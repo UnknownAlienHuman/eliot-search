@@ -145,4 +145,7 @@ green pipeline would prove nothing and would invite treating scaffolding as prog
 
 ## License
 
-Private. Not yet licensed for distribution.
+MIT. See [LICENSE](LICENSE).
+
+The repository is private while the contracts are unstable; the license is MIT so that the
+boundary contracts can be shared or open-sourced without a later relicensing step.
