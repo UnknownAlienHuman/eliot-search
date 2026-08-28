@@ -2,9 +2,10 @@
 
 **Local-first data preparation and retrieval provider for ELIOT Memory OS.**
 
-> **Status: structure scaffold.** This repository currently contains the directory layout, ownership
-> notes and boundary description only. No implementation, no architecture master, no contracts.
-> Continuous integration is deliberately disabled until the contract freeze lands.
+> **Status: architecture master published; implementation scaffold.** The authoritative standalone
+> contract is [ELIOT Search 8.4](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md). No
+> implementation exists; runtime, performance, security execution, migration and product acceptance
+> remain unproven. Continuous integration remains disabled until implementation begins.
 
 ---
 
