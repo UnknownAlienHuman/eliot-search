@@ -1,0 +1,360 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P09-P10"
+wave = 5
+status = "schema-only"
+implementation_authorized = false
+
+# LOCKED values are correctness/security invariants. TUNABLE values are finite owner-validated policy.
+# QUALIFIED_REF values require immutable accepted dependency/profile evidence.
+
+[reconciliation]
+owner = "search-source-reconcile"
+user_config_section = "reconcile"
+
+[[reconciliation.field]]
+name = "watcher_is_authority"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[reconciliation.field]]
+name = "overflow_declares_gap_before_ack"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[reconciliation.field]]
+name = "open_gap_blocks_current_confirmed"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[reconciliation.field]]
+name = "complete_inventory_required_to_resolve_gap"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[reconciliation.field]]
+name = "partial_inventory_may_remove_unseen_source"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[reconciliation.field]]
+name = "guarded_apply_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[reconciliation.field]]
+name = "inventory_interval_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 10000
+max = 86400000
+default = 300000
+change_action = "APPLY_LIVE"
+
+[[reconciliation.field]]
+name = "overflow_reconcile_budget_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 100
+max = 600000
+default = 5000
+change_action = "APPLY_LIVE"
+
+[[reconciliation.field]]
+name = "max_roots_per_sweep"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 4096
+default = 64
+change_action = "APPLY_LIVE"
+
+[[reconciliation.field]]
+name = "max_entries_per_slice"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 1000000
+default = 10000
+change_action = "APPLY_LIVE"
+
+[[reconciliation.field]]
+name = "max_concurrent_roots"
+type = "u16"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 1
+max = 32
+default = 2
+change_action = "APPLY_LIVE"
+
+[[reconciliation.field]]
+name = "max_slice_retry_attempts"
+type = "u8"
+mode = "TUNABLE"
+min = 0
+max = 3
+default = 1
+change_action = "APPLY_LIVE"
+
+[currentness]
+owner = "search-source-reconcile"
+user_config_section = ""
+
+[[currentness.field]]
+name = "watcher_event_may_confirm_currentness"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[currentness.field]]
+name = "qdrant_health_may_confirm_filesystem_currentness"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[currentness.field]]
+name = "unsaved_buffer_may_upgrade_disk_currentness"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[currentness.field]]
+name = "filesystem_saved_buffer_projection_axes_separate"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[overlay]
+owner = "search-overlay"
+user_config_section = "overlay"
+
+[[overlay.field]]
+name = "unsaved_bytes_to_redb_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "unsaved_bytes_to_cas_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "unsaved_bytes_to_qdrant_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "unsaved_bytes_to_ordinary_telemetry_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "cross_binding_unsaved_visibility_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "shadow_before_retrieval_and_idf_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[overlay.field]]
+name = "post_candidate_dedup_repairs_shadowing"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "overlay_may_be_second_durable_search_database"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "durable_handle_to_unsaved_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[overlay.field]]
+name = "max_unsaved_sources_per_binding"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 1024
+default = 64
+change_action = "APPLY_LIVE_RESTRICTIVE"
+
+[[overlay.field]]
+name = "max_unsaved_bytes_per_binding"
+type = "u64"
+mode = "TUNABLE"
+min = 1024
+max = 1073741824
+default = 67108864
+change_action = "APPLY_LIVE_RESTRICTIVE"
+
+[[overlay.field]]
+name = "unsaved_ttl_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 1000
+max = 86400000
+default = 1800000
+change_action = "APPLY_LIVE_RESTRICTIVE"
+
+[[overlay.field]]
+name = "saved_overlay_max_entries"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 100000
+default = 1024
+change_action = "APPLY_LIVE_RESTRICTIVE"
+
+[[overlay.field]]
+name = "max_units_per_entry"
+type = "u32"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 1
+max = 1000000
+default = 100000
+change_action = "APPLY_LIVE_RESTRICTIVE"
+
+[[overlay.field]]
+name = "max_features_per_entry"
+type = "u32"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 1
+max = 4000000
+default = 262144
+change_action = "APPLY_LIVE_RESTRICTIVE"
+
+[[overlay.field]]
+name = "max_overlay_candidates_per_leg"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 4096
+default = 256
+change_action = "APPLY_LIVE"
+
+[rust_enrichment]
+owner = "search-code-enricher"
+user_config_section = ""
+
+[[rust_enrichment.field]]
+name = "parser_profile_ref"
+type = "QualifiedProfileRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+change_action = "REENRICH_AND_REBUILD_PROJECTION+GATE_REQUIRED"
+
+[[rust_enrichment.field]]
+name = "execute_cargo_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[rust_enrichment.field]]
+name = "execute_rustc_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[rust_enrichment.field]]
+name = "execute_build_scripts_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[rust_enrichment.field]]
+name = "expand_macros_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[rust_enrichment.field]]
+name = "network_or_package_resolution_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[rust_enrichment.field]]
+name = "syntax_may_claim_compiler_semantics"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[rust_enrichment.field]]
+name = "max_input_bytes"
+type = "u64"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 1
+max = 16777216
+default = 4194304
+change_action = "REENRICH_AND_REBUILD_PROJECTION"
+
+[[rust_enrichment.field]]
+name = "max_parse_nodes"
+type = "u32"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 1
+max = 5000000
+default = 1000000
+change_action = "REENRICH_AND_REBUILD_PROJECTION"
+
+[[rust_enrichment.field]]
+name = "max_parse_depth"
+type = "u16"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 1
+max = 4096
+default = 512
+change_action = "REENRICH_AND_REBUILD_PROJECTION"
+
+[[rust_enrichment.field]]
+name = "max_parse_errors"
+type = "u32"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 0
+max = 100000
+default = 1000
+change_action = "REENRICH_AND_REBUILD_PROJECTION"
+
+[[rust_enrichment.field]]
+name = "max_facts_per_source"
+type = "u32"
+mode = "TUNABLE_INTERNAL_CEILING"
+min = 1
+max = 5000000
+default = 1000000
+change_action = "REENRICH_AND_REBUILD_PROJECTION"
+
+[forbidden]
+watcher_as_source_truth = true
+resolve_gap_from_watcher_event = true
+partial_inventory_removal = true
+current_across_open_gap = true
+persist_unsaved_bytes = true
+index_unsaved_in_qdrant = true
+cross_binding_unsaved_visibility = true
+shadow_after_candidate_generation = true
+overlay_second_database = true
+durable_unsaved_handle = true
+execute_code_enrichment_toolchain = true
+expand_macros = true
+syntax_semantic_overclaim = true
+unbounded_inventory_overlay_or_parser_work = true
