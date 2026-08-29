@@ -1,0 +1,465 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P16-P18"
+wave = 10
+gate = "G6"
+status = "schema-only"
+implementation_authorized = false
+optional_depth_authorized = false
+
+[gate]
+owner = "eliot-searchd"
+
+[[gate.field]]
+name = "candidate_class"
+type = "disabled | model | document | scale"
+mode = "TUNABLE"
+default = "disabled"
+change_action = "GATE_REQUIRED"
+
+[[gate.field]]
+name = "accepted_p15_receipt_ref"
+type = "QualifiedReceiptRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[gate.field]]
+name = "candidate_adr_ref"
+type = "QualifiedAdrRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[gate.field]]
+name = "candidate_qualification_ref"
+type = "QualifiedReceiptRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[gate.field]]
+name = "candidate_benefit_ref"
+type = "QualifiedReceiptRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[gate.field]]
+name = "candidate_removal_ref"
+type = "QualifiedReceiptRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[gate.field]]
+name = "candidate_migration_rollback_ref"
+type = "QualifiedReceiptRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[gate.field]]
+name = "compiled_feature_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[gate.field]]
+name = "explicit_configuration_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[gate.field]]
+name = "binding_authorization_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[gate.field]]
+name = "configuration_alone_authorizes"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[gate.field]]
+name = "one_candidate_per_ticket"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[model]
+owner = "search-model-provider"
+
+[[model.field]]
+name = "requested"
+type = "bool"
+mode = "TUNABLE"
+default = false
+change_action = "GATE_REQUIRED"
+
+[[model.field]]
+name = "profile_ref"
+type = "QualifiedModelProfileRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[model.field]]
+name = "max_batch_items"
+type = "u32"
+mode = "TUNABLE"
+default = 32
+min = 1
+max = 512
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[model.field]]
+name = "max_batch_bytes"
+type = "u64"
+mode = "TUNABLE"
+default = 16777216
+min = 1024
+max = 268435456
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[model.field]]
+name = "max_concurrency"
+type = "u16"
+mode = "TUNABLE"
+default = 2
+min = 1
+max = 16
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[model.field]]
+name = "max_queue"
+type = "u32"
+mode = "TUNABLE"
+default = 16
+min = 1
+max = 256
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[model.field]]
+name = "request_deadline_ms"
+type = "u64"
+mode = "TUNABLE"
+default = 30000
+min = 100
+max = 300000
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[model.field]]
+name = "cancel_grace_ms"
+type = "u64"
+mode = "TUNABLE"
+default = 2000
+min = 100
+max = 30000
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[model.field]]
+name = "network_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[model.field]]
+name = "automatic_download_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[model.field]]
+name = "automatic_upgrade_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[model.field]]
+name = "training_or_learning_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[model.field]]
+name = "generative_answer_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[model.field]]
+name = "persistent_input_cache_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[model.field]]
+name = "unsaved_persistence_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[model.field]]
+name = "rerank_output_must_be_input_subset"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[model.field]]
+name = "implicit_provider_fallback_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[document]
+owner = "eliot-search-doc-worker"
+
+[[document.field]]
+name = "requested"
+type = "bool"
+mode = "TUNABLE"
+default = false
+change_action = "GATE_REQUIRED"
+
+[[document.field]]
+name = "profile_ref"
+type = "QualifiedDocumentProfileRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[document.field]]
+name = "max_input_bytes"
+type = "u64"
+mode = "TUNABLE"
+default = 67108864
+min = 1024
+max = 1073741824
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "max_output_bytes"
+type = "u64"
+mode = "TUNABLE"
+default = 134217728
+min = 1024
+max = 1073741824
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "max_pages"
+type = "u32"
+mode = "TUNABLE"
+default = 2000
+min = 1
+max = 10000
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "max_archive_members"
+type = "u32"
+mode = "TUNABLE"
+default = 10000
+min = 1
+max = 100000
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "max_nested_depth"
+type = "u8"
+mode = "TUNABLE"
+default = 4
+min = 0
+max = 8
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "max_decompression_ratio"
+type = "u32"
+mode = "TUNABLE"
+default = 100
+min = 1
+max = 1000
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "max_temp_bytes"
+type = "u64"
+mode = "TUNABLE"
+default = 536870912
+min = 1048576
+max = 4294967296
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "max_concurrency"
+type = "u16"
+mode = "TUNABLE"
+default = 1
+min = 1
+max = 8
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "request_deadline_ms"
+type = "u64"
+mode = "TUNABLE"
+default = 300000
+min = 1000
+max = 1800000
+change_action = "APPLY_NEXT_WORKER_START"
+
+[[document.field]]
+name = "network_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[document.field]]
+name = "scripts_or_macros_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[document.field]]
+name = "shell_or_child_process_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[document.field]]
+name = "remote_resources_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[document.field]]
+name = "path_escape_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[document.field]]
+name = "automatic_download_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[document.field]]
+name = "automatic_upgrade_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[scale]
+owner = "eliot-searchd"
+
+[[scale.field]]
+name = "requested"
+type = "bool"
+mode = "TUNABLE"
+default = false
+change_action = "GATE_REQUIRED"
+
+[[scale.field]]
+name = "profile_ref"
+type = "QualifiedScaleProfileRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[scale.field]]
+name = "measured_bottleneck_ref"
+type = "QualifiedEvidenceRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[scale.field]]
+name = "in_place_schema_or_topology_change_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[scale.field]]
+name = "guarded_redb_route_switch_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[scale.field]]
+name = "qdrant_alias_is_commit"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[scale.field]]
+name = "old_route_pin_drain_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[scale.field]]
+name = "failed_candidate_discard_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[scale.field]]
+name = "post_switch_rollback_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[removal]
+owner = "eliot-searchd"
+
+[[removal.field]]
+name = "baseline_restore_before_reclaim"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[removal.field]]
+name = "capability_draining_state_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[removal.field]]
+name = "worker_process_exit_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[removal.field]]
+name = "optional_cache_temp_cleanup_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[removal.field]]
+name = "route_pin_drain_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[removal.field]]
+name = "p15_regression_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[removal.field]]
+name = "claim_secure_erase"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[forbidden]
+optional_depth_by_configuration = true
+provider_selection_by_latest = true
+network_provider = true
+automatic_download_or_upgrade = true
+training_learning_or_persistent_content_cache = true
+provider_output_as_source_evidence = true
+rerank_scope_or_candidate_widening = true
+document_code_execution_or_remote_resources = true
+in_place_active_collection_change = true
+qdrant_alias_visibility_commit = true
+old_route_reclaim_before_pin_drain = true
+self_review_or_self_acceptance = true
