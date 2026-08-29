@@ -15,7 +15,6 @@ search-contracts.workspace = true
 search-domain.workspace = true
 search-projection-planner.workspace = true
 search-point-identity.workspace = true
-search-qdrant-bridge.workspace = true
 search-epoch-pins.workspace = true
 
 [lints]

@@ -1,75 +1,69 @@
 # Agent contract — search-qdrant-bridge
 
-You own only `crates/search-index-qdrant/search-qdrant-bridge/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+You own only `crates/search-index-qdrant/search-qdrant-bridge/`. Do not edit another package, the root
+workspace, shared contracts or architecture. Missing fields use the contract-change process.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S9, S10, S27, H8, H10, P05.
+The Architecture 8.4 master is not required for ordinary work. This is the package slice.
+Traceability only: S9, S10, H8.6-H8.9, H10, P05.
 
 ## Mission
 
-Own all qualified Qdrant process and transport details behind vendor-neutral Search ports.
+Own the qualified Qdrant data plane and capability/schema probes behind vendor-neutral Search ports.
 
 ## Ownership
 
-- exact artifact qualification and process identity
-- loopback/auth/ACL/Job Object lifecycle
 - collection schema and capability probes
-- strict-mode indexes
-- upsert, close, query, count and exact readback transport
+- strict-mode payload indexes
+- exact point upsert/close/delete/readback transport
+- filtered query, count and scroll/administrative operations authorized by a port contract
+- transport timeout, retry and response-shape validation
+- private vendor-type translation
 
 ## Forbidden ownership
 
-- recipe meaning, access authority or result interpretation
+- executable qualification, process lifecycle, ACL, Job Object or secret storage
+- recipe meaning, access authority, publication visibility or result interpretation
 - vendor types in public ports
 - automatic upgrades or unpinned latest
 - CLI/worker/client direct Qdrant access
 
 ## Allowed dependencies
 
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+`search-contracts`, `search-domain`. The daemon supplies a ready endpoint/auth capability from
+`search-qdrant-supervisor`; no direct package dependency is required.
 
 ## Required logical surface
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `QdrantSupervisor::start(qualified_artifact, secret) -> Result<ProcessGuard, QdrantError>`
+- `QdrantBridge::connect(endpoint, auth_lease) -> Result<QdrantBridge, QdrantError>`
 - `QdrantBridge::probe_capabilities() -> Result<CapabilityReceipt, QdrantError>`
 - `QdrantBridge::ensure_schema(schema) -> Result<SchemaReceipt, QdrantError>`
 - `QdrantBridge::upsert_exact(batch, write_policy) -> Result<MutationReceipt, QdrantError>`
 - `QdrantBridge::readback_exact(ids) -> Result<PointReadback, QdrantError>`
 - `QdrantBridge::query(leg, budget) -> Result<CandidateStream, QdrantError>`
+- `QdrantBridge::delete_exact(ids, write_policy) -> Result<MutationReceipt, QdrantError>`
 
 ## Failure surface
 
-Use typed errors/reason codes. Relevant public reasons: `QDRANT_UNAVAILABLE`, `QDRANT_CAPABILITY_MISMATCH`, `COLLECTION_SCHEMA_MISMATCH`. Never turn a degraded or partial
-state into an apparent success.
+Relevant reasons include `QDRANT_UNAVAILABLE`, `QDRANT_CAPABILITY_MISMATCH`,
+`COLLECTION_SCHEMA_MISMATCH`, `QDRANT_RESPONSE_INVALID` and `QDRANT_AUTH_FAILED`.
 
 ## Test seams and exit evidence
 
-- `loopback and API auth required`
 - `signed i64 and missing-valid_until fixture`
 - `filtered IDF and strict-mode unindexed-filter rejection`
 - `wait=true strong write/readback fixture`
-- `executable/hash/PID mismatch quarantines`
-- `credentials absent from argv and logs`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
+- `exact ID delete/readback receipt validation`
+- `vendor response anomalies fail closed`
+- `vendor types cannot cross public package boundary`
+- `tests use a pre-qualified endpoint; process lifecycle is not duplicated`
 
 ## Size and split guard
 
 - Delivery wave: **W3 / P05**
-- Soft `src/` target: **9,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
+- Soft `src/` target: **7,000 lines**
+- Hard review threshold: **10,000 hand-written Rust lines**
 
 ## Definition of done
 
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+The bridge is a bounded, qualified data-plane adapter only. Windows process ownership and credentials
+remain in `search-qdrant-supervisor` / `search-os-secrets`.

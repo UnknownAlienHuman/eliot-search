@@ -1,23 +1,24 @@
 # Agent contract — search-publication
 
-You own only `crates/search-index-qdrant/search-publication/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+You own only `crates/search-index-qdrant/search-publication/`. Do not edit another package, the root
+workspace, shared contracts or architecture. Missing fields use the contract-change process.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S13, S36, H11, P07.
+The Architecture 8.4 master is not required for ordinary work. This is the package slice.
+Traceability only: S13, S36, H11, P07.
 
 ## Mission
 
-Serialize projection commits, verify exact readback and linearize visibility only through guarded control-journal commit.
+Serialize projection commits, verify exact readback and linearize visibility only through guarded
+control-journal commit.
 
 ## Ownership
 
 - publication actor and state machine
-- durable intents and receipts orchestration
-- exact new/old point mutation sequence
-- generation guard CAS commit
-- recovery, compensation and doctor command domain
+- durable intent/receipt orchestration through `ControlJournalPort`
+- exact new/old point mutation sequence through `SearchIndexPort`
+- generation-guard CAS commit
+- recovery, compensation and doctor-command domain
+- committed retired-point manifests handed to `search-index-reclaimer`
 
 ## Forbidden ownership
 
@@ -25,29 +26,28 @@ Serialize projection commits, verify exact readback and linearize visibility onl
 - reusing skipped epochs
 - Qdrant alias as commit point
 - broad payload closure on correctness paths
-- staging later epoch while earlier is unresolved
-- depending on the concrete redb adapter; durable state is reached through a vendor-neutral port
+- staging a later epoch while an earlier intent is unresolved
+- depending on concrete redb, Qdrant bridge or process-supervisor crates
+- deleting retired points itself
 
 ## Allowed dependencies
 
-`search-contracts`, `search-domain`, `search-projection-planner`, `search-point-identity`, `search-qdrant-bridge`, `search-epoch-pins`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+`search-contracts`, `search-domain`, `search-projection-planner`, `search-point-identity`,
+`search-epoch-pins`. Durable journal and index operations are injected through vendor-neutral ports.
 
 ## Required logical surface
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `PublicationCoordinator::submit(prepared) -> Result<PublicationReceipt, PublicationError>`
-- `PublicationCoordinator::recover(intent) -> RecoveryDecision`
+- `PublicationCoordinator::submit(prepared, ports) -> Result<PublicationReceipt, PublicationError>`
+- `PublicationCoordinator::recover(intent, ports) -> RecoveryDecision`
 - `verify_exact_readback(manifest, readback) -> Result<(), PublicationError>`
-- `commit_visible_epoch(guards, receipt) -> Result<ControlCommit, PublicationError>`
-- `doctor_publication(command) -> Result<DoctorReceipt, PublicationError>`
+- `commit_visible_epoch(guards, receipt, control) -> Result<ControlCommit, PublicationError>`
+- `emit_retired_manifest(commit) -> RetiredPointManifest`
+- `doctor_publication(command, ports) -> Result<DoctorReceipt, PublicationError>`
 
 ## Failure surface
 
-Use typed errors/reason codes. Relevant public reasons: `PUBLICATION_BLOCKED`, `PUBLICATION_READBACK_MISMATCH`, `POINT_ID_COLLISION`. Never turn a degraded or partial
-state into an apparent success.
+Relevant reasons include `PUBLICATION_BLOCKED`, `PUBLICATION_READBACK_MISMATCH`,
+`POINT_ID_COLLISION`, `CONTROL_COMMIT_REJECTED` and `PUBLICATION_RECOVERY_REQUIRED`.
 
 ## Test seams and exit evidence
 
@@ -57,20 +57,17 @@ state into an apparent success.
 - `exact readback mismatch blocks publication`
 - `skipped epoch is never reused`
 - `abandon requires verified exclusion fence`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
+- `fake journal/index ports prove no concrete adapter dependency`
+- `reclaimer receives only a committed exact retired manifest`
 
 ## Size and split guard
 
 - Delivery wave: **W3 / P07**
 - Soft `src/` target: **9,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
+- Hard review threshold: **10,000 hand-written Rust lines**
+- Commit and recovery remain one owner; split only on a proven dependency/process boundary.
 
 ## Definition of done
 
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+The state machine is linearizable and fault-tested through ports, never imports redb/Qdrant vendor
+adapters and hands ordinary deletion to the reclaimer only after commit.
