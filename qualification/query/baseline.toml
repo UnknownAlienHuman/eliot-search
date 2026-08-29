@@ -1,0 +1,76 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "DESIGNED_NOT_EXECUTED"
+qualification = "qualification/query/W4_QUALIFICATION.md"
+probe_registry = "qualification/query/probes.toml"
+
+[recipes]
+version = 1
+count = 11
+ids = [
+  "locate@1",
+  "find_text@1",
+  "inspect_entity@1",
+  "compare_implementations@1",
+  "explore_entity@1",
+  "find_callers@1",
+  "find_tests@1",
+  "find_configuration@1",
+  "exact_scan@1",
+  "expand_handle@1",
+  "continue@1",
+]
+unknown_recipe = "reject"
+
+[protocol]
+max_frame_bytes = 8388608
+max_in_flight_per_connection = 32
+compression = false
+fragmented_messages = false
+pairing_required = true
+monotonic_connection_sequence = true
+
+[planning]
+all_s14_axes_required = true
+client_vendor_plan_allowed = false
+zero_means_unlimited = false
+max_scoring_legs = 16
+max_prefetch_candidates_per_leg = 256
+max_validated_candidates = 64
+max_materialized_result_bytes = 1048576
+
+[execution]
+queues_bounded = true
+pins_process_local = true
+raw_score_cross_population_allowed = false
+fusion_profile = "weighted-rrf-baseline-v1"
+contaminated_leg_policy = "discard_or_replan_whole_leg"
+ordinary_read_control_writes_allowed = false
+
+[validation]
+qdrant_payload_is_evidence = false
+exact_revision_readback_required = true
+live_security_precheck_required = true
+live_security_pre_emission_required = true
+validation_gap_contains_evidence = false
+
+[results]
+full_file_default_allowed = false
+complete_scope_requires_exact_proof = true
+default_recommended_handles_min = 2
+default_recommended_handles_max = 4
+truncation_must_record_omission = true
+
+[handles]
+public_token_self_describing = false
+possession_grants_access = false
+ephemeral_restart_valid = false
+durable_unsaved_allowed = false
+server_stores_plaintext_token = false
+
+[continuations]
+public_raw_qdrant_cursor_allowed = false
+silent_refresh_to_newer_corpus_allowed = false
+durable_ordinary_query_allowed = false
+durable_record_owns_process_pin = false
