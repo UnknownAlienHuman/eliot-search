@@ -1,59 +1,36 @@
 # Agent contract — eliot-search-doc-worker
 
-You own only `bins/eliot-search-doc-worker/`. This is a composition or worker package, not a place to reimplement
-capability logic. Do not edit library packages, the root workspace, shared fixtures or architecture.
-Traceability only: S17, S29, P17.
+Own only `bins/eliot-search-doc-worker/**`. Keep the binary an isolated no-execute provider host. Do not
+edit libraries, daemon, root Cargo, shared evidence or architecture.
 
-## Mission
+## Gate and read set
 
-Host one ADR-qualified document materializer in an isolated no-execute process.
+Blocked until a candidate ticket supplies accepted P15, dedicated provider ADR, exact provider/runtime/
+Windows profile and accepted direct handoffs. Read only package instructions/assignment, `FUNCTIONS.md`,
+W10 cross-contract, document profile/settings and ticketed API digests.
 
 ## Ownership
 
-- worker lifecycle and IPC
-- provider sandbox/resource limits
-- materialization request dispatch
-- crash/malformed-input isolation
+- exact provider/profile/artifact and inherited sandbox verification;
+- private daemon-only IPC;
+- bounded input/container inspection and no-execute/no-network enforcement;
+- provider dispatch, output/coordinate/loss-map validation seam;
+- finite resources/cancellation, malformed/crash isolation and cleanup/removal.
 
 ## Forbidden ownership
 
-- provider selection in scaffold
-- redb/Qdrant ownership or direct access
-- macros, remote resources or archive execution
-- Python/Node runtime without explicit ADR
+- source acquisition, revision storage, canonical materialization meaning, Qdrant/publication or clients;
+- scripts/macros/OLE/hooks/filters/shell/child process or remote resources;
+- path/reparse escape or unbounded archive/page/object/image/decompression/output;
+- provider selection in scaffold, automatic download/update, Python/Node without ADR;
+- G6 benefit verdict or self-acceptance.
 
-## Allowed dependencies
+## Invariants
 
-`search-contracts`, `search-provider-protocol`, `search-materializer`. Do not add a storage, index, model, parser or client implementation outside this declared
-graph. New external artifacts require an ADR, exact version/digest, license proof and qualification.
+Exact retained input digest/length; no current-path/Qdrant-payload substitution; lossy mapping never
+claims exactness; content absent from diagnostics; timeout/crash publishes no unverified temp output;
+worker absent/stopped by default; removal restores accepted P15 behavior.
 
-## Integration milestones
+## Size
 
-- P17 only after explicit acceptance gate and provider ADR
-
-## Test seams and exit evidence
-
-- `feature absent by default`
-- `malformed-input isolation`
-- `provider removal test`
-- `no store/index access`
-
-Record exact command output and degraded behavior. Do not claim a Windows, Qdrant or provider proof that
-was not executed.
-
-## Size and split guard
-
-- Delivery wave: **W10 / P17 after accepted P15**
-- Soft `src/` target: **5,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Keep `main` and command wiring thin; behavior belongs to the owning library package.
-
-## Gate
-
-This binary is optional. Do not implement, package or enable it before the stated P15 acceptance gate and ADR.
-
-## Definition of done
-
-The binary only composes accepted package contracts, has no reverse storage/authority path, enforces
-bounded lifecycle and cancellation, and supplies a reproducible handoff using
-`swarm/PACKAGE_HANDOFF_TEMPLATE.md`. Compilation alone is insufficient.
+Target `src/` <=5,000 lines; split review before 8,500 total; hard stop at 10,000 including local tests.

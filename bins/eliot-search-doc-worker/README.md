@@ -1,23 +1,16 @@
 # eliot-search-doc-worker
 
-**Status:** binary package boundary and agent contract only; runtime behavior is intentionally unimplemented.
+**Optional isolated P17 document materializer worker.**
 
-Host one ADR-qualified document materializer in an isolated no-execute process.
+**Status:** complete worker contract; provider/runtime/artifact are unselected and implementation is
+blocked.
 
-## Owns
+Hosts one exact no-execute/no-network document profile over private daemon-only IPC. Enforces bounded
+container/page/object/image/decompression/output resources, malformed-input isolation, exact input
+identity, coordinate/loss maps, assurance and cleanup/removal.
 
-- worker lifecycle and IPC
-- provider sandbox/resource limits
-- materialization request dispatch
-- crash/malformed-input isolation
-
-## Must not own
-
-- provider selection in scaffold
-- redb/Qdrant ownership or direct access
-- macros, remote resources or archive execution
-- Python/Node runtime without explicit ADR
-
-- **Delivery:** W10 / P17 after accepted P15
-- **Soft source-line target:** 5,000
+- **Default:** binary absent or stopped.
+- **Gate:** exact accepted P15 + provider ADR + G6 candidate qualification.
+- **Soft source target:** 5,000 lines.
+- **Functions:** [FUNCTIONS.md](FUNCTIONS.md)
 - **Agent instructions:** [AGENTS.md](AGENTS.md)

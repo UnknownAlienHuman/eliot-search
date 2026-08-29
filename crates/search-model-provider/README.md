@@ -1,26 +1,18 @@
 # search-model-provider
 
-**C12 — Optional model provider contract.**
+**C12 — Optional model profile and scoring boundary.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** complete W10/P16 function contract; no model/runtime/provider selected or implemented.
 
-Define the isolated optional dense, rerank and multivector provider boundary; no model is selected in the scaffold.
+Owns versioned dense/multivector/rerank profiles, bounded input/output validation, provider-neutral
+worker requests, content-free receipts, migration classification and removal validation.
 
-## Owns
+Does not own worker lifecycle, stores/index, query/access authority, source evidence, generative answers,
+network/download/update/training/cache behavior or G6 acceptance.
 
-- versioned model profile descriptors
-- worker request/response contracts
-- health, cancellation and resource accounting
-- dense/rerank result validation
-- uninstall/fallback-to-baseline proof seam
-
-## Must not own
-
-- baseline dependency on a model
-- canonical decisions or generative answers
-- implicit downloads or network calls
-- starting before P15 acceptance and an ADR
-
-- **Delivery wave:** W10 / P16 after accepted P15
-- **Soft source-line target:** 6,500
+- **Delivery:** W10/P16 only after exact accepted P15 + ADR + qualification.
+- **Default:** absent/disabled.
+- **Soft source target:** 6,500 lines.
+- **Functions:** [FUNCTIONS.md](FUNCTIONS.md)
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
+- **Cross-contract:** [`../../docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md`](../../docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md)

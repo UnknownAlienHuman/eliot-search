@@ -1,23 +1,15 @@
 # eliot-search-model-worker
 
-**Status:** binary package boundary and agent contract only; runtime behavior is intentionally unimplemented.
+**Optional isolated P16 model worker.**
 
-Host an admitted optional model provider in an isolated on-demand process.
+**Status:** complete worker contract; binary/runtime/model are unselected and implementation is blocked.
 
-## Owns
+Hosts one exact qualified model profile over private daemon-only IPC with finite resource, cancellation,
+content-minimization, crash-isolation and removal semantics. It never opens Search stores/index or an
+external client endpoint.
 
-- worker lifecycle and IPC
-- resource limits
-- model-provider request dispatch
-- health/cancellation reporting
-
-## Must not own
-
-- starting before P15+ADR
-- redb/Qdrant ownership or direct access
-- canonical decisions
-- persistent hidden model cache
-
-- **Delivery:** W10 / P16 after accepted P15
-- **Soft source-line target:** 4,500
+- **Default:** binary absent or stopped.
+- **Gate:** exact accepted P15 + ADR + G6 candidate qualification.
+- **Soft source target:** 4,500 lines.
+- **Functions:** [FUNCTIONS.md](FUNCTIONS.md)
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
