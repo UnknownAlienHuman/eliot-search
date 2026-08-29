@@ -6,6 +6,8 @@ The exact plane compiles one immutable authorized denominator and executes a pin
 every denominator item. It may prove only the stated predicate. Qdrant candidates, lexical top-k and
 semantic similarity never define or narrow the denominator.
 
+Canonical invariant: **Qdrant/top-k/lexical/semantic candidates never define or narrow the denominator.**
+
 ## State and authority
 
 The package owns:
