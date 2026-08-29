@@ -4,27 +4,26 @@ P00 is the only architecture-authorized implementation entry point. W1+ remains 
 
 ## Writer A — `search-contracts`
 
-Read all P00 contract-pack files and deliver strong IDs, exact tagged schemas, eleven recipe request and
-result variants, validated-candidate-only results, opaque wire handles, separate server-side
-handle/continuation records, reason namespaces and canonical JSON/CBOR fixtures. No I/O, ports or
-vendor types.
+Deliver strong IDs, exact tagged schemas, eleven request/results, validated-only candidates, opaque
+wire handles/server records, explicit `QuerySnapshotFence`, separate emission security fence, reason
+namespaces and canonical JSON/CBOR. No I/O, ports or vendor types.
 
 ## Integration checkpoint A
 
-Verify architecture/pack hashes, resolve every challenge, review schema/serialization/result/handle
-fixtures, and publish the accepted contracts API/schema digest.
+Verify architecture/pack hashes, zero challenges, schema/result/handle/snapshot fixtures and publish the
+accepted contracts API/schema digest.
 
-## Writers B and C — after checkpoint A
+## Writers B and C
 
-- `search-domain`: pure transitions, eligibility, fingerprints, ordering and coverage.
+From that immutable handoff:
+
+- `search-domain`: pure transitions, snapshot/plan fingerprints, eligibility, drift, ordering, coverage.
 - `search-ports`: shared vendor-neutral traits and conformance fakes.
-
-They run separately from the same immutable contracts handoff.
 
 ## Integration checkpoint B
 
-Pin the real Windows-compatible toolchain/dependencies, generate `Cargo.lock`, run formatting,
-workspace/W0 tests, dependency/public-API guards and license policy, then publish W0 receipt.
+Pin the real Windows-compatible toolchain/dependencies, generate lockfile, run formatting,
+workspace/W0 tests, dependency/API guards and license policy, then publish W0 receipt.
 
 ## Required evidence
 
@@ -44,6 +43,12 @@ wire_source_handle_contains_no_source_identity_test
 wire_continuation_contains_no_binding_or_plan_test
 server_handle_record_not_in_provider_result_test
 opaque_handle_possession_never_authorizes_test
+query_snapshot_fence_exact_fields_test
+query_snapshot_fingerprint_golden_test
+generic_dependency_cannot_replace_snapshot_axis_test
+direct_only_route_epoch_variant_test
+result_preserves_planned_snapshot_and_latest_emission_fence_test
+native_anchor_range_and_finite_coordinate_tests
 wire_state_spelling_fixture
 forbidden_epoch_sentinel_test
 source_owner_generation_digest_fixture

@@ -71,15 +71,15 @@ Every entry is a distinct newtype/tagged union.
 ```text
 InstallationId, InstallationIncarnationId, DataRootId, BindingId,
 WorkspaceId, WorkspaceViewRevisionId, RootBindingId, PathBindingId,
-RepositoryLineageId, CorpusId, ReferencePortfolioId, SourceNamespaceId,
-SourceId, SourceMembershipId, ProjectionMembershipId, SourceRevisionId,
-MaterializationId, RepresentationId, UnitId, AccessPartitionId,
-ScoringPartitionId, ScoringDocumentId, AccessPolicyBindingId,
-ResidencyPolicyBindingId, ScopeDomainId, AccessDomainId,
-ConfidentialityDomainId, EncryptionKeyDomainId, RetentionDomainId,
-ErasureDomainId, GrantId, RequestId, PlanId, CandidateId, CutoverId,
-BufferSnapshotId, ImportedSnapshotId, HandleId, ContinuationId,
-PublicationIntentId, PublicationReceiptId.
+RepositoryLineageId, CollectionGenerationId, CorpusId, ReferencePortfolioId,
+SourceNamespaceId, SourceId, SourceMembershipId, ProjectionMembershipId,
+SourceRevisionId, MaterializationId, RepresentationId, UnitId,
+AccessPartitionId, ScoringPartitionId, ScoringDocumentId,
+AccessPolicyBindingId, ResidencyPolicyBindingId, ScopeDomainId,
+AccessDomainId, ConfidentialityDomainId, EncryptionKeyDomainId,
+RetentionDomainId, ErasureDomainId, GrantId, RequestId, PlanId,
+CandidateId, CutoverId, BufferSnapshotId, ImportedSnapshotId,
+HandleId, ContinuationId, PublicationIntentId, PublicationReceiptId.
 ```
 
 Counter/version wrappers:
@@ -88,7 +88,7 @@ Counter/version wrappers:
 OwnerEpoch, Epoch, NonZeroRevision, PortfolioRevision,
 CollectionRouteRevision, CatalogRevision, MembershipRevision,
 AccessPolicyRevision, ShadowFenceRevision, PurgeFenceRevision,
-ObservationCursorRevision, PolicyRevision.
+ObservationCursorRevision, OverlayRevision, PolicyRevision.
 ```
 
 Digest/profile wrappers:
@@ -96,7 +96,8 @@ Digest/profile wrappers:
 ```text
 Blake3Digest32, Sha256Digest32, VersionedContentDigest,
 SourceOwnerGeneration, ObjectResidencyKeyDigest, PlanFingerprint,
-ArtifactDigest, DigestRef, HandleTokenDigest, ProfileId, RuleId,
+QuerySnapshotFingerprint, ArtifactDigest, DigestRef, HandleTokenDigest,
+ProfileId, ProjectionProfileSetId, FusionProfileId, RuleId,
 RecipeFamilyId, ReceiptRef, GitObjectId.
 ```
 
