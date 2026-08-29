@@ -1,0 +1,46 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "UNQUALIFIED"
+qualified_at = ""
+qualification_receipt_ref = ""
+reviewer_receipt_ref = ""
+
+[server]
+version = ""
+build_identity = ""
+artifact_path_class = ""
+artifact_sha256 = ""
+artifact_bytes = 0
+source_ref = ""
+source_sha = ""
+license_receipt_ref = ""
+target_os = "windows"
+target_arch = "x86_64"
+automatic_download = false
+automatic_upgrade = false
+
+[client]
+crate_name = "qdrant-client"
+version = ""
+source_checksum = ""
+source_ref = ""
+lockfile_digest = ""
+license_receipt_ref = ""
+
+[process]
+binding = "loopback_only"
+authentication = "generated_api_key_secret_lease"
+data_root_owner_required = true
+job_object_required = true
+filesystem_acl_required = true
+bounded_restart_required = true
+blind_attach_allowed = false
+plaintext_secret_in_argv_allowed = false
+
+[selection]
+latest_allowed = false
+version_range_allowed = false
+floating_git_revision_allowed = false
+documentation_only_acceptance_allowed = false
+health_only_acceptance_allowed = false
