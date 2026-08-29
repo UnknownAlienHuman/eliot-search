@@ -2,66 +2,60 @@
 
 ## Identity
 
-- Package:
-- Assignment/wave:
-- Base commit:
-- Final commit:
-- Agent:
-- Reviewer:
+- Package / assignment / wave:
+- Base and final commits:
+- Agent / reviewer:
+- Accepted dependency commits and API/port digests:
 
-## Changed files
+## Changed files and scope
 
-List every changed file. No path may be outside the assigned package unless the integration owner
-records an approved exception.
+List every changed file. Record any integration-owner exception; otherwise every path must remain under
+the package directory.
 
-## Public surface and port receipt
+## Public surface
 
-- Added/changed public types:
-- Ports implemented:
-- Ports consumed:
-- Canonical API/schema digest:
-- Opaque state/handle types:
-- Confirm no vendor type, credential, raw store locator or authorization decision crosses the boundary:
+- added/changed public records or package-owned opaque types;
+- ports implemented and consumed;
+- canonical public API/schema/port digest;
+- operation inventory with idempotency, cancellation, deadline and bounds;
+- proof that no vendor/native type or credential crosses the API.
 
 ## State ownership
 
-- Mutable state owned by this package:
-- Dependency-owned state referenced only opaquely:
-- Confirm no second store/catalog/handle/policy owner was introduced:
+- mutable state owned here;
+- dependency-owned state referenced only opaquely;
+- confirmation that no second store/catalog/handle/policy/deletion owner was introduced.
 
-## Invariants and failure behavior
+## Failure mapping
 
-List the owned invariants proved, typed reason codes emitted and truthful degradation/partial-result
-semantics.
+| Local typed error | Public reason | Protocol error | Retryability | Disclosure |
+|---|---|---|---|---|
 
 ## Tests and raw outcomes
 
-Record exact commands and raw success/failure/skip summaries. Include platform, toolchain and external
-artifact versions/digests. Never infer a pass for an unavailable command.
+Record exact commands and raw pass/fail/skip summaries, platform, toolchain and external artifact
+versions/digests. Never infer a pass for an unavailable command.
 
-## Dependencies
+## Dependencies and qualification
 
-- Added/removed dependencies:
-- Accepted direct-dependency commits/API digests:
-- ADR/license/security qualification:
+- added/removed dependencies;
+- ADR/license/source/security qualification;
+- fake/conformance fixture digest.
 
 ## Size
 
-- Hand-written Rust lines:
-- Largest module:
-- Split review required: yes/no
+- hand-written Rust lines / largest module;
+- split review required and decision.
 
 ## Residual state
 
-- Known failures or skipped checks:
-- Blockers:
-- Contract/port-change requests:
-- Follow-up integration work:
+- known failures/skips/blockers;
+- contract/port change requests;
+- follow-up integration work.
 
 ## Reviewer receipt
 
-- Ownership respected:
-- Port/dependency direction respected:
-- Security/currentness invariants:
-- Tests reproduce:
-- Accept/reject with reasons:
+- ownership and dependency/port direction respected;
+- security/currentness invariants preserved;
+- tests reproduce;
+- accept/reject with reasons.

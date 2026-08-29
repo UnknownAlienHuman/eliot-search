@@ -2,29 +2,28 @@
 
 ## Package reviewer
 
-- Changes stay inside the package write scope.
-- The implementation owns only responsibilities listed in package `AGENTS.md` and assignment.
-- Mutable state has one owner; no duplicate store, policy engine, handle table or deletion path appeared.
-- Public ports match `docs/handoff/PORT_CATALOG.md` and contain no vendor types, credentials, raw store
-  locators, raw point IDs or reusable authorization decisions.
-- Direct dependencies match `swarm/crates.toml`; new dependencies have an accepted boundary review.
-- No duplicate local contract was invented to bypass `search-contracts` or `search-domain`.
-- Failure paths emit typed reasons and never manufacture completeness, currentness or success.
-- Invariant, negative, property and fault tests cover the package-owned failure states.
-- No `todo!()`, placeholder success, silent fallback, fake receipt or hidden unbounded queue exists.
-- Hand-written Rust remains below 10,000 lines and split review occurred before 8,500 when applicable.
-- Raw command outcomes and unavailable checks are reported honestly.
+- Changes stay inside assigned package scope.
+- Mutable state has one owner; no duplicate store, policy engine, handle table or deletion path appears.
+- Shared records come from the accepted `search-contracts` digest.
+- Shared traits come from the accepted `search-ports` digest; no local substitute port appears.
+- Pure rules are not duplicated around `search-domain`.
+- Public API contains no vendor/native type, credential, raw store locator, raw point ID or reusable
+  authorization decision.
+- Direct dependencies match `swarm/crates.toml` and accepted handoffs.
+- Every blocking operation defines deadline/cancellation/bounds; every mutation defines idempotency.
+- Failures are typed and explicitly mapped to public/protocol reasons where applicable.
+- No placeholder success, fake receipt, silent fallback, `todo!()` or hidden unbounded queue exists.
+- Split review occurs before 8,500 total hand-written lines; 10,000 is a hard stop.
+- Raw commands and unavailable checks are reported honestly.
 
 ## Integration reviewer
 
-- Cargo members, registry entries, assignments and package directories are identical.
-- Dependency graph remains acyclic and respects contract → capability → adapter → daemon composition.
-- Only `eliot-searchd` constructs concrete redb, OS-secret, Qdrant process and Qdrant data-plane adapters.
-- Query/lifecycle crates consume ports and do not directly open concrete stores.
-- Root lockfile/toolchain/CI/generated changes are made only by the integration owner.
-- Downstream packages consume immutable accepted dependency commits and API/port digests.
-- Access/currentness restrictions happen before retrieval/scoring, not only after.
-- Source-backed readback, publication, handle expansion, ordinary reclaim and security purge remain
-  separate end-to-end invariants.
-- Optional providers remain gated, disabled and removable.
-- Wave exit evidence is complete; compilation alone is not treated as a gate or product verdict.
+- Cargo members, package directories, registry entries and assignments are identical.
+- Cargo manifest dependencies match registry dependencies.
+- Graph is acyclic and wave-monotonic except the declared daemon composition exception.
+- Only daemon composition constructs concrete redb, OS-secret, Qdrant process/data-plane adapters.
+- Contracts, domain and ports publish immutable accepted API digests before consumers start.
+- Access/currentness happen before retrieval/scoring.
+- Source readback, publication, handles, ordinary reclaim and purge remain distinct end-to-end invariants.
+- Optional providers remain blocked, removable and separately qualified.
+- Wave evidence is complete; compilation alone is not acceptance.

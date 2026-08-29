@@ -1,95 +1,71 @@
 # Implementation waves
 
-The architecture authorizes implementation at **P00/W0 only**. Later ownership is visible but not
-launchable until `swarm/launch-state.toml` advances with accepted evidence.
+The architecture authorizes P00 first. `swarm/launch-state.toml` is the only current launch authority;
+this document defines the future dependency-safe sequence.
 
 ## W0 — Contract freeze
 
-**Packages:** `search-contracts`, then `search-domain`.
+1. `search-contracts` implements the exact P00 field-level pack.
+2. Integration owner accepts its API/schema digest and resolves every contract challenge.
+3. `search-domain` and `search-ports` may then run in parallel against that immutable handoff.
+4. Integration owner pins the real Windows-compatible toolchain/dependencies, generates `Cargo.lock`,
+   runs P00 policy/tests and publishes the W0 receipt.
 
-Freeze vendor-neutral IDs, views, memberships, grants, plans, budgets, anchors, handles, recipes,
-reason codes, port shapes and pure invariant functions.
+No W1 package starts before that receipt.
 
-**Exit:** architecture hash; exact recipe set; canonical serialization; port/schema digest; dependency
-policy; pure property tests. No redb, Qdrant, watcher, parser or runtime dependency.
+## W1 — Process and control shell
 
-## W1 — Runtime, secrets and control shell
-
-**Packages:** `search-runtime-owner`, `search-os-secrets`, `search-control-redb`,
-`search-provider-protocol` transport primitives, daemon/CLI shells.
-
-**Exit:** second-owner denial; crash/reopen owner proof; secret plaintext absent from side channels;
-journal migration/corruption fixtures; hot query writes nothing; bounded frame/session shell.
+Runtime owner, OS-bound secret adapter, bounded redb journal, generic frame/session shell and thin
+CLI/daemon composition. Proves one-root ownership, secret non-disclosure, read-only hot admission,
+framing limits and clean shutdown.
 
 ## W2 — Direct source spine
 
-**Packages:** `search-source-admission`, `search-source-identity`, `search-source-registry`,
-`search-safe-reader`, `search-revision-store`, baseline `search-materializer`, `search-unitizer`.
-
-**Exit:** deny-by-default admission receipts; rename/hardlink/reparse/unstable-read fixtures;
-source-owner cutover; exact revision readback; coordinate/residency proofs.
+Source admission, identity/path history, registry/ownership, stable no-execute reads, residency-aware
+revision CAS, text/code materialization and deterministic unitization. No index is required.
 
 ## W3 — Qualified lexical index
 
-**Packages:** `search-qdrant-supervisor`, `search-qdrant-bridge`, `search-point-identity`,
-`search-lexical`, `search-projection-planner`, `search-epoch-pins`, `search-publication`,
-`search-index-reclaimer`.
-
-**Exit:** exact artifact/hash/PID/Job Object and secret handling proof; capability/schema fixture;
-lexical golden vectors; collision non-overwrite; publication failpoint matrix; committed exact retired
-manifest; no pinned reclaim and no broad correctness deletion.
+Exact Qdrant process artifact and containment, data-plane capability/schema gate, lexical fixtures,
+point identity/projection manifests, linearizable publication, epoch pins and exact retired-point
+reclamation.
 
 ## W4 — Baseline query product
 
-**Packages:** `search-access`, `search-query-planner`, `search-retrieval-executor`,
-`search-candidate-validator`, `search-handles`, `search-result-projector`, `search-continuation`,
-`search-eval` baseline harness.
-
-**Exit:** query crates have no concrete adapter edge; access/IDF noninterference; deterministic plans and
-ordering; bounded queues/results; exact source-backed candidates; handle authorization/TTL; raw baseline captured.
+Pre-candidate access, server-owned plans, bounded leg execution, exact source-backed validation, handle
+state, compact cards, continuations and raw read/grep evaluation baseline.
 
 ## W5 — Current workspace and code structure
 
-**Packages:** `search-source-reconcile`, `search-overlay`, `search-code-enricher`.
-
-**Exit:** watcher overflow/resume; no false currentness across gaps; unsaved-byte non-persistence;
-malformed/cfg parser fixtures; no compiler-certainty overclaim.
+Observation reconciliation, saved/unsaved overlays and qualified Rust structural enrichment.
 
 ## W6 — Comparison and exact proof
 
-**Packages:** `search-subject-resolver`, `search-comparator`, `search-exact`.
-
-**Exit:** renamed analogue/false-name/fork fixtures; decisive tests/config variants; complete-negative
-proof fails on drift, unreadable items or cancellation; inventory/readback remain port-driven.
+Ambiguity-preserving subject resolution, descriptive cross-repository comparison and frozen-denominator
+exact execution reports.
 
 ## W7 — Security and lifecycle hardening
 
-**Packages:** `search-retention`, durable `search-handles`, and hardening passes for access, validator,
-continuation, publication, revision store and index reclaimer.
-
-**Exit:** revocation at every checkpoint; contaminated legs discarded; handle denial; resumable CAS
-mark/sweep; purge non-resurrection; restore quarantine; ordinary reclaim and purge receipts remain distinct.
+Restrictive-revocation linearization, durable handles, CAS mark-and-sweep, purge receipts/tombstones,
+restore quarantine and ordinary-reclaim/purge separation.
 
 ## W8 — Generic client edge
 
-**Packages:** provider-protocol binding/integration, optional ELIOT and Research leaf adapters, daemon/CLI integration.
+Full binding/capability/evidence edge. Optional ELIOT and Research profiles remain leaf packages,
+disabled unless explicitly enabled and separately accepted.
 
-**Exit:** generic request → server-owned plan → candidate round trip; no reverse authority or canonical
-DB access; exact optional adapter fixtures when enabled.
+## W9 — Product Pulse / Windows qualification
 
-## W9 — Product Pulse and Windows qualification
-
-**Packages:** `search-eval`, daemon and CLI.
-
-**Exit:** raw A/B/C evidence; latency/resource/fault/security report; source-admission/leakage audit;
-protocol stress; explicit accepted/rejected verdict. Unit tests alone do not pass.
+Control corpus A/B/C comparison, latency/resource/fault/security evidence and explicit product verdict.
+Compilation or unit tests alone do not pass.
 
 ## W10 — Optional depth
 
-Model, rerank, document or scale profiles only after accepted P15 evidence and dedicated ADR.
+Semantic, rerank, document or scale profiles only after accepted P15, dedicated ADR, exact artifact
+qualification and measured material benefit.
 
 ## Launch rule
 
-For each package the orchestrator verifies launch authorization, accepted direct dependencies and port
-handoffs, creates an isolated worktree, supplies only bounded instructions, enforces write scope and
-merges in topological order with a wave receipt.
+For each package the orchestrator verifies `swarm/crates.toml`, launch state, accepted dependency API
+and port digests, creates one isolated worktree, provides only the bounded read set, rejects writes
+outside package scope and merges in topological order.
