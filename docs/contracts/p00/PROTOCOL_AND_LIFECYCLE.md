@@ -121,7 +121,7 @@ The token contains no raw Qdrant cursor, score, path or source bytes.
 ```yaml
 SecurityMutationBarrierState:
   security_domain_ref: OpaqueRef
-  phase: acquired | durable_committed | live_snapshot_published | dependents_invalidated | acknowledged | fail_closed
+  phase: ACQUIRED | DURABLE_COMMITTED | LIVE_SNAPSHOT_PUBLISHED | DEPENDENTS_INVALIDATED | ACKNOWLEDGED | FAIL_CLOSED
   access_policy_revision: AccessPolicyRevision
   live_deny_generation: u64
   mutation_receipt_ref: ReceiptRef
@@ -137,13 +137,15 @@ observable.
 
 ## Publication support records
 
+State spellings preserve the S13 state machine.
+
 ```yaml
 PublicationIntent:
   publication_intent_id: PublicationIntentId
   target_epoch: Epoch
   prepared_manifest_ref: ReceiptRef
   owner_source_membership_access_guards: bounded_list<StateDependency>
-  state: prepared | intent_durable | new_points_acknowledged | old_points_closed_acknowledged | readback_verified | control_committed | compensating | aborted | invalidation_only_committed | blocked
+  state: PREPARED | INTENT_DURABLE | NEW_POINTS_ACKNOWLEDGED | OLD_POINTS_CLOSED_ACKNOWLEDGED | READBACK_VERIFIED | CONTROL_COMMITTED | RECLAIMABLE | COMPENSATING | ABORTED | INVALIDATION_ONLY_COMMITTED | PUBLICATION_BLOCKED
 
 PublicationReceipt:
   publication_receipt_id: PublicationReceiptId
@@ -152,9 +154,18 @@ PublicationReceipt:
   exact_retired_manifest_ref: ReceiptRef
   readback_digest: Blake3Digest32
   control_commit_revision: NonZeroRevision
+
+AbandonedPublicationFence:
+  publication_intent_id: PublicationIntentId
+  collection_generation_id: CollectionGenerationId
+  excluded_projection_memberships: bounded_set<ProjectionMembershipId>
+  excluded_partition_refs: bounded_set<OpaqueRef>
+  fence_revision: NonZeroRevision
+  receipt_ref: ReceiptRef
 ```
 
-Uncommitted intents never change visible epoch. Skipped epochs are not reused.
+Uncommitted intents never change visible epoch. Skipped epochs are not reused. Abandonment is legal
+only after the exclusion fence is active before retrieval and IDF.
 
 ## Purge and restore
 
@@ -166,7 +177,9 @@ PurgeReceipt:
   index_deletion: not_applicable | pending | complete | partial | failed
   cache_deletion: not_applicable | pending | complete | partial | failed
   backup_snapshot_status: not_present | pending | retained_tombstone | unresolved
-  physical_secure_erase: not_guaranteed | provider_evidence_ref
+  physical_secure_erase:
+    status: not_guaranteed | evidence_available
+    evidence_ref: ReceiptRef | null
   revoked_handle_count: u64
   tombstone_ref: ReceiptRef
 
@@ -181,9 +194,10 @@ PairedRecoveryManifest:
   purge_tombstone_generation: u64
 
 RestoreDecision:
-  state: restore_pending_revalidation | direct_only | indexed_admitted | quarantined
+  state: RESTORE_PENDING_REVALIDATION | DIRECT_ONLY | INDEXED_ADMITTED | QUARANTINED
   reason_codes: bounded_set<SearchReasonCodeV1>
   validation_receipt_refs: bounded_list<ReceiptRef>
 ```
 
-Ordinary index reclamation cannot satisfy a security purge receipt.
+`evidence_ref` must be absent when secure erase is not guaranteed. Ordinary index reclamation cannot
+satisfy a security purge receipt.

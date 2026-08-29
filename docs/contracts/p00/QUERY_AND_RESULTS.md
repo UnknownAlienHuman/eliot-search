@@ -1,4 +1,6 @@
-# Grant, plan, result and exact-proof schemas
+# Grant, plan, candidate and exact-proof schemas
+
+Recipe-specific outputs are defined in `RECIPE_RESULTS.md`.
 
 ## Read grant
 
@@ -29,8 +31,8 @@ SearchReadGrantClaims:
   revocation_generation: u64
 ```
 
-Grant lists are authorization ceilings, then intersected with server-authoritative state. They do not
-contain Qdrant filters, collection names, point IDs or unrestricted paths.
+Grant lists are ceilings intersected with server-authoritative state. They contain no vendor filters,
+collection names, point IDs or unrestricted paths.
 
 ## Execution budget
 
@@ -49,8 +51,8 @@ QueryExecutionBudget:
   max_memory_bytes: u64
 ```
 
-Every limit is server-clamped. Zero has explicit schema meaning (`disabled` or `none`) and is never
-interpreted as unlimited.
+Every limit is server-clamped. Zero means disabled/none as defined by the field; it never means
+unlimited.
 
 ## Task plan
 
@@ -108,42 +110,54 @@ ExactnessRequirements:
   allow_truthful_partial: bool
 ```
 
-`PlanFingerprint` is BLAKE3-256 over canonical, domain-separated serialization of every load-bearing
-field except the fingerprint itself.
+`PlanFingerprint` hashes canonical, domain-separated serialization of every load-bearing field except
+the fingerprint itself.
+
+## Result fence
+
+```yaml
+ResultFence:
+  source_owner_fences: bounded_list<SourceOwnerFence>
+  access_policy_revision: AccessPolicyRevision
+  live_deny_generation: u64
+  shadow_fence_revision: ShadowFenceRevision
+  purge_fence_revision: PurgeFenceRevision
+  collection_route_revision: CollectionRouteRevision
+  visible_epoch: Epoch | null
+  source_view: SourceView
+  workspace_view_revision_ref: WorkspaceViewRevisionId | null
+```
 
 ## Candidate result
+
+Architecture S23 removes stale, unreadable, inaccessible and otherwise invalid candidates before
+projection. Therefore `candidates` contains only validated, source-backed candidates.
 
 ```yaml
 SearchCandidateSet:
   request_id: RequestId
   plan_id: PlanId
   plan_fingerprint: PlanFingerprint
-  source_view: SourceView
-  workspace_view_revision_ref: WorkspaceViewRevisionId | null
-  result_fence:
-    source_owner_fences: bounded_list<SourceOwnerFence>
-    access_policy_revision: AccessPolicyRevision
-    live_deny_generation: u64
-    collection_route_revision: CollectionRouteRevision
-    visible_epoch: Epoch | null
-  candidates: bounded_list<SearchCandidate>
+  result_fence: ResultFence
+  candidates: bounded_list<ValidatedSearchCandidate>
   coverage: Coverage
   continuation_handle: ContinuationHandle | null
   result_validation_receipt_ref: ReceiptRef
-```
 
-```yaml
-SearchCandidate:
+ValidatedSearchCandidate:
   candidate_id: CandidateId
   source_handle: SearchSourceHandle
   evidence_role: EvidenceRole
   entity_kind: EntityKind | null
   assurance: exact_bytes | mapped_text | lossy_text | descriptive_only
   freshness: current_confirmed | observed_with_age | gap_detected | unknown
-  validation_state: validated | stale | unreadable
   ranking_trace: BoundedNonContentRankingTrace
   reason_codes: bounded_set<SearchReasonCodeV1>
+  candidate_validation_receipt_ref: ReceiptRef
 ```
+
+`ValidatedSearchCandidate.reason_codes` cannot contain `STALE`, `UNREADABLE`, `ACCESS_REVOKED` or
+`PURGED`. Those outcomes are validation gaps, not evidence candidates.
 
 ```yaml
 Coverage:
@@ -152,12 +166,23 @@ Coverage:
   represented_memberships: bounded_set<SourceMembershipId>
   represented_source_lineages: bounded_set<RepositoryLineageId>
   omitted_or_failed_legs: bounded_list<CoverageGap>
+  candidate_validation_gaps: bounded_list<CandidateValidationGap>
   observation_freshness: ObservationFreshness
   unknowns: bounded_list<CoverageUnknown>
   denominator_kind: candidate_scope | complete_scope | unknown
+
+CandidateValidationGap:
+  nominated_candidate_ref: OpaqueId
+  source_revision_ref: SourceRevisionRef | null
+  reason: STALE | UNREADABLE | ACCESS_REVOKED | PURGED | SOURCE_REVISION_UNAVAILABLE
+  affected_leg_refs: bounded_list<OpaqueId>
+  contaminated_rank_leg: bool
+  disposition: dropped | replan_requested | gap_reported
 ```
 
-`complete_scope` is valid only when an accepted exact execution report proves the denominator.
+A gap carries no excerpt or evidence-bearing source handle. If a revoked population influenced scoring
+or IDF, the entire leg is contaminated and discarded/replanned. `complete_scope` is valid only from an
+accepted exact execution report.
 
 ## Native anchors
 
@@ -240,5 +265,5 @@ ExactExecutionReport:
   receipt_ref: ReceiptRef
 ```
 
-`no_match_in_complete_scope` requires every denominator item and cannot prove absence of a semantic
-analogue.
+`no_match_in_complete_scope` requires every denominator item and proves only the stated exact
+predicate, never absence of a semantic analogue.
