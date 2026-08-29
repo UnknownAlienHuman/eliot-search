@@ -5,6 +5,7 @@
 | `architecture/` | Authoritative single-file Architecture 8.4 implementation master. |
 | `contracts/p00/` | Compact field-level W0 projection, canonicalization, recipes, reasons and ports. |
 | `config/` | Configuration format, section ownership and composite reconfiguration contracts. |
+| `current/` | W5 observation continuity, saved/unsaved overlay and Rust syntax contracts. |
 | `client/` | Generic provider edge, standalone client and optional leaf-profile contracts. |
 | `evaluation/` | Product Pulse, Windows qualification, corpus/metric and verdict contracts. |
 | `optional/` | Post-P15 model, document and advanced-scale candidate contracts. |

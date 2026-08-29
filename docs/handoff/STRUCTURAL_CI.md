@@ -1,48 +1,52 @@
 # Structural CI scope
 
-`Swarm structure` is a read-only scaffold-integrity workflow. It validates four layers:
+`Swarm structure` is a read-only, manual-only scaffold-integrity workflow. It validates five layers:
 
 1. `validate-swarm.ps1` — Cargo members/manifests, package registry, assignments, dependency graph,
    launch counts/authorization, line limits and P00 manifest integrity;
 2. `validate-implementation-packets.ps1` — registry-declared function/configuration packets and W3
    Qdrant/lexical qualification shape;
-3. `validate-current-packets.ps1` — W4 function/qualification registration plus W5 currentness,
-   overlay and Rust-structure packet/baseline/probe integrity;
-4. `validate-proof-packets.ps1` — W6 resolver/comparator/exact function links, locked non-overclaim
-   baseline, unselected proof profiles, 52 mandatory probes and G3 evidence IDs.
+3. `validate-current-packets.ps1` — W4 function/qualification registration plus W5 package links,
+   baseline and 42 current-workspace probes;
+4. `validate-w5-current.ps1` — W5 cross-contract, settings, bounded read/write packets, Rust parser
+   artifact/probes and exact W5/W6 partition of the central G3 evidence set;
+5. `validate-proof-packets.ps1` — W6 resolver/comparator/exact links, locked non-overclaim baseline,
+   unselected proof profiles, 52 mandatory probes and G3 evidence IDs.
 
-The workflow uses read-only repository permissions and a commit-pinned checkout action with credentials
-not persisted.
+The workflows use read-only repository permissions, commit-pinned checkout and
+`persist-credentials: false`. They run only through `workflow_dispatch`.
 
-It checks that:
+The W5 checks prove structurally that:
 
-- registry and launch-state qualification paths remain synchronized through W6;
-- W6 resolver/comparator/exact entries point to exact package-local `FUNCTIONS.md` and one qualification
-  packet;
-- launch state remains P00/W0 with only `search-contracts` authorized;
-- material ambiguity, lineage independence, evidence-role separation and non-normative output remain
-  locked;
-- Qdrant/top-k/client file lists cannot become exact denominators;
-- every exact denominator item must be accounted and incomplete conditions cannot satisfy complete
-  negative proof;
-- regex engine/provider and structural exact profile identities remain `UNSELECTED` before qualification;
-- all 52 W6 probes remain unique, mandatory and `UNAVAILABLE` before execution;
-- G3 names separate evidence for ambiguity/drift, lineage/cfg variants, non-normative coverage, predicate
-  qualification, frozen denominator, incomplete failures and security/unsaved revalidation.
+- watcher/USN observations are hints and cannot confirm currentness;
+- overflow/reset/rebind opens a gap before acknowledgement;
+- partial/cancelled/timed-out inventory cannot close a gap or remove unseen sources;
+- disk, saved revision, buffer snapshot and projection currentness remain separate;
+- unsaved bytes cannot enter redb, CAS, Qdrant, logs, metrics, backups, crash artifacts, provider caches,
+  evaluation corpora or learning inputs;
+- overlay shadowing occurs before retrieval and IDF and cannot fall back to stale base on failure;
+- durable handles/continuations cannot target unsaved bytes;
+- Rust parser/provider remains `UNSELECTED`/`UNQUALIFIED`;
+- Cargo, rustc, build scripts, macro expansion, network/package resolution and compiler-semantic overclaim
+  remain disabled;
+- all 42 current-workspace and 17 Rust-syntax probes remain mandatory and unavailable before execution;
+- W5 owns only seven currentness/overlay/parser G3 evidence items; downstream W6 owns the remaining seven;
+- launch authority remains P00/W0.
 
-It does **not** prove:
+The structural workflows do **not** prove:
 
-- Rust implementation or contract correctness;
-- subject resolution quality on real repositories;
-- actual repository lineage/copy independence;
-- actual regex safety/performance or structural exact behavior;
-- exact inventory/revision/access/overlay runtime integration;
-- complete-negative proof correctness under real faults;
+- real Windows watcher/USN continuity or IDE buffer authentication;
+- memory isolation or exhaustive runtime non-persistence;
+- parser dependency safety, span behavior or no-execute containment;
+- reconciliation, shadowing or currentness correctness under real faults;
+- Rust implementation or API correctness;
 - Qdrant/redb/CAS/Windows security behavior;
+- comparison/exact-proof quality;
 - latency, resource budgets or Product Pulse acceptance.
 
-Passing is a merge prerequisite for scaffold changes, not a gate receipt. Runtime claims require exact
-commands, environment/artifact/API/profile identities, raw output and independent review.
+Passing is a merge prerequisite for scaffold changes, not a package, wave or product receipt. Runtime
+claims require exact commands, environment/artifact/API/profile identities, raw output and independent
+review.
 
 Current pinned checkout identity:
 

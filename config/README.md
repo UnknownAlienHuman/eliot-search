@@ -6,6 +6,8 @@ Configuration is implementation-scaffolded, not implemented.
   secret policy and bounded packet path.
 - [`sections/`](sections/) — one small field/validation/reload packet per capability-owned section.
 - [`eliot-search.example.toml`](eliot-search.example.toml) — complete safe DIRECT-mode example.
+- [`w5-current.toml`](w5-current.toml) — locked W5 currentness, transient-overlay and Rust parser-profile
+  settings; it is a stage qualification schema, not implementation authorization.
 - [`../docs/config/CONFIGURATION_1.0.md`](../docs/config/CONFIGURATION_1.0.md) — full cross-package
   configuration contract.
 
@@ -13,6 +15,9 @@ Configuration is implementation-scaffolded, not implemented.
 reconfiguration planning. It owns no capability setting and performs no I/O. Each section owner owns
 typed defaults, validation, digest and live-application behavior.
 
-The example does not select a Qdrant build or lexical profile. Indexed settings remain disabled or
-`UNQUALIFIED` until P05–P07 evidence is accepted. Plaintext secrets, automatic downloads/upgrades and
-optional-profile self-authorization are invalid.
+Stage-specific `w*-*.toml` files add locked qualification and bounded orchestration settings. They do not
+create new authority, select artifacts/providers or permit a future wave to start.
+
+The example does not select a Qdrant build, lexical profile or optional provider. Indexed settings remain
+disabled or `UNQUALIFIED` until their evidence is accepted. Plaintext secrets, automatic downloads/
+upgrades, currentness weakening and optional-profile self-authorization are invalid.

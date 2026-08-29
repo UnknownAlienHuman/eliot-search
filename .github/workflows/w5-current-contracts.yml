@@ -1,0 +1,31 @@
+name: W5 current-workspace contracts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w5-current-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate W5 contracts
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate W4 registry and current-workspace qualification
+        shell: pwsh
+        run: ./tools/validate-current-packets.ps1 -Json
+
+      - name: Validate W5 cross-contract, settings, swarm packet and Rust syntax qualification
+        shell: pwsh
+        run: ./tools/validate-w5-current.ps1 -Json
