@@ -84,7 +84,7 @@ search-eliot-adapter = { path = "crates/search-eliot-adapter" }
 search-research-export-adapter = { path = "crates/search-research-export-adapter" }
 
 [workspace.lints.rust]
-unsafe_code = "warn"
+unsafe_code = "deny"
 unused_must_use = "deny"
 
 [workspace.lints.clippy]

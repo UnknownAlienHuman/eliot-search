@@ -2,11 +2,11 @@
 
 **Local-first data preparation and retrieval provider for ELIOT Memory OS.**
 
-> **Status: Architecture 8.4 published; swarm-ready package scaffold; no business implementation.**
+> **Status: Architecture 8.4 published; swarm-ready implementation contracts; no business implementation.**
 > The authoritative standalone contract is
 > [ELIOT Search 8.4](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md).
-> The workspace currently contains package boundaries, dependency declarations and per-package agent
-> contracts only. Runtime, correctness, performance, security execution, migration and product
+> The workspace contains package boundaries, dependency declarations, bounded per-package assignments
+> and launch gates. Runtime, correctness, performance, security execution, migration and product
 > acceptance remain unproven.
 
 ## Product boundary
@@ -39,12 +39,12 @@ stale or inaccessible candidates are removed before projection.
 
 ## Swarm decomposition
 
-Architecture S31 lists focused capability families and explicitly permits a capability cell to become a
-separate crate when a real dependency, replacement, test or context boundary exists. ADR
+Architecture S31 permits a capability cell to become a separate crate when a real dependency,
+replacement, test or context boundary exists. ADR
 [0001](docs/adr/0001-capability-cell-crate-decomposition.md) applies that rule to a one-agent/one-crate
-swarm and a target below 10,000 hand-written lines per package.
+swarm and a hard limit below 10,000 hand-written Rust lines per package.
 
-The workspace has **34 library packages** and **4 binary packages**. Family directories are organizational
+The workspace has **34 library packages** and **4 binary packages**. Family directories are navigation
 containers, not forwarding crates.
 
 ```text
@@ -96,17 +96,27 @@ bins/
   eliot-search-doc-worker/           optional after P15
 ```
 
-Every package contains a small `AGENTS.md` with its exact ownership, forbidden responsibilities,
-logical API, reason codes, test seams, allowed dependencies and delivery wave. Swarm orchestration uses
-[`swarm/crates.toml`](swarm/crates.toml); agents do not need to repeatedly load the architecture master.
+## Agent context
+
+Each writer receives one bounded packet under
+[`swarm/assignments/`](swarm/assignments/README.md). A packet contains:
+
+- exact ownership and non-ownership;
+- logical primitives and function-level operations;
+- state/invariant and failure semantics;
+- suggested internal module plan;
+- dependency handoff requirements;
+- mandatory tests, line budget and split triggers.
+
+Ordinary package agents do not load the 145 KB architecture master. Current implementation permission
+comes only from [`swarm/launch-state.toml`](swarm/launch-state.toml), not from a Cargo member or a future
+wave appearing in documentation.
 
 ## Delivery order
 
-The scaffold preserves P00–P18 but exposes smaller ownership units:
-
 ```text
 W0 contracts and pure domain
-W1 runtime owner and control journal
+W1 runtime owner and bounded control shell
 W2 direct source/revision/materialization spine
 W3 qualified Qdrant, lexical, identity and publication
 W4 lexical query pipeline and compact cards
@@ -118,14 +128,14 @@ W9 Product Pulse / Windows qualification
 W10 optional model or document depth after accepted P15
 ```
 
-See [implementation waves](docs/handoff/IMPLEMENTATION_WAVES.md) and the
-[crate matrix](docs/handoff/CRATE_MATRIX.md).
+See the [implementation waves](docs/handoff/IMPLEMENTATION_WAVES.md), [crate matrix](docs/handoff/CRATE_MATRIX.md),
+[dependency graph](docs/handoff/DEPENDENCY_GRAPH.md) and [P00 bootstrap](docs/handoff/P00_BOOTSTRAP.md).
 
 ## Scaffold semantics
 
-`Cargo.toml` files and `src/lib.rs` / `src/main.rs` files only establish package boundaries. They contain
-no retrieval, storage, protocol or runtime implementation. P00 still owns the exact Rust toolchain pin,
-Cargo.lock, contract types, tests and dependency-policy proof.
+`Cargo.toml` and empty `src/lib.rs` / `src/main.rs` files establish package boundaries only. No
+retrieval, storage, protocol or runtime behavior has been implemented. P00 still owns the exact Rust
+toolchain pin, Cargo.lock, contract implementation, pure tests and dependency-policy proof.
 
 ## License
 

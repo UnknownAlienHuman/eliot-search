@@ -1,61 +1,51 @@
 # Agent contract — eliot-searchd
 
-You own only `bins/eliot-searchd/`. This is a composition or worker package, not a place to reimplement
-capability logic. Do not edit library packages, the root workspace, shared fixtures or architecture.
-Traceability only: S0, S27, S29, S30.3, S32, S33, P01-P15.
+You own only `bins/eliot-searchd/`. This is a progressive composition package, not a capability
+implementation. Read `swarm/assignments/eliot-searchd.md` and only the accepted dependency handoffs for
+the active Cargo feature layer.
 
 ## Mission
 
-Compose the capability crates, own the data root and expose the only storage/provider process boundary.
+Compose accepted capability crates, own the data root and expose the only storage/provider process
+boundary while keeping `main` thin.
+
+## Progressive layers
+
+```text
+wave1-shell       owner + journal + provider framing
+wave2-source      direct source/revision/materialization spine
+wave3-index       lexical/Qdrant/publication/pins
+wave4-query       access/planner/executor/validation/cards/continuations
+wave5-current     reconciliation/overlay/Rust structure
+wave6-proof       exact scan/subject/comparison
+wave7-lifecycle   retention/purge/restore hardening
+```
+
+The default feature is `wave1-shell`. A final dependency appearing in Cargo is not permission to read it
+or enable it. Each later layer requires accepted public handoffs and integration-owner activation.
 
 ## Ownership
 
-- dependency wiring and startup order
-- data-root owner guard
-- bounded task supervision
-- provider protocol server
-- controlled shutdown and readiness/degradation reporting
+- dependency injection and startup order;
+- data-root owner guard and sole Qdrant process supervision;
+- bounded task/server lifecycle;
+- readiness/degradation capability descriptor;
+- controlled drain, cancellation and shutdown.
 
 ## Forbidden ownership
 
-- reimplementing capability logic inside main
-- sharing store clients with CLI/workers/adapters
-- allowing another process to own qdrant or redb
-- hidden fallback across capability boundaries
+- capability logic inside `main`;
+- direct dependency on unaccepted future-wave behavior;
+- sharing redb/Qdrant clients with CLI, workers or adapters;
+- a second data-root/index owner;
+- hidden fallback across profiles.
 
-## Allowed dependencies
+## Write and integration boundary
 
-`search-contracts`, `search-domain`, `search-runtime-owner`, `search-control-redb`, `search-source-registry`, `search-source-identity`, `search-source-reconcile`, `search-safe-reader`, `search-revision-store`, `search-materializer`, `search-unitizer`, `search-code-enricher`, `search-lexical`, `search-projection-planner`, `search-point-identity`, `search-qdrant-bridge`, `search-publication`, `search-epoch-pins`, `search-access`, `search-overlay`, `search-exact`, `search-subject-resolver`, `search-query-planner`, `search-retrieval-executor`, `search-candidate-validator`, `search-comparator`, `search-result-projector`, `search-continuation`, `search-retention`, `search-eval`, `search-provider-protocol`. Do not add a storage, index, model, parser or client implementation outside this declared
-graph. New external artifacts require an ADR, exact version/digest, license proof and qualification.
+The writer edits only this package. Root feature policy, workspace members, lockfile and launch state
+belong to the integration owner. New behavior belongs in the package that owns its state/failure seam.
 
-## Integration milestones
+## Size guard
 
-- P01: owner shell, framing entry, clean shutdown
-- P02-P04: direct profile composition
-- P05-P08: lexical profile composition
-- P09-P13: reconciliation, code, exact and purge hardening
-- P14-P15: generic client edge and product qualification
-
-## Test seams and exit evidence
-
-- `CLI and workers cannot reach stores directly`
-- `startup orders owner→journal→source→optional Qdrant`
-- `degraded direct mode is truthful`
-- `shutdown cancels work and releases pins`
-- `second daemon cannot own same root`
-
-Record exact command output and degraded behavior. Do not claim a Windows, Qdrant or provider proof that
-was not executed.
-
-## Size and split guard
-
-- Delivery wave: **W1 shell, integrated through W9**
-- Soft `src/` target: **6,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Keep `main` and command wiring thin; behavior belongs to the owning library package.
-
-## Definition of done
-
-The binary only composes accepted package contracts, has no reverse storage/authority path, enforces
-bounded lifecycle and cancellation, and supplies a reproducible handoff using
-`swarm/PACKAGE_HANDOFF_TEMPLATE.md`. Compilation alone is insufficient.
+Target `src/` ≤ 6,500 lines. Mandatory split/design review occurs before 8,500 total hand-written Rust
+lines; 10,000 including local tests is a hard stop.
