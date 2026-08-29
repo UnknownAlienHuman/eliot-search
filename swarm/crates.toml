@@ -1,16 +1,21 @@
-schema_version = 2
+schema_version = 3
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
 status = "scaffold-only"
+package_count = 43
+library_package_count = 39
+binary_package_count = 4
 assignment_path_template = "swarm/assignments/{package}.md"
 launch_state_path = "swarm/launch-state.toml"
+port_catalog_path = "docs/handoff/PORT_CATALOG.md"
 hard_handwritten_rust_line_limit = 10000
 mandatory_split_review_line_limit = 8500
 ordinary_agent_architecture_access = "exception-only"
 
 # Per-package AGENTS.md is `${path}/AGENTS.md`; write scope is `${path}/**`.
-# `wave` is the first possible wave, not current authorization. launch-state.toml is authoritative.
+# `wave` is the earliest possible wave, not current authorization. launch-state.toml is authoritative.
+# Concrete redb/Qdrant/process adapters are composed only by `eliot-searchd`.
 
 [[package]]
 name = "search-contracts"
@@ -49,6 +54,18 @@ assignment = "swarm/assignments/search-runtime-owner.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
+name = "search-os-secrets"
+path = "crates/search-runtime/search-os-secrets"
+kind = "lib"
+cell = "C01/C15/C30 security support"
+family = "runtime"
+wave = 1
+optional = false
+soft_src_line_target = 3500
+assignment = "swarm/assignments/search-os-secrets.md"
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
 name = "search-control-redb"
 path = "crates/search-control-redb"
 kind = "lib"
@@ -61,6 +78,18 @@ assignment = "swarm/assignments/search-control-redb.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
+name = "search-source-admission"
+path = "crates/search-source/search-source-admission"
+kind = "lib"
+cell = "C03/C06 security support"
+family = "source"
+wave = 2
+optional = false
+soft_src_line_target = 4500
+assignment = "swarm/assignments/search-source-admission.md"
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
 name = "search-source-registry"
 path = "crates/search-source/search-source-registry"
 kind = "lib"
@@ -70,7 +99,7 @@ wave = 2
 optional = false
 soft_src_line_target = 6500
 assignment = "swarm/assignments/search-source-registry.md"
-deps = ["search-contracts", "search-domain", "search-source-identity"]
+deps = ["search-contracts", "search-domain", "search-source-identity", "search-source-admission"]
 
 [[package]]
 name = "search-source-identity"
@@ -104,7 +133,7 @@ cell = "C06"
 family = "source"
 wave = 2
 optional = false
-soft_src_line_target = 7500
+soft_src_line_target = 6500
 assignment = "swarm/assignments/search-safe-reader.md"
 deps = ["search-contracts", "search-domain"]
 
@@ -205,14 +234,26 @@ assignment = "swarm/assignments/search-point-identity.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
-name = "search-qdrant-bridge"
-path = "crates/search-index-qdrant/search-qdrant-bridge"
+name = "search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor"
 kind = "lib"
-cell = "C15"
+cell = "C01/C15 process support"
 family = "index"
 wave = 3
 optional = false
-soft_src_line_target = 7500
+soft_src_line_target = 5500
+assignment = "swarm/assignments/search-qdrant-supervisor.md"
+deps = ["search-contracts", "search-domain", "search-os-secrets"]
+
+[[package]]
+name = "search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge"
+kind = "lib"
+cell = "C15 data plane"
+family = "index"
+wave = 3
+optional = false
+soft_src_line_target = 7000
 assignment = "swarm/assignments/search-qdrant-bridge.md"
 deps = ["search-contracts", "search-domain"]
 
@@ -226,19 +267,31 @@ wave = 3
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-publication.md"
-deps = ["search-contracts", "search-domain", "search-projection-planner", "search-point-identity", "search-qdrant-bridge", "search-epoch-pins"]
+deps = ["search-contracts", "search-domain", "search-projection-planner", "search-point-identity"]
 
 [[package]]
 name = "search-epoch-pins"
 path = "crates/search-index-qdrant/search-epoch-pins"
 kind = "lib"
-cell = "C17"
+cell = "C17 pin registry"
 family = "index"
 wave = 3
 optional = false
 soft_src_line_target = 4500
 assignment = "swarm/assignments/search-epoch-pins.md"
 deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer"
+kind = "lib"
+cell = "C17 reclaim executor"
+family = "index"
+wave = 3
+optional = false
+soft_src_line_target = 4500
+assignment = "swarm/assignments/search-index-reclaimer.md"
+deps = ["search-contracts", "search-domain", "search-epoch-pins"]
 
 [[package]]
 name = "search-access"
@@ -274,7 +327,7 @@ wave = 6
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-exact.md"
-deps = ["search-contracts", "search-domain", "search-source-registry", "search-revision-store", "search-safe-reader", "search-access"]
+deps = ["search-contracts", "search-domain", "search-access"]
 
 [[package]]
 name = "search-subject-resolver"
@@ -310,7 +363,7 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-retrieval-executor.md"
-deps = ["search-contracts", "search-domain", "search-query-planner", "search-qdrant-bridge", "search-lexical", "search-epoch-pins", "search-access"]
+deps = ["search-contracts", "search-domain", "search-query-planner", "search-lexical", "search-epoch-pins", "search-access"]
 
 [[package]]
 name = "search-candidate-validator"
@@ -322,7 +375,7 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-candidate-validator.md"
-deps = ["search-contracts", "search-domain", "search-access", "search-revision-store"]
+deps = ["search-contracts", "search-domain", "search-access"]
 
 [[package]]
 name = "search-comparator"
@@ -337,6 +390,18 @@ assignment = "swarm/assignments/search-comparator.md"
 deps = ["search-contracts", "search-domain", "search-subject-resolver"]
 
 [[package]]
+name = "search-handles"
+path = "crates/search-query/search-handles"
+kind = "lib"
+cell = "C26/C27 handle support"
+family = "query"
+wave = 4
+optional = false
+soft_src_line_target = 6500
+assignment = "swarm/assignments/search-handles.md"
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
 name = "search-result-projector"
 path = "crates/search-query/search-result-projector"
 kind = "lib"
@@ -346,7 +411,7 @@ wave = 4
 optional = false
 soft_src_line_target = 7000
 assignment = "swarm/assignments/search-result-projector.md"
-deps = ["search-contracts", "search-domain", "search-candidate-validator"]
+deps = ["search-contracts", "search-domain", "search-candidate-validator", "search-handles"]
 
 [[package]]
 name = "search-continuation"
@@ -370,7 +435,7 @@ wave = 7
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-retention.md"
-deps = ["search-contracts", "search-domain", "search-control-redb", "search-revision-store", "search-qdrant-bridge", "search-epoch-pins"]
+deps = ["search-contracts", "search-domain", "search-epoch-pins", "search-index-reclaimer", "search-handles"]
 
 [[package]]
 name = "search-eval"
@@ -432,7 +497,7 @@ soft_src_line_target = 6500
 assignment = "swarm/assignments/eliot-searchd.md"
 progressive_composition = true
 active_default_feature = "wave1-shell"
-deps = ["search-contracts", "search-domain", "search-runtime-owner", "search-control-redb", "search-source-registry", "search-source-identity", "search-source-reconcile", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "search-code-enricher", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-access", "search-overlay", "search-exact", "search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-comparator", "search-result-projector", "search-continuation", "search-retention", "search-eval", "search-provider-protocol"]
+deps = ["search-contracts", "search-domain", "search-runtime-owner", "search-os-secrets", "search-control-redb", "search-source-admission", "search-source-registry", "search-source-identity", "search-source-reconcile", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "search-code-enricher", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer", "search-access", "search-overlay", "search-exact", "search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-comparator", "search-handles", "search-result-projector", "search-continuation", "search-retention", "search-eval", "search-provider-protocol"]
 
 [[package]]
 name = "eliot-search"
