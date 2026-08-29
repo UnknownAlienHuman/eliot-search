@@ -15,6 +15,7 @@ path = "src/main.rs"
 default = ["wave1-shell"]
 wave1-shell = []
 wave2-source = [
+    "dep:search-source-admission",
     "dep:search-source-registry",
     "dep:search-source-identity",
     "dep:search-safe-reader",
@@ -27,9 +28,11 @@ wave3-index = [
     "dep:search-lexical",
     "dep:search-projection-planner",
     "dep:search-point-identity",
+    "dep:search-qdrant-supervisor",
     "dep:search-qdrant-bridge",
     "dep:search-publication",
     "dep:search-epoch-pins",
+    "dep:search-index-reclaimer",
 ]
 wave4-query = [
     "wave3-index",
@@ -37,6 +40,7 @@ wave4-query = [
     "dep:search-query-planner",
     "dep:search-retrieval-executor",
     "dep:search-candidate-validator",
+    "dep:search-handles",
     "dep:search-result-projector",
     "dep:search-continuation",
     "dep:search-eval",
@@ -63,9 +67,11 @@ full-baseline = ["wave7-lifecycle"]
 search-contracts.workspace = true
 search-domain.workspace = true
 search-runtime-owner.workspace = true
+search-os-secrets.workspace = true
 search-control-redb.workspace = true
 search-provider-protocol.workspace = true
 
+search-source-admission = { workspace = true, optional = true }
 search-source-registry = { workspace = true, optional = true }
 search-source-identity = { workspace = true, optional = true }
 search-source-reconcile = { workspace = true, optional = true }
@@ -78,9 +84,11 @@ search-code-enricher = { workspace = true, optional = true }
 search-lexical = { workspace = true, optional = true }
 search-projection-planner = { workspace = true, optional = true }
 search-point-identity = { workspace = true, optional = true }
+search-qdrant-supervisor = { workspace = true, optional = true }
 search-qdrant-bridge = { workspace = true, optional = true }
 search-publication = { workspace = true, optional = true }
 search-epoch-pins = { workspace = true, optional = true }
+search-index-reclaimer = { workspace = true, optional = true }
 
 search-access = { workspace = true, optional = true }
 search-overlay = { workspace = true, optional = true }
@@ -90,6 +98,7 @@ search-query-planner = { workspace = true, optional = true }
 search-retrieval-executor = { workspace = true, optional = true }
 search-candidate-validator = { workspace = true, optional = true }
 search-comparator = { workspace = true, optional = true }
+search-handles = { workspace = true, optional = true }
 search-result-projector = { workspace = true, optional = true }
 search-continuation = { workspace = true, optional = true }
 

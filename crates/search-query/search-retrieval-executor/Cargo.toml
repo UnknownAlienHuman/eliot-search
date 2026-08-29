@@ -14,7 +14,6 @@ path = "src/lib.rs"
 search-contracts.workspace = true
 search-domain.workspace = true
 search-query-planner.workspace = true
-search-qdrant-bridge.workspace = true
 search-lexical.workspace = true
 search-epoch-pins.workspace = true
 search-access.workspace = true

@@ -14,6 +14,7 @@ path = "src/lib.rs"
 search-contracts.workspace = true
 search-domain.workspace = true
 search-candidate-validator.workspace = true
+search-handles.workspace = true
 
 [lints]
 workspace = true

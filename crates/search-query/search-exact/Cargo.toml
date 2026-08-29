@@ -13,9 +13,6 @@ path = "src/lib.rs"
 [dependencies]
 search-contracts.workspace = true
 search-domain.workspace = true
-search-source-registry.workspace = true
-search-revision-store.workspace = true
-search-safe-reader.workspace = true
 search-access.workspace = true
 
 [lints]
