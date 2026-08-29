@@ -1,13 +1,16 @@
-schema_version = 1
+schema_version = 2
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
 status = "scaffold-only"
+assignment_path_template = "swarm/assignments/{package}.md"
+launch_state_path = "swarm/launch-state.toml"
 hard_handwritten_rust_line_limit = 10000
+mandatory_split_review_line_limit = 8500
 ordinary_agent_architecture_access = "exception-only"
 
 # Per-package AGENTS.md is `${path}/AGENTS.md`; write scope is `${path}/**`.
-# `wave` is the first authorized launch wave. Full delivery/gate detail is in docs/handoff/CRATE_MATRIX.md.
+# `wave` is the first possible wave, not current authorization. launch-state.toml is authoritative.
 
 [[package]]
 name = "search-contracts"
@@ -17,7 +20,8 @@ cell = "C00"
 family = "foundation"
 wave = 0
 optional = false
-soft_src_line_target = 8000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-contracts.md"
 deps = []
 
 [[package]]
@@ -29,6 +33,7 @@ family = "foundation"
 wave = 0
 optional = false
 soft_src_line_target = 7000
+assignment = "swarm/assignments/search-domain.md"
 deps = ["search-contracts"]
 
 [[package]]
@@ -40,6 +45,7 @@ family = "runtime"
 wave = 1
 optional = false
 soft_src_line_target = 4500
+assignment = "swarm/assignments/search-runtime-owner.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -50,7 +56,8 @@ cell = "C02"
 family = "control"
 wave = 1
 optional = false
-soft_src_line_target = 8500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-control-redb.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -62,6 +69,7 @@ family = "source"
 wave = 2
 optional = false
 soft_src_line_target = 6500
+assignment = "swarm/assignments/search-source-registry.md"
 deps = ["search-contracts", "search-domain", "search-source-identity"]
 
 [[package]]
@@ -73,6 +81,7 @@ family = "source"
 wave = 2
 optional = false
 soft_src_line_target = 6500
+assignment = "swarm/assignments/search-source-identity.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -84,6 +93,7 @@ family = "source"
 wave = 5
 optional = false
 soft_src_line_target = 7000
+assignment = "swarm/assignments/search-source-reconcile.md"
 deps = ["search-contracts", "search-domain", "search-source-registry", "search-source-identity", "search-safe-reader"]
 
 [[package]]
@@ -95,6 +105,7 @@ family = "source"
 wave = 2
 optional = false
 soft_src_line_target = 7500
+assignment = "swarm/assignments/search-safe-reader.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -105,7 +116,8 @@ cell = "C07"
 family = "source"
 wave = 2
 optional = false
-soft_src_line_target = 8000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-revision-store.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -117,6 +129,7 @@ family = "preparation"
 wave = 2
 optional = false
 soft_src_line_target = 7000
+assignment = "swarm/assignments/search-materializer.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -128,6 +141,7 @@ family = "preparation"
 wave = 2
 optional = false
 soft_src_line_target = 6500
+assignment = "swarm/assignments/search-unitizer.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -138,7 +152,8 @@ cell = "C10"
 family = "preparation"
 wave = 5
 optional = false
-soft_src_line_target = 8500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-code-enricher.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -149,7 +164,8 @@ cell = "C11"
 family = "provider"
 wave = 3
 optional = false
-soft_src_line_target = 8500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-lexical.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -161,6 +177,7 @@ family = "provider"
 wave = 10
 optional = true
 soft_src_line_target = 6500
+assignment = "swarm/assignments/search-model-provider.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -172,6 +189,7 @@ family = "index"
 wave = 3
 optional = false
 soft_src_line_target = 7000
+assignment = "swarm/assignments/search-projection-planner.md"
 deps = ["search-contracts", "search-domain", "search-point-identity"]
 
 [[package]]
@@ -183,6 +201,7 @@ family = "index"
 wave = 3
 optional = false
 soft_src_line_target = 4500
+assignment = "swarm/assignments/search-point-identity.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -193,7 +212,8 @@ cell = "C15"
 family = "index"
 wave = 3
 optional = false
-soft_src_line_target = 9000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-qdrant-bridge.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -204,7 +224,8 @@ cell = "C16"
 family = "index"
 wave = 3
 optional = false
-soft_src_line_target = 9500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-publication.md"
 deps = ["search-contracts", "search-domain", "search-projection-planner", "search-point-identity", "search-qdrant-bridge", "search-epoch-pins"]
 
 [[package]]
@@ -216,6 +237,7 @@ family = "index"
 wave = 3
 optional = false
 soft_src_line_target = 4500
+assignment = "swarm/assignments/search-epoch-pins.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -226,7 +248,8 @@ cell = "C18"
 family = "query"
 wave = 4
 optional = false
-soft_src_line_target = 8500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-access.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -237,7 +260,8 @@ cell = "C19"
 family = "query"
 wave = 5
 optional = false
-soft_src_line_target = 8000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-overlay.md"
 deps = ["search-contracts", "search-domain", "search-unitizer", "search-lexical"]
 
 [[package]]
@@ -248,7 +272,8 @@ cell = "C20"
 family = "query"
 wave = 6
 optional = false
-soft_src_line_target = 8500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-exact.md"
 deps = ["search-contracts", "search-domain", "search-source-registry", "search-revision-store", "search-safe-reader", "search-access"]
 
 [[package]]
@@ -260,6 +285,7 @@ family = "query"
 wave = 6
 optional = false
 soft_src_line_target = 6000
+assignment = "swarm/assignments/search-subject-resolver.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -270,7 +296,8 @@ cell = "C22"
 family = "query"
 wave = 4
 optional = false
-soft_src_line_target = 9000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-query-planner.md"
 deps = ["search-contracts", "search-domain", "search-access"]
 
 [[package]]
@@ -281,7 +308,8 @@ cell = "C23"
 family = "query"
 wave = 4
 optional = false
-soft_src_line_target = 9500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-retrieval-executor.md"
 deps = ["search-contracts", "search-domain", "search-query-planner", "search-qdrant-bridge", "search-lexical", "search-epoch-pins", "search-access"]
 
 [[package]]
@@ -292,7 +320,8 @@ cell = "C24"
 family = "query"
 wave = 4
 optional = false
-soft_src_line_target = 8000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-candidate-validator.md"
 deps = ["search-contracts", "search-domain", "search-access", "search-revision-store"]
 
 [[package]]
@@ -303,7 +332,8 @@ cell = "C25"
 family = "query"
 wave = 6
 optional = false
-soft_src_line_target = 8000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-comparator.md"
 deps = ["search-contracts", "search-domain", "search-subject-resolver"]
 
 [[package]]
@@ -315,6 +345,7 @@ family = "query"
 wave = 4
 optional = false
 soft_src_line_target = 7000
+assignment = "swarm/assignments/search-result-projector.md"
 deps = ["search-contracts", "search-domain", "search-candidate-validator"]
 
 [[package]]
@@ -326,6 +357,7 @@ family = "query"
 wave = 4
 optional = false
 soft_src_line_target = 6000
+assignment = "swarm/assignments/search-continuation.md"
 deps = ["search-contracts", "search-domain", "search-query-planner", "search-access", "search-epoch-pins"]
 
 [[package]]
@@ -336,7 +368,8 @@ cell = "C28"
 family = "runtime"
 wave = 7
 optional = false
-soft_src_line_target = 9000
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-retention.md"
 deps = ["search-contracts", "search-domain", "search-control-redb", "search-revision-store", "search-qdrant-bridge", "search-epoch-pins"]
 
 [[package]]
@@ -347,7 +380,8 @@ cell = "C29"
 family = "evaluation"
 wave = 4
 optional = false
-soft_src_line_target = 8500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-eval.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -358,7 +392,8 @@ cell = "C30 generic edge"
 family = "adapter"
 wave = 1
 optional = false
-soft_src_line_target = 8500
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-provider-protocol.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -370,6 +405,7 @@ family = "adapter"
 wave = 8
 optional = true
 soft_src_line_target = 5500
+assignment = "swarm/assignments/search-eliot-adapter.md"
 deps = ["search-contracts", "search-domain", "search-provider-protocol"]
 
 [[package]]
@@ -381,6 +417,7 @@ family = "adapter"
 wave = 8
 optional = true
 soft_src_line_target = 6000
+assignment = "swarm/assignments/search-research-export-adapter.md"
 deps = ["search-contracts", "search-domain", "search-provider-protocol"]
 
 [[package]]
@@ -392,7 +429,9 @@ family = "binary"
 wave = 1
 optional = false
 soft_src_line_target = 6500
+assignment = "swarm/assignments/eliot-searchd.md"
 progressive_composition = true
+active_default_feature = "wave1-shell"
 deps = ["search-contracts", "search-domain", "search-runtime-owner", "search-control-redb", "search-source-registry", "search-source-identity", "search-source-reconcile", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "search-code-enricher", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-access", "search-overlay", "search-exact", "search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-comparator", "search-result-projector", "search-continuation", "search-retention", "search-eval", "search-provider-protocol"]
 
 [[package]]
@@ -404,7 +443,7 @@ family = "binary"
 wave = 1
 optional = false
 soft_src_line_target = 4500
-progressive_composition = true
+assignment = "swarm/assignments/eliot-search.md"
 deps = ["search-contracts", "search-provider-protocol"]
 
 [[package]]
@@ -416,6 +455,7 @@ family = "binary"
 wave = 10
 optional = true
 soft_src_line_target = 4500
+assignment = "swarm/assignments/eliot-search-model-worker.md"
 deps = ["search-contracts", "search-provider-protocol", "search-model-provider"]
 
 [[package]]
@@ -427,4 +467,5 @@ family = "binary"
 wave = 10
 optional = true
 soft_src_line_target = 5000
+assignment = "swarm/assignments/eliot-search-doc-worker.md"
 deps = ["search-contracts", "search-provider-protocol", "search-materializer"]
