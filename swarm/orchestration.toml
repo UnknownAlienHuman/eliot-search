@@ -1,0 +1,129 @@
+schema_version = 1
+project = "eliot-search"
+package_registry = "swarm/crates.toml"
+launch_state = "swarm/launch-state.toml"
+gate_registry = "swarm/gates.toml"
+assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
+package_handoff_template = "swarm/PACKAGE_HANDOFF_TEMPLATE.md"
+api_handoff_template = "swarm/API_HANDOFF_TEMPLATE.md"
+wave_receipt_template = "swarm/WAVE_RECEIPT_TEMPLATE.md"
+accepted_handoff_layout = "swarm/handoffs/<package>/<api_digest>.toml"
+
+states = [
+  "BLOCKED",
+  "READY",
+  "LEASED",
+  "IMPLEMENTING",
+  "REVIEW",
+  "ACCEPTED",
+  "REJECTED",
+  "SUPERSEDED",
+]
+
+one_active_writer_per_package = true
+package_writer_may_edit_launch_state = false
+package_writer_may_edit_assignment = false
+package_writer_may_edit_dependency_handoff = false
+accepted_receipts_are_append_only = true
+consumer_uses_branch_head = false
+consumer_requires_exact_commit_and_api_digest = true
+
+[ready]
+requires_launch_authorization = true
+requires_all_direct_dependency_handoffs = true
+requires_no_active_lease = true
+requires_optional_prerequisites_when_applicable = true
+
+[lease]
+required_fields = [
+  "lease_id",
+  "package",
+  "writer",
+  "wave",
+  "stage",
+  "base_commit",
+  "write_scope",
+  "assignment_path",
+  "assignment_sha256",
+  "instruction_digests",
+  "dependency_handoff_digests",
+  "feature_profile",
+  "issued_at",
+]
+automatic_expiry = false
+revocation_requires_integration_receipt = true
+second_active_lease = "deny"
+
+[review]
+requires_complete_changed_file_list = true
+requires_scope_check = true
+requires_api_digest = true
+requires_raw_test_outcomes = true
+requires_dependency_digest_check = true
+requires_ownership_review = true
+requires_line_budget_check = true
+
+[acceptance]
+required_fields = [
+  "package",
+  "ticket_id",
+  "lease_id",
+  "base_commit",
+  "final_commit",
+  "assignment_sha256",
+  "api_schema_digest",
+  "dependency_handoff_digests",
+  "evidence_refs",
+  "reviewer_receipt",
+  "accepted_at",
+]
+mutable_after_acceptance = false
+correction_mode = "new_receipt_supersedes_old"
+
+[wave_advance]
+authority = "integration-owner"
+requires_all_mandatory_package_handoffs = true
+requires_all_mandatory_gate_evidence_pass = true
+requires_no_unresolved_active_lease = true
+requires_wave_receipt = true
+launch_state_and_receipt_same_reviewed_change = true
+
+[[transition]]
+from = "BLOCKED"
+to = "READY"
+condition = "launch authorized and dependencies accepted"
+
+[[transition]]
+from = "READY"
+to = "LEASED"
+condition = "valid immutable ticket and no competing lease"
+
+[[transition]]
+from = "LEASED"
+to = "IMPLEMENTING"
+condition = "writer acknowledges exact ticket/base/read set"
+
+[[transition]]
+from = "IMPLEMENTING"
+to = "REVIEW"
+condition = "complete package and API handoff submitted"
+
+[[transition]]
+from = "REVIEW"
+to = "ACCEPTED"
+condition = "package and integration review accepted"
+
+[[transition]]
+from = "REVIEW"
+to = "REJECTED"
+condition = "review receipt contains exact rejection reasons"
+
+[[transition]]
+from = "REJECTED"
+to = "READY"
+condition = "new ticket revision issued by integration owner"
+
+[[transition]]
+from = "BLOCKED|READY|LEASED|IMPLEMENTING|REVIEW|REJECTED"
+to = "SUPERSEDED"
+condition = "integration-owner supersession receipt"
