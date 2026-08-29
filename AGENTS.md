@@ -10,24 +10,27 @@ A writer reads only:
 1. this file and nearest family/package `AGENTS.md`;
 2. `docs/handoff/AUTHORITY_MAP.md`;
 3. its exact package entry in `swarm/crates.toml`;
-4. `swarm/ASSIGNMENT_PROTOCOL.md` and one package assignment;
-5. the registry-declared package-local `FUNCTIONS.md`, when present;
-6. every registry-declared configuration packet under `config/sections/`, when present;
-7. the registry-declared qualification packet, when present;
-8. relevant port-catalog entries;
-9. accepted public dependency handoffs/API digests;
-10. immutable assignment ticket/base commit and package-local fixtures.
+4. its exact foundation/function entry in `swarm/function-packets.toml`;
+5. `swarm/ASSIGNMENT_PROTOCOL.md` and one package assignment;
+6. the exact primary contract or package-local `FUNCTIONS.md` declared by the function registry;
+7. every package configuration packet declared by `swarm/crates.toml`, when present;
+8. the package qualification/stage packet declared by the registries/ticket, when present;
+9. relevant port-catalog entries;
+10. accepted public dependency handoffs/API digests;
+11. immutable assignment ticket/base commit and named package-local/shared fixtures.
 
-W0 writers additionally read their assigned P00 contract-pack files. The architecture master is
-exception-only: a demonstrated contradiction or missing load-bearing field stops work and uses
-`CONTRACT_CHANGE_TEMPLATE.md`.
+W0 foundation writers consume their exact P00 contract-pack entry rather than a package-local
+`FUNCTIONS.md`. The architecture master is exception-only: a demonstrated contradiction or missing
+load-bearing field stops work and uses `CONTRACT_CHANGE_TEMPLATE.md`.
 
-## Exact dependencies and launch
+## Exact dependencies, functions and launch
 
-- `swarm/crates.toml` is the only exact dependency/path/assignment/function/configuration/qualification
+- `swarm/crates.toml` is the exact package/path/dependency/wave/assignment/configuration/qualification
   registry.
-- Dependency prose in package instructions is explanatory and cannot override the registry.
-- Cargo manifest and registry dependency sets must match before merge.
+- `swarm/function-packets.toml` is the exact primary function/contract packet and package write-scope
+  registry for all 45 packages.
+- Dependency prose in package instructions is explanatory and cannot override either registry.
+- Cargo manifest and `swarm/crates.toml` dependency sets must match before merge.
 - `swarm/launch-state.toml` alone decides whether a package may run now.
 - Presence in Cargo, a future wave, README, function packet, qualification packet or assignment is not
   authorization.
@@ -37,12 +40,12 @@ exception-only: a demonstrated contradiction or missing load-bearing field stops
 ## Write ownership
 
 - one writer, one Cargo package, one isolated worktree;
-- writer edits only its package path;
+- writer edits only the exact `write_scope` from `swarm/function-packets.toml`;
 - root Cargo/lockfile/toolchain/CI, architecture, contract pack, generated schemas, `swarm/`,
   `config/sections.toml`, qualification registries, shared fixtures and cross-package changes belong to
   the integration owner;
-- a package that owns a configuration section implements the section packet inside its package but does
-  not edit the central registry or another owner's settings;
+- a package that owns a configuration section implements the section validator/digest/change behavior
+  inside its package but does not edit the central registry or another owner's settings;
 - package agents do not repair/redefine dependencies; they request a contract/port/configuration change.
 
 ## Global invariants
@@ -68,6 +71,10 @@ exception-only: a demonstrated contradiction or missing load-bearing field stops
     silent provider switching is forbidden.
 18. Mutation timeout/cancellation after a possible external write is `OUTCOME_UNKNOWN` until exact
     readback/recovery resolves it.
+19. Paths are locators, not source identity; final opened handle/object must remain inside an admitted
+    root before bytes can be accepted.
+20. Source admission, identity, registry, reads, revision storage, materialization and unitization retain
+    separate owners and immutable handoffs.
 
 ## Layer ownership
 
@@ -86,20 +93,23 @@ cross public boundaries. Concrete adapters are constructed only by daemon compos
 
 ## Function contract rule
 
-A registry-declared `FUNCTIONS.md` is part of the package handoff. Each operation defines:
+Every non-foundation package has exactly one primary package-local `FUNCTIONS.md` in
+`swarm/function-packets.toml`. The three P00 foundation packages have exact primary contract-pack files.
+Each operation defines:
 
-- validated inputs and state owner;
+- validated inputs and sole state owner;
 - preconditions and successful postconditions;
 - typed failures and retryability;
 - idempotency/mutation identity;
 - cancellation and deadline behavior;
 - crash or unknown-outcome recovery;
-- finite resource bounds;
+- finite resource/content/disclosure bounds;
 - configuration interaction;
 - deterministic, negative, property, fault and qualification fixtures.
 
 The function packet specifies behavior, not mandatory Rust spelling. A writer may improve internal
-module layout but cannot weaken the operation contract or add a second owner.
+module layout but cannot weaken the operation contract, add a second owner, widen its read/write boundary
+or infer unspecified behavior from another package's implementation.
 
 ## Configuration rule
 
@@ -114,7 +124,7 @@ module layout but cannot weaken the operation contract or add a second owner.
 
 ## Size and implementation rules
 
-- normal target ≤7,500 hand-written `src/` lines;
+- normal target ≤7,500 hand-written `src/` lines or the lower package target;
 - split review before 8,500 total hand-written lines;
 - hard stop at 10,000 including local tests;
 - no forwarding-only or crate-per-type shells;
