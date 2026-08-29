@@ -1,0 +1,109 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P13"
+wave = 7
+status = "BLOCKED"
+launch_authority = "swarm/launch-state.toml"
+qualification = "qualification/lifecycle/W7_QUALIFICATION.md"
+baseline = "qualification/lifecycle/baseline.toml"
+probes = "qualification/lifecycle/probes.toml"
+settings_schema = "config/w7-lifecycle.toml"
+settings_contract = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+implementation_packet = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+architecture_access = "exception-only"
+
+# A W7 ticket supplies only one package packet, exact accepted direct-dependency handoffs, named
+# fixtures/settings and applicable probe IDs. Presence here is not launch authorization.
+
+[[packet]]
+package = "search-retention"
+primary = "crates/search-runtime/search-retention/FUNCTIONS.md"
+assignment = "swarm/assignments/search-retention.md"
+config_packets = ["config/sections/retention.md", "config/w7-lifecycle.toml"]
+owns = ["retention_roots", "mark_sweep_policy", "purge_fence_tombstone_plan_receipt", "paired_recovery_restore_quarantine"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-config", "search-control-redb", "search-revision-store", "search-access", "search-handles", "search-continuation", "search-candidate-validator", "search-publication", "search-epoch-pins", "search-index-reclaimer"]
+
+[[packet]]
+package = "search-revision-store"
+primary = "crates/search-source/search-revision-store/FUNCTIONS.md"
+assignment = "swarm/assignments/search-revision-store.md"
+config_packets = ["config/sections/revision_store.md", "config/w7-lifecycle.toml"]
+owns = ["immutable_revision_objects", "retention_leases", "lifecycle_root_inventory_ports", "exact_object_operations", "store_tombstone_quarantine"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-config", "search-control-redb", "search-source-identity", "search-source-registry"]
+
+[[packet]]
+package = "search-access"
+primary = "crates/search-query/search-access/W7_HARDENING.md"
+base_functions = "crates/search-query/search-access/FUNCTIONS.md"
+assignment = "swarm/assignments/search-access.md"
+config_packets = ["config/w7-lifecycle.toml"]
+owns = ["restrictive_control_mutation", "live_security_fence", "checkpoint_rechecks", "contamination_decision"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-control-redb"]
+
+[[packet]]
+package = "search-handles"
+primary = "crates/search-query/search-handles/W7_HARDENING.md"
+base_functions = "crates/search-query/search-handles/FUNCTIONS.md"
+assignment = "swarm/assignments/search-handles.md"
+config_packets = ["config/sections/handles.md", "config/w7-lifecycle.toml"]
+owns = ["durable_handle_eligibility", "handle_lifecycle_invalidation", "handle_token_non_resurrection"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-config", "search-access", "search-revision-store"]
+
+[[packet]]
+package = "search-continuation"
+primary = "crates/search-query/search-continuation/W7_HARDENING.md"
+base_functions = "crates/search-query/search-continuation/FUNCTIONS.md"
+assignment = "swarm/assignments/search-continuation.md"
+config_packets = ["config/sections/continuations.md", "config/w7-lifecycle.toml"]
+owns = ["continuation_lifecycle_invalidation", "pin_release", "durable_checkpoint_non_resurrection"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-config", "search-access", "search-epoch-pins"]
+
+[[packet]]
+package = "search-candidate-validator"
+primary = "crates/search-query/search-candidate-validator/W7_HARDENING.md"
+base_functions = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+assignment = "swarm/assignments/search-candidate-validator.md"
+config_packets = []
+owns = ["candidate_lifecycle_checkpoint", "source_backed_emission_deny", "restored_purged_candidate_rejection"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-access", "search-revision-store"]
+
+[[packet]]
+package = "search-publication"
+primary = "crates/search-index-qdrant/search-publication/W7_HARDENING.md"
+base_functions = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+assignment = "swarm/assignments/search-publication.md"
+config_packets = []
+owns = ["invalidation_only_publication", "purge_publication_interaction", "restore_new_route_publication"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-control-redb", "search-qdrant-bridge"]
+
+[[packet]]
+package = "search-index-reclaimer"
+primary = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"
+base_functions = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+assignment = "swarm/assignments/search-index-reclaimer.md"
+config_packets = ["config/sections/index_reclaim.md"]
+owns = ["ordinary_reclaim_receipt_boundary", "purge_overlap_revalidation", "restore_quarantine_non_reclaim"]
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-publication", "search-epoch-pins", "search-qdrant-bridge"]
+
+[review]
+require_exact_dependency_api_digests = true
+require_operation_identity_and_unknown_outcome = true
+require_checkpoint_matrix = true
+require_owner_specific_invalidation_receipts = true
+require_no_content_in_diagnostics = true
+require_receipt_layer_truthfulness = true
+require_line_budget = true
+
+[gate]
+gate_id = "G3"
+stage = "P13"
+required_evidence = [
+  "restrictive_security_live_fence_and_checkpoints",
+  "handle_continuation_candidate_lifecycle_hardening",
+  "residency_revision_lifecycle_ports",
+  "retention_mark_sweep_fault_matrix",
+  "purge_fence_layers_tombstone_non_resurrection",
+  "restore_pairing_quarantine_revalidation_new_route",
+  "ordinary_reclaim_sweep_purge_receipt_separation",
+  "lifecycle_content_minimization_and_non_overclaim",
+]

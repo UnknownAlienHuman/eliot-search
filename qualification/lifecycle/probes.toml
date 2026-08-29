@@ -1,0 +1,489 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P13"
+wave = 7
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[[probe]]
+id = "restriction_commit_live_before_ack"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "security_snapshot_publish_failure_fail_closed"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "revocation_at_every_checkpoint"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "purge_at_every_checkpoint"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "contaminated_leg_whole_discard"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "permissive_change_no_tombstone_resurrection"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "missing_invalidation_receipt_fail_closed"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ordinary_grant_validation_no_control_write"
+owner = "search-access"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "durable_handle_full_eligibility_matrix"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "handle_token_redaction_and_entropy"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "handle_purge_after_readback_before_emission"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "handle_foreign_unknown_indistinguishable"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "handle_lifecycle_invalidation_idempotent"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "handle_tombstone_restore_remint_blocked"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "restored_handle_token_not_serving_valid"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "durable_handle_unsaved_rejected"
+owner = "search-handles"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "continuation_revocation_each_checkpoint"
+owner = "search-continuation"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "continuation_invalidation_releases_pins"
+owner = "search-continuation"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "continuation_dependency_drift_no_silent_refresh"
+owner = "search-continuation"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "continuation_purge_restore_blocked"
+owner = "search-continuation"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ephemeral_continuation_restart_invalid"
+owner = "search-continuation"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "durable_checkpoint_no_pin_unsaved_vendor"
+owner = "search-continuation"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "validator_revocation_each_checkpoint"
+owner = "search-candidate-validator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "validator_readback_then_purge_no_emission"
+owner = "search-candidate-validator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "validator_contaminated_leg_discard"
+owner = "search-candidate-validator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "validator_restored_old_epoch_rejected"
+owner = "search-candidate-validator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "validation_gap_no_evidence_payload"
+owner = "search-candidate-validator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "residency_cross_domain_dedup_denied"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "immutable_object_write_crash_matrix"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "revision_occurrence_a_b_a_distinct"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "lease_release_no_immediate_delete"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "lifecycle_root_inventory_one_generation"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_object_delete_authority_and_readback"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "tombstone_blocks_object_reintroduction"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "restore_quarantine_object_validation"
+owner = "search-revision-store"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "durable_root_completeness"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "active_pin_protection"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "shared_object_reachable_preserved"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "refcount_not_deletion_authority"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "mark_checkpoint_crash_resume"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "root_generation_drift_invalidates_mark"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "sweep_exact_batch_unknown_outcome"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "new_hold_or_pin_narrows_sweep"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "sweep_final_exact_accounting"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "sweep_receipt_does_not_claim_purge"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "purge_fence_live_before_ack"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "purge_crash_every_layer"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "handle_continuation_invalidation_receipts"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "purge_projection_distinct_from_reclaim"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "shared_object_logical_deny_physical_preserve"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "purge_layer_status_partial"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "secure_erase_nonclaim"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "client_revocation_no_delete_authority"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "tombstone_blocks_reindex_and_remint"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "purge_operation_idempotency_conflict"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "paired_recovery_manifest_mismatch"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "single_store_snapshot_not_servable"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "restore_enters_and_remains_quarantine"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "restore_source_access_residency_tombstone_revalidation"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "restore_new_route_commit_or_rebuild"
+owner = "search-retention"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
