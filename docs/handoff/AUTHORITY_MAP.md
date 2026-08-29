@@ -10,16 +10,18 @@ configuration/qualification packets and package instructions.
    change Part I.
 3. **Accepted public API/schema/port/configuration digest** — actual contract consumed downstream.
 4. **P00 contract pack** — bounded derivative implementation projection; stops on Part I conflict.
-5. **`swarm/crates.toml`** — exact package names, paths, direct dependencies, assignment, function,
-   configuration and qualification packet paths, optionality, wave metadata and line targets.
-6. **`config/sections.toml`** — exact configuration section owner, earliest wave, minimum action, secret
+5. **`swarm/crates.toml`** — exact package names, paths, direct dependencies, assignments,
+   configuration/qualification packets, optionality, wave metadata and line targets.
+6. **`swarm/function-packets.toml`** — exact primary function/contract packet and package-local write
+   scope for every package; foundation packages point to their P00 contract files.
+7. **`config/sections.toml`** — exact configuration section owner, earliest wave, minimum action, secret
    policy and bounded section packet.
-7. **Qualification registry/packet** — exact artifact/probe/schema requirements; never a success receipt.
-8. **`swarm/launch-state.toml`** — current implementation authorization only.
-9. **Package assignment and registry-declared `FUNCTIONS.md`** — owned behavior, operation semantics,
-   failures, recovery, bounds and tests.
-10. **Root/family/package `AGENTS.md`** — write scope and local operational rules.
-11. **README/human matrix** — navigation and explanation only.
+8. **Qualification registry/packet** — exact artifact/probe/schema requirements; never a success receipt.
+9. **`swarm/launch-state.toml`** — current implementation authorization only.
+10. **Package assignment and function-registry primary packet** — owned behavior, operation semantics,
+    failures, recovery, bounds and tests.
+11. **Root/family/package `AGENTS.md`** — operational read/write rules within the machine registries.
+12. **README/human matrix** — navigation and explanation only.
 
 ## Domain-specific authority
 
@@ -30,26 +32,41 @@ configuration/qualification packets and package instructions.
 | Pure transition/order/coverage rules | accepted `search-domain` digest |
 | Shared trait/method semantics | accepted `search-ports` digest |
 | Generic configuration layering/redaction/planning | accepted `search-config` digest |
+| Exact package path/dependencies/wave/assignment | `swarm/crates.toml` |
+| Exact package function behavior packet and write scope | `swarm/function-packets.toml` |
 | Which package owns a configuration section | `config/sections.toml` |
 | Exact section fields/defaults/bounds/change obligations | section packet + accepted owner digest |
-| Exact direct Cargo dependencies and bounded read packets | `swarm/crates.toml` plus matching files |
+| Which stage packet and qualification apply | machine stage/swarm packet plus accepted ticket |
 | May an agent start now | `swarm/launch-state.toml` |
-| Which package owns mutable state | assignment + `PRIMITIVE_OWNERSHIP.md` |
+| Which package owns mutable state | function packet + assignment + `PRIMITIVE_OWNERSHIP.md` |
 | Which adapter implements a port | `PORT_CATALOG.md` and accepted adapter handoff |
-| Is a Qdrant artifact/profile accepted | immutable P05–P07 qualification/evidence receipt |
-| Which package owns a shared fixture | `tests/CRATE_FIXTURE_OWNERS.md` |
+| Is a Qdrant/provider/profile accepted | immutable qualification/evidence receipt |
+| Which package owns a shared fixture | `tests/CRATE_FIXTURE_OWNERS.md` or stage fixture-owner registry |
 
 ## Conflict handling
 
 - A Part I conflict stops work with `CONTRACT_CHALLENGE`; derivative docs are not silently patched.
-- Cargo and registry mismatch blocks merge; neither is harmless documentation drift.
+- Cargo and `swarm/crates.toml` dependency mismatch blocks merge.
+- Package name/path/wave/assignment mismatch between `swarm/crates.toml` and
+  `swarm/function-packets.toml` blocks merge.
+- Missing, duplicate, cross-package or structurally incomplete primary function packet blocks merge.
 - Section owner/packet/Cargo dependency mismatch blocks merge.
 - A qualification packet specifies what must be proven; empty/UNAVAILABLE evidence never enables a
   capability.
-- Package `AGENTS.md` and assignment dependency prose are explanatory. Exact dependency/read-set closure
-  is the package entry in `swarm/crates.toml`.
+- Package `AGENTS.md` and assignment dependency prose are explanatory. Exact dependency closure is
+  `swarm/crates.toml`; exact function/write closure is `swarm/function-packets.toml`.
 - An assignment or function packet cannot authorize a future wave.
 - A README cannot add a field, port, reason code, dependency, capability or authority.
+
+## Bounded-context rule
+
+An ordinary writer receives only root/package instructions, its exact package and function-registry
+entries, one assignment, one primary function/contract packet, owned configuration/qualification/stage
+packets, accepted direct handoffs and named fixtures.
+
+The architecture master and another package's implementation internals are exception-only. A writer that
+finds a missing load-bearing contract stops and opens a contract change; it does not widen its own read
+set or infer behavior from implementation details.
 
 ## Freeze rule
 
