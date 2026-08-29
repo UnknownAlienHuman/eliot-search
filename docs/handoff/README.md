@@ -3,6 +3,7 @@
 - [AUTHORITY_MAP.md](AUTHORITY_MAP.md) — conflict precedence and source-of-truth ownership.
 - [`../contracts/p00/README.md`](../contracts/p00/README.md) — exact W0 contract implementation pack.
 - [P00_BOOTSTRAP.md](P00_BOOTSTRAP.md) — contracts → domain/ports → W0 receipt sequence.
+- [STRUCTURAL_CI.md](STRUCTURAL_CI.md) — narrow scaffold-integrity workflow and non-claims.
 - [SWARM_READINESS_AUDIT.md](SWARM_READINESS_AUDIT.md) — current readiness and honest status.
 - [OWNERSHIP_BOUNDARY_AUDIT.md](OWNERSHIP_BOUNDARY_AUDIT.md) — missing-owner/dependency audit.
 - [CRATE_MATRIX.md](CRATE_MATRIX.md) — one-agent/one-package human ownership index.
