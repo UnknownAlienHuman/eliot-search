@@ -1,0 +1,123 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+stage = "P16-P18"
+wave = 10
+gate = "G6"
+status = "contract-only"
+implementation_authorized = false
+optional_depth_authorized = false
+provider_selected = false
+
+required_files = [
+  "README.md",
+  "W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md",
+  "manifest.toml",
+]
+
+[[owner]]
+role = "package"
+package = "search-model-provider"
+functions = "crates/search-model-provider/FUNCTIONS.md"
+owns = [
+  "model_profile_identity",
+  "dense_and_multivector_encoding_contract",
+  "bounded_rerank_contract",
+  "provider_output_validation",
+  "optional_capability_and_removal_contract",
+]
+
+[[owner]]
+role = "package"
+package = "eliot-search-model-worker"
+functions = "bins/eliot-search-model-worker/FUNCTIONS.md"
+owns = [
+  "isolated_model_process_runtime",
+  "private_worker_protocol_dispatch",
+  "resource_and_cancellation_enforcement",
+  "model_worker_shutdown_and_cleanup",
+]
+
+[[owner]]
+role = "package"
+package = "eliot-search-doc-worker"
+functions = "bins/eliot-search-doc-worker/FUNCTIONS.md"
+owns = [
+  "isolated_document_provider_runtime",
+  "no_execute_and_no_network_sandbox",
+  "malformed_and_bomb_isolation",
+  "coordinate_and_loss_map_output_validation",
+  "document_worker_shutdown_and_cleanup",
+]
+
+[[owner]]
+role = "integration"
+package = "eliot-searchd"
+contract = "bins/eliot-searchd/W10_INTEGRATION.md"
+owns = [
+  "gate_and_feature_activation",
+  "worker_process_composition",
+  "candidate_generation_and_route_cutover",
+  "capability_snapshot_publication",
+  "deactivation_rollback_and_baseline_restore",
+]
+
+[[owner]]
+role = "scale-package"
+package = "search-qdrant-bridge"
+contract = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+owns = ["scale_capability_and_schema_qualification", "candidate_topology_data_plane"]
+
+[[owner]]
+role = "scale-package"
+package = "search-publication"
+contract = "crates/search-index-qdrant/search-publication/P18_SCALE.md"
+owns = ["scale_migration_state_machine", "guarded_route_switch_and_recovery"]
+
+[[owner]]
+role = "scale-package"
+package = "search-epoch-pins"
+contract = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"
+owns = ["old_and_new_route_pinning", "route_drain_watermarks"]
+
+[[owner]]
+role = "scale-package"
+package = "search-index-reclaimer"
+contract = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
+owns = ["old_route_exact_reclaim_after_drain"]
+
+[global_invariants]
+accepted_p15_required = true
+dedicated_adr_per_candidate = true
+exact_artifact_and_windows_qualification_required = true
+compiled_feature_required = true
+explicit_configuration_required = true
+binding_authorization_required = true
+configuration_alone_authorizes = false
+disabled_and_absent_by_default = true
+automatic_download_allowed = false
+automatic_upgrade_allowed = false
+network_allowed = false
+training_or_learning_from_content_allowed = false
+unsaved_persistence_allowed = false
+generative_answer_authority_allowed = false
+client_admission_authority_allowed = false
+provider_output_is_source_evidence = false
+provider_failure_breaks_baseline = false
+removal_restores_p15_behavior = true
+in_place_collection_schema_change_allowed = false
+qdrant_alias_is_visibility_commit = false
+old_route_reclaim_before_pin_drain_allowed = false
+optional_profile_self_acceptance_allowed = false
+
+[current_disposition]
+accepted_p15_receipt = "UNSELECTED"
+model_profile = "DISABLED"
+document_profile = "DISABLED"
+scale_profile = "DISABLED"
+model_artifact = "UNSELECTED"
+document_artifact = "UNSELECTED"
+scale_topology = "UNSELECTED"
+mandatory_candidate_probes = "NOT_EXECUTED"
+g6 = "NOT_ACCEPTED"
