@@ -1,24 +1,25 @@
 # eliot-searchd
 
-**Status:** binary package boundary and agent contract only; runtime behavior is intentionally unimplemented.
+**Composition binary — the only owner of Search stores, local Qdrant process and provider server.**
 
-Compose the capability crates, own the data root and expose the only storage/provider process boundary.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
 ## Owns
 
-- dependency wiring and startup order
-- data-root owner guard
+- data-root owner acquisition
+- concrete redb/Qdrant/process/OS adapter construction
+- vendor-neutral port wiring
 - bounded task supervision
 - provider protocol server
-- controlled shutdown and readiness/degradation reporting
+- shutdown/readiness/degradation reporting
 
 ## Must not own
 
-- reimplementing capability logic inside main
-- sharing store clients with CLI/workers/adapters
-- allowing another process to own qdrant or redb
-- hidden fallback across capability boundaries
+- capability logic
+- shared clients for CLI/workers/adapters
+- hidden fallback or reverse authority paths
+- direct client-system canonical writes
 
-- **Delivery:** W1 shell, integrated through W9
+- **Delivery wave:** W1 shell, integrated through W9
 - **Soft source-line target:** 6,500
 - **Agent instructions:** [AGENTS.md](AGENTS.md)

@@ -1,23 +1,24 @@
 # Agent contract — search-retention
 
-You own only `crates/search-runtime/search-retention/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+You own only `crates/search-runtime/search-retention/`. Do not edit another package, the root workspace,
+shared contracts or architecture. Missing fields use the contract-change process.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S28, H6.2, P13.
+The Architecture 8.4 master is not required for ordinary work. This is the package slice.
+Traceability only: S28, H6.2, P13.
 
 ## Mission
 
-Execute crash-safe mark-and-sweep, monotonic purge and restore quarantine across Search-owned projections and CAS.
+Execute crash-safe CAS mark-and-sweep, monotonic purge and restore quarantine through vendor-neutral
+ports while keeping ordinary index reclamation and handle storage in their own owners.
 
 ## Ownership
 
-- mark root discovery and resumable sweep
+- authoritative mark-root discovery and resumable CAS sweep orchestration
 - retention/legal-hold policy execution
-- live purge fence, tombstone and receipts
-- handle revocation and non-resurrection
-- paired restore manifest revalidation
+- live purge fence, tombstone and multi-layer receipts
+- handle/index invalidation requests
+- paired restore-manifest revalidation and quarantine
+- non-resurrection proofs
 
 ## Forbidden ownership
 
@@ -25,27 +26,29 @@ Execute crash-safe mark-and-sweep, monotonic purge and restore quarantine across
 - deleting client-owned canonical evidence
 - refcount-only GC
 - restore/reindex that bypasses purge tombstones
+- ordinary retired-point reclaim (owned by `search-index-reclaimer`)
+- handle record storage/authorization (owned by `search-handles`)
+- direct redb, Qdrant, process or revision-store adapter dependency
 
 ## Allowed dependencies
 
-`search-contracts`, `search-domain`, `search-control-redb`, `search-revision-store`, `search-qdrant-bridge`, `search-epoch-pins`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+`search-contracts`, `search-domain`, `search-epoch-pins`, `search-index-reclaimer`,
+`search-handles`. Control, object-store, index-admin and restore storage operations are injected through
+vendor-neutral ports. Dependencies do not transfer state ownership.
 
 ## Required logical surface
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `RetentionEngine::mark(snapshot, active_pins) -> Result<MarkManifest, RetentionError>`
-- `RetentionEngine::sweep(mark) -> Result<SweepReceipt, RetentionError>`
-- `RetentionEngine::purge(command) -> Result<PurgeReceipt, RetentionError>`
+- `RetentionEngine::mark(snapshot, active_pins, ports) -> Result<MarkManifest, RetentionError>`
+- `RetentionEngine::sweep(mark, object_store) -> Result<SweepReceipt, RetentionError>`
+- `RetentionEngine::purge(command, ports) -> Result<PurgeReceipt, RetentionError>`
 - `RetentionEngine::validate_restore(manifest, live_sources) -> RestoreDecision`
 - `RetentionEngine::apply_tombstones(candidate_set) -> FilteredSet`
+- `RetentionEngine::emit_invalidation_set(change) -> LifecycleInvalidationSet`
 
 ## Failure surface
 
-Use typed errors/reason codes. Relevant public reasons: `PURGED`, `RESTORE_PENDING_REVALIDATION`, `RESIDENCY_DOMAIN_MISMATCH`. Never turn a degraded or partial
-state into an apparent success.
+Relevant reasons include `PURGED`, `RESTORE_PENDING_REVALIDATION`, `RESIDENCY_DOMAIN_MISMATCH`,
+`RETENTION_MARK_INCOMPLETE` and `PURGE_ACK_INCOMPLETE`.
 
 ## Test seams and exit evidence
 
@@ -54,20 +57,18 @@ state into an apparent success.
 - `purge fence precedes acknowledgement and deletion`
 - `purged material cannot resurrect through restore/reindex`
 - `receipt distinguishes logical/index/cache/backup/physical status`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
+- `ordinary reclaimer cannot satisfy purge acknowledgement`
+- `fake ports prove no direct redb/Qdrant/revision-store dependency`
 
 ## Size and split guard
 
 - Delivery wave: **W7 / P13**
-- Soft `src/` target: **9,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
+- Soft `src/` target: **8,500 lines**
+- Hard review threshold: **10,000 hand-written Rust lines**
+- CAS retention, purge and restore stay together as one monotonic lifecycle policy owner; independently
+  replaceable backup/object providers require a new ADR.
 
 ## Definition of done
 
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Lifecycle transitions are monotonic, resumable and receipt-backed; ordinary index reclamation and
+handle state remain outside this package.

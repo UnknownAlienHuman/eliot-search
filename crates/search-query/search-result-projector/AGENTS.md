@@ -1,50 +1,51 @@
 # Agent contract — search-result-projector
 
-You own only `crates/search-query/search-result-projector/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+You own only `crates/search-query/search-result-projector/`. Do not edit another package, the root
+workspace, shared contracts or architecture. Missing fields use the contract-change process.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S23.2-S23.3, S26, H15.4, P08.
+The Architecture 8.4 master is not required for ordinary work. This is the package slice.
+Traceability only: S23.2-S23.3, S26, H15.4, P08.
 
 ## Mission
 
-Project validated candidates, comparison and exact reports into bounded evidence-oriented responses and handles.
+Project validated candidates, comparison and exact reports into bounded evidence responses while
+delegating handle state to `search-handles`.
 
 ## Ownership
 
-- SearchCandidateSet assembly
+- `SearchCandidateSet` assembly
 - coverage/freshness/gap semantics
-- default 2-4 recommended handles
+- selection of the default 2–4 recommended handle subjects
 - bounded non-content ranking trace
 - result byte and disclosure budgets
+- requesting opaque handles from `HandleFactoryPort`
 
 ## Forbidden ownership
 
 - raw full files or unbounded chunk arrays
 - Qdrant collections, filters, offsets or payload exposure
 - belief/admission/finish dispositions
-- calling top-k coverage complete_scope
+- calling top-k coverage `complete_scope`
+- storing, expanding or authorizing handles
 
 ## Allowed dependencies
 
-`search-contracts`, `search-domain`, `search-candidate-validator`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+`search-contracts`, `search-domain`, `search-candidate-validator`, `search-handles`.
+The dependency permits handle minting through the public contract; handle mutable state remains owned
+by `search-handles`.
 
 ## Required logical surface
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `project_candidate_set(validated, plan, budget) -> Result<SearchCandidateSet, ProjectError>`
+- `project_candidate_set(validated, plan, budget, handles) -> Result<SearchCandidateSet, ProjectError>`
 - `project_comparison(matrix, plan, budget) -> Result<ComparisonResult, ProjectError>`
 - `project_exact_report(report, plan, budget) -> Result<ExactResult, ProjectError>`
+- `select_handle_subjects(validated, limits) -> HandleSubjectSet`
 - `enforce_disclosure_and_size(response, grant) -> Result<(), ProjectError>`
 
 ## Failure surface
 
-Use typed errors/reason codes. Relevant public reasons: `RESULT_BUDGET_EXCEEDED`, `INCOMPLETE_COVERAGE`, `DISCLOSURE_CEILING_EXCEEDED`. Never turn a degraded or partial
-state into an apparent success.
+Relevant reasons include `RESULT_BUDGET_EXCEEDED`, `INCOMPLETE_COVERAGE`,
+`DISCLOSURE_CEILING_EXCEEDED` and `HANDLE_CREATION_FAILED`.
 
 ## Test seams and exit evidence
 
@@ -53,21 +54,15 @@ state into an apparent success.
 - `candidate_scope is not relabeled complete_scope`
 - `response binds plan/view/owner/security generations`
 - `authorized display metadata is resolved only after retrieval`
-- `comparison and exact reports enter as contract products without hard package coupling`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
+- `projector owns no handle table and cannot expand a handle`
 
 ## Size and split guard
 
 - Delivery wave: **W4 / P08**
 - Soft `src/` target: **7,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
+- Hard review threshold: **10,000 hand-written Rust lines**
 
 ## Definition of done
 
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Responses are bounded and truthful, handle subjects are selected deterministically, and all handle
+state/authorization remains in `search-handles`.

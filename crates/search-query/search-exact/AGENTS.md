@@ -1,20 +1,20 @@
 # Agent contract — search-exact
 
-You own only `crates/search-query/search-exact/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+You own only `crates/search-query/search-exact/`. Do not edit another package, the root workspace,
+shared contracts or architecture. Missing fields use the contract-change process.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S10.3, S25, H13, P12.
+The Architecture 8.4 master is not required for ordinary work. This is the package slice.
+Traceability only: S10.3, S25, H13, P12.
 
 ## Mission
 
-Compile and execute bounded exact scans against a frozen authoritative denominator and produce truthful proof reports.
+Compile and execute bounded exact scans against a frozen authoritative denominator and produce truthful
+proof reports through inventory/readback ports.
 
 ## Ownership
 
-- ExactScanPlan compilation
-- literal, safe regex, qualified-symbol and structural predicates
+- `ExactScanPlan` compilation
+- literal, safe-regex, qualified-symbol and structural predicate profiles
 - frozen SourceRevision denominator
 - execution completeness accounting
 - negative-proof report semantics
@@ -24,27 +24,25 @@ Compile and execute bounded exact scans against a frozen authoritative denominat
 - using indexed top-k as denominator
 - semantic absence claims
 - unbounded backtracking regex
-- silently changing scope or revision during execution
+- silently changing scope/revision during execution
+- depending on concrete source registry, safe reader, revision store, redb or Qdrant packages
 
 ## Allowed dependencies
 
-`search-contracts`, `search-domain`, `search-source-registry`, `search-revision-store`, `search-safe-reader`, `search-access`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+`search-contracts`, `search-domain`, `search-access`. Source inventory and revision byte access are
+injected through `SourceInventoryPort`, `SourceRevisionStorePort` and bounded cancellation/budget ports.
 
 ## Required logical surface
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
 - `compile_exact_scan(request, scope, inventory) -> Result<ExactScanPlan, ExactError>`
-- `execute_exact_scan(plan, budget, cancel) -> Result<ExactExecutionReport, ExactError>`
+- `execute_exact_scan(plan, budget, cancel, readback) -> Result<ExactExecutionReport, ExactError>`
 - `evaluate_completeness(report) -> ExactCoverage`
 - `validate_predicate_profile(predicate) -> Result<(), ExactError>`
 
 ## Failure surface
 
-Use typed errors/reason codes. Relevant public reasons: `SCOPE_CHANGED_OR_REVISION_UNAVAILABLE`, `INCOMPLETE_COVERAGE`, `EXACT_PREDICATE_UNSUPPORTED`. Never turn a degraded or partial
-state into an apparent success.
+Relevant reasons include `SCOPE_CHANGED_OR_REVISION_UNAVAILABLE`, `INCOMPLETE_COVERAGE`,
+`EXACT_PREDICATE_UNSUPPORTED`, `EXACT_BUDGET_EXHAUSTED` and `CANCELLED`.
 
 ## Test seams and exit evidence
 
@@ -54,20 +52,17 @@ state into an apparent success.
 - `raw-bytes and decoded-text semantics are distinct`
 - `cancellation and scope drift yield incomplete report`
 - `semantic-overclaim fixture is rejected`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
+- `fake inventory/readback ports prove no concrete store dependency`
 
 ## Size and split guard
 
 - Delivery wave: **W6 / P12**
 - Soft `src/` target: **8,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
+- Hard review threshold: **10,000 hand-written Rust lines**
+- Keep one proof owner. Split only if a replaceable predicate engine or measured line growth creates a
+  real boundary.
 
 ## Definition of done
 
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Every proof binds a frozen authoritative denominator, all omissions are reported and concrete storage
+or index adapters are absent from the package graph.

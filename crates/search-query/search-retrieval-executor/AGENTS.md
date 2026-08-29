@@ -1,21 +1,21 @@
 # Agent contract — search-retrieval-executor
 
-You own only `crates/search-query/search-retrieval-executor/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+You own only `crates/search-query/search-retrieval-executor/`. Do not edit another package, the root
+workspace, shared contracts or architecture. Missing fields use the contract-change process.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S21.2-S21.3, S30.3, H15, P08.
+The Architecture 8.4 master is not required for ordinary work. This is the package slice.
+Traceability only: S21.2-S21.3, S30.3, H15, P08.
 
 ## Mission
 
-Execute direct, exact, indexed and optional-provider legs under bounded queues, cancellation and deterministic fusion.
+Execute direct, exact, indexed and optional-provider legs under bounded queues, cancellation and
+deterministic fusion without importing a concrete index adapter.
 
 ## Ownership
 
 - interactive/verification/background lanes
 - leg scheduling and cancellation propagation
-- baseline direct/Qdrant leg dispatch
+- baseline direct/index leg dispatch through typed ports
 - typed extension-leg dispatch for overlay, exact and optional providers
 - within-leg and cross-leg fusion orchestration
 - partial-result accounting
@@ -27,27 +27,27 @@ Execute direct, exact, indexed and optional-provider legs under bounded queues, 
 - raw-score comparison across scoring populations
 - unbounded queue, prefetch or retries
 - hard dependency on later overlay, exact or optional-provider implementations
+- direct dependency on `search-qdrant-bridge`, redb or process packages
 
 ## Allowed dependencies
 
-`search-contracts`, `search-domain`, `search-query-planner`, `search-qdrant-bridge`, `search-lexical`, `search-epoch-pins`, `search-access`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+`search-contracts`, `search-domain`, `search-query-planner`, `search-lexical`,
+`search-epoch-pins`, `search-access`. Direct/index/provider execution is injected through
+vendor-neutral leg ports.
 
 ## Required logical surface
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `Executor::execute(plan, context) -> Result<RawExecution, ExecuteError>`
+- `Executor::execute(plan, context, ports) -> Result<RawExecution, ExecuteError>`
 - `Executor::cancel(request_id) -> CancelOutcome`
 - `schedule_leg(leg, lane, budget) -> LegTicket`
+- `dispatch_leg(leg, ports, budget) -> Result<LegOutput, ExecuteError>`
 - `fuse_safe_legs(outputs, fusion_profile) -> FusedCandidates`
 - `classify_partial_result(state) -> PartialCoverage`
 
 ## Failure surface
 
-Use typed errors/reason codes. Relevant public reasons: `RESOURCE_EXHAUSTED`, `QDRANT_UNAVAILABLE`, `INCOMPLETE_COVERAGE`, `CANCELLED`. Never turn a degraded or partial
-state into an apparent success.
+Relevant reasons include `RESOURCE_EXHAUSTED`, `INDEX_UNAVAILABLE`, `INCOMPLETE_COVERAGE`,
+`CANCELLED` and `LEG_PROVIDER_UNAVAILABLE`.
 
 ## Test seams and exit evidence
 
@@ -56,21 +56,17 @@ state into an apparent success.
 - `raw scores across partitions never cross fusion boundary`
 - `saturation returns RESOURCE_EXHAUSTED or truthful partial`
 - `stable plan yields stable ordering`
-- `extension legs are injected through typed ports and cannot bypass budgets or access checkpoints`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
+- `extension legs cannot bypass budgets or access checkpoints`
+- `package graph contains no Qdrant/redb/process adapter edge`
 
 ## Size and split guard
 
 - Delivery wave: **W4 / P08**
 - Soft `src/` target: **9,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
+- Hard review threshold: **10,000 hand-written Rust lines**
+- Request a split before optional providers force concrete dependencies into this scheduler.
 
 ## Definition of done
 
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+All execution paths are bounded and port-driven, fusion is deterministic and no concrete storage/index
+adapter is reachable from this package.
