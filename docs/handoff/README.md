@@ -9,6 +9,8 @@
 - [`../../qualification/query/W4_QUALIFICATION.md`](../../qualification/query/W4_QUALIFICATION.md) — bounded P08 query evidence contract.
 - [W5_IMPLEMENTATION_PACKET.md](W5_IMPLEMENTATION_PACKET.md) — currentness/overlay/Rust-structure package index and hard stops.
 - [`../../qualification/current/README.md`](../../qualification/current/README.md) — unexecuted P09–P10 current-workspace evidence contract.
+- [W6_IMPLEMENTATION_PACKET.md](W6_IMPLEMENTATION_PACKET.md) — subject-resolution/comparison/exact-proof ownership, ordering and hard stops.
+- [`../../qualification/proof/README.md`](../../qualification/proof/README.md) — unexecuted P11–P12 profile/baseline/probe contract.
 - [STRUCTURAL_CI.md](STRUCTURAL_CI.md) — scaffold and implementation-packet validation workflow and non-claims.
 - [SWARM_READINESS_AUDIT.md](SWARM_READINESS_AUDIT.md) — current readiness and honest status.
 - [OWNERSHIP_BOUNDARY_AUDIT.md](OWNERSHIP_BOUNDARY_AUDIT.md) — missing-owner/dependency audit.
