@@ -1,13 +1,27 @@
 name: W5 current-workspace contracts
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/w5-current-contracts.yml"
+      - "config/w5-current.toml"
+      - "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+      - "docs/current/**"
+      - "qualification/current/**"
+      - "qualification/rust-syntax/**"
+      - "swarm/w5-current.toml"
+      - "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+      - "crates/search-query/search-overlay/FUNCTIONS.md"
+      - "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+      - "tools/validate-current-packets.ps1"
+      - "tools/validate-w5-current.ps1"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: w5-current-contracts-${{ github.ref }}
+  group: w5-current-contracts-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
