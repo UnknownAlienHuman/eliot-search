@@ -1,73 +1,81 @@
 # Agent contract — search-eval
 
-You own only `crates/search-eval/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+You own only `crates/search-eval/`. Do not edit another package, the root workspace, shared contracts,
+qualification evidence or architecture. A missing field uses the contract-change process; do not patch
+another owner's fixture or weaken an invariant.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S29.1, S30.2, S35-S37, P08, P15.
+## Bounded read set
+
+For W4 baseline work read the package assignment, `FUNCTIONS.md`, observability section and accepted
+direct handoffs. For W9/P15 work additionally read only:
+
+- `docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md`;
+- `qualification/product-pulse/{baseline,corpus,metrics,probes,gate-map}.toml`;
+- `config/w9-product-pulse.toml`;
+- `swarm/w9-product-pulse.toml`;
+- accepted immutable fixture/API/evidence references supplied by the integration ticket.
+
+The Architecture 8.4 master is exception-only. `swarm/launch-state.toml` remains the only launch
+authority.
 
 ## Mission
 
-Own content-minimized observability, control-corpus evaluation and property/fault evidence without becoming a training pipeline.
+Own content-minimized observability, deterministic evaluation schemas and the evidence-backed Product
+Pulse verdict without becoming a production dependency, training pipeline or gate self-approver.
 
 ## Ownership
 
-- opaque metrics and operation traces
-- control-corpus harness and baseline adapters
-- property/fault fixture orchestration
-- latency/resource/security acceptance reports
-- privacy leakage assertions
+- corpus, baseline, run, metric and evidence schemas;
+- deterministic case/block aggregation and A/B/C comparison;
+- latency/resource/recovery/protocol/security reports;
+- content-minimization and source-admission leakage audits;
+- Product Pulse report and closed verdict construction.
 
 ## Forbidden ownership
 
-- raw source, unsaved buffers or query text in default logs
-- hidden training or learning inputs
-- treating green unit tests as product acceptance
-- production crates depending on eval
+- production ranking/query/source/index behavior;
+- raw source/query/unsaved/secret/token/path content in ordinary reports or telemetry;
+- hidden learning, training, query-specific tuning or oracle feedback;
+- changing another package's fault fixture;
+- executing stores or Qdrant through a production dependency;
+- selecting thresholds after candidate results;
+- self-reviewing or self-accepting G5;
+- authorizing optional depth without an exact accepted P15 receipt.
 
 ## Allowed dependencies
 
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+`search-contracts`, `search-domain`, `search-config`. Additional dependencies require an explicit
+boundary review. Integration execution uses a dev/test driver over accepted provider/public interfaces;
+production packages never depend on `search-eval`.
 
-## Required logical surface
+## Required operation surface
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
+`FUNCTIONS.md` is authoritative. It includes corpus/policy validation, frozen run identity, baseline
+validation, deterministic execution blocks, evidence ingestion/reproduction, scoring/aggregation,
+A/B/C comparison, SLO/resource reports, leakage/admission/fault/protocol audits, Product Pulse report,
+hard blockers, verdict and immutable receipt.
 
-- `record_metric(event) -> Result<(), EvalError>`
-- `run_control_corpus(profile, baselines) -> EvaluationReport`
-- `run_property_suite(target) -> PropertyReport`
-- `audit_privileged_debug(trace_set) -> LeakageReport`
-- `product_pulse_decision(report) -> AcceptanceDecision`
+## Invariants
 
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `EVALUATION_FIXTURE_INVALID`, `PRIVACY_LEAK_DETECTED`, `PRODUCT_ACCEPTANCE_NOT_PROVEN`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `default telemetry contains no source/query/path/corpus names`
-- `required control-corpus cases are present`
-- `A/B/C baselines use identical declared scope`
-- `fault fixtures preserve raw receipts`
-- `P15 cannot pass without security/resource/latency evidence`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
+- identical declared scope and immutable case snapshot across A/B/C;
+- oracle and criteria hidden from production/baselines;
+- cold/warm/preparation/recovery lanes remain distinct;
+- every failed/skipped/cancelled/timed-out/unavailable observation remains visible;
+- safety/correctness failures cannot be averaged away;
+- environment/corpus/artifact/configuration drift creates a new run;
+- producer and accepting reviewer are different identities;
+- only `ACCEPTED` may unlock W10.
 
 ## Size and split guard
 
-- Delivery wave: **W4 baseline / P08; acceptance W9 / P15**
-- Soft `src/` target: **8,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
+- normal target: at most 7,500 hand-written `src/` lines;
+- split review before 8,500 total hand-written lines;
+- hard stop at 10,000 including package-local tests;
+- keep schemas/aggregation/verdict together for auditability;
+- platform execution drivers may be dev/test tooling, but they cannot own verdict meaning or become a
+  production dependency.
 
-## Definition of done
+## Handoff
 
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Report exact commands, immutable raw evidence references, failures/unavailable checks and public API
+digest. Compilation and unit tests are structural evidence only; they never claim G5 acceptance.
