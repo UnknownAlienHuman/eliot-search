@@ -26,6 +26,11 @@ The package owns:
 It does not own filesystem save, source admission, durable revision creation, Qdrant publication,
 source-handle durability or a persistent second index.
 
+**Storage-class rule:** unsaved overlay state is `process-memory-only`. Its bytes are forbidden from
+redb, CAS, Qdrant, provider caches, backups, restore manifests, evaluation corpora, crash attachments,
+logs and telemetry. Only content-minimized non-reconstructive digest/size/session/invalidation metadata
+may cross a package boundary where an accepted contract explicitly requires it.
+
 ## `admit_saved_overlay`
 
 ```text
@@ -217,6 +222,7 @@ bytes, crash-dump inclusion, plaintext telemetry or a persistent secondary index
 
 - exhaustive sink audit: unsaved bytes absent from redb, CAS, Qdrant, logs, metrics, backups, restore
   manifests, crash attachments, provider caches, evaluation corpora and learning inputs;
+- process-memory-only unsaved storage class is enforced across every serialization/persistence sink;
 - authenticated attach and binding/sensitivity ceilings;
 - precedence `unsaved > saved > published` under concurrent replacement;
 - close, replace, TTL, disconnect, revocation, purge and owner-generation invalidation;

@@ -1,0 +1,291 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P14"
+wave = 8
+status = "schema-only"
+implementation_authorized = false
+
+# Modes:
+# LOCKED            correctness/security/authority invariant; override is rejected.
+# TUNABLE           bounded resource policy validated by the owner.
+# QUALIFIED_REF     immutable accepted feature/profile/mapping receipt.
+# OPAQUE_SECRET_REF OS-bound opaque reference; plaintext is invalid.
+
+[generic_edge]
+owner = "search-provider-protocol"
+
+[[generic_edge.field]]
+name = "mutual_authentication_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[generic_edge.field]]
+name = "pairing_proof_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[generic_edge.field]]
+name = "binding_filtered_capabilities"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[generic_edge.field]]
+name = "reverse_authority_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[generic_edge.field]]
+name = "raw_store_access_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[generic_edge.field]]
+name = "client_disposition_in_result_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[generic_edge.field]]
+name = "max_visible_memberships_per_descriptor"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 4096
+default = 512
+change_action = "APPLY_LIVE"
+
+[[generic_edge.field]]
+name = "descriptor_refresh_ttl_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 100
+max = 300000
+default = 5000
+change_action = "APPLY_LIVE"
+
+[[generic_edge.field]]
+name = "pairing_challenge_ttl_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 5000
+max = 300000
+default = 60000
+change_action = "APPLY_LIVE"
+
+[[generic_edge.field]]
+name = "binding_idle_timeout_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 60000
+max = 2592000000
+default = 86400000
+change_action = "APPLY_LIVE"
+
+[[generic_edge.field]]
+name = "max_bindings_per_installation"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 1024
+default = 64
+change_action = "SECURITY_BARRIER"
+
+[standalone_cli]
+owner = "eliot-search"
+
+[[standalone_cli.field]]
+name = "direct_store_access_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[standalone_cli.field]]
+name = "default_output_mode"
+type = "enum"
+mode = "TUNABLE"
+allowed = ["human", "json"]
+default = "human"
+change_action = "APPLY_LIVE"
+
+[[standalone_cli.field]]
+name = "progress_enabled"
+type = "bool"
+mode = "TUNABLE"
+default = true
+change_action = "APPLY_LIVE"
+
+[[standalone_cli.field]]
+name = "standalone_grant_ttl_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 1000
+max = 3600000
+default = 300000
+change_action = "APPLY_LIVE"
+
+[[standalone_cli.field]]
+name = "allow_partial_exit_zero"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[eliot_adapter]
+owner = "search-eliot-adapter"
+optional = true
+
+[[eliot_adapter.field]]
+name = "enabled"
+type = "bool"
+mode = "TUNABLE"
+default = false
+change_action = "GATE_REQUIRED+RESTART_DEPENDENCY"
+
+[[eliot_adapter.field]]
+name = "compiled_feature_ref"
+type = "QualifiedFeatureRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+change_action = "GATE_REQUIRED+RESTART_DEPENDENCY"
+
+[[eliot_adapter.field]]
+name = "mapping_profile_ref"
+type = "QualifiedProfileRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+change_action = "GATE_REQUIRED+RESTART_DEPENDENCY"
+
+[[eliot_adapter.field]]
+name = "canonical_credentials_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[eliot_adapter.field]]
+name = "reverse_write_channel_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[eliot_adapter.field]]
+name = "memory_disposition_output_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[eliot_adapter.field]]
+name = "fail_open_on_provider_error"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[research_export]
+owner = "search-research-export-adapter"
+optional = true
+
+[[research_export.field]]
+name = "enabled"
+type = "bool"
+mode = "TUNABLE"
+default = false
+change_action = "GATE_REQUIRED+RESTART_DEPENDENCY"
+
+[[research_export.field]]
+name = "compiled_feature_ref"
+type = "QualifiedFeatureRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+change_action = "GATE_REQUIRED+RESTART_DEPENDENCY"
+
+[[research_export.field]]
+name = "manifest_protocol"
+type = "enum"
+mode = "LOCKED"
+default = "eliotr.normalized.v1"
+
+[[research_export.field]]
+name = "manifest_body_sha256"
+type = "Sha256Digest32"
+mode = "LOCKED"
+default = "3a5f9fd2b254eebe574b2c4a28f9804df0da9df359e59ceee125fa7da90fef22"
+
+[[research_export.field]]
+name = "max_bundle_bytes"
+type = "u64"
+mode = "TUNABLE"
+min = 1
+max = 1073741824
+default = 268435456
+change_action = "APPLY_LIVE"
+
+[[research_export.field]]
+name = "max_bundle_entries"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 100000
+default = 10000
+change_action = "APPLY_LIVE"
+
+[[research_export.field]]
+name = "unsaved_content_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[research_export.field]]
+name = "ordinary_export_transfers_ownership"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[research_export.field]]
+name = "cutover_receipt_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[research_export.field]]
+name = "unknown_load_bearing_fields"
+type = "enum"
+mode = "LOCKED"
+default = "reject"
+
+[[research_export.field]]
+name = "path_traversal_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[research_export.field]]
+name = "cross_residency_dedup_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[activation]
+requires_generic_edge_receipt = true
+requires_compiled_feature = true
+requires_explicit_config_enablement = true
+requires_profile_fixture_receipt = true
+requires_binding_authorization = true
+configuration_alone_authorizes_profile = false
+
+[forbidden]
+unauthenticated_capability_descriptor = true
+unauthenticated_request = true
+unauthenticated_handle_expansion = true
+client_scope_widens_authority = true
+adapter_mints_grant = true
+provider_result_contains_client_disposition = true
+raw_qdrant_access = true
+raw_redb_access = true
+plaintext_pairing_or_handle_tokens_in_logs = true
+optional_profile_self_activation = true
+unsaved_research_export = true
+ordinary_export_owner_transfer = true
+internal_digest_relabelled_as_wire_sha256 = true

@@ -90,6 +90,11 @@ escaped entries.
 Cancellation, deadline or provider failure returns a resumable incomplete slice. No partial result may
 close an observation gap or advance the authoritative inventory revision.
 
+**Completeness rule:** partial/cancelled/timed-out inventory is always `INVENTORY_INCOMPLETE`; it can
+publish only a checkpoint plus explicit unknown/unreadable scope. It cannot advance the authoritative
+inventory revision, close an observation gap, produce `CURRENT_CONFIRMED` or satisfy an exact-negative
+denominator.
+
 ## `compare_inventory`
 
 ```text
@@ -235,6 +240,7 @@ slices and may pause/reschedule safely.
 - watcher overflow, USN reset, resume and provider restart open gaps before acknowledgement;
 - duplicate and out-of-order cursors are deterministic;
 - bounded multi-slice inventory cannot report complete early;
+- partial/cancelled/timed-out inventory never advances currentness or exact completeness;
 - cancellation/deadline checkpoint never closes a gap;
 - stable-read failure remains unresolved and shadowed;
 - live candidate head mismatch never emits stale current evidence;

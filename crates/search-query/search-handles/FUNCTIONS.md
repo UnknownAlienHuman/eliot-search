@@ -41,6 +41,19 @@ no authority.
 Validates budgets before readback, reopens the exact revision/anchor, verifies digest/assurance and
 rechecks live state immediately before returning bounded bytes/metadata.
 
+## Cancellation and deadlines
+
+- Minting checks cancellation/deadline before randomness consumption and before record insertion.
+- If cancellation or deadline occurs after record insertion but before token delivery, the exact record
+  is invalidated and no successful token is reported; uncertain insertion is resolved by the package's
+  operation identity/record lookup rather than blind reminting.
+- Expansion checks cancellation/deadline before source readback, between bounded read/range operations
+  and immediately before emission.
+- Cancellation after bytes were read but before emission returns no bytes and no reusable permit.
+- A deadline never bypasses the final live binding/grant/owner/view/residency/purge recheck.
+- Invalidation and expiry are monotonic; cancellation may stop between bounded batches, returning a
+  resumable content-free receipt without resurrecting already invalidated records.
+
 ## Lifecycle
 
 ### `invalidate(scope, generation, store) -> InvalidationReceipt`
@@ -63,4 +76,5 @@ invalidated. `durable_unsaved_allowed=true` is always rejected.
 Token entropy/opacity; plaintext absent from logs/debug/receipts; provider result cannot serialize
 server record; possession without authorization denied; ephemeral restart/buffer-close invalidation;
 durable retained-revision requirement; owner/view/residency/purge drift; range budget before readback;
+cancellation/deadline before readback and immediately before emission; uncertain mint cleanup/recovery;
 quota/TTL reduction receipts; fake persistence/readback ports.
