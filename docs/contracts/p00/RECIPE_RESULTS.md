@@ -1,7 +1,8 @@
 # Recipe-specific result schemas
 
-Every result is bounded, carries the same request/plan/result fence and exposes truthful coverage. A
-recipe result never contains client belief/admission/finish authority or raw vendor state.
+Every result is bounded, fenced and truthful. A recipe result never contains client
+belief/admission/finish authority or raw vendor state. Ambiguity is represented by tagged variants,
+never by nullable fields mixed with resolved evidence.
 
 ## Common header
 
@@ -36,23 +37,31 @@ AmbiguousSubjectCandidate:
   entity_kind: EntityKind
   match_basis: qualified_name | exact_name | signature | structural | lexical | semantic
   disambiguation_summary: BoundedNonContentMetadata
+
+SubjectAmbiguityResult:
+  header: RecipeResultHeader
+  ambiguity: SubjectAmbiguitySet
 ```
 
-No materially ambiguous subject is silently selected.
+No materially ambiguous subject is silently selected. Ambiguity candidates are authorized navigation
+handles, not confirmed answers about which definition the client intended.
 
 ## Inspection
 
 ```yaml
 EntityInspectionResult:
-  header: RecipeResultHeader
-  subject: ResolvedSubject | SubjectAmbiguitySet
-  definitions: bounded_list<EvidenceObservation>
-  references: bounded_list<EvidenceObservation>
-  callers: bounded_list<EvidenceObservation>
-  tests: bounded_list<EvidenceObservation>
-  documentation: bounded_list<EvidenceObservation>
-  configuration_variants: bounded_list<ConfigurationObservation>
-  continuation_handle: ContinuationHandle | null
+  resolved:
+    header: RecipeResultHeader
+    subject: ResolvedSubject
+    definitions: bounded_list<EvidenceObservation>
+    references: bounded_list<EvidenceObservation>
+    callers: bounded_list<EvidenceObservation>
+    tests: bounded_list<EvidenceObservation>
+    documentation: bounded_list<EvidenceObservation>
+    configuration_variants: bounded_list<ConfigurationObservation>
+    continuation_handle: ContinuationHandle | null
+  ambiguous:
+    result: SubjectAmbiguityResult
 
 EvidenceObservation:
   role: EvidenceRole
@@ -62,16 +71,22 @@ EvidenceObservation:
   configuration_predicate: BoundedExpression | null
 ```
 
+Exactly one inspection variant is present. The ambiguous variant cannot contain definitions, callers,
+tests or documentation.
+
 ## Entity exploration
 
 ```yaml
 EntityExplorationResult:
-  header: RecipeResultHeader
-  root_subject: ResolvedSubject | SubjectAmbiguitySet
-  nodes: bounded_list<EntityGraphNode>
-  edges: bounded_list<EntityGraphEdge>
-  truncated_at_depth: u8 | null
-  continuation_handle: ContinuationHandle | null
+  resolved:
+    header: RecipeResultHeader
+    root_subject: ResolvedSubject
+    nodes: bounded_list<EntityGraphNode>
+    edges: bounded_list<EntityGraphEdge>
+    truncated_at_depth: u8 | null
+    continuation_handle: ContinuationHandle | null
+  ambiguous:
+    result: SubjectAmbiguityResult
 
 EntityGraphNode:
   node_id: OpaqueId
@@ -92,6 +107,12 @@ Nodes/edges are descriptive navigation, not a canonical program graph.
 ## Cross-repository comparison
 
 ```yaml
+CompareImplementationsResult:
+  compared:
+    result: CrossRepositoryBehaviorSet
+  ambiguous:
+    result: SubjectAmbiguityResult
+
 CrossRepositoryBehaviorSet:
   header: RecipeResultHeader
   local_subject:
@@ -122,8 +143,8 @@ BehaviorComparison:
   unknowns: bounded_list<CoverageUnknown>
 ```
 
-Forks/mirrors collapse by lineage for independent-evidence summaries. Tests/docs are evidence roles,
-not automatic truth; Search does not emit a “correct implementation” verdict.
+Comparison runs only after one local subject is resolved. Forks/mirrors collapse by lineage for
+independent-evidence summaries. Search emits no “correct implementation” verdict.
 
 ## Corpus profile
 
@@ -141,8 +162,7 @@ CorpusFacet:
   count_assurance: exact_inventory | filtered_index | partial
 ```
 
-Only authorized values/counts are emitted. Filtered-index counts use the same base eligibility filter;
-partial counts are marked and cannot support completeness.
+Only authorized values/counts are emitted. Partial counts cannot support completeness.
 
 ## Corpus delta
 
@@ -183,7 +203,7 @@ ProvenanceStep:
   receipt_ref: ReceiptRef
 ```
 
-Provenance describes recorded lineage; it does not infer missing transformations.
+Provenance describes recorded lineage; it never invents a missing transformation.
 
 ## Handle expansion
 
@@ -215,8 +235,8 @@ HandleExpansionBody:
     next_continuation_handle: ContinuationHandle | null
 ```
 
-Every expansion reauthorizes live grant/owner/view/residency/purge state. The body is size-clamped before
-source readback/emission.
+Exactly one body variant is present. Every expansion reauthorizes live state and clamps size before
+readback/emission.
 
 ## Tagged recipe result
 
@@ -225,7 +245,7 @@ RecipeResultV1:
   locate: SearchCandidateSet
   find_text: SearchCandidateSet
   inspect_entity: EntityInspectionResult
-  compare_implementations: CrossRepositoryBehaviorSet
+  compare_implementations: CompareImplementationsResult
   explore_entity: EntityExplorationResult
   corpus_profile: CorpusProfileResult
   corpus_delta: CorpusDeltaResult
@@ -235,4 +255,4 @@ RecipeResultV1:
   expand_handle: HandleExpansionResult
 ```
 
-Exactly one variant is present and its tag must match the request recipe.
+Exactly one variant is present and its tag matches the request recipe.
