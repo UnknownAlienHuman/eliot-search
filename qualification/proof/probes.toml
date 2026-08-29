@@ -1,0 +1,425 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P11-P12"
+wave = 6
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[[probe]]
+id = "explicit_handle_wins"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "invalid_explicit_reference_no_fallthrough"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "qualified_key_before_exact_name"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "same_name_material_ambiguity"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "renamed_equivalence_requires_receipt"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "overload_kind_signature_distinction"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "subject_cfg_variants_remain_distinct"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "structural_lexical_rank_not_unique_identity"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "bounded_ambiguity_reports_truncation"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "subject_candidates_one_coherent_fence"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "incomplete_higher_ladder_blocks_lower_resolution"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "resolution_receipt_drift_invalidation"
+owner = "search-subject-resolver"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ambiguous_local_subject_blocks_comparison"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "comparable_match_basis_source_backed"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "false_same_name_not_comparable"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "fork_mirror_copy_collapse"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ambiguous_lineage_not_counted_independent"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "evidence_roles_remain_separate"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "tests_and_docs_not_automatic_truth"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "mutually_exclusive_cfg_is_variant"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "overlapping_cfg_incompatibility_is_conflict"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unknown_cfg_not_unconditional"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "local_absence_requires_exact_proof"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "comparison_incomplete_coverage_explicit"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "recommended_reading_deterministic_lineage_diverse"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "comparison_no_normative_verdict_api"
+owner = "search-comparator"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "literal_raw_and_decoded_semantics_distinct"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "regex_engine_exact_artifact_identity"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "regex_non_backtracking_adversarial_corpus"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "qualified_symbol_profile_golden"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "structural_exact_profile_identity"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "record_field_profile_golden"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "authoritative_inventory_denominator_only"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "qdrant_topk_denominator_rejected"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "denominator_exact_identity_deduplication"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "every_denominator_item_accounted_once"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "complete_negative_requires_all_items"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unreadable_blocks_complete_negative"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "revision_unavailable_blocks_complete_negative"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unsupported_encoding_blocks_complete_negative"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "scope_drift_blocks_complete_negative"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "observation_gap_blocks_complete_negative"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "timeout_blocks_complete_negative"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "cancellation_blocks_complete_negative"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "access_and_purge_midscan_recheck"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unsaved_snapshot_expiry_and_restart"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_checkpoint_commit_readback_resume"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_report_tamper_and_count_rejection"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "historical_vs_current_proof_revalidation"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "semantic_absence_overclaim_rejected"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "qdrant_payload_not_exact_evidence"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_fake_ports_adapter_independence"
+owner = "search-exact"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
