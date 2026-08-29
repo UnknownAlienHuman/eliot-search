@@ -1,21 +1,20 @@
 # Bounded package assignments
 
-Each file in this directory is the implementation packet for exactly one Cargo package. The
-orchestrator supplies one packet to one writer together with root/family/package `AGENTS.md`, `../ASSIGNMENT_PROTOCOL.md` and accepted public dependency handoffs.
+Each file is the implementation packet for one Cargo package. `swarm/crates.toml` is authoritative for
+package path, exact direct dependencies, assignment path, earliest wave, optionality and size target.
 
-Assignments are integration-owned and immutable for a writer's task. A package writer must not edit
-`swarm/assignments/` to make implementation easier. Missing or contradictory load-bearing semantics use
-`../CONTRACT_CHANGE_TEMPLATE.md`.
+The orchestrator supplies:
 
-A packet is intentionally small compared with the architecture master and contains:
+- root/family/package `AGENTS.md`;
+- `ASSIGNMENT_PROTOCOL.md`;
+- exactly one assignment;
+- the relevant `docs/contracts/p00/` files for W0 only;
+- accepted API/port handoffs for every dependency listed in the registry;
+- immutable assignment issue and base commit.
 
-- mission, ownership and forbidden ownership;
-- logical primitives and operations;
-- required invariants and typed reason codes;
-- suggested internal module plan;
-- mandatory tests/evidence;
-- dependency and line-budget rules;
-- launch gate and architecture traceability.
+Assignment prose defines mission, owned/forbidden state, logical operations, invariants, failures,
+tests and internal module suggestions. A header that omits a shared foundation dependency does not
+override `swarm/crates.toml`; the registry must be checked before launch.
 
-The file name is the exact Cargo package name: `swarm/assignments/<package>.md`.
-`../launch-state.toml` decides whether the packet may currently be launched.
+Writers cannot edit assignments. Missing or contradictory load-bearing semantics use
+`CONTRACT_CHANGE_TEMPLATE.md`. `launch-state.toml` decides whether an assignment may currently run.
