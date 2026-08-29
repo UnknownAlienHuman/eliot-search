@@ -1,33 +1,39 @@
 # AGENTS.md — ELIOT Search swarm contract
 
-This repository is implementation-scaffolded, not implemented. The authoritative architecture remains
-`docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`. Ordinary package agents use bounded
-assignments and accepted handoffs instead of loading that 145 KB master.
+This repository is implementation-scaffolded, not implemented. Architecture Part I remains normative;
+ordinary agents use bounded packets and accepted handoffs instead of loading the 145 KB master.
 
-## Authoritative read set
+## Read set
 
-A package writer reads only:
+A writer reads only:
 
-1. this file;
-2. nearest family and package `AGENTS.md`;
-3. `swarm/ASSIGNMENT_PROTOCOL.md`;
-4. exactly one `swarm/assignments/<package>.md`;
-5. relevant `docs/handoff/PORT_CATALOG.md` entries;
+1. this file and nearest family/package `AGENTS.md`;
+2. `docs/handoff/AUTHORITY_MAP.md`;
+3. its exact package entry in `swarm/crates.toml`;
+4. `swarm/ASSIGNMENT_PROTOCOL.md` and one package assignment;
+5. relevant port-catalog entries;
 6. accepted public dependency handoffs/API digests;
-7. immutable assignment issue/base commit and package-local fixtures.
+7. immutable assignment issue/base commit and local fixtures.
 
-W0 writers additionally read the exact files assigned to them in `docs/contracts/p00/README.md`.
-The architecture master is exception-only. A demonstrated contradiction or missing load-bearing field
-uses `swarm/CONTRACT_CHANGE_TEMPLATE.md` and stops affected work.
+W0 writers additionally read their assigned P00 contract-pack files. The architecture master is
+exception-only: a demonstrated contradiction or missing load-bearing field stops work and uses
+`CONTRACT_CHANGE_TEMPLATE.md`.
 
-## Launch and write ownership
+## Exact dependencies and launch
 
-- `swarm/launch-state.toml` is the only current launch authority.
-- One writer owns one Cargo package and one isolated worktree.
-- Writers edit only their package directory.
-- Root workspace, lockfile, toolchain, CI, architecture, contract pack, generated schemas, shared
-  fixtures, assignments and launch state belong to the integration owner.
-- A package never repairs or redefines a dependency; it requests a contract/port change.
+- `swarm/crates.toml` is the only exact dependency/path/assignment registry.
+- Dependency prose in package instructions is explanatory and cannot override the registry.
+- Cargo manifest and registry dependency sets must match before merge.
+- `swarm/launch-state.toml` alone decides whether a package may run now.
+- Presence in Cargo, a future wave, README or assignment is not authorization.
+
+## Write ownership
+
+- one writer, one Cargo package, one isolated worktree;
+- writer edits only its package path;
+- root Cargo/lockfile/toolchain/CI, architecture, contract pack, generated schemas, `swarm/`, shared
+  fixtures and cross-package changes belong to the integration owner;
+- package agents do not repair/redefine dependencies; they request a contract/port change.
 
 ## Global invariants
 
@@ -47,43 +53,39 @@ uses `swarm/CONTRACT_CHANGE_TEMPLATE.md` and stops affected work.
 14. Ordinary retired-point reclaim and security/legal purge have separate owners and receipts.
 15. Partial/degraded outcomes remain typed data and are never relabeled success.
 
-## Dependency direction
+## Layer ownership
 
 ```text
-search-contracts
-  ├─ search-domain
-  └─ search-ports
-       ↑ capability and orchestration packages
-       ↑ concrete adapters
+search-contracts  shared records, IDs, schemas and reason registries
+  ├─ search-domain  pure meaning
+  └─ search-ports   shared vendor-neutral operations
+       ↑ capabilities and adapters
        ↑ eliot-searchd composition
 ```
 
-- Shared records come from `search-contracts`.
-- Shared vendor-neutral traits come from `search-ports`.
-- Pure reusable meaning comes from `search-domain`.
-- Concrete adapters are constructed only by `eliot-searchd`.
-- Vendor/native types and generic string errors never cross public boundaries.
+Vendor/native types, credentials, raw collection names, point IDs and generic vendor strings do not
+cross public boundaries. Concrete adapters are constructed only by daemon composition.
 
 ## Size and implementation rules
 
-- ordinary target: ≤7,500 hand-written `src/` lines;
+- normal target ≤7,500 hand-written `src/` lines;
 - split review before 8,500 total hand-written lines;
 - hard stop at 10,000 including local tests;
 - no forwarding-only or crate-per-type shells;
-- start with failing contract/property/fault tests;
+- begin with failing contract/property/fault tests;
 - no `todo!()`, fake receipt, placeholder success, silent fallback or unbounded queue;
 - Windows x64 is first qualified runtime;
 - no wildcard/floating git dependency or baseline Python/Node runtime;
-- preserve exact commands, artifact identities and unavailable checks in the handoff.
+- preserve exact commands, artifacts and unavailable checks in the handoff.
 
 ## GitHub connector access
 
-Before claiming GitHub is read-only, reload the full catalog with
-`list_resources(paths=["GitHub"])` without a query filter, verify repository push permission, and use a
-harmless unattached blob probe when necessary. VM network access and connector API access are separate.
+Before claiming GitHub is read-only, reload the full catalog without a query filter, verify push
+permission and use an unattached blob probe when needed. VM network and connector API access are
+separate.
 
 ## Handoff
 
-Use `swarm/PACKAGE_HANDOFF_TEMPLATE.md`; review follows `swarm/REVIEW_CHECKLIST.md`. The handoff must
-publish the public API/port digest and let downstream agents work without reading implementation
-internals or the architecture master.
+Use `PACKAGE_HANDOFF_TEMPLATE.md`; review follows `REVIEW_CHECKLIST.md`. Publish an immutable public
+API/port digest sufficient for downstream work without implementation internals or the architecture
+master.

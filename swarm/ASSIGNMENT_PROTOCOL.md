@@ -1,8 +1,8 @@
 # Package assignment protocol
 
-Every writer reads root/family/package instructions, exactly one assignment, relevant port-catalog
-entries and accepted direct-dependency handoffs. W0 writers additionally read only the P00 contract-pack
-files assigned in `docs/contracts/p00/README.md`.
+Every writer reads root/family/package instructions, `AUTHORITY_MAP.md`, its exact registry entry, one
+assignment, relevant port entries and accepted dependency handoffs. W0 writers additionally read only
+the P00 pack files assigned to them.
 
 ## Boundaries
 
@@ -10,8 +10,16 @@ files assigned in `docs/contracts/p00/README.md`.
 - writer edits only the assigned package path;
 - root workspace, lockfile, toolchain, CI, architecture, contract pack, generated schemas, assignments,
   launch state and shared fixtures belong to the integration owner;
-- missing/contradictory semantics use `CONTRACT_CHANGE_TEMPLATE.md`; do not invent a local type, port,
-  adapter, reason code or fallback.
+- missing/contradictory semantics use `CONTRACT_CHANGE_TEMPLATE.md`; never invent a local record, port,
+  reason code, adapter or fallback.
+
+## Authority
+
+- Architecture Part I owns product semantics.
+- Accepted API digests own frozen fields/methods.
+- `swarm/crates.toml` owns exact direct dependencies even when older explanatory prose omits one.
+- `launch-state.toml` owns current permission only.
+- Assignment owns capability behavior, not cross-package contracts or launch authority.
 
 ## Ownership rule
 
@@ -19,7 +27,7 @@ files assigned in `docs/contracts/p00/README.md`.
 - pure reusable meaning: `search-domain`;
 - shared vendor-neutral traits: `search-ports`;
 - capability mutable state/behavior: owning package;
-- concrete adapters: their adapter package, constructed only by `eliot-searchd`.
+- concrete adapters: adapter package, constructed by `eliot-searchd`.
 
 ## Operation contract
 
@@ -39,5 +47,5 @@ success. Package-local failures map explicitly before provider emission.
 Compilation alone is not acceptance. Windows/Qdrant/redb/provider claims require executed environment
 and artifact identity. No wildcard/floating git dependency or baseline Python/Node runtime.
 
-Split review is mandatory before 8,500 total hand-written Rust lines; 10,000 including local tests is a
-hard stop. Forwarding-only crates are forbidden.
+Split review is mandatory before 8,500 total hand-written lines; 10,000 including local tests is a hard
+stop. Forwarding-only crates are forbidden.
