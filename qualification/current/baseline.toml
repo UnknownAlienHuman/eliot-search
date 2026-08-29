@@ -1,0 +1,87 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P09-P10"
+wave = 5
+status = "DESIGNED_NOT_EXECUTED"
+implementation_authorized = false
+
+[observation]
+watchers_are_hints = true
+quiet_watcher_is_currentness_proof = false
+startup_reconcile_required = true
+resume_reconcile_required = true
+periodic_reconcile_required = true
+explicit_reconcile_required = true
+overflow_reconcile_required = true
+cursor_gap_opens_before_ack = true
+current_requires_continuous_cursor = true
+current_requires_complete_verified_inventory = true
+partial_inventory_is_complete = false
+cancelled_inventory_is_complete = false
+relaxed_observed_mode_requires_age = true
+exact_negative_allows_relaxed_observed_mode = false
+historical_retained_view_allowed_during_live_gap = true
+live_head_mismatch_emits_current_evidence = false
+control_unknown_outcome_requires_readback = true
+
+[overlay]
+precedence = ["published", "saved", "unsaved"]
+unsaved_authenticated_binding_required = true
+unsaved_memory_only = true
+unsaved_durable_allowed = false
+unsaved_redb_allowed = false
+unsaved_cas_allowed = false
+unsaved_qdrant_allowed = false
+unsaved_log_or_metric_payload_allowed = false
+unsaved_backup_or_restore_allowed = false
+unsaved_crash_attachment_allowed = false
+unsaved_provider_cache_allowed = false
+unsaved_eval_corpus_allowed = false
+unsaved_learning_or_training_allowed = false
+shadow_installed_before_snapshot_visible = true
+budget_failure_may_unshadow_base = false
+restart_recovers_unsaved_bytes = false
+ephemeral_token_valid_after_restart = false
+durable_handle_to_unsaved_allowed = false
+saved_overlay_requires_immutable_revision = true
+save_transition_requires_revision_receipt = true
+physical_secure_erase_claimed = false
+
+[rust_structure]
+parser_profile_status = "UNSELECTED"
+parser_source = "UNSELECTED"
+parser_version = "UNSELECTED"
+grammar_source_checksum = "UNSELECTED"
+license_receipt_ref = ""
+profile_fixture_digest = ""
+assurance = "tolerant_syntax"
+compiler_truth = false
+execute_build_scripts = false
+expand_procedural_macros = false
+execute_shell = false
+network_allowed = false
+credential_prompts_allowed = false
+execute_lsp_or_compiler_build_commands = false
+configuration_predicates_required = true
+cfg_unknown_treated_unconditional = false
+malformed_input_may_claim_complete = false
+vendor_types_public = false
+
+[limits]
+max_inventory_roots = 4096
+max_inventory_entries_per_slice = 10000
+max_inventory_bytes_per_slice = 67108864
+max_unsaved_sources_per_binding = 64
+max_unsaved_bytes_per_binding = 67108864
+max_rust_input_bytes = 16777216
+max_rust_syntax_nodes = 2000000
+max_rust_relations = 4000000
+max_cfg_depth = 128
+zero_means_unlimited = false
+
+[evidence]
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+raw_output_required = true
+independent_review_required = true
+prose_only_evidence = "reject"
