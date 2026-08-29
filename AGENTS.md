@@ -11,9 +11,12 @@ A writer reads only:
 2. `docs/handoff/AUTHORITY_MAP.md`;
 3. its exact package entry in `swarm/crates.toml`;
 4. `swarm/ASSIGNMENT_PROTOCOL.md` and one package assignment;
-5. relevant port-catalog entries;
-6. accepted public dependency handoffs/API digests;
-7. immutable assignment issue/base commit and local fixtures.
+5. the registry-declared package-local `FUNCTIONS.md`, when present;
+6. every registry-declared configuration packet under `config/sections/`, when present;
+7. the registry-declared qualification packet, when present;
+8. relevant port-catalog entries;
+9. accepted public dependency handoffs/API digests;
+10. immutable assignment ticket/base commit and package-local fixtures.
 
 W0 writers additionally read their assigned P00 contract-pack files. The architecture master is
 exception-only: a demonstrated contradiction or missing load-bearing field stops work and uses
@@ -21,19 +24,26 @@ exception-only: a demonstrated contradiction or missing load-bearing field stops
 
 ## Exact dependencies and launch
 
-- `swarm/crates.toml` is the only exact dependency/path/assignment registry.
+- `swarm/crates.toml` is the only exact dependency/path/assignment/function/configuration/qualification
+  registry.
 - Dependency prose in package instructions is explanatory and cannot override the registry.
 - Cargo manifest and registry dependency sets must match before merge.
 - `swarm/launch-state.toml` alone decides whether a package may run now.
-- Presence in Cargo, a future wave, README or assignment is not authorization.
+- Presence in Cargo, a future wave, README, function packet, qualification packet or assignment is not
+  authorization.
+- A package agent never selects an external artifact version or marks a qualification probe `PASS`
+  without an integration-owned ticket and immutable executed evidence.
 
 ## Write ownership
 
 - one writer, one Cargo package, one isolated worktree;
 - writer edits only its package path;
-- root Cargo/lockfile/toolchain/CI, architecture, contract pack, generated schemas, `swarm/`, shared
-  fixtures and cross-package changes belong to the integration owner;
-- package agents do not repair/redefine dependencies; they request a contract/port change.
+- root Cargo/lockfile/toolchain/CI, architecture, contract pack, generated schemas, `swarm/`,
+  `config/sections.toml`, qualification registries, shared fixtures and cross-package changes belong to
+  the integration owner;
+- a package that owns a configuration section implements the section packet inside its package but does
+  not edit the central registry or another owner's settings;
+- package agents do not repair/redefine dependencies; they request a contract/port/configuration change.
 
 ## Global invariants
 
@@ -52,19 +62,55 @@ exception-only: a demonstrated contradiction or missing load-bearing field stops
 13. Possessing a handle never grants access; expansion reauthorizes live state.
 14. Ordinary retired-point reclaim and security/legal purge have separate owners and receipts.
 15. Partial/degraded outcomes remain typed data and are never relabeled success.
+16. A configuration snapshot becomes effective only after every required live/barrier/restart/rebuild/
+    generation/gate receipt succeeds; mixed partial configuration is never published.
+17. Indexed mode requires one exact qualified server/client/artifact/profile set; automatic upgrade or
+    silent provider switching is forbidden.
+18. Mutation timeout/cancellation after a possible external write is `OUTCOME_UNKNOWN` until exact
+    readback/recovery resolves it.
 
 ## Layer ownership
 
 ```text
 search-contracts  shared records, IDs, schemas and reason registries
   ├─ search-domain  pure meaning
-  └─ search-ports   shared vendor-neutral operations
-       ↑ capabilities and adapters
+  ├─ search-ports   shared vendor-neutral operations
+  └─ search-config  pure configuration mechanics
+       ↑ capability-owned settings and behavior
+       ↑ concrete adapters
        ↑ eliot-searchd composition
 ```
 
 Vendor/native types, credentials, raw collection names, point IDs and generic vendor strings do not
 cross public boundaries. Concrete adapters are constructed only by daemon composition.
+
+## Function contract rule
+
+A registry-declared `FUNCTIONS.md` is part of the package handoff. Each operation defines:
+
+- validated inputs and state owner;
+- preconditions and successful postconditions;
+- typed failures and retryability;
+- idempotency/mutation identity;
+- cancellation and deadline behavior;
+- crash or unknown-outcome recovery;
+- finite resource bounds;
+- configuration interaction;
+- deterministic, negative, property, fault and qualification fixtures.
+
+The function packet specifies behavior, not mandatory Rust spelling. A writer may improve internal
+module layout but cannot weaken the operation contract or add a second owner.
+
+## Configuration rule
+
+- `config/sections.toml` names one semantic owner and one packet per section.
+- `search-config` parses/layers/redacts/plans but owns no capability setting.
+- The section owner supplies compiled defaults, typed validation, digest and change planning.
+- Only fields classified `APPLY_LIVE` may use package-local live application.
+- Security, restart, rebuild, collection-generation and optional-gate obligations are composed by the
+  daemon and may coexist; one dominant enum must not erase required steps.
+- Plaintext secrets, automatic artifact download/upgrade and optional-profile self-authorization fail
+  closed.
 
 ## Size and implementation rules
 
@@ -87,5 +133,5 @@ separate.
 ## Handoff
 
 Use `PACKAGE_HANDOFF_TEMPLATE.md`; review follows `REVIEW_CHECKLIST.md`. Publish an immutable public
-API/port digest sufficient for downstream work without implementation internals or the architecture
-master.
+API/port/configuration digest sufficient for downstream work without implementation internals or the
+architecture master.
