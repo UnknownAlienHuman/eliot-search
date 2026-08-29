@@ -1,28 +1,24 @@
 # search-retrieval-executor
 
-**C23 — Bounded retrieval execution.**
+**C23 — Retrieval Executor.**
 
 **Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-Execute direct, exact, indexed and optional-provider legs under bounded queues, cancellation and deterministic fusion.
+Execute bounded direct/index/provider legs through vendor-neutral ports and fuse only compatible authorized outputs.
 
 ## Owns
 
-- interactive/verification/background lanes
-- leg scheduling and cancellation propagation
-- baseline direct/Qdrant leg dispatch
-- typed extension-leg dispatch for overlay, exact and optional providers
-- within-leg and cross-leg fusion orchestration
-- partial-result accounting
+- execution lanes, scheduling and cancellation
+- typed leg dispatch
+- deterministic rank fusion
+- partial coverage accounting
 
 ## Must not own
 
-- final source validation or admission
-- durable query leases/history
-- raw-score comparison across scoring populations
-- unbounded queue, prefetch or retries
-- hard dependency on later overlay, exact or optional-provider implementations
+- final validation/admission
+- durable query history
+- concrete Qdrant/redb/process adapters
 
 - **Delivery wave:** W4 / P08
-- **Soft source-line target:** 9,500
+- **Soft source-line target:** 7,500
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
