@@ -16,8 +16,11 @@ only by the owner below; other writers submit a typed request.
 | no-execute/reparse/stable-read corpus | `search-safe-reader` | source, exact, validator |
 | anchor/coordinate/revision fixtures | `search-revision-store` | materializer, exact, validator, code enricher |
 | observation cursor/gap/inventory/fault fixtures | `search-source-reconcile` | daemon, access, validator, exact, eval |
-| saved/unsaved overlay precedence and non-persistence corpus | `search-overlay` | executor, validator, handles, continuation, eval |
-| Rust parser/grammar/malformed/cfg/evidence-role corpus | `search-code-enricher` | planner, comparator, exact, eval |
+| saved/unsaved overlay precedence and non-persistence corpus | `search-overlay` | executor, validator, handles, continuation, exact, eval |
+| Rust parser/grammar/malformed/cfg/evidence-role corpus | `search-code-enricher` | planner, resolver, comparator, exact, eval |
+| subject ladder, ambiguity, equivalence and drift corpus | `search-subject-resolver` | comparator, planner, eval |
+| repository lineage, evidence-role, cfg-variant and non-normative matrix corpus | `search-comparator` | result projection, eval, adapters |
+| exact predicate, denominator, item-failure, checkpoint and proof corpus | `search-exact` | planner, eval, adapters |
 | lexical golden vectors | `search-lexical` | projection, executor, eval |
 | Qdrant process/ACL/Job Object fixtures | `search-qdrant-supervisor` | daemon, P05 qualification |
 | Qdrant capability/schema/data-plane fixtures | `search-qdrant-bridge` | projection, publication, executor, reclaimer |
