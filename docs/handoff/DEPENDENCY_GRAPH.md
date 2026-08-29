@@ -1,7 +1,7 @@
 # Dependency graph and launch topology
 
-The package graph is acyclic. `swarm/crates.toml` is machine authority; this document explains the
-launch semantics that are easy to miss from Cargo alone.
+The package graph is acyclic. `swarm/crates.toml` is machine authority; this document explains launch
+and port semantics that Cargo alone cannot express.
 
 ## Foundation
 
@@ -10,20 +10,22 @@ search-contracts
 └─ search-domain
 ```
 
-`search-contracts` is implemented and accepted first. `search-domain` may start only from the accepted
-public contract digest, not from a concurrently changing contracts worktree.
+`search-contracts` is implemented and accepted first. `search-domain` starts only from its accepted
+public contract digest.
 
 ## Capability graph
 
 ```text
 W1
-  search-runtime-owner  ← contracts, domain
-  search-control-redb   ← contracts, domain
-  search-provider-protocol (frame/session shell) ← contracts, domain
+  search-runtime-owner
+  search-os-secrets
+  search-control-redb
+  search-provider-protocol (frame/session shell)
 
 W2
+  search-source-admission
   search-source-identity
-  search-source-registry        ← source-identity
+  search-source-registry        ← identity + admission
   search-safe-reader
   search-revision-store
   search-materializer
@@ -32,33 +34,36 @@ W2
 W3
   search-point-identity
   search-projection-planner     ← point-identity
-  search-qdrant-bridge
+  search-qdrant-supervisor      ← os-secrets
+  search-qdrant-bridge          (data plane only)
   search-lexical
   search-epoch-pins
-  search-publication            ← planner, point-identity, qdrant-bridge, epoch-pins
+  search-publication            ← planner + point-identity; journal/index via ports
+  search-index-reclaimer        ← epoch-pins + committed retired manifest
 
 W4
   search-access
   search-query-planner          ← access
-  search-retrieval-executor     ← planner, bridge, lexical, epoch-pins, access
-  search-candidate-validator    ← access, revision-store
-  search-result-projector       ← candidate-validator
-  search-continuation           ← planner, access, epoch-pins
+  search-retrieval-executor     ← planner + lexical + pins + access; index via port
+  search-candidate-validator    ← access; source readback via port
+  search-handles
+  search-result-projector       ← validator + handles
+  search-continuation           ← planner + access + pins
   search-eval (baseline harness)
 
 W5
-  search-source-reconcile       ← registry, identity, safe-reader
-  search-overlay                ← unitizer, lexical
+  search-source-reconcile       ← registry + identity + safe-reader
+  search-overlay                ← unitizer + lexical
   search-code-enricher
 
 W6
-  search-exact                  ← registry, revision-store, safe-reader, access
+  search-exact                  ← access; inventory/readback via ports
   search-subject-resolver
   search-comparator             ← subject-resolver
 
 W7
-  search-retention              ← control-redb, revision-store, qdrant-bridge, epoch-pins
-  hardening passes reuse search-access, candidate-validator and continuation
+  search-retention              ← pins + reclaimer + handles; stores/index via ports
+  hardening passes reuse access, validator, continuation, publication and revision store
 
 W8
   search-eliot-adapter          ← provider-protocol
@@ -69,43 +74,44 @@ W9
   search-eval owns Product Pulse and Windows qualification evidence
 
 W10
-  search-model-provider and model worker only after accepted P15 + ADR
-  document worker/provider depth only after accepted P15 + ADR
+  model/document/advanced-scale packages only after accepted P15 + dedicated ADR
 ```
 
-Packages listed in the same wave are not automatically parallel. A writer starts only when every direct
-dependency handoff is accepted. Examples: `search-source-identity` precedes `search-source-registry`;
-`search-point-identity` precedes `search-projection-planner`; `search-access` precedes
-`search-query-planner`; `search-subject-resolver` precedes `search-comparator`.
+Packages in one wave are not automatically parallel. Every direct dependency and consumed port must
+have an accepted handoff/API digest before the consumer starts.
 
 ## Adapter direction
 
-Vendor/client adapters terminate at their boundary:
-
 ```text
-query capability → vendor-neutral port → search-qdrant-bridge → qdrant-client
-generic provider protocol → optional leaf adapter → external client contract
+capability/orchestration
+  → vendor-neutral port
+  → daemon binding
+  → concrete adapter
+
+SearchIndexPort        → search-qdrant-bridge
+ProcessSupervisorPort  → search-qdrant-supervisor
+ControlJournalPort     → search-control-redb
+SecretStorePort        → search-os-secrets
+SourceRevisionStorePort→ search-revision-store
 ```
 
-Qdrant, redb, Windows and client-system types do not travel back into contracts/domain or across public
-package ports.
+Concrete adapters do not appear in query/lifecycle public APIs. Vendor, OS and database types never
+travel back into contracts/domain or client adapters.
 
 ## Progressive daemon composition
 
-The final daemon references many packages, but it is not implemented as one all-context task.
-
 ```text
 wave1-shell
-  contracts + domain + runtime-owner + control-redb + provider-protocol
+  contracts + domain + runtime-owner + os-secrets + control-redb + provider-protocol
 
 wave2-source
-  + source identity/registry/safe reader/revision/materializer/unitizer
+  + admission + identity/registry + safe reader + revision/materializer/unitizer
 
 wave3-index
-  + lexical/point identity/projection/bridge/publication/pins
+  + lexical + point/projection + Qdrant supervisor/bridge + publication + pins/reclaimer
 
 wave4-query
-  + access/planner/executor/validator/projector/continuation/eval baseline
+  + access/planner/executor/validator + handles/projector/continuation + eval baseline
 
 wave5-current
   + reconciler/overlay/code enrichment
@@ -117,4 +123,4 @@ wave7-lifecycle
   + retention/purge/restore hardening
 ```
 
-Only the active feature layer and accepted dependency handoffs enter the daemon writer's context.
+Only the active feature layer and accepted handoffs enter the daemon writer's context.
