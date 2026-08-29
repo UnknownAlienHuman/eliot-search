@@ -60,11 +60,15 @@ function Same-Set([string[]]$Left, [string[]]$Right) {
     }
     $true
 }
+function Get-Sha256([string]$Path) {
+    (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 
 $rootCargoPath = Join-Path $Root "Cargo.toml"
 $registryPath = Join-Path $Root "swarm/crates.toml"
 $launchPath = Join-Path $Root "swarm/launch-state.toml"
-foreach ($required in @($rootCargoPath, $registryPath, $launchPath)) {
+$p00ManifestPath = Join-Path $Root "docs/contracts/p00/manifest.toml"
+foreach ($required in @($rootCargoPath, $registryPath, $launchPath, $p00ManifestPath)) {
     if (-not (Test-Path $required -PathType Leaf)) { Add-Error "Missing required file: $required" }
 }
 if ($errors.Count -gt 0) { throw ($errors -join [Environment]::NewLine) }
@@ -72,6 +76,14 @@ if ($errors.Count -gt 0) { throw ($errors -join [Environment]::NewLine) }
 $rootCargo = [IO.File]::ReadAllText($rootCargoPath)
 $registry = [IO.File]::ReadAllText($registryPath)
 $launch = [IO.File]::ReadAllText($launchPath)
+$p00Manifest = [IO.File]::ReadAllText($p00ManifestPath)
+
+$registryArchitectureHash = Get-TomlString $registry "architecture_sha256"
+$launchArchitectureHash = Get-TomlString $launch "architecture_sha256"
+$manifestArchitectureHash = Get-TomlString $p00Manifest "architecture_sha256"
+if ($registryArchitectureHash -cne $launchArchitectureHash -or $registryArchitectureHash -cne $manifestArchitectureHash) {
+    Add-Error "Architecture hashes differ across registry, launch state and P00 manifest."
+}
 
 $workspaceSection = Get-Section $rootCargo "workspace"
 $membersMatch = [regex]::Match($workspaceSection, '(?ms)^members\s*=\s*\[(.*?)\]')
@@ -197,13 +209,18 @@ foreach ($name in @($authorized + $conditional)) {
     if ($packages[$name].Wave -ne $activeWave) { Add-Error "Launch-authorized $name is W$($packages[$name].Wave), active wave is W$activeWave." }
 }
 
-$p00Files = @("README.md", "CANONICAL_TYPES.md", "CONTRACT_CHALLENGES.md", "SOURCE_GRAPH.md", "RECIPES.md", "QUERY_AND_RESULTS.md", "PROTOCOL_AND_LIFECYCLE.md", "REASON_CODES.md", "PORT_OPERATIONS.md")
-foreach ($file in $p00Files) {
-    if (-not (Test-Path (Join-Path $Root "docs/contracts/p00/$file") -PathType Leaf) { Add-Error "Missing P00 contract file: $file" }
+$p00RequiredFiles = @(Get-TomlArray $p00Manifest "required_files")
+if ($p00RequiredFiles.Count -eq 0) { Add-Error "P00 manifest has no required_files." }
+$p00Hashes = [ordered]@{}
+foreach ($file in $p00RequiredFiles) {
+    $path = Join-Path $Root "docs/contracts/p00/$file"
+    if (-not (Test-Path $path -PathType Leaf)) { Add-Error "Missing P00 contract file: $file"; continue }
+    $p00Hashes[$file] = Get-Sha256 $path
 }
 
 $result = [ordered]@{
     ok = ($errors.Count -eq 0)
+    architecture_sha256 = $registryArchitectureHash
     packages = $packages.Count
     libraries = $actualLibraries
     binaries = $actualBinaries
@@ -211,6 +228,8 @@ $result = [ordered]@{
     active_wave = $activeWave
     authorized = $authorized
     conditional = $conditional
+    p00_manifest_sha256 = Get-Sha256 $p00ManifestPath
+    p00_file_sha256 = $p00Hashes
     warnings = @($warnings)
     errors = @($errors)
 }
@@ -220,6 +239,7 @@ else {
     Write-Host "ELIOT Search swarm validation"
     Write-Host "packages=$($result.packages) libraries=$($result.libraries) binaries=$($result.binaries) assignments=$($result.assignments)"
     Write-Host "active_wave=W$activeWave authorized=[$($authorized -join ', ')] conditional=[$($conditional -join ', ')]"
+    Write-Host "p00_manifest_sha256=$($result.p00_manifest_sha256)"
     foreach ($warning in $warnings) { Write-Warning $warning }
     foreach ($error in $errors) { Write-Host "ERROR: $error" -ForegroundColor Red }
     if ($result.ok) { Write-Host "PASS" -ForegroundColor Green }

@@ -47,6 +47,3 @@ jobs:
         shell: pwsh
         run: |
           & ./tools/validate-swarm.ps1 -Json
-          if (-not (Test-Path ./docs/contracts/p00/RECIPE_RESULTS.md -PathType Leaf)) {
-            throw "Missing docs/contracts/p00/RECIPE_RESULTS.md"
-          }

@@ -1,0 +1,16 @@
+schema_version = 1
+architecture_version = "8.4"
+architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+
+required_files = [
+  "README.md",
+  "CANONICAL_TYPES.md",
+  "CONTRACT_CHALLENGES.md",
+  "SOURCE_GRAPH.md",
+  "RECIPES.md",
+  "QUERY_AND_RESULTS.md",
+  "RECIPE_RESULTS.md",
+  "PROTOCOL_AND_LIFECYCLE.md",
+  "REASON_CODES.md",
+  "PORT_OPERATIONS.md",
+]
