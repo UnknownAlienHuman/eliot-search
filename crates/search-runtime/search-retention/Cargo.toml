@@ -13,10 +13,9 @@ path = "src/lib.rs"
 [dependencies]
 search-contracts.workspace = true
 search-domain.workspace = true
-search-control-redb.workspace = true
-search-revision-store.workspace = true
-search-qdrant-bridge.workspace = true
 search-epoch-pins.workspace = true
+search-index-reclaimer.workspace = true
+search-handles.workspace = true
 
 [lints]
 workspace = true

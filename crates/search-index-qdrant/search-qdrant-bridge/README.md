@@ -1,26 +1,26 @@
 # search-qdrant-bridge
 
-**C15 — Qdrant supervisor and bridge.**
+**C15 — Qdrant data-plane bridge.**
 
 **Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-Own all qualified Qdrant process and transport details behind vendor-neutral Search ports.
+Own qualified Qdrant collection, point and query operations behind vendor-neutral Search ports.
 
 ## Owns
 
-- exact artifact qualification and process identity
-- loopback/auth/ACL/Job Object lifecycle
-- collection schema and capability probes
-- strict-mode indexes
-- upsert, close, query, count and exact readback transport
+- capability and collection-schema probes
+- strict-mode indexes and filter translation
+- exact point mutation/readback/delete transport
+- filtered query/count operations
+- private vendor-type translation
 
 ## Must not own
 
-- recipe meaning, access authority or result interpretation
+- executable/process/ACL/Job Object lifecycle
+- secret storage
+- recipe, access, publication or result semantics
 - vendor types in public ports
-- automatic upgrades or unpinned latest
-- CLI/worker/client direct Qdrant access
 
 - **Delivery wave:** W3 / P05
-- **Soft source-line target:** 9,000
+- **Soft source-line target:** 7,000
 - **Agent instructions:** [AGENTS.md](AGENTS.md)

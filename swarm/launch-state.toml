@@ -2,6 +2,7 @@ schema_version = 1
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+scaffold_package_count = 43
 
 active_wave = 0
 active_stage = "P00"
@@ -10,7 +11,7 @@ authorized_packages = ["search-contracts"]
 conditionally_authorized_packages = ["search-domain"]
 blocked_packages = "all packages with wave > 0"
 last_accepted_wave_receipt = ""
-updated_at = "2026-08-28"
+updated_at = "2026-08-29"
 
 [conditions.search-domain]
 requires_accepted_handoff = ["search-contracts"]

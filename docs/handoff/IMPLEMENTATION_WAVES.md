@@ -1,127 +1,95 @@
 # Implementation waves
 
-The architecture authorizes implementation at **P00 only**. The scaffold makes later ownership visible
-but does not authorize parallel implementation past the active gate. Launch a wave only after all
-required dependency handoffs and the preceding gate evidence are accepted.
-
-A package may reappear in a later wave for hardening or integration. Ownership does not move: the same
-package boundary receives a new scoped assignment. Optional W10 work is prohibited before an accepted
-P15 decision.
+The architecture authorizes implementation at **P00/W0 only**. Later ownership is visible but not
+launchable until `swarm/launch-state.toml` advances with accepted evidence.
 
 ## W0 — Contract freeze
 
-**Maps to:** P00 / G0
+**Packages:** `search-contracts`, then `search-domain`.
 
-**Packages:** `search-contracts`, `search-domain`
+Freeze vendor-neutral IDs, views, memberships, grants, plans, budgets, anchors, handles, recipes,
+reason codes, port shapes and pure invariant functions.
 
-**Goal:** Freeze vendor-neutral identities, epochs, recipes, reasons, views, memberships, grants, plans, budgets, anchors, handles and pure invariant rules.
+**Exit:** architecture hash; exact recipe set; canonical serialization; port/schema digest; dependency
+policy; pure property tests. No redb, Qdrant, watcher, parser or runtime dependency.
 
-**Exit evidence:** Architecture hash check; exact v1 recipe set; canonical serialization fixtures; dependency policy; pure property tests. No Qdrant, redb, watcher, parser or runtime dependency.
+## W1 — Runtime, secrets and control shell
 
-## W1 — Process and control shell
+**Packages:** `search-runtime-owner`, `search-os-secrets`, `search-control-redb`,
+`search-provider-protocol` transport primitives, daemon/CLI shells.
 
-**Maps to:** P01–P02 / G1 foundation
-
-**Packages:** `search-runtime-owner`, `search-control-redb`, `search-provider-protocol (transport primitives)`, `eliot-searchd (shell)`, `eliot-search (shell)`
-
-**Goal:** Establish one data-root owner, bounded control journal, immutable snapshot publication, local frame codec and clean daemon/CLI lifecycle.
-
-**Exit evidence:** Second-owner denial; crash/reopen owner proof; migration and corruption fixtures; hot queries write nothing; CLI opens no store.
+**Exit:** second-owner denial; crash/reopen owner proof; secret plaintext absent from side channels;
+journal migration/corruption fixtures; hot query writes nothing; bounded frame/session shell.
 
 ## W2 — Direct source spine
 
-**Maps to:** P03–P04 / G1
+**Packages:** `search-source-admission`, `search-source-identity`, `search-source-registry`,
+`search-safe-reader`, `search-revision-store`, baseline `search-materializer`, `search-unitizer`.
 
-**Packages:** `search-source-identity`, `search-source-registry`, `search-safe-reader`, `search-revision-store`, `search-materializer (text/code baseline)`, `search-unitizer`
-
-**Goal:** Deliver source ownership, identity/path history, stable no-execute reads, immutable residency-aware revisions, anchors and deterministic units without an index.
-
-**Exit evidence:** Rename/hardlink/reparse/unstable-read fixtures; source-owner cutover state machine; exact revision readback; coordinate and residency proofs.
+**Exit:** deny-by-default admission receipts; rename/hardlink/reparse/unstable-read fixtures;
+source-owner cutover; exact revision readback; coordinate/residency proofs.
 
 ## W3 — Qualified lexical index
 
-**Maps to:** P05–P07 / G2
+**Packages:** `search-qdrant-supervisor`, `search-qdrant-bridge`, `search-point-identity`,
+`search-lexical`, `search-projection-planner`, `search-epoch-pins`, `search-publication`,
+`search-index-reclaimer`.
 
-**Packages:** `search-qdrant-bridge`, `search-point-identity`, `search-lexical`, `search-projection-planner`, `search-epoch-pins`, `search-publication`
-
-**Goal:** Qualify one exact Qdrant artifact and lexical profile, build isolated point manifests and linearizable epoch publication with recovery.
-
-**Exit evidence:** Capability fixture; no implicit analyzer defaults; collision non-overwrite; one membership per point; every publication failpoint; no pinned reclamation.
+**Exit:** exact artifact/hash/PID/Job Object and secret handling proof; capability/schema fixture;
+lexical golden vectors; collision non-overwrite; publication failpoint matrix; committed exact retired
+manifest; no pinned reclaim and no broad correctness deletion.
 
 ## W4 — Baseline query product
 
-**Maps to:** P08 / G2 product slice
+**Packages:** `search-access`, `search-query-planner`, `search-retrieval-executor`,
+`search-candidate-validator`, `search-handles`, `search-result-projector`, `search-continuation`,
+`search-eval` baseline harness.
 
-**Packages:** `search-access`, `search-query-planner`, `search-retrieval-executor`, `search-candidate-validator`, `search-result-projector`, `search-continuation`, `search-eval (baseline harness)`
-
-**Goal:** Implement locate/find_text with pre-candidate access, bounded plans/execution, source readback, compact cards, continuations and baseline measurements.
-
-**Exit evidence:** Access noninterference; deterministic PlanFingerprint/order; bounded queues/results; source-backed candidates only; raw read/grep baseline captured.
+**Exit:** query crates have no concrete adapter edge; access/IDF noninterference; deterministic plans and
+ordering; bounded queues/results; exact source-backed candidates; handle authorization/TTL; raw baseline captured.
 
 ## W5 — Current workspace and code structure
 
-**Maps to:** P09–P10 / G3 foundation
+**Packages:** `search-source-reconcile`, `search-overlay`, `search-code-enricher`.
 
-**Packages:** `search-source-reconcile`, `search-overlay`, `search-code-enricher`
-
-**Goal:** Add complete observation reconciliation, saved/unsaved overlays and the qualified Rust structural profile.
-
-**Exit evidence:** Watcher overflow/resume; no false currentness across gaps; unsaved-byte non-persistence; malformed/cfg parser fixtures; no compiler-certainty overclaim.
+**Exit:** watcher overflow/resume; no false currentness across gaps; unsaved-byte non-persistence;
+malformed/cfg parser fixtures; no compiler-certainty overclaim.
 
 ## W6 — Comparison and exact proof
 
-**Maps to:** P11–P12 / G3
+**Packages:** `search-subject-resolver`, `search-comparator`, `search-exact`.
 
-**Packages:** `search-subject-resolver`, `search-comparator`, `search-exact`
-
-**Goal:** Resolve subjects without guessing, compare implementations by lineage/evidence role and execute frozen-denominator exact proofs.
-
-**Exit evidence:** Renamed analogue and false same-name fixtures; fork collapse; decisive tests/config variants; complete-negative proof fails on drift/unreadable/cancelled scope.
+**Exit:** renamed analogue/false-name/fork fixtures; decisive tests/config variants; complete-negative
+proof fails on drift, unreadable items or cancellation; inventory/readback remain port-driven.
 
 ## W7 — Security and lifecycle hardening
 
-**Maps to:** P13
+**Packages:** `search-retention`, durable `search-handles`, and hardening passes for access, validator,
+continuation, publication, revision store and index reclaimer.
 
-**Packages:** `search-retention`, `search-access (hardening)`, `search-candidate-validator (hardening)`, `search-continuation (hardening)`, `search-publication (restore/purge interaction)`, `search-revision-store (mark-and-sweep integration)`
-
-**Goal:** Linearize restrictive revocation, durable handles, purge, restore quarantine and crash-safe CAS/index reclamation.
-
-**Exit evidence:** Revocation during every query checkpoint; contaminated legs discarded; handle denial; purge non-resurrection; resumable mark-and-sweep; mismatched restore quarantine.
+**Exit:** revocation at every checkpoint; contaminated legs discarded; handle denial; resumable CAS
+mark/sweep; purge non-resurrection; restore quarantine; ordinary reclaim and purge receipts remain distinct.
 
 ## W8 — Generic client edge
 
-**Maps to:** P14 / G4
+**Packages:** provider-protocol binding/integration, optional ELIOT and Research leaf adapters, daemon/CLI integration.
 
-**Packages:** `search-provider-protocol (binding/integration)`, `search-eliot-adapter (optional profile)`, `search-research-export-adapter (optional profile)`, `eliot-searchd/eliot-search integration`
-
-**Goal:** Complete authenticated binding, capability descriptors and generic evidence edges; enable leaf compatibility profiles only when requested.
-
-**Exit evidence:** Generic request→server plan→candidate round trip; no reverse authority or canonical DB access; exact optional ELIOT/Research fixtures when enabled.
+**Exit:** generic request → server-owned plan → candidate round trip; no reverse authority or canonical
+DB access; exact optional adapter fixtures when enabled.
 
 ## W9 — Product Pulse and Windows qualification
 
-**Maps to:** P15 / G5
+**Packages:** `search-eval`, daemon and CLI.
 
-**Packages:** `search-eval`, `eliot-searchd`, `eliot-search`
-
-**Goal:** Run the full control corpus, latency/resource/fault/security qualification and decide whether the lexical/code product is accepted.
-
-**Exit evidence:** Raw A/B/C evidence; source-admission and leakage audit; protocol stress; recovery matrix; explicit accepted/rejected verdict. Unit tests alone do not pass.
+**Exit:** raw A/B/C evidence; latency/resource/fault/security report; source-admission/leakage audit;
+protocol stress; explicit accepted/rejected verdict. Unit tests alone do not pass.
 
 ## W10 — Optional depth
 
-**Maps to:** P16–P18 / G6
-
-**Packages:** `search-model-provider`, `eliot-search-model-worker`, `eliot-search-doc-worker`, `search-materializer (qualified document provider)`, `existing publication/runtime owners for measured scale migration`
-
-**Goal:** Add semantic, rerank, document or scale profiles only after accepted P15 evidence and a dedicated ADR.
-
-**Exit evidence:** Measured material benefit, exact artifact qualification, uninstall/removal fallback, migration kill tests and rollback. No optional profile is baseline-required.
-
+Model, rerank, document or scale profiles only after accepted P15 evidence and dedicated ADR.
 
 ## Launch rule
 
-For each package, the orchestrator reads `swarm/crates.toml`, verifies every direct dependency handoff,
-creates one isolated worktree and gives the agent only the root/family/package instructions plus accepted
-dependency API notes. The integration owner merges in topological order and records the exact commit
-used by downstream agents.
+For each package the orchestrator verifies launch authorization, accepted direct dependencies and port
+handoffs, creates an isolated worktree, supplies only bounded instructions, enforces write scope and
+merges in topological order with a wave receipt.

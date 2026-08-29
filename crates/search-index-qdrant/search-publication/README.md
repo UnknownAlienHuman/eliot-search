@@ -1,28 +1,24 @@
 # search-publication
 
-**C16 — Epoch publication coordinator.**
+**C16 — Publication Coordinator.**
 
 **Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-Serialize projection commits, verify exact readback and linearize visibility only through guarded control-journal commit.
+Own the serialized epoch publication/commit/recovery state machine through vendor-neutral journal and index ports.
 
 ## Owns
 
-- publication actor and state machine
-- durable intents and receipts orchestration
-- exact new/old point mutation sequence
-- generation guard CAS commit
-- recovery, compensation and doctor command domain
+- publication intents, exact mutation sequence and readback
+- guarded VisibleEpoch commit
+- compensation/recovery/doctor decisions
+- committed retired-point manifests
 
 ## Must not own
 
-- multiple active commit transactions
-- reusing skipped epochs
-- Qdrant alias as commit point
-- broad payload closure on correctness paths
-- staging later epoch while earlier is unresolved
-- depending on the concrete redb adapter; durable state is reached through a vendor-neutral port
+- concrete redb/Qdrant clients
+- broad-filter closure or physical reclaim
+- query interpretation or source truth
 
 - **Delivery wave:** W3 / P07
-- **Soft source-line target:** 9,500
+- **Soft source-line target:** 7,500
 - **Agent instructions:** [AGENTS.md](AGENTS.md)

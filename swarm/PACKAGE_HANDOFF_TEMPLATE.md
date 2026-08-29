@@ -14,10 +14,20 @@
 List every changed file. No path may be outside the assigned package unless the integration owner
 records an approved exception.
 
-## Public surface
+## Public surface and port receipt
 
-Describe added/changed public types, ports and behavior. Confirm that no vendor type crosses the public
-boundary.
+- Added/changed public types:
+- Ports implemented:
+- Ports consumed:
+- Canonical API/schema digest:
+- Opaque state/handle types:
+- Confirm no vendor type, credential, raw store locator or authorization decision crosses the boundary:
+
+## State ownership
+
+- Mutable state owned by this package:
+- Dependency-owned state referenced only opaquely:
+- Confirm no second store/catalog/handle/policy owner was introduced:
 
 ## Invariants and failure behavior
 
@@ -32,7 +42,7 @@ artifact versions/digests. Never infer a pass for an unavailable command.
 ## Dependencies
 
 - Added/removed dependencies:
-- Accepted direct-dependency commits:
+- Accepted direct-dependency commits/API digests:
 - ADR/license/security qualification:
 
 ## Size
@@ -45,13 +55,13 @@ artifact versions/digests. Never infer a pass for an unavailable command.
 
 - Known failures or skipped checks:
 - Blockers:
-- Contract-change requests:
+- Contract/port-change requests:
 - Follow-up integration work:
 
 ## Reviewer receipt
 
 - Ownership respected:
-- Dependency direction respected:
+- Port/dependency direction respected:
 - Security/currentness invariants:
 - Tests reproduce:
 - Accept/reject with reasons:

@@ -1,6 +1,7 @@
 # Primitive ownership rules
 
-This file prevents agents from defining local look-alike contracts.
+This file prevents agents from defining local look-alike contracts or hiding mutable state inside a
+consumer. Port direction is defined separately in [`PORT_CATALOG.md`](PORT_CATALOG.md).
 
 ## Three layers
 
@@ -14,57 +15,74 @@ Examples: `SourceRevision`, `SourceMembership`, `SearchTaskPlan`, `SearchCandida
 
 ### 2. `search-domain` — pure reusable meaning
 
-Owns deterministic transition/eligibility/fingerprint/ordering/coverage functions over contract types.
-It does not persist or supervise the state.
+Owns deterministic transition, eligibility, fingerprint, ordering and coverage functions over contract
+types. It performs no I/O and persists or supervises no state.
 
-Examples: source-owner transition legality, publication transition legality, eligibility AST
+Examples: source-owner transition legality, publication transition legality, eligibility-AST
 equivalence, stable candidate ordering and coverage classification.
 
-### 3. Capability package — owned runtime state and behavior
+### 3. Capability package — one mutable-state and side-effect owner
 
-Owns process-local or adapter-specific implementation state, commands, receipts and failure handling for
-one causal capability. Its public surface uses contract types and package-owned opaque handles; it never
-creates a duplicate shared wire record.
+Owns implementation state, commands, receipts and failure handling for one causal capability. Its
+public surface uses contract types and package-owned opaque types. Concrete vendor translation remains
+inside the corresponding adapter.
 
-Examples:
-
-| Runtime primitive | Owner |
+| Runtime primitive or state | Sole owner |
 |---|---|
-| data-root owner guard/lease | `search-runtime-owner` |
-| redb journal transaction/snapshot cache | `search-control-redb` |
-| root/membership/portfolio registry state | `search-source-registry` |
-| watcher cursor/reconcile plan | `search-source-reconcile` |
-| stable read attempt/receipt | `search-safe-reader` |
-| CAS object address/retention lease/readback | `search-revision-store` |
-| materializer/unitizer/enricher profile state | corresponding preparation package |
-| point canonical key/collision decision | `search-point-identity` |
+| data-root owner guard / owner epoch | `search-runtime-owner` |
+| OS-user/incarnation-bound secret references | `search-os-secrets` |
+| redb journal transaction and immutable snapshot cache | `search-control-redb` |
+| source-admission policy evaluation and decision receipt | `search-source-admission` |
+| root, membership, portfolio, source-view and namespace-cutover state | `search-source-registry` |
+| physical/logical source identity and path history | `search-source-identity` |
+| watcher cursor and reconciliation plan | `search-source-reconcile` |
+| stable no-execute read attempt and receipt | `search-safe-reader` |
+| residency-aware CAS object, revision lease and exact readback | `search-revision-store` |
+| materializer / unitizer / code-enricher profile state | corresponding preparation package |
+| lexical profile and sparse encoding | `search-lexical` |
+| point canonical key and collision decision | `search-point-identity` |
 | projection manifest planning | `search-projection-planner` |
-| Qdrant vendor request/ack/readback | `search-qdrant-bridge` |
-| publication actor/intent recovery | `search-publication` |
-| epoch/route pin guard | `search-epoch-pins` |
-| grant intersection/live deny/safe leg | `search-access` |
-| overlay snapshot/shadow set | `search-overlay` |
-| exact denominator/execution | `search-exact` |
+| qualified Qdrant executable and child-process lifecycle | `search-qdrant-supervisor` |
+| Qdrant collection, point, query and readback data plane | `search-qdrant-bridge` |
+| publication actor, intent recovery and visibility commit | `search-publication` |
+| epoch/route pin guards and reclamation watermark | `search-epoch-pins` |
+| ordinary retired-point delete plan and receipt | `search-index-reclaimer` |
+| grant intersection, live deny and safe retrieval legs | `search-access` |
+| saved/unsaved overlay snapshot and shadow set | `search-overlay` |
+| exact denominator and execution report | `search-exact` |
 | subject ambiguity resolution | `search-subject-resolver` |
-| recipe plan compilation | `search-query-planner` |
-| bounded leg execution/fusion | `search-retrieval-executor` |
+| recipe/task-plan compilation | `search-query-planner` |
+| bounded leg execution and rank fusion | `search-retrieval-executor` |
 | source-backed candidate validation | `search-candidate-validator` |
 | cross-repository behavior matrix | `search-comparator` |
-| compact result card projection | `search-result-projector` |
-| continuation record/TTL/window | `search-continuation` |
-| sweep/purge/restore execution | `search-retention` |
-| control corpus/Product Pulse verdict | `search-eval` |
-| frame/session/binding state | `search-provider-protocol` |
+| ephemeral/durable source-handle records and expansion authorization | `search-handles` |
+| compact result-card projection | `search-result-projector` |
+| continuation record, TTL and candidate window | `search-continuation` |
+| CAS retention, security purge and restore quarantine | `search-retention` |
+| control corpus and Product Pulse verdict | `search-eval` |
+| frame, session and binding state | `search-provider-protocol` |
+
+## Critical separations
+
+- `search-source-admission` decides whether an observed source class may be admitted;
+  `search-safe-reader` only acquires bytes from an already admitted locator.
+- `search-qdrant-supervisor` owns the local process; `search-qdrant-bridge` owns the vendor data plane.
+- `search-publication` retires exact point identities; `search-index-reclaimer` deletes them only after
+  the pin watermark permits it.
+- `search-retention` performs security/legal purge and CAS lifecycle; ordinary index reclamation is not
+  accepted as a purge receipt.
+- `search-result-projector` selects handle subjects; `search-handles` owns handle state and every
+  authorization check; `search-continuation` owns pagination/continuation state only.
 
 ## Conflict rule
 
 When two assignments appear to name the same concept:
 
 1. shared serialized shape belongs to `search-contracts`;
-2. pure transition/ordering meaning belongs to `search-domain`;
-3. mutable runtime state and side effects belong to the capability package;
-4. vendor translation belongs only to the adapter;
-5. the consumer stores only an opaque/reference form unless its assignment explicitly owns the state.
+2. pure transition or ordering meaning belongs to `search-domain`;
+3. mutable state and side effects belong to the sole owner above;
+4. vendor translation belongs only to the adapter named in `PORT_CATALOG.md`;
+5. a consumer stores only an opaque/reference form unless its assignment explicitly owns the state.
 
-Do not resolve an ambiguity by copying a struct. Submit a contract-change request naming producer,
-consumer, field-level need, version impact and owner.
+Do not resolve ambiguity by copying a struct or opening another package's store. Submit a contract-change
+request naming producer, consumer, required port, field-level need, version impact and owner.

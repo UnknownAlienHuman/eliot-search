@@ -1,7 +1,12 @@
-# Family rules
+# Runtime family rules
 
-- Own lifecycle, retention and purge mechanics; never retrieval meaning.
+- `search-runtime-owner` owns the data-root owner epoch and process-wide lease only.
+- `search-os-secrets` owns opaque OS-user/incarnation-bound secret references; plaintext never becomes
+  public configuration, argv, logs or telemetry.
+- `search-retention` owns CAS lifecycle, security/legal purge and restore quarantine.
+- Ordinary retired Qdrant-point deletion belongs to `search-index-reclaimer`, not retention or purge.
 - The daemon is the composition root; this directory itself is not a Cargo package.
-- Security/legal purge dominates ordinary retention.
+- Runtime packages never decide retrieval meaning or client admission.
 
-This directory is not a package. Do not add a family-level `Cargo.toml` or shared implementation. Put behavior in the child package that owns the failure state and test seam.
+Do not add a family-level `Cargo.toml` or shared implementation. Put behavior in the child package that
+owns the failure state and test seam.
