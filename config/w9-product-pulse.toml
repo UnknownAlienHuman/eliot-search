@@ -1,0 +1,329 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P15"
+wave = 9
+gate = "G5"
+status = "schema-only"
+implementation_authorized = false
+product_accepted = false
+
+[run]
+owner = "search-eval"
+
+[[run.field]]
+name = "environment_profile_ref"
+type = "QualifiedEnvironmentRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[run.field]]
+name = "baseline_a_ref"
+type = "QualifiedBaselineRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[run.field]]
+name = "baseline_b_ref"
+type = "QualifiedBaselineRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[run.field]]
+name = "acceptance_policy_ref"
+type = "QualifiedPolicyRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[run.field]]
+name = "raw_output_store_ref"
+type = "QualifiedArtifactStoreRef"
+mode = "QUALIFIED_REF"
+default = "UNSELECTED"
+
+[[run.field]]
+name = "warmup_iterations"
+type = "u16"
+mode = "TUNABLE"
+default = 5
+change_action = "APPLY_NEXT_RUN"
+min = 0
+max = 20
+
+[[run.field]]
+name = "measured_iterations"
+type = "u16"
+mode = "TUNABLE"
+default = 30
+change_action = "APPLY_NEXT_RUN"
+min = 30
+max = 500
+
+[[run.field]]
+name = "case_timeout_ms"
+type = "u64"
+mode = "TUNABLE"
+default = 120000
+change_action = "APPLY_NEXT_RUN"
+min = 1000
+max = 600000
+
+[[run.field]]
+name = "block_timeout_ms"
+type = "u64"
+mode = "TUNABLE"
+default = 1800000
+change_action = "APPLY_NEXT_RUN"
+min = 60000
+max = 7200000
+
+[[run.field]]
+name = "resource_sample_interval_ms"
+type = "u64"
+mode = "TUNABLE"
+default = 100
+change_action = "APPLY_NEXT_RUN"
+min = 50
+max = 1000
+
+[[run.field]]
+name = "randomized_order"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[run.field]]
+name = "seed_captured"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[run.field]]
+name = "network_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[run.field]]
+name = "cold_warm_separate"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[run.field]]
+name = "preparation_cost_separate"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[corpus]
+owner = "search-eval"
+
+[[corpus.field]]
+name = "all_required_cases"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[corpus.field]]
+name = "minimum_independent_lineages"
+type = "u16"
+mode = "LOCKED"
+default = 8
+
+[[corpus.field]]
+name = "mutable_fixtures_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[corpus.field]]
+name = "oracle_visible_to_production"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[corpus.field]]
+name = "oracle_visible_to_baselines"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[corpus.field]]
+name = "hidden_case_removal_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[evidence]
+owner = "search-eval"
+
+[[evidence.field]]
+name = "raw_output_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[evidence.field]]
+name = "independent_review_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[evidence.field]]
+name = "prose_only_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[evidence.field]]
+name = "failed_observations_preserved"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[evidence.field]]
+name = "unavailable_observations_preserved"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[evidence.field]]
+name = "append_only_receipts"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[evidence.field]]
+name = "source_content_in_report_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[evidence.field]]
+name = "query_text_in_report_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[evidence.field]]
+name = "secret_or_token_in_report_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[evidence.field]]
+name = "absolute_path_in_report_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[safety]
+owner = "search-eval"
+
+[[safety.field]]
+name = "stale_leakage_tolerance"
+type = "u32"
+mode = "LOCKED"
+default = 0
+
+[[safety.field]]
+name = "access_leakage_tolerance"
+type = "u32"
+mode = "LOCKED"
+default = 0
+
+[[safety.field]]
+name = "secret_content_leakage_tolerance"
+type = "u32"
+mode = "LOCKED"
+default = 0
+
+[[safety.field]]
+name = "false_complete_negative_tolerance"
+type = "u32"
+mode = "LOCKED"
+default = 0
+
+[[safety.field]]
+name = "hard_blocker_weighting_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[safety.field]]
+name = "oracle_feedback_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[safety.field]]
+name = "optional_profiles_enabled"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[verdict]
+owner = "search-eval"
+
+[[verdict.field]]
+name = "criteria_preregistered"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[verdict.field]]
+name = "criteria_after_candidate_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[verdict.field]]
+name = "self_review_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[verdict.field]]
+name = "self_acceptance_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[verdict.field]]
+name = "missing_required_evidence_can_pass"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[verdict.field]]
+name = "unit_tests_only_can_pass"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[verdict.field]]
+name = "compilation_only_can_pass"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[verdict.field]]
+name = "only_accepted_receipt_unlocks_w10"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[forbidden]
+product_acceptance_by_configuration = true
+optional_depth_by_configuration = true
+network_access = true
+oracle_feedback = true
+post_hoc_criteria = true
+hidden_case_removal = true
+failed_observation_omission = true
+hard_blocker_weighting = true
+prose_only_evidence = true
+self_review = true
+self_acceptance = true
+source_query_secret_token_path_in_report = true
