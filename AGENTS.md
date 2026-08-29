@@ -13,8 +13,9 @@ A package writer reads only:
 3. its package `AGENTS.md`;
 4. `swarm/ASSIGNMENT_PROTOCOL.md`;
 5. `swarm/assignments/<package-name>.md`;
-6. accepted public API/handoff receipts of direct dependencies;
-7. the immutable assignment issue/base commit and package-local fixtures.
+6. `docs/handoff/PORT_CATALOG.md` entries for ports it provides or consumes;
+7. accepted public API/handoff receipts of direct dependencies;
+8. the immutable assignment issue/base commit and package-local fixtures.
 
 The architecture master is exception-only. Open it only after demonstrating that the bounded packet and
 accepted dependency contracts contradict each other or omit a load-bearing field. Submit the exact
@@ -27,7 +28,7 @@ section and proposed resolution through `swarm/CONTRACT_CHANGE_TEMPLATE.md`.
 
 - Start only the active wave.
 - Start a package only after every direct dependency handoff is accepted.
-- Optional model/document work remains physically blocked until the stated P15 decision and ADR.
+- Optional model/document work remains blocked until the stated P15 decision and ADR.
 - A package may reappear in a later wave for hardening, but never has two concurrent writers.
 
 ## Write ownership
@@ -36,7 +37,7 @@ section and proposed resolution through `swarm/CONTRACT_CHANGE_TEMPLATE.md`.
 - The writer edits only that package directory.
 - Root `Cargo.toml`, `Cargo.lock`, toolchain, CI, `docs/generated/`, `swarm/`, architecture, shared
   fixtures and cross-package changes belong to the integration owner.
-- A read-only package reviewer does not broaden write scope.
+- A read-only reviewer does not broaden write scope.
 - Package agents never opportunistically repair a dependency. They submit a typed contract request.
 - Shared fixtures follow `tests/CRATE_FIXTURE_OWNERS.md`.
 
@@ -57,6 +58,9 @@ section and proposed resolution through `swarm/CONTRACT_CHANGE_TEMPLATE.md`.
 13. A workspace is never called current across an unresolved observation gap.
 14. A source namespace has exactly one active mutable identity/revision owner.
 15. Partial or degraded behavior is returned with typed coverage/reasons; it is never relabeled success.
+16. Possession of a Search handle never grants access; every expansion reauthorizes live state.
+17. Ordinary retired-point reclaim and security/legal purge have different owners and receipts.
+18. Concrete redb/Qdrant/process/OS-secret adapters are constructed only by the daemon composition root.
 
 ## Dependency direction
 
@@ -65,14 +69,14 @@ search-contracts
     ↑
 search-domain and vendor-neutral capability packages
     ↑
-storage/index/transport adapters and bounded orchestration
+concrete storage/index/process/OS adapters
     ↑
-runtime composition and binaries
+eliot-searchd composition
 ```
 
-Capability packages consume accepted ports and contracts. The CLI, client adapters and workers never
-open redb, CAS or Qdrant directly. No dependency cycle, vendor-type leak or reverse authority edge is
-acceptable.
+Orchestration packages consume ports from `PORT_CATALOG.md`; they do not list concrete adapter crates
+merely to perform I/O. The CLI, client adapters and workers never open redb, CAS or Qdrant directly.
+No dependency cycle, vendor-type leak or reverse authority edge is acceptable.
 
 ## Size and split rule
 
