@@ -1,0 +1,309 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P13"
+wave = 7
+status = "schema-only"
+implementation_authorized = false
+
+# LOCKED fields are architecture/security invariants and cannot be overridden. TUNABLE fields are
+# bounded resource/scheduling policy validated by the semantic owner. COMMAND_ONLY fields are not
+# configuration toggles; they require authenticated explicit lifecycle commands and receipts.
+
+[security]
+owner = "search-access"
+
+[[security.field]]
+name = "restrictive_state_monotonic"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[security.field]]
+name = "ack_after_live_fence"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[security.field]]
+name = "contaminated_leg_policy"
+type = "enum"
+mode = "LOCKED"
+default = "discard_whole_leg"
+
+[[security.field]]
+name = "invalidation_batch_targets"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 100000
+default = 1024
+change_action = "APPLY_LIVE"
+
+[[security.field]]
+name = "invalidation_timeout_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 100
+max = 120000
+default = 15000
+change_action = "APPLY_LIVE"
+
+[handles]
+owner = "search-handles"
+
+[[handles.field]]
+name = "durable_requires_retained_revision"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[handles.field]]
+name = "durable_unsaved_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[handles.field]]
+name = "restored_token_reuse_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[handles.field]]
+name = "invalidation_batch_records"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 100000
+default = 1024
+change_action = "APPLY_LIVE"
+
+[continuations]
+owner = "search-continuation"
+
+[[continuations.field]]
+name = "durable_contains_process_pin"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[continuations.field]]
+name = "durable_contains_unsaved_bytes"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[continuations.field]]
+name = "restored_token_reuse_allowed"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[continuations.field]]
+name = "invalidation_batch_records"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 100000
+default = 512
+change_action = "APPLY_LIVE"
+
+[revision_store]
+owner = "search-revision-store"
+
+[[revision_store.field]]
+name = "residency_separation_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[revision_store.field]]
+name = "exact_delete_authority_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[revision_store.field]]
+name = "purge_tombstone_enforced"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[revision_store.field]]
+name = "restore_quarantine_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[revision_store.field]]
+name = "inventory_page_objects"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 100000
+default = 10000
+change_action = "APPLY_LIVE"
+
+[retention]
+owner = "search-retention"
+
+[[retention.field]]
+name = "all_architecture_roots_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[retention.field]]
+name = "active_pin_protection_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[retention.field]]
+name = "refcount_is_deletion_authority"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[retention.field]]
+name = "mark_batch_objects"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 100000
+default = 10000
+change_action = "APPLY_LIVE"
+
+[[retention.field]]
+name = "sweep_batch_objects"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 10000
+default = 1000
+change_action = "APPLY_LIVE"
+
+[[retention.field]]
+name = "background_budget_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 10
+max = 60000
+default = 1000
+change_action = "APPLY_LIVE"
+
+[[retention.field]]
+name = "sweep_interval_ms"
+type = "u64"
+mode = "TUNABLE"
+min = 10000
+max = 604800000
+default = 3600000
+change_action = "APPLY_LIVE"
+
+[purge]
+owner = "search-retention"
+
+[[purge.field]]
+name = "purge_command"
+type = "AuthenticatedPurgeCommand"
+mode = "COMMAND_ONLY"
+default = "absent"
+
+[[purge.field]]
+name = "live_fence_before_ack"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[purge.field]]
+name = "tombstone_before_destructive_work"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[purge.field]]
+name = "later_layer_failure_reopens_access"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[purge.field]]
+name = "ordinary_reclaim_receipt_accepted"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[purge.field]]
+name = "claim_secure_erase"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[purge.field]]
+name = "layer_batch_targets"
+type = "u32"
+mode = "TUNABLE"
+min = 1
+max = 10000
+default = 512
+change_action = "APPLY_LIVE"
+
+[backup_restore]
+owner = "search-retention"
+
+[[backup_restore.field]]
+name = "provider_ref"
+type = "QualifiedBackupProviderRef | absent"
+mode = "QUALIFIED_REF"
+default = "absent"
+change_action = "GATE_REQUIRED"
+
+[[backup_restore.field]]
+name = "paired_manifest_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[backup_restore.field]]
+name = "restore_command"
+type = "AuthenticatedRestoreCommand"
+mode = "COMMAND_ONLY"
+default = "absent"
+
+[[backup_restore.field]]
+name = "restore_quarantine_required"
+type = "bool"
+mode = "LOCKED"
+default = true
+
+[[backup_restore.field]]
+name = "serve_before_revalidation"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[backup_restore.field]]
+name = "reuse_backup_visible_epoch"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[[backup_restore.field]]
+name = "purged_material_may_reappear"
+type = "bool"
+mode = "LOCKED"
+default = false
+
+[forbidden]
+plaintext_secret_keys = true
+remove_purge_tombstone = true
+broad_object_delete = true
+refcount_only_gc = true
+ordinary_reclaim_as_purge = true
+secure_erase_overclaim = true
+client_evidence_delete_claim = true
+unpaired_restore = true
+serve_quarantined_restore = true
+restore_old_visible_epoch = true
+restore_purged_material = true
