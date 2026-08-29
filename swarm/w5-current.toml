@@ -1,0 +1,98 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P09-P10"
+wave = 5
+status = "BLOCKED"
+launch_authority = "swarm/launch-state.toml"
+contract_manifest = "docs/current/manifest.toml"
+cross_package_contract = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+settings_schema = "config/w5-current.toml"
+settings_contract = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+rust_qualification = "qualification/rust-syntax/README.md"
+architecture_access = "exception-only"
+requires_accepted_gate = "G2"
+requires_accepted_w4_baseline = true
+
+[[packet]]
+package = "search-source-reconcile"
+assignment = "swarm/assignments/search-source-reconcile.md"
+functions = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+config_packet = "config/sections/reconcile.md"
+cross_sections = ["1", "2", "3", "4", "5", "6", "17", "18", "19", "20"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-config",
+  "search-source-registry",
+  "search-source-identity",
+  "search-safe-reader",
+]
+
+[[packet]]
+package = "search-overlay"
+assignment = "swarm/assignments/search-overlay.md"
+functions = "crates/search-query/search-overlay/FUNCTIONS.md"
+config_packet = "config/sections/overlay.md"
+cross_sections = ["1", "6", "7", "8", "9", "10", "11", "12", "16", "17", "18", "19", "20"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-config",
+  "search-unitizer",
+  "search-lexical",
+  "search-access",
+  "search-revision-store",
+  "search-handles",
+]
+
+[[packet]]
+package = "search-code-enricher"
+assignment = "swarm/assignments/search-code-enricher.md"
+functions = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+config_packet = ""
+qualification_packet = "qualification/rust-syntax/README.md"
+cross_sections = ["1", "6", "13", "14", "15", "16", "17", "18", "19", "20"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-materializer",
+  "search-unitizer",
+  "search-revision-store",
+]
+
+[review]
+require_package_local_functions = true
+require_exact_dependency_api_digests = true
+require_watcher_hint_not_authority = true
+require_gap_before_ack_and_complete_reconcile = true
+require_currentness_axes_separate = true
+require_unsaved_nonpersistence = true
+require_binding_scoped_pre_idf_shadow = true
+require_overlay_not_second_database = true
+require_rust_parser_qualification = true
+require_no_execute_no_network = true
+require_syntax_assurance_no_semantic_overclaim = true
+require_cancellation_crash_recovery = true
+require_line_budget = true
+
+[gate]
+gate_id = "G3"
+requires_accepted_gate = "G2"
+required_evidence = [
+  "observation_gap_currentness_denial",
+  "unsaved_bytes_nonpersistence",
+  "rust_structure_assurance",
+]
+additional_w5_evidence = [
+  "watcher_overflow_complete_reconciliation",
+  "partial_inventory_nonremoval",
+  "reconciliation_guard_and_crash_recovery",
+  "saved_overlay_until_matching_publication",
+  "binding_scoped_shadow_before_retrieval_and_idf",
+  "overlay_lifecycle_and_quota_invalidation",
+  "rust_parser_no_execute_and_span_mapping",
+  "truthful_filesystem_saved_buffer_projection_currentness",
+]
