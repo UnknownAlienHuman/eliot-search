@@ -54,6 +54,24 @@ A candidate from a different view/fence cannot be mixed into the resolution set.
 is explicit. Possession of a handle or cursor still requires current authorization and owner-generation
 validation by the producing package.
 
+## Resolution-ladder fail-closed rule
+
+The ladder is strictly ordered:
+
+```text
+explicit reference
+> qualified key
+> exact name
+> signature and entity kind
+> structural/lexical candidates
+```
+
+A lower rung is evaluated only after every applicable higher rung completed with a decisive
+non-resolution result. **A higher-priority incomplete step blocks lower-priority `RESOLVED` output.**
+Cancellation, timeout, budget exhaustion, truncation, unreadable evidence, observation gap or stale
+context at a higher rung yields `INCOMPLETE` or material ambiguity; it is never treated as “no match” for
+fall-through.
+
 ## `resolve_explicit_reference`
 
 ```text
@@ -231,6 +249,7 @@ durable mutation or unknown commit outcome.
 
 - explicit valid handle/cursor wins; stale/revoked explicit reference does not silently fall through;
 - qualified key precedes name; exact name precedes signature/structural/lexical;
+- higher-priority incomplete evidence blocks every lower-priority resolved success;
 - same-name materially different definitions return ambiguity;
 - renamed true subject collapses only with accepted equivalence receipt;
 - overload/entity-kind/signature/cfg variants remain distinct when material;
