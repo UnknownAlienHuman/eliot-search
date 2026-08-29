@@ -1,0 +1,94 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P16-P18"
+wave = 10
+gate = "G6"
+status = "CANDIDATE_TEMPLATES_DISABLED"
+selected_candidate = "NONE"
+
+[[candidate]]
+profile = "model"
+status = "DISABLED"
+dedicated_optional_profile_adr = [
+  "model_adr_exact_scope",
+  "model_adr_p15_binding",
+  "model_profile_contract_freeze",
+]
+exact_provider_artifact_qualification = [
+  "model_artifact_runtime_identity",
+  "model_document_query_rerank_golden",
+  "model_security_resource_worker_qualification",
+]
+measured_material_benefit = [
+  "model_incremental_quality_gain",
+  "model_latency_resource_cost",
+  "model_access_currentness_noninterference",
+]
+removal_or_uninstall_fallback = [
+  "model_absent_disabled_baseline",
+  "model_worker_cache_cleanup",
+  "model_p15_regression_after_removal",
+]
+migration_and_rollback_when_applicable = [
+  "model_generation_or_not_applicable_plan",
+  "model_route_pin_drain_and_candidate_discard",
+  "model_activation_rollback_failpoints",
+]
+
+[[candidate]]
+profile = "document"
+status = "DISABLED"
+dedicated_optional_profile_adr = [
+  "document_adr_exact_scope",
+  "document_adr_p15_binding",
+  "document_profile_contract_freeze",
+]
+exact_provider_artifact_qualification = [
+  "document_artifact_runtime_identity",
+  "document_no_execute_fuzz_bomb_qualification",
+  "document_coordinate_loss_assurance_golden",
+]
+measured_material_benefit = [
+  "document_incremental_fidelity_gain",
+  "document_latency_resource_cost",
+  "document_content_access_assurance_audit",
+]
+removal_or_uninstall_fallback = [
+  "document_absent_disabled_baseline",
+  "document_worker_temp_cache_cleanup",
+  "document_p15_regression_after_removal",
+]
+migration_and_rollback_when_applicable = [
+  "document_generation_build_catchup_cutover",
+  "document_route_pin_drain_and_reclaim",
+  "document_failed_candidate_discard_and_rollback",
+]
+
+[[candidate]]
+profile = "scale"
+status = "DISABLED"
+dedicated_optional_profile_adr = [
+  "scale_adr_measured_bottleneck",
+  "scale_adr_exact_topology_scope",
+  "scale_profile_contract_freeze",
+]
+exact_provider_artifact_qualification = [
+  "scale_qdrant_artifact_topology_identity",
+  "scale_schema_strict_mutation_readback",
+  "scale_scoring_idf_access_equivalence",
+]
+measured_material_benefit = [
+  "scale_throughput_latency_gain",
+  "scale_resource_cost",
+  "scale_quality_currentness_nonregression",
+]
+removal_or_uninstall_fallback = [
+  "scale_one_shard_default_preserved",
+  "scale_candidate_exact_discard",
+  "scale_baseline_topology_restore",
+]
+migration_and_rollback_when_applicable = [
+  "scale_all_migration_failpoints",
+  "scale_old_route_pin_drain",
+  "scale_post_switch_forward_rollback",
+]

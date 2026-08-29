@@ -1,0 +1,340 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P16-P18"
+wave = 10
+gate = "G6"
+status = "TEMPLATES_DISABLED"
+result_values = ["DISABLED", "PASS", "FAIL", "UNAVAILABLE"]
+selected_candidate = "NONE"
+raw_output_required_for_pass = true
+independent_review_required_for_pass = true
+prose_only_evidence = "reject"
+
+[probe_defaults]
+mandatory_when_selected = true
+result = "DISABLED"
+raw_output_ref = ""
+raw_output_digest = ""
+reviewer_receipt_ref = ""
+
+# MODEL_OPTIONAL — 15 probes, three per G6 evidence ID.
+
+[[probe]]
+id = "model_adr_exact_scope"
+profile = "model"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "integration-owner"
+purpose = "ADR fixes candidate kind, intended use, feature/config, risks and authority boundary."
+
+[[probe]]
+id = "model_adr_p15_binding"
+profile = "model"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "independent-reviewer"
+purpose = "ADR and candidate are bound to the exact accepted P15 report and regression baseline."
+
+[[probe]]
+id = "model_profile_contract_freeze"
+profile = "model"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "search-model-provider"
+purpose = "All model/tokenizer/runtime/vector/rerank/resource/content fields are immutable."
+
+[[probe]]
+id = "model_artifact_runtime_identity"
+profile = "model"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "eliot-search-model-worker"
+purpose = "Worker/runtime/model weights/tokenizer/Windows/license identities match exact digests."
+
+[[probe]]
+id = "model_document_query_rerank_golden"
+profile = "model"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "search-model-provider"
+purpose = "Document/query vectors and rerank calibration match qualified golden fixtures."
+
+[[probe]]
+id = "model_security_resource_worker_qualification"
+profile = "model"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "eliot-search-model-worker"
+purpose = "Private IPC, no-network/content policy, finite resources, cancellation and crash isolation pass."
+
+[[probe]]
+id = "model_incremental_quality_gain"
+profile = "model"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Pre-registered extension of P15 demonstrates material quality/recall gain."
+
+[[probe]]
+id = "model_latency_resource_cost"
+profile = "model"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Latency, CPU/GPU, RAM/VRAM, disk, preparation and model-input cost are acceptable."
+
+[[probe]]
+id = "model_access_currentness_noninterference"
+profile = "model"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Inaccessible/stale/denied/purged/shadowed material cannot influence model output."
+
+[[probe]]
+id = "model_absent_disabled_baseline"
+profile = "model"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "eliot-searchd"
+purpose = "Feature/binary/profile is absent or disabled by default and P15 works without it."
+
+[[probe]]
+id = "model_worker_cache_cleanup"
+profile = "model"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "eliot-search-model-worker"
+purpose = "Drain/shutdown removes provider input/temp/cache state and verifies process exit."
+
+[[probe]]
+id = "model_p15_regression_after_removal"
+profile = "model"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "search-eval"
+purpose = "Accepted P15 behavior and capability regression pass after uninstall."
+
+[[probe]]
+id = "model_generation_or_not_applicable_plan"
+profile = "model"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "eliot-searchd"
+purpose = "Dense/multivector use generation migration; rerank-only has reviewed no-persistent-state proof."
+
+[[probe]]
+id = "model_route_pin_drain_and_candidate_discard"
+profile = "model"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "search-publication"
+purpose = "Failed candidate exact-discard and old-route pin drain preserve baseline visibility."
+
+[[probe]]
+id = "model_activation_rollback_failpoints"
+profile = "model"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "eliot-searchd"
+purpose = "Worker/build/validation/control/snapshot/removal crash matrix restores coherent baseline."
+
+# DOCUMENT_OPTIONAL — 15 probes, three per G6 evidence ID.
+
+[[probe]]
+id = "document_adr_exact_scope"
+profile = "document"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "integration-owner"
+purpose = "ADR fixes provider, input formats, sandbox, output/coordinates, feature/config and removal."
+
+[[probe]]
+id = "document_adr_p15_binding"
+profile = "document"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "independent-reviewer"
+purpose = "Document candidate is bound to exact P15 text/code baseline and declared extension use cases."
+
+[[probe]]
+id = "document_profile_contract_freeze"
+profile = "document"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "eliot-search-doc-worker"
+purpose = "Provider/input/container/limit/no-execute/output/map/assurance fields are immutable."
+
+[[probe]]
+id = "document_artifact_runtime_identity"
+profile = "document"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "eliot-search-doc-worker"
+purpose = "Provider/runtime/Windows/license artifacts match exact local digests."
+
+[[probe]]
+id = "document_no_execute_fuzz_bomb_qualification"
+profile = "document"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "eliot-search-doc-worker"
+purpose = "No-execute/no-network, malformed/fuzz and archive/page/object/decompression bomb suites pass."
+
+[[probe]]
+id = "document_coordinate_loss_assurance_golden"
+profile = "document"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "search-materializer"
+purpose = "Exact input binding, coordinate/loss maps and assurance outputs match qualified fixtures."
+
+[[probe]]
+id = "document_incremental_fidelity_gain"
+profile = "document"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Pre-registered P15 extension demonstrates material document retrieval/evidence fidelity gain."
+
+[[probe]]
+id = "document_latency_resource_cost"
+profile = "document"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Materialization latency, memory, disk/temp, CPU and preparation cost are acceptable."
+
+[[probe]]
+id = "document_content_access_assurance_audit"
+profile = "document"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Access/content leakage, source readback and assurance-overclaim audits pass."
+
+[[probe]]
+id = "document_absent_disabled_baseline"
+profile = "document"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "eliot-searchd"
+purpose = "Feature/binary/profile is absent or disabled and baseline text/code behavior remains available."
+
+[[probe]]
+id = "document_worker_temp_cache_cleanup"
+profile = "document"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "eliot-search-doc-worker"
+purpose = "Drain/shutdown removes bounded temp/cache state and verifies child/process cleanup."
+
+[[probe]]
+id = "document_p15_regression_after_removal"
+profile = "document"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "search-eval"
+purpose = "Accepted P15 regression passes after provider uninstall and route restoration."
+
+[[probe]]
+id = "document_generation_build_catchup_cutover"
+profile = "document"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "search-publication"
+purpose = "New representation/projection generation builds, catches up and switches under guarded commit."
+
+[[probe]]
+id = "document_route_pin_drain_and_reclaim"
+profile = "document"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "search-epoch-pins"
+purpose = "Old document route remains until exact route pins drain and reclaim is permitted."
+
+[[probe]]
+id = "document_failed_candidate_discard_and_rollback"
+profile = "document"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "eliot-searchd"
+purpose = "Candidate failures and post-switch rollback preserve/recover the accepted baseline."
+
+# ADVANCED_SCALE_OPTIONAL — 15 probes, three per G6 evidence ID.
+
+[[probe]]
+id = "scale_adr_measured_bottleneck"
+profile = "scale"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "integration-owner"
+purpose = "ADR is justified by an accepted reproducible one-shard bottleneck report."
+
+[[probe]]
+id = "scale_adr_exact_topology_scope"
+profile = "scale"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "independent-reviewer"
+purpose = "ADR fixes topology/scoring/resource/failure/migration/rollback and simpler alternatives."
+
+[[probe]]
+id = "scale_profile_contract_freeze"
+profile = "scale"
+evidence_id = "dedicated_optional_profile_adr"
+producer = "search-qdrant-bridge"
+purpose = "Server/client/topology/schema/scoring/IDF/fanout/migration profile is immutable."
+
+[[probe]]
+id = "scale_qdrant_artifact_topology_identity"
+profile = "scale"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "search-qdrant-bridge"
+purpose = "Exact server/client/Windows artifacts and selected topology capability probes pass."
+
+[[probe]]
+id = "scale_schema_strict_mutation_readback"
+profile = "scale"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "search-qdrant-bridge"
+purpose = "Candidate schema, strict filters, strong mutation/readback and bounded fanout pass."
+
+[[probe]]
+id = "scale_scoring_idf_access_equivalence"
+profile = "scale"
+evidence_id = "exact_provider_artifact_qualification"
+producer = "search-eval"
+purpose = "Scoring, filtered-IDF, access/currentness/shadow/purge equivalence is proved."
+
+[[probe]]
+id = "scale_throughput_latency_gain"
+profile = "scale"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Pre-registered profile demonstrates material bottleneck relief/throughput or latency gain."
+
+[[probe]]
+id = "scale_resource_cost"
+profile = "scale"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Memory, disk, CPU, background load, write amplification and operational cost are acceptable."
+
+[[probe]]
+id = "scale_quality_currentness_nonregression"
+profile = "scale"
+evidence_id = "measured_material_benefit"
+producer = "search-eval"
+purpose = "Quality, currentness, access and recovery have no unacceptable regression."
+
+[[probe]]
+id = "scale_one_shard_default_preserved"
+profile = "scale"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "eliot-searchd"
+purpose = "Accepted one-shard P15 profile remains buildable/retained and default when scale is disabled."
+
+[[probe]]
+id = "scale_candidate_exact_discard"
+profile = "scale"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "search-index-reclaimer"
+purpose = "Failed/unselected candidate routes are exact-discarded without baseline impact."
+
+[[probe]]
+id = "scale_baseline_topology_restore"
+profile = "scale"
+evidence_id = "removal_or_uninstall_fallback"
+producer = "search-eval"
+purpose = "Rollback/removal restores accepted P15 behavior and capability regression."
+
+[[probe]]
+id = "scale_all_migration_failpoints"
+profile = "scale"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "search-publication"
+purpose = "Every base/catch-up/barrier/validation/route-switch/drain state passes kill/reopen recovery."
+
+[[probe]]
+id = "scale_old_route_pin_drain"
+profile = "scale"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "search-epoch-pins"
+purpose = "Old route is never reclaimed while any query/continuation/verification pin can observe it."
+
+[[probe]]
+id = "scale_post_switch_forward_rollback"
+profile = "scale"
+evidence_id = "migration_and_rollback_when_applicable"
+producer = "eliot-searchd"
+purpose = "Post-switch rollback is a validated forward route transition without epoch rewind."
