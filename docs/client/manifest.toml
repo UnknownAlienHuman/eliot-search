@@ -1,0 +1,94 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+stage = "P14"
+wave = 8
+gate = "G4"
+status = "contract-only"
+implementation_authorized = false
+optional_profiles_required_for_baseline = false
+new_core_recipe_allowed = false
+
+required_files = [
+  "README.md",
+  "W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md",
+  "manifest.toml",
+]
+
+[[owner]]
+package = "search-provider-protocol"
+function_contract = "crates/search-provider-protocol/FUNCTIONS.md"
+hardening_contract = "crates/search-provider-protocol/W8_HARDENING.md"
+owns = [
+  "local_frame_and_session",
+  "pairing_and_binding_lifecycle",
+  "request_progress_terminal_state",
+  "binding_filtered_capability_descriptor",
+]
+
+[[owner]]
+package = "eliot-searchd"
+integration_contract = "bins/eliot-searchd/W8_INTEGRATION.md"
+owns = [
+  "generic_edge_composition",
+  "authoritative_capability_snapshot_inputs",
+  "server_side_standalone_grant_minting",
+  "optional_profile_feature_and_gate_activation",
+]
+
+[[owner]]
+package = "eliot-search"
+function_contract = "bins/eliot-search/FUNCTIONS.md"
+owns = [
+  "standalone_cli_argument_mapping",
+  "protocol_session_and_rendering",
+  "explicit_exit_status",
+]
+
+[[owner]]
+package = "search-eliot-adapter"
+function_contract = "crates/search-eliot-adapter/FUNCTIONS.md"
+optional = true
+enabled_by_default = false
+owns = [
+  "eliot_scope_view_fence_mapping",
+  "generic_result_to_eliot_provider_result_mapping",
+  "reverse_authority_guard",
+]
+
+[[owner]]
+package = "search-research-export-adapter"
+function_contract = "crates/search-research-export-adapter/FUNCTIONS.md"
+optional = true
+enabled_by_default = false
+owns = [
+  "eliotr_normalized_v1_manifest",
+  "retained_native_readback_and_wire_sha256",
+  "ownership_mode_and_cutover_receipt_validation",
+  "bounded_bundle_assembly",
+]
+
+[global_invariants]
+mutual_authentication_required = true
+pairing_proof_required = true
+capability_descriptor_is_binding_filtered = true
+capability_availability_grants_authority = false
+client_requested_scope_is_authority = false
+provider_result_contains_client_disposition = false
+raw_qdrant_or_redb_access_from_clients = false
+reverse_write_channel = false
+handle_possession_grants_access = false
+handle_expansion_reauthorizes_live_state = true
+unsaved_research_export_allowed = false
+ordinary_export_transfers_ownership = false
+new_core_recipe_allowed = false
+
+[optional_profiles]
+eliot_adapter = "DISABLED"
+research_export_adapter = "DISABLED"
+
+[evidence]
+generic_edge = "UNAVAILABLE"
+eliot_profile = "UNAVAILABLE"
+research_export_profile = "UNAVAILABLE"
