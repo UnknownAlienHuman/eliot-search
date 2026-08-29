@@ -1,0 +1,77 @@
+schema_version = 1
+project = "eliot-search"
+profile_class = "model"
+stage = "P16"
+status = "UNSELECTED"
+enabled = false
+accepted_p15_receipt_ref = "UNSELECTED"
+adr_ref = "UNSELECTED"
+qualification_receipt_ref = ""
+benefit_receipt_ref = ""
+removal_receipt_ref = ""
+reviewer_receipt_ref = ""
+
+[capabilities]
+rerank_only = false
+dense_vector = false
+multivector = false
+generative_answers = false
+training_or_learning = false
+network = false
+automatic_download = false
+automatic_upgrade = false
+persistent_input_cache = false
+
+[artifact]
+provider_name = "UNSELECTED"
+provider_source_ref = "UNSELECTED"
+provider_source_checksum = ""
+provider_version = "UNSELECTED"
+provider_binary_or_library_sha256 = ""
+model_name = "UNSELECTED"
+model_source_ref = "UNSELECTED"
+model_weights_sha256 = ""
+runtime_backend = "UNSELECTED"
+runtime_version = "UNSELECTED"
+runtime_artifact_sha256 = ""
+Windows_package_ref = "UNSELECTED"
+Windows_package_sha256 = ""
+license_receipt_ref = ""
+
+[input]
+tokenizer_source_ref = "UNSELECTED"
+tokenizer_checksum = ""
+preprocessor_profile_ref = "UNSELECTED"
+query_template_digest = ""
+document_template_digest = ""
+input_modalities = []
+max_input_bytes = 0
+max_input_tokens = 0
+truncation_policy = "UNSELECTED"
+
+[output]
+named_vectors = []
+dimensions = 0
+dtype = "UNSELECTED"
+normalization = "UNSELECTED"
+distance = "UNSELECTED"
+pooling_or_multivector_layout = "UNSELECTED"
+quantization = "UNSELECTED"
+calibration_ref = "UNSELECTED"
+rerank_score_semantics = "UNSELECTED"
+tie_break = "UNSELECTED"
+
+[resources]
+max_batch_items = 0
+max_batch_bytes = 0
+max_concurrency = 0
+max_queue = 0
+max_memory_bytes = 0
+max_commit_bytes = 0
+max_vram_bytes = 0
+request_deadline_ms = 0
+cancel_grace_ms = 0
+
+[identity]
+golden_fixture_digest = ""
+profile_digest = ""

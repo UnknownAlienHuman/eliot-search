@@ -1,0 +1,78 @@
+schema_version = 1
+project = "eliot-search"
+profile_class = "document"
+stage = "P17"
+status = "UNSELECTED"
+enabled = false
+accepted_p15_receipt_ref = "UNSELECTED"
+adr_ref = "UNSELECTED"
+qualification_receipt_ref = ""
+benefit_receipt_ref = ""
+removal_receipt_ref = ""
+reviewer_receipt_ref = ""
+
+[artifact]
+provider_name = "UNSELECTED"
+provider_source_ref = "UNSELECTED"
+provider_source_checksum = ""
+provider_version = "UNSELECTED"
+provider_binary_or_library_sha256 = ""
+runtime_name = "UNSELECTED"
+runtime_version = "UNSELECTED"
+runtime_artifact_sha256 = ""
+Windows_package_ref = "UNSELECTED"
+Windows_package_sha256 = ""
+license_receipt_ref = ""
+Python_or_Node_runtime = false
+
+[input]
+accepted_mime_types = []
+accepted_encodings = []
+max_input_bytes = 0
+max_pages = 0
+max_objects = 0
+max_images = 0
+max_image_pixels = 0
+max_archive_members = 0
+max_nested_depth = 0
+max_uncompressed_bytes = 0
+max_decompression_ratio = 0
+
+[security]
+network_allowed = false
+scripts_allowed = false
+javascript_allowed = false
+macros_allowed = false
+ole_actions_allowed = false
+hooks_or_filters_allowed = false
+shell_or_child_process_allowed = false
+remote_resources_allowed = false
+credential_prompts_allowed = false
+path_traversal_allowed = false
+symlink_hardlink_reparse_escape_allowed = false
+automatic_download = false
+automatic_upgrade = false
+
+[output]
+text_schema_ref = "UNSELECTED"
+structure_schema_ref = "UNSELECTED"
+table_figure_schema_ref = "UNSELECTED"
+coordinate_map_profile_ref = "UNSELECTED"
+loss_map_profile_ref = "UNSELECTED"
+assurance_taxonomy_ref = "UNSELECTED"
+max_output_bytes = 0
+max_output_items = 0
+
+[resources]
+max_concurrency = 0
+max_queue = 0
+max_memory_bytes = 0
+max_commit_bytes = 0
+max_temp_bytes = 0
+request_deadline_ms = 0
+cancel_grace_ms = 0
+
+[identity]
+golden_fixture_digest = ""
+fuzz_fixture_digest = ""
+profile_digest = ""
