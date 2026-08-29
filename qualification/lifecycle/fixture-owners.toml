@@ -1,0 +1,55 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P13"
+status = "owner-map-only"
+
+[[fixture]]
+id = "restrictive_mutation_checkpoint_corpus"
+owner = "search-access"
+consumers = ["search-retrieval-executor", "search-candidate-validator", "search-handles", "search-continuation", "search-exact", "search-retention", "search-eval"]
+
+[[fixture]]
+id = "durable_handle_lifecycle_corpus"
+owner = "search-handles"
+consumers = ["search-retention", "search-result-projector", "search-provider-protocol", "search-eval"]
+
+[[fixture]]
+id = "continuation_lifecycle_corpus"
+owner = "search-continuation"
+consumers = ["search-retention", "search-retrieval-executor", "search-eval"]
+
+[[fixture]]
+id = "candidate_lifecycle_checkpoint_corpus"
+owner = "search-candidate-validator"
+consumers = ["search-result-projector", "search-retention", "search-eval"]
+
+[[fixture]]
+id = "revision_object_lifecycle_corpus"
+owner = "search-revision-store"
+consumers = ["search-retention", "search-exact", "search-candidate-validator", "eliot-searchd"]
+
+[[fixture]]
+id = "retention_root_mark_sweep_fault_corpus"
+owner = "search-retention"
+consumers = ["search-revision-store", "search-control-redb", "search-epoch-pins", "search-eval", "eliot-searchd"]
+
+[[fixture]]
+id = "purge_layer_non_resurrection_corpus"
+owner = "search-retention"
+consumers = ["search-access", "search-handles", "search-continuation", "search-candidate-validator", "search-publication", "search-index-reclaimer", "search-revision-store", "search-eval", "eliot-searchd"]
+
+[[fixture]]
+id = "paired_restore_quarantine_corpus"
+owner = "search-retention"
+consumers = ["search-revision-store", "search-source-registry", "search-access", "search-publication", "search-qdrant-bridge", "search-eval", "eliot-searchd"]
+
+[[fixture]]
+id = "ordinary_reclaim_purge_receipt_boundary"
+owner = "search-index-reclaimer"
+consumers = ["search-retention", "search-publication", "search-eval"]
+
+[rule]
+producer_may_self_accept = false
+shared_fixture_edit_requires_owner_review = true
+raw_source_content_in_default_evidence = false
+secret_or_token_in_evidence = false
