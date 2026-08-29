@@ -23,16 +23,26 @@ pwsh -NoProfile -File tools/validate-implementation-packets.ps1 -Json
 Checks registry-declared `FUNCTIONS.md`, configuration ownership/example parity, `search-config`
 dependencies, secret/autoupgrade floors and W3 Qdrant qualification/probe/schema packets.
 
-## W4/W5 packet validation
+## W4 registry and W5 qualification validation
 
 ```powershell
 pwsh -NoProfile -File tools/validate-current-packets.ps1
 pwsh -NoProfile -File tools/validate-current-packets.ps1 -Json
 ```
 
-Checks W4 function/qualification registration; W5 reconcile/overlay/code-enricher function links;
-launch qualification-path parity; locked currentness/unsaved/no-execute baseline flags; exact unselected
-parser identities; and unique mandatory W5 probes.
+Checks W4 function/qualification registration; W5 function links; launch qualification-path parity;
+locked currentness/unsaved/no-execute baseline flags; and 42 mandatory W5 probes.
+
+## W5 deep current-workspace validation
+
+```powershell
+pwsh -NoProfile -File tools/validate-w5-current.ps1
+pwsh -NoProfile -File tools/validate-w5-current.ps1 -Json
+```
+
+Checks the complete W5 cross-contract, 3 owner packets, stage settings and finite bounds, 42 currentness/
+overlay probes, 17 unselected Rust parser probes, exact G3 W5/W6 evidence partition, package-local write
+scopes and manual-only workflow wiring.
 
 ## W6 proof packet validation
 
@@ -76,5 +86,5 @@ document worker function contracts; 45 disabled probe templates; candidate-speci
 locked gate/content/migration/removal settings; optional-profile defaults; manual-only workflows; and
 unchanged P00/W0 launch authority.
 
-Passing structural checks is not runtime, security, Qdrant, current-workspace, comparison, exact-proof,
-Windows-performance, Product Pulse, provider or optional-depth acceptance evidence.
+Passing structural checks is not runtime, security, Qdrant, current-workspace, parser, comparison,
+exact-proof, Windows-performance, Product Pulse, provider or optional-depth acceptance evidence.

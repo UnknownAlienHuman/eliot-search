@@ -1,0 +1,160 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[[probe]]
+id = "dependency_identity_and_license"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Parser and grammar source/version/checksum/license exactly match the accepted profile."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "no_process_network_or_toolchain_execution"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Parsing executes no Cargo, rustc, build script, hook, formatter, macro expansion, package resolution, network or credential prompt."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "deterministic_tree_and_fact_manifest"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Equal source/profile input produces byte-identical canonical tree/fact/relation/gap manifests."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "rust_item_definition_fixtures"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Modules, functions, methods, types, traits, impls, fields, constants, statics and macros produce expected syntax facts and anchors."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "reference_relation_assurance"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Use/path/call-like/impl relations remain syntax/descriptive facts and never resolved compiler-semantic edges."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "cfg_and_cfg_attr_preserved_not_evaluated"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Nested, negated and unknown cfg/cfg_attr syntax is retained without claiming compiled inclusion."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "macro_uncertainty"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Macro definitions/invocations are observed syntactically; no expanded facts or semantic certainty are fabricated."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "malformed_and_incomplete_source"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Parser error/missing/recovery regions produce bounded explicit gaps and no complete-structure overclaim."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "native_anchor_byte_span_mapping"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Parser spans map to exact native source anchors under the qualified representation/coordinate-map contract."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "unicode_identifier_fixture"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Unicode identifiers and canonical symbol normalization preserve exact source anchors and deterministic keys."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "crlf_coordinate_fixture"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "CRLF source/parser spans map to correct native byte ranges."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "utf16_coordinate_fixture"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "UTF-16 materialization and loss/coordinate maps never mislabel parser spans as raw-byte exact."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "bounded_nodes_depth_errors_and_facts"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Input bytes, parse nodes, depth, errors, facts and diagnostics remain within finite profile limits."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "cancellation_no_fake_complete_manifest"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Cancellation/budget exhaustion yields no successful complete manifest and only policy-valid partial evidence."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "semantic_overclaim_rejection"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Name/type/trait/call resolution, compiled cfg truth, macro-expanded behavior and semantic absence claims are rejected."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "vendor_type_public_api_guard"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Parser tree/node/cursor/vendor types do not cross the public package boundary."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "profile_change_requires_reenrichment"
+owner = "search-code-enricher"
+mandatory = true
+purpose = "Parser/grammar/query/normalization/cfg/assurance/span/bound/fixture change produces a new profile and rebuild obligation."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""

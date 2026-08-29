@@ -1,0 +1,131 @@
+schema_version = 2
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P09-P10"
+wave = 5
+status = "BLOCKED"
+implementation_authorized = false
+launch_authority = "swarm/launch-state.toml"
+contract_manifest = "docs/current/manifest.toml"
+cross_package_contract = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+settings_schema = "config/w5-current.toml"
+settings_contract = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+current_qualification = "qualification/current/W5_QUALIFICATION.md"
+rust_qualification = "qualification/rust-syntax/README.md"
+architecture_access = "exception-only"
+requires_accepted_gate = "G2"
+requires_accepted_w4_baseline = true
+
+# Presence here is not launch authorization. Each writer receives only its packet, accepted direct
+# dependency handoffs and named fixture receipts in an integration-owner ticket.
+
+[[packet]]
+package = "search-source-reconcile"
+assignment = "swarm/assignments/search-source-reconcile.md"
+functions = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+config_packet = "config/sections/reconcile.md"
+qualification_packets = [
+  "qualification/current/W5_QUALIFICATION.md",
+]
+cross_sections = ["1", "2", "3", "4", "5", "6", "17", "18", "19", "20"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-config",
+  "search-source-registry",
+  "search-source-identity",
+  "search-safe-reader",
+]
+write_scope = "crates/search-source/search-source-reconcile/**"
+
+[[packet]]
+package = "search-overlay"
+assignment = "swarm/assignments/search-overlay.md"
+functions = "crates/search-query/search-overlay/FUNCTIONS.md"
+config_packet = "config/sections/overlay.md"
+qualification_packets = [
+  "qualification/current/W5_QUALIFICATION.md",
+]
+cross_sections = ["1", "6", "7", "8", "9", "10", "11", "12", "16", "17", "18", "19", "20"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-config",
+  "search-unitizer",
+  "search-lexical",
+  "search-access",
+  "search-revision-store",
+  "search-handles",
+]
+write_scope = "crates/search-query/search-overlay/**"
+
+[[packet]]
+package = "search-code-enricher"
+assignment = "swarm/assignments/search-code-enricher.md"
+functions = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+config_packet = ""
+qualification_packets = [
+  "qualification/current/W5_QUALIFICATION.md",
+  "qualification/rust-syntax/README.md",
+]
+cross_sections = ["1", "6", "13", "14", "15", "16", "17", "18", "19", "20"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-materializer",
+  "search-unitizer",
+  "search-revision-store",
+]
+write_scope = "crates/search-prep/search-code-enricher/**"
+
+[review]
+require_one_writer_per_package = true
+require_package_local_write_scope = true
+require_package_local_functions = true
+require_exact_dependency_api_digests = true
+require_watcher_hint_not_authority = true
+require_gap_before_ack_and_complete_reconcile = true
+require_currentness_axes_separate = true
+require_unsaved_nonpersistence = true
+require_binding_scoped_pre_idf_shadow = true
+require_overlay_not_second_database = true
+require_rust_parser_qualification = true
+require_no_execute_no_network = true
+require_syntax_assurance_no_semantic_overclaim = true
+require_cancellation_crash_recovery = true
+require_line_budget = true
+
+[gate]
+gate_id = "G3"
+requires_accepted_gate = "G2"
+w5_required_evidence = [
+  "observation_gap_currentness_denial",
+  "reconciliation_commit_and_snapshot_recovery",
+  "live_head_shadow_before_emission",
+  "unsaved_bytes_nonpersistence",
+  "overlay_precedence_and_restart_invalidation",
+  "rust_parser_exact_artifact_and_no_execute",
+  "rust_structure_assurance_and_cfg_variants",
+]
+downstream_w6_evidence_not_owned = [
+  "subject_resolution_ambiguity_and_drift",
+  "comparison_lineage_independence_and_cfg_variants",
+  "comparison_non_normative_output_and_coverage",
+  "exact_predicate_engine_qualification",
+  "exact_frozen_denominator_complete_negative",
+  "exact_drift_unreadable_cancel_failure",
+  "exact_security_and_unsaved_revalidation",
+]
+
+[current_state]
+reconciliation_runtime = "NOT_IMPLEMENTED"
+watcher_provider = "UNSELECTED"
+ide_buffer_adapter = "UNSELECTED"
+unsaved_sink_audit = "NOT_EXECUTED"
+rust_parser_profile = "UNSELECTED"
+rust_structure_assurance = "UNAVAILABLE"
+workspace_currentness = "UNAVAILABLE"
+gate = "BLOCKED"
