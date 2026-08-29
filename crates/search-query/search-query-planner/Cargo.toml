@@ -14,6 +14,7 @@ path = "src/lib.rs"
 search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
+search-config.workspace = true
 search-access.workspace = true
 
 [lints]
