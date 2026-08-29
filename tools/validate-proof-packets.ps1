@@ -270,7 +270,7 @@ foreach ($unselected in @(
 if (-not (Get-TomlBool $profilesText "non_backtracking_required")) {
     Add-Error "Exact regex profile must require non-backtracking semantics."
 }
-if (Get-TomlBool $profilesText "backreferences_allowed" -or Get-TomlBool $profilesText "lookaround_allowed") {
+if ((Get-TomlBool $profilesText "backreferences_allowed") -or (Get-TomlBool $profilesText "lookaround_allowed")) {
     Add-Error "Unqualified regex profile permits unsupported backtracking features."
 }
 foreach ($selectionFalse in @(
