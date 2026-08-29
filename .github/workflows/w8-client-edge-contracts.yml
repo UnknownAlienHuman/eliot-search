@@ -1,0 +1,42 @@
+name: W8 generic client edge contracts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/w8-client-edge-contracts.yml"
+      - "docs/client/**"
+      - "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+      - "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+      - "config/w8-client-edge.toml"
+      - "qualification/client-edge/**"
+      - "swarm/w8-client-edge.toml"
+      - "crates/search-provider-protocol/W8_HARDENING.md"
+      - "bins/eliot-searchd/W8_INTEGRATION.md"
+      - "bins/eliot-search/FUNCTIONS.md"
+      - "crates/search-eliot-adapter/FUNCTIONS.md"
+      - "crates/search-research-export-adapter/FUNCTIONS.md"
+      - "tools/validate-w8-client-edge.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w8-client-edge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate W8 contracts
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate W8 owner, authority, settings and evidence packets
+        shell: pwsh
+        run: ./tools/validate-w8-client-edge.ps1 -Json
