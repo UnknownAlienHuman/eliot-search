@@ -143,7 +143,7 @@ foreach ($package in $packages.Values) {
         $functionText = Read-Required $package.Functions
         foreach ($pattern in @(
             '(?m)^# Function contract',
-            '(?m)^### `',
+            '(?m)^#{2,3} `',
             '(?m)^## Required',
             '(?i)(cancellation|deadline)',
             '(?i)(failure|error)'
