@@ -1,26 +1,25 @@
 # search-retention
 
-**C28 — Retention, purge and restore.**
+**C28 — Retention, purge and restore lifecycle.**
 
 **Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-Execute crash-safe mark-and-sweep, monotonic purge and restore quarantine across Search-owned projections and CAS.
+Coordinate crash-safe CAS mark-and-sweep, monotonic purge and restore quarantine through vendor-neutral ports.
 
 ## Owns
 
-- mark root discovery and resumable sweep
-- retention/legal-hold policy execution
-- live purge fence, tombstone and receipts
-- handle revocation and non-resurrection
-- paired restore manifest revalidation
+- retention roots/leases and resumable CAS sweep
+- purge fences, tombstones and truthful receipts
+- restore revalidation/quarantine
+- non-resurrection semantics
 
 ## Must not own
 
-- claiming physical secure erase beyond evidence
-- deleting client-owned canonical evidence
-- refcount-only GC
-- restore/reindex that bypasses purge tombstones
+- ordinary retired-point reclamation
+- handle storage/authorization
+- concrete redb/Qdrant/revision-store access
+- physical secure-erasure claims beyond evidence
 
 - **Delivery wave:** W7 / P13
-- **Soft source-line target:** 9,000
+- **Soft source-line target:** 7,500
 - **Agent instructions:** [AGENTS.md](AGENTS.md)

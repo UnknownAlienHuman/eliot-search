@@ -1,23 +1,24 @@
 # eliot-searchd
 
-**Status:** progressive composition boundary only; runtime behavior is intentionally unimplemented.
+**Composition binary — sole owner of Search stores, local Qdrant process and provider server.**
 
-`eliot-searchd` is the sole process owner for the Search data root, control journal, provider endpoint
-and qualified Qdrant child. Capability logic remains in library packages.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-The Cargo feature graph prevents the W1 shell from dragging the complete future system into one agent
-context:
+## Owns
 
-- `wave1-shell` — owner, journal and provider framing;
-- `wave2-source` — direct source/revision/materialization;
-- `wave3-index` — lexical/Qdrant/publication;
-- `wave4-query` — bounded query pipeline;
-- `wave5-current` — reconciliation/overlay/code;
-- `wave6-proof` — exact/subject/comparison;
-- `wave7-lifecycle` / `full-baseline` — retention and purge/restore hardening.
+- data-root owner acquisition and progressive startup
+- concrete redb/OS-secret/Qdrant adapter construction
+- vendor-neutral port wiring
+- bounded request supervision and provider server
+- shutdown/readiness/degradation reporting
 
-The default is `wave1-shell`. A layer is enabled only after accepted dependency handoffs and launch-state
-activation.
+## Must not own
 
-See [AGENTS.md](AGENTS.md) and
-[`swarm/assignments/eliot-searchd.md`](../../swarm/assignments/eliot-searchd.md).
+- capability logic
+- shared clients for CLI/workers/adapters
+- reverse adapter edges into query/lifecycle packages
+- hidden fallback or client canonical writes
+
+- **Delivery wave:** W1 shell, integrated progressively through W9
+- **Soft source-line target:** 6,500
+- **Agent instructions:** [AGENTS.md](AGENTS.md)
