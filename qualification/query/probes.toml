@@ -1,0 +1,349 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[[probe]]
+id = "protocol_frame_golden_and_allocation_bound"
+owner = "search-provider-protocol"
+mandatory = true
+purpose = "Length-prefixed JSON round-trips and oversized frames are rejected before unbounded allocation."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "protocol_pairing_version_and_replay"
+owner = "search-provider-protocol"
+mandatory = true
+purpose = "Pairing is required, major/minor negotiation is explicit and regressed/duplicate sequences fail."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "protocol_inflight_cancel_disconnect_cleanup"
+owner = "search-provider-protocol"
+mandatory = true
+purpose = "32-in-flight ceiling, idempotent cancellation and disconnect resource cleanup are enforced."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "grant_binding_expiry_revocation_matrix"
+owner = "search-access"
+mandatory = true
+purpose = "Binding, installation, expiry, recipe, budget and revocation claims fail closed."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "scope_intersection_never_widens"
+owner = "search-access"
+mandatory = true
+purpose = "Requested/client scope cannot add a server-unauthorized membership or partition."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "retrieval_idf_predicate_equivalence"
+owner = "search-access"
+mandatory = true
+purpose = "Retrieval and filtered-IDF population share one canonical base eligibility digest."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "access_noninterference_order_count_trace"
+owner = "search-access"
+mandatory = true
+purpose = "Changing inaccessible material cannot alter authorized ordering, counts, diversity or trace."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "overlap_proof_required_and_drifted"
+owner = "search-access"
+mandatory = true
+purpose = "Grouped populations require a current overlap-free proof and split/fail when proof axes drift."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "security_barrier_crash_matrix"
+owner = "search-access"
+mandatory = true
+purpose = "Durable restriction, live snapshot, invalidation and acknowledgement recover or fail closed at every crash point."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "revocation_at_every_query_checkpoint"
+owner = "search-access"
+mandatory = true
+purpose = "Restrictive state is rechecked at admission, dispatch, validation, readback, emission and expansion."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_s14_snapshot_axes"
+owner = "search-query-planner"
+mandatory = true
+purpose = "Every named S14 axis is explicit, bound and covered by the snapshot fingerprint."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "direct_and_indexed_plan_tag_validity"
+owner = "search-query-planner"
+mandatory = true
+purpose = "Direct-only and indexed route/epoch/profile forms are separately validated."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "deterministic_recipe_plan_fingerprint"
+owner = "search-query-planner"
+mandatory = true
+purpose = "Equal canonical inputs give equal eleven-recipe plan bytes, fingerprint and leg graph."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "observation_gap_strict_currentness_denied"
+owner = "search-query-planner"
+mandatory = true
+purpose = "Strict-current workspace recipes reject unresolved watcher/inventory gaps."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "client_vendor_plan_filter_rejected"
+owner = "search-query-planner"
+mandatory = true
+purpose = "Client collections, point IDs, Qdrant filters and unrestricted paths cannot enter a plan."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "finite_plan_budget_property"
+owner = "search-query-planner"
+mandatory = true
+purpose = "Leg, candidate, source-read, result, CPU/memory and deadline budgets are finite and compositional."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "lane_priority_and_bounded_saturation"
+owner = "search-retrieval-executor"
+mandatory = true
+purpose = "Interactive priority, finite queues/prefetch and typed saturation/partial coverage are enforced."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "cancel_disconnect_release_all_pins"
+owner = "search-retrieval-executor"
+mandatory = true
+purpose = "Cancellation/disconnect stops work and releases every request-owned route/epoch pin."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "raw_score_population_isolation"
+owner = "search-retrieval-executor"
+mandatory = true
+purpose = "Raw scores remain within populations and cross-leg fusion is profile-pinned/deterministic."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "contaminated_leg_whole_discard"
+owner = "search-retrieval-executor"
+mandatory = true
+purpose = "A restrictive population change discards/replans the entire influenced leg and ordering."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ordinary_query_zero_control_writes"
+owner = "search-retrieval-executor"
+mandatory = true
+purpose = "10,000 ordinary query admissions/executions create no durable control lease/history rows."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_revision_source_backing"
+owner = "search-candidate-validator"
+mandatory = true
+purpose = "Evidence candidates reopen exact revisions and verify digest, length, anchor, unit and profile."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "stale_unreadable_gap_has_no_evidence"
+owner = "search-candidate-validator"
+mandatory = true
+purpose = "Stale/unreadable/mismatched nominations become gaps without excerpt or evidence handle."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "overlay_shadow_and_live_emission_recheck"
+owner = "search-candidate-validator"
+mandatory = true
+purpose = "Overlay shadow and final live security/residency checks block stale or revoked emission."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "compact_result_and_deterministic_truncation"
+owner = "search-result-projector"
+mandatory = true
+purpose = "Result budgets are bounded, truncation deterministic and every omission explicit."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "complete_scope_requires_exact_proof"
+owner = "search-result-projector"
+mandatory = true
+purpose = "Indexed candidate scope can never be relabeled complete scope or semantic absence."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "validated_only_recipe_results"
+owner = "search-result-projector"
+mandatory = true
+purpose = "Only validated candidates enter evidence fields and ambiguity excludes resolved evidence."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "default_two_to_four_exact_handles"
+owner = "search-result-projector"
+mandatory = true
+purpose = "Eligible default cards request a bounded two-to-four exact source handles."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "source_handle_token_opacity_and_redaction"
+owner = "search-handles"
+mandatory = true
+purpose = "Wire token is non-self-describing and absent from logs, telemetry, receipts and server serialization."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "source_handle_live_reauthorization"
+owner = "search-handles"
+mandatory = true
+purpose = "Possession alone fails; binding, grant, owner, view, residency, purge and disclosure are rechecked."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ephemeral_and_durable_handle_lifecycle"
+owner = "search-handles"
+mandatory = true
+purpose = "Ephemeral state dies on restart/buffer close; durable state requires retained immutable revision and never unsaved bytes."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "continuation_token_no_cursor_or_fence"
+owner = "search-continuation"
+mandatory = true
+purpose = "Public token contains no raw cursor, point ID, score, plan, binding or route/security fence."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ephemeral_continuation_restart_and_pin_bounds"
+owner = "search-continuation"
+mandatory = true
+purpose = "Ephemeral restart/expiry releases the bounded candidate window and every pin."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "durable_replan_checkpoint_constraints"
+owner = "search-continuation"
+mandatory = true
+purpose = "Durable checkpoint is explicit-job-only, owns no process pin and rejects ordinary/unsaved targets."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "snapshot_expired_no_silent_refresh"
+owner = "search-continuation"
+mandatory = true
+purpose = "Expired/drifted fence returns explicit expiry/refresh instead of newer-corpus continuation."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "content_minimized_telemetry_and_errors"
+owner = "search-eval"
+mandatory = true
+purpose = "Ordinary events contain no source/query/secret/token/absolute-path or inaccessible display content."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "direct_indexed_raw_baseline_comparison"
+owner = "search-eval"
+mandatory = true
+purpose = "Raw-read, DIRECT and qualified lexical runs share one immutable corpus and expose all failures/gaps."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "truthful_direct_degradation_when_index_unavailable"
+owner = "eliot-searchd"
+mandatory = true
+purpose = "Index failure disables indexed legs while DIRECT capability and explicit degradation remain truthful."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
