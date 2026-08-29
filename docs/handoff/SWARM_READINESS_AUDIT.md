@@ -30,6 +30,7 @@ security or lifecycle state without a single owner.
 | F-05 | Major | Source-admission decisions were duplicated by registry and safe reader. | Added pure `search-source-admission`; registry verifies receipts and safe reader performs I/O only. |
 | F-06 | Blocker | Query/lifecycle packages depended directly on concrete Qdrant, redb or revision-store adapters. | Orchestration consumes ports; only `eliot-searchd` constructs concrete adapters. |
 | F-07 | Major | Ordinary point reclaim, CAS retention and security purge could collapse into one deletion path. | Reclaimer, revision/CAS lifecycle and purge receipts now have separate owners and acceptance semantics. |
+| F-08 | Major | The first hardening draft still linked the Qdrant process adapter directly to the concrete OS-secret adapter. | Supervisor now accepts a bounded secret lease; daemon composes both ports and neither adapter opens the other. |
 
 ## Deliberate non-splits
 
@@ -48,7 +49,9 @@ introduced.
 - Cargo members, workspace dependency paths and `swarm/crates.toml` package paths are identical;
 - exactly 43 package assignments exist;
 - every registry dependency names an existing package and the graph is acyclic;
-- dependency waves never point from an earlier package to a later first-launch wave;
+- ordinary packages depend only on the same or an earlier first-launch wave;
+- `eliot-searchd` is the sole exempt progressive-composition package and later dependencies are
+  feature-gated;
 - new packages contain only boundary placeholders, not business implementation;
 - query/lifecycle Cargo manifests contain no concrete redb/Qdrant/process adapter edge;
 - launch state remains P00/W0 and optional depth remains blocked.

@@ -34,7 +34,7 @@ W2
 W3
   search-point-identity
   search-projection-planner     ← point-identity
-  search-qdrant-supervisor      ← os-secrets
+  search-qdrant-supervisor      (process port; daemon supplies secret lease)
   search-qdrant-bridge          (data plane only)
   search-lexical
   search-epoch-pins
@@ -95,6 +95,10 @@ SecretStorePort        → search-os-secrets
 SourceRevisionStorePort→ search-revision-store
 ```
 
+For Qdrant startup, daemon composition resolves a purpose/incarnation-bound secret lease through
+`SecretStorePort` and supplies that lease to `ProcessSupervisorPort`. The two concrete adapters never
+open each other's stores or types.
+
 Concrete adapters do not appear in query/lifecycle public APIs. Vendor, OS and database types never
 travel back into contracts/domain or client adapters.
 
@@ -123,4 +127,6 @@ wave7-lifecycle
   + retention/purge/restore hardening
 ```
 
-Only the active feature layer and accepted handoffs enter the daemon writer's context.
+`eliot-searchd` is first launched at W1 but declares feature-gated optional dependencies from later
+waves. `progressive_composition = true` is the sole wave-monotonicity exception; no later feature may be
+enabled without accepted dependency receipts.

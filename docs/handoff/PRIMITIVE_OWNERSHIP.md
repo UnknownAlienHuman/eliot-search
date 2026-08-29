@@ -33,8 +33,8 @@ inside the corresponding adapter.
 | OS-user/incarnation-bound secret references | `search-os-secrets` |
 | redb journal transaction and immutable snapshot cache | `search-control-redb` |
 | source-admission policy evaluation and decision receipt | `search-source-admission` |
-| root, membership, portfolio and source-view registry | `search-source-registry` |
-| source identity, path history and owner-cutover state | `search-source-identity` |
+| root, membership, portfolio, source-view and namespace-cutover state | `search-source-registry` |
+| physical/logical source identity and path history | `search-source-identity` |
 | watcher cursor and reconciliation plan | `search-source-reconcile` |
 | stable no-execute read attempt and receipt | `search-safe-reader` |
 | residency-aware CAS object, revision lease and exact readback | `search-revision-store` |

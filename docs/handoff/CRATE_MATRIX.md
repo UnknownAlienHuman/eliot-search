@@ -30,7 +30,7 @@ only from `swarm/launch-state.toml`.
 | `search-model-provider` | C12 | provider | W10 | ≤6,500 | `search-contracts`, `search-domain` | [`search-model-provider.md`](../../swarm/assignments/search-model-provider.md) |
 | `search-projection-planner` | C13 | index | W3 | ≤7,000 | `search-contracts`, `search-domain`, `search-point-identity` | [`search-projection-planner.md`](../../swarm/assignments/search-projection-planner.md) |
 | `search-point-identity` | C14 | index | W3 | ≤4,500 | `search-contracts`, `search-domain` | [`search-point-identity.md`](../../swarm/assignments/search-point-identity.md) |
-| `search-qdrant-supervisor` | C01/C15 process support | index | W3 | ≤5,500 | `search-contracts`, `search-domain`, `search-os-secrets` | [`search-qdrant-supervisor.md`](../../swarm/assignments/search-qdrant-supervisor.md) |
+| `search-qdrant-supervisor` | C01/C15 process support | index | W3 | ≤5,500 | `search-contracts`, `search-domain` | [`search-qdrant-supervisor.md`](../../swarm/assignments/search-qdrant-supervisor.md) |
 | `search-qdrant-bridge` | C15 data plane | index | W3 | ≤7,000 | `search-contracts`, `search-domain` | [`search-qdrant-bridge.md`](../../swarm/assignments/search-qdrant-bridge.md) |
 | `search-publication` | C16 | index | W3 | ≤7,500 | `search-contracts`, `search-domain`, `search-projection-planner`, `search-point-identity` | [`search-publication.md`](../../swarm/assignments/search-publication.md) |
 | `search-epoch-pins` | C17 pin registry | index | W3 | ≤4,500 | `search-contracts`, `search-domain` | [`search-epoch-pins.md`](../../swarm/assignments/search-epoch-pins.md) |
@@ -51,7 +51,7 @@ only from `swarm/launch-state.toml`.
 | `search-provider-protocol` | C30 generic edge | adapter | W1 | ≤7,500 | `search-contracts`, `search-domain` | [`search-provider-protocol.md`](../../swarm/assignments/search-provider-protocol.md) |
 | `search-eliot-adapter` | C30 optional ELIOT profile | adapter | W8 | ≤5,500 | `search-contracts`, `search-domain`, `search-provider-protocol` | [`search-eliot-adapter.md`](../../swarm/assignments/search-eliot-adapter.md) |
 | `search-research-export-adapter` | C30 optional Research profile | adapter | W8 | ≤6,000 | `search-contracts`, `search-domain`, `search-provider-protocol` | [`search-research-export-adapter.md`](../../swarm/assignments/search-research-export-adapter.md) |
-| `eliot-searchd` | composition | binary | W1 | ≤6,500 | progressive accepted capability graph | [`eliot-searchd.md`](../../swarm/assignments/eliot-searchd.md) |
+| `eliot-searchd` | composition | binary | W1 | ≤6,500 | progressive feature-gated graph | [`eliot-searchd.md`](../../swarm/assignments/eliot-searchd.md) |
 | `eliot-search` | composition | binary | W1 | ≤4,500 | `search-contracts`, `search-provider-protocol` | [`eliot-search.md`](../../swarm/assignments/eliot-search.md) |
 | `eliot-search-model-worker` | composition | binary | W10 | ≤4,500 | `search-contracts`, `search-provider-protocol`, `search-model-provider` | [`eliot-search-model-worker.md`](../../swarm/assignments/eliot-search-model-worker.md) |
 | `eliot-search-doc-worker` | composition | binary | W10 | ≤5,000 | `search-contracts`, `search-provider-protocol`, `search-materializer` | [`eliot-search-doc-worker.md`](../../swarm/assignments/eliot-search-doc-worker.md) |
@@ -67,10 +67,12 @@ adapters are constructed only by `eliot-searchd`. A dependency does not transfer
 - Every package represents a real dependency, replacement, security, runtime, test or context boundary.
 - Family directories never gain a forwarding crate.
 - A package is not split merely to hold one type or one function.
-- New packages require synchronized Cargo, registry, matrix, assignment, port/primitive ownership and launch-topology updates.
+- New package creation requires the integration owner to update Cargo, registry, matrix, assignment,
+  primitive/port ownership and launch topology in one reviewed change.
 
 ## Composition exception
 
-`eliot-searchd` has the final dependency graph but composes it progressively through Cargo features.
-Its W1 writer reads only W1 handoffs. Later layers consume accepted package/port receipts rather than
-the whole architecture or implementation internals.
+`eliot-searchd` is first launched at W1 but its optional Cargo dependencies span later waves. The
+`progressive_composition = true` registry flag and Cargo features make this the sole permitted
+wave-monotonicity exception. Its W1 writer reads only W1 handoffs; later features are enabled only from
+accepted wave receipts.

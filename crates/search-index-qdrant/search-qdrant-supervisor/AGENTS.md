@@ -10,18 +10,20 @@ The bounded implementation packet is `swarm/assignments/search-qdrant-supervisor
 - exact Qdrant artifact and process identity
 - loopback/ACL/Job Object containment
 - bounded restart, quarantine and controlled shutdown
-- opaque secret-reference injection
+- consumption of an opaque, bounded secret lease supplied by daemon composition
 
 ## Forbidden ownership
 
 - collection/point/query data-plane operations
 - recipe, access, ranking or publication meaning
+- opening or implementing the OS secret store
 - automatic download/upgrade
 - plaintext secrets in argv, config or logs
 
 ## Dependencies
 
-`search-contracts`, `search-domain`, `search-os-secrets`. Platform process dependencies require exact
+`search-contracts`, `search-domain`. The daemon obtains a secret lease through `SecretStorePort` and
+passes only its vendor-neutral bounded capability. Platform process dependencies require exact
 qualification and Windows evidence.
 
 ## Size

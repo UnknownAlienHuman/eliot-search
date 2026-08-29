@@ -243,7 +243,7 @@ wave = 3
 optional = false
 soft_src_line_target = 5500
 assignment = "swarm/assignments/search-qdrant-supervisor.md"
-deps = ["search-contracts", "search-domain", "search-os-secrets"]
+deps = ["search-contracts", "search-domain"]
 
 [[package]]
 name = "search-qdrant-bridge"
