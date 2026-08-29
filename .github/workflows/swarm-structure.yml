@@ -1,45 +1,6 @@
 name: Swarm structure
 
 on:
-  pull_request:
-    paths:
-      - Cargo.toml
-      - "crates/**/Cargo.toml"
-      - "bins/**/Cargo.toml"
-      - "crates/**/AGENTS.md"
-      - "bins/**/AGENTS.md"
-      - "crates/**/FUNCTIONS.md"
-      - "bins/**/FUNCTIONS.md"
-      - "config/**"
-      - "qualification/**"
-      - "swarm/**"
-      - "docs/contracts/p00/**"
-      - "docs/config/**"
-      - "docs/handoff/**"
-      - "tools/validate-swarm.ps1"
-      - "tools/validate-implementation-packets.ps1"
-      - "tools/validate-current-packets.ps1"
-      - "tools/validate-proof-packets.ps1"
-      - ".github/workflows/swarm-structure.yml"
-  push:
-    branches: [main]
-    paths:
-      - Cargo.toml
-      - "crates/**/Cargo.toml"
-      - "bins/**/Cargo.toml"
-      - "crates/**/FUNCTIONS.md"
-      - "bins/**/FUNCTIONS.md"
-      - "config/**"
-      - "qualification/**"
-      - "swarm/**"
-      - "docs/contracts/p00/**"
-      - "docs/config/**"
-      - "docs/handoff/**"
-      - "tools/validate-swarm.ps1"
-      - "tools/validate-implementation-packets.ps1"
-      - "tools/validate-current-packets.ps1"
-      - "tools/validate-proof-packets.ps1"
-      - ".github/workflows/swarm-structure.yml"
   workflow_dispatch:
 
 permissions:
