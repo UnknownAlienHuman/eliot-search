@@ -1,0 +1,30 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P13"
+wave = 7
+parent_gate = "G3"
+status = "BLOCKED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+raw_output_required = true
+independent_review_required = true
+prose_only_evidence = "reject"
+
+required_evidence = [
+  "restrictive_security_live_fence_and_checkpoints",
+  "handle_continuation_candidate_lifecycle_hardening",
+  "residency_revision_lifecycle_ports",
+  "retention_mark_sweep_fault_matrix",
+  "purge_fence_layers_tombstone_non_resurrection",
+  "restore_pairing_quarantine_revalidation_new_route",
+  "ordinary_reclaim_sweep_purge_receipt_separation",
+  "lifecycle_content_minimization_and_non_overclaim",
+]
+
+[advance]
+authority = "integration-owner"
+launch_state_change_required = true
+all_package_handoffs_required = true
+all_60_probes_pass_required = true
+backup_unavailable_must_remain_explicit = true
+ordinary_reclaim_may_substitute_purge = false
+structural_ci_is_gate_receipt = false
