@@ -1,78 +1,102 @@
 # Crate ownership matrix
 
-This matrix is the human view of `swarm/crates.toml`. One writer owns one Cargo package. Family
-directories are navigation only. `wave` is the earliest possible launch; current authorization comes
-only from `swarm/launch-state.toml`.
+This is the human ownership/index view. `swarm/crates.toml` alone owns exact dependency lists,
+package paths, optionality and assignment paths; this file intentionally does not duplicate those
+edges.
 
-- **Library packages:** 39
+- **Library packages:** 40
 - **Binary packages:** 4
-- **Total Cargo packages:** 43
-- **Mandatory split review:** before 8,500 hand-written Rust lines
-- **Hard stop:** 10,000 hand-written Rust lines including package-local tests
+- **Total one-writer packages:** 44
+- **Normal `src/` target:** at most 7,500 hand-written lines
+- **Split review:** before 8,500 total hand-written lines
+- **Hard stop:** 10,000 including package-local tests
 
-| Package | Cell / support boundary | Family | Earliest wave | Target `src/` | Direct dependencies | Assignment |
-|---|---|---|---:|---:|---|---|
-| `search-contracts` | C00 | foundation | W0 | ≤7,500 | — | [`search-contracts.md`](../../swarm/assignments/search-contracts.md) |
-| `search-domain` | shared pure kernel | foundation | W0 | ≤7,000 | `search-contracts` | [`search-domain.md`](../../swarm/assignments/search-domain.md) |
-| `search-runtime-owner` | C01 | runtime | W1 | ≤4,500 | `search-contracts`, `search-domain` | [`search-runtime-owner.md`](../../swarm/assignments/search-runtime-owner.md) |
-| `search-os-secrets` | C01/C15/C30 security support | runtime | W1 | ≤3,500 | `search-contracts`, `search-domain` | [`search-os-secrets.md`](../../swarm/assignments/search-os-secrets.md) |
-| `search-control-redb` | C02 | control | W1 | ≤7,500 | `search-contracts`, `search-domain` | [`search-control-redb.md`](../../swarm/assignments/search-control-redb.md) |
-| `search-source-admission` | C03/C06 security support | source | W2 | ≤4,500 | `search-contracts`, `search-domain` | [`search-source-admission.md`](../../swarm/assignments/search-source-admission.md) |
-| `search-source-registry` | C03 | source | W2 | ≤6,500 | `search-contracts`, `search-domain`, `search-source-identity`, `search-source-admission` | [`search-source-registry.md`](../../swarm/assignments/search-source-registry.md) |
-| `search-source-identity` | C04 | source | W2 | ≤6,500 | `search-contracts`, `search-domain` | [`search-source-identity.md`](../../swarm/assignments/search-source-identity.md) |
-| `search-source-reconcile` | C05 | source | W5 | ≤7,000 | `search-contracts`, `search-domain`, `search-source-registry`, `search-source-identity`, `search-safe-reader` | [`search-source-reconcile.md`](../../swarm/assignments/search-source-reconcile.md) |
-| `search-safe-reader` | C06 | source | W2 | ≤6,500 | `search-contracts`, `search-domain` | [`search-safe-reader.md`](../../swarm/assignments/search-safe-reader.md) |
-| `search-revision-store` | C07 | source | W2 | ≤7,500 | `search-contracts`, `search-domain` | [`search-revision-store.md`](../../swarm/assignments/search-revision-store.md) |
-| `search-materializer` | C08 | preparation | W2 | ≤7,000 | `search-contracts`, `search-domain` | [`search-materializer.md`](../../swarm/assignments/search-materializer.md) |
-| `search-unitizer` | C09 | preparation | W2 | ≤6,500 | `search-contracts`, `search-domain` | [`search-unitizer.md`](../../swarm/assignments/search-unitizer.md) |
-| `search-code-enricher` | C10 | preparation | W5 | ≤7,500 | `search-contracts`, `search-domain` | [`search-code-enricher.md`](../../swarm/assignments/search-code-enricher.md) |
-| `search-lexical` | C11 | provider | W3 | ≤7,500 | `search-contracts`, `search-domain` | [`search-lexical.md`](../../swarm/assignments/search-lexical.md) |
-| `search-model-provider` | C12 | provider | W10 | ≤6,500 | `search-contracts`, `search-domain` | [`search-model-provider.md`](../../swarm/assignments/search-model-provider.md) |
-| `search-projection-planner` | C13 | index | W3 | ≤7,000 | `search-contracts`, `search-domain`, `search-point-identity` | [`search-projection-planner.md`](../../swarm/assignments/search-projection-planner.md) |
-| `search-point-identity` | C14 | index | W3 | ≤4,500 | `search-contracts`, `search-domain` | [`search-point-identity.md`](../../swarm/assignments/search-point-identity.md) |
-| `search-qdrant-supervisor` | C01/C15 process support | index | W3 | ≤5,500 | `search-contracts`, `search-domain` | [`search-qdrant-supervisor.md`](../../swarm/assignments/search-qdrant-supervisor.md) |
-| `search-qdrant-bridge` | C15 data plane | index | W3 | ≤7,000 | `search-contracts`, `search-domain` | [`search-qdrant-bridge.md`](../../swarm/assignments/search-qdrant-bridge.md) |
-| `search-publication` | C16 | index | W3 | ≤7,500 | `search-contracts`, `search-domain`, `search-projection-planner`, `search-point-identity` | [`search-publication.md`](../../swarm/assignments/search-publication.md) |
-| `search-epoch-pins` | C17 pin registry | index | W3 | ≤4,500 | `search-contracts`, `search-domain` | [`search-epoch-pins.md`](../../swarm/assignments/search-epoch-pins.md) |
-| `search-index-reclaimer` | C17 reclaim executor | index | W3 | ≤4,500 | `search-contracts`, `search-domain`, `search-epoch-pins` | [`search-index-reclaimer.md`](../../swarm/assignments/search-index-reclaimer.md) |
-| `search-access` | C18 | query | W4 | ≤7,500 | `search-contracts`, `search-domain` | [`search-access.md`](../../swarm/assignments/search-access.md) |
-| `search-overlay` | C19 | query | W5 | ≤7,500 | `search-contracts`, `search-domain`, `search-unitizer`, `search-lexical` | [`search-overlay.md`](../../swarm/assignments/search-overlay.md) |
-| `search-exact` | C20 | query | W6 | ≤7,500 | `search-contracts`, `search-domain`, `search-access` | [`search-exact.md`](../../swarm/assignments/search-exact.md) |
-| `search-subject-resolver` | C21 | query | W6 | ≤6,000 | `search-contracts`, `search-domain` | [`search-subject-resolver.md`](../../swarm/assignments/search-subject-resolver.md) |
-| `search-query-planner` | C22 | query | W4 | ≤7,500 | `search-contracts`, `search-domain`, `search-access` | [`search-query-planner.md`](../../swarm/assignments/search-query-planner.md) |
-| `search-retrieval-executor` | C23 | query | W4 | ≤7,500 | `search-contracts`, `search-domain`, `search-query-planner`, `search-lexical`, `search-epoch-pins`, `search-access` | [`search-retrieval-executor.md`](../../swarm/assignments/search-retrieval-executor.md) |
-| `search-candidate-validator` | C24 | query | W4 | ≤7,500 | `search-contracts`, `search-domain`, `search-access` | [`search-candidate-validator.md`](../../swarm/assignments/search-candidate-validator.md) |
-| `search-comparator` | C25 | query | W6 | ≤7,500 | `search-contracts`, `search-domain`, `search-subject-resolver` | [`search-comparator.md`](../../swarm/assignments/search-comparator.md) |
-| `search-handles` | C26/C27 handle support | query | W4 | ≤6,500 | `search-contracts`, `search-domain` | [`search-handles.md`](../../swarm/assignments/search-handles.md) |
-| `search-result-projector` | C26 | query | W4 | ≤7,000 | `search-contracts`, `search-domain`, `search-candidate-validator`, `search-handles` | [`search-result-projector.md`](../../swarm/assignments/search-result-projector.md) |
-| `search-continuation` | C27 | query | W4 | ≤6,000 | `search-contracts`, `search-domain`, `search-query-planner`, `search-access`, `search-epoch-pins` | [`search-continuation.md`](../../swarm/assignments/search-continuation.md) |
-| `search-retention` | C28 | runtime | W7 | ≤7,500 | `search-contracts`, `search-domain`, `search-epoch-pins`, `search-index-reclaimer`, `search-handles` | [`search-retention.md`](../../swarm/assignments/search-retention.md) |
-| `search-eval` | C29 | evaluation | W4 | ≤7,500 | `search-contracts`, `search-domain` | [`search-eval.md`](../../swarm/assignments/search-eval.md) |
-| `search-provider-protocol` | C30 generic edge | adapter | W1 | ≤7,500 | `search-contracts`, `search-domain` | [`search-provider-protocol.md`](../../swarm/assignments/search-provider-protocol.md) |
-| `search-eliot-adapter` | C30 optional ELIOT profile | adapter | W8 | ≤5,500 | `search-contracts`, `search-domain`, `search-provider-protocol` | [`search-eliot-adapter.md`](../../swarm/assignments/search-eliot-adapter.md) |
-| `search-research-export-adapter` | C30 optional Research profile | adapter | W8 | ≤6,000 | `search-contracts`, `search-domain`, `search-provider-protocol` | [`search-research-export-adapter.md`](../../swarm/assignments/search-research-export-adapter.md) |
-| `eliot-searchd` | composition | binary | W1 | ≤6,500 | progressive feature-gated graph | [`eliot-searchd.md`](../../swarm/assignments/eliot-searchd.md) |
-| `eliot-search` | composition | binary | W1 | ≤4,500 | `search-contracts`, `search-provider-protocol` | [`eliot-search.md`](../../swarm/assignments/eliot-search.md) |
-| `eliot-search-model-worker` | composition | binary | W10 | ≤4,500 | `search-contracts`, `search-provider-protocol`, `search-model-provider` | [`eliot-search-model-worker.md`](../../swarm/assignments/eliot-search-model-worker.md) |
-| `eliot-search-doc-worker` | composition | binary | W10 | ≤5,000 | `search-contracts`, `search-provider-protocol`, `search-materializer` | [`eliot-search-doc-worker.md`](../../swarm/assignments/eliot-search-doc-worker.md) |
+## Foundation
 
-## Dependency rule
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `search-contracts` | C00 serialized records, IDs and reason registries | W0 | 7,500 | [`search-contracts.md`](../../swarm/assignments/search-contracts.md) |
+| `search-domain` | pure transition/eligibility/order/coverage kernel | W0 | 7,000 | [`search-domain.md`](../../swarm/assignments/search-domain.md) |
+| `search-ports` | shared vendor-neutral traits and conformance fakes | W0 | 5,500 | [`search-ports.md`](../../swarm/assignments/search-ports.md) |
 
-Capability/orchestration packages consume vendor-neutral ports from
-[`PORT_CATALOG.md`](PORT_CATALOG.md). Concrete redb, OS-secret, Qdrant process and Qdrant data-plane
-adapters are constructed only by `eliot-searchd`. A dependency does not transfer state ownership.
+## Runtime and control
 
-## Package-count rule
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `search-runtime-owner` | C01 data-root owner epoch/lease | W1 | 4,500 | [`search-runtime-owner.md`](../../swarm/assignments/search-runtime-owner.md) |
+| `search-os-secrets` | OS-bound opaque secret lifecycle | W1 | 3,500 | [`search-os-secrets.md`](../../swarm/assignments/search-os-secrets.md) |
+| `search-control-redb` | C02 bounded control journal | W1 | 7,500 | [`search-control-redb.md`](../../swarm/assignments/search-control-redb.md) |
+| `search-retention` | C28 CAS retention, purge and restore | W7 | 7,500 | [`search-retention.md`](../../swarm/assignments/search-retention.md) |
 
-- Every package represents a real dependency, replacement, security, runtime, test or context boundary.
-- Family directories never gain a forwarding crate.
-- A package is not split merely to hold one type or one function.
-- New package creation requires the integration owner to update Cargo, registry, matrix, assignment,
-  primitive/port ownership and launch topology in one reviewed change.
+## Source
 
-## Composition exception
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `search-source-admission` | deny-by-default admission evaluator | W2 | 4,500 | [`search-source-admission.md`](../../swarm/assignments/search-source-admission.md) |
+| `search-source-registry` | C03 roots, memberships, portfolios, views and cutover | W2 | 6,500 | [`search-source-registry.md`](../../swarm/assignments/search-source-registry.md) |
+| `search-source-identity` | C04 source identity and path history | W2 | 6,500 | [`search-source-identity.md`](../../swarm/assignments/search-source-identity.md) |
+| `search-source-reconcile` | C05 observation and reconciliation | W5 | 7,000 | [`search-source-reconcile.md`](../../swarm/assignments/search-source-reconcile.md) |
+| `search-safe-reader` | C06 stable no-execute acquisition | W2 | 6,500 | [`search-safe-reader.md`](../../swarm/assignments/search-safe-reader.md) |
+| `search-revision-store` | C07 residency-aware immutable CAS/readback | W2 | 7,500 | [`search-revision-store.md`](../../swarm/assignments/search-revision-store.md) |
 
-`eliot-searchd` is first launched at W1 but its optional Cargo dependencies span later waves. The
-`progressive_composition = true` registry flag and Cargo features make this the sole permitted
-wave-monotonicity exception. Its W1 writer reads only W1 handoffs; later features are enabled only from
-accepted wave receipts.
+## Preparation and providers
+
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `search-materializer` | C08 canonical materialization/loss maps | W2 | 7,000 | [`search-materializer.md`](../../swarm/assignments/search-materializer.md) |
+| `search-unitizer` | C09 deterministic unit occurrences | W2 | 6,500 | [`search-unitizer.md`](../../swarm/assignments/search-unitizer.md) |
+| `search-code-enricher` | C10 structural facts and assurance | W5 | 7,500 | [`search-code-enricher.md`](../../swarm/assignments/search-code-enricher.md) |
+| `search-lexical` | C11 deterministic sparse encoding | W3 | 7,500 | [`search-lexical.md`](../../swarm/assignments/search-lexical.md) |
+| `search-model-provider` | C12 optional semantic/rerank provider | W10 | 6,500 | [`search-model-provider.md`](../../swarm/assignments/search-model-provider.md) |
+
+## Index
+
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `search-projection-planner` | C13 exact point/manifests planning | W3 | 7,000 | [`search-projection-planner.md`](../../swarm/assignments/search-projection-planner.md) |
+| `search-point-identity` | C14 canonical key and collision guard | W3 | 4,500 | [`search-point-identity.md`](../../swarm/assignments/search-point-identity.md) |
+| `search-qdrant-supervisor` | exact Qdrant process/artifact containment | W3 | 5,500 | [`search-qdrant-supervisor.md`](../../swarm/assignments/search-qdrant-supervisor.md) |
+| `search-qdrant-bridge` | C15 Qdrant data-plane adapter | W3 | 7,000 | [`search-qdrant-bridge.md`](../../swarm/assignments/search-qdrant-bridge.md) |
+| `search-publication` | C16 linearizable epoch publication | W3 | 7,500 | [`search-publication.md`](../../swarm/assignments/search-publication.md) |
+| `search-epoch-pins` | C17 route/epoch pin registry | W3 | 4,500 | [`search-epoch-pins.md`](../../swarm/assignments/search-epoch-pins.md) |
+| `search-index-reclaimer` | exact ordinary retired-point deletion | W3 | 4,500 | [`search-index-reclaimer.md`](../../swarm/assignments/search-index-reclaimer.md) |
+
+## Query
+
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `search-access` | C18 grants, pre-candidate filters and live deny | W4 | 7,500 | [`search-access.md`](../../swarm/assignments/search-access.md) |
+| `search-overlay` | C19 saved/unsaved transient overlay | W5 | 7,500 | [`search-overlay.md`](../../swarm/assignments/search-overlay.md) |
+| `search-exact` | C20 frozen-denominator exact proof | W6 | 7,500 | [`search-exact.md`](../../swarm/assignments/search-exact.md) |
+| `search-subject-resolver` | C21 ambiguity-preserving resolution | W6 | 6,000 | [`search-subject-resolver.md`](../../swarm/assignments/search-subject-resolver.md) |
+| `search-query-planner` | C22 server-owned bounded plan | W4 | 7,500 | [`search-query-planner.md`](../../swarm/assignments/search-query-planner.md) |
+| `search-retrieval-executor` | C23 bounded leg execution/fusion | W4 | 7,500 | [`search-retrieval-executor.md`](../../swarm/assignments/search-retrieval-executor.md) |
+| `search-candidate-validator` | C24 exact source-backed validation | W4 | 7,500 | [`search-candidate-validator.md`](../../swarm/assignments/search-candidate-validator.md) |
+| `search-comparator` | C25 descriptive behavior comparison | W6 | 7,500 | [`search-comparator.md`](../../swarm/assignments/search-comparator.md) |
+| `search-handles` | source-handle state and expansion authorization | W4 | 6,500 | [`search-handles.md`](../../swarm/assignments/search-handles.md) |
+| `search-result-projector` | C26 bounded result cards | W4 | 7,000 | [`search-result-projector.md`](../../swarm/assignments/search-result-projector.md) |
+| `search-continuation` | C27 bounded continuation state | W4 | 6,000 | [`search-continuation.md`](../../swarm/assignments/search-continuation.md) |
+
+## Evaluation and edges
+
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `search-eval` | C29 control corpus and Product Pulse | W4 | 7,500 | [`search-eval.md`](../../swarm/assignments/search-eval.md) |
+| `search-provider-protocol` | C30 generic frame/session/binding edge | W1 | 7,500 | [`search-provider-protocol.md`](../../swarm/assignments/search-provider-protocol.md) |
+| `search-eliot-adapter` | optional ELIOT leaf mapping | W8 | 5,500 | [`search-eliot-adapter.md`](../../swarm/assignments/search-eliot-adapter.md) |
+| `search-research-export-adapter` | optional Research export leaf | W8 | 6,000 | [`search-research-export-adapter.md`](../../swarm/assignments/search-research-export-adapter.md) |
+
+## Binaries
+
+| Package | Boundary | Earliest wave | Target | Assignment |
+|---|---|---:|---:|---|
+| `eliot-searchd` | progressive composition root | W1 | 6,500 | [`eliot-searchd.md`](../../swarm/assignments/eliot-searchd.md) |
+| `eliot-search` | standalone daemon client CLI | W1 | 4,500 | [`eliot-search.md`](../../swarm/assignments/eliot-search.md) |
+| `eliot-search-model-worker` | optional model worker | W10 | 4,500 | [`eliot-search-model-worker.md`](../../swarm/assignments/eliot-search-model-worker.md) |
+| `eliot-search-doc-worker` | optional document worker | W10 | 5,000 | [`eliot-search-doc-worker.md`](../../swarm/assignments/eliot-search-doc-worker.md) |
+
+## Package-count and dependency rule
+
+Every package must represent a real dependency, replacement, security, runtime, test or context
+boundary. Family directories never gain forwarding crates. Adding a package requires one atomic
+integration change covering Cargo, registry, assignment, ownership, fixtures and launch topology.

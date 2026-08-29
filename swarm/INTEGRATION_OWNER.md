@@ -1,59 +1,54 @@
 # Integration owner contract
 
-The integration owner is a repository role, not a Cargo package writer. It may not implement capability
-behavior merely because it can edit root files.
+The integration owner is a repository role, not a capability writer. Root access does not authorize
+implementation of package behavior.
 
 ## Exclusive write scope
 
-Only the integration owner may change:
-
-- root workspace members, dependency versions, feature wiring and dependency policy;
-- `rust-toolchain.toml`, `Cargo.lock`, CI and generated schema registries;
-- `swarm/`, architecture/handoff documents and shared fixture ownership;
-- cross-package compatibility patches and composition-wave activation;
-- `swarm/launch-state.toml` and accepted handoff commit references.
+Only this role may change root Cargo/dependency/features, toolchain, lockfile, CI, architecture,
+`docs/contracts/`, generated schemas, handoff docs, `swarm/`, shared fixture ownership and launch state.
 
 ## P00 responsibilities
 
-1. Verify the embedded Architecture 8.4 SHA-256 and required sections.
-2. Select and pin one stable Rust toolchain that passes the Windows/dependency qualification.
-3. Review exact dependency sources/licenses; generate and commit `Cargo.lock`.
-4. Accept the `search-contracts` public schema before allowing `search-domain` to consume it.
-5. Run dependency-direction and public-vendor-type checks.
-6. Publish the W0 receipt and advance the launch state only after all P00 evidence is real.
+1. Verify the embedded Architecture 8.4 hash and hash every P00 contract-pack file.
+2. Resolve all contract challenges, including Part I precedence decisions.
+3. Review and accept `search-contracts`; publish its API/schema digest.
+4. Launch `search-domain` and `search-ports` only from that immutable accepted commit.
+5. Accept their pure-domain and port API/conformance digests.
+6. Select/pin a stable Windows-compatible Rust/dependency set, generate `Cargo.lock`, review licenses
+   and execute the real P00 policy/test suite.
+7. Verify Cargo members, registry, assignments, package directories and dependency sets are identical.
+8. Publish a W0 receipt before advancing launch state.
 
-The scaffold deliberately does not invent a toolchain version or lockfile before this qualification.
+The scaffold does not invent a green toolchain, lockfile or external qualification result.
 
-## Wave merge protocol
+## Package merge protocol
 
-For each package:
-
-1. create an immutable-base worktree and one writer branch;
-2. provide only the bounded assignment and accepted public dependency handoffs;
-3. reject writes outside the package path;
-4. review package evidence and contract requests;
+1. create one immutable-base worktree and writer branch;
+2. provide only the bounded read set and accepted dependency digests;
+3. reject writes outside package scope;
+4. review ownership, port conformance, failure mappings and raw evidence;
 5. merge in topological order;
-6. record the exact accepted commit and public API digest;
-7. run workspace/dependency/generated-schema checks;
+6. record exact accepted commit and API/port digest;
+7. run workspace/generated-schema/dependency checks;
 8. publish a wave receipt before activating dependents.
 
-## Contract changes
+## Contract and port changes
 
-A package cannot patch around an absent field or port. The integration owner routes the request to the
-contract owner, records compatibility/version impact, merges the accepted contract first, and restarts
-the blocked consumer from an immutable dependency commit.
+A consumer cannot patch around an absent field, reason or port. Route the request to
+`search-contracts`, `search-domain` or `search-ports` as appropriate, record compatibility impact,
+merge the producer first and restart the blocked consumer from the new immutable handoff.
 
 ## Composition
 
-`eliot-searchd` is progressive. The W1 writer reads and wires only the owner/journal/protocol shell.
-Later feature layers are enabled only after their package handoffs are accepted. A final-manifest
-dependency does not authorize a daemon writer to read or implement every future capability.
+`eliot-searchd` is progressive. A W1 writer sees only contracts/domain/ports and shell dependencies.
+Later Cargo features are enabled only after their package handoffs are accepted.
 
 ## Prohibited behavior
 
-- implementing business logic in root scripts or the daemon to avoid a package contract;
-- advancing a wave from compilation alone;
-- fabricating unavailable Windows/Qdrant/redb/provider evidence;
-- enabling optional model/document packages before their gate;
-- merging two concurrent writers for one package;
-- silently changing Architecture 8.4 through a handoff document.
+- business logic in root scripts or daemon wiring to avoid an owner;
+- advancing from compilation alone;
+- fabricated Windows/Qdrant/redb/provider evidence;
+- optional depth before its gate;
+- two concurrent writers for one package;
+- silent architecture changes through derivative docs.

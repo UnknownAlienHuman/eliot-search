@@ -1,0 +1,49 @@
+name: Swarm structure
+
+on:
+  pull_request:
+    paths:
+      - Cargo.toml
+      - "crates/**/Cargo.toml"
+      - "bins/**/Cargo.toml"
+      - "crates/**/AGENTS.md"
+      - "bins/**/AGENTS.md"
+      - "swarm/**"
+      - "docs/contracts/p00/**"
+      - "docs/handoff/**"
+      - "tools/validate-swarm.ps1"
+      - ".github/workflows/swarm-structure.yml"
+  push:
+    branches: [main]
+    paths:
+      - Cargo.toml
+      - "crates/**/Cargo.toml"
+      - "bins/**/Cargo.toml"
+      - "swarm/**"
+      - "docs/contracts/p00/**"
+      - "tools/validate-swarm.ps1"
+      - ".github/workflows/swarm-structure.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swarm-structure-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate scaffold topology
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate registry, Cargo and launch state
+        shell: pwsh
+        run: |
+          & ./tools/validate-swarm.ps1 -Json

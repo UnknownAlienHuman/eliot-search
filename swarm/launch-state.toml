@@ -1,14 +1,16 @@
-schema_version = 1
+schema_version = 2
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
-scaffold_package_count = 43
+scaffold_package_count = 44
+library_package_count = 40
+binary_package_count = 4
 
 active_wave = 0
 active_stage = "P00"
-state = "W0_READY_FOR_ASSIGNMENT"
+state = "W0_READY_FOR_CONTRACTS_ASSIGNMENT"
 authorized_packages = ["search-contracts"]
-conditionally_authorized_packages = ["search-domain"]
+conditionally_authorized_packages = ["search-domain", "search-ports"]
 blocked_packages = "all packages with wave > 0"
 last_accepted_wave_receipt = ""
 updated_at = "2026-08-29"
@@ -17,10 +19,16 @@ updated_at = "2026-08-29"
 requires_accepted_handoff = ["search-contracts"]
 requires_public_api_digest = true
 
+[conditions.search-ports]
+requires_accepted_handoff = ["search-contracts"]
+requires_public_api_digest = true
+requires_contract_pack_challenges_empty = true
+
 [advance]
 authority = "integration-owner"
 requires_all_active_package_handoffs = true
 requires_workspace_policy_evidence = true
+requires_contract_pack_hash_receipt = true
 requires_wave_receipt = true
 manual_edit_without_receipt = false
 
