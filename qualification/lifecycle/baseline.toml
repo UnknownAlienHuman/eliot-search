@@ -1,0 +1,116 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P13"
+wave = 7
+status = "DESIGNED_NOT_EXECUTED"
+implementation_authorized = false
+backup_provider = "UNSELECTED"
+
+[security]
+restrictive_state_monotonic = true
+ack_requires_durable_control_commit = true
+ack_requires_live_snapshot_publication = true
+unknown_commit_outcome_requires_readback = true
+missing_invalidation_receipt_fails_closed = true
+permissive_change_removes_purge_tombstone = false
+candidate_only_cleanup_preserves_contaminated_ranking = false
+
+[checkpoints]
+request_admission = true
+before_retrieval_leg = true
+after_retrieval_leg = true
+before_source_readback = true
+after_source_readback = true
+before_candidate_emission = true
+before_handle_readback = true
+after_handle_readback = true
+before_handle_emission = true
+before_continuation_expand = true
+after_continuation_execution = true
+before_continuation_emission = true
+before_exact_emission = true
+before_restore_admission = true
+
+[handles]
+possession_grants_access = false
+durable_requires_immutable_revision = true
+durable_requires_retention_lease = true
+durable_unsaved_allowed = false
+foreign_token_existence_disclosure_allowed = false
+restored_old_token_serving_valid = false
+ephemeral_survives_restart = false
+purge_tombstone_blocks_remint = true
+
+[continuations]
+durable_checkpoint_contains_process_pin = false
+durable_checkpoint_contains_vendor_cursor = false
+durable_checkpoint_contains_unsaved_bytes = false
+dependency_drift_silent_refresh_allowed = false
+ephemeral_survives_restart = false
+restored_old_token_serving_valid = false
+
+[retention]
+all_required_roots_mandatory = true
+active_pin_protection_mandatory = true
+refcount_is_deletion_authority = false
+partial_mark_authorizes_sweep = false
+cancelled_mark_authorizes_sweep = false
+stale_root_generation_authorizes_sweep = false
+stale_pin_generation_authorizes_sweep = false
+broad_object_delete_allowed = false
+exact_delete_readback_required = true
+new_root_hold_or_pin_must_invalidate_or_narrow = true
+
+[purge]
+logical_fence_before_ack = true
+tombstone_before_destructive_work = true
+later_layer_failure_reopens_access = false
+ordinary_reclaim_receipt_satisfies_purge = false
+cas_sweep_receipt_satisfies_purge = false
+shared_object_may_remain_physically = true
+shared_object_remains_logically_inaccessible_to_purged_scope = true
+client_revocation_claims_client_data_deletion = false
+secure_erase_guaranteed = false
+tombstone_blocks_write_import_reindex_restore = true
+
+[restore]
+paired_manifest_required = true
+redb_only_snapshot_can_serve = false
+qdrant_only_snapshot_can_serve = false
+restore_starts_quarantined = true
+quarantine_survives_restart = true
+serve_before_source_revalidation = false
+serve_before_access_residency_revalidation = false
+serve_before_purge_tombstone_revalidation = false
+serve_before_schema_profile_revalidation = false
+old_visible_epoch_restored_current = false
+new_guarded_publication_required = true
+purged_material_may_reappear = false
+
+[receipt_truth]
+ordinary_reclaim_distinct = true
+object_sweep_distinct = true
+security_purge_distinct = true
+backup_deletion_distinct = true
+physical_secure_erase_distinct = true
+absence_implies_all_layers_complete = false
+vendor_types_public = false
+broad_correctness_predicate_public = false
+
+[limits]
+max_roots = 10000000
+max_mark_frontier = 1000000
+max_sweep_objects = 10000000
+max_purge_targets = 10000000
+max_restore_objects = 10000000
+max_invalidation_targets = 1000000
+max_batch_objects = 10000
+max_batch_points = 4096
+zero_means_unlimited = false
+
+[evidence]
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+raw_output_required = true
+independent_review_required = true
+prose_only_evidence = "reject"
