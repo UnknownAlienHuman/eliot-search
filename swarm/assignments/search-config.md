@@ -1,123 +1,122 @@
 # `search-config` implementation packet
 
 **Path:** `crates/search-config`  
-**Capability:** W1 configuration support  
+**Capability:** shared configuration mechanics  
 **Delivery:** W1 / P01  
-**Gate:** BLOCKED until W0 contracts handoff is accepted  
+**Gate:** BLOCKED until accepted W0 contracts handoff  
 **Direct public handoffs:** `search-contracts`
 
-Apply `../ASSIGNMENT_PROTOCOL.md`. Read `docs/config/CONFIGURATION_1.0.md` and
-`config/sections.toml`. Logical names express required semantics, not mandatory Rust spelling.
+Apply `../ASSIGNMENT_PROTOCOL.md`. Read only this assignment, package/root instructions,
+[`../../crates/search-config/FUNCTIONS.md`](../../crates/search-config/FUNCTIONS.md),
+[`../../docs/config/CONFIGURATION_1.0.md`](../../docs/config/CONFIGURATION_1.0.md),
+[`../../docs/config/RECONFIGURATION_1.1.md`](../../docs/config/RECONFIGURATION_1.1.md),
+[`../../config/sections.toml`](../../config/sections.toml) and accepted dependency handoffs.
 
 ## Mission
 
-Provide deterministic configuration layering, section dispatch, security-floor enforcement,
-redaction and reconfiguration planning while each capability retains ownership of its settings and
-runtime state.
+Provide deterministic, I/O-free parsing/layering, provenance, redaction, fingerprinting, diff and
+composite reconfiguration planning. Capability packages retain ownership of typed settings and runtime
+application.
 
 ## Owns
 
-- `ConfigSource`, `ConfigLayer`, `ConfigDocument`, `ConfigSectionName`, `ConfigKeyPath`
-- deterministic defaults < file < environment < CLI precedence
-- override allowlists and immutable/fixed setting enforcement
-- section descriptor registry and duplicate/unknown rejection
-- effective snapshot canonicalization and `ConfigFingerprint`
-- config diff and ordered reload plan
-- redacted effective-config diagnostics
+- bounded UTF-8 TOML document parsing after caller-provided byte acquisition;
+- `ConfigSource`, layers, provenance and explicit reset markers;
+- deterministic `defaults < file < environment < CLI` precedence under field allowlists;
+- section descriptor registry and duplicate/unknown rejection;
+- canonical effective snapshot and `ConfigFingerprint`;
+- stable `ConfigDelta` and composite `ReconfigurationPlan`;
+- redacted effective-config diagnostics.
 
 ## Must not own
 
-- reading files, environment variables or process arguments
-- package-specific settings structs, default policies or runtime state
-- secret plaintext, secret resolution or credential transport
-- optional-provider authorization
-- applying reload plans or committing security mutations
+- file, environment, CLI or clock acquisition;
+- capability-specific settings structs/default policy/runtime state;
+- secret plaintext, secret resolution or credential transport;
+- optional-provider authorization;
+- applying lifecycle, security, rebuild, generation or gate actions;
+- reducing multiple obligations to one lossy severity enum.
 
-## Logical operations
+## Required operations
 
-1. `parse_document(bytes, source) -> Result<ConfigDocument, ConfigError>`
-2. `register_sections(descriptors) -> Result<ConfigRegistry, ConfigError>`
-3. `merge_layers(defaults, file, environment, cli, registry) -> Result<MergedConfig, ConfigError>`
-4. `project_section(merged, descriptor) -> Result<ConfigSectionInput, ConfigError>`
-5. `assemble_effective(validated_sections) -> Result<EffectiveConfigSnapshot, ConfigError>`
-6. `fingerprint(snapshot) -> ConfigFingerprint`
-7. `diff(old, new) -> ConfigDelta`
-8. `plan_reconfiguration(delta, descriptors) -> Result<ReconfigurationPlan, ConfigError>`
-9. `redacted_view(snapshot, disclosure) -> RedactedConfigView`
-10. `validate_environment_key(name, registry) -> Result<ConfigKeyPath, ConfigError>`
+The exact behavior is in `FUNCTIONS.md`:
 
-## Operation semantics
+1. `parse_document`
+2. `register_sections`
+3. `merge_layers`
+4. `project_section`
+5. `assemble_effective`
+6. `fingerprint`
+7. `diff`
+8. `plan_reconfiguration`
+9. `redacted_view`
+10. `validate_environment_key`
 
-- Parsing is bounded before allocation, rejects duplicate keys, non-UTF-8, unsupported schema version
-  and unknown load-bearing top-level fields.
-- Merge order is deterministic. A higher layer may override only a key whose descriptor explicitly
-  permits that source; arrays/maps are file-only unless a descriptor says otherwise.
-- Package section validation happens before an effective snapshot exists. One invalid section rejects
-  the whole candidate snapshot.
-- Fingerprints use canonical bytes, include schema/section descriptor revisions and exclude secret
-  plaintext because plaintext is forbidden.
-- Reconfiguration plans are ordered and monotonic: `REJECT` > `SECURITY_BARRIER` >
-  `NEW_COLLECTION_GENERATION` > `DRAIN_AND_RESTART` > `RESTART_DEPENDENCY` > `APPLY_LIVE` > `NOOP`.
-- Planning does not execute changes. The daemon/capability owner performs the plan and produces receipts.
+## Composite action semantics
+
+`ReconfigurationPlan.required_actions` is a set, not a scalar maximum. It may simultaneously contain:
+
+```text
+APPLY_LIVE
+SECURITY_BARRIER
+RESTART_DEPENDENCY
+DRAIN_AND_RESTART
+NEW_COLLECTION_GENERATION
+REBUILD_PROJECTION
+GATE_REQUIRED
+REJECT
+```
+
+`NOOP` is the empty set. `REJECT` blocks all execution. `GATE_REQUIRED` blocks activation until named
+receipts exist. Security, restart, rebuild and generation obligations may coexist and none may be erased
+by another action. The daemon topologically orders prerequisites and publishes the candidate fingerprint
+only after every required receipt succeeds.
 
 ## Required invariants
 
-- unknown config section/key fails closed
-- fixed security floors cannot be weakened by file, environment or CLI
-- only opaque `SecretRef` values are accepted in secret-bearing fields
-- config diagnostics never contain source content, query text, absolute paths by default or secret values
-- equal layers/descriptors produce byte-identical fingerprints and plans
-- optional model/document settings are rejected without accepted gate/ADR/artifact prerequisites
-- a change requiring restart, security barrier, collection generation or rebuild is never applied live
+- unknown section/key, duplicate key/table, unsupported version and wrong type fail closed;
+- a higher-precedence source may override only an explicitly allowed field;
+- fixed security floors cannot be weakened;
+- plaintext secrets are invalid in every layer;
+- one invalid section rejects the entire candidate snapshot;
+- equal canonical inputs produce byte-identical fingerprints, deltas and plans;
+- failed or partially executed reconfiguration never publishes a mixed snapshot;
+- optional model/document settings remain blocked without gate, ADR, artifact and feature receipts;
+- parser, merge, fingerprint, diff and plan operations perform no I/O.
 
-## Typed failure surface
+## Typed failures
 
-- `CONFIG_PARSE_FAILED`
-- `CONFIG_SCHEMA_VERSION_UNSUPPORTED`
-- `CONFIG_DUPLICATE_KEY`
-- `CONFIG_UNKNOWN_SECTION`
-- `CONFIG_UNKNOWN_KEY`
-- `CONFIG_OVERRIDE_NOT_ALLOWED`
-- `CONFIG_SECURITY_FLOOR_VIOLATION`
-- `CONFIG_SECRET_PLAINTEXT_FORBIDDEN`
-- `CONFIG_SECTION_CONFLICT`
-- `CONFIG_SECTION_INVALID`
-- `CONFIG_PROFILE_NOT_AUTHORIZED`
-- `CONFIG_RECONFIGURATION_REJECTED`
+`CONFIG_PARSE_FAILED`, `CONFIG_SCHEMA_VERSION_UNSUPPORTED`, `CONFIG_DUPLICATE_KEY`,
+`CONFIG_UNKNOWN_SECTION`, `CONFIG_UNKNOWN_KEY`, `CONFIG_OVERRIDE_NOT_ALLOWED`,
+`CONFIG_SECURITY_FLOOR_VIOLATION`, `CONFIG_SECRET_PLAINTEXT_FORBIDDEN`, `CONFIG_SECTION_CONFLICT`,
+`CONFIG_SECTION_INVALID`, `CONFIG_PROFILE_NOT_AUTHORIZED`, `CONFIG_RECONFIGURATION_REJECTED`.
 
-## Exit tests / evidence
+## Exit evidence
 
-- `layer_precedence_and_override_allowlist`
-- `duplicate_unknown_and_wrong_type_fail_closed`
-- `plaintext_secret_rejected_and_redacted_view_safe`
-- `fixed_security_floor_cannot_be_weakened`
-- `equal_inputs_equal_fingerprint_and_reload_plan`
-- `restart_rebuild_generation_and_security_changes_never_live`
-- `optional_profile_requires_gate_adr_and_artifact_receipts`
-- `package_section_collision_rejected`
-- `parser_and_merge_are_io_free`
+- layer precedence and override allowlist;
+- duplicate/unknown/wrong-type fail-closed fixtures;
+- secret rejection and redacted-view non-disclosure;
+- deterministic fingerprint/delta/composite-plan fixtures;
+- simultaneous security+restart and generation+rebuild obligations preserved;
+- failed step never publishes candidate fingerprint;
+- optional profile cannot self-authorize;
+- package-section collision rejected;
+- I/O-free dependency and behavior proof.
 
-## Suggested internal modules
+## Suggested modules
 
 ```text
-search-config/src/
-  source.rs
-  document.rs
-  registry.rs
-  merge.rs
-  section.rs
-  snapshot.rs
-  fingerprint.rs
-  diff.rs
-  reload.rs
-  redact.rs
-  error.rs
+source.rs
+document.rs
+registry.rs
+merge.rs
+section.rs
+snapshot.rs
+fingerprint.rs
+diff.rs
+plan.rs
+redact.rs
+error.rs
 ```
 
-## Size / split
-
-- Initial `src/` target: **≤5,500 hand-written lines**.
-- Split review: **before 8,500 total hand-written lines**.
-- Hard stop: **10,000 including package-local tests**.
-- Parsing/layering/reload planning remain together while one effective-config identity governs them.
-  A format-specific parser may split only if it becomes independently replaceable.
+Target `src/` ≤5,500 lines; split review before 8,500 total; hard stop at 10,000 including local tests.
