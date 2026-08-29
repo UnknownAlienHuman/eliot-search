@@ -1,0 +1,63 @@
+schema_version = 1
+project = "eliot-search"
+profile_class = "scale"
+stage = "P18"
+status = "UNSELECTED"
+enabled = false
+accepted_p15_receipt_ref = "UNSELECTED"
+measured_bottleneck_report_ref = "UNSELECTED"
+adr_ref = "UNSELECTED"
+qualification_receipt_ref = ""
+benefit_receipt_ref = ""
+removal_or_rollback_receipt_ref = ""
+reviewer_receipt_ref = ""
+
+[artifact]
+qdrant_server_version = "UNSELECTED"
+qdrant_server_sha256 = ""
+qdrant_client_version = "UNSELECTED"
+qdrant_client_checksum = ""
+Windows_package_ref = "UNSELECTED"
+license_receipt_ref = ""
+
+[topology]
+profile_name = "UNSELECTED"
+node_count = 0
+process_count = 0
+shard_number = 0
+replication_factor = 0
+write_consistency_factor = 0
+strict_mode_required = true
+in_place_change_allowed = false
+qdrant_alias_is_commit = false
+
+[semantics]
+collection_schema_digest = ""
+projection_profile_set_digest = ""
+scoring_profile_digest = ""
+filtered_idf_profile_digest = ""
+query_fanout_policy_ref = "UNSELECTED"
+access_currentness_equivalence_required = true
+scoring_equivalence_required = true
+
+[migration]
+base_at_r0_required = true
+ordered_catch_up_required = true
+final_barrier_at_r1_required = true
+guarded_redb_route_switch_required = true
+old_route_pins_required = true
+failed_candidate_discard_required = true
+post_switch_rollback_required = true
+
+[resources]
+max_query_fanout = 0
+max_concurrency = 0
+max_queue = 0
+max_memory_bytes = 0
+max_disk_bytes = 0
+migration_deadline_ms = 0
+
+[identity]
+equivalence_fixture_digest = ""
+fault_fixture_digest = ""
+profile_digest = ""

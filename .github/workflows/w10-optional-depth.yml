@@ -1,0 +1,54 @@
+name: W10 optional depth contracts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/w10-optional-depth.yml"
+      - "docs/optional/**"
+      - "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+      - "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+      - "qualification/optional-depth/**"
+      - "config/w10-optional-depth.toml"
+      - "config/sections/optional_profiles.md"
+      - "swarm/w10-optional-depth.toml"
+      - "swarm/launch-state.toml"
+      - "crates/search-model-provider/**"
+      - "bins/eliot-search-model-worker/**"
+      - "bins/eliot-search-doc-worker/**"
+      - "bins/eliot-searchd/W10_INTEGRATION.md"
+      - "crates/search-index-qdrant/**/P18_SCALE.md"
+      - "tools/validate-w10-optional-depth.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w10-optional-depth-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate W10 contracts
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate repository topology and prior packets
+        shell: pwsh
+        run: |
+          & ./tools/validate-swarm.ps1 -Json
+          & ./tools/validate-implementation-packets.ps1 -Json
+          & ./tools/validate-current-packets.ps1 -Json
+          & ./tools/validate-proof-packets.ps1 -Json
+          & ./tools/validate-w8-client-edge.ps1 -Json
+
+      - name: Validate W10 optional-depth packets
+        shell: pwsh
+        run: |
+          & ./tools/validate-w10-optional-depth.ps1 -Json

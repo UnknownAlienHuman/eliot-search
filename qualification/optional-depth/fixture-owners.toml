@@ -1,0 +1,82 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P16-P18"
+wave = 10
+gate = "G6"
+
+[fixture_defaults]
+accepted_fixture_ref = ""
+accepted_fixture_digest = ""
+status = "UNAVAILABLE"
+
+[[fixture_family]]
+id = "optional_gate_and_p15_binding"
+semantic_owner = "eliot-searchd"
+consumers = ["search-model-provider", "eliot-search-model-worker", "eliot-search-doc-worker"]
+purpose = "Exact accepted P15/ADR/gate/feature/config/binding receipt chain."
+
+[[fixture_family]]
+id = "model_profile_golden"
+semantic_owner = "search-model-provider"
+consumers = ["eliot-search-model-worker", "search-eval"]
+purpose = "Profile digest, document/query vectors, multivector order and rerank calibration."
+
+[[fixture_family]]
+id = "model_worker_windows"
+semantic_owner = "eliot-search-model-worker"
+consumers = ["eliot-searchd", "search-eval"]
+purpose = "Private IPC, exact artifact/runtime, resources, cancellation, crash and cleanup."
+
+[[fixture_family]]
+id = "model_access_content_noninterference"
+semantic_owner = "search-access"
+consumers = ["search-model-provider", "search-eval"]
+purpose = "Model-leg access/currentness/shadow/purge and content-leakage fixtures."
+
+[[fixture_family]]
+id = "model_incremental_product_pulse"
+semantic_owner = "search-eval"
+consumers = ["search-model-provider", "eliot-searchd"]
+purpose = "Pre-registered material benefit and accepted cost/risk comparison."
+
+[[fixture_family]]
+id = "document_profile_golden"
+semantic_owner = "search-materializer"
+consumers = ["eliot-search-doc-worker", "search-eval"]
+purpose = "Exact input/output schema, coordinates, loss maps and assurance."
+
+[[fixture_family]]
+id = "document_no_execute_fuzz"
+semantic_owner = "eliot-search-doc-worker"
+consumers = ["eliot-searchd", "search-eval"]
+purpose = "Scripts/macros/remote resources, malformed inputs and bomb limits."
+
+[[fixture_family]]
+id = "document_incremental_product_pulse"
+semantic_owner = "search-eval"
+consumers = ["eliot-search-doc-worker", "eliot-searchd"]
+purpose = "Material document fidelity/quality gain and accepted resource cost."
+
+[[fixture_family]]
+id = "optional_generation_migration"
+semantic_owner = "search-publication"
+consumers = ["eliot-searchd", "search-qdrant-bridge", "search-epoch-pins", "search-index-reclaimer"]
+purpose = "Candidate generation R0/catch-up/R1/route switch/drain/reclaim/rollback."
+
+[[fixture_family]]
+id = "scale_topology_capability"
+semantic_owner = "search-qdrant-bridge"
+consumers = ["search-publication", "search-eval", "eliot-searchd"]
+purpose = "Exact topology/schema, strict filters, scoring/IDF equivalence and fanout."
+
+[[fixture_family]]
+id = "scale_migration_failpoints"
+semantic_owner = "search-publication"
+consumers = ["search-epoch-pins", "search-index-reclaimer", "search-eval", "eliot-searchd"]
+purpose = "Every advanced-scale migration and rollback kill/reopen state."
+
+[[fixture_family]]
+id = "optional_removal_baseline_regression"
+semantic_owner = "search-eval"
+consumers = ["eliot-searchd", "eliot-search-model-worker", "eliot-search-doc-worker"]
+purpose = "Worker/cache/route removal and exact accepted P15 regression."

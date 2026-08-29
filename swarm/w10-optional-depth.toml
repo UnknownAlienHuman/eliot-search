@@ -1,0 +1,165 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P16-P18"
+wave = 10
+gate = "G6"
+status = "BLOCKED"
+launch_authority = "swarm/launch-state.toml"
+requires_accepted_gate = "G5"
+requires_exact_accepted_p15_receipt = true
+implementation_authorized = false
+optional_depth_authorized = false
+one_candidate_per_ticket = true
+ordinary_agent_architecture_access = "exception-only"
+
+cross_package_contract = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+qualification = "qualification/optional-depth/W10_QUALIFICATION.md"
+settings = "config/w10-optional-depth.toml"
+probe_templates = "qualification/optional-depth/probes.toml"
+gate_map = "qualification/optional-depth/gate-map.toml"
+fixture_owners = "qualification/optional-depth/fixture-owners.toml"
+
+[[packet]]
+package = "search-model-provider"
+stages = ["P16"]
+assignment = "swarm/assignments/search-model-provider.md"
+functions = "crates/search-model-provider/FUNCTIONS.md"
+profile_template = "qualification/optional-depth/model-profile.toml"
+write_scope = "crates/search-model-provider/**"
+soft_src_line_target = 6500
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports"]
+read_set = [
+  "AGENTS.md",
+  "crates/search-model-provider/AGENTS.md",
+  "swarm/assignments/search-model-provider.md",
+  "crates/search-model-provider/FUNCTIONS.md",
+  "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md",
+  "qualification/optional-depth/model-profile.toml",
+  "qualification/optional-depth/probes.toml",
+  "config/w10-optional-depth.toml",
+]
+
+[[packet]]
+package = "eliot-search-model-worker"
+stages = ["P16"]
+assignment = "swarm/assignments/eliot-search-model-worker.md"
+functions = "bins/eliot-search-model-worker/FUNCTIONS.md"
+profile_template = "qualification/optional-depth/model-profile.toml"
+write_scope = "bins/eliot-search-model-worker/**"
+soft_src_line_target = 4500
+accepted_handoffs_required = ["search-contracts", "search-ports", "search-provider-protocol", "search-model-provider"]
+read_set = [
+  "AGENTS.md",
+  "bins/eliot-search-model-worker/AGENTS.md",
+  "swarm/assignments/eliot-search-model-worker.md",
+  "bins/eliot-search-model-worker/FUNCTIONS.md",
+  "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md",
+  "qualification/optional-depth/model-profile.toml",
+  "config/w10-optional-depth.toml",
+]
+
+[[packet]]
+package = "eliot-search-doc-worker"
+stages = ["P17"]
+assignment = "swarm/assignments/eliot-search-doc-worker.md"
+functions = "bins/eliot-search-doc-worker/FUNCTIONS.md"
+profile_template = "qualification/optional-depth/document-profile.toml"
+write_scope = "bins/eliot-search-doc-worker/**"
+soft_src_line_target = 5000
+accepted_handoffs_required = ["search-contracts", "search-ports", "search-provider-protocol", "search-materializer"]
+read_set = [
+  "AGENTS.md",
+  "bins/eliot-search-doc-worker/AGENTS.md",
+  "swarm/assignments/eliot-search-doc-worker.md",
+  "bins/eliot-search-doc-worker/FUNCTIONS.md",
+  "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md",
+  "qualification/optional-depth/document-profile.toml",
+  "config/w10-optional-depth.toml",
+]
+
+[[packet]]
+package = "eliot-searchd"
+stages = ["P16", "P17", "P18"]
+assignment = "swarm/assignments/eliot-searchd.md"
+contract = "bins/eliot-searchd/W10_INTEGRATION.md"
+write_scope = "bins/eliot-searchd/**"
+role = "integration-owner"
+accepted_handoffs_required = [
+  "accepted_P15_Product_Pulse",
+  "candidate_specific_ADR_and_G6_receipts",
+  "all_selected_package_API_digests",
+]
+read_set = [
+  "AGENTS.md",
+  "bins/eliot-searchd/AGENTS.md",
+  "bins/eliot-searchd/W10_INTEGRATION.md",
+  "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md",
+  "qualification/optional-depth/W10_QUALIFICATION.md",
+  "config/sections/optional_profiles.md",
+  "config/w10-optional-depth.toml",
+]
+
+[[packet]]
+package = "search-qdrant-bridge"
+stages = ["P18"]
+contract = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+profile_template = "qualification/optional-depth/scale-profile.toml"
+write_scope = "crates/search-index-qdrant/search-qdrant-bridge/**"
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports"]
+
+[[packet]]
+package = "search-publication"
+stages = ["P16", "P17", "P18"]
+contract = "crates/search-index-qdrant/search-publication/P18_SCALE.md"
+write_scope = "crates/search-index-qdrant/search-publication/**"
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports"]
+
+[[packet]]
+package = "search-epoch-pins"
+stages = ["P16", "P17", "P18"]
+contract = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"
+write_scope = "crates/search-index-qdrant/search-epoch-pins/**"
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports"]
+
+[[packet]]
+package = "search-index-reclaimer"
+stages = ["P16", "P17", "P18"]
+contract = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
+write_scope = "crates/search-index-qdrant/search-index-reclaimer/**"
+accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-epoch-pins"]
+
+[integration]
+shared_evidence_and_registry_edits = "integration-owner-only"
+package_writer_may_select_provider = false
+package_writer_may_edit_other_package = false
+package_writer_may_accept_g6 = false
+package_writer_may_enable_feature_or_config = false
+required_candidate_inputs = [
+  "exact_accepted_P15_receipt",
+  "dedicated_candidate_ADR",
+  "exact_artifact_profile_Windows_license_qualification",
+  "pre_registered_material_benefit_policy",
+  "removal_fallback_plan",
+  "migration_rollback_plan_or_reviewed_rerank_only_not_applicable_receipt",
+]
+
+[gate_requirements]
+required_evidence_ids = [
+  "dedicated_optional_profile_adr",
+  "exact_provider_artifact_qualification",
+  "measured_material_benefit",
+  "removal_or_uninstall_fallback",
+  "migration_and_rollback_when_applicable",
+]
+raw_output_required = true
+independent_review_required = true
+all_selected_candidate_probes_must_pass = true
+
+[current_state]
+accepted_p15_receipt = "UNSELECTED"
+selected_candidate = "NONE"
+model = "DISABLED"
+document = "DISABLED"
+scale = "DISABLED"
+g6 = "NOT_ACCEPTED"

@@ -41,9 +41,8 @@ pwsh -NoProfile -File tools/validate-proof-packets.ps1
 pwsh -NoProfile -File tools/validate-proof-packets.ps1 -Json
 ```
 
-Checks resolver/comparator/exact function and qualification links, P00/W0 launch preservation, locked
-ambiguity/non-normative/frozen-denominator rules, unselected regex/structural profiles, 52 unique
-mandatory `UNAVAILABLE` probes and exact G3 evidence IDs.
+Checks resolver/comparator/exact links, P00/W0 launch preservation, locked ambiguity/non-normative/
+frozen-denominator rules, unselected regex/structural profiles, 52 mandatory probes and G3 evidence.
 
 ## W8 client-edge validation
 
@@ -52,8 +51,8 @@ pwsh -NoProfile -File tools/validate-w8-client-edge.ps1
 pwsh -NoProfile -File tools/validate-w8-client-edge.ps1 -Json
 ```
 
-Checks generic-edge ownership, exact recipe closure, authority boundaries, locked client/optional-profile
-settings, 50 generic/optional probe states, G4 mapping and blocked/unqualified status.
+Checks generic-edge ownership, recipe closure, authority boundaries, locked settings, 50 probe states,
+G4 mapping and blocked/unqualified status.
 
 ## W9 Product Pulse validation
 
@@ -62,9 +61,20 @@ pwsh -NoProfile -File tools/validate-w9-product-pulse.ps1
 pwsh -NoProfile -File tools/validate-w9-product-pulse.ps1 -Json
 ```
 
-Checks the single `search-eval` package owner plus integration/reviewer roles; 49 mandatory corpus cases;
-33 metric definitions; Architecture SLO values; 60 mandatory `UNAVAILABLE` probes; exact six-ID G5 map;
-locked fairness/privacy/verdict settings; manual-only CI; and unchanged P00/W0 launch/optional-depth state.
+Checks Product Pulse roles, 49 corpus cases, 33 metrics, S30 targets, 60 mandatory probes, six-ID G5
+map, locked fairness/privacy/verdict settings and manual-only CI.
+
+## W10 optional-depth validation
+
+```powershell
+pwsh -NoProfile -File tools/validate-w10-optional-depth.ps1
+pwsh -NoProfile -File tools/validate-w10-optional-depth.ps1 -Json
+```
+
+Checks three unselected candidate profiles; eight one-package/integration ownership packets; model and
+document worker function contracts; 45 disabled probe templates; candidate-specific five-ID G6 maps;
+locked gate/content/migration/removal settings; optional-profile defaults; manual-only workflows; and
+unchanged P00/W0 launch authority.
 
 Passing structural checks is not runtime, security, Qdrant, current-workspace, comparison, exact-proof,
-Windows-performance or Product Pulse acceptance evidence.
+Windows-performance, Product Pulse, provider or optional-depth acceptance evidence.

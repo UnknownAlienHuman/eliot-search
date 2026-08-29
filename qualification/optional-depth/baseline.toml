@@ -1,0 +1,66 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P16-P18"
+wave = 10
+gate = "G6"
+status = "DISABLED_NOT_SELECTED"
+implementation_authorized = false
+optional_depth_authorized = false
+
+[accepted_baseline]
+p15_report_ref = "UNSELECTED"
+p15_report_digest = ""
+p15_reviewer_receipt_ref = ""
+repository_commit = ""
+dependency_api_digest_set = ""
+baseline_configuration_fingerprint = ""
+Windows_environment_digest = ""
+
+[candidate]
+profile_class = "NONE"
+profile_ref = "UNSELECTED"
+profile_digest = ""
+adr_ref = "UNSELECTED"
+adr_digest = ""
+qualification_run_ref = ""
+benefit_report_ref = ""
+removal_receipt_ref = ""
+migration_rollback_receipt_ref = ""
+independent_reviewer_receipt_ref = ""
+status = "DISABLED"
+
+[activation]
+compiled_feature_present = false
+explicit_configuration_enabled = false
+binding_authorized = false
+worker_qualified = false
+candidate_route_validated = false
+gate_receipt_accepted = false
+active = false
+
+[common_policy]
+network_allowed = false
+automatic_download_allowed = false
+automatic_upgrade_allowed = false
+training_or_learning_allowed = false
+persistent_content_cache_allowed = false
+unsaved_persistence_allowed = false
+generative_answer_authority_allowed = false
+client_admission_authority_allowed = false
+provider_output_is_source_evidence = false
+in_place_schema_change_allowed = false
+qdrant_alias_is_commit = false
+self_review_allowed = false
+self_acceptance_allowed = false
+raw_output_required = true
+independent_review_required = true
+
+[selection]
+latest_allowed = false
+version_range_allowed = false
+floating_revision_allowed = false
+documentation_only_acceptance_allowed = false
+unit_tests_only_acceptance_allowed = false
+compilation_only_acceptance_allowed = false
+configuration_only_activation_allowed = false

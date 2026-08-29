@@ -15,6 +15,8 @@
 - [`../../qualification/client-edge/README.md`](../../qualification/client-edge/README.md) — unexecuted P14 client-edge probe contract.
 - [W9_IMPLEMENTATION_PACKET.md](W9_IMPLEMENTATION_PACKET.md) — Product Pulse/Windows evaluation ownership, ordering and hard stops.
 - [`../../qualification/product-pulse/README.md`](../../qualification/product-pulse/README.md) — unexecuted P15 corpus/metric/probe/evidence contract.
+- [W10_IMPLEMENTATION_PACKET.md](W10_IMPLEMENTATION_PACKET.md) — optional model/document/scale ownership, gate, migration and removal.
+- [`../../qualification/optional-depth/README.md`](../../qualification/optional-depth/README.md) — disabled P16–P18 provider/topology templates and G6 probes.
 - [STRUCTURAL_CI.md](STRUCTURAL_CI.md) — scaffold and implementation-packet validation workflow and non-claims.
 - [SWARM_READINESS_AUDIT.md](SWARM_READINESS_AUDIT.md) — current readiness and honest status.
 - [OWNERSHIP_BOUNDARY_AUDIT.md](OWNERSHIP_BOUNDARY_AUDIT.md) — missing-owner/dependency audit.
