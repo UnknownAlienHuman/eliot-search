@@ -78,43 +78,128 @@ SearchProviderCapabilityDescriptor:
 
 Only memberships visible to the binding are represented. Capability availability grants no authority.
 
-## Source handles
+## Public handle tokens
+
+S26.1 requires default result and continuation handles to be opaque random identifiers. Therefore
+provider JSON carries only bearer locators and non-sensitive lifecycle metadata, never the detailed
+source/plan record that the daemon uses internally.
 
 ```yaml
 SearchSourceHandle:
   handle_id: HandleId
   handle_revision: NonZeroRevision
-  durability: ephemeral | durable_source
-  binding_id: BindingId
-  source_namespace_id: SourceNamespaceId
-  source_owner_generation: SourceOwnerGeneration
-  source_revision_ref: SourceRevisionRef
-  source_view: SourceView
-  workspace_view_revision_ref: WorkspaceViewRevisionId | null
-  native_anchor: NativeAnchor
-  excerpt_digest: Blake3Digest32
-  materialization_profile_id: ProfileId
-  assurance_ceiling: exact_bytes | mapped_text | lossy_text | descriptive_only
-  object_residency_key_digest: ObjectResidencyKeyDigest
-  retention_expiry: UtcTimestamp | null
-  invalidation_refs: bounded_list<OpaqueRef>
-```
+  handle_class: ephemeral | durable_source
+  expires_at: UtcTimestamp | null
+  opaque_token: OpaqueHandleToken
 
-A durable handle requires an immutable retained revision and cannot target unsaved bytes. Every
-expansion rechecks binding, grant, owner generation, view, residency and purge state. Possession grants
-no access.
-
-```yaml
 ContinuationHandle:
   continuation_id: ContinuationId
-  binding_id: BindingId
-  durability: ephemeral_in_memory | durable_replan_checkpoint
-  plan_fingerprint: PlanFingerprint
   expires_at: UtcTimestamp
-  opaque_token: BoundedOpaqueBytes
+  opaque_token: OpaqueHandleToken
 ```
 
-The token contains no raw Qdrant cursor, score, path or source bytes.
+The token has at least 256 bits of CSPRNG entropy, is never deterministically derived from source or
+plan data, and is redacted from every default diagnostic surface. `HandleId`/`ContinuationId` alone is
+not sufficient to resolve or authorize anything. Token possession grants no access; every use requires
+current binding/grant/security/owner/view/residency/purge validation.
+
+## Server-side source-handle records
+
+The grouped fields from S26.2 are represented in server-owned records, not exposed as the wire token.
+The record is a closed tagged union because an ephemeral handle may target authenticated unsaved bytes,
+while a durable handle may not.
+
+```yaml
+SearchSourceHandleRecord:
+  ephemeral:
+    handle_id: HandleId
+    handle_revision: NonZeroRevision
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    grant_id: GrantId
+    target:
+      retained_source:
+        source_namespace_id: SourceNamespaceId
+        source_owner_generation: SourceOwnerGeneration
+        source_revision_ref: SourceRevisionRef
+        source_view: SourceView
+        workspace_view_revision_ref: WorkspaceViewRevisionId | null
+        native_anchor: NativeAnchor
+        excerpt_digest: Blake3Digest32
+        materialization_profile_id: ProfileId
+        assurance_ceiling: exact_bytes | mapped_text | lossy_text | descriptive_only
+        object_residency_key_digest: ObjectResidencyKeyDigest
+      unsaved_buffer:
+        workspace_id: WorkspaceId
+        workspace_view_revision_ref: WorkspaceViewRevisionId
+        buffer_snapshot_id: BufferSnapshotId
+        buffer_version: u64
+        native_anchor: NativeAnchor
+        excerpt_digest: Blake3Digest32
+    created_at: UtcTimestamp
+    expires_at: UtcTimestamp
+    invalidation_refs: bounded_list<OpaqueRef>
+    status: ACTIVE | REVOKED | EXPIRED
+  durable_source:
+    handle_id: HandleId
+    handle_revision: NonZeroRevision
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    grant_id: GrantId
+    source_namespace_id: SourceNamespaceId
+    source_owner_generation: SourceOwnerGeneration
+    source_revision_ref: SourceRevisionRef
+    source_view: SourceView
+    workspace_view_revision_ref: WorkspaceViewRevisionId | null
+    native_anchor: NativeAnchor
+    excerpt_digest: Blake3Digest32
+    materialization_profile_id: ProfileId
+    assurance_ceiling: exact_bytes | mapped_text | lossy_text | descriptive_only
+    object_residency_key_digest: ObjectResidencyKeyDigest
+    retention_lease_ref: OpaqueRef
+    created_at: UtcTimestamp
+    retention_expiry: UtcTimestamp | null
+    invalidation_refs: bounded_list<OpaqueRef>
+    status: ACTIVE | REVOKED | EXPIRED
+```
+
+Ephemeral records are memory-only and restart-invalid. An unsaved-buffer target never enters redb, CAS,
+backup, telemetry, evaluation or a durable record. A durable record requires an immutable retained
+revision plus a current retention lease. The public token never embeds or serializes this record.
+
+## Server-side continuation records
+
+```yaml
+ContinuationRecord:
+  ephemeral_window:
+    continuation_id: ContinuationId
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    plan_fingerprint: PlanFingerprint
+    result_fence: ResultFence
+    candidate_window_ref: OpaqueRef
+    issued_candidate_identity_set_ref: OpaqueRef
+    epoch_pin_ref: OpaqueRef
+    created_at: UtcTimestamp
+    expires_at: UtcTimestamp
+    status: ACTIVE | REVOKED | EXPIRED
+  durable_replan_checkpoint:
+    continuation_id: ContinuationId
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    plan_fingerprint: PlanFingerprint
+    result_fence: ResultFence
+    durable_job_ref: OpaqueRef
+    replan_checkpoint_ref: OpaqueRef
+    issued_candidate_identity_set_ref: OpaqueRef
+    created_at: UtcTimestamp
+    expires_at: UtcTimestamp
+    status: ACTIVE | REVOKED | EXPIRED
+```
+
+The ephemeral variant owns a bounded candidate window and pin; it is memory-only and restart-invalid.
+The durable variant is allowed only for an explicit durable job and stores no process-local pin or
+unsaved bytes. Raw Qdrant offsets, cursors, scores and point IDs never appear in the public token.
 
 ## Security mutation state
 

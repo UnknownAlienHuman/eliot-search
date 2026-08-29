@@ -3,91 +3,52 @@
 **Path:** `crates/search-query/search-continuation`  
 **Capability:** C27  
 **Delivery:** W4 / P08; hardening W7 / P13  
-**Gate:** BLOCKED until query planner, access and epoch-pin receipts are accepted  
-**Trace:** S14.3-S14.4, S26, H12, P08, P13  
-**Direct public handoffs:** `search-contracts`, `search-domain`, `search-query-planner`, `search-access`, `search-epoch-pins`
-
-Apply `../ASSIGNMENT_PROTOCOL.md`. Logical names below express required semantics, not mandatory Rust
-spelling.
+**Gate:** BLOCKED until planner, access, pins, contracts and continuation ports are accepted  
+**Trace:** S14.3-S14.4, S26, H12, P08, P13
 
 ## Mission
 
-Own bounded provider-local continuation records that either retain an in-memory window/pin or re-execute a versioned plan under its fence.
+Issue opaque continuation tokens while owning a separate tagged server record for either a bounded
+in-memory window/pin or an explicit durable replan checkpoint.
 
 ## Owns
 
-- ephemeral continuation identity, TTL/count quotas and binding scope
-- candidate-window/pin retention
-- durable replan checkpoint schema for explicit durable jobs only
-- authorization/fence revalidation and issued-ID suppression
+Token issuance/digest lookup, TTL/count/binding state, candidate-window/pin retention, durable job
+checkpoint records, live fence revalidation, issued-candidate suppression, expiry and invalidation.
 
 ## Must not own
 
-- public raw Qdrant offsets, cursors or scores
-- indefinite pins
-- silent continuation against newer corpus
-- durable record per ordinary query
-
-## Logical primitives
-
-- ContinuationDurability, ContinuationRecord, CandidateWindow, ReplanCheckpoint, IssuedCandidateSet, ContinuationPolicy, ContinuationExpansion
+Public binding/plan/fence/cursor fields, raw Qdrant offsets/scores/point IDs in tokens, indefinite pins,
+silent refresh against a newer corpus, durable records for ordinary reads, or durable unsaved bytes.
 
 ## Logical operations
 
-1. `create_ephemeral(plan, window, pin, policy) -> Result<ContinuationHandle, ContinuationError>`
-2. `create_durable_replan_checkpoint(job, plan) -> Result<ContinuationHandle, ContinuationError>`
-3. `expand(handle, binding, current_state, budget) -> Result<ContinuationExpansion, ContinuationError>`
-4. `expire(now) -> ExpiryReceipt`
-5. `invalidate_by_security_generation(change) -> InvalidationReceipt`
+1. `create_ephemeral(plan, window, pin, binding, policy) -> Result<ContinuationHandle, ContinuationError>`
+2. `create_durable_replan_checkpoint(job, plan, binding, policy) -> Result<ContinuationHandle, ContinuationError>`
+3. `resolve_token(handle) -> Result<ContinuationRecord, ContinuationError>`
+4. `expand(handle, current_state, budget) -> Result<ContinuationExpansion, ContinuationError>`
+5. `expire(now) -> ExpiryReceipt`
+6. `invalidate(change) -> InvalidationReceipt`
 
-## Required invariants
+## Invariants
 
-- handle is opaque, random, binding-scoped and auth-checked every expansion
-- expired fence returns SNAPSHOT_EXPIRED with refresh option
-- ephemeral handle is memory-only and restart-invalid
-- durable checkpoint targets immutable admitted data, never unsaved bytes
-- pin TTL/count are bounded
+- public token exposes no binding, durability, plan fingerprint, route/security fence or window ref;
+- token digest, not plaintext token, is stored;
+- every expansion reauthorizes binding and live security/view/route state;
+- ephemeral variant is memory-only, restart-invalid and pin-bounded;
+- durable variant belongs to an explicit durable job, replans under stored fence and owns no
+  process-local pin or unsaved bytes;
+- expired fence returns `SNAPSHOT_EXPIRED` rather than silently refreshing.
 
-## Typed failure surface
+## Exit evidence
 
-- `SNAPSHOT_EXPIRED`
-- `CONTINUATION_NOT_FOUND`
-- `CONTINUATION_BINDING_MISMATCH`
-- `ACCESS_REVOKED`
-- `CONTINUATION_LIMIT_EXCEEDED`
+- wire token contains no cursor/binding/plan/fence;
+- token entropy/redaction fixture;
+- binding and live-fence revalidation;
+- restart invalidates ephemeral window and releases pin;
+- durable checkpoint rejected for ordinary query/unsaved target;
+- issued-candidate suppression remains internal;
+- expired/revoked tokens cannot resume;
+- bounded pin/window/count tests.
 
-## Exit tests / evidence
-
-- `raw_qdrant_cursor_never_public`
-- `binding_scope_enforced`
-- `restart_invalidates_ephemeral`
-- `expired_fence_never_silently_refreshes`
-- `security_change_invalidates`
-- `unsaved_buffer_not_durable`
-- `bounded_pin_window`
-
-## Suggested internal modules
-
-```text
-search-continuation/src/
-  record.rs
-  ephemeral.rs
-  durable.rs
-  window.rs
-  expand.rs
-  expiry.rs
-  security.rs
-  error.rs
-```
-
-This is an internal file plan, not a request for more crates.
-
-## Size / split
-
-- Initial `src/` target: **≤ 6,000 hand-written lines**.
-- Split review: **before 8,500 total hand-written Rust lines**.
-- Hard stop: **10,000 including package-local tests**.
-- Ephemeral and durable checkpoint classes remain together while one public handle contract governs them; split if durable job runtime becomes separate.
-
-The handoff must let a downstream agent consume the public contract without reading implementation
-internals or the architecture master.
+Target `src/` ≤6,000 lines; split review before 8,500 total; hard stop at 10,000 including local tests.

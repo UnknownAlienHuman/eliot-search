@@ -4,28 +4,22 @@ P00 is the only architecture-authorized implementation entry point. W1+ remains 
 
 ## Writer A — `search-contracts`
 
-Read all P00 contract-pack files and deliver:
-
-- strong IDs and exact tagged field-level schemas;
-- eleven recipe requests and eleven field-level result variants;
-- validated-candidate-only result semantics and explicit validation gaps;
-- public/protocol/contract reason namespaces;
-- canonical JSON/CBOR validation and golden fixtures;
-- no I/O, ports or vendor types.
+Read all P00 contract-pack files and deliver strong IDs, exact tagged schemas, eleven recipe request and
+result variants, validated-candidate-only results, opaque wire handles, separate server-side
+handle/continuation records, reason namespaces and canonical JSON/CBOR fixtures. No I/O, ports or
+vendor types.
 
 ## Integration checkpoint A
 
-1. verify architecture and contract-pack hashes;
-2. resolve every challenge;
-3. review schema/serialization/result fixtures;
-4. publish accepted contracts commit and API/schema digest.
+Verify architecture/pack hashes, resolve every challenge, review schema/serialization/result/handle
+fixtures, and publish the accepted contracts API/schema digest.
 
 ## Writers B and C — after checkpoint A
 
 - `search-domain`: pure transitions, eligibility, fingerprints, ordering and coverage.
 - `search-ports`: shared vendor-neutral traits and conformance fakes.
 
-They may run separately from the same immutable contracts handoff.
+They run separately from the same immutable contracts handoff.
 
 ## Integration checkpoint B
 
@@ -45,6 +39,11 @@ recipe_set_exact_test
 recipe_result_union_exact_test
 emitted_candidate_always_validated_test
 validation_gap_contains_no_evidence_test
+subject_ambiguity_excludes_resolved_evidence_test
+wire_source_handle_contains_no_source_identity_test
+wire_continuation_contains_no_binding_or_plan_test
+server_handle_record_not_in_provider_result_test
+opaque_handle_possession_never_authorizes_test
 wire_state_spelling_fixture
 forbidden_epoch_sentinel_test
 source_owner_generation_digest_fixture

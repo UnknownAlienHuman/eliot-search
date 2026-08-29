@@ -17,9 +17,12 @@ These decisions resolve implementation ambiguity without changing Architecture 8
 | PC-011 | Recipe registry named outputs but output bodies remained opaque. | `RECIPE_RESULTS.md` defines every output and exact result union. |
 | PC-012 | S7.3 uses `occurrence_sequence: u64`; draft narrowed it to nonzero. | Preserve `u64`. |
 | PC-013 | Inspection/exploration/comparison could encode ambiguity together with resolved evidence. | Use nested tagged `resolved/ambiguous` variants; ambiguous variants contain no resolved evidence fields. |
+| PC-014 | S26.1 requires opaque default handles while S26.2 lists the durable source fields bound by a handle. | Provider JSON carries an opaque `SearchSourceHandle`; S26.2 fields live in a server-owned durable record keyed by token digest. The record is never the bearer token. |
+| PC-015 | A continuation token draft exposed binding, durability and plan fingerprint. | Public continuation is opaque lifecycle metadata only; binding/plan/fence/window/checkpoint fields remain in a server-owned tagged record. |
 
 ## Stop conditions
 
 Stop with `CONTRACT_CHALLENGE` when Part I conflicts, a recipe needs implicit authority/scope, a public
-reason lacks a mapping, a port needs vendor types, canonical bytes cannot be reproduced, one record
-encodes mutually exclusive states, or representing a gap would require emitting invalid evidence.
+reason lacks a mapping, a port needs vendor types, canonical bytes cannot be reproduced, mutually
+exclusive states coexist, an invalid candidate would need to become evidence, or a public handle would
+need to expose its server-side authority/currentness record.

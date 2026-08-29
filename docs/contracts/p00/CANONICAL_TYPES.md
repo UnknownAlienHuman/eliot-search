@@ -18,12 +18,19 @@
 | `SourceOwnerGeneration` | dedicated wrapper over `Blake3Digest32`, never an integer |
 | opaque identity | non-empty bounded UTF-8 or canonical bytes with an explicit type and maximum length |
 | raw bytes in JSON | base64url without padding; never implicit UTF-8 |
+| `OpaqueHandleToken` | 32–64 CSPRNG bytes; JSON base64url without padding; never deterministically derived from source, plan, path or identity fields |
+| `HandleTokenDigest` | dedicated BLAKE3-256 digest of the exact opaque token under the handle-token domain; stored server-side only |
 | timestamp | RFC 3339 UTC string with `Z`; canonical form uses exactly six fractional digits; reject offsets and non-canonical alternatives at load-bearing boundaries |
 | duration/deadline | unsigned integer milliseconds; no floating-point duration |
 
 The contract crate defines explicit bounds for every opaque string/byte/list field. P00 defaults are
 256 bytes for opaque IDs, 1,024 bytes for opaque references and 8 MiB for a full provider frame unless
 a narrower schema states otherwise.
+
+An opaque handle token is a bearer locator, not an authorization decision. It is redacted from logs,
+telemetry, panic text and debug formatting. Only its domain-separated digest may appear in persistent
+lookup state. `HandleId` is non-secret correlation identity; both a valid token and current live
+authorization are required for expansion.
 
 ## Required strong IDs
 
@@ -61,6 +68,8 @@ verified source bytes; they never relabel a BLAKE3 digest.
 - Floating point is forbidden in identity/fingerprint inputs. `PdfRegion` coordinates are result data,
   not identity input unless a future profile defines a fixed-point canonical mapping.
 - JSON reserialization is never used to derive an identity.
+- Opaque handle tokens are never included in identity/fingerprint canonicalization. Their digest is a
+  lookup guard, not source or plan identity.
 
 ## Domain separation
 
@@ -73,6 +82,8 @@ eliot-search/point-identity/v1
 eliot-search/plan-fingerprint/v1
 eliot-search/schema-identity/v1
 eliot-search/receipt/v1
+eliot-search/handle-token-digest/v1
+eliot-search/continuation-token-digest/v1
 ```
 
 The prefix, schema version and canonical payload are all hashed. Golden-byte and digest fixtures are
