@@ -1,0 +1,380 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P15"
+wave = 9
+gate = "G5"
+status = "UNMATERIALIZED"
+implementation_authorized = false
+accepted_corpus_revision = ""
+accepted_corpus_digest = ""
+minimum_independent_reference_lineages = 8
+network_allowed = false
+oracle_visible_to_production = false
+oracle_visible_to_baselines = false
+all_required_cases_must_materialize = true
+
+[reference_portfolio]
+fixture_ref = ""
+fixture_digest = ""
+independent_lineage_count = 0
+fork_count = 0
+mirror_count = 0
+nested_repository_count = 0
+submodule_count = 0
+
+[case_defaults]
+mandatory = true
+fixture_ref = ""
+fixture_digest = ""
+oracle_ref = ""
+oracle_digest = ""
+source_view_ref = ""
+workspace_view_ref = ""
+scope_policy_ref = ""
+budget_profile_ref = ""
+status = "UNMATERIALIZED"
+result = "UNAVAILABLE"
+
+[[case]]
+id = "active_local_function"
+family = "quality_navigation"
+fixture_family = "generic_client_edge"
+recipe = "locate@1"
+purpose = "Actively edited local function with exact definition and authenticated workspace view."
+
+[[case]]
+id = "renamed_true_analogue"
+family = "quality_comparison"
+fixture_family = "comparison_lineage_roles"
+recipe = "compare_implementations@1"
+purpose = "Renamed true analogue across independent repository lineages."
+
+[[case]]
+id = "same_name_false_positive"
+family = "quality_comparison"
+fixture_family = "comparison_lineage_roles"
+recipe = "compare_implementations@1"
+purpose = "Same-name non-analogue must not be treated as equivalent."
+
+[[case]]
+id = "decisive_test_edge_case"
+family = "quality_evidence_roles"
+fixture_family = "comparison_lineage_roles"
+recipe = "inspect_entity@1"
+purpose = "Test contains decisive behavior absent from definition surface."
+
+[[case]]
+id = "caller_evidence_role"
+family = "quality_evidence_roles"
+fixture_family = "comparison_lineage_roles"
+recipe = "inspect_entity@1"
+purpose = "Caller evidence remains distinct and grounded."
+
+[[case]]
+id = "documentation_evidence_role"
+family = "quality_evidence_roles"
+fixture_family = "comparison_lineage_roles"
+recipe = "inspect_entity@1"
+purpose = "Documentation evidence remains distinct and multilingual."
+
+[[case]]
+id = "configuration_variant_split"
+family = "quality_configuration"
+fixture_family = "rust_structure_cfg"
+recipe = "compare_implementations@1"
+purpose = "Mutually exclusive configuration variants are variants, not conflicts."
+
+[[case]]
+id = "fork_mirror_lineage_collapse"
+family = "quality_lineage"
+fixture_family = "comparison_lineage_roles"
+recipe = "compare_implementations@1"
+purpose = "Fork and mirror collapse to one independent lineage."
+
+[[case]]
+id = "eight_independent_lineages"
+family = "quality_lineage"
+fixture_family = "comparison_lineage_roles"
+recipe = "compare_implementations@1"
+purpose = "At least eight independent reference lineages are represented."
+
+[[case]]
+id = "nested_repository_boundary"
+family = "scope_boundaries"
+fixture_family = "source_identity_boundaries"
+recipe = "corpus_profile@1"
+purpose = "Nested repository boundary is explicit and deterministic."
+
+[[case]]
+id = "submodule_boundary"
+family = "scope_boundaries"
+fixture_family = "source_identity_boundaries"
+recipe = "corpus_profile@1"
+purpose = "Submodule/source-owner boundary is explicit and deterministic."
+
+[[case]]
+id = "ambiguous_subject"
+family = "quality_resolution"
+fixture_family = "subject_resolution_ambiguity"
+recipe = "inspect_entity@1"
+purpose = "Material ambiguity is returned rather than hidden."
+
+[[case]]
+id = "provenance_chain"
+family = "quality_provenance"
+fixture_family = "revision_anchor_readback"
+recipe = "provenance@1"
+purpose = "Exact source/revision/view/owner provenance is preserved."
+
+[[case]]
+id = "multilingual_documentation"
+family = "quality_multilingual"
+fixture_family = "revision_anchor_readback"
+recipe = "find_text@1"
+purpose = "Multilingual documentation is recalled without implicit English-only analysis."
+
+[[case]]
+id = "non_ascii_path"
+family = "quality_multilingual"
+fixture_family = "revision_anchor_readback"
+recipe = "locate@1"
+purpose = "Non-ASCII path and coordinate handling remains exact."
+
+[[case]]
+id = "complete_literal_negative"
+family = "exact_proof"
+fixture_family = "exact_denominator_proof"
+recipe = "execute_exact_scan@1"
+purpose = "Complete literal negative succeeds only over complete readable denominator."
+
+[[case]]
+id = "exact_negative_unreadable"
+family = "exact_proof"
+fixture_family = "exact_denominator_proof"
+recipe = "execute_exact_scan@1"
+purpose = "Unreadable denominator item blocks complete negative."
+
+[[case]]
+id = "exact_negative_scope_drift"
+family = "exact_proof"
+fixture_family = "exact_denominator_proof"
+recipe = "execute_exact_scan@1"
+purpose = "Revision or scope drift blocks complete negative."
+
+[[case]]
+id = "comparison_non_normative"
+family = "quality_comparison"
+fixture_family = "comparison_lineage_roles"
+recipe = "compare_implementations@1"
+purpose = "Comparison output remains descriptive and non-normative."
+
+[[case]]
+id = "stale_projection_readback"
+family = "currentness"
+fixture_family = "observation_gap_reconcile"
+recipe = "locate@1"
+purpose = "Stale projection cannot be emitted without exact source readback."
+
+[[case]]
+id = "unindexed_reference_gap"
+family = "currentness"
+fixture_family = "observation_gap_reconcile"
+recipe = "inspect_entity@1"
+purpose = "Unindexed reference produces truthful coverage gap."
+
+[[case]]
+id = "inaccessible_membership_noninterference"
+family = "security"
+fixture_family = "access_revocation"
+recipe = "compare_implementations@1"
+purpose = "Inaccessible membership cannot affect result or reveal metadata."
+
+[[case]]
+id = "saved_overlay_precedence"
+family = "overlay"
+fixture_family = "saved_unsaved_overlay"
+recipe = "locate@1"
+purpose = "Saved immutable overlay shadows published base until publication."
+
+[[case]]
+id = "unsaved_overlay_precedence"
+family = "overlay"
+fixture_family = "saved_unsaved_overlay"
+recipe = "locate@1"
+purpose = "Authenticated unsaved snapshot shadows saved/base and remains memory-only."
+
+[[case]]
+id = "watcher_gap_currentness_denial"
+family = "currentness"
+fixture_family = "observation_gap_reconcile"
+recipe = "locate@1"
+purpose = "Watcher gap blocks current-confirmed claims."
+
+[[case]]
+id = "resume_reconciliation"
+family = "currentness"
+fixture_family = "observation_gap_reconcile"
+recipe = "corpus_delta@1"
+purpose = "Resume inventory reconciles before currentness is restored."
+
+[[case]]
+id = "live_head_mismatch"
+family = "currentness"
+fixture_family = "observation_gap_reconcile"
+recipe = "locate@1"
+purpose = "Live-head mismatch drops/shadows stale indexed evidence."
+
+[[case]]
+id = "access_revoke_mid_query"
+family = "security"
+fixture_family = "access_revocation"
+recipe = "compare_implementations@1"
+purpose = "Mid-query revoke discards contaminated leg and blocks emission."
+
+[[case]]
+id = "purge_restore_nonresurrection"
+family = "lifecycle"
+fixture_family = "retention_purge_restore"
+recipe = "provenance@1"
+purpose = "Purge tombstone blocks restore/reindex resurrection."
+
+[[case]]
+id = "point_identity_collision"
+family = "lifecycle"
+fixture_family = "retention_purge_restore"
+recipe = "locate@1"
+purpose = "Projected UUID collision never overwrites another point identity."
+
+[[case]]
+id = "continuation_expiry"
+family = "lifecycle"
+fixture_family = "retention_purge_restore"
+recipe = "expand_handle@1"
+purpose = "Expired continuation does not silently refresh against newer corpus."
+
+[[case]]
+id = "handle_revocation"
+family = "security"
+fixture_family = "access_revocation"
+recipe = "expand_handle@1"
+purpose = "Handle possession cannot bypass current authorization/revocation."
+
+[[case]]
+id = "source_admission_secret_canary"
+family = "security"
+fixture_family = "access_revocation"
+recipe = "corpus_profile@1"
+purpose = "Credential/private-key canaries are denied and never indexed."
+
+[[case]]
+id = "content_leakage_canary"
+family = "security"
+fixture_family = "access_revocation"
+recipe = "find_text@1"
+purpose = "Source/query/secret/token/path canaries never enter ordinary telemetry/evidence."
+
+[[case]]
+id = "publication_failpoint_matrix"
+family = "fault_recovery"
+fixture_family = "publication_failpoints"
+recipe = "locate@1"
+purpose = "Every publication transition kill/reopen preserves visibility invariants."
+
+[[case]]
+id = "qdrant_restart_recovery"
+family = "fault_recovery"
+fixture_family = "publication_failpoints"
+recipe = "locate@1"
+purpose = "Qdrant restart/identity mismatch yields correct degraded or quarantined state."
+
+[[case]]
+id = "daemon_kill_reopen"
+family = "fault_recovery"
+fixture_family = "publication_failpoints"
+recipe = "locate@1"
+purpose = "Daemon kill/reopen preserves owner/control/publication semantics."
+
+[[case]]
+id = "disk_full_low_space"
+family = "fault_recovery"
+fixture_family = "publication_failpoints"
+recipe = "locate@1"
+purpose = "Disk-full/low-space failure is bounded and recoverable without false success."
+
+[[case]]
+id = "sleep_resume_observation"
+family = "fault_recovery"
+fixture_family = "publication_failpoints"
+recipe = "locate@1"
+purpose = "Sleep/resume creates or resolves observation continuity truthfully."
+
+[[case]]
+id = "protocol_oversize_malformed"
+family = "protocol_stress"
+fixture_family = "provider_protocol"
+recipe = "locate@1"
+purpose = "Oversize and malformed frames fail before unbounded allocation."
+
+[[case]]
+id = "protocol_replay_duplicate"
+family = "protocol_stress"
+fixture_family = "provider_protocol"
+recipe = "locate@1"
+purpose = "Replay/regressed sequence and duplicate request IDs fail closed."
+
+[[case]]
+id = "protocol_cancel_storm"
+family = "protocol_stress"
+fixture_family = "provider_protocol"
+recipe = "locate@1"
+purpose = "Cancellation storm remains bounded and releases request resources."
+
+[[case]]
+id = "protocol_connection_churn"
+family = "protocol_stress"
+fixture_family = "provider_protocol"
+recipe = "locate@1"
+purpose = "Connection churn/disconnect releases pins/guards without leaks."
+
+[[case]]
+id = "resource_saturation"
+family = "resource_governance"
+fixture_family = "windows_resource_driver"
+recipe = "compare_implementations@1"
+purpose = "Saturation returns bounded rejection or truthful partial coverage."
+
+[[case]]
+id = "background_throttle"
+family = "resource_governance"
+fixture_family = "windows_resource_driver"
+recipe = "locate@1"
+purpose = "Foreground work outranks and throttles background preparation."
+
+[[case]]
+id = "warm_exact_navigation_slo"
+family = "performance"
+fixture_family = "windows_resource_driver"
+recipe = "locate@1"
+purpose = "Warm exact/keyword navigation p95 target."
+
+[[case]]
+id = "warm_lexical_query_slo"
+family = "performance"
+fixture_family = "windows_resource_driver"
+recipe = "find_text@1"
+purpose = "Warm single-scope lexical query p95 target."
+
+[[case]]
+id = "warm_comparison_slo"
+family = "performance"
+fixture_family = "windows_resource_driver"
+recipe = "compare_implementations@1"
+purpose = "Warm cross-repository comparison p95 before source expansion."
+
+[[case]]
+id = "first_progressive_card_slo"
+family = "performance"
+fixture_family = "windows_resource_driver"
+recipe = "compare_implementations@1"
+purpose = "First useful progressive card target when local branch is ready."

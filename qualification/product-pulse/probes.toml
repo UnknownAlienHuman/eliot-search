@@ -1,0 +1,381 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P15"
+wave = 9
+gate = "G5"
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+raw_output_required_for_pass = true
+independent_review_required_for_pass = true
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[probe_defaults]
+owner = "search-eval"
+mandatory = true
+result = "UNAVAILABLE"
+command_or_fixture_ref = ""
+raw_output_ref = ""
+raw_output_digest = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "corpus_manifest_complete"
+evidence_id = "control_corpus_abc_results"
+producer = "search-eval"
+purpose = "All required case IDs, fixture/oracle digests and eight-lineage minimum validate."
+
+[[probe]]
+id = "baseline_a_exact_identity"
+evidence_id = "control_corpus_abc_results"
+producer = "integration-owner"
+purpose = "Raw grep/read baseline artifact, driver and configuration are exact and immutable."
+
+[[probe]]
+id = "baseline_b_exact_identity"
+evidence_id = "control_corpus_abc_results"
+producer = "integration-owner"
+purpose = "Comparison-tool baseline artifact, driver and configuration are exact and immutable."
+
+[[probe]]
+id = "candidate_c_exact_identity"
+evidence_id = "control_corpus_abc_results"
+producer = "integration-owner"
+purpose = "ELIOT Search commit, artifacts, profiles and configuration are exact and qualified."
+
+[[probe]]
+id = "abc_scope_view_parity"
+evidence_id = "control_corpus_abc_results"
+producer = "search-eval"
+purpose = "A/B/C use the same declared source portfolio, source/workspace view and no-network policy."
+
+[[probe]]
+id = "oracle_independence"
+evidence_id = "control_corpus_abc_results"
+producer = "independent-reviewer"
+purpose = "Oracle labels and criteria were frozen without exposure to production or baseline drivers."
+
+[[probe]]
+id = "blocked_randomized_run_order"
+evidence_id = "control_corpus_abc_results"
+producer = "search-eval"
+purpose = "Paired A/B/C case blocks use a captured deterministic randomization seed."
+
+[[probe]]
+id = "failed_unavailable_visibility"
+evidence_id = "control_corpus_abc_results"
+producer = "search-eval"
+purpose = "Failed, skipped, cancelled, timed-out and unavailable observations remain in denominators."
+
+[[probe]]
+id = "quality_metric_reproduction"
+evidence_id = "control_corpus_abc_results"
+producer = "independent-reviewer"
+purpose = "Selected case-level quality metrics reproduce from immutable raw outputs."
+
+[[probe]]
+id = "abc_material_benefit_analysis"
+evidence_id = "control_corpus_abc_results"
+producer = "search-eval"
+purpose = "Pre-registered policy produces DOMINATES/COMPLEMENTS/regression classification."
+
+[[probe]]
+id = "windows_environment_identity"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "Exact Windows build, machine, power, storage and background policy are captured."
+
+[[probe]]
+id = "cold_warm_lane_separation"
+evidence_id = "latency_and_resource_report"
+producer = "search-eval"
+purpose = "Preparation, cold first request and warm steady-state observations remain separate."
+
+[[probe]]
+id = "preparation_cost_report"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "Index/build/preparation time, resources and disk growth are reported."
+
+[[probe]]
+id = "warm_exact_navigation_p95"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "Warm exact/keyword navigation p95 is measured against the 100 ms target."
+
+[[probe]]
+id = "warm_lexical_query_p95"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "Warm single-scope lexical p95 is measured against the 200 ms target."
+
+[[probe]]
+id = "warm_comparison_p95"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "Warm cross-repository comparison p95 before expansion is measured against 700 ms."
+
+[[probe]]
+id = "first_useful_card_latency"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "First useful progressive card is measured against 300 ms under declared readiness."
+
+[[probe]]
+id = "cpu_memory_disk_sampling"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "CPU, working set/private bytes, commit, disk and I/O samples are continuous and bounded."
+
+[[probe]]
+id = "background_priority_throttle"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "Foreground priority and background throttle behavior are measured under pressure."
+
+[[probe]]
+id = "resource_saturation_bounded"
+evidence_id = "latency_and_resource_report"
+producer = "integration-owner"
+purpose = "Queue saturation yields bounded rejection/partial coverage without unbounded growth."
+
+[[probe]]
+id = "publication_all_failpoints"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-publication"
+purpose = "Every publication kill/reopen boundary preserves visibility and recovery invariants."
+
+[[probe]]
+id = "qdrant_restart_identity_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-qdrant-supervisor"
+purpose = "Qdrant termination, restart, orphan and identity mismatch paths are classified correctly."
+
+[[probe]]
+id = "redb_reopen_corruption_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-control-redb"
+purpose = "Journal reopen/corruption/migration paths preserve quarantine and snapshot semantics."
+
+[[probe]]
+id = "cas_reopen_mark_sweep_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-revision-store"
+purpose = "CAS reopen and mark/sweep interruption protect all durable/ephemeral roots."
+
+[[probe]]
+id = "disk_full_low_space_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "integration-owner"
+purpose = "Disk-full and low-space faults fail boundedly without fabricated success."
+
+[[probe]]
+id = "watcher_overflow_sleep_resume_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-source-reconcile"
+purpose = "Overflow, reset, sleep/resume and root rebind preserve observation-gap truth."
+
+[[probe]]
+id = "access_revoke_checkpoint_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-access"
+purpose = "Revocation at every query/readback/emission/expansion checkpoint blocks forbidden output."
+
+[[probe]]
+id = "purge_restore_nonresurrection_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-retention"
+purpose = "Purge tombstones prevent restore/reindex resurrection and receipts remain truthful."
+
+[[probe]]
+id = "continuation_handle_restart_matrix"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-continuation"
+purpose = "Disconnect/restart/expiry invalidates ephemeral state and releases pins/resources."
+
+[[probe]]
+id = "recovery_state_and_latency_consistency"
+evidence_id = "fault_and_recovery_matrix"
+producer = "search-eval"
+purpose = "Every cell reports correct state plus recovery latency; latency cannot mask wrong state."
+
+[[probe]]
+id = "credential_private_key_admission_denial"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "search-source-admission"
+purpose = "Credential/private-key/system-location canaries are denied by default."
+
+[[probe]]
+id = "ordinary_log_content_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "search-eval"
+purpose = "Ordinary logs contain no source/query/unsaved/secret/token/path canaries."
+
+[[probe]]
+id = "metrics_trace_content_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "search-eval"
+purpose = "Metrics and traces contain only content-minimized identifiers/counts/durations."
+
+[[probe]]
+id = "qdrant_payload_diagnostic_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "search-qdrant-bridge"
+purpose = "Qdrant payloads and diagnostics contain no forbidden source/query/secret metadata."
+
+[[probe]]
+id = "redb_cas_metadata_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "integration-owner"
+purpose = "Exposed technical redb/CAS evidence contains no forbidden content or inaccessible names."
+
+[[probe]]
+id = "protocol_error_metadata_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "search-provider-protocol"
+purpose = "Frames and errors do not expose secrets, tokens, foreign scope or unrestricted paths."
+
+[[probe]]
+id = "process_command_env_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "integration-owner"
+purpose = "Command lines and captured environments contain no plaintext credentials or source data."
+
+[[probe]]
+id = "crash_attachment_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "integration-owner"
+purpose = "Crash dumps/attachments follow the declared source-bearing policy and reveal no canaries."
+
+[[probe]]
+id = "backup_restore_manifest_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "search-retention"
+purpose = "Backup/restore manifests remain content-minimized and tombstone-aware."
+
+[[probe]]
+id = "privileged_debug_scope_ttl_scan"
+evidence_id = "source_admission_and_content_leakage_audit"
+producer = "search-eval"
+purpose = "Privileged debug is authenticated, binding-scoped, TTL-bounded and secret/token-free."
+
+[[probe]]
+id = "frame_limit_partial_body_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Max/oversize/partial frame handling is bounded before allocation."
+
+[[probe]]
+id = "malformed_utf8_json_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Malformed UTF-8/JSON and unknown load-bearing tags fail closed."
+
+[[probe]]
+id = "sequence_replay_regression_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Replay, duplicate and regressed connection sequences are rejected."
+
+[[probe]]
+id = "request_id_duplicate_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Duplicate request IDs cannot create multiple request lifecycles."
+
+[[probe]]
+id = "in_flight_32_ceiling_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "The 33rd concurrent request is boundedly rejected at the accepted ceiling."
+
+[[probe]]
+id = "progress_terminal_uniqueness_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Progress order is monotonic and exactly one terminal event is emitted."
+
+[[probe]]
+id = "cancel_storm_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Cancellation storms remain idempotent and release request-local work."
+
+[[probe]]
+id = "disconnect_connection_churn_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Connection churn releases pins, guards, windows and quotas."
+
+[[probe]]
+id = "binding_revoke_expiry_load_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-provider-protocol"
+purpose = "Binding revoke/expiry under load blocks new/emitting work without authority leak."
+
+[[probe]]
+id = "protocol_peak_resource_leak_stress"
+evidence_id = "provider_protocol_stress"
+producer = "search-eval"
+purpose = "Peak memory/queue/guard/pin counts remain bounded with no content leakage."
+
+[[probe]]
+id = "criteria_preregistered_before_candidate"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "independent-reviewer"
+purpose = "Quality/resource criteria and weights are frozen before candidate results."
+
+[[probe]]
+id = "all_mandatory_evidence_present"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "search-eval"
+purpose = "Every G5 probe has immutable raw output and no hidden missing result."
+
+[[probe]]
+id = "hard_safety_blocker_set_empty"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "search-eval"
+purpose = "No stale/access/secret/content/oracle/protocol safety blocker is present."
+
+[[probe]]
+id = "hard_correctness_blocker_set_empty"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "search-eval"
+purpose = "No publication/pin/purge/restore/revocation/complete-negative blocker is present."
+
+[[probe]]
+id = "candidate_slo_report_complete"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "search-eval"
+purpose = "Every required architecture SLO measurement is PASS and adequately sampled."
+
+[[probe]]
+id = "material_benefit_rule_satisfied"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "search-eval"
+purpose = "Pre-registered DOMINATES or COMPLEMENTS rule is satisfied."
+
+[[probe]]
+id = "reproducibility_digest_coherent"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "search-eval"
+purpose = "Corpus, environment, baseline, artifact, config and report identities are coherent."
+
+[[probe]]
+id = "independent_reproduction_sample"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "independent-reviewer"
+purpose = "Independent reviewer reproduces the required sample or full run."
+
+[[probe]]
+id = "producer_reviewer_separation"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "independent-reviewer"
+purpose = "Evidence producer and accepting reviewer are different identities."
+
+[[probe]]
+id = "accepted_receipt_optional_depth_gate"
+evidence_id = "explicit_product_pulse_verdict"
+producer = "integration-owner"
+purpose = "Only the exact accepted P15 receipt can authorize a future W10 ticket."
