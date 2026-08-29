@@ -1,0 +1,36 @@
+name: Function packet coverage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: function-packets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate all package function packets
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate package registry and existing structural packets
+        shell: pwsh
+        run: |
+          & ./tools/validate-swarm.ps1 -Json
+          & ./tools/validate-implementation-packets.ps1 -Json
+          & ./tools/validate-current-packets.ps1 -Json
+          & ./tools/validate-w5-current.ps1 -Json
+          & ./tools/validate-proof-packets.ps1 -Json
+
+      - name: Validate exact primary function packet coverage
+        shell: pwsh
+        run: ./tools/validate-function-packets.ps1 -Json
