@@ -1,4 +1,4 @@
-schema_version = 5
+schema_version = 6
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
@@ -12,13 +12,15 @@ port_catalog_path = "docs/handoff/PORT_CATALOG.md"
 p00_contract_pack_path = "docs/contracts/p00/README.md"
 configuration_registry_path = "config/sections.toml"
 qdrant_qualification_path = "qualification/qdrant/W3_QUALIFICATION.md"
+query_qualification_path = "qualification/query/W4_QUALIFICATION.md"
+current_workspace_qualification_path = "qualification/current/W5_QUALIFICATION.md"
 hard_handwritten_rust_line_limit = 10000
 mandatory_split_review_line_limit = 8500
 ordinary_agent_architecture_access = "exception-only"
 
 # Per-package AGENTS.md is `${path}/AGENTS.md`; write scope is `${path}/**`.
 # `wave` is the earliest possible wave, not current authorization. launch-state.toml is authoritative.
-# `functions` and `config_sections` are bounded read-set inputs, not implementation authorization.
+# `functions`, `config_sections` and `qualification` are bounded read-set inputs, not authorization.
 # Shared vendor-neutral traits are owned by search-ports; concrete adapters are composed only by eliot-searchd.
 
 [[package]]
@@ -156,7 +158,9 @@ wave = 5
 optional = false
 soft_src_line_target = 7000
 assignment = "swarm/assignments/search-source-reconcile.md"
+functions = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
 config_sections = ["reconcile"]
+qualification = "qualification/current/W5_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-source-registry", "search-source-identity", "search-safe-reader"]
 
 [[package]]
@@ -219,6 +223,8 @@ wave = 5
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-code-enricher.md"
+functions = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+qualification = "qualification/current/W5_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports"]
 
 [[package]]
@@ -354,6 +360,8 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-access.md"
+functions = "crates/search-query/search-access/FUNCTIONS.md"
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports"]
 
 [[package]]
@@ -366,7 +374,9 @@ wave = 5
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-overlay.md"
+functions = "crates/search-query/search-overlay/FUNCTIONS.md"
 config_sections = ["overlay"]
+qualification = "qualification/current/W5_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-unitizer", "search-lexical"]
 
 [[package]]
@@ -403,7 +413,9 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-query-planner.md"
+functions = "crates/search-query/search-query-planner/FUNCTIONS.md"
 config_sections = ["query"]
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-access"]
 
 [[package]]
@@ -416,7 +428,9 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-retrieval-executor.md"
+functions = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
 config_sections = ["scheduler"]
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-query-planner", "search-lexical", "search-epoch-pins", "search-access"]
 
 [[package]]
@@ -429,6 +443,8 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-candidate-validator.md"
+functions = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-access"]
 
 [[package]]
@@ -453,7 +469,9 @@ wave = 4
 optional = false
 soft_src_line_target = 6500
 assignment = "swarm/assignments/search-handles.md"
+functions = "crates/search-query/search-handles/FUNCTIONS.md"
 config_sections = ["handles"]
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
@@ -466,6 +484,8 @@ wave = 4
 optional = false
 soft_src_line_target = 7000
 assignment = "swarm/assignments/search-result-projector.md"
+functions = "crates/search-query/search-result-projector/FUNCTIONS.md"
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-candidate-validator", "search-handles"]
 
 [[package]]
@@ -478,7 +498,9 @@ wave = 4
 optional = false
 soft_src_line_target = 6000
 assignment = "swarm/assignments/search-continuation.md"
+functions = "crates/search-query/search-continuation/FUNCTIONS.md"
 config_sections = ["continuations"]
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-query-planner", "search-access", "search-epoch-pins"]
 
 [[package]]
@@ -504,7 +526,9 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-eval.md"
+functions = "crates/search-eval/FUNCTIONS.md"
 config_sections = ["observability"]
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-config"]
 
 [[package]]
@@ -517,7 +541,9 @@ wave = 1
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-provider-protocol.md"
+functions = "crates/search-provider-protocol/FUNCTIONS.md"
 config_sections = ["protocol"]
+qualification = "qualification/query/W4_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
@@ -555,6 +581,7 @@ optional = false
 soft_src_line_target = 6500
 assignment = "swarm/assignments/eliot-searchd.md"
 config_sections = ["optional_profiles"]
+qualification = "qualification/query/W4_QUALIFICATION.md"
 progressive_composition = true
 active_default_feature = "wave1-shell"
 deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-runtime-owner", "search-os-secrets", "search-control-redb", "search-source-admission", "search-source-registry", "search-source-identity", "search-source-reconcile", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "search-code-enricher", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer", "search-access", "search-overlay", "search-exact", "search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-comparator", "search-handles", "search-result-projector", "search-continuation", "search-retention", "search-eval", "search-provider-protocol"]
