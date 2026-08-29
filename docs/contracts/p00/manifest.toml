@@ -6,6 +6,7 @@ required_files = [
   "README.md",
   "CANONICAL_TYPES.md",
   "TYPE_REGISTRY.md",
+  "SUPPORT_SCHEMAS.md",
   "CONTRACT_CHALLENGES.md",
   "SOURCE_GRAPH.md",
   "RECIPES.md",

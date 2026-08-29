@@ -1,65 +1,68 @@
 # P00 supporting type registry
 
-This registry closes helper types referenced by the field-level schemas. A writer cannot replace one
-with a local `String`, `Vec`, map or vendor object.
+This registry closes helper types referenced by field-level schemas. A writer cannot replace one with
+a local `String`, `Vec`, map or vendor object.
 
-## Visibility classes
+## Visibility and owner classes
 
-| Class | Meaning |
-|---|---|
-| `ProviderWire` | may appear in `ProviderEnvelope`; must pass disclosure review |
-| `SharedDomain` | shared cross-package contract; not automatically provider-visible |
-| `ServerRecord` | persisted or process-local server state; forbidden in provider result variants |
-| `PackageOpaque` | capability-owned type exposed only as an opaque public handle/reference |
+| Class | Owner | Meaning |
+|---|---|---|
+| `ProviderWire` | `search-contracts` | legal in `ProviderEnvelope` after disclosure review |
+| `SharedDomain` | `search-contracts` | shared record, not automatically provider-visible |
+| `ServerRecord` | `search-contracts` schema; owning capability controls state | forbidden in provider result variants |
+| `PackageOpaque` | owning capability | cross-boundary only through opaque type/reference |
+| `PortSupport` | `search-ports` | operation context/receipt/stream support; not provider wire |
 
-Visibility is explicit per record. Implementing `Serialize` for internal storage does not make a
-`ServerRecord` legal in provider JSON.
+Implementing a storage serializer does not make a `ServerRecord` legal in provider JSON.
 
-## Bounded collection and byte wrappers
+## Bounds and collections
 
 ```yaml
+ContractBoundsV1:
+  bounds_revision: NonZeroRevision
+  classes: bounded_map<ProfileId, LimitClass>
+  table_digest: Blake3Digest32
+
 LimitClass:
-  name: ProfileId
   max_items: u32 | null
   max_bytes: u64 | null
   max_depth: u16 | null
 ```
 
-The accepted contract publishes one immutable `ContractBoundsV1` table mapping every named limit class
-to exact maxima. A zero maximum means the field is disabled, never unlimited.
+W0 publishes exact values and a digest. Zero means disabled, never unlimited.
 
 ```text
-BoundedList<T, LimitClass>      ordered, duplicates allowed only when the field says so
-BoundedSet<T, LimitClass>       canonical uniqueness and deterministic iteration order
-BoundedMap<K,V,LimitClass>      canonical unique keys
-BoundedText<LimitClass>         validated UTF-8
-BoundedBytes<LimitClass>        arbitrary bytes
-BoundedCanonicalBytes<LimitClass> bytes already validated against a named canonical codec
-BoundedOpaqueBytes<LimitClass>  bytes with no semantic parsing by the consumer
-BoundedTextOrBytes              tagged text | bytes; encoding is never guessed
+BoundedList<T,L>   ordered; duplicate policy is field-specific
+BoundedSet<T,L>    canonical uniqueness and deterministic iteration
+BoundedMap<K,V,L>  canonical unique keys
+BoundedText<L>     validated UTF-8
+BoundedBytes<L>    arbitrary bytes
+BoundedCanonicalBytes<L> validated canonical codec bytes
+BoundedOpaqueBytes<L> no semantic parsing by consumer
+BoundedTextOrBytes tagged text | bytes; encoding is never guessed
 ```
 
-All decoders enforce limits before full allocation where framing permits it. Recursive records such as
-`NativeAnchor.archive_member` use a named depth limit.
+Decoders enforce limits before full allocation where framing permits it. Recursive anchors use a named
+depth limit.
 
 ## Opaque and display wrappers
 
 | Type | Visibility | Rule |
 |---|---|---|
-| `OpaqueId` | SharedDomain | non-empty bounded identity with no consumer-side parsing |
-| `OpaqueRef` | SharedDomain | non-empty bounded reference; possession grants no authority |
-| `OpaqueCanonicalBytes` | SharedDomain | bounded bytes validated by the producing contract |
-| `OpaqueHandleToken` | ProviderWire | CSPRNG bearer locator; redacted; current auth still required |
-| `BoundedDisplayName` | ProviderWire when authorized | display-only UTF-8; never identity |
-| `BoundedDisplayPath` | ProviderWire only after disclosure check | original display path; never authorization or identity |
-| `BoundedName` | SharedDomain | normalized subject-name input/output |
-| `BoundedSymbolKey` | SharedDomain | normalized qualified/exact symbol key |
-| `BoundedExpression` | SharedDomain | descriptive configuration predicate; not executable code |
-| `BoundedObservation` | ProviderWire | content-minimized descriptive observation |
+| `OpaqueId` | SharedDomain | non-empty bounded identity, no consumer parsing |
+| `OpaqueRef` | SharedDomain | bounded reference; possession grants no authority |
+| `OpaqueCanonicalBytes` | SharedDomain | producer-validated canonical bytes |
+| `OpaqueHandleToken` | ProviderWire | CSPRNG bearer locator, redacted, current auth required |
+| `BoundedDisplayName` | ProviderWire when authorized | display only, never identity |
+| `BoundedDisplayPath` | ProviderWire after disclosure check | never authorization/identity |
+| `BoundedName` | SharedDomain | normalized subject name |
+| `BoundedSymbolKey` | SharedDomain | normalized exact/qualified symbol key |
+| `BoundedExpression` | SharedDomain | descriptive predicate, never executable |
+| `BoundedObservation` | ProviderWire | content-minimized observation |
 | `BoundedBehaviorSignature` | SharedDomain | deterministic descriptive comparison signature |
-| `BoundedNonContentMetadata` | ProviderWire | allowlisted scalar/count/profile metadata only |
-| `BoundedNonContentRankingTrace` | ProviderWire | no query/source text, path, vendor payload or inaccessible facet |
-| `OpaqueAuthorizedFacetValue` | ProviderWire | display value resolved only after authorization |
+| `BoundedNonContentMetadata` | ProviderWire | closed scalar metadata from `SUPPORT_SCHEMAS.md` |
+| `BoundedNonContentRankingTrace` | ProviderWire | closed ranking trace from `SUPPORT_SCHEMAS.md` |
+| `OpaqueAuthorizedFacetValue` | ProviderWire | resolved only after authorization |
 
 ## Identity and reference registry
 
@@ -67,9 +70,9 @@ Every entry is a distinct newtype/tagged union.
 
 ```text
 InstallationId, InstallationIncarnationId, DataRootId, BindingId,
-WorkspaceId, RootBindingId, PathBindingId, RepositoryLineageId,
-CorpusId, ReferencePortfolioId, SourceNamespaceId, SourceId,
-SourceMembershipId, ProjectionMembershipId, SourceRevisionId,
+WorkspaceId, WorkspaceViewRevisionId, RootBindingId, PathBindingId,
+RepositoryLineageId, CorpusId, ReferencePortfolioId, SourceNamespaceId,
+SourceId, SourceMembershipId, ProjectionMembershipId, SourceRevisionId,
 MaterializationId, RepresentationId, UnitId, AccessPartitionId,
 ScoringPartitionId, ScoringDocumentId, AccessPolicyBindingId,
 ResidencyPolicyBindingId, ScopeDomainId, AccessDomainId,
@@ -121,18 +124,18 @@ ExactScanPlanRef:
   plan_fingerprint: PlanFingerprint
 ```
 
-Exactly one tagged-union variant is present.
+Exactly one union variant is present.
 
 ## Baseline semantic registries
 
 ```text
 AssuranceClass = exact_bytes | mapped_text | lossy_text | descriptive_only
-ObservationFreshness = current_confirmed | observed_with_age | gap_detected | unknown
+ObservationFreshnessState = current_confirmed | observed_with_age | gap_detected | unknown
 EvidenceRole = definition | reference | test | documentation | caller | configuration
 Modality = code | text | document | image | archive | mixed
 ```
 
-`EntityKind` is a versioned keyword registry rather than an arbitrary string. Baseline values:
+`EntityKind` is a versioned registry, not arbitrary text:
 
 ```text
 function, method, type, trait, impl, module, field, constant, static,
@@ -140,44 +143,10 @@ macro, variable, parameter, file, section, test, document, table,
 image_region, unknown
 ```
 
-A provider-specific entity kind maps to one baseline value plus an optional private profile-qualified
-subkind; the subkind cannot affect access or exact identity unless a future contract versions it.
+Provider-specific subkinds are private/profile-qualified and cannot affect access or exact identity
+without a new contract.
 
-## Protocol support records
-
-```yaml
-ProtocolRange:
-  minimum: ProtocolVersion
-  maximum: ProtocolVersion
-
-OptionalProviderState:
-  profile_id: ProfileId
-  state: absent | stopped | starting | ready | degraded | quarantined
-  degraded_reason_codes: bounded_set<SearchReasonCodeV1>
-  artifact_identity_digest: Blake3Digest32 | null
-
-MembershipReadiness:
-  source_membership_id: SourceMembershipId
-  direct_ready: bool
-  lexical_ready: bool
-  code_ready: bool
-  semantic_ready: bool
-  document_ready: bool
-  visible_epoch: Epoch | null
-  observation_freshness: ObservationFreshness
-  degraded_reason_codes: bounded_set<SearchReasonCodeV1>
-
-BoundedProgressCounts:
-  completed_legs: u32
-  total_planned_legs: u32
-  nominated_candidates: u32
-  validated_candidates: u32
-  omitted_or_failed_legs: u32
-```
-
-Progress counts reveal no inaccessible population totals.
-
-## Coverage support records
+## Coverage records
 
 ```yaml
 LegDescriptor:
@@ -185,13 +154,6 @@ LegDescriptor:
   leg_kind: direct | exact | structural | lexical | semantic | rerank
   scoring_partition_ref: OpaqueRef | null
   profile_id: ProfileId
-
-LegExecutionSummary:
-  leg_ref: OpaqueId
-  state: completed | partial | cancelled | failed | discarded_contaminated
-  nominated_count: u32
-  validated_count: u32
-  reason_codes: bounded_set<SearchReasonCodeV1>
 
 CoverageGap:
   gap_ref: OpaqueId
@@ -206,15 +168,15 @@ CoverageUnknown:
   bounded_metadata: BoundedNonContentMetadata
 
 ObservationFreshness:
-  state: current_confirmed | observed_with_age | gap_detected | unknown
+  state: ObservationFreshnessState
   observation_cursor_revision: ObservationCursorRevision
   observed_age_ms: u64 | null
 ```
 
-Counts and affected scopes are already authorization-filtered. Gap records contain no source body,
-excerpt, secret, inaccessible name or absolute path.
+Counts/scopes are authorization-filtered. Gap records contain no content, secret, inaccessible name or
+absolute path.
 
-## Port support records
+## Port support records — owned by `search-ports`
 
 ```yaml
 OperationContext:
@@ -246,11 +208,10 @@ BoundedStream<T>:
   deadline_ms: u64
 ```
 
-Cancellation and stream refs are process/package capabilities, not provider-wire values. Concrete
-executor, channel, file, socket or vendor request types never appear here.
+These are `PortSupport`, not `search-contracts` provider records. Cancellation/stream refs are
+process/package capabilities and non-serializable. No executor/channel/file/socket/vendor type appears.
 
-## Ownership rule
+## New-type rule
 
-If a new helper type is needed, the contract-change request must classify its visibility, canonical
-representation, bounds, disclosure, owner and whether it is serialized. Local aliases that duplicate
-this registry are forbidden.
+A new helper type request classifies owner, visibility, canonical representation, bounds, disclosure
+and serialization. Local aliases duplicating this registry are forbidden.
