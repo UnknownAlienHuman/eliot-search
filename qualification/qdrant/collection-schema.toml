@@ -1,0 +1,144 @@
+schema_version = 2
+project = "eliot-search"
+status = "DESIGNED_NOT_EXECUTED"
+topology_identity = "qdrant-baseline-v1"
+
+[topology]
+nodes = 1
+shard_number = 1
+replication_factor = 1
+write_consistency_factor = 1
+collection_generations = "one_active_plus_migration_candidate"
+loopback_only = true
+authentication_required = true
+
+[strict_mode]
+enabled = true
+unindexed_filtering_retrieve = false
+unindexed_filtering_update = false
+payload_indexes_before_ingest = true
+reject_unsupported_or_unindexed_filter = true
+
+[query_semantics]
+filtered_idf_required = true
+idf_parameter_shape = "search_params.idf.corpus"
+base_eligibility_shared_by_retrieval_and_idf = true
+mutation_wait_required = true
+mutation_ordering = "strong"
+mutation_success_requires_exact_readback = true
+
+[[sparse_vector]]
+name = "lex_code_v1"
+modifier = "idf"
+profile_status = "UNQUALIFIED"
+
+[[sparse_vector]]
+name = "lex_text_neutral_v1"
+modifier = "idf"
+profile_status = "UNQUALIFIED"
+
+# Optional dense/multivector names are not created until G5/P15 + ADR + exact provider qualification.
+
+[[payload_index]]
+field = "installation_incarnation_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "collection_generation_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "projection_membership_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "access_partition_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "scoring_partition_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "source_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "source_revision_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "representation_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "unit_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "scoring_document_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "projection_profile_set_id"
+type = "keyword"
+conditions = ["match"]
+
+[[payload_index]]
+field = "unit_kind"
+type = "keyword"
+conditions = ["match"]
+
+[[payload_index]]
+field = "modality"
+type = "keyword"
+conditions = ["match"]
+
+[[payload_index]]
+field = "language_or_format"
+type = "keyword"
+conditions = ["match"]
+
+[[payload_index]]
+field = "entity_kind"
+type = "keyword"
+conditions = ["match"]
+
+[[payload_index]]
+field = "normalized_symbol_key"
+type = "keyword"
+conditions = ["match"]
+
+[[payload_index]]
+field = "repository_lineage_id"
+type = "uuid"
+conditions = ["match"]
+
+[[payload_index]]
+field = "valid_from_epoch"
+type = "integer"
+conditions = ["range"]
+
+[[payload_index]]
+field = "valid_until_epoch_exclusive"
+type = "integer"
+conditions = ["range", "missing_field_must_not_fixture"]
+
+[payload]
+membership_arrays_allowed = false
+corpus_or_repository_display_names_allowed = false
+acl_subjects_allowed = false
+raw_source_text_allowed = false
+absolute_paths_allowed = false
+query_text_allowed = false
+point_identity_digest_256_required = true

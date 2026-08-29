@@ -1,12 +1,12 @@
 # Crate ownership matrix
 
 This is the human ownership/index view. `swarm/crates.toml` alone owns exact dependency lists,
-package paths, optionality and assignment paths; this file intentionally does not duplicate those
-edges.
+package paths, optionality, assignments, function packets, configuration sections and qualification
+packets; this file intentionally does not duplicate those edges.
 
-- **Library packages:** 40
+- **Library packages:** 41
 - **Binary packages:** 4
-- **Total one-writer packages:** 44
+- **Total one-writer packages:** 45
 - **Normal `src/` target:** at most 7,500 hand-written lines
 - **Split review:** before 8,500 total hand-written lines
 - **Hard stop:** 10,000 including package-local tests
@@ -18,6 +18,7 @@ edges.
 | `search-contracts` | C00 serialized records, IDs and reason registries | W0 | 7,500 | [`search-contracts.md`](../../swarm/assignments/search-contracts.md) |
 | `search-domain` | pure transition/eligibility/order/coverage kernel | W0 | 7,000 | [`search-domain.md`](../../swarm/assignments/search-domain.md) |
 | `search-ports` | shared vendor-neutral traits and conformance fakes | W0 | 5,500 | [`search-ports.md`](../../swarm/assignments/search-ports.md) |
+| `search-config` | pure configuration layering, redaction and reconfiguration planning | W1 | 5,500 | [`search-config.md`](../../swarm/assignments/search-config.md) |
 
 ## Runtime and control
 
@@ -95,8 +96,20 @@ edges.
 | `eliot-search-model-worker` | optional model worker | W10 | 4,500 | [`eliot-search-model-worker.md`](../../swarm/assignments/eliot-search-model-worker.md) |
 | `eliot-search-doc-worker` | optional document worker | W10 | 5,000 | [`eliot-search-doc-worker.md`](../../swarm/assignments/eliot-search-doc-worker.md) |
 
+## Registry extensions
+
+`swarm/crates.toml` may additionally bind a package to:
+
+- a package-local `FUNCTIONS.md` operation contract;
+- one or more capability-owned configuration packets under `config/sections/`;
+- an external-artifact qualification packet such as `qualification/qdrant/W3_QUALIFICATION.md`.
+
+Those paths are part of the bounded writer read set but do not authorize implementation. Current
+authorization remains solely in `swarm/launch-state.toml`.
+
 ## Package-count and dependency rule
 
 Every package must represent a real dependency, replacement, security, runtime, test or context
 boundary. Family directories never gain forwarding crates. Adding a package requires one atomic
-integration change covering Cargo, registry, assignment, ownership, fixtures and launch topology.
+integration change covering Cargo, registry, assignment, ownership, fixtures, configuration ownership
+and launch topology.

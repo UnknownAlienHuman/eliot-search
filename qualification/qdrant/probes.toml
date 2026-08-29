@@ -1,0 +1,223 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[[probe]]
+id = "authenticated_loopback_health"
+owner = "supervisor"
+mandatory = true
+purpose = "Authenticated health succeeds only through loopback and the generated secret lease."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "artifact_process_identity"
+owner = "supervisor"
+mandatory = true
+purpose = "PID, executable path, SHA-256, build identity, incarnation and data root all match."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "job_object_acl_shutdown"
+owner = "supervisor"
+mandatory = true
+purpose = "Filesystem/process ACL and Job Object containment terminate the child with daemon shutdown."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "strict_unindexed_retrieve_rejected"
+owner = "bridge"
+mandatory = true
+purpose = "Strict mode rejects retrieval filters on fields without a compatible payload index."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "strict_unindexed_update_rejected"
+owner = "bridge"
+mandatory = true
+purpose = "Strict mode rejects update/delete-by-filter on fields without a compatible payload index."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "schema_digest_equality"
+owner = "bridge"
+mandatory = true
+purpose = "Actual collection topology, vectors, payload indexes and strict settings equal the descriptor."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "signed_i64_epoch_range"
+owner = "bridge"
+mandatory = true
+purpose = "Signed integer range behavior accepts the architecture epoch domain and rejects invalid sentinels."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "missing_valid_until_open_end"
+owner = "bridge"
+mandatory = true
+purpose = "A missing valid_until field passes NOT(valid_until <= visible_epoch)."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "sparse_idf_modifier"
+owner = "bridge"
+mandatory = true
+purpose = "Sparse-vector IDF modifier is admitted and produces the qualified fixture result."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "independent_idf_population_filter"
+owner = "bridge"
+mandatory = true
+purpose = "IDF population can be filtered independently from retrieval while sharing base eligibility."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "idf_access_noninterference"
+owner = "bridge"
+mandatory = true
+purpose = "Changing inaccessible/staged/retired/denied points cannot change authorized result ordering."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "payload_index_completeness"
+owner = "bridge"
+mandatory = true
+purpose = "Every mandatory base-filter field has an admitted compatible payload index before ingestion."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "wait_true_mutation_ack"
+owner = "bridge"
+mandatory = true
+purpose = "Acknowledged upsert/close/delete is observable by exact readback before success."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "strong_write_ordering"
+owner = "bridge"
+mandatory = true
+purpose = "The selected client/server pair accepts and honors the strongest qualified ordering mode."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "exact_count_and_readback"
+owner = "bridge"
+mandatory = true
+purpose = "Exact IDs, counts, payload digest and vector-name set match the requested manifest."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "uuid_point_identity"
+owner = "bridge"
+mandatory = true
+purpose = "UUID point IDs preserve exact lookup and collision fixture behavior."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "one_shard_topology"
+owner = "bridge"
+mandatory = true
+purpose = "Collection is admitted only with shard_number=1 and matching scoring identity."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "lexical_document_query_golden"
+owner = "lexical"
+mandatory = true
+purpose = "Document and query vectors reproduce accepted token IDs/weights/profile digest."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "lexical_collision_corpus"
+owner = "lexical"
+mandatory = true
+purpose = "Collision corpus stays within accepted measured bounds and never becomes exact proof."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "point_collision_nonoverwrite"
+owner = "point_identity"
+mandatory = true
+purpose = "A projected UUID/full-digest mismatch blocks mutation and preserves the existing point."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "publication_failpoint_matrix"
+owner = "publication"
+mandatory = true
+purpose = "Every pre/post acknowledgement and control-commit crash point recovers without unsafe visibility."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "route_epoch_pin_watermark"
+owner = "epoch_pins"
+mandatory = true
+purpose = "Every active route/epoch pin blocks ordinary reclamation until release/expiry."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "exact_reclaim_resume"
+owner = "index_reclaimer"
+mandatory = true
+purpose = "Exact-ID batched delete resumes idempotently and never satisfies purge acknowledgement."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""
+
+[[probe]]
+id = "direct_mode_on_failure"
+owner = "daemon"
+mandatory = true
+purpose = "Any failed or unavailable mandatory probe disables indexed mode while reporting truthful DIRECT degradation."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+receipt_ref = ""

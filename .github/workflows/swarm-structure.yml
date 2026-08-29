@@ -8,10 +8,16 @@ on:
       - "bins/**/Cargo.toml"
       - "crates/**/AGENTS.md"
       - "bins/**/AGENTS.md"
+      - "crates/**/FUNCTIONS.md"
+      - "bins/**/FUNCTIONS.md"
+      - "config/**"
+      - "qualification/**"
       - "swarm/**"
       - "docs/contracts/p00/**"
+      - "docs/config/**"
       - "docs/handoff/**"
       - "tools/validate-swarm.ps1"
+      - "tools/validate-implementation-packets.ps1"
       - ".github/workflows/swarm-structure.yml"
   push:
     branches: [main]
@@ -19,9 +25,16 @@ on:
       - Cargo.toml
       - "crates/**/Cargo.toml"
       - "bins/**/Cargo.toml"
+      - "crates/**/FUNCTIONS.md"
+      - "bins/**/FUNCTIONS.md"
+      - "config/**"
+      - "qualification/**"
       - "swarm/**"
       - "docs/contracts/p00/**"
+      - "docs/config/**"
+      - "docs/handoff/**"
       - "tools/validate-swarm.ps1"
+      - "tools/validate-implementation-packets.ps1"
       - ".github/workflows/swarm-structure.yml"
   workflow_dispatch:
 
@@ -34,9 +47,9 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate scaffold topology
+    name: Validate topology and implementation packets
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,3 +60,8 @@ jobs:
         shell: pwsh
         run: |
           & ./tools/validate-swarm.ps1 -Json
+
+      - name: Validate functions, configuration and W3 qualification
+        shell: pwsh
+        run: |
+          & ./tools/validate-implementation-packets.ps1 -Json

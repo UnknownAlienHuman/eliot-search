@@ -67,6 +67,7 @@ full-baseline = ["wave7-lifecycle"]
 search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
+search-config.workspace = true
 search-runtime-owner.workspace = true
 search-os-secrets.workspace = true
 search-control-redb.workspace = true
