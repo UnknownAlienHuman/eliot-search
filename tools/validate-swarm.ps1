@@ -144,7 +144,7 @@ foreach ($package in $packages.Values) {
 
     $manifest = [IO.File]::ReadAllText($manifestPath)
     $manifestName = Get-TomlString (Get-Section $manifest "package") "name"
-    if ($manifestName -cne $package.Name) { Add-Error "Manifest name mismatch at $manifestPath: '$manifestName' != '$($package.Name)'." }
+    if ($manifestName -cne $package.Name) { Add-Error "Manifest name mismatch at ${manifestPath}: '$manifestName' != '$($package.Name)'." }
 
     $dependencySection = Get-Section $manifest "dependencies"
     $manifestInternalDeps = [System.Collections.Generic.List[string]]::new()
