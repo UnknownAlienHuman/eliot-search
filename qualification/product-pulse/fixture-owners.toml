@@ -1,0 +1,155 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P15"
+wave = 9
+gate = "G5"
+
+[fixture_defaults]
+evaluation_owner = "search-eval"
+accepted_fixture_ref = ""
+accepted_fixture_digest = ""
+status = "UNAVAILABLE"
+
+[[fixture_family]]
+id = "control_corpus_manifest"
+semantic_owner = "search-eval"
+consumers = ["search-eval"]
+purpose = "Corpus/run/oracle schema and immutable manifest."
+
+[[fixture_family]]
+id = "source_admission_canaries"
+semantic_owner = "search-source-admission"
+consumers = ["search-eval"]
+purpose = "Credential, private-key, sensitive-location and disclosure fixtures."
+
+[[fixture_family]]
+id = "source_identity_boundaries"
+semantic_owner = "search-source-identity"
+consumers = ["search-eval"]
+purpose = "Rename, hardlink, case, nested repository and submodule fixtures."
+
+[[fixture_family]]
+id = "revision_anchor_readback"
+semantic_owner = "search-revision-store"
+consumers = ["search-eval"]
+purpose = "Exact revision, digest, coordinates, multilingual and non-ASCII path fixtures."
+
+[[fixture_family]]
+id = "observation_gap_reconcile"
+semantic_owner = "search-source-reconcile"
+consumers = ["search-eval"]
+purpose = "Watcher overflow, reset, sleep/resume and reconciliation fixtures."
+
+[[fixture_family]]
+id = "saved_unsaved_overlay"
+semantic_owner = "search-overlay"
+consumers = ["search-eval"]
+purpose = "Overlay precedence, shadowing and non-persistence fixtures."
+
+[[fixture_family]]
+id = "rust_structure_cfg"
+semantic_owner = "search-code-enricher"
+consumers = ["search-eval"]
+purpose = "Rust structure, malformed and cfg-variant fixtures."
+
+[[fixture_family]]
+id = "subject_resolution_ambiguity"
+semantic_owner = "search-subject-resolver"
+consumers = ["search-eval"]
+purpose = "Renamed analogue, same-name false positive and ambiguity fixtures."
+
+[[fixture_family]]
+id = "comparison_lineage_roles"
+semantic_owner = "search-comparator"
+consumers = ["search-eval"]
+purpose = "Lineage collapse, evidence roles and non-normative comparison fixtures."
+
+[[fixture_family]]
+id = "exact_denominator_proof"
+semantic_owner = "search-exact"
+consumers = ["search-eval"]
+purpose = "Complete negative, unreadable and drift fixtures."
+
+[[fixture_family]]
+id = "lexical_vectors"
+semantic_owner = "search-lexical"
+consumers = ["search-eval"]
+purpose = "Qualified lexical document/query vectors and collision corpus."
+
+[[fixture_family]]
+id = "qdrant_process_windows"
+semantic_owner = "search-qdrant-supervisor"
+consumers = ["search-eval"]
+purpose = "Process identity, restart, ACL and Job Object fixtures."
+
+[[fixture_family]]
+id = "qdrant_data_schema"
+semantic_owner = "search-qdrant-bridge"
+consumers = ["search-eval"]
+purpose = "Schema, filtered-IDF, strict-mode, readback and response fixtures."
+
+[[fixture_family]]
+id = "point_identity_collision"
+semantic_owner = "search-point-identity"
+consumers = ["search-eval"]
+purpose = "UUID projection/full-digest collision non-overwrite fixture."
+
+[[fixture_family]]
+id = "publication_failpoints"
+semantic_owner = "search-publication"
+consumers = ["search-eval"]
+purpose = "Complete publication kill/reopen matrix."
+
+[[fixture_family]]
+id = "epoch_pins_reclaim"
+semantic_owner = "search-epoch-pins"
+consumers = ["search-eval"]
+purpose = "Route/epoch pin and watermark fixtures."
+
+[[fixture_family]]
+id = "ordinary_index_reclaim"
+semantic_owner = "search-index-reclaimer"
+consumers = ["search-eval"]
+purpose = "Exact retired-point deletion/recovery fixtures."
+
+[[fixture_family]]
+id = "access_revocation"
+semantic_owner = "search-access"
+consumers = ["search-eval"]
+purpose = "Grant, live deny, contamination and checkpoint fixtures."
+
+[[fixture_family]]
+id = "handles_continuations"
+semantic_owner = "search-handles"
+consumers = ["search-eval"]
+purpose = "Handle opacity, reauthorization, TTL and revocation fixtures."
+
+[[fixture_family]]
+id = "continuation_lifecycle"
+semantic_owner = "search-continuation"
+consumers = ["search-eval"]
+purpose = "Continuation expiry, restart and pin-release fixtures."
+
+[[fixture_family]]
+id = "retention_purge_restore"
+semantic_owner = "search-retention"
+consumers = ["search-eval"]
+purpose = "CAS sweep, purge receipt and restore non-resurrection fixtures."
+
+[[fixture_family]]
+id = "provider_protocol"
+semantic_owner = "search-provider-protocol"
+consumers = ["search-eval"]
+purpose = "Frame, replay, cancellation, in-flight and disconnect stress fixtures."
+
+[[fixture_family]]
+id = "generic_client_edge"
+semantic_owner = "integration-owner"
+consumers = ["search-eval"]
+purpose = "Authenticated end-to-end provider/CLI round-trip fixture."
+
+[[fixture_family]]
+id = "windows_resource_driver"
+semantic_owner = "integration-owner"
+consumers = ["search-eval"]
+purpose = "Windows process/resource/fault sampling driver."

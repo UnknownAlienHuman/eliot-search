@@ -1,0 +1,337 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P15"
+wave = 9
+gate = "G5"
+status = "SCHEMA_ONLY"
+quality_acceptance_policy_status = "UNSELECTED"
+quality_policy_must_precede_candidate_results = true
+incompatible_run_aggregation_allowed = false
+hard_blockers_may_be_weighted_away = false
+
+[percentiles]
+required = ["p50", "p95"]
+minimum_measured_samples = 30
+interpolation = "nearest_rank"
+missing_or_insufficient = "UNAVAILABLE"
+
+[candidate_slo]
+status = "ARCHITECTURE_TARGET_NOT_MEASURED"
+warm_exact_keyword_navigation_p95_ms = 100
+warm_single_scope_lexical_p95_ms = 200
+warm_cross_repository_comparison_p95_ms = 700
+first_useful_progressive_card_ms = 300
+
+[quality_policy]
+policy_ref = "UNSELECTED"
+policy_digest = ""
+primary_metrics = []
+secondary_metrics = []
+non_inferiority_margins = []
+minimum_practical_effects = []
+allowed_resource_regressions = []
+case_family_weights = []
+dominates_rule = "UNSELECTED"
+complements_rule = "UNSELECTED"
+
+[metric_defaults]
+missing = "UNAVAILABLE"
+aggregation = "pre_registered_by_metric"
+
+[[metric]]
+id = "correct_grounded_action_rate"
+unit = "ratio"
+direction = "higher"
+denominator = "case"
+class = "required_quality"
+hard_blocker = false
+description = "Correct grounded action under the declared oracle."
+
+[[metric]]
+id = "oracle_definition_recall"
+unit = "ratio"
+direction = "higher"
+denominator = "oracle_definition"
+class = "required_quality"
+hard_blocker = false
+description = "Recall of oracle definitions."
+
+[[metric]]
+id = "oracle_test_recall"
+unit = "ratio"
+direction = "higher"
+denominator = "oracle_test"
+class = "required_quality"
+hard_blocker = false
+description = "Recall of decisive tests."
+
+[[metric]]
+id = "oracle_documentation_recall"
+unit = "ratio"
+direction = "higher"
+denominator = "oracle_documentation"
+class = "required_quality"
+hard_blocker = false
+description = "Recall of relevant documentation."
+
+[[metric]]
+id = "oracle_caller_recall"
+unit = "ratio"
+direction = "higher"
+denominator = "oracle_caller"
+class = "required_quality"
+hard_blocker = false
+description = "Recall of relevant callers."
+
+[[metric]]
+id = "oracle_configuration_recall"
+unit = "ratio"
+direction = "higher"
+denominator = "oracle_configuration"
+class = "required_quality"
+hard_blocker = false
+description = "Recall of configuration variants."
+
+[[metric]]
+id = "false_analogue_rate"
+unit = "ratio"
+direction = "lower"
+denominator = "analogue_decision"
+class = "required_quality"
+hard_blocker = false
+description = "False analogue/equivalence rate."
+
+[[metric]]
+id = "ambiguity_honesty_rate"
+unit = "ratio"
+direction = "higher"
+denominator = "ambiguous_case"
+class = "required_quality"
+hard_blocker = false
+description = "Material ambiguity preserved rather than forced resolution."
+
+[[metric]]
+id = "coverage_gap_honesty_rate"
+unit = "ratio"
+direction = "higher"
+denominator = "incomplete_case"
+class = "required_quality"
+hard_blocker = false
+description = "Incomplete scope reported truthfully."
+
+[[metric]]
+id = "complete_negative_false_claim_count"
+unit = "count"
+direction = "zero"
+denominator = "complete_negative_claim"
+class = "hard_correctness"
+hard_blocker = true
+description = "False complete-negative claims."
+
+[[metric]]
+id = "stale_leakage_count"
+unit = "count"
+direction = "zero"
+denominator = "emitted_candidate"
+class = "hard_safety"
+hard_blocker = true
+description = "Stale/currentness-overclaim emissions."
+
+[[metric]]
+id = "access_leakage_count"
+unit = "count"
+direction = "zero"
+denominator = "request_or_trace"
+class = "hard_safety"
+hard_blocker = true
+description = "Unauthorized content/metadata/ranking influence."
+
+[[metric]]
+id = "secret_content_leakage_count"
+unit = "count"
+direction = "zero"
+denominator = "audited_surface"
+class = "hard_safety"
+hard_blocker = true
+description = "Secret/source/query/token/path canary leaks."
+
+[[metric]]
+id = "source_read_count"
+unit = "count"
+direction = "lower"
+denominator = "case"
+class = "efficiency"
+hard_blocker = false
+description = "Source read operations."
+
+[[metric]]
+id = "source_read_bytes"
+unit = "bytes"
+direction = "lower"
+denominator = "case"
+class = "efficiency"
+hard_blocker = false
+description = "Source bytes read."
+
+[[metric]]
+id = "model_input_tokens"
+unit = "tokens"
+direction = "lower"
+denominator = "case"
+class = "efficiency"
+hard_blocker = false
+description = "Input tokens for model-using baseline; N/A otherwise."
+
+[[metric]]
+id = "model_output_tokens"
+unit = "tokens"
+direction = "lower"
+denominator = "case"
+class = "efficiency"
+hard_blocker = false
+description = "Output tokens for model-using baseline; N/A otherwise."
+
+[[metric]]
+id = "time_to_first_correct_grounded_action_ms"
+unit = "milliseconds"
+direction = "lower"
+denominator = "case"
+class = "required_quality"
+hard_blocker = false
+description = "Latency to first correct grounded action."
+
+[[metric]]
+id = "request_latency_ms"
+unit = "milliseconds"
+direction = "lower"
+denominator = "request"
+class = "performance"
+hard_blocker = false
+description = "End-to-end request latency."
+
+[[metric]]
+id = "first_useful_progressive_card_ms"
+unit = "milliseconds"
+direction = "lower"
+denominator = "request"
+class = "performance"
+hard_blocker = false
+description = "Accepted first useful card timer."
+
+[[metric]]
+id = "process_cpu_ms"
+unit = "milliseconds"
+direction = "lower"
+denominator = "case"
+class = "resource"
+hard_blocker = false
+description = "Process CPU time."
+
+[[metric]]
+id = "system_cpu_percent"
+unit = "percent"
+direction = "lower"
+denominator = "sample"
+class = "resource"
+hard_blocker = false
+description = "System CPU utilization."
+
+[[metric]]
+id = "working_set_bytes"
+unit = "bytes"
+direction = "lower"
+denominator = "sample"
+class = "resource"
+hard_blocker = false
+description = "Process working set."
+
+[[metric]]
+id = "private_bytes"
+unit = "bytes"
+direction = "lower"
+denominator = "sample"
+class = "resource"
+hard_blocker = false
+description = "Process private bytes."
+
+[[metric]]
+id = "commit_bytes"
+unit = "bytes"
+direction = "lower"
+denominator = "sample"
+class = "resource"
+hard_blocker = false
+description = "Process commit charge."
+
+[[metric]]
+id = "disk_bytes_written"
+unit = "bytes"
+direction = "lower"
+denominator = "case"
+class = "resource"
+hard_blocker = false
+description = "Disk bytes written."
+
+[[metric]]
+id = "disk_bytes_read"
+unit = "bytes"
+direction = "lower"
+denominator = "case"
+class = "resource"
+hard_blocker = false
+description = "Disk bytes read."
+
+[[metric]]
+id = "background_cpu_duty_percent"
+unit = "percent"
+direction = "lower"
+denominator = "background_window"
+class = "resource"
+hard_blocker = false
+description = "Background CPU duty cycle."
+
+[[metric]]
+id = "queue_depth_peak"
+unit = "count"
+direction = "lower"
+denominator = "case"
+class = "resource"
+hard_blocker = false
+description = "Peak bounded queue depth."
+
+[[metric]]
+id = "resource_exhausted_count"
+unit = "count"
+direction = "informational"
+denominator = "case"
+class = "resource"
+hard_blocker = false
+description = "Typed saturation/rejection count."
+
+[[metric]]
+id = "recovery_correctness_rate"
+unit = "ratio"
+direction = "one"
+denominator = "fault_cell"
+class = "hard_correctness"
+hard_blocker = true
+description = "Correct recovered state across required cells."
+
+[[metric]]
+id = "recovery_latency_ms"
+unit = "milliseconds"
+direction = "lower"
+denominator = "fault_cell"
+class = "performance"
+hard_blocker = false
+description = "Latency to accepted recovered/degraded/quarantined state."
+
+[[metric]]
+id = "protocol_resource_leak_count"
+unit = "count"
+direction = "zero"
+denominator = "stress_run"
+class = "hard_safety"
+hard_blocker = true
+description = "Leaked guards/pins/windows/requests after stress."

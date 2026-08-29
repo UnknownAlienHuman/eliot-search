@@ -1,0 +1,133 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P15"
+wave = 9
+gate = "G5"
+status = "DESIGNED_NOT_EXECUTED"
+implementation_authorized = false
+product_accepted = false
+optional_depth_authorized = false
+
+[prerequisites]
+accepted_g4_receipt_ref = ""
+accepted_w7_lifecycle_receipt_ref = ""
+accepted_w8_generic_edge_receipt_ref = ""
+accepted_dependency_handoff_digest = ""
+all_required = true
+
+[run_identity]
+run_id = ""
+repository_commit = ""
+dependency_api_digest_set = ""
+configuration_fingerprint = ""
+corpus_digest = ""
+metric_registry_digest = ""
+acceptance_policy_digest = ""
+windows_environment_digest = ""
+run_seed = ""
+status = "UNFROZEN"
+
+[baseline_a]
+name = "raw_grep_read"
+status = "UNSELECTED"
+artifact_ref = ""
+artifact_digest = ""
+driver_ref = ""
+driver_digest = ""
+configuration_digest = ""
+network_allowed = false
+
+[baseline_b]
+name = "comparison_tool"
+status = "UNSELECTED"
+artifact_ref = ""
+artifact_digest = ""
+driver_ref = ""
+driver_digest = ""
+configuration_digest = ""
+network_allowed = false
+
+[candidate_c]
+name = "eliot_search"
+status = "UNAVAILABLE"
+daemon_artifact_ref = ""
+daemon_artifact_digest = ""
+cli_artifact_ref = ""
+cli_artifact_digest = ""
+profile = "DIRECT_LEXICAL_CODE_BASELINE"
+optional_profiles_enabled = false
+network_allowed = false
+
+[windows_environment]
+status = "UNSELECTED"
+os_edition_version_build = ""
+architecture = "x86_64"
+cpu_identity = ""
+logical_cpu_count = 0
+memory_bytes = 0
+storage_identity = ""
+filesystem = "NTFS"
+free_bytes_at_start = 0
+gpu_identity = ""
+driver_identity = ""
+power_plan = ""
+power_source = ""
+virtualization_state = ""
+antivirus_state = ""
+indexer_state = ""
+pagefile_state = ""
+locale = ""
+timezone = ""
+thermal_precondition_ref = ""
+background_process_policy_ref = ""
+
+[experiment]
+blocked_paired_execution = true
+randomized_order = true
+seed_captured = true
+warmup_observations_preserved = true
+warmup_excluded_from_measured = true
+cold_and_warm_separate = true
+preparation_cost_separate = true
+retry_preserves_original_failure = true
+minimum_measured_iterations = 30
+default_warmup_iterations = 5
+network_allowed = false
+
+[hard_safety]
+stale_leakage_tolerance = 0
+access_leakage_tolerance = 0
+secret_content_leakage_tolerance = 0
+false_complete_negative_tolerance = 0
+oracle_feedback_allowed = false
+hidden_case_removal_allowed = false
+failed_observation_omission_allowed = false
+hard_blocker_weighting_allowed = false
+self_acceptance_allowed = false
+prose_only_evidence_allowed = false
+
+[verdict]
+state = "DESIGNED_NOT_EXECUTED"
+allowed_terminal = ["ACCEPTED", "REJECTED"]
+allowed_nonterminal = [
+  "INCOMPLETE",
+  "BLOCKED_SAFETY",
+  "BLOCKED_CORRECTNESS",
+  "BLOCKED_REPRODUCIBILITY",
+  "BLOCKED_PERFORMANCE",
+  "BLOCKED_QUALITY",
+]
+accepted_report_ref = ""
+accepted_report_digest = ""
+independent_reviewer_receipt_ref = ""
+
+[selection]
+latest_allowed = false
+version_range_allowed = false
+floating_revision_allowed = false
+mutable_fixture_allowed = false
+criteria_after_candidate_allowed = false
+self_review_allowed = false
+unit_tests_only_acceptance_allowed = false
+compilation_only_acceptance_allowed = false
