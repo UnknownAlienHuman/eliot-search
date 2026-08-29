@@ -1,0 +1,115 @@
+schema_version = 1
+project = "eliot-search"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+raw_output_required = true
+prose_only_evidence = "reject"
+
+[[gate]]
+id = "G0"
+stage = "P00"
+wave = 0
+name = "contract"
+required_evidence = [
+  "architecture_hash_challenge",
+  "workspace_registry_assignment_parity",
+  "dependency_graph_acyclic",
+  "dependency_direction_policy",
+  "recipe_set_exact",
+  "epoch_and_sentinel_contract",
+  "canonical_public_schema_fixtures",
+  "reason_code_registry",
+  "contract_domain_tests",
+  "dependency_source_and_license_policy",
+]
+
+[[gate]]
+id = "G1"
+stage = "P01-P04"
+wave = 2
+name = "direct"
+required_evidence = [
+  "single_data_root_owner",
+  "control_journal_migration_and_reopen",
+  "hot_query_no_control_write",
+  "source_admission_deny_default",
+  "source_identity_and_cutover",
+  "stable_no_execute_read",
+  "residency_aware_revision_store",
+  "anchor_coordinate_fixtures",
+  "exact_revision_readback",
+]
+
+[[gate]]
+id = "G2"
+stage = "P05-P08"
+wave = 4
+name = "lexical"
+required_evidence = [
+  "qdrant_exact_artifact_and_process_qualification",
+  "qdrant_capability_and_schema_suite",
+  "lexical_golden_vectors",
+  "point_identity_collision_nonoverwrite",
+  "publication_failpoint_matrix",
+  "epoch_pin_and_exact_reclaim",
+  "access_idf_noninterference",
+  "bounded_deterministic_lexical_cards",
+]
+
+[[gate]]
+id = "G3"
+stage = "P09-P12"
+wave = 6
+name = "code_and_exact"
+required_evidence = [
+  "observation_gap_currentness_denial",
+  "unsaved_bytes_nonpersistence",
+  "rust_structure_assurance",
+  "subject_ambiguity_and_lineage_compare",
+  "exact_complete_scope_proof",
+  "exact_drift_unreadable_cancel_failure",
+]
+
+[[gate]]
+id = "G4"
+stage = "P14"
+wave = 8
+name = "generic_client_edge"
+required_evidence = [
+  "provider_frame_replay_cancel_limits",
+  "authenticated_binding_and_grant",
+  "capability_descriptor_filtering",
+  "handle_expansion_reauthorization",
+  "generic_request_plan_candidate_roundtrip",
+]
+optional_evidence = [
+  "eliot_adapter_mapping_when_enabled",
+  "research_export_roundtrip_when_enabled",
+]
+
+[[gate]]
+id = "G5"
+stage = "P15"
+wave = 9
+name = "product_acceptance"
+required_evidence = [
+  "control_corpus_abc_results",
+  "latency_and_resource_report",
+  "fault_and_recovery_matrix",
+  "source_admission_and_content_leakage_audit",
+  "provider_protocol_stress",
+  "explicit_product_pulse_verdict",
+]
+
+[[gate]]
+id = "G6"
+stage = "P16-P18"
+wave = 10
+name = "optional_depth"
+requires_accepted_gate = "G5"
+required_evidence = [
+  "dedicated_optional_profile_adr",
+  "exact_provider_artifact_qualification",
+  "measured_material_benefit",
+  "removal_or_uninstall_fallback",
+  "migration_and_rollback_when_applicable",
+]
