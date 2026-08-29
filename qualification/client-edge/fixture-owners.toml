@@ -1,0 +1,55 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P14"
+
+[[fixture]]
+area = "frame_version_sequence_cancel"
+owner = "search-provider-protocol"
+consumers = ["eliot-searchd", "eliot-search", "search-eliot-adapter"]
+
+[[fixture]]
+area = "pairing_binding_revocation"
+owner = "search-provider-protocol"
+consumers = ["eliot-searchd", "eliot-search", "search-handles", "search-continuation"]
+
+[[fixture]]
+area = "binding_filtered_capability_descriptor"
+owner = "search-provider-protocol"
+consumers = ["eliot-searchd", "eliot-search", "search-eliot-adapter"]
+
+[[fixture]]
+area = "standalone_grant_and_generic_roundtrip"
+owner = "eliot-searchd"
+consumers = ["eliot-search", "search-provider-protocol", "search-eval"]
+
+[[fixture]]
+area = "handle_expansion_reauthorization"
+owner = "search-handles"
+consumers = ["search-provider-protocol", "eliot-searchd", "eliot-search", "search-eliot-adapter"]
+
+[[fixture]]
+area = "continuation_expiry_disconnect"
+owner = "search-continuation"
+consumers = ["search-provider-protocol", "eliot-search"]
+
+[[fixture]]
+area = "standalone_cli_render_and_exit"
+owner = "eliot-search"
+consumers = ["search-eval"]
+
+[[fixture]]
+area = "eliot_mapping_and_authority_guard"
+owner = "search-eliot-adapter"
+consumers = ["eliot-searchd", "search-eval"]
+optional = true
+
+[[fixture]]
+area = "eliotr_normalized_v1_export"
+owner = "search-research-export-adapter"
+consumers = ["eliot-searchd", "search-eval"]
+optional = true
+
+[[fixture]]
+area = "client_edge_leakage_noninterference"
+owner = "search-eval"
+consumers = ["search-provider-protocol", "eliot-searchd", "eliot-search", "search-eliot-adapter", "search-research-export-adapter"]

@@ -1,0 +1,156 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+stage = "P14"
+wave = 8
+gate = "G4"
+status = "BLOCKED"
+launch_authority = "swarm/launch-state.toml"
+contract_manifest = "docs/client/manifest.toml"
+cross_package_contract = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+settings_schema = "config/w8-client-edge.toml"
+settings_contract = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+qualification = "qualification/client-edge/W8_QUALIFICATION.md"
+probe_registry = "qualification/client-edge/probes.toml"
+gate_map = "qualification/client-edge/gate-map.toml"
+requires_accepted_gate = "G3"
+requires_accepted_wave = 7
+requires_generic_query_handoff = true
+requires_lifecycle_hardening_handoff = true
+ordinary_agent_architecture_access = "exception-only"
+
+# A W8 ticket supplies one package block only, accepted dependency handoffs/API digests and named fixture
+# owners. Presence here is not launch authorization.
+
+[[packet]]
+package = "search-provider-protocol"
+role = "generic_edge"
+optional = false
+assignment = "swarm/assignments/search-provider-protocol.md"
+functions = "crates/search-provider-protocol/FUNCTIONS.md"
+hardening = "crates/search-provider-protocol/W8_HARDENING.md"
+cross_sections = ["2", "3", "4", "5", "6", "7", "8", "9", "14", "15", "17", "18"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-config",
+  "search-runtime-owner",
+  "search-control-redb",
+  "search-access",
+  "search-handles",
+  "search-continuation",
+]
+
+[[packet]]
+package = "eliot-searchd"
+role = "generic_edge_composition"
+optional = false
+assignment = "swarm/assignments/eliot-searchd.md"
+integration = "bins/eliot-searchd/W8_INTEGRATION.md"
+cross_sections = ["1", "3", "4", "5", "6", "7", "9", "10", "15", "16", "17", "18"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-config",
+  "search-runtime-owner",
+  "search-control-redb",
+  "search-provider-protocol",
+  "search-access",
+  "search-query-planner",
+  "search-retrieval-executor",
+  "search-candidate-validator",
+  "search-result-projector",
+  "search-handles",
+  "search-continuation",
+  "search-retention",
+]
+
+[[packet]]
+package = "eliot-search"
+role = "standalone_client"
+optional = false
+assignment = "swarm/assignments/eliot-search.md"
+functions = "bins/eliot-search/FUNCTIONS.md"
+cross_sections = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "14", "15", "17", "18"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-ports",
+  "search-config",
+  "search-provider-protocol",
+]
+
+[[packet]]
+package = "search-eliot-adapter"
+role = "optional_eliot_leaf"
+optional = true
+enabled_by_default = false
+assignment = "swarm/assignments/search-eliot-adapter.md"
+functions = "crates/search-eliot-adapter/FUNCTIONS.md"
+cross_sections = ["1", "2", "4", "6", "7", "8", "9", "11", "13", "14", "15", "16", "17", "18"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-provider-protocol",
+  "search-access",
+  "search-handles",
+]
+activation_requires = [
+  "compiled feature",
+  "explicit config",
+  "accepted generic edge",
+  "accepted ELIOT mapping fixture",
+  "binding authorization",
+]
+
+[[packet]]
+package = "search-research-export-adapter"
+role = "optional_research_export_leaf"
+optional = true
+enabled_by_default = false
+assignment = "swarm/assignments/search-research-export-adapter.md"
+functions = "crates/search-research-export-adapter/FUNCTIONS.md"
+cross_sections = ["1", "2", "7", "9", "12", "13", "14", "15", "16", "17", "18"]
+accepted_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-provider-protocol",
+  "search-access",
+  "search-revision-store",
+  "search-retention",
+]
+activation_requires = [
+  "compiled feature",
+  "explicit config",
+  "accepted generic edge",
+  "accepted normalized export fixture",
+  "binding authorization",
+]
+
+[review]
+require_exact_dependency_api_digests = true
+require_binding_filtered_capability_noninterference = true
+require_no_reverse_authority_or_store_access = true
+require_handle_expansion_live_reauthorization = true
+require_generic_result_without_client_disposition = true
+require_optional_profiles_disabled_by_default = true
+require_research_native_readback_and_independent_wire_digest = true
+require_unknown_mutation_outcome_recovery = true
+require_raw_evidence_and_independent_review = true
+require_line_budget = true
+
+[gate_evidence]
+required = [
+  "provider_frame_replay_cancel_limits",
+  "authenticated_binding_and_grant",
+  "capability_descriptor_filtering",
+  "handle_expansion_reauthorization",
+  "generic_request_plan_candidate_roundtrip",
+]
+optional_when_enabled = [
+  "eliot_adapter_mapping_when_enabled",
+  "research_export_roundtrip_when_enabled",
+]

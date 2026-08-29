@@ -1,0 +1,529 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P14"
+wave = 8
+gate = "G4"
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE", "DISABLED"]
+raw_output_required_for_pass = true
+independent_review_required_for_pass = true
+all_generic_mandatory_must_pass = true
+optional_profile_probe_rule = "PASS required only when profile enabled; otherwise DISABLED"
+
+[[probe]]
+id = "frame_length_and_json_golden"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Exact u32-le framing and canonical UTF-8 JSON round trip."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "oversize_before_allocation"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Oversize frame is rejected before unbounded body allocation."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "malformed_unknown_version_tag"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Malformed UTF-8/JSON, unknown load-bearing tags and major-version mismatch fail closed."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "connection_sequence_replay"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Duplicate, replayed and regressed connection sequences are rejected."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "in_flight_ceiling"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Thirty-two request ceiling is enforced without unbounded queueing."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "progress_terminal_ordering"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Progress is monotonic and exactly one terminal event is emitted."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "cancel_idempotent"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Cancellation is idempotent and does not fabricate rollback."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "disconnect_cleanup"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Disconnect cancels request-local work and releases request pins/resources."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "pairing_required_beyond_acl"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Pipe ACL or local user alone cannot authenticate a binding."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "pairing_single_use_replay"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Pairing challenge is single-use and replay-safe."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "pairing_role_peer_incarnation_expiry"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Role, peer, installation incarnation and expiry bindings are enforced."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "binding_commit_unknown_outcome"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Timeout around binding commit is recovered by stable operation identity and digest."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "binding_revocation_ordered"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Durable revocation, live snapshot, drain, cancel and dependent invalidation precede acknowledgement."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "standalone_grant_scope_never_widens"
+owner = "eliot-searchd"
+profile = "generic"
+mandatory = true
+purpose = "Server-minted standalone grant intersects authoritative scope and requested ceiling only narrows."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "descriptor_authentication_required"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Capability descriptor cannot be fetched before authenticated binding."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "descriptor_visible_memberships_only"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Descriptor contains only binding-visible opaque memberships/readiness."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "descriptor_hidden_scope_noninterference"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Hidden source/membership changes do not affect another binding descriptor bytes/counts/reasons."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "descriptor_stale_never_authorizes"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Cached/stale descriptor cannot bypass current grant/profile/access checks."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "optional_handler_descriptor_coherence"
+owner = "eliot-searchd"
+profile = "generic"
+mandatory = true
+purpose = "Published profile availability and routed handler existence are coherent at every generation."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_recipe_registry_closure"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Exactly eleven P00 recipes are admitted; adapter-specific or unversioned recipes are rejected."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "generic_navigation_roundtrip"
+owner = "eliot-searchd"
+profile = "generic"
+mandatory = true
+purpose = "Typed locate/find request reaches server plan and bounded validated candidates."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "generic_exact_proof_roundtrip"
+owner = "eliot-searchd"
+profile = "generic"
+mandatory = true
+purpose = "Compile/execute exact proof report preserves frozen denominator and failure semantics."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "generic_expand_handle_roundtrip"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "expand_handle@1 routes through owner reauthorization and bounded source readback."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "result_no_client_disposition"
+owner = "search-provider-protocol"
+profile = "generic"
+mandatory = true
+purpose = "Result carries no client memory, admission, finish, completion or reusable authorization disposition."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "client_owned_evidence_import_no_search_authority"
+owner = "eliot-searchd"
+profile = "generic"
+mandatory = true
+purpose = "Client snapshots/imports verified evidence under client governance; Search writes/decides nothing canonical."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "foreign_binding_handle_denied"
+owner = "search-handles"
+profile = "generic"
+mandatory = true
+purpose = "Foreign binding token fails without existence disclosure."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "revocation_during_expansion"
+owner = "search-handles"
+profile = "generic"
+mandatory = true
+purpose = "Grant/binding revocation before emission blocks expansion."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "purge_during_expansion"
+owner = "search-handles"
+profile = "generic"
+mandatory = true
+purpose = "Live purge fence before emission blocks expansion."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "view_residency_drift_during_expansion"
+owner = "search-handles"
+profile = "generic"
+mandatory = true
+purpose = "Owner/view/residency/retention drift prevents stale byte emission."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "expired_continuation_no_silent_refresh"
+owner = "search-continuation"
+profile = "generic"
+mandatory = true
+purpose = "Expired/drifted continuation returns explicit refresh gap and never switches corpus silently."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "standalone_cli_no_store_dependency"
+owner = "eliot-search"
+profile = "generic"
+mandatory = true
+purpose = "CLI dependency/runtime trace has no redb/CAS/Qdrant/secret-store path."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "standalone_partial_render_and_exit"
+owner = "eliot-search"
+profile = "generic"
+mandatory = true
+purpose = "Human/JSON output preserves coverage gaps and partial/degraded has explicit status."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "default_edge_leakage_audit"
+owner = "search-eval"
+profile = "generic"
+mandatory = true
+purpose = "Logs/metrics/traces/errors/crash attachments expose no source/query/tokens/hidden scope."
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "eliot_disabled_by_default"
+owner = "search-eliot-adapter"
+profile = "eliot"
+mandatory = false
+required_when_enabled = true
+purpose = "ELIOT leaf is absent/disabled without complete activation closure."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "eliot_scope_disclosure_mapping"
+owner = "search-eliot-adapter"
+profile = "eliot"
+mandatory = false
+required_when_enabled = true
+purpose = "WorkScope/disclosure maps to requested scope only and never widens authority."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "eliot_view_state_fence_mapping"
+owner = "search-eliot-adapter"
+profile = "eliot"
+mandatory = false
+required_when_enabled = true
+purpose = "SourceView/WorkspaceViewRevision/StateFence mapping preserves every required dependency."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "eliot_result_no_memory_disposition"
+owner = "search-eliot-adapter"
+profile = "eliot"
+mandatory = false
+required_when_enabled = true
+purpose = "Mapped result preserves evidence metadata and has no memory/admission/finish disposition."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "eliot_provider_failure_narrows_coverage"
+owner = "search-eliot-adapter"
+profile = "eliot"
+mandatory = false
+required_when_enabled = true
+purpose = "Search failure narrows provider coverage without failing unrelated ELIOT work."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "eliot_no_reverse_write_or_credentials"
+owner = "search-eliot-adapter"
+profile = "eliot"
+mandatory = false
+required_when_enabled = true
+purpose = "No canonical credential/store/reverse-write channel exists."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "eliot_core_api_digest_unchanged"
+owner = "search-eliot-adapter"
+profile = "eliot"
+mandatory = false
+required_when_enabled = true
+purpose = "Enabling leaf does not change Search contracts/domain API digest."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_disabled_by_default"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Research export leaf is absent/disabled without complete activation closure."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_manifest_digest_golden"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Exact eliotr.normalized.v1 manifest body/schema digest matches architecture."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_native_to_wire_digest_independent"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Native BLAKE3 is verified and wire SHA-256 is independently computed from exact bytes."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_unknown_field_rejected"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Unknown load-bearing manifest fields fail closed."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_unsaved_export_rejected"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Unsaved/current-path/Qdrant payload cannot enter durable export absent admitted snapshot."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_ordinary_export_no_owner_transfer"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Federated/import export omits cutover receipt and preserves Search ownership."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_cutover_receipt_exact"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Cutover mode accepts only completed exact source-owner cutover receipt/mapping."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_bundle_path_safety"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Traversal/absolute/device/duplicate/symlink/hardlink/reparse and limit corpus is rejected."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_cross_domain_reuse_rejected"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "No cross-residency CAS dedup or key reuse."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "research_publish_unknown_outcome_recovery"
+owner = "search-research-export-adapter"
+profile = "research"
+mandatory = false
+required_when_enabled = true
+purpose = "Timeout/cancel around final publish is classified by exact bundle readback or cleanup."
+result = "DISABLED"
+raw_output_ref = ""
+reviewer_receipt_ref = ""

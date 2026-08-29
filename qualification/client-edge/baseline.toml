@@ -1,0 +1,111 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P14"
+wave = 8
+gate = "G4"
+status = "UNQUALIFIED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE", "DISABLED"]
+raw_output_required_for_pass = true
+independent_review_required_for_pass = true
+prose_only_evidence = "reject"
+
+[protocol]
+transport = "windows_named_pipe"
+frame_format = "u32_le_length_plus_utf8_json"
+max_frame_bytes = 8388608
+max_in_flight_per_connection = 32
+compression = false
+fragmented_assembly = false
+monotonic_connection_sequence = true
+monotonic_event_sequence = true
+exactly_one_terminal_event = true
+cancellation_idempotent = true
+mutual_authentication_required = true
+pairing_proof_required = true
+acl_alone_is_authentication = false
+
+[binding]
+challenge_single_use = true
+challenge_ttl_bounded = true
+challenge_peer_role_bound = true
+challenge_peer_identity_bound = true
+challenge_installation_incarnation_bound = true
+binding_commit_before_ack = true
+live_revocation_snapshot_before_ack = true
+dependent_invalidation_before_revocation_ack = true
+binding_possession_grants_source_access = false
+
+[capabilities]
+binding_filtered = true
+hidden_membership_names_visible = false
+hidden_membership_counts_visible = false
+availability_grants_authority = false
+stale_descriptor_bypasses_live_checks = false
+handler_descriptor_coherence_required = true
+
+[requests]
+exact_core_recipe_count = 11
+adapter_specific_core_recipe_allowed = false
+client_scope_is_authority = false
+client_mints_grant = false
+raw_vendor_filter_allowed = false
+result_contains_client_disposition = false
+result_contains_reusable_authorization = false
+provider_failure_narrows_coverage = true
+
+[handles]
+opaque_non_self_describing_token = true
+possession_grants_access = false
+live_binding_grant_owner_view_residency_purge_recheck = true
+recheck_immediately_before_emission = true
+silent_continuation_refresh = false
+ephemeral_disconnect_cleanup = true
+
+[standalone_cli]
+direct_store_access = false
+server_mints_bounded_grant = true
+partial_or_degraded_exit_zero = false
+material_gaps_may_be_hidden = false
+
+[client_authority]
+search_writes_client_canonical_store = false
+search_decides_client_admission = false
+search_decides_client_finish = false
+search_deletes_client_canonical_evidence = false
+reverse_write_channel = false
+canonical_client_credentials_shared = false
+
+[eliot_profile]
+status = "DISABLED"
+enabled_by_default = false
+profile_ref = "UNSELECTED"
+required_for_standalone_baseline = false
+memory_disposition_output = false
+reverse_write_channel = false
+canonical_credentials = false
+new_search_core_authority_surface = false
+
+[research_export_profile]
+status = "DISABLED"
+enabled_by_default = false
+profile_ref = "UNSELECTED"
+required_for_standalone_baseline = false
+protocol = "eliotr.normalized.v1"
+manifest_body_sha256 = "3a5f9fd2b254eebe574b2c4a28f9804df0da9df359e59ceee125fa7da90fef22"
+unsaved_export_allowed = false
+ordinary_export_transfers_ownership = false
+cutover_requires_completed_receipt = true
+internal_digest_relabelled_wire_sha256 = false
+path_traversal_allowed = false
+cross_residency_dedup_allowed = false
+online_research_conclusion = false
+
+[activation]
+compiled_feature_required = true
+explicit_config_required = true
+generic_edge_receipt_required = true
+profile_fixture_receipt_required = true
+binding_authorization_required = true
+configuration_alone_sufficient = false
+optional_failure_breaks_generic_edge = false

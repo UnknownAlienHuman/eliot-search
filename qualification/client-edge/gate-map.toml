@@ -1,0 +1,98 @@
+schema_version = 1
+project = "eliot-search"
+gate = "G4"
+stage = "P14"
+
+[[evidence]]
+id = "provider_frame_replay_cancel_limits"
+required = true
+probe_ids = [
+  "frame_length_and_json_golden",
+  "oversize_before_allocation",
+  "malformed_unknown_version_tag",
+  "connection_sequence_replay",
+  "in_flight_ceiling",
+  "progress_terminal_ordering",
+  "cancel_idempotent",
+  "disconnect_cleanup",
+]
+
+[[evidence]]
+id = "authenticated_binding_and_grant"
+required = true
+probe_ids = [
+  "pairing_required_beyond_acl",
+  "pairing_single_use_replay",
+  "pairing_role_peer_incarnation_expiry",
+  "binding_commit_unknown_outcome",
+  "binding_revocation_ordered",
+  "standalone_grant_scope_never_widens",
+]
+
+[[evidence]]
+id = "capability_descriptor_filtering"
+required = true
+probe_ids = [
+  "descriptor_authentication_required",
+  "descriptor_visible_memberships_only",
+  "descriptor_hidden_scope_noninterference",
+  "descriptor_stale_never_authorizes",
+  "optional_handler_descriptor_coherence",
+]
+
+[[evidence]]
+id = "handle_expansion_reauthorization"
+required = true
+probe_ids = [
+  "foreign_binding_handle_denied",
+  "revocation_during_expansion",
+  "purge_during_expansion",
+  "view_residency_drift_during_expansion",
+  "expired_continuation_no_silent_refresh",
+]
+
+[[evidence]]
+id = "generic_request_plan_candidate_roundtrip"
+required = true
+probe_ids = [
+  "exact_recipe_registry_closure",
+  "generic_navigation_roundtrip",
+  "generic_exact_proof_roundtrip",
+  "generic_expand_handle_roundtrip",
+  "result_no_client_disposition",
+  "client_owned_evidence_import_no_search_authority",
+  "standalone_cli_no_store_dependency",
+  "standalone_partial_render_and_exit",
+  "default_edge_leakage_audit",
+]
+
+[[evidence]]
+id = "eliot_adapter_mapping_when_enabled"
+required = false
+required_when_profile_enabled = "eliot_profile"
+probe_ids = [
+  "eliot_disabled_by_default",
+  "eliot_scope_disclosure_mapping",
+  "eliot_view_state_fence_mapping",
+  "eliot_result_no_memory_disposition",
+  "eliot_provider_failure_narrows_coverage",
+  "eliot_no_reverse_write_or_credentials",
+  "eliot_core_api_digest_unchanged",
+]
+
+[[evidence]]
+id = "research_export_roundtrip_when_enabled"
+required = false
+required_when_profile_enabled = "research_export_profile"
+probe_ids = [
+  "research_disabled_by_default",
+  "research_manifest_digest_golden",
+  "research_native_to_wire_digest_independent",
+  "research_unknown_field_rejected",
+  "research_unsaved_export_rejected",
+  "research_ordinary_export_no_owner_transfer",
+  "research_cutover_receipt_exact",
+  "research_bundle_path_safety",
+  "research_cross_domain_reuse_rejected",
+  "research_publish_unknown_outcome_recovery",
+]
