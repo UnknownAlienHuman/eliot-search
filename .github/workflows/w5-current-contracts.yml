@@ -1,0 +1,39 @@
+name: W5 current-workspace contract structure
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/w5-current-contracts.yml"
+      - "docs/current/**"
+      - "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+      - "config/w5-current.toml"
+      - "swarm/w5-current.toml"
+      - "qualification/rust-syntax/**"
+      - "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+      - "crates/search-query/search-overlay/FUNCTIONS.md"
+      - "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+      - "tools/validate-w5-current.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w5-current-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate W5 current-workspace contracts
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate W5 owner, function, settings and parser qualification contracts
+        shell: pwsh
+        run: ./tools/validate-w5-current.ps1 -Json
