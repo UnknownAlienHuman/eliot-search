@@ -1,4 +1,4 @@
-schema_version = 3
+schema_version = 4
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
@@ -6,8 +6,11 @@ scaffold_package_count = 45
 library_package_count = 41
 binary_package_count = 4
 package_registry = "swarm/crates.toml"
+package_registry_schema_version = 6
 configuration_registry = "config/sections.toml"
 qdrant_qualification = "qualification/qdrant/W3_QUALIFICATION.md"
+query_qualification = "qualification/query/W4_QUALIFICATION.md"
+current_workspace_qualification = "qualification/current/W5_QUALIFICATION.md"
 
 active_wave = 0
 active_stage = "P00"

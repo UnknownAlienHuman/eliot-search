@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = 2
 project = "eliot-search"
 result_values = ["PASS", "FAIL", "UNAVAILABLE"]
 raw_output_required = true
@@ -59,11 +59,15 @@ required_evidence = [
 id = "G3"
 stage = "P09-P12"
 wave = 6
-name = "code_and_exact"
+name = "current_code_and_exact"
 required_evidence = [
   "observation_gap_currentness_denial",
+  "reconciliation_commit_and_snapshot_recovery",
+  "live_head_shadow_before_emission",
   "unsaved_bytes_nonpersistence",
-  "rust_structure_assurance",
+  "overlay_precedence_and_restart_invalidation",
+  "rust_parser_exact_artifact_and_no_execute",
+  "rust_structure_assurance_and_cfg_variants",
   "subject_ambiguity_and_lineage_compare",
   "exact_complete_scope_proof",
   "exact_drift_unreadable_cancel_failure",

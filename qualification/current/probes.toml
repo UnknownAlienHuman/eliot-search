@@ -1,0 +1,345 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P09-P10"
+wave = 5
+status = "NOT_EXECUTED"
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[[probe]]
+id = "startup_reconcile_missed_create_modify_delete_rename"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "contiguous_duplicate_out_of_order_cursor"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "watcher_overflow_gap_before_ack"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "usn_wrap_reset_gap_before_ack"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "resume_and_provider_restart_gap"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "root_rebind_gap"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "bounded_multislice_no_early_complete"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "cancel_deadline_checkpoint_no_gap_close"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "stable_read_unresolved_remains_shadowed"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "commit_timeout_readback_idempotency"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "observation_snapshot_publish_failure_fail_closed"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "strict_relaxed_historical_currentness_matrix"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "live_head_mismatch_shadow_drop"
+owner = "search-source-reconcile"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "authenticated_unsaved_attach_and_sensitivity"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "attach_shadow_before_snapshot_visibility"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "replacement_has_no_stale_base_window"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "close_disconnect_ttl_invalidation"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "revocation_purge_owner_generation_invalidation"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unsaved_absent_from_redb_cas_qdrant"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unsaved_absent_from_logs_metrics_traces"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unsaved_absent_from_backup_restore_crash_attachments"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "unsaved_absent_from_provider_cache_eval_training"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "overlay_budget_failure_preserves_shadow"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "restart_destroys_unsaved_bytes_and_tokens"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "saved_overlay_recovery_from_revision"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "explicit_save_requires_matching_revision_receipt"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "durable_handle_and_continuation_unsaved_rejected"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "quota_ttl_reduction_invalidates_before_config_receipt"
+owner = "search-overlay"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "exact_rust_parser_grammar_profile_identity"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "no_execute_build_proc_macro_lsp_shell_network"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "rust_structural_fact_corpus"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "malformed_parse_degraded_not_compiler_truth"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "cfg_predicate_variant_separation"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "evidence_role_classification"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "ambiguous_relations_not_compiler_resolved"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "anchor_coordinate_and_digest_validation"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "deterministic_enrichment_manifest"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "non_utf8_behavior_explicit"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "parser_cancellation_and_resource_limits"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "profile_change_requires_reenrich_reproject"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "parser_vendor_type_public_api_guard"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "structural_telemetry_content_minimized"
+owner = "search-code-enricher"
+mandatory = true
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""

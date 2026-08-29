@@ -18,6 +18,7 @@ on:
       - "docs/handoff/**"
       - "tools/validate-swarm.ps1"
       - "tools/validate-implementation-packets.ps1"
+      - "tools/validate-current-packets.ps1"
       - ".github/workflows/swarm-structure.yml"
   push:
     branches: [main]
@@ -35,6 +36,7 @@ on:
       - "docs/handoff/**"
       - "tools/validate-swarm.ps1"
       - "tools/validate-implementation-packets.ps1"
+      - "tools/validate-current-packets.ps1"
       - ".github/workflows/swarm-structure.yml"
   workflow_dispatch:
 
@@ -49,7 +51,7 @@ jobs:
   validate:
     name: Validate topology and implementation packets
     runs-on: windows-latest
-    timeout-minutes: 7
+    timeout-minutes: 10
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,3 +67,8 @@ jobs:
         shell: pwsh
         run: |
           & ./tools/validate-implementation-packets.ps1 -Json
+
+      - name: Validate W4 registry and W5 current-workspace packets
+        shell: pwsh
+        run: |
+          & ./tools/validate-current-packets.ps1 -Json

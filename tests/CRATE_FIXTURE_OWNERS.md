@@ -14,7 +14,10 @@ only by the owner below; other writers submit a typed request.
 | source-admission deny-by-default corpus | `search-source-admission` | registry, reader, eval |
 | source identity/path history fixtures | `search-source-identity` | registry, reconcile, exact |
 | no-execute/reparse/stable-read corpus | `search-safe-reader` | source, exact, validator |
-| anchor/coordinate/revision fixtures | `search-revision-store` | materializer, exact, validator |
+| anchor/coordinate/revision fixtures | `search-revision-store` | materializer, exact, validator, code enricher |
+| observation cursor/gap/inventory/fault fixtures | `search-source-reconcile` | daemon, access, validator, exact, eval |
+| saved/unsaved overlay precedence and non-persistence corpus | `search-overlay` | executor, validator, handles, continuation, eval |
+| Rust parser/grammar/malformed/cfg/evidence-role corpus | `search-code-enricher` | planner, comparator, exact, eval |
 | lexical golden vectors | `search-lexical` | projection, executor, eval |
 | Qdrant process/ACL/Job Object fixtures | `search-qdrant-supervisor` | daemon, P05 qualification |
 | Qdrant capability/schema/data-plane fixtures | `search-qdrant-bridge` | projection, publication, executor, reclaimer |

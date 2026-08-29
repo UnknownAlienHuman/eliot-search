@@ -2,9 +2,9 @@
 
 **Local-first data preparation and retrieval provider for ELIOT Memory OS.**
 
-> **Status: Architecture 8.4 published; exact P00 contract pack and 45-package swarm scaffold; no
-> business implementation.** Runtime correctness, performance, security execution, migration and
-> product acceptance remain unproven.
+> **Status: Architecture 8.4 published; exact P00 contract pack and 45-package swarm scaffold; W3–W5
+> bounded implementation/qualification packets; no business implementation.** Runtime correctness,
+> performance, security execution, migration and product acceptance remain unproven.
 
 ## Product boundary
 
@@ -37,6 +37,21 @@ The machine authority is [`swarm/crates.toml`](swarm/crates.toml). It records ex
 assignments, function packets, configuration sections and qualification inputs. The human index is
 [`docs/handoff/CRATE_MATRIX.md`](docs/handoff/CRATE_MATRIX.md).
 
+## Prepared product slices
+
+- **W3 / P05–P07:** lexical profiles, qualified Qdrant process/data plane, exact projection manifests,
+  serialized publication, epoch/route pins and ordinary exact reclaim.
+- **W4 / P08:** pre-candidate access, bounded query planning/execution, source-backed validation,
+  handles, compact result projection, continuation and protocol/evaluation contracts.
+- **W5 / P09–P10:** observation-gap reconciliation, truthful current-workspace preflight,
+  saved/unsaved overlay precedence and one qualified no-execute Rust tolerant-syntax profile.
+
+The bounded W5 index is [`docs/handoff/W5_IMPLEMENTATION_PACKET.md`](docs/handoff/W5_IMPLEMENTATION_PACKET.md).
+The corresponding evidence contract is
+[`qualification/current/W5_QUALIFICATION.md`](qualification/current/W5_QUALIFICATION.md). All probes
+start as `UNAVAILABLE`; these documents do not authorize implementation or select a watcher, IDE adapter
+or parser artifact.
+
 ## Configuration
 
 `search-config` owns only deterministic parsing/layering, provenance, redaction, fingerprints, diffs
@@ -45,15 +60,6 @@ Plaintext secrets are invalid; only opaque secret references may appear in confi
 
 The example file is safe DIRECT mode. Indexed W3 settings remain disabled or `UNQUALIFIED` until an
 exact Qdrant server/client pair, lexical profile and capability suite are accepted.
-
-## W3 qualification
-
-[`qualification/qdrant/W3_QUALIFICATION.md`](qualification/qdrant/W3_QUALIFICATION.md) is the
-architecture-to-evidence contract for the Qdrant process, data plane, lexical profiles, collection
-schema, publication, pins and ordinary exact reclaim.
-
-No release tag or version string is accepted by itself. Failure or unavailable mandatory evidence keeps
-indexed mode disabled while DIRECT/exact operation may remain truthfully degraded.
 
 ## Launch gate
 
@@ -69,8 +75,9 @@ Current W0 order:
 3. integration owner publishes W0 receipt
 ```
 
-Every W1+ package, including `search-config`, remains blocked. Optional model/document depth
-additionally requires accepted P15, a dedicated ADR and exact provider qualification.
+Every W1+ package, including `search-config`, remains blocked. Prepared W3–W5 packets are future bounded
+inputs only. Optional model/document depth additionally requires accepted P15, a dedicated ADR and
+exact provider qualification.
 
 ## Port rule
 
