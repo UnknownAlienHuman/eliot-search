@@ -20,8 +20,29 @@ pwsh -NoProfile -File tools/validate-implementation-packets.ps1
 pwsh -NoProfile -File tools/validate-implementation-packets.ps1 -Json
 ```
 
-Checks registry-declared `FUNCTIONS.md`, configuration ownership/example parity, `search-config`
-dependencies, secret/autoupgrade floors and W3 Qdrant qualification/probe/schema packets.
+Checks legacy `swarm/crates.toml` function links, configuration ownership/example parity,
+`search-config` dependencies, secret/autoupgrade floors and W3 Qdrant packets.
+
+## All-package function packet coverage
+
+```powershell
+pwsh -NoProfile -File tools/validate-function-packets.ps1
+pwsh -NoProfile -File tools/validate-function-packets.ps1 -Json
+```
+
+Checks:
+
+- exact equality between the 45 packages in `swarm/crates.toml` and the 3 foundation plus 42 package
+  entries in `swarm/function-packets.toml`;
+- package path, earliest wave, assignment and exact package-local write scope;
+- one unique package-local `FUNCTIONS.md` for every non-foundation crate;
+- exact P00 primary contracts for `search-contracts`, `search-domain` and `search-ports`;
+- function heading, operation surface, cancellation/deadline, typed failure and required-test semantics;
+- existence of every stage/assignment/function file and prohibition on ordinary architecture reads;
+- complete W1/W2 owner/control/source/read/preparation/daemon function packet set;
+- root authority documents reference both registries;
+- launch authority remains P00/W0 with only `search-contracts` authorized;
+- the dedicated workflow remains read-only and manual-only.
 
 ## W4 registry and W5 qualification validation
 
