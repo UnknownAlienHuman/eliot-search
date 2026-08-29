@@ -2,16 +2,27 @@
 
 These utilities are never linked into production binaries.
 
-## Swarm structure validation
+## Swarm topology validation
 
 ```powershell
 pwsh -NoProfile -File tools/validate-swarm.ps1
 pwsh -NoProfile -File tools/validate-swarm.ps1 -Json
 ```
 
-The validator checks Cargo/registry/package/assignment identity, exact internal dependencies,
-cycles/waves, launch state, line limits and the P00 manifest. JSON output includes SHA-256 for the P00
-manifest and every required contract-pack file, suitable for the future W0 receipt.
+Checks Cargo/registry/package/assignment identity, exact internal dependencies, cycles/waves, launch
+state, line limits and the P00 manifest. JSON output includes SHA-256 for the P00 manifest and every
+required contract-pack file.
 
-It uses built-in PowerShell/.NET APIs and creates no production dependency. The structural workflow is
-not runtime, security, Qdrant or product-acceptance evidence.
+## Implementation-packet validation
+
+```powershell
+pwsh -NoProfile -File tools/validate-implementation-packets.ps1
+pwsh -NoProfile -File tools/validate-implementation-packets.ps1 -Json
+```
+
+Checks registry-declared `FUNCTIONS.md`, configuration section ownership/packets/example parity,
+`search-config` dependencies, secret/autoupgrade floors and the W3 Qdrant qualification/probe/schema
+packet.
+
+Both scripts use built-in PowerShell/.NET APIs and create no production dependency. Passing these
+structural checks is not runtime, security, Qdrant, performance or product-acceptance evidence.
