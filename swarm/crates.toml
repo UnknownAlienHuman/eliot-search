@@ -1,4 +1,4 @@
-schema_version = 6
+schema_version = 7
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
@@ -14,6 +14,7 @@ configuration_registry_path = "config/sections.toml"
 qdrant_qualification_path = "qualification/qdrant/W3_QUALIFICATION.md"
 query_qualification_path = "qualification/query/W4_QUALIFICATION.md"
 current_workspace_qualification_path = "qualification/current/W5_QUALIFICATION.md"
+proof_qualification_path = "qualification/proof/W6_QUALIFICATION.md"
 hard_handwritten_rust_line_limit = 10000
 mandatory_split_review_line_limit = 8500
 ordinary_agent_architecture_access = "exception-only"
@@ -389,6 +390,8 @@ wave = 6
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-exact.md"
+functions = "crates/search-query/search-exact/FUNCTIONS.md"
+qualification = "qualification/proof/W6_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-access"]
 
 [[package]]
@@ -401,6 +404,8 @@ wave = 6
 optional = false
 soft_src_line_target = 6000
 assignment = "swarm/assignments/search-subject-resolver.md"
+functions = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+qualification = "qualification/proof/W6_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -457,6 +462,8 @@ wave = 6
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-comparator.md"
+functions = "crates/search-query/search-comparator/FUNCTIONS.md"
+qualification = "qualification/proof/W6_QUALIFICATION.md"
 deps = ["search-contracts", "search-domain", "search-subject-resolver"]
 
 [[package]]
