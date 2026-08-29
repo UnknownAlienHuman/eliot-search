@@ -1,16 +1,13 @@
-# Documentation
+# docs
 
 | Directory | Contents |
 |---|---|
-| `architecture/` | The single authoritative ELIOT Search 8.4 architecture, handoff and audit master. |
-| `adr/` | Architecture Decision Records for load-bearing defaults, package boundaries and vendor choices. |
-| `handoff/` | Swarm readiness audit, package matrix, dependency topology, implementation waves and P00 bootstrap. |
-| `contracts/` | Hand-written contract notes not yet generated. |
-| `generated/` | Generated schemas, registries and descriptors. Never hand-edit. |
+| `architecture/` | Authoritative single-file Architecture 8.4 implementation master. |
+| `contracts/p00/` | Compact field-level W0 implementation projection, canonicalization, recipes, reasons and ports. |
+| `handoff/` | Crate matrix, dependency graph, launch waves, ownership, port catalog and readiness audits. |
+| `adr/` | Load-bearing implementation/package decisions. |
+| `contracts/` | Contract projections and notes not generated from Rust yet. |
+| `generated/` | Generated schemas/registries/descriptors after P00; never hand-edited. |
 
-Ordinary package agents read root/family/package `AGENTS.md`, `../swarm/ASSIGNMENT_PROTOCOL.md`, one file
-from [`../swarm/assignments/`](../swarm/assignments/README.md), and accepted public dependency handoffs.
-They do not load the architecture master during ordinary work.
-
-Machine-readable package metadata lives in [`../swarm/crates.toml`](../swarm/crates.toml). Current
-authorization lives separately in [`../swarm/launch-state.toml`](../swarm/launch-state.toml).
+Part I of the architecture master remains normative. Contract projections are hash-receipted derivative
+inputs for bounded agents and stop on contradiction.

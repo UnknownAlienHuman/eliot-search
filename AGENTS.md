@@ -1,113 +1,89 @@
 # AGENTS.md — ELIOT Search swarm contract
 
 This repository is implementation-scaffolded, not implemented. The authoritative architecture remains
-`docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`, but ordinary package agents MUST NOT load
-that 145 KB master. Each writer receives a bounded assignment under `swarm/assignments/`.
+`docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`. Ordinary package agents use bounded
+assignments and accepted handoffs instead of loading that 145 KB master.
 
 ## Authoritative read set
 
 A package writer reads only:
 
 1. this file;
-2. the nearest family `AGENTS.md`, when present;
-3. its package `AGENTS.md`;
-4. `swarm/ASSIGNMENT_PROTOCOL.md`;
-5. `swarm/assignments/<package-name>.md`;
-6. `docs/handoff/PORT_CATALOG.md` entries for ports it provides or consumes;
-7. accepted public API/handoff receipts of direct dependencies;
-8. the immutable assignment issue/base commit and package-local fixtures.
+2. nearest family and package `AGENTS.md`;
+3. `swarm/ASSIGNMENT_PROTOCOL.md`;
+4. exactly one `swarm/assignments/<package>.md`;
+5. relevant `docs/handoff/PORT_CATALOG.md` entries;
+6. accepted public dependency handoffs/API digests;
+7. immutable assignment issue/base commit and package-local fixtures.
 
-The architecture master is exception-only. Open it only after demonstrating that the bounded packet and
-accepted dependency contracts contradict each other or omit a load-bearing field. Submit the exact
-section and proposed resolution through `swarm/CONTRACT_CHANGE_TEMPLATE.md`.
+W0 writers additionally read the exact files assigned to them in `docs/contracts/p00/README.md`.
+The architecture master is exception-only. A demonstrated contradiction or missing load-bearing field
+uses `swarm/CONTRACT_CHANGE_TEMPLATE.md` and stops affected work.
 
-## Launch authority
+## Launch and write ownership
 
-`swarm/launch-state.toml` is the only current launch authority. A package being present in Cargo,
-`swarm/crates.toml`, a README or a future wave does not authorize implementation.
-
-- Start only the active wave.
-- Start a package only after every direct dependency handoff is accepted.
-- Optional model/document work remains blocked until the stated P15 decision and ADR.
-- A package may reappear in a later wave for hardening, but never has two concurrent writers.
-
-## Write ownership
-
-- One writer agent owns exactly one Cargo package and one isolated worktree.
-- The writer edits only that package directory.
-- Root `Cargo.toml`, `Cargo.lock`, toolchain, CI, `docs/generated/`, `swarm/`, architecture, shared
-  fixtures and cross-package changes belong to the integration owner.
-- A read-only reviewer does not broaden write scope.
-- Package agents never opportunistically repair a dependency. They submit a typed contract request.
-- Shared fixtures follow `tests/CRATE_FIXTURE_OWNERS.md`.
+- `swarm/launch-state.toml` is the only current launch authority.
+- One writer owns one Cargo package and one isolated worktree.
+- Writers edit only their package directory.
+- Root workspace, lockfile, toolchain, CI, architecture, contract pack, generated schemas, shared
+  fixtures, assignments and launch state belong to the integration owner.
+- A package never repairs or redefines a dependency; it requests a contract/port change.
 
 ## Global invariants
 
-1. Qdrant is the only search/index database. redb is a bounded control journal and never a searchable corpus.
-2. Original bytes or an immutable admitted revision are source truth. Qdrant payload text is never evidence.
+1. Qdrant is the only search/index database; redb is never a searchable corpus.
+2. Original bytes or an immutable admitted revision are source truth.
 3. Retrieval proposes candidates; clients own interpretation and admission.
-4. One point belongs to exactly one `ProjectionMembership`. Membership arrays are forbidden.
-5. Access/currentness filters apply before candidate generation, IDF, facets, counts and traces.
+4. One point has one `ProjectionMembership`; membership arrays are forbidden.
+5. Access/currentness apply before retrieval, IDF, facets, counts and traces.
 6. Indexed top-k never narrows an exact-proof denominator.
-7. Restrictive access and purge fences override query snapshots immediately.
-8. An uncommitted epoch is never current; an epoch number is never reused.
-9. Publication is globally serialized and acknowledged/read back before the control-journal commit.
-10. Unsaved bytes are memory-only until explicit snapshot admission.
-11. Vendor types cannot cross public package ports.
-12. Optional model/document work is blocked until P15 product acceptance and an ADR.
-13. A workspace is never called current across an unresolved observation gap.
-14. A source namespace has exactly one active mutable identity/revision owner.
-15. Partial or degraded behavior is returned with typed coverage/reasons; it is never relabeled success.
-16. Possession of a Search handle never grants access; every expansion reauthorizes live state.
-17. Ordinary retired-point reclaim and security/legal purge have different owners and receipts.
-18. Concrete redb/Qdrant/process/OS-secret adapters are constructed only by the daemon composition root.
+7. Restrictive access and purge fences override snapshots immediately.
+8. Uncommitted epochs are never current and are never reused.
+9. Publication is serialized and acknowledged/read back before control commit.
+10. Unsaved bytes remain memory-only until explicit admission.
+11. A workspace is not current across an observation gap.
+12. One source namespace has one active mutable identity/revision owner.
+13. Possessing a handle never grants access; expansion reauthorizes live state.
+14. Ordinary retired-point reclaim and security/legal purge have separate owners and receipts.
+15. Partial/degraded outcomes remain typed data and are never relabeled success.
 
 ## Dependency direction
 
 ```text
 search-contracts
-    ↑
-search-domain and vendor-neutral capability packages
-    ↑
-concrete storage/index/process/OS adapters
-    ↑
-eliot-searchd composition
+  ├─ search-domain
+  └─ search-ports
+       ↑ capability and orchestration packages
+       ↑ concrete adapters
+       ↑ eliot-searchd composition
 ```
 
-Orchestration packages consume ports from `PORT_CATALOG.md`; they do not list concrete adapter crates
-merely to perform I/O. The CLI, client adapters and workers never open redb, CAS or Qdrant directly.
-No dependency cycle, vendor-type leak or reverse authority edge is acceptable.
+- Shared records come from `search-contracts`.
+- Shared vendor-neutral traits come from `search-ports`.
+- Pure reusable meaning comes from `search-domain`.
+- Concrete adapters are constructed only by `eliot-searchd`.
+- Vendor/native types and generic string errors never cross public boundaries.
 
-## Size and split rule
+## Size and implementation rules
 
-- Ordinary implementation target: `src/` at or below 7,500 hand-written lines.
-- A package assignment may set a smaller target.
-- Mandatory design/split review occurs before 8,500 total hand-written Rust lines.
-- Hard stop: 10,000 hand-written Rust lines including package-local tests.
-- Generated or vendored code does not justify a larger package and must not hide ownership.
-- Split only on a real dependency, replacement, test, security, runtime or agent-context boundary.
-- Never create a forwarding-only crate or crate-per-type shell.
+- ordinary target: ≤7,500 hand-written `src/` lines;
+- split review before 8,500 total hand-written lines;
+- hard stop at 10,000 including local tests;
+- no forwarding-only or crate-per-type shells;
+- start with failing contract/property/fault tests;
+- no `todo!()`, fake receipt, placeholder success, silent fallback or unbounded queue;
+- Windows x64 is first qualified runtime;
+- no wildcard/floating git dependency or baseline Python/Node runtime;
+- preserve exact commands, artifact identities and unavailable checks in the handoff.
 
-## Implementation protocol
+## GitHub connector access
 
-- Start with failing contract/property/fault tests, then implement the smallest behavior that closes them.
-- Public interfaces use `search-contracts` types or package-owned opaque types; no vendor structs.
-- Windows x64 is the first qualified runtime. Keep ports portable where semantics are platform-neutral.
-- No Python or Node production dependency in the baseline.
-- No wildcard or floating git dependency. New vendor artifacts require exact qualification and an ADR
-  when load-bearing.
-- No `todo!()`, placeholder success, silent fallback, fake receipt or fake green acceptance.
-- Every degraded path returns a typed reason and truthful coverage.
-- Preserve raw command output and exact artifact/environment identity in the package handoff.
-
-## Integration owner
-
-The non-package integration role is defined in `swarm/INTEGRATION_OWNER.md`. It alone may pin the
-toolchain, update root dependency policy, generate `Cargo.lock`, change the workspace graph, publish
-generated schemas, enable CI, advance launch state and merge accepted package handoffs.
+Before claiming GitHub is read-only, reload the full catalog with
+`list_resources(paths=["GitHub"])` without a query filter, verify repository push permission, and use a
+harmless unattached blob probe when necessary. VM network access and connector API access are separate.
 
 ## Handoff
 
-Use `swarm/PACKAGE_HANDOFF_TEMPLATE.md`. Review follows `swarm/REVIEW_CHECKLIST.md`. The completed
-handoff must let downstream agents consume the public package contract without reading its internals or
-the architecture master.
+Use `swarm/PACKAGE_HANDOFF_TEMPLATE.md`; review follows `swarm/REVIEW_CHECKLIST.md`. The handoff must
+publish the public API/port digest and let downstream agents work without reading implementation
+internals or the architecture master.

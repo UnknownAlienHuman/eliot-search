@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/search-contracts",
     "crates/search-domain",
+    "crates/search-ports",
     "crates/search-runtime/search-runtime-owner",
     "crates/search-runtime/search-os-secrets",
     "crates/search-control-redb",
@@ -55,6 +56,7 @@ repository = "https://github.com/UnknownAlienHuman/eliot-search"
 [workspace.dependencies]
 search-contracts = { path = "crates/search-contracts" }
 search-domain = { path = "crates/search-domain" }
+search-ports = { path = "crates/search-ports" }
 search-runtime-owner = { path = "crates/search-runtime/search-runtime-owner" }
 search-os-secrets = { path = "crates/search-runtime/search-os-secrets" }
 search-control-redb = { path = "crates/search-control-redb" }
