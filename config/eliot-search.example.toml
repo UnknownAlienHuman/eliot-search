@@ -149,4 +149,6 @@ privileged_debug_ttl_ms = 300000
 [optional_profiles]
 semantic = false
 document = false
-# model_provider_profile and document_provider_profile remain absent until G5/P15 + ADR + qualification.
+advanced_scale = false
+# model_provider_profile, document_provider_profile and scale_profile remain absent until exact accepted
+# P15 + candidate ADR + artifact/profile/Windows qualification + measured benefit + removal/migration G6 receipts.

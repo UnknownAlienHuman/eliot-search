@@ -1,92 +1,49 @@
 # `eliot-search-doc-worker` implementation packet
 
 **Path:** `bins/eliot-search-doc-worker`  
-**Capability:** optional worker binary  
+**Capability:** isolated optional document materializer  
 **Delivery:** W10 / P17  
-**Gate:** HARD BLOCK: accepted P15 plus document-provider ADR and qualification receipt required  
-**Trace:** S17, S29, P17  
-**Direct public handoffs:** `search-contracts`, `search-provider-protocol`, `search-materializer`
+**Gate:** BLOCKED until exact accepted P15 + provider ADR/profile/artifact ticket  
+**Direct public handoffs:** `search-contracts`, `search-ports`, `search-provider-protocol`, `search-materializer`
 
-Apply `../ASSIGNMENT_PROTOCOL.md`. Logical names below express required semantics, not mandatory Rust
-spelling.
+Read only package/root instructions, this assignment, `FUNCTIONS.md`, W10 cross-contract, document
+profile/settings and exact accepted handoffs in the ticket.
 
 ## Mission
 
-Host one accepted document materializer in an isolated no-execute process with bounded IPC and malformed-input isolation.
+Host one exact qualified document provider in a private no-execute/no-network process with bounded
+container/resources, validated coordinates/loss maps, malformed-input isolation and verified cleanup.
 
 ## Owns
 
-- worker lifecycle and protocol dispatch
-- sandbox/resource limits
-- qualified provider identity verification
-- crash/malformed-input isolation and removal
+- provider/profile/artifact and inherited sandbox verification;
+- private daemon-only IPC;
+- bounded MIME/container/member/page/object/image/decompression inspection;
+- no-execute/no-network/remote-resource/path containment enforcement;
+- provider dispatch and output/coordinate/loss-map validation seam;
+- cancellation, crash isolation, temp cleanup and process removal.
 
 ## Must not own
 
-- provider selection in scaffold
-- redb/CAS/Qdrant direct access
-- macro, remote-resource or archive execution
-- Python/Node production runtime without ADR
+- source acquisition, revision store, materialization meaning, Qdrant/publication or clients;
+- provider selection in scaffold;
+- scripts/macros/OLE/hooks/filters/shell/child process/remote resources;
+- path/reparse escape or unbounded archives/pages/objects/images/output;
+- Product Pulse threshold/verdict, shared qualification evidence or G6 acceptance;
+- Python/Node runtime without explicit ADR and exact qualification.
 
-## Logical primitives
+## Required operations
 
-- DocumentWorkerConfig, ProviderArtifactIdentity, MaterializeDispatch, SandboxPolicy, ResourceLimitSet, WorkerHealth, RemovalReceipt
+See `FUNCTIONS.md`: validate profile/sandbox, load provider, private session, request admission, safe input
+inspection, materialize/output validation, cancel/terminal/cleanup, health/drain/shutdown and crash/retry.
 
-## Logical operations
+## Exit evidence
 
-1. `verify_provider(config) -> Result<WorkerStartupReceipt, WorkerError>`
-2. `serve_materialization(channel, provider, limits) -> Result<(), WorkerError>`
-3. `enforce_no_execute_policy(request) -> Result<(), WorkerError>`
-4. `cancel(request_id) -> CancelOutcome`
-5. `shutdown_and_remove() -> Result<RemovalReceipt, WorkerError>`
+Binary absent baseline; exact Windows artifact/license; private IPC; no store/index access; exact retained
+input; script/network/remote/path denial; bomb and malformed/fuzz corpus; coordinate/loss-map/assurance
+goldens; finite resources/cancellation; no unverified temp output; content-minimized process surfaces;
+worker cleanup and accepted P15 regression after removal.
 
-## Required invariants
+## Size
 
-- absent/stopped by default
-- provider identity and Windows packaging are qualified before start
-- malformed input cannot crash daemon
-- no execution/remote fetch/store/index access
-- removal returns to baseline text/code materialization
-
-## Typed failure surface
-
-- `OPTIONAL_DEPTH_NOT_ACCEPTED`
-- `PROVIDER_NOT_QUALIFIED`
-- `NO_EXECUTE_POLICY_DENIED`
-- `WORKER_RESOURCE_EXHAUSTED`
-- `WORKER_CRASHED`
-
-## Exit tests / evidence
-
-- `feature_absent_by_default`
-- `malformed_input_isolation`
-- `archive_bomb_budget`
-- `macro_and_remote_resource_denied`
-- `no_store_index_dependency_guard`
-- `provider_removal_test`
-
-## Suggested internal modules
-
-```text
-eliot-search-doc-worker/src/
-  config.rs
-  startup.rs
-  dispatch.rs
-  sandbox.rs
-  limits.rs
-  health.rs
-  shutdown.rs
-  main.rs
-```
-
-This is an internal file plan, not a request for more crates.
-
-## Size / split
-
-- Initial `src/` target: **≤ 5,000 hand-written lines**.
-- Split review: **before 8,500 total hand-written Rust lines**.
-- Hard stop: **10,000 including package-local tests**.
-- Keep worker thin; materialization semantics remain in search-materializer/provider adapter.
-
-The handoff must let a downstream agent consume the public contract without reading implementation
-internals or the architecture master.
+Target `src/` <=5,000 lines; split review before 8,500 total; hard stop 10,000 including local tests.

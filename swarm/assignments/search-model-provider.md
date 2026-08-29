@@ -1,91 +1,70 @@
 # `search-model-provider` implementation packet
 
 **Path:** `crates/search-model-provider`  
-**Capability:** C12  
+**Capability:** C12 optional dense/multivector/rerank boundary  
 **Delivery:** W10 / P16  
-**Gate:** HARD BLOCK: no implementation, dependency or artifact selection before accepted P15 and a dedicated ADR  
-**Trace:** S17.2, S21.2, S29, P16  
-**Direct public handoffs:** `search-contracts`, `search-domain`
+**Gate:** BLOCKED until exact accepted P15 + candidate ADR + integration ticket  
+**Direct public handoffs:** `search-contracts`, `search-domain`, `search-ports`
 
-Apply `../ASSIGNMENT_PROTOCOL.md`. Logical names below express required semantics, not mandatory Rust
-spelling.
+Apply `../ASSIGNMENT_PROTOCOL.md`. Read only this assignment, package/root instructions,
+`FUNCTIONS.md`, the W10 cross-contract, model profile/settings and exact accepted dependency/API digests
+listed in `swarm/w10-optional-depth.toml` and the ticket.
 
 ## Mission
 
-After product acceptance only, host vendor-neutral dense, multivector and rerank contracts behind an isolated optional provider.
+Implement provider-neutral profile, input/output validation and bounded encode/rerank semantics for one
+exact optional model candidate without selecting a vendor/runtime, launching a worker, touching stores or
+creating authority.
 
 ## Owns
 
-- optional model profile descriptors
-- bounded encode/rerank request and response contracts
-- provider capability/health and removal semantics
-- measurement hooks for incremental benefit over P15
+- immutable complete `ModelProfileDescriptor` and domain-separated digest;
+- document/query dense or multivector input preparation contract;
+- model-vector shape/finite/layout validation and content-free receipts;
+- bounded rerank subset transform and failure policy;
+- profile capability/change/migration classification;
+- instrumentation and benefit/removal receipt validation seams.
 
 ## Must not own
 
-- baseline dependency or hidden fallback
-- model selection before ADR
-- canonical decisions, synthesis or admission
-- direct redb/Qdrant ownership
-- training or caching unsaved/source content outside explicit policy
+- provider/runtime/model/tokenizer artifact selection in scaffold;
+- worker lifecycle, IPC, Windows containment or restart;
+- Qdrant/redb/CAS/source/handle/client access;
+- Search planning, access, source evidence, exact proof or client disposition;
+- generative answers, network/download/update, training/learning or persistent input cache;
+- Product Pulse threshold/verdict, shared qualification evidence or G6 acceptance;
+- fallback to another model/profile.
 
-## Logical primitives
+## Required operations
 
-- ModelProfileDescriptor, DenseEncodeRequest, DenseVectorBatch, RerankRequest, RerankResult, ModelProviderCapability, ModelProviderState, RemovalReceipt
+See package `FUNCTIONS.md`:
 
-## Logical operations
-
-1. `probe_provider(descriptor) -> ProviderQualificationResult`
-2. `encode(request, budget) -> Result<DenseVectorBatch, ModelError>`
-3. `rerank(request, budget) -> Result<RerankResult, ModelError>`
-4. `shutdown_and_remove() -> Result<RemovalReceipt, ModelError>`
+1. profile validation/digest/qualification/capability;
+2. document/query batch validation and exact input preparation;
+3. document/query encode and vector-output validation;
+4. rerank request/output/subset/failure semantics;
+5. capability/profile-change and generation classification;
+6. instrumentation, benefit-receipt and removal-receipt validation.
 
 ## Required invariants
 
-- package remains removable and disabled by default
-- unavailable model narrows optional coverage and never breaks P15 lexical/code behavior
-- profile/artifact/dimensions/quantization are immutable identity
-- unsaved bytes never enter provider cache/telemetry/training
-- no generative model is required on hot path
+- provider output is candidate nomination/ranking only;
+- rerank cannot add a candidate, widen scope or claim completeness;
+- exact authorized source/readback remains mandatory;
+- access/currentness/shadow/purge apply before model influence;
+- dense/multivector create new collection generation;
+- rerank-only has no persistent-vector migration but still needs G6/removal;
+- no successful partial output after cancellation/timeout/crash;
+- no content persistence or content-bearing diagnostics;
+- accepted P15 behavior remains independent.
 
-## Typed failure surface
+## Exit evidence
 
-- `MODEL_PROVIDER_DISABLED`
-- `MODEL_PROVIDER_UNAVAILABLE`
-- `MODEL_PROFILE_MISMATCH`
-- `MODEL_BUDGET_EXHAUSTED`
-- `OPTIONAL_DEPTH_NOT_ACCEPTED`
+Canonical profile/digest goldens; document/query/rerank fixtures; multivector ordering; finite/shape and
+subset negatives; access noninterference; bounded resources/cancellation; no network/training/cache;
+content-minimization; generation classification; fake worker port; removal/P15 regression seam;
+dependency/vendor-type guard.
 
-## Exit tests / evidence
+## Size
 
-- `feature_absent_by_default`
-- `P15_behavior_without_provider`
-- `exact_artifact_profile_fixture`
-- `provider_removal_test`
-- `unsaved_content_non_persistence`
-- `measured_gain_gate`
-
-## Suggested internal modules
-
-```text
-search-model-provider/src/
-  profile.rs
-  capability.rs
-  encode.rs
-  rerank.rs
-  budget.rs
-  removal.rs
-  error.rs
-```
-
-This is an internal file plan, not a request for more crates.
-
-## Size / split
-
-- Initial `src/` target: **≤ 6,500 hand-written lines**.
-- Split review: **before 8,500 total hand-written Rust lines**.
-- Hard stop: **10,000 including package-local tests**.
-- Do not split or implement during baseline. A future provider-specific adapter may split after ADR qualification.
-
-The handoff must let a downstream agent consume the public contract without reading implementation
-internals or the architecture master.
+Target `src/` <=6,500 lines; split review before 8,500 total; hard stop 10,000 including local tests.
