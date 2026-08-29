@@ -1,0 +1,110 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P15"
+wave = 9
+gate = "G5"
+status = "BLOCKED"
+launch_authority = "swarm/launch-state.toml"
+requires_accepted_gate = "G4"
+requires_lifecycle_hardening = true
+implementation_authorized = false
+product_accepted = false
+optional_depth_authorized = false
+
+cross_package_contract = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+qualification = "qualification/product-pulse/W9_QUALIFICATION.md"
+settings = "config/w9-product-pulse.toml"
+metric_registry = "qualification/product-pulse/metrics.toml"
+corpus_registry = "qualification/product-pulse/corpus.toml"
+probe_registry = "qualification/product-pulse/probes.toml"
+gate_map = "qualification/product-pulse/gate-map.toml"
+fixture_owners = "qualification/product-pulse/fixture-owners.toml"
+
+[[packet]]
+package = "search-eval"
+path = "crates/search-eval"
+assignment = "swarm/assignments/search-eval.md"
+functions = "crates/search-eval/FUNCTIONS.md"
+write_scope = "crates/search-eval/**"
+soft_src_line_target = 7500
+split_review_line_limit = 8500
+hard_line_limit = 10000
+accepted_direct_handoffs_required = [
+  "search-contracts",
+  "search-domain",
+  "search-config",
+]
+read_set = [
+  "AGENTS.md",
+  "crates/search-eval/AGENTS.md",
+  "swarm/assignments/search-eval.md",
+  "crates/search-eval/FUNCTIONS.md",
+  "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md",
+  "qualification/product-pulse/baseline.toml",
+  "qualification/product-pulse/corpus.toml",
+  "qualification/product-pulse/metrics.toml",
+  "qualification/product-pulse/probes.toml",
+  "qualification/product-pulse/gate-map.toml",
+  "config/w9-product-pulse.toml",
+]
+
+[integration]
+owner = "integration-owner"
+package_writer_may_execute_cross_package_faults = false
+package_writer_may_edit_shared_evidence = false
+package_writer_may_accept_gate = false
+required_accepted_inputs = [
+  "G0_wave_receipt",
+  "G1_wave_receipt",
+  "G2_wave_receipt",
+  "G3_wave_receipt",
+  "W7_lifecycle_security_receipt",
+  "G4_generic_client_edge_receipt",
+  "exact_Windows_artifact_and_environment_receipts",
+  "accepted_package_API_digest_set",
+]
+integration_only_paths = [
+  "qualification/product-pulse/** evidence slots",
+  "shared fixture materialization",
+  "cross-package fault/stress drivers",
+  "gate and wave receipts",
+]
+
+[review]
+owner = "independent-reviewer"
+criteria_review_before_candidate = true
+raw_evidence_reproduction_required = true
+producer_reviewer_separation_required = true
+package_self_acceptance = false
+
+[gate_requirements]
+required_evidence_ids = [
+  "control_corpus_abc_results",
+  "latency_and_resource_report",
+  "fault_and_recovery_matrix",
+  "source_admission_and_content_leakage_audit",
+  "provider_protocol_stress",
+  "explicit_product_pulse_verdict",
+]
+all_mandatory_probes_must_pass = true
+raw_output_required = true
+independent_review_required = true
+
+[hard_stops]
+unselected_corpus_baseline_environment_or_policy = true
+missing_required_probe = true
+any_hard_safety_or_correctness_blocker = true
+scope_or_environment_incoherence = true
+post_hoc_criteria_or_case_change = true
+optional_profile_enabled = true
+self_review_or_self_acceptance = true
+optional_depth_without_exact_accepted_receipt = true
+
+[current_state]
+control_corpus = "UNMATERIALIZED"
+baselines = "UNSELECTED"
+windows_environment = "UNSELECTED"
+quality_policy = "UNSELECTED"
+probes = "NOT_EXECUTED"
+product_pulse = "NOT_ACCEPTED"

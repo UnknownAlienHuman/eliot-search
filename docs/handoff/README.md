@@ -11,6 +11,10 @@
 - [`../../qualification/current/README.md`](../../qualification/current/README.md) — unexecuted P09–P10 current-workspace evidence contract.
 - [W6_IMPLEMENTATION_PACKET.md](W6_IMPLEMENTATION_PACKET.md) — subject-resolution/comparison/exact-proof ownership, ordering and hard stops.
 - [`../../qualification/proof/README.md`](../../qualification/proof/README.md) — unexecuted P11–P12 profile/baseline/probe contract.
+- [W8_IMPLEMENTATION_PACKET.md](W8_IMPLEMENTATION_PACKET.md) — generic client edge, standalone CLI and optional leaf profiles.
+- [`../../qualification/client-edge/README.md`](../../qualification/client-edge/README.md) — unexecuted P14 client-edge probe contract.
+- [W9_IMPLEMENTATION_PACKET.md](W9_IMPLEMENTATION_PACKET.md) — Product Pulse/Windows evaluation ownership, ordering and hard stops.
+- [`../../qualification/product-pulse/README.md`](../../qualification/product-pulse/README.md) — unexecuted P15 corpus/metric/probe/evidence contract.
 - [STRUCTURAL_CI.md](STRUCTURAL_CI.md) — scaffold and implementation-packet validation workflow and non-claims.
 - [SWARM_READINESS_AUDIT.md](SWARM_READINESS_AUDIT.md) — current readiness and honest status.
 - [OWNERSHIP_BOUNDARY_AUDIT.md](OWNERSHIP_BOUNDARY_AUDIT.md) — missing-owner/dependency audit.

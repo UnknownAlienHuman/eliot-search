@@ -1,26 +1,30 @@
 # search-eval
 
-**C29 — Telemetry and evaluation.**
+**C29 — Content-minimized telemetry, qualification and Product Pulse.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
-
-Own content-minimized observability, control-corpus evaluation and property/fault evidence without becoming a training pipeline.
+**Status:** package boundary and complete W4/W9 function contract; behavior and acceptance evidence are
+intentionally unimplemented.
 
 ## Owns
 
-- opaque metrics and operation traces
-- control-corpus harness and baseline adapters
-- property/fault fixture orchestration
-- latency/resource/security acceptance reports
-- privacy leakage assertions
+- control-corpus, baseline, run, metric and evidence schemas;
+- deterministic paired A/B/C aggregation;
+- latency/resource/fault/protocol/security reports;
+- source-admission and content-minimization audits;
+- Product Pulse hard-blocker classification, verdict and immutable receipt.
 
-## Must not own
+## Does not own
 
-- raw source, unsaved buffers or query text in default logs
-- hidden training or learning inputs
-- treating green unit tests as product acceptance
-- production crates depending on eval
+- production query/ranking/source/index/lifecycle behavior;
+- raw source, unsaved buffers, query text, secrets, tokens or absolute paths in ordinary telemetry;
+- hidden training/learning or oracle feedback;
+- cross-package fault execution or another package's fixtures;
+- gate self-acceptance;
+- production packages depending on eval.
 
-- **Delivery wave:** W4 baseline / P08; acceptance W9 / P15
-- **Soft source-line target:** 8,500
+- **Delivery:** W4/P08 baseline schemas; W9/P15 acceptance.
+- **Soft `src/` target:** 7,500 hand-written lines.
+- **Split review:** before 8,500 total hand-written lines.
+- **Hard stop:** 10,000 including package-local tests.
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
+- **W9 cross-contract:** [`../../docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md`](../../docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md)

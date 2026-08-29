@@ -1,0 +1,106 @@
+schema_version = 1
+project = "eliot-search"
+gate = "G5"
+stage = "P15"
+
+[[evidence]]
+id = "control_corpus_abc_results"
+required = true
+owner = "search-eval"
+probe_ids = [
+  "corpus_manifest_complete",
+  "baseline_a_exact_identity",
+  "baseline_b_exact_identity",
+  "candidate_c_exact_identity",
+  "abc_scope_view_parity",
+  "oracle_independence",
+  "blocked_randomized_run_order",
+  "failed_unavailable_visibility",
+  "quality_metric_reproduction",
+  "abc_material_benefit_analysis",
+]
+
+[[evidence]]
+id = "latency_and_resource_report"
+required = true
+owner = "search-eval"
+probe_ids = [
+  "windows_environment_identity",
+  "cold_warm_lane_separation",
+  "preparation_cost_report",
+  "warm_exact_navigation_p95",
+  "warm_lexical_query_p95",
+  "warm_comparison_p95",
+  "first_useful_card_latency",
+  "cpu_memory_disk_sampling",
+  "background_priority_throttle",
+  "resource_saturation_bounded",
+]
+
+[[evidence]]
+id = "fault_and_recovery_matrix"
+required = true
+owner = "search-eval"
+probe_ids = [
+  "publication_all_failpoints",
+  "qdrant_restart_identity_matrix",
+  "redb_reopen_corruption_matrix",
+  "cas_reopen_mark_sweep_matrix",
+  "disk_full_low_space_matrix",
+  "watcher_overflow_sleep_resume_matrix",
+  "access_revoke_checkpoint_matrix",
+  "purge_restore_nonresurrection_matrix",
+  "continuation_handle_restart_matrix",
+  "recovery_state_and_latency_consistency",
+]
+
+[[evidence]]
+id = "source_admission_and_content_leakage_audit"
+required = true
+owner = "search-eval"
+probe_ids = [
+  "credential_private_key_admission_denial",
+  "ordinary_log_content_scan",
+  "metrics_trace_content_scan",
+  "qdrant_payload_diagnostic_scan",
+  "redb_cas_metadata_scan",
+  "protocol_error_metadata_scan",
+  "process_command_env_scan",
+  "crash_attachment_scan",
+  "backup_restore_manifest_scan",
+  "privileged_debug_scope_ttl_scan",
+]
+
+[[evidence]]
+id = "provider_protocol_stress"
+required = true
+owner = "search-eval"
+probe_ids = [
+  "frame_limit_partial_body_stress",
+  "malformed_utf8_json_stress",
+  "sequence_replay_regression_stress",
+  "request_id_duplicate_stress",
+  "in_flight_32_ceiling_stress",
+  "progress_terminal_uniqueness_stress",
+  "cancel_storm_stress",
+  "disconnect_connection_churn_stress",
+  "binding_revoke_expiry_load_stress",
+  "protocol_peak_resource_leak_stress",
+]
+
+[[evidence]]
+id = "explicit_product_pulse_verdict"
+required = true
+owner = "search-eval"
+probe_ids = [
+  "criteria_preregistered_before_candidate",
+  "all_mandatory_evidence_present",
+  "hard_safety_blocker_set_empty",
+  "hard_correctness_blocker_set_empty",
+  "candidate_slo_report_complete",
+  "material_benefit_rule_satisfied",
+  "reproducibility_digest_coherent",
+  "independent_reproduction_sample",
+  "producer_reviewer_separation",
+  "accepted_receipt_optional_depth_gate",
+]

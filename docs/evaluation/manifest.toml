@@ -1,0 +1,77 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+stage = "P15"
+wave = 9
+gate = "G5"
+status = "contract-only"
+implementation_authorized = false
+product_accepted = false
+optional_depth_authorized = false
+
+required_files = [
+  "README.md",
+  "W9_PRODUCT_PULSE_CONTRACTS_1.0.md",
+  "manifest.toml",
+]
+
+[[owner]]
+role = "package"
+package = "search-eval"
+function_contract = "crates/search-eval/FUNCTIONS.md"
+owns = [
+  "control_corpus_schema",
+  "baseline_and_run_descriptors",
+  "metric_and_evidence_validation",
+  "content_minimization_audit",
+  "product_pulse_report",
+  "acceptance_verdict_construction",
+]
+
+[[owner]]
+role = "integration"
+name = "integration-owner"
+owns = [
+  "exact_windows_environment_capture",
+  "provider_and_baseline_execution",
+  "cross_package_fault_and_stress_execution",
+  "immutable_raw_output_publication",
+  "gate_evidence_assembly",
+]
+
+[[owner]]
+role = "review"
+name = "independent-reviewer"
+owns = [
+  "criteria_pre_registration_review",
+  "raw_evidence_reproduction_review",
+  "acceptance_or_rejection_receipt",
+]
+
+[global_invariants]
+identical_declared_scope_across_baselines = true
+oracle_hidden_from_production_and_baselines = true
+cold_and_warm_results_separate = true
+preparation_cost_reported_separately = true
+run_order_randomized_and_seeded = true
+environment_identity_exact = true
+raw_output_required = true
+failed_skipped_unavailable_visible = true
+self_acceptance_allowed = false
+prose_only_evidence_allowed = false
+missing_required_evidence_can_pass = false
+stale_access_secret_leakage_tolerance = 0
+false_complete_negative_tolerance = 0
+optional_profiles_enabled_in_baseline = false
+optional_depth_before_acceptance = false
+
+[current_disposition]
+control_corpus = "UNMATERIALIZED"
+baseline_a = "UNSELECTED"
+baseline_b = "UNSELECTED"
+candidate_c = "UNAVAILABLE"
+windows_environment = "UNSELECTED"
+quality_policy = "UNSELECTED"
+mandatory_probes = "NOT_EXECUTED"
+product_pulse = "NOT_ACCEPTED"
