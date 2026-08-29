@@ -1,11 +1,14 @@
 # Configuration contracts
 
-- [`CONFIGURATION_1.0.md`](CONFIGURATION_1.0.md) — exact local configuration, precedence, section
-  ownership, field bounds and reconfiguration semantics.
-- [`../../config/sections.toml`](../../config/sections.toml) — machine-readable top-level section
-  ownership and minimum reload class.
-- [`../../config/eliot-search.example.toml`](../../config/eliot-search.example.toml) — safe DIRECT
-  profile example.
+- [`CONFIGURATION_1.0.md`](CONFIGURATION_1.0.md) — local format, precedence, section ownership, field
+  bounds and lifecycle descriptions.
+- [`RECONFIGURATION_1.1.md`](RECONFIGURATION_1.1.md) — authoritative correction: reload requirements are
+  a composite action set, not a lossy single severity value.
+- [`../../config/sections.toml`](../../config/sections.toml) — machine-readable owner, earliest wave,
+  minimum action, secret policy and per-section packet.
+- [`../../config/sections/`](../../config/sections/) — bounded section-owner field/API/test packets.
+- [`../../config/eliot-search.example.toml`](../../config/eliot-search.example.toml) — complete safe
+  DIRECT-profile example.
 
-These files define implementation inputs. They do not claim that parsing or runtime reload has been
-implemented.
+Where 1.0 and 1.1 conflict on `dominant_action` or total ordering, 1.1 wins. These files define
+implementation inputs; they do not claim parsing or runtime reload has been implemented.

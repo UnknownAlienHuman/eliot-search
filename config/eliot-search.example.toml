@@ -3,20 +3,24 @@ profile = "direct"
 
 [instance]
 mode = "standalone"
-# data_root is omitted to use the OS-local per-user default.
+# data_root omitted: use OS-local per-user default.
 lock_timeout_ms = 0
 shutdown_timeout_ms = 15000
+abandoned_owner_policy = "quarantine_unless_identity_absent"
 
 [secrets]
 backend = "windows_user_bound"
 lease_ttl_ms = 30000
 rotation_grace_ms = 60000
+# qdrant_api_secret_ref omitted in DIRECT.
 
 [control]
 open_timeout_ms = 5000
 max_idempotency_records = 10000
 idempotency_ttl_ms = 86400000
 snapshot_publish_timeout_ms = 2000
+durability = "fsync_atomic"
+migration_policy = "verified_or_quarantine"
 
 [protocol]
 max_frame_bytes = 8388608
@@ -24,6 +28,8 @@ max_in_flight_per_connection = 32
 hello_timeout_ms = 5000
 request_deadline_cap_ms = 120000
 compression = false
+fragmented_messages = false
+pairing_required = true
 
 [source_admission]
 bootstrap_policy_profile = "baseline-safe-v1"
@@ -38,17 +44,60 @@ stable_read_attempts = 3
 retry_delay_ms = 25
 git_network_allowed = false
 execute_hooks = false
+execute_filters = false
+
+[reconcile]
+inventory_interval_ms = 300000
+overflow_reconcile_budget_ms = 5000
+max_roots_per_sweep = 64
+max_entries_per_slice = 10000
 
 [revision_store]
 max_total_bytes = 21474836480
 max_single_object_bytes = 16777216
 fsync_before_publish = true
+verify_after_reopen = true
+temporary_subdir = "tmp"
+
+[lexical]
+# Exact accepted profile IDs are published by P06 qualification.
+profile_id = "UNQUALIFIED"
+code_profile_enabled = false
+neutral_text_profile_enabled = false
+collision_threshold_profile = "UNQUALIFIED"
+
+[qdrant_process]
+enabled = false
+# artifact_path, expected_sha256, expected_version and api_secret_ref are required only when enabled.
+port = 0
+startup_timeout_ms = 30000
+health_timeout_ms = 2000
+restart_max_attempts = 3
+restart_window_ms = 300000
+auto_download = false
+auto_upgrade = false
+
+[qdrant_data]
+request_timeout_ms = 5000
+upsert_batch_points = 256
+delete_batch_points = 512
+readback_batch_points = 256
+strict_mode = true
+wait_for_mutations = true
+strong_ordering = true
+
+[index_reclaim]
+batch_points = 512
+max_batches_per_slice = 8
+slice_budget_ms = 250
 
 [query]
 default_budget_class = "interactive-default-v1"
 max_scoring_legs = 16
+max_prefetch_candidates_per_leg = 256
 max_validated_candidates = 64
 max_materialized_result_bytes = 1048576
+fusion_profile_id = "weighted-rrf-baseline-v1"
 
 [scheduler]
 interactive_concurrency = 8
@@ -57,29 +106,47 @@ background_concurrency = 2
 interactive_queue = 64
 verification_queue = 16
 background_queue = 32
+background_pause_cpu_percent = 80
+background_pause_memory_percent = 85
+
+[overlay]
+max_unsaved_sources_per_binding = 64
+max_unsaved_bytes_per_binding = 67108864
+unsaved_ttl_ms = 1800000
+saved_overlay_max_revisions = 1024
 
 [handles]
 ephemeral_ttl_ms = 600000
 max_ephemeral_per_binding = 256
 max_durable_per_binding = 128
 max_expansion_bytes = 1048576
+durable_unsaved_allowed = false
 
 [continuations]
 ephemeral_ttl_ms = 300000
 max_per_binding = 64
 max_pinned_candidates = 512
 max_pin_ttl_ms = 300000
+durable_ordinary_queries = false
+
+[retention]
+sweep_interval_ms = 3600000
+mark_batch_objects = 10000
+delete_batch_objects = 1000
+default_retention_ms = 604800000
+claim_secure_erase = false
 
 [observability]
 level = "info"
+rotation_bytes = 10485760
+rotation_files = 5
 include_query_text = false
 include_source_content = false
 include_absolute_paths = false
 privileged_debug_enabled = false
+privileged_debug_ttl_ms = 300000
 
 [optional_profiles]
 semantic = false
 document = false
-
-# LEXICAL/CODE profiles additionally require an exact qualified Qdrant artifact, digest and version.
-# Plaintext API keys are invalid. Configure only an opaque OS-bound secret reference after P05.
+# model_provider_profile and document_provider_profile remain absent until G5/P15 + ADR + qualification.
