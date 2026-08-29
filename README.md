@@ -2,7 +2,7 @@
 
 **Local-first data preparation and retrieval provider for ELIOT Memory OS.**
 
-> **Status: Architecture 8.4 published; exact P00 contract pack and 45-package swarm scaffold; W3–W5
+> **Status: Architecture 8.4 published; exact P00 contract pack and 45-package swarm scaffold; W3–W6
 > bounded implementation/qualification packets; no business implementation.** Runtime correctness,
 > performance, security execution, migration and product acceptance remain unproven.
 
@@ -45,12 +45,14 @@ assignments, function packets, configuration sections and qualification inputs. 
   handles, compact result projection, continuation and protocol/evaluation contracts.
 - **W5 / P09–P10:** observation-gap reconciliation, truthful current-workspace preflight,
   saved/unsaved overlay precedence and one qualified no-execute Rust tolerant-syntax profile.
+- **W6 / P11–P12:** ambiguity-preserving subject resolution, descriptive lineage/configuration-aware
+  comparison and frozen-denominator exact proof.
 
-The bounded W5 index is [`docs/handoff/W5_IMPLEMENTATION_PACKET.md`](docs/handoff/W5_IMPLEMENTATION_PACKET.md).
-The corresponding evidence contract is
-[`qualification/current/W5_QUALIFICATION.md`](qualification/current/W5_QUALIFICATION.md). All probes
-start as `UNAVAILABLE`; these documents do not authorize implementation or select a watcher, IDE adapter
-or parser artifact.
+W6 package ownership and hard stops are indexed in
+[`docs/handoff/W6_IMPLEMENTATION_PACKET.md`](docs/handoff/W6_IMPLEMENTATION_PACKET.md). Its machine
+evidence contract is [`qualification/proof/`](qualification/proof/README.md). All 52 probes begin
+`UNAVAILABLE`; no regex engine, structural exact profile, resolution policy or comparison policy is
+selected by the scaffold.
 
 ## Configuration
 
@@ -75,9 +77,18 @@ Current W0 order:
 3. integration owner publishes W0 receipt
 ```
 
-Every W1+ package, including `search-config`, remains blocked. Prepared W3–W5 packets are future bounded
+Every W1+ package, including `search-config`, remains blocked. Prepared W3–W6 packets are future bounded
 inputs only. Optional model/document depth additionally requires accepted P15, a dedicated ADR and
 exact provider qualification.
+
+## Non-overclaim rules
+
+- material subject ambiguity is returned, not guessed away;
+- comparison is descriptive and never chooses a correct/best implementation;
+- forks/mirrors do not inflate independent evidence;
+- exact negative proof uses an authoritative frozen inventory denominator, never Qdrant/top-k;
+- unreadable, drifted, cancelled, timed-out or otherwise incomplete items block complete-negative claims;
+- exact proof states only the compiled predicate and frozen scope, never arbitrary semantic absence.
 
 ## Port rule
 

@@ -1,0 +1,78 @@
+schema_version = 1
+project = "eliot-search"
+stage = "P11-P12"
+status = "UNQUALIFIED"
+qualified_at = ""
+qualification_receipt_ref = ""
+reviewer_receipt_ref = ""
+
+[subject_resolution]
+profile_status = "SCHEMA_ONLY"
+profile_id = "UNSELECTED"
+normalization_profile = "UNSELECTED"
+ladder_profile = "explicit-qualified-name-signature-structural-lexical-v1"
+equivalence_receipt_schema = "UNSELECTED"
+golden_fixture_digest = ""
+
+[comparison]
+profile_status = "SCHEMA_ONLY"
+profile_id = "UNSELECTED"
+axis_profile = "interface-validation-errors-side_effects-tests-callers-documentation-v1"
+lineage_relation_profile = "UNSELECTED"
+configuration_predicate_profile = "UNSELECTED"
+observation_classification_profile = "UNSELECTED"
+recommended_reading_profile = "UNSELECTED"
+golden_fixture_digest = ""
+
+[exact_literal]
+profile_status = "SCHEMA_ONLY"
+profile_id = "UNSELECTED"
+raw_byte_semantics = true
+decoded_text_semantics = true
+normalization = "explicit_per_profile"
+golden_fixture_digest = ""
+
+[exact_regex]
+profile_status = "UNSELECTED"
+profile_id = "UNSELECTED"
+engine_name = "UNSELECTED"
+engine_version = "UNSELECTED"
+source_ref = "UNSELECTED"
+source_checksum = "UNSELECTED"
+license_receipt_ref = ""
+non_backtracking_required = true
+backreferences_allowed = false
+lookaround_allowed = false
+worst_case_complexity_class = "UNSELECTED"
+max_pattern_bytes = 65536
+max_program_bytes = 1048576
+golden_fixture_digest = ""
+
+[exact_qualified_symbol]
+profile_status = "SCHEMA_ONLY"
+profile_id = "UNSELECTED"
+symbol_key_contract_digest = "UNSELECTED"
+golden_fixture_digest = ""
+
+[exact_structural]
+profile_status = "UNSELECTED"
+profile_id = "UNSELECTED"
+structural_ir_profile_ref = "UNSELECTED"
+code_enricher_api_digest = "UNSELECTED"
+configuration_predicate_profile = "UNSELECTED"
+max_pattern_depth = 128
+golden_fixture_digest = ""
+
+[exact_record_field]
+profile_status = "SCHEMA_ONLY"
+profile_id = "UNSELECTED"
+record_schema_registry_digest = "UNSELECTED"
+golden_fixture_digest = ""
+
+[selection]
+latest_allowed = false
+version_range_allowed = false
+floating_git_revision_allowed = false
+documentation_only_acceptance_allowed = false
+unit_tests_only_acceptance_allowed = false
+self_review_allowed = false

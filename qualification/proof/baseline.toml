@@ -1,0 +1,93 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "P11-P12"
+wave = 6
+status = "DESIGNED_NOT_EXECUTED"
+implementation_authorized = false
+
+[subject_resolution]
+ladder = ["explicit_reference", "qualified_key", "exact_normalized_name", "signature_kind", "structural", "lexical"]
+semantic_ladder_enabled = false
+invalid_explicit_reference_may_fall_through = false
+same_name_proves_identity = false
+top_rank_proves_identity = false
+material_ambiguity_must_be_returned = true
+ambiguity_must_report_truncation = true
+mixed_source_views_allowed = false
+mixed_security_fences_allowed = false
+higher_priority_incomplete_allows_lower_resolved = false
+resolution_receipt_revalidation_required = true
+
+[comparison]
+normative_verdict_allowed = false
+correct_implementation_claim_allowed = false
+best_implementation_claim_allowed = false
+adoption_decision_allowed = false
+forks_count_independently = false
+ambiguous_lineage_counted_independent = false
+tests_are_automatic_truth = false
+documentation_is_automatic_truth = false
+unknown_cfg_treated_unconditional = false
+mutually_exclusive_cfg_is_conflict = false
+local_absence_without_exact_proof_is_complete = false
+incomplete_candidate_scope_is_complete = false
+unknowns_and_coverage_required = true
+lineage_diversity_required = true
+
+[exact]
+authoritative_inventory_denominator_required = true
+qdrant_candidates_as_denominator_allowed = false
+top_k_as_denominator_allowed = false
+client_file_list_as_authoritative_denominator_allowed = false
+exact_planned_revision_required = true
+current_path_substitution_allowed = false
+every_denominator_item_accounted = true
+raw_bytes_and_decoded_text_distinct = true
+regex_non_backtracking_required = true
+regex_engine_qualification_required = true
+structural_profile_qualification_required = true
+complete_negative_requires_zero_matches = true
+complete_negative_requires_zero_failures = true
+complete_negative_requires_zero_omissions = true
+complete_negative_allows_timeout = false
+complete_negative_allows_cancellation = false
+complete_negative_allows_unreadable = false
+complete_negative_allows_revision_unavailable = false
+complete_negative_allows_scope_drift = false
+complete_negative_allows_observation_gap = false
+complete_negative_allows_expired_unsaved_snapshot = false
+complete_negative_allows_access_revocation = false
+complete_negative_allows_purge = false
+semantic_absence_claim_allowed = false
+qdrant_payload_as_exact_evidence_allowed = false
+historical_and_current_proof_are_distinct = true
+restrictive_security_recheck_before_emission = true
+
+[checkpoint]
+ordinary_interactive_durable_checkpoint_required = false
+governed_verification_checkpoint_allowed = true
+unsaved_bytes_in_checkpoint_allowed = false
+source_bodies_in_checkpoint_allowed = false
+process_local_pin_assumed_after_restart = false
+unknown_control_commit_requires_readback = true
+
+[limits]
+max_ambiguity_candidates = 128
+max_comparison_implementations = 256
+max_lineage_groups = 256
+max_observations_per_axis = 4096
+max_recommended_handles = 64
+max_denominator_items = 10000000
+max_exact_matches = 100000
+max_exact_failures = 1000000
+max_predicate_bytes = 65536
+max_regex_program_bytes = 1048576
+max_structural_pattern_depth = 128
+zero_means_unlimited = false
+
+[evidence]
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+raw_output_required = true
+independent_review_required = true
+prose_only_evidence = "reject"
