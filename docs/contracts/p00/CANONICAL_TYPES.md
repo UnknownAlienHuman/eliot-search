@@ -9,38 +9,25 @@
 
 | Type family | Canonical rule |
 |---|---|
-| UUID-backed IDs | distinct newtype per identity; JSON lower-case hyphenated UUID; canonical CBOR 16-byte value |
+| UUID-backed IDs | distinct newtype; JSON lower-case hyphenated UUID; deterministic CBOR 16-byte value |
 | `OwnerEpoch` | non-zero unsigned 64-bit integer |
 | `Epoch` | signed 64-bit integer, `0 <= value < i64::MAX` |
-| revision/generation counters | dedicated unsigned integer newtype; zero allowed only when the owning schema explicitly defines an initial state |
-| `Blake3Digest32` | 32 bytes; JSON 64 lower-case hex characters |
-| `Sha256Digest32` | 32 bytes; JSON 64 lower-case hex characters |
-| `SourceOwnerGeneration` | dedicated wrapper over `Blake3Digest32`, never an integer |
-| opaque identity | non-empty bounded UTF-8 or canonical bytes with an explicit type and maximum length |
+| revision/generation counters | dedicated unsigned newtype; zero only when schema defines initial state |
+| `Blake3Digest32` / `Sha256Digest32` | 32 bytes; JSON 64 lower-case hex characters |
+| `SourceOwnerGeneration` | dedicated BLAKE3 digest wrapper, never integer |
+| opaque identity/reference | non-empty bounded UTF-8 or canonical bytes; no consumer parsing |
 | raw bytes in JSON | base64url without padding; never implicit UTF-8 |
-| timestamp | RFC 3339 UTC string with `Z`; canonical form uses exactly six fractional digits; reject offsets and non-canonical alternatives at load-bearing boundaries |
-| duration/deadline | unsigned integer milliseconds; no floating-point duration |
+| `OpaqueHandleToken` | 32–64 CSPRNG bytes; base64url; never derived from source/plan/path/identity |
+| `HandleTokenDigest` | domain-separated BLAKE3-256 of exact token; server-side only |
+| timestamp | RFC 3339 UTC `Z`, exactly six fractional digits at load-bearing boundaries |
+| duration/deadline | unsigned milliseconds, never floating point |
 
-The contract crate defines explicit bounds for every opaque string/byte/list field. P00 defaults are
-256 bytes for opaque IDs, 1,024 bytes for opaque references and 8 MiB for a full provider frame unless
-a narrower schema states otherwise.
+P00 publishes explicit bounds for every opaque/list/string/byte field. Default outer frame limit is
+8 MiB unless a narrower schema applies.
 
-## Required strong IDs
-
-In addition to H3.1, P00 defines distinct wrappers for identities used by Part I schemas, including:
-
-```text
-DataRootId, BindingId, WorkspaceId, RootBindingId, PathBindingId,
-MaterializationId, WorkspaceViewRevisionId, GrantId, RequestId, PlanId,
-CandidateId, CutoverId, BufferSnapshotId, ImportedSnapshotId,
-AccessPolicyBindingId, ResidencyPolicyBindingId, HandleId, ContinuationId,
-PublicationIntentId, PublicationReceiptId, CollectionRouteRevision,
-CatalogRevision, MembershipRevision, AccessPolicyRevision,
-ShadowFenceRevision, PurgeFenceRevision, ObservationCursorRevision,
-PolicyRevision, ProfileId, RuleId and ReceiptRef.
-```
-
-A UUID/string may not substitute for one of these at a public boundary.
+Opaque tokens are bearer locators, not authorization decisions. They are redacted from logs,
+telemetry, panic/debug output and canonical identity inputs. `HandleId` is non-secret correlation
+identity; valid token plus current authorization is required.
 
 ## Versioned content digest
 
@@ -50,38 +37,36 @@ VersionedContentDigest:
   bytes: fixed_32_bytes
 ```
 
-Native Search objects use `blake3_256`. Wire protocols that explicitly require SHA-256 compute it from
-verified source bytes; they never relabel a BLAKE3 digest.
+Native Search objects use BLAKE3. Protocol SHA-256 is computed from verified bytes, never relabeled.
 
 ## Canonical serialization
 
-- Provider transport: `u32` little-endian byte length plus UTF-8 JSON.
-- Identity/fingerprint inputs: RFC 8949 deterministic CBOR over explicitly versioned structs.
-- Map keys and enum discriminants are fixed by schema version; map iteration order is never observable.
-- Floating point is forbidden in identity/fingerprint inputs. `PdfRegion` coordinates are result data,
-  not identity input unless a future profile defines a fixed-point canonical mapping.
-- JSON reserialization is never used to derive an identity.
+- Provider transport: `u32` little-endian length + UTF-8 JSON.
+- Identity/fingerprint inputs: RFC 8949 deterministic CBOR over versioned structs.
+- Enum discriminants/map keys are fixed; map iteration order is not observable.
+- Floating point is forbidden in identity/fingerprint inputs.
+- PDF coordinates are result data unless a future fixed-point identity mapping is defined.
+- JSON reserialization is never an identity input.
+- Opaque handle tokens are excluded from identity/fingerprint canonicalization.
 
 ## Domain separation
-
-At minimum, implementations use distinct prefixes:
 
 ```text
 eliot-search/source-owner-generation/v1
 eliot-search/object-residency-key/v1
 eliot-search/point-identity/v1
+eliot-search/query-snapshot-fingerprint/v1
 eliot-search/plan-fingerprint/v1
 eliot-search/schema-identity/v1
 eliot-search/receipt/v1
+eliot-search/handle-token-digest/v1
+eliot-search/continuation-token-digest/v1
 ```
 
-The prefix, schema version and canonical payload are all hashed. Golden-byte and digest fixtures are
-required for each domain.
+Prefix, schema version and canonical payload are hashed. Golden bytes/digests are required.
 
 ## Unknown fields
 
-- Unknown load-bearing fields in security, scope, identity, budget, currentness, lifecycle and ownership
-  records fail closed.
-- Protocol minor-version negotiation may permit explicitly registered non-load-bearing extension fields.
-- `deny_unknown_fields` alone is not sufficient: version-aware decoding and extension classification
-  are part of the contract tests.
+Unknown load-bearing security, scope, identity, budget, currentness, lifecycle and ownership fields fail
+closed. Minor extensions require negotiation and explicit non-load-bearing registration; generic
+`deny_unknown_fields` alone is insufficient.

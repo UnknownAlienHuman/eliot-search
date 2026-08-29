@@ -5,8 +5,8 @@ compatibility and disclosure rules.
 
 ## 1. Public provider reasons — `SearchReasonCodeV1`
 
-These may appear in candidate sets, coverage, capability descriptors and provider terminal results.
-They are stable and versioned.
+These may appear in coverage, capability descriptors and provider terminal results. Candidate-level
+use is restricted to validated candidates and cannot represent a failed validation.
 
 ```text
 QDRANT_UNAVAILABLE
@@ -42,12 +42,11 @@ STALE
 UNREADABLE
 ```
 
-The first 26 are the S34 key list. The final five are explicitly required elsewhere by Part I and are
-included in the closed v1 provider registry.
+The first group is the S34 key list; the final cross-section codes are required elsewhere by Part I.
+`STALE`, `UNREADABLE`, `ACCESS_REVOKED`, `PURGED` and `SOURCE_REVISION_UNAVAILABLE` describe validation
+or coverage gaps. They cannot label an emitted evidence candidate.
 
 ## 2. Protocol errors — `ProtocolErrorCode`
-
-These terminate or reject transport/session operations and are not candidate reasons:
 
 ```text
 PROTOCOL_VERSION_MISMATCH
@@ -62,11 +61,9 @@ DEADLINE_EXPIRED
 UNSUPPORTED_MESSAGE_KIND
 ```
 
-A protocol error may carry a mapped public reason only when product coverage is also affected.
+These reject/terminate transport or session operations, not candidate evidence.
 
 ## 3. Contract-validation errors — `ContractErrorCode`
-
-These are programming/input validation errors:
 
 ```text
 EPOCH_OUT_OF_RANGE
@@ -78,32 +75,30 @@ CANONICALIZATION_FAILED
 DIGEST_MISMATCH
 BOUND_EXCEEDED
 INVALID_TAGGED_VARIANT
+RECIPE_RESULT_MISMATCH
 ```
 
-They are not automatically exposed to an untrusted client.
+They are programming/input-validation errors and are not automatically disclosed to an untrusted
+client.
 
 ## 4. Package-local errors
 
-Each package may define internal variants such as `SECRET_LEASE_INVALID`, `RECLAIM_PINNED` or
-`SOURCE_ADMISSION_DENIED`. They are not stable provider reason codes unless this registry adds an
-explicit mapping.
+Packages may define internal variants such as `SECRET_LEASE_INVALID`, `RECLAIM_PINNED` or
+`SOURCE_ADMISSION_DENIED`. They are not stable provider reasons without an explicit registry mapping.
 
-Every package handoff supplies a table:
+Every handoff supplies:
 
 | Local error | Public/provider mapping | Protocol mapping | Retryability | Disclosure |
 |---|---|---|---|---|
 
-Vendor error strings and native numeric codes stay private. Default logs contain only the local typed
-code, operation ID and bounded non-content metadata.
+Vendor strings/native numeric codes stay private.
 
 ## Mapping rules
 
-- Never map an access/purge failure to a generic success or candidate omission.
+- Never map access/purge failure to success or silent omission.
 - A contaminated scoring/IDF leg maps to `ACCESS_REVOKED` and is discarded/replanned.
-- A bounded resource limit maps to `RESOURCE_EXHAUSTED` or truthful `INCOMPLETE_COVERAGE`.
-- A stale/unreadable candidate maps to `STALE`/`UNREADABLE`; material coverage loss also includes
+- A resource limit maps to `RESOURCE_EXHAUSTED` or truthful `INCOMPLETE_COVERAGE`.
+- A stale/unreadable nomination maps to a `CandidateValidationGap`; material loss also includes
   `INCOMPLETE_COVERAGE`.
-- Internal corruption maps to the narrow public reason (`CONTROL_STORE_CORRUPT`, schema mismatch, etc.)
-  only after content-minimized classification.
-- Unknown codes from a newer major version fail closed; unknown minor extensions are accepted only when
-  negotiated and explicitly non-load-bearing.
+- Unknown newer-major codes fail closed; minor extensions require negotiation and explicit
+  non-load-bearing classification.

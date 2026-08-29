@@ -3,85 +3,55 @@
 **Path:** `crates/search-query/search-result-projector`  
 **Capability:** C26  
 **Delivery:** W4 / P08  
-**Gate:** BLOCKED until candidate-validator and handle-factory handoffs are accepted  
-**Trace:** S23.2-S23.3, S26, H15.4, P08  
-**Direct public handoffs:** `search-contracts`, `search-domain`, `search-candidate-validator`, `search-handles`
-
-Apply `../ASSIGNMENT_PROTOCOL.md`. Logical names below express required semantics, not mandatory Rust spelling.
+**Gate:** BLOCKED until validator, handle and exact result contracts are accepted  
+**Trace:** S23.2-S23.3, S26, H15.4, P08
 
 ## Mission
 
-Project validated candidates into compact bounded response cards while delegating all mutable handle state and expansion authorization to `search-handles`.
+Project validated candidates and explicit coverage gaps into compact bounded recipe results while
+delegating mutable handle state/authorization to `search-handles`.
 
 ## Owns
 
-- compact candidate/result-card shaping
-- response byte/source/variant budgets
-- coverage/freshness/gap projection
-- deterministic selection of handle subjects
-- handle creation requests through `HandleFactoryPort`
+- `SearchCandidateSet` and generic result-card shaping;
+- response byte/source/variant budgets;
+- coverage/freshness/validation-gap projection;
+- deterministic selection of handle subjects;
+- handle creation requests through accepted port.
 
 ## Must not own
 
-- raw full-file or unbounded chunk dumps
-- unvalidated Qdrant points or client admission/belief dispositions
-- hiding omitted/failed legs or freshness gaps
-- handle tables, durable eligibility, expansion authorization or revocation
-
-## Logical primitives
-
-- `ProjectionRequest`, `ResultBudget`, `CandidateCard`, `NavigationSummary`, `VariantCard`, `CoverageCard`, `HandleSubject`, `HandleCreationRequest`, `ProjectedResult`
+- unvalidated candidates, raw full files or unbounded chunks;
+- vendor metadata or client belief/admission;
+- hidden omitted/failed legs or validation gaps;
+- handle records, expansion authorization or revocation.
 
 ## Logical operations
 
-1. `project_candidate_set(validated, execution, budget, handles) -> Result<SearchCandidateSet, ProjectError>`
-2. `select_handle_subjects(candidates, quotas) -> Vec<HandleSubject>`
-3. `project_coverage(execution, validation) -> Coverage`
+1. `project_candidate_set(validated, gaps, execution, budget, handles) -> Result<SearchCandidateSet, ProjectError>`
+2. `select_handle_subjects(validated, quotas) -> BoundedList<HandleSubject>`
+3. `project_coverage(execution, gaps) -> Coverage`
 4. `enforce_result_budget(result, budget) -> Result<ProjectedResult, ProjectError>`
 
-## Required invariants
+## Invariants
 
-- default card contains bounded 2-4 recommended exact handles
-- `complete_scope` appears only with exact-plane proof
-- every card binds plan/view/owner/security generations
-- omissions and failures remain explicit
-- no raw vendor metadata or reusable authorization decision escapes
-- projector owns no mutable handle record and cannot expand a handle
+- only `ValidatedSearchCandidate` enters `candidates`;
+- stale/unreadable/access/purge outcomes remain non-evidence gaps;
+- default card contains bounded 2–4 recommended exact handles;
+- `complete_scope` requires exact report;
+- every result binds plan/view/owner/security generations;
+- deterministic truncation records omitted material;
+- projector has no handle table or expansion path.
 
-## Typed failure surface
+## Exit evidence
 
-- `RESULT_BUDGET_EXHAUSTED`
-- `INCOMPLETE_COVERAGE`
-- `HANDLE_CREATION_FAILED`
-- `RESULT_BINDING_MISMATCH`
-- `NO_VALIDATED_CANDIDATES`
+- golden compact card and exact recipe-result tag;
+- invalid candidate type cannot be passed to projection;
+- validation gaps contain no evidence excerpt;
+- full-file dump rejected;
+- complete-scope overclaim rejected;
+- security/result fence fixture;
+- deterministic budget truncation;
+- no mutable handle state.
 
-## Exit tests / evidence
-
-- `golden_compact_card`
-- `full_file_dump_rejected`
-- `coverage_binding_fixture`
-- `complete_scope_requires_exact_report`
-- `security_generation_in_every_result`
-- `deterministic_budget_truncation`
-- `projector_has_no_handle_table_or_expansion_path`
-
-## Suggested internal modules
-
-```text
-search-result-projector/src/
-  budget.rs
-  summary.rs
-  candidate.rs
-  variant.rs
-  coverage.rs
-  handle_request.rs
-  binding.rs
-  error.rs
-```
-
-## Size / split
-
-- Initial `src/` target: **≤ 7,000 hand-written lines**.
-- Split review: **before 8,500 total hand-written Rust lines**.
-- Hard stop: **10,000 including package-local tests**.
+Target `src/` ≤7,000 lines; split review before 8,500 total; hard stop at 10,000 including local tests.

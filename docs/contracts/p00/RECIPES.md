@@ -1,5 +1,7 @@
 # Recipe registry and typed request families
 
+Exact recipe outputs are defined in `RECIPE_RESULTS.md`.
+
 ## Exact registry
 
 `RecipeIdV1` contains exactly:
@@ -30,9 +32,7 @@ SearchRecipeRequest:
   requested_scope: RequestedScope
   requested_budget_class: ProfileId
   body: RecipeBodyV1
-```
 
-```yaml
 RequestedScope:
   active_workspace: WorkspaceId
   explicit_memberships: bounded_list<SourceMembershipId>
@@ -70,92 +70,65 @@ EvidenceRole = definition | reference | test | documentation | caller | configur
 ComparisonAxis = interface | validation | errors | side_effects | tests | callers | documentation
 ```
 
-## Recipe bodies and outputs
+## Recipe bodies
 
 ```yaml
 locate@1:
-  request:
-    subject: SubjectSelector
-    evidence_roles: bounded_set<EvidenceRole>
-  output: SearchCandidateSet
+  subject: SubjectSelector
+  evidence_roles: bounded_set<EvidenceRole>
 
 find_text@1:
-  request:
-    predicate: ExactPredicate
-    case_policy: exact | unicode_casefold
-    context_bytes_before: u32
-    context_bytes_after: u32
-  output: SearchCandidateSet
+  predicate: ExactPredicate
+  case_policy: exact | unicode_casefold
+  context_bytes_before: u32
+  context_bytes_after: u32
 
 inspect_entity@1:
-  request:
-    subject: SubjectSelector
-    evidence_roles: bounded_set<EvidenceRole>
-    include_relations: bounded_set<definition | reference | caller | test | documentation>
-  output: EntityInspectionResult
+  subject: SubjectSelector
+  evidence_roles: bounded_set<EvidenceRole>
+  include_relations: bounded_set<definition | reference | caller | test | documentation>
 
 compare_implementations@1:
-  request:
-    subject: SubjectSelector
-    references:
-      portfolio_id: ReferencePortfolioId
-      portfolio_revision: PortfolioRevision
-    comparison_axes: bounded_set<ComparisonAxis>
-  output: CrossRepositoryBehaviorSet
+  subject: SubjectSelector
+  references:
+    portfolio_id: ReferencePortfolioId
+    portfolio_revision: PortfolioRevision
+  comparison_axes: bounded_set<ComparisonAxis>
 
 explore_entity@1:
-  request:
-    subject: SubjectSelector
-    relation_kinds: bounded_set<definition | reference | caller | test | documentation | configuration>
-    max_depth: u8
-  output: EntityExplorationResult
+  subject: SubjectSelector
+  relation_kinds: bounded_set<definition | reference | caller | test | documentation | configuration>
+  max_depth: u8
 
 corpus_profile@1:
-  request:
-    facets: bounded_set<role | language_or_format | entity_kind | lineage | readiness>
-  output: CorpusProfileResult
+  facets: bounded_set<role | language_or_format | entity_kind | lineage | readiness>
 
 corpus_delta@1:
-  request:
-    from_view: SourceView
-    to_view: SourceView
-    dimensions: bounded_set<source | membership | representation | symbol | readiness>
-  output: CorpusDeltaResult
+  from_view: SourceView
+  to_view: SourceView
+  dimensions: bounded_set<source | membership | representation | symbol | readiness>
 
 provenance@1:
-  request:
-    source_handle: SearchSourceHandle
-    max_lineage_depth: u8
-  output: ProvenanceResult
+  source_handle: SearchSourceHandle
+  max_lineage_depth: u8
 
 compile_exact_scan@1:
-  request:
-    predicate: ExactPredicate
-    completeness_requirements: ExactCompletenessRequirements
-  output: ExactScanPlan
+  predicate: ExactPredicate
+  completeness_requirements: ExactCompletenessRequirements
 
 execute_exact_scan@1:
-  request:
-    plan_ref: ExactScanPlanRef
-  output: ExactExecutionReport
+  plan_ref: ExactScanPlanRef
 
 expand_handle@1:
-  request:
-    handle: SearchSourceHandle | ContinuationHandle
-    expansion: excerpt | source_metadata | provenance | continuation
-    max_bytes: u64
-  output: HandleExpansionResult
+  handle: SearchSourceHandle | ContinuationHandle
+  expansion: excerpt | source_metadata | provenance | continuation
+  max_bytes: u64
 ```
+
+`RecipeBodyV1` is a tagged union keyed by `RecipeIdV1`; body/recipe mismatch fails contract validation.
 
 ## Output minimums
 
-Every output includes:
-
-- request/plan identity where applicable;
-- source/security/view generations;
-- coverage and explicit gaps;
-- bounded result size;
-- typed public reason codes;
-- no raw vendor cursor, collection, filter or reusable authorization decision.
-
-Recipe-specific result records may add descriptive fields but cannot weaken these bindings.
+Every output includes request/plan identity where applicable, source/security/view fences, truthful
+coverage, bounded size and typed reasons. No output contains a raw vendor cursor, collection, filter,
+point ID or reusable authorization decision.

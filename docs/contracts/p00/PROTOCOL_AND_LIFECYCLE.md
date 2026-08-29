@@ -78,50 +78,135 @@ SearchProviderCapabilityDescriptor:
 
 Only memberships visible to the binding are represented. Capability availability grants no authority.
 
-## Source handles
+## Public handle tokens
+
+S26.1 requires default result and continuation handles to be opaque random identifiers. Therefore
+provider JSON carries only bearer locators and non-sensitive lifecycle metadata, never the detailed
+source/plan record that the daemon uses internally.
 
 ```yaml
 SearchSourceHandle:
   handle_id: HandleId
   handle_revision: NonZeroRevision
-  durability: ephemeral | durable_source
-  binding_id: BindingId
-  source_namespace_id: SourceNamespaceId
-  source_owner_generation: SourceOwnerGeneration
-  source_revision_ref: SourceRevisionRef
-  source_view: SourceView
-  workspace_view_revision_ref: WorkspaceViewRevisionId | null
-  native_anchor: NativeAnchor
-  excerpt_digest: Blake3Digest32
-  materialization_profile_id: ProfileId
-  assurance_ceiling: exact_bytes | mapped_text | lossy_text | descriptive_only
-  object_residency_key_digest: ObjectResidencyKeyDigest
-  retention_expiry: UtcTimestamp | null
-  invalidation_refs: bounded_list<OpaqueRef>
-```
+  handle_class: ephemeral | durable_source
+  expires_at: UtcTimestamp | null
+  opaque_token: OpaqueHandleToken
 
-A durable handle requires an immutable retained revision and cannot target unsaved bytes. Every
-expansion rechecks binding, grant, owner generation, view, residency and purge state. Possession grants
-no access.
-
-```yaml
 ContinuationHandle:
   continuation_id: ContinuationId
-  binding_id: BindingId
-  durability: ephemeral_in_memory | durable_replan_checkpoint
-  plan_fingerprint: PlanFingerprint
   expires_at: UtcTimestamp
-  opaque_token: BoundedOpaqueBytes
+  opaque_token: OpaqueHandleToken
 ```
 
-The token contains no raw Qdrant cursor, score, path or source bytes.
+The token has at least 256 bits of CSPRNG entropy, is never deterministically derived from source or
+plan data, and is redacted from every default diagnostic surface. `HandleId`/`ContinuationId` alone is
+not sufficient to resolve or authorize anything. Token possession grants no access; every use requires
+current binding/grant/security/owner/view/residency/purge validation.
+
+## Server-side source-handle records
+
+The grouped fields from S26.2 are represented in server-owned records, not exposed as the wire token.
+The record is a closed tagged union because an ephemeral handle may target authenticated unsaved bytes,
+while a durable handle may not.
+
+```yaml
+SearchSourceHandleRecord:
+  ephemeral:
+    handle_id: HandleId
+    handle_revision: NonZeroRevision
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    grant_id: GrantId
+    target:
+      retained_source:
+        source_namespace_id: SourceNamespaceId
+        source_owner_generation: SourceOwnerGeneration
+        source_revision_ref: SourceRevisionRef
+        source_view: SourceView
+        workspace_view_revision_ref: WorkspaceViewRevisionId | null
+        native_anchor: NativeAnchor
+        excerpt_digest: Blake3Digest32
+        materialization_profile_id: ProfileId
+        assurance_ceiling: exact_bytes | mapped_text | lossy_text | descriptive_only
+        object_residency_key_digest: ObjectResidencyKeyDigest
+      unsaved_buffer:
+        workspace_id: WorkspaceId
+        workspace_view_revision_ref: WorkspaceViewRevisionId
+        buffer_snapshot_id: BufferSnapshotId
+        buffer_version: u64
+        native_anchor: NativeAnchor
+        excerpt_digest: Blake3Digest32
+    created_at: UtcTimestamp
+    expires_at: UtcTimestamp
+    invalidation_refs: bounded_list<OpaqueRef>
+    status: ACTIVE | REVOKED | EXPIRED
+  durable_source:
+    handle_id: HandleId
+    handle_revision: NonZeroRevision
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    grant_id: GrantId
+    source_namespace_id: SourceNamespaceId
+    source_owner_generation: SourceOwnerGeneration
+    source_revision_ref: SourceRevisionRef
+    source_view: SourceView
+    workspace_view_revision_ref: WorkspaceViewRevisionId | null
+    native_anchor: NativeAnchor
+    excerpt_digest: Blake3Digest32
+    materialization_profile_id: ProfileId
+    assurance_ceiling: exact_bytes | mapped_text | lossy_text | descriptive_only
+    object_residency_key_digest: ObjectResidencyKeyDigest
+    retention_lease_ref: OpaqueRef
+    created_at: UtcTimestamp
+    retention_expiry: UtcTimestamp | null
+    invalidation_refs: bounded_list<OpaqueRef>
+    status: ACTIVE | REVOKED | EXPIRED
+```
+
+Ephemeral records are memory-only and restart-invalid. An unsaved-buffer target never enters redb, CAS,
+backup, telemetry, evaluation or a durable record. A durable record requires an immutable retained
+revision plus a current retention lease. The public token never embeds or serializes this record.
+
+## Server-side continuation records
+
+```yaml
+ContinuationRecord:
+  ephemeral_window:
+    continuation_id: ContinuationId
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    plan_fingerprint: PlanFingerprint
+    result_fence: ResultFence
+    candidate_window_ref: OpaqueRef
+    issued_candidate_identity_set_ref: OpaqueRef
+    epoch_pin_ref: OpaqueRef
+    created_at: UtcTimestamp
+    expires_at: UtcTimestamp
+    status: ACTIVE | REVOKED | EXPIRED
+  durable_replan_checkpoint:
+    continuation_id: ContinuationId
+    token_digest: HandleTokenDigest
+    binding_id: BindingId
+    plan_fingerprint: PlanFingerprint
+    result_fence: ResultFence
+    durable_job_ref: OpaqueRef
+    replan_checkpoint_ref: OpaqueRef
+    issued_candidate_identity_set_ref: OpaqueRef
+    created_at: UtcTimestamp
+    expires_at: UtcTimestamp
+    status: ACTIVE | REVOKED | EXPIRED
+```
+
+The ephemeral variant owns a bounded candidate window and pin; it is memory-only and restart-invalid.
+The durable variant is allowed only for an explicit durable job and stores no process-local pin or
+unsaved bytes. Raw Qdrant offsets, cursors, scores and point IDs never appear in the public token.
 
 ## Security mutation state
 
 ```yaml
 SecurityMutationBarrierState:
   security_domain_ref: OpaqueRef
-  phase: acquired | durable_committed | live_snapshot_published | dependents_invalidated | acknowledged | fail_closed
+  phase: ACQUIRED | DURABLE_COMMITTED | LIVE_SNAPSHOT_PUBLISHED | DEPENDENTS_INVALIDATED | ACKNOWLEDGED | FAIL_CLOSED
   access_policy_revision: AccessPolicyRevision
   live_deny_generation: u64
   mutation_receipt_ref: ReceiptRef
@@ -137,13 +222,15 @@ observable.
 
 ## Publication support records
 
+State spellings preserve the S13 state machine.
+
 ```yaml
 PublicationIntent:
   publication_intent_id: PublicationIntentId
   target_epoch: Epoch
   prepared_manifest_ref: ReceiptRef
   owner_source_membership_access_guards: bounded_list<StateDependency>
-  state: prepared | intent_durable | new_points_acknowledged | old_points_closed_acknowledged | readback_verified | control_committed | compensating | aborted | invalidation_only_committed | blocked
+  state: PREPARED | INTENT_DURABLE | NEW_POINTS_ACKNOWLEDGED | OLD_POINTS_CLOSED_ACKNOWLEDGED | READBACK_VERIFIED | CONTROL_COMMITTED | RECLAIMABLE | COMPENSATING | ABORTED | INVALIDATION_ONLY_COMMITTED | PUBLICATION_BLOCKED
 
 PublicationReceipt:
   publication_receipt_id: PublicationReceiptId
@@ -152,9 +239,18 @@ PublicationReceipt:
   exact_retired_manifest_ref: ReceiptRef
   readback_digest: Blake3Digest32
   control_commit_revision: NonZeroRevision
+
+AbandonedPublicationFence:
+  publication_intent_id: PublicationIntentId
+  collection_generation_id: CollectionGenerationId
+  excluded_projection_memberships: bounded_set<ProjectionMembershipId>
+  excluded_partition_refs: bounded_set<OpaqueRef>
+  fence_revision: NonZeroRevision
+  receipt_ref: ReceiptRef
 ```
 
-Uncommitted intents never change visible epoch. Skipped epochs are not reused.
+Uncommitted intents never change visible epoch. Skipped epochs are not reused. Abandonment is legal
+only after the exclusion fence is active before retrieval and IDF.
 
 ## Purge and restore
 
@@ -166,7 +262,9 @@ PurgeReceipt:
   index_deletion: not_applicable | pending | complete | partial | failed
   cache_deletion: not_applicable | pending | complete | partial | failed
   backup_snapshot_status: not_present | pending | retained_tombstone | unresolved
-  physical_secure_erase: not_guaranteed | provider_evidence_ref
+  physical_secure_erase:
+    status: not_guaranteed | evidence_available
+    evidence_ref: ReceiptRef | null
   revoked_handle_count: u64
   tombstone_ref: ReceiptRef
 
@@ -181,9 +279,10 @@ PairedRecoveryManifest:
   purge_tombstone_generation: u64
 
 RestoreDecision:
-  state: restore_pending_revalidation | direct_only | indexed_admitted | quarantined
+  state: RESTORE_PENDING_REVALIDATION | DIRECT_ONLY | INDEXED_ADMITTED | QUARANTINED
   reason_codes: bounded_set<SearchReasonCodeV1>
   validation_receipt_refs: bounded_list<ReceiptRef>
 ```
 
-Ordinary index reclamation cannot satisfy a security purge receipt.
+`evidence_ref` must be absent when secure erase is not guaranteed. Ordinary index reclamation cannot
+satisfy a security purge receipt.

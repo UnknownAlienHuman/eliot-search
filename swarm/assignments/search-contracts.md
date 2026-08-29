@@ -3,67 +3,39 @@
 **Path:** `crates/search-contracts`  
 **Capability:** C00 shared schemas  
 **Delivery:** W0 / P00  
-**Gate:** AUTHORIZED only by `swarm/launch-state.toml`  
-**Trace:** Architecture Part I S3, S7, S10, S19-S26, S30.3, S32-S34; H3; P00  
-**Direct public handoffs:** none
+**Gate:** AUTHORIZED by launch state only
 
-Read all files in `docs/contracts/p00/`.
+Read the full P00 pack and `AUTHORITY_MAP.md`.
 
 ## Mission
 
-Implement the complete vendor-neutral v1 type system and canonical serialization surface. Downstream
-agents must not need the architecture master to discover a field, variant, bound or reason namespace.
+Implement provider-wire, shared-domain and server-record schemas so downstream agents never invent
+fields, wrappers, bounds, visibility, snapshot axes, result bodies, handle boundaries or reasons.
 
 ## Owns
 
-- strong IDs, digests, versions, bounded opaque wrappers and tagged variants
-- source/ownership/residency/view/admission records
-- grant, recipe, budget, plan, result, exact-proof and coverage records
-- provider envelope, capability, handle, security and lifecycle records
-- canonical JSON/CBOR inputs and four error/reason namespaces
+Strong IDs/digests/bounded wrappers; `ContractBoundsV1`; all type-registry entries marked
+`ProviderWire`, `SharedDomain` or `ServerRecord`; exact `QuerySnapshotFence` and separate emission
+fence; source/residency/view/grant/recipe/plan/result schemas; opaque handles and server records;
+protocol/security/lifecycle; canonical JSON/CBOR and reason namespaces.
 
-## Must not own
+## Does not own
 
-- port traits, I/O, clocks, random generation, process/runtime state or persistence
-- Qdrant/redb/Windows/parser/model/client-vendor types
-- raw UUID/string substitution for a declared identity
-- opaque `object` fields that hide load-bearing authority/currentness state
+`PortSupport`, traits, I/O, clocks, randomness, mutable runtime state, adapters, vendor/native/client
+types, raw primitive aliases, invalid evidence or generic digests replacing load-bearing fields.
 
 ## Required decisions
 
-- `SourceOwnerGeneration` is BLAKE3-256; `OwnerEpoch` is `NonZeroU64`
-- nullable variant records become tagged enums with exact legal fields
-- v1 exposes exactly eleven recipes
-- only `SearchReasonCodeV1` enters candidate/coverage results
-- canonical fingerprint inputs use domain-separated deterministic CBOR
-- provider frames remain length-prefixed UTF-8 JSON
-
-## Required modules
-
-```text
-ids.rs              strong identities and revisions
-canonical.rs        JSON/CBOR and domain separation
-source.rs           source graph, ownership and admission
-residency.rs        complete residency closure
-views.rs            tagged source/workspace views
-recipes.rs          exact registry and request bodies
-access.rs           grants/security fences
-query.rs            budget/task-plan records
-result.rs           candidates/coverage/comparison outputs
-exact.rs            anchors, predicates, plans and reports
-protocol.rs         envelope/capabilities
-handles.rs          source/continuation handles
-lifecycle.rs        publication/purge/restore records
-reason.rs           public/protocol/contract namespaces
-```
+Owner generation vs epoch; occurrence `u64`; exact state spelling; tagged variants; exact eleven
+requests/results; ambiguity excludes evidence; candidates validated only; wire handles opaque;
+explicit S14 snapshot fields; planned snapshot separated from live emission fence; every support type
+has owner/visibility/bound; deterministic CBOR and length-prefixed JSON.
 
 ## Exit evidence
 
-- golden canonical bytes/digests for every load-bearing identity domain
-- schema/roundtrip fixture for every public record
-- exact recipe and public-reason registries
-- invalid tagged combinations and unknown load-bearing fields fail closed
-- membership arrays and vendor types are structurally impossible
-- API/schema digest and a field inventory with zero unresolved challenges
+Golden identities and query-snapshot fingerprint; exact bounds; all records round-trip; exact
+registries; no unresolved aliases; invalid-tag/unknown-field rejection; snapshot field exactness and
+no-hidden-axis tests; planned-vs-emission fence tests; ambiguity/candidate/handle tests; no membership
+arrays/vendor/port-support types; final API digest and zero challenges.
 
-Target `src/` ≤7,500 lines; split review before 8,500 total; hard stop at 10,000 including local tests.
+Target `src/` ≤7,500 lines; split review before 8,500 total; hard stop 10,000 including local tests.

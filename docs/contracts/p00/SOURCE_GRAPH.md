@@ -44,6 +44,8 @@ Nested repositories and submodules remain distinct workspaces.
 
 ## Namespace ownership
 
+The status strings below preserve the Architecture S7.2.1 wire spelling.
+
 ```yaml
 SourceNamespaceOwnership:
   source_namespace_id: SourceNamespaceId
@@ -53,7 +55,7 @@ SourceNamespaceOwnership:
   ownership_record_revision: NonZeroRevision
   source_owner_generation: SourceOwnerGeneration # BLAKE3-256
   source_admission_policy_revision: PolicyRevision
-  status: active | cutover_prepared | fenced | retired
+  status: ACTIVE | CUTOVER_PREPARED | FENCED | RETIRED
   cutover_receipt_ref: ReceiptRef | null
 ```
 
@@ -75,13 +77,13 @@ SourceOwnerCutoverReceipt:
     fence_revision: NonZeroRevision
     final_source_view_ref: SourceViewRef
     final_revision_set_digest: Blake3Digest32
-    terminal_status: fenced | retired
+    terminal_status: FENCED | RETIRED
   new_owner:
     owner_system_id: OpaqueId
     source_owner_generation_after_activation: SourceOwnerGeneration
     activation_revision: NonZeroRevision
     admitted_revision_set_digest: Blake3Digest32
-    status: active
+    status: ACTIVE
   validation:
     compatibility_receipt_refs: bounded_list<ReceiptRef>
     integrity_receipt_refs: bounded_list<ReceiptRef>
@@ -116,7 +118,7 @@ PathBinding:
 SourceRevision:
   revision_id: SourceRevisionId
   source_id: SourceId
-  occurrence_sequence: NonZeroU64
+  occurrence_sequence: u64
   content_digest: Blake3Digest32
   byte_length: u64
   observed_at: UtcTimestamp
@@ -132,7 +134,8 @@ SourceRevisionRef:
   byte_length: u64
 ```
 
-A revert `A → B → A` creates three revision occurrences. Paths are locators, not identity.
+A revert `A → B → A` creates three revision occurrences. Paths are locators, not identity. The
+architecture leaves occurrence sequence zero/nonzero policy to the owner, so P00 does not narrow `u64`.
 
 ## Membership and portfolio
 
@@ -233,9 +236,7 @@ SourceView:
     imported_snapshot_id: ImportedSnapshotId
   retained_revision:
     retained_revision_id: SourceRevisionId
-```
 
-```yaml
 WorkspaceViewRevision:
   workspace_view_revision_id: WorkspaceViewRevisionId
   workspace_instance_id: WorkspaceId
