@@ -1,6 +1,7 @@
 # Development tools
 
-These utilities are never linked into production binaries.
+These utilities are never linked into production binaries. All repository workflows are manual-only
+unless the owner deliberately changes that policy.
 
 ## Swarm topology validation
 
@@ -44,6 +45,26 @@ Checks resolver/comparator/exact function and qualification links, P00/W0 launch
 ambiguity/non-normative/frozen-denominator rules, unselected regex/structural profiles, 52 unique
 mandatory `UNAVAILABLE` probes and exact G3 evidence IDs.
 
-All scripts use built-in PowerShell/.NET APIs and create no production dependency. Passing structural
-checks is not runtime, security, Qdrant, current-workspace, comparison, exact-proof, performance or
-Product Pulse evidence.
+## W8 client-edge validation
+
+```powershell
+pwsh -NoProfile -File tools/validate-w8-client-edge.ps1
+pwsh -NoProfile -File tools/validate-w8-client-edge.ps1 -Json
+```
+
+Checks generic-edge ownership, exact recipe closure, authority boundaries, locked client/optional-profile
+settings, 50 generic/optional probe states, G4 mapping and blocked/unqualified status.
+
+## W9 Product Pulse validation
+
+```powershell
+pwsh -NoProfile -File tools/validate-w9-product-pulse.ps1
+pwsh -NoProfile -File tools/validate-w9-product-pulse.ps1 -Json
+```
+
+Checks the single `search-eval` package owner plus integration/reviewer roles; 49 mandatory corpus cases;
+33 metric definitions; Architecture SLO values; 60 mandatory `UNAVAILABLE` probes; exact six-ID G5 map;
+locked fairness/privacy/verdict settings; manual-only CI; and unchanged P00/W0 launch/optional-depth state.
+
+Passing structural checks is not runtime, security, Qdrant, current-workspace, comparison, exact-proof,
+Windows-performance or Product Pulse acceptance evidence.

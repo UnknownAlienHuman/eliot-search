@@ -2,94 +2,88 @@
 
 **Path:** `crates/search-eval`  
 **Capability:** C29  
-**Delivery:** W4 baseline / P08; acceptance W9 / P15  
-**Gate:** BASELINE harness blocked until W4; acceptance verdict blocked until W8/P14 receipts  
-**Trace:** S29.1, S30, S35-S37, P08, P15  
-**Direct public handoffs:** `search-contracts`, `search-domain`
+**Delivery:** W4/P08 baseline schemas; W9/P15 Product Pulse  
+**Gate:** baseline harness blocked until W4; W9 blocked until accepted G4 plus lifecycle/security receipts  
+**Trace:** S29.1, S30, S35–S37, P08, P15  
+**Direct public handoffs:** `search-contracts`, `search-domain`, `search-config`
 
-Apply `../ASSIGNMENT_PROTOCOL.md`. Logical names below express required semantics, not mandatory Rust
-spelling.
+Apply `../ASSIGNMENT_PROTOCOL.md`. `FUNCTIONS.md` owns operation semantics. W9 ordinary read scope is
+listed in `swarm/w9-product-pulse.toml`; architecture access is exception-only.
 
 ## Mission
 
-Own content-minimized telemetry, deterministic control-corpus fixtures, baseline comparison and the evidence-backed Product Pulse verdict.
+Own deterministic, content-minimized evaluation meaning and construct an evidence-backed Product Pulse
+verdict without becoming a production dependency, training pipeline or gate self-approver.
 
 ## Owns
 
-- control-corpus schema and fixture ownership
-- A/B/C evaluation harness contracts
-- quality, latency, resource, recovery and leakage metrics
-- acceptance report structure and raw evidence receipts
+- control-corpus, oracle, baseline, environment, metric and frozen-run schemas;
+- paired randomized A/B/C comparison semantics;
+- quality/efficiency, latency/resource, fault/recovery and protocol-stress reports;
+- source-admission and content-minimization leakage audits;
+- hard-blocker classification;
+- Product Pulse report, closed verdict and immutable receipt.
 
 ## Must not own
 
-- hidden training/learning
-- source/query/unsaved content in default telemetry
-- self-declared green acceptance from unit tests
-- changing production ranking to fit the fixture
+- production ranking/query/source/index/lifecycle behavior;
+- another package's fixture semantics or cross-package fault mutation;
+- raw source/query/unsaved/secret/token/path content in ordinary telemetry/reports;
+- hidden learning, training, oracle feedback or query-specific tuning;
+- post-hoc thresholds, case removal or retry-until-pass selection;
+- direct Qdrant/redb/CAS/source-store access in production;
+- self-review or self-acceptance;
+- optional-depth authorization without an exact accepted P15 receipt.
 
-## Logical primitives
+## Required operations
 
-- ControlCorpusCase, OracleExpectation, EvaluationRun, BaselineDescriptor, MetricObservation, LeakageAudit, RecoveryMatrix, ProductPulseReport, AcceptanceVerdict
+See package `FUNCTIONS.md` for:
 
-## Logical operations
+1. control-corpus/metric/policy/baseline/run validation;
+2. deterministic case-block planning and dev/test execution-driver seam;
+3. evidence validation/ingestion/reproduction;
+4. case scoring and coherent aggregation;
+5. paired A/B/C and SLO/resource reports;
+6. leakage/admission/fault/protocol audits;
+7. Product Pulse report, hard blockers, verdict and append-only receipt.
 
-1. `load_control_corpus(manifest) -> Result<ControlCorpus, EvalError>`
-2. `run_case(provider, case, budget) -> CaseResult`
-3. `compare_baselines(a, b, c) -> ComparisonReport`
-4. `audit_content_minimization(events) -> LeakageAudit`
-5. `aggregate_product_pulse(runs) -> ProductPulseReport`
-6. `decide_acceptance(report, criteria) -> AcceptanceVerdict`
+## Invariants
 
-## Required invariants
+- identical declared scope/view/case snapshot across A/B/C;
+- oracle and criteria hidden from production and baseline drivers;
+- cold/warm/preparation/recovery observations never mix;
+- every failed/skipped/cancelled/timed-out/unavailable observation remains visible;
+- hard safety/correctness failures cannot be averaged away;
+- all identities are exact and immutable;
+- producer and accepting reviewer differ;
+- only `ACCEPTED` unlocks W10.
 
-- raw evidence and failed/skipped checks remain visible
-- Product Pulse is the only P15 acceptance decision
-- semantic/document depth cannot begin before accepted verdict
-- telemetry contains IDs/reasons/counts/durations but no source/query/secret/absolute-path content
-- fork/mirror and access/stale cases are represented
+## Integration boundary
 
-## Typed failure surface
-
-- `EVALUATION_FIXTURE_INVALID`
-- `EVALUATION_INCOMPLETE`
-- `LEAKAGE_DETECTED`
-- `PRODUCT_NOT_ACCEPTED`
-- `QUALIFICATION_ENVIRONMENT_UNAVAILABLE`
+The package writer implements schemas, pure aggregation, fake/dev-test driver traits and tests only
+inside the package. The integration owner executes the accepted product on Windows, publishes immutable
+raw evidence and assembles G5 references. The independent reviewer freezes criteria before candidate
+results and accepts or rejects the final report.
 
 ## Exit tests / evidence
 
-- `control_corpus_manifest_validation`
-- `raw_grep_read_baseline`
-- `content_minimized_telemetry_audit`
-- `publication_fault_matrix_ingestion`
-- `access_leakage_negative_cases`
-- `verdict_rejects_missing_raw_evidence`
-
-## Suggested internal modules
-
-```text
-search-eval/src/
-  corpus.rs
-  oracle.rs
-  runner.rs
-  baseline.rs
-  metric.rs
-  leakage.rs
-  recovery.rs
-  report.rs
-  verdict.rs
-  error.rs
-```
-
-This is an internal file plan, not a request for more crates.
+- complete S35 case registry and eight-lineage minimum;
+- exact run/environment/artifact/configuration identities;
+- deterministic seeded paired ordering;
+- no hidden failures or post-hoc criteria;
+- zero-tolerance canary audits;
+- fault and protocol matrices cannot pass incomplete;
+- Architecture SLO timer and percentile fixtures;
+- DOMINATES/COMPLEMENTS policy goldens;
+- hard blocker defeats aggregate quality;
+- producer cannot self-review;
+- report/receipt redaction and append-only identity;
+- production dependency-direction guard.
 
 ## Size / split
 
-- Initial `src/` target: **≤ 7,500 hand-written lines**.
-- Split review: **before 8,500 total hand-written Rust lines**.
-- Hard stop: **10,000 including package-local tests**.
-- Keep measurement/report/verdict together for auditability. Platform drivers may be external test tooling but cannot own the verdict.
-
-The handoff must let a downstream agent consume the public contract without reading implementation
-internals or the architecture master.
+- target `src/` ≤7,500 hand-written lines;
+- split review before 8,500 total hand-written lines;
+- hard stop at 10,000 including local tests;
+- keep schemas/aggregation/verdict together for auditability;
+- platform execution drivers remain dev/test tooling and cannot own verdict meaning.

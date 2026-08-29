@@ -1,0 +1,37 @@
+name: W9 Product Pulse contracts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w9-product-pulse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate W9 contracts
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate repository topology and prior packets
+        shell: pwsh
+        run: |
+          & ./tools/validate-swarm.ps1 -Json
+          & ./tools/validate-implementation-packets.ps1 -Json
+          & ./tools/validate-current-packets.ps1 -Json
+          & ./tools/validate-proof-packets.ps1 -Json
+          & ./tools/validate-w8-client-edge.ps1 -Json
+
+      - name: Validate W9 Product Pulse packets
+        shell: pwsh
+        run: |
+          & ./tools/validate-w9-product-pulse.ps1 -Json
