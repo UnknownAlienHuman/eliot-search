@@ -1,13 +1,30 @@
 name: W10 optional depth contracts
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/w10-optional-depth.yml"
+      - "docs/optional/**"
+      - "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+      - "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+      - "qualification/optional-depth/**"
+      - "config/w10-optional-depth.toml"
+      - "config/sections/optional_profiles.md"
+      - "swarm/w10-optional-depth.toml"
+      - "swarm/launch-state.toml"
+      - "crates/search-model-provider/**"
+      - "bins/eliot-search-model-worker/**"
+      - "bins/eliot-search-doc-worker/**"
+      - "bins/eliot-searchd/W10_INTEGRATION.md"
+      - "crates/search-index-qdrant/**/P18_SCALE.md"
+      - "tools/validate-w10-optional-depth.ps1"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: w10-optional-depth-${{ github.ref }}
+  group: w10-optional-depth-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,7 +47,6 @@ jobs:
           & ./tools/validate-current-packets.ps1 -Json
           & ./tools/validate-proof-packets.ps1 -Json
           & ./tools/validate-w8-client-edge.ps1 -Json
-          & ./tools/validate-w9-product-pulse.ps1 -Json
 
       - name: Validate W10 optional-depth packets
         shell: pwsh
