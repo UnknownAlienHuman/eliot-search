@@ -5,6 +5,7 @@ architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da
 required_files = [
   "README.md",
   "CANONICAL_TYPES.md",
+  "TYPE_REGISTRY.md",
   "CONTRACT_CHALLENGES.md",
   "SOURCE_GRAPH.md",
   "RECIPES.md",
