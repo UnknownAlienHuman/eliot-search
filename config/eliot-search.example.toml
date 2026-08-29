@@ -1,0 +1,85 @@
+schema_version = 1
+profile = "direct"
+
+[instance]
+mode = "standalone"
+# data_root is omitted to use the OS-local per-user default.
+lock_timeout_ms = 0
+shutdown_timeout_ms = 15000
+
+[secrets]
+backend = "windows_user_bound"
+lease_ttl_ms = 30000
+rotation_grace_ms = 60000
+
+[control]
+open_timeout_ms = 5000
+max_idempotency_records = 10000
+idempotency_ttl_ms = 86400000
+snapshot_publish_timeout_ms = 2000
+
+[protocol]
+max_frame_bytes = 8388608
+max_in_flight_per_connection = 32
+hello_timeout_ms = 5000
+request_deadline_cap_ms = 120000
+compression = false
+
+[source_admission]
+bootstrap_policy_profile = "baseline-safe-v1"
+max_file_bytes = 16777216
+allow_generated = false
+allow_vendor = false
+allow_binary = false
+
+[source_reader]
+max_file_bytes = 16777216
+stable_read_attempts = 3
+retry_delay_ms = 25
+git_network_allowed = false
+execute_hooks = false
+
+[revision_store]
+max_total_bytes = 21474836480
+max_single_object_bytes = 16777216
+fsync_before_publish = true
+
+[query]
+default_budget_class = "interactive-default-v1"
+max_scoring_legs = 16
+max_validated_candidates = 64
+max_materialized_result_bytes = 1048576
+
+[scheduler]
+interactive_concurrency = 8
+verification_concurrency = 2
+background_concurrency = 2
+interactive_queue = 64
+verification_queue = 16
+background_queue = 32
+
+[handles]
+ephemeral_ttl_ms = 600000
+max_ephemeral_per_binding = 256
+max_durable_per_binding = 128
+max_expansion_bytes = 1048576
+
+[continuations]
+ephemeral_ttl_ms = 300000
+max_per_binding = 64
+max_pinned_candidates = 512
+max_pin_ttl_ms = 300000
+
+[observability]
+level = "info"
+include_query_text = false
+include_source_content = false
+include_absolute_paths = false
+privileged_debug_enabled = false
+
+[optional_profiles]
+semantic = false
+document = false
+
+# LEXICAL/CODE profiles additionally require an exact qualified Qdrant artifact, digest and version.
+# Plaintext API keys are invalid. Configure only an opaque OS-bound secret reference after P05.
