@@ -1,0 +1,55 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+stage = "P09-P10"
+wave = 5
+status = "contract-only"
+implementation_authorized = false
+requires_accepted_gate = "G2"
+requires_accepted_w4_baseline = true
+
+required_files = ["README.md", "W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md", "manifest.toml"]
+
+[[owner]]
+package = "search-source-reconcile"
+function_contract = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+config_section = "reconcile"
+owns = ["observation_gap", "watcher_cursor", "inventory_reconciliation", "observation_currentness_receipt"]
+
+[[owner]]
+package = "search-overlay"
+function_contract = "crates/search-query/search-overlay/FUNCTIONS.md"
+config_section = "overlay"
+owns = ["saved_overlay", "unsaved_buffer_snapshot", "overlay_shadow_fence", "overlay_query_leg", "overlay_invalidation"]
+
+[[owner]]
+package = "search-code-enricher"
+function_contract = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+config_section = ""
+owns = ["rust_syntax_profile", "syntax_facts", "cfg_observations", "syntax_assurance", "enrichment_manifest"]
+
+[global_invariants]
+watcher_is_hint_not_authority = true
+overflow_creates_gap_before_ack = true
+currentness_requires_complete_inventory = true
+unresolved_gap_may_be_called_current = false
+unsaved_bytes_persisted_to_redb = false
+unsaved_bytes_persisted_to_cas = false
+unsaved_bytes_persisted_to_qdrant = false
+unsaved_overlay_binding_scoped = true
+stale_base_shadowed_before_retrieval_and_idf = true
+overlay_is_second_search_database = false
+durable_handle_to_unsaved_overlay = false
+syntax_enricher_executes_build_or_macro = false
+syntax_enricher_uses_network = false
+syntax_only_claims_compiler_certainty = false
+
+[qualification]
+reconciliation_runtime = "NOT_IMPLEMENTED"
+watcher_overflow_recovery = "UNAVAILABLE"
+unsaved_nonpersistence = "UNAVAILABLE"
+overlay_shadow_noninterference = "UNAVAILABLE"
+rust_parser_profile = "UNSELECTED"
+rust_structure_assurance = "UNAVAILABLE"
+workspace_currentness = "UNAVAILABLE"
