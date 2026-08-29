@@ -1,7 +1,23 @@
 # eliot-search-doc-worker
 
-**Optional.** Isolated worker for document materialization such as PDF, Office, OCR and archives.
+**Status:** binary package boundary and agent contract only; runtime behavior is intentionally unimplemented.
 
-Provider-neutral: no materializer implementation is pre-selected. Admission requires an ADR plus a
-qualification suite covering deployment, no-execute behavior, coordinate and loss maps, resource
-limits, malformed-input isolation and removal.
+Host one ADR-qualified document materializer in an isolated no-execute process.
+
+## Owns
+
+- worker lifecycle and IPC
+- provider sandbox/resource limits
+- materialization request dispatch
+- crash/malformed-input isolation
+
+## Must not own
+
+- provider selection in scaffold
+- redb/Qdrant ownership or direct access
+- macros, remote resources or archive execution
+- Python/Node runtime without explicit ADR
+
+- **Delivery:** W10 / P17 after accepted P15
+- **Soft source-line target:** 5,000
+- **Agent instructions:** [AGENTS.md](AGENTS.md)

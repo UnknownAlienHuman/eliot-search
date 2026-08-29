@@ -1,0 +1,48 @@
+[package]
+name = "eliot-searchd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+readme = "README.md"
+
+[[bin]]
+name = "eliot-searchd"
+path = "src/main.rs"
+
+[dependencies]
+search-contracts.workspace = true
+search-domain.workspace = true
+search-runtime-owner.workspace = true
+search-control-redb.workspace = true
+search-source-registry.workspace = true
+search-source-identity.workspace = true
+search-source-reconcile.workspace = true
+search-safe-reader.workspace = true
+search-revision-store.workspace = true
+search-materializer.workspace = true
+search-unitizer.workspace = true
+search-code-enricher.workspace = true
+search-lexical.workspace = true
+search-projection-planner.workspace = true
+search-point-identity.workspace = true
+search-qdrant-bridge.workspace = true
+search-publication.workspace = true
+search-epoch-pins.workspace = true
+search-access.workspace = true
+search-overlay.workspace = true
+search-exact.workspace = true
+search-subject-resolver.workspace = true
+search-query-planner.workspace = true
+search-retrieval-executor.workspace = true
+search-candidate-validator.workspace = true
+search-comparator.workspace = true
+search-result-projector.workspace = true
+search-continuation.workspace = true
+search-retention.workspace = true
+search-eval.workspace = true
+search-provider-protocol.workspace = true
+
+[lints]
+workspace = true

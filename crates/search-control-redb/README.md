@@ -1,15 +1,26 @@
 # search-control-redb
 
-**Cell C02 — Control Journal.**
+**C02 — Bounded redb control journal.**
 
-Bounded durable control state. The journal exists because cross-process lifecycle and crash recovery
-need durable technical state, not because Search needs a second database.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-- **Owns:** installation and data-root owner epoch; source roots and observed heads; membership and
-  policy binding identifiers; manifest references; publication intents and receipts; committed visible
-  epoch; collection route; watcher cursors; shadow, deny and purge fences; bounded job checkpoints.
-- **Must not own:** source bodies or extracted corpus text; postings or term statistics; vectors;
-  ranked candidate sets used as a query store; agent query history as an index.
+Persist only bounded technical control state and publish immutable snapshots for read-only hot paths.
 
-A lost or incompatible journal causes a new collection generation and a rebuild. Authoritative
-currentness is never reverse-engineered from an orphaned index.
+## Owns
+
+- journal schema and migrations
+- publication intents/receipts and route metadata
+- source/control references, cursors and fences
+- atomic Arc<ControlSnapshot> publication
+- corruption quarantine and write counters
+
+## Must not own
+
+- source bodies or extracted text
+- postings, vectors or term statistics
+- ranked candidate/query history storage
+- reverse-engineering currentness from orphaned Qdrant data
+
+- **Delivery wave:** W1 / P02
+- **Soft source-line target:** 8,500
+- **Agent instructions:** [AGENTS.md](AGENTS.md)

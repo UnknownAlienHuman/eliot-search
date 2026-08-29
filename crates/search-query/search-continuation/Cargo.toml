@@ -1,0 +1,21 @@
+[package]
+name = "search-continuation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+readme = "README.md"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+search-contracts.workspace = true
+search-domain.workspace = true
+search-query-planner.workspace = true
+search-access.workspace = true
+search-epoch-pins.workspace = true
+
+[lints]
+workspace = true

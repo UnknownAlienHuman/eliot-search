@@ -1,10 +1,20 @@
-# search-source
+# Source family
 
-**Cells C03 to C07** — Source Registry, Source Identity, Change Reconciler, Safe Reader, Revision Store.
+**Organizational capability family — not a Cargo package.**
 
-- **Owns:** roots and path bindings; physical and logical source identity with path history; watcher
-  and inventory reconciliation; stable no-execute reads; immutable retained revision bytes and manifests.
-- **Must not own:** access decisions, corpus policy, ranking, search queries.
+## Child packages
 
-Paths are locators, not identity. Watchers are hints: completeness comes from reconciliation, and an
-unresolved observation gap is reported rather than presented as a current view.
+- [`search-source-registry/`](search-source-registry/) — C03: Own admitted roots, source memberships, reference portfolios and coherent SourceView/WorkspaceViewRevision resolution.
+- [`search-source-identity/`](search-source-identity/) — C04: Derive stable source identity, retain path history and enforce single-writer namespace ownership and cutover.
+- [`search-source-reconcile/`](search-source-reconcile/) — C05: Turn watcher/USN hints and bounded inventories into truthful currentness, shadows and reconciliation work.
+- [`search-safe-reader/`](search-safe-reader/) — C06: Acquire exact source bytes without executing content, escaping admitted roots or mislabeling unstable files.
+- [`search-revision-store/`](search-revision-store/) — C07: Admit, retain and reopen immutable source revisions under complete residency identities.
+
+## Family invariants
+
+- Paths are locators, not identity.
+- Watchers are hints; inventory reconciliation proves observation continuity.
+- Only exact bytes or immutable admitted revisions are source truth.
+- SourceIdentity carries no membership or access policy.
+
+Each writer agent owns exactly one child package and follows that package's `AGENTS.md`.

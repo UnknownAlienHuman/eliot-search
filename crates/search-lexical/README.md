@@ -1,12 +1,26 @@
 # search-lexical
 
-**Cell C11 — Lexical Encoder.**
+**C11 — Deterministic lexical encoder.**
 
-Deterministic text-to-sparse-vector encoding behind an explicit port.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-- **Owns:** immutable lexical profiles; tokenization and identifier expansion semantics; weighting
-  parameters pinned by fixture; golden document and query vectors; collision policy.
-- **Must not own:** an inverted index or any searchable corpus.
+Encode documents and queries into immutable sparse-vector profiles without owning an index.
 
-No implicit language, stopword or stemming default is permitted. Exactly one lexical provider path is
-selected per collection generation; switching providers is a migration, not a runtime choice.
+## Owns
+
+- code_v1 and text_neutral_v1 profile behavior
+- tokenization, Unicode and identifier expansion
+- document/query compatibility fixtures
+- term-index/collision policy
+- profile and fixture digests
+
+## Must not own
+
+- inverted-index or searchable corpus storage
+- implicit English stopwords/stemming
+- runtime fallback between providers
+- using BM25 to prove exact identity or absence
+
+- **Delivery wave:** W3 / P06
+- **Soft source-line target:** 8,500
+- **Agent instructions:** [AGENTS.md](AGENTS.md)

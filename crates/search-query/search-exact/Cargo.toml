@@ -1,0 +1,22 @@
+[package]
+name = "search-exact"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+readme = "README.md"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+search-contracts.workspace = true
+search-domain.workspace = true
+search-source-registry.workspace = true
+search-revision-store.workspace = true
+search-safe-reader.workspace = true
+search-access.workspace = true
+
+[lints]
+workspace = true

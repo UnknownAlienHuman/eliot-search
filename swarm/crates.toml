@@ -1,0 +1,430 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+status = "scaffold-only"
+hard_handwritten_rust_line_limit = 10000
+ordinary_agent_architecture_access = "exception-only"
+
+# Per-package AGENTS.md is `${path}/AGENTS.md`; write scope is `${path}/**`.
+# `wave` is the first authorized launch wave. Full delivery/gate detail is in docs/handoff/CRATE_MATRIX.md.
+
+[[package]]
+name = "search-contracts"
+path = "crates/search-contracts"
+kind = "lib"
+cell = "C00"
+family = "foundation"
+wave = 0
+optional = false
+soft_src_line_target = 8000
+deps = []
+
+[[package]]
+name = "search-domain"
+path = "crates/search-domain"
+kind = "lib"
+cell = "shared pure kernel"
+family = "foundation"
+wave = 0
+optional = false
+soft_src_line_target = 7000
+deps = ["search-contracts"]
+
+[[package]]
+name = "search-runtime-owner"
+path = "crates/search-runtime/search-runtime-owner"
+kind = "lib"
+cell = "C01"
+family = "runtime"
+wave = 1
+optional = false
+soft_src_line_target = 4500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-control-redb"
+path = "crates/search-control-redb"
+kind = "lib"
+cell = "C02"
+family = "control"
+wave = 1
+optional = false
+soft_src_line_target = 8500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-source-registry"
+path = "crates/search-source/search-source-registry"
+kind = "lib"
+cell = "C03"
+family = "source"
+wave = 2
+optional = false
+soft_src_line_target = 6500
+deps = ["search-contracts", "search-domain", "search-source-identity"]
+
+[[package]]
+name = "search-source-identity"
+path = "crates/search-source/search-source-identity"
+kind = "lib"
+cell = "C04"
+family = "source"
+wave = 2
+optional = false
+soft_src_line_target = 6500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-source-reconcile"
+path = "crates/search-source/search-source-reconcile"
+kind = "lib"
+cell = "C05"
+family = "source"
+wave = 5
+optional = false
+soft_src_line_target = 7000
+deps = ["search-contracts", "search-domain", "search-source-registry", "search-source-identity", "search-safe-reader"]
+
+[[package]]
+name = "search-safe-reader"
+path = "crates/search-source/search-safe-reader"
+kind = "lib"
+cell = "C06"
+family = "source"
+wave = 2
+optional = false
+soft_src_line_target = 7500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-revision-store"
+path = "crates/search-source/search-revision-store"
+kind = "lib"
+cell = "C07"
+family = "source"
+wave = 2
+optional = false
+soft_src_line_target = 8000
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-materializer"
+path = "crates/search-prep/search-materializer"
+kind = "lib"
+cell = "C08"
+family = "preparation"
+wave = 2
+optional = false
+soft_src_line_target = 7000
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-unitizer"
+path = "crates/search-prep/search-unitizer"
+kind = "lib"
+cell = "C09"
+family = "preparation"
+wave = 2
+optional = false
+soft_src_line_target = 6500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-code-enricher"
+path = "crates/search-prep/search-code-enricher"
+kind = "lib"
+cell = "C10"
+family = "preparation"
+wave = 5
+optional = false
+soft_src_line_target = 8500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-lexical"
+path = "crates/search-lexical"
+kind = "lib"
+cell = "C11"
+family = "provider"
+wave = 3
+optional = false
+soft_src_line_target = 8500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-model-provider"
+path = "crates/search-model-provider"
+kind = "lib"
+cell = "C12"
+family = "provider"
+wave = 10
+optional = true
+soft_src_line_target = 6500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner"
+kind = "lib"
+cell = "C13"
+family = "index"
+wave = 3
+optional = false
+soft_src_line_target = 7000
+deps = ["search-contracts", "search-domain", "search-point-identity"]
+
+[[package]]
+name = "search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity"
+kind = "lib"
+cell = "C14"
+family = "index"
+wave = 3
+optional = false
+soft_src_line_target = 4500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge"
+kind = "lib"
+cell = "C15"
+family = "index"
+wave = 3
+optional = false
+soft_src_line_target = 9000
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-publication"
+path = "crates/search-index-qdrant/search-publication"
+kind = "lib"
+cell = "C16"
+family = "index"
+wave = 3
+optional = false
+soft_src_line_target = 9500
+deps = ["search-contracts", "search-domain", "search-projection-planner", "search-point-identity", "search-qdrant-bridge", "search-epoch-pins"]
+
+[[package]]
+name = "search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins"
+kind = "lib"
+cell = "C17"
+family = "index"
+wave = 3
+optional = false
+soft_src_line_target = 4500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-access"
+path = "crates/search-query/search-access"
+kind = "lib"
+cell = "C18"
+family = "query"
+wave = 4
+optional = false
+soft_src_line_target = 8500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-overlay"
+path = "crates/search-query/search-overlay"
+kind = "lib"
+cell = "C19"
+family = "query"
+wave = 5
+optional = false
+soft_src_line_target = 8000
+deps = ["search-contracts", "search-domain", "search-unitizer", "search-lexical"]
+
+[[package]]
+name = "search-exact"
+path = "crates/search-query/search-exact"
+kind = "lib"
+cell = "C20"
+family = "query"
+wave = 6
+optional = false
+soft_src_line_target = 8500
+deps = ["search-contracts", "search-domain", "search-source-registry", "search-revision-store", "search-safe-reader", "search-access"]
+
+[[package]]
+name = "search-subject-resolver"
+path = "crates/search-query/search-subject-resolver"
+kind = "lib"
+cell = "C21"
+family = "query"
+wave = 6
+optional = false
+soft_src_line_target = 6000
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-query-planner"
+path = "crates/search-query/search-query-planner"
+kind = "lib"
+cell = "C22"
+family = "query"
+wave = 4
+optional = false
+soft_src_line_target = 9000
+deps = ["search-contracts", "search-domain", "search-access"]
+
+[[package]]
+name = "search-retrieval-executor"
+path = "crates/search-query/search-retrieval-executor"
+kind = "lib"
+cell = "C23"
+family = "query"
+wave = 4
+optional = false
+soft_src_line_target = 9500
+deps = ["search-contracts", "search-domain", "search-query-planner", "search-qdrant-bridge", "search-lexical", "search-epoch-pins", "search-access"]
+
+[[package]]
+name = "search-candidate-validator"
+path = "crates/search-query/search-candidate-validator"
+kind = "lib"
+cell = "C24"
+family = "query"
+wave = 4
+optional = false
+soft_src_line_target = 8000
+deps = ["search-contracts", "search-domain", "search-access", "search-revision-store"]
+
+[[package]]
+name = "search-comparator"
+path = "crates/search-query/search-comparator"
+kind = "lib"
+cell = "C25"
+family = "query"
+wave = 6
+optional = false
+soft_src_line_target = 8000
+deps = ["search-contracts", "search-domain", "search-subject-resolver"]
+
+[[package]]
+name = "search-result-projector"
+path = "crates/search-query/search-result-projector"
+kind = "lib"
+cell = "C26"
+family = "query"
+wave = 4
+optional = false
+soft_src_line_target = 7000
+deps = ["search-contracts", "search-domain", "search-candidate-validator"]
+
+[[package]]
+name = "search-continuation"
+path = "crates/search-query/search-continuation"
+kind = "lib"
+cell = "C27"
+family = "query"
+wave = 4
+optional = false
+soft_src_line_target = 6000
+deps = ["search-contracts", "search-domain", "search-query-planner", "search-access", "search-epoch-pins"]
+
+[[package]]
+name = "search-retention"
+path = "crates/search-runtime/search-retention"
+kind = "lib"
+cell = "C28"
+family = "runtime"
+wave = 7
+optional = false
+soft_src_line_target = 9000
+deps = ["search-contracts", "search-domain", "search-control-redb", "search-revision-store", "search-qdrant-bridge", "search-epoch-pins"]
+
+[[package]]
+name = "search-eval"
+path = "crates/search-eval"
+kind = "lib"
+cell = "C29"
+family = "evaluation"
+wave = 4
+optional = false
+soft_src_line_target = 8500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-provider-protocol"
+path = "crates/search-provider-protocol"
+kind = "lib"
+cell = "C30 generic edge"
+family = "adapter"
+wave = 1
+optional = false
+soft_src_line_target = 8500
+deps = ["search-contracts", "search-domain"]
+
+[[package]]
+name = "search-eliot-adapter"
+path = "crates/search-eliot-adapter"
+kind = "lib"
+cell = "C30 optional ELIOT profile"
+family = "adapter"
+wave = 8
+optional = true
+soft_src_line_target = 5500
+deps = ["search-contracts", "search-domain", "search-provider-protocol"]
+
+[[package]]
+name = "search-research-export-adapter"
+path = "crates/search-research-export-adapter"
+kind = "lib"
+cell = "C30 optional Research profile"
+family = "adapter"
+wave = 8
+optional = true
+soft_src_line_target = 6000
+deps = ["search-contracts", "search-domain", "search-provider-protocol"]
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+kind = "bin"
+cell = "composition"
+family = "binary"
+wave = 1
+optional = false
+soft_src_line_target = 6500
+progressive_composition = true
+deps = ["search-contracts", "search-domain", "search-runtime-owner", "search-control-redb", "search-source-registry", "search-source-identity", "search-source-reconcile", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "search-code-enricher", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-access", "search-overlay", "search-exact", "search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-comparator", "search-result-projector", "search-continuation", "search-retention", "search-eval", "search-provider-protocol"]
+
+[[package]]
+name = "eliot-search"
+path = "bins/eliot-search"
+kind = "bin"
+cell = "composition"
+family = "binary"
+wave = 1
+optional = false
+soft_src_line_target = 4500
+progressive_composition = true
+deps = ["search-contracts", "search-provider-protocol"]
+
+[[package]]
+name = "eliot-search-model-worker"
+path = "bins/eliot-search-model-worker"
+kind = "bin"
+cell = "composition"
+family = "binary"
+wave = 10
+optional = true
+soft_src_line_target = 4500
+deps = ["search-contracts", "search-provider-protocol", "search-model-provider"]
+
+[[package]]
+name = "eliot-search-doc-worker"
+path = "bins/eliot-search-doc-worker"
+kind = "bin"
+cell = "composition"
+family = "binary"
+wave = 10
+optional = true
+soft_src_line_target = 5000
+deps = ["search-contracts", "search-provider-protocol", "search-materializer"]

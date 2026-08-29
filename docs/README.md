@@ -1,12 +1,13 @@
-# docs
+# Documentation
 
 | Directory | Contents |
 |---|---|
-| `architecture/` | [ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md](architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md) — the authoritative Search architecture and implementation master. One file; no second normative document. |
-| `handoff/` | Implementation handoff and the PR delivery graph derived from the architecture. |
-| `adr/` | Architecture Decision Records. Required for any load-bearing default, new owner, vendor selection or contract change. |
+| `architecture/` | The single authoritative ELIOT Search 8.4 architecture, handoff and audit master. |
+| `adr/` | Architecture Decision Records for load-bearing defaults, package boundaries and vendor choices. |
+| `handoff/` | Swarm execution protocol, package matrix and implementation waves derived from Architecture 8.4. |
 | `contracts/` | Hand-written contract notes not yet generated. |
-| `generated/` | Generated projections: schemas, reason-code registry, capability descriptor, command surface. Never hand-edited. |
+| `generated/` | Generated schemas, registries and descriptors. Never hand-edit. |
 
-Prose here explains rationale, owners and failure behavior. Schemas, registries and matrices move into
-`generated/` as implementation lands.
+Ordinary package agents read the nearest `AGENTS.md`, not the full architecture master. The master
+remains the source of truth; package instructions are bounded implementation extracts. Machine-readable
+assignment metadata lives in [`../swarm/crates.toml`](../swarm/crates.toml).

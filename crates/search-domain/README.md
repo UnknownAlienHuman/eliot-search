@@ -1,9 +1,24 @@
 # search-domain
 
-Pure domain cores.
+**shared pure kernel — Pure invariant algebra.**
 
-State machines, validation, ranking rules, reconciliation and policy expressed as pure functions over
-`search-contracts` types.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-- **Owns:** deterministic decision logic and invariant tests.
-- **Must not own:** I/O, clocks, process handles, vendor clients.
+Implement pure state transitions and deterministic decision rules over search-contracts types without owning any external capability.
+
+## Owns
+
+- pure validation and transition functions
+- canonical ordering and plan-fingerprint rules
+- eligibility/filter AST semantics
+- coverage classification and invariant proofs
+
+## Must not own
+
+- I/O, clocks, process handles or vendor clients
+- becoming a dumping ground for capability-specific logic
+- owning source, query, publication or access state
+
+- **Delivery wave:** W0 / P00
+- **Soft source-line target:** 7,000
+- **Agent instructions:** [AGENTS.md](AGENTS.md)

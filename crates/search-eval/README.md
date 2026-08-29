@@ -1,9 +1,26 @@
 # search-eval
 
-**Cell C29 — Telemetry and Evaluation.**
+**C29 — Telemetry and evaluation.**
 
-- **Owns:** content-minimized metrics; the control-corpus harness; baseline comparison fixtures;
-  quality evidence.
-- **Must not own:** hidden training; source text in logs; raw query text by default.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-Delivered together with the first lexical recipes and executed at product acceptance, not added late.
+Own content-minimized observability, control-corpus evaluation and property/fault evidence without becoming a training pipeline.
+
+## Owns
+
+- opaque metrics and operation traces
+- control-corpus harness and baseline adapters
+- property/fault fixture orchestration
+- latency/resource/security acceptance reports
+- privacy leakage assertions
+
+## Must not own
+
+- raw source, unsaved buffers or query text in default logs
+- hidden training or learning inputs
+- treating green unit tests as product acceptance
+- production crates depending on eval
+
+- **Delivery wave:** W4 baseline / P08; acceptance W9 / P15
+- **Soft source-line target:** 8,500
+- **Agent instructions:** [AGENTS.md](AGENTS.md)

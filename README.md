@@ -2,151 +2,131 @@
 
 **Local-first data preparation and retrieval provider for ELIOT Memory OS.**
 
-> **Status: architecture master published; implementation scaffold.** The authoritative standalone
-> contract is [ELIOT Search 8.4](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md). No
-> implementation exists; runtime, performance, security execution, migration and product acceptance
-> remain unproven. Continuous integration remains disabled until implementation begins.
-
----
-
-## What this is
-
-ELIOT Search prepares local data and answers retrieval requests. It is a separate product with its own
-repository, its own delivery gates and its own release cadence. ELIOT Memory OS reaches it through a
-typed provider contract, never through shared credentials or a shared database.
-
-It owns:
-
-- local source registration and observation;
-- source identity, revision occurrences and membership bindings;
-- safe no-execute reads, materialization, unitization and code/document enrichment;
-- exact, lexical, structural and optional semantic retrieval projections;
-- currentness, publication, overlays and coherent source readback;
-- typed local-data recipes and compact evidence-oriented result cards;
-- local index lifecycle, purge and rebuild.
-
-## What this is not
-
-- **Not the memory system.** It never receives canonical database credentials and never writes
-  cognitive state.
-- **Not an online research service.** External acquisition, large corpora and long-running
-  investigations belong to ELIOT Research.
-- **Not a research controller.** Planning and swarm execution stay inside ELIOT Memory OS.
-- **Not an authority.** Search returns candidates, coverage and uncertainty. It does not decide what
-  ELIOT should believe, and it never returns an ELIOT admission disposition.
+> **Status: Architecture 8.4 published; swarm-ready package scaffold; no business implementation.**
+> The authoritative standalone contract is
+> [ELIOT Search 8.4](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md).
+> The workspace currently contains package boundaries, dependency declarations and per-package agent
+> contracts only. Runtime, correctness, performance, security execution, migration and product
+> acceptance remain unproven.
 
 ## Product boundary
 
-Four contours that must not be conflated:
+ELIOT Search owns local source observation, immutable revision readback, preparation, rebuildable
+retrieval projections, exact scans, compact candidate results, currentness, purge and rebuild.
+It is not the memory system, an online research service, a task controller, a canonical knowledge store
+or an authority service.
 
-| Contour | Owns | Repository |
-|---|---|---|
-| **ELIOT Memory OS** | Principal, WorkScope, task, authority, canonical records, Context Compiler, Governor, Dreamer, verification and completion | `eliot-memory-os` |
-| **ELIOT Search** | Local source preparation and retrieval — this repository | `eliot-search` |
-| **ELIOT Research** | External corpora, acquisition at scale, investigations and research publications | `eliot-research` |
-| **Inquiry discipline** | Protocol, evidence grade, coverage denominator and claim audit | inside ELIOT Memory OS |
-
-Search and Research are **pluggable providers**. Neither is required for the first ELIOT spine.
-An absent provider narrows declared coverage and is reported as a gap; it never transfers its
-responsibility to another owner and never blocks unrelated local work.
+ELIOT Memory OS reaches Search through typed provider contracts. It never shares canonical database
+credentials with Search. Search returns candidates, coverage, freshness, assurance and reason codes;
+the consuming client owns interpretation and admission.
 
 ## Non-negotiable invariants
 
-A change that violates one of these requires a new architecture revision, not a local workaround.
-
 ```text
-one search/index database; the control journal is never a searchable corpus;
-original bytes or an immutable admitted revision are the only source truth;
-retrieval proposes candidates; ELIOT admits influence;
-one projection membership per point; no membership arrays in a payload;
-access and currentness filters apply before candidate generation and scoring statistics;
-indexed top-k never narrows the denominator of an exact negative proof;
-restrictive access and purge fences override query snapshots immediately;
-an uncommitted epoch is never observable as current, and an epoch number is never reused;
+one search/index database: Qdrant;
+redb is a bounded control journal, never a searchable corpus;
+source bytes or an immutable admitted revision are source truth;
+one point has one ProjectionMembership; no membership arrays;
+access/currentness filters run before retrieval and IDF;
+indexed top-k never defines an exact negative denominator;
+live deny and purge fences override query snapshots immediately;
+uncommitted epochs are never current and are never reused;
 publication writes are acknowledged and read back before commit;
-no source range is called exact without a declared coordinate basis and revision digest;
-an unsaved editor buffer is never inferred from a filesystem watcher;
-index loss cannot destroy load-bearing ELIOT evidence;
-stale or inaccessible candidates are removed before result projection;
-a workspace is never called current across an unresolved observation gap.
+unsaved editor bytes never persist without explicit admission;
+vendor types never cross public package ports;
+stale or inaccessible candidates are removed before projection.
 ```
 
-## Repository layout
+## Swarm decomposition
+
+Architecture S31 lists focused capability families and explicitly permits a capability cell to become a
+separate crate when a real dependency, replacement, test or context boundary exists. ADR
+[0001](docs/adr/0001-capability-cell-crate-decomposition.md) applies that rule to a one-agent/one-crate
+swarm and a target below 10,000 hand-written lines per package.
+
+The workspace has **34 library packages** and **4 binary packages**. Family directories are organizational
+containers, not forwarding crates.
 
 ```text
-docs/
-  architecture/   authoritative architecture master (single file)
-  handoff/        implementation handoff and PR delivery graph
-  adr/            architecture decision records
-  contracts/      hand-written contract notes not yet generated
-  generated/      generated schemas, registries and descriptors — never hand-edited
-
 crates/
-  search-contracts       C00  versioned types, recipes, reason codes
-  search-domain               pure state machines, validation, ranking rules
-  search-control-redb    C02  bounded durable control journal
-  search-source          C03–C07  registry, identity, reconciler, safe reader, revision store
-  search-prep            C08–C10  materializer, unitizer, code enricher
-  search-lexical         C11  deterministic lexical encoder behind a port
-  search-index-qdrant    C13–C17  projection, point identity, bridge, publication, pins
-  search-query           C18–C27  access, overlay, exact plane, planner, executor, projector
-  search-runtime         C01, C28  data-root owner, retention and purge
-  search-eliot-adapter   C30  provider protocol translation
-  search-eval            C29  content-minimized telemetry and evaluation
+  search-contracts/                  C00
+  search-domain/                     shared pure invariant kernel
+  search-control-redb/               C02
+  search-runtime/
+    search-runtime-owner/            C01
+    search-retention/                C28
+  search-source/
+    search-source-registry/          C03
+    search-source-identity/          C04
+    search-source-reconcile/         C05
+    search-safe-reader/              C06
+    search-revision-store/           C07
+  search-prep/
+    search-materializer/             C08
+    search-unitizer/                 C09
+    search-code-enricher/            C10
+  search-lexical/                    C11
+  search-model-provider/             C12 optional
+  search-index-qdrant/
+    search-projection-planner/       C13
+    search-point-identity/            C14
+    search-qdrant-bridge/             C15
+    search-publication/               C16
+    search-epoch-pins/                C17
+  search-query/
+    search-access/                    C18
+    search-overlay/                   C19
+    search-exact/                     C20
+    search-subject-resolver/          C21
+    search-query-planner/             C22
+    search-retrieval-executor/        C23
+    search-candidate-validator/       C24
+    search-comparator/                C25
+    search-result-projector/          C26
+    search-continuation/              C27
+  search-eval/                       C29
+  search-provider-protocol/          C30 generic edge
+  search-eliot-adapter/              C30 optional ELIOT profile
+  search-research-export-adapter/    C30 optional Research profile
 
 bins/
-  eliot-searchd                  the daemon; sole owner of the data root
-  eliot-search                   standalone CLI over the same daemon
-  eliot-search-model-worker      optional; dense/rerank profiles
-  eliot-search-doc-worker        optional; document materialization
-
-tests/
-  control-corpus/  acceptance corpus
-  fixtures/        recorded deterministic fixtures
-  property/        property and fault proofs
-
-tools/             development-only generators and drivers
+  eliot-searchd/
+  eliot-search/
+  eliot-search-model-worker/         optional after P15
+  eliot-search-doc-worker/           optional after P15
 ```
 
-A capability cell is a causal responsibility with a contract, an owner, a failure state and a test
-seam. A cell does not automatically imply a crate, and a crate may host several cells. Each crate
-README states what it owns and — equally important — what it must not own.
+Every package contains a small `AGENTS.md` with its exact ownership, forbidden responsibilities,
+logical API, reason codes, test seams, allowed dependencies and delivery wave. Swarm orchestration uses
+[`swarm/crates.toml`](swarm/crates.toml); agents do not need to repeatedly load the architecture master.
 
-## Delivery gates
+## Delivery order
 
-Depth is added only after the layer beneath it is proven.
+The scaffold preserves P00–P18 but exposes smaller ownership units:
 
-| Gate | Proven |
-|---|---|
-| **G0 Contract** | Identity, membership, epoch, anchors, recipes, reason codes and dependency direction compile and pass pure property tests |
-| **G1 Direct** | One daemon owns the root; inventory, exact reads and scans, revision store and no-execute policy work with no index at all |
-| **G2 Lexical** | Qualified index build, encoder fixtures, filtered scoring statistics, point manifests and publication fault tests |
-| **G3 Code** | Subject resolution, structure, callers/tests/docs and cross-repository comparison on the control corpus |
-| **G4 ELIOT edge** | Binding, grants, compact cards, handle expansion, evidence pinning and verification through existing ELIOT surfaces |
-| **G5 Product acceptance** | Beats or materially complements baselines without stale or access leakage, within resource budgets |
-| **G6 Optional depth** | Dense, rerank and document providers admitted individually, each on measured benefit |
+```text
+W0 contracts and pure domain
+W1 runtime owner and control journal
+W2 direct source/revision/materialization spine
+W3 qualified Qdrant, lexical, identity and publication
+W4 lexical query pipeline and compact cards
+W5 reconciliation, overlays and Rust structure
+W6 subject comparison and exact proof
+W7 security, retention, purge and restore hardening
+W8 generic client protocol and optional leaf adapters
+W9 Product Pulse / Windows qualification
+W10 optional model or document depth after accepted P15
+```
 
-No optional semantic or document work begins before G5 is decided.
+See [implementation waves](docs/handoff/IMPLEMENTATION_WAVES.md) and the
+[crate matrix](docs/handoff/CRATE_MATRIX.md).
 
-## Relationship to ELIOT
+## Scaffold semantics
 
-ELIOT compiles natural language, task context and WorkScope into a typed request and a scoped read
-grant. Search plans and executes retrieval, then returns candidates with coverage, freshness, provider
-assurance, source handles and reason codes. ELIOT performs admission, verification and interpretation.
-
-A capability descriptor tells ELIOT which recipes and profiles are actually available, how fresh the
-observation is, and which reason codes are currently degraded. Provider availability is planning
-information, never permission.
-
-## Continuous integration
-
-CI is disabled for this repository. It is enabled only when the contract freeze provides something
-meaningful to verify: format, workspace check, contract tests and dependency policy. Until then a
-green pipeline would prove nothing and would invite treating scaffolding as progress.
+`Cargo.toml` files and `src/lib.rs` / `src/main.rs` files only establish package boundaries. They contain
+no retrieval, storage, protocol or runtime implementation. P00 still owns the exact Rust toolchain pin,
+Cargo.lock, contract types, tests and dependency-policy proof.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-The repository is private while the contracts are unstable; the license is MIT so that the
-boundary contracts can be shared or open-sourced without a later relicensing step.

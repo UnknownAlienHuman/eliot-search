@@ -1,10 +1,17 @@
-# search-prep
+# Preparation family
 
-**Cells C08 to C10** — Materializer, Unitizer, Code Enricher.
+**Organizational capability family — not a Cargo package.**
 
-- **Owns:** format-to-canonical-representation conversion with an explicit loss map; deterministic unit
-  occurrences; structural facts such as definitions, references and configuration predicates.
-- **Must not own:** authority, ranking, compiler-grade certainty.
+## Child packages
 
-Tolerant parsing yields syntax structure, not compiler truth. Provider assurance and configuration
-predicates travel with every structural fact.
+- [`search-materializer/`](search-materializer/) — C08: Convert an exact retained revision into a canonical representation with explicit coordinate and loss maps.
+- [`search-unitizer/`](search-unitizer/) — C09: Turn a materialization into deterministic unit occurrences and an immutable unit manifest.
+- [`search-code-enricher/`](search-code-enricher/) — C10: Produce provider-qualified Rust definitions, references, tests and documentation facts without claiming compiler truth.
+
+## Family invariants
+
+- Every transform has a versioned profile and explicit assurance ceiling.
+- Coordinate and loss maps are mandatory when bytes are transformed.
+- Tolerant syntax parsing is not compiler truth.
+
+Each writer agent owns exactly one child package and follows that package's `AGENTS.md`.

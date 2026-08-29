@@ -1,11 +1,26 @@
 # search-contracts
 
-**Cell C00 — Contracts.**
+**C00 — Versioned contracts.**
 
-Versioned external and domain types shared by every other crate.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-- **Owns:** schemas, newtypes, identifiers, recipe set, reason codes, provider envelope, grant claims, execution budget.
-- **Must not own:** runtime state, transport, storage, ELIOT semantics.
-- **Dependencies:** none. Nothing here may reference the index client, the control journal, platform APIs or ELIOT internals.
+Define the complete vendor-neutral wire and domain contract surface used by every other package.
 
-Contract freeze delivers this crate first; every later crate compiles against it.
+## Owns
+
+- newtypes and identifiers
+- recipes and reason codes
+- source/view/membership/residency schemas
+- grants, plans, budgets and candidate/result schemas
+- anchors, handles, protocol envelopes and capability descriptors
+
+## Must not own
+
+- runtime state or I/O
+- redb, Qdrant, Windows or client-vendor types
+- implicit string/UUID substitution at domain boundaries
+- silently ignored security, scope or budget fields
+
+- **Delivery wave:** W0 / P00
+- **Soft source-line target:** 8,000
+- **Agent instructions:** [AGENTS.md](AGENTS.md)
