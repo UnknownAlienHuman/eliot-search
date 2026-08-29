@@ -5,40 +5,115 @@ architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da
 scaffold_package_count = 45
 library_package_count = 41
 binary_package_count = 4
-package_registry = "swarm/crates.toml"
 package_registry_schema_version = 7
-configuration_registry = "config/sections.toml"
+package_registry_path = "swarm/crates.toml"
+configuration_registry_path = "config/sections.toml"
 qdrant_qualification = "qualification/qdrant/W3_QUALIFICATION.md"
 query_qualification = "qualification/query/W4_QUALIFICATION.md"
 current_workspace_qualification = "qualification/current/W5_QUALIFICATION.md"
 proof_qualification = "qualification/proof/W6_QUALIFICATION.md"
-
-active_wave = 0
 active_stage = "P00"
-state = "W0_READY_FOR_CONTRACTS_ASSIGNMENT"
-authorized_packages = ["search-contracts"]
-conditionally_authorized_packages = ["search-domain", "search-ports"]
-blocked_packages = "all packages with wave > 0"
-last_accepted_wave_receipt = ""
-updated_at = "2026-08-29"
+active_wave = 0
 
-[conditions.search-domain]
-requires_accepted_handoff = ["search-contracts"]
-requires_public_api_digest = true
+# Cargo/package presence, a FUNCTIONS.md packet, qualification template or future wave is never
+# implementation authorization. This file and accepted immutable wave receipts are authoritative.
 
-[conditions.search-ports]
-requires_accepted_handoff = ["search-contracts"]
-requires_public_api_digest = true
-requires_contract_pack_challenges_empty = true
+authorized_packages = [
+  "search-contracts",
+]
 
-[advance]
-authority = "integration-owner"
-requires_all_active_package_handoffs = true
-requires_workspace_policy_evidence = true
-requires_contract_pack_hash_receipt = true
-requires_wave_receipt = true
-manual_edit_without_receipt = false
+conditional_packages = [
+  "search-domain",
+  "search-ports",
+]
+
+blocked_packages = [
+  "search-config",
+  "search-runtime-owner",
+  "search-os-secrets",
+  "search-control-redb",
+  "search-source-admission",
+  "search-source-registry",
+  "search-source-identity",
+  "search-source-reconcile",
+  "search-safe-reader",
+  "search-revision-store",
+  "search-materializer",
+  "search-unitizer",
+  "search-code-enricher",
+  "search-lexical",
+  "search-model-provider",
+  "search-projection-planner",
+  "search-point-identity",
+  "search-qdrant-supervisor",
+  "search-qdrant-bridge",
+  "search-publication",
+  "search-epoch-pins",
+  "search-index-reclaimer",
+  "search-access",
+  "search-overlay",
+  "search-exact",
+  "search-subject-resolver",
+  "search-query-planner",
+  "search-retrieval-executor",
+  "search-candidate-validator",
+  "search-comparator",
+  "search-handles",
+  "search-result-projector",
+  "search-continuation",
+  "search-retention",
+  "search-eval",
+  "search-provider-protocol",
+  "search-eliot-adapter",
+  "search-research-export-adapter",
+  "eliot-searchd",
+  "eliot-search",
+  "eliot-search-model-worker",
+  "eliot-search-doc-worker",
+]
+
+[conditional_activation.search-domain]
+requires = [
+  "accepted search-contracts public API/schema digest",
+  "accepted search-contracts package handoff",
+  "integration-owner assignment ticket bound to accepted commit",
+]
+
+[conditional_activation.search-ports]
+requires = [
+  "accepted search-contracts public API/schema digest",
+  "accepted search-contracts package handoff",
+  "integration-owner assignment ticket bound to accepted commit",
+]
 
 [optional_depth]
 model_and_document_packages = "blocked"
-requires = ["accepted P15 Product Pulse", "dedicated ADR", "exact artifact/provider qualification"]
+advanced_scale_packages = "blocked"
+packet = "swarm/w10-optional-depth.toml"
+qualification = "qualification/optional-depth/W10_QUALIFICATION.md"
+settings = "config/w10-optional-depth.toml"
+accepted_p15_receipt_ref = ""
+selected_candidate = "NONE"
+accepted_candidate_receipts = []
+requires_accepted_gate = "G5"
+requires_accepted_p15 = true
+requires_dedicated_adr = true
+requires_exact_artifact_qualification = true
+requires_measured_material_benefit = true
+requires_removal_fallback = true
+requires_migration_rollback_when_applicable = true
+configuration_alone_authorizes = false
+
+[advancement]
+next_wave = 1
+requires_accepted_gate = "G0"
+requires_accepted_wave_receipt = "W0"
+requires_accepted_packages = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+]
+
+current_claim = "package boundaries and bounded contracts only"
+runtime_evidence = "absent"
+product_acceptance = "not_accepted"
