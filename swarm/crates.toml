@@ -1,21 +1,24 @@
-schema_version = 4
+schema_version = 5
 project = "eliot-search"
 architecture_version = "8.4"
 architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
 status = "scaffold-only"
-package_count = 44
-library_package_count = 40
+package_count = 45
+library_package_count = 41
 binary_package_count = 4
 assignment_path_template = "swarm/assignments/{package}.md"
 launch_state_path = "swarm/launch-state.toml"
 port_catalog_path = "docs/handoff/PORT_CATALOG.md"
 p00_contract_pack_path = "docs/contracts/p00/README.md"
+configuration_registry_path = "config/sections.toml"
+qdrant_qualification_path = "qualification/qdrant/W3_QUALIFICATION.md"
 hard_handwritten_rust_line_limit = 10000
 mandatory_split_review_line_limit = 8500
 ordinary_agent_architecture_access = "exception-only"
 
 # Per-package AGENTS.md is `${path}/AGENTS.md`; write scope is `${path}/**`.
 # `wave` is the earliest possible wave, not current authorization. launch-state.toml is authoritative.
+# `functions` and `config_sections` are bounded read-set inputs, not implementation authorization.
 # Shared vendor-neutral traits are owned by search-ports; concrete adapters are composed only by eliot-searchd.
 
 [[package]]
@@ -55,6 +58,19 @@ assignment = "swarm/assignments/search-ports.md"
 deps = ["search-contracts"]
 
 [[package]]
+name = "search-config"
+path = "crates/search-config"
+kind = "lib"
+cell = "configuration mechanics"
+family = "foundation"
+wave = 1
+optional = false
+soft_src_line_target = 5500
+assignment = "swarm/assignments/search-config.md"
+functions = "crates/search-config/FUNCTIONS.md"
+deps = ["search-contracts"]
+
+[[package]]
 name = "search-runtime-owner"
 path = "crates/search-runtime/search-runtime-owner"
 kind = "lib"
@@ -64,7 +80,8 @@ wave = 1
 optional = false
 soft_src_line_target = 4500
 assignment = "swarm/assignments/search-runtime-owner.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["instance"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-os-secrets"
@@ -76,7 +93,8 @@ wave = 1
 optional = false
 soft_src_line_target = 3500
 assignment = "swarm/assignments/search-os-secrets.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["secrets"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-control-redb"
@@ -88,7 +106,8 @@ wave = 1
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-control-redb.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["control"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-source-admission"
@@ -100,7 +119,8 @@ wave = 2
 optional = false
 soft_src_line_target = 4500
 assignment = "swarm/assignments/search-source-admission.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["source_admission"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-source-registry"
@@ -136,7 +156,8 @@ wave = 5
 optional = false
 soft_src_line_target = 7000
 assignment = "swarm/assignments/search-source-reconcile.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-source-registry", "search-source-identity", "search-safe-reader"]
+config_sections = ["reconcile"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-source-registry", "search-source-identity", "search-safe-reader"]
 
 [[package]]
 name = "search-safe-reader"
@@ -148,7 +169,8 @@ wave = 2
 optional = false
 soft_src_line_target = 6500
 assignment = "swarm/assignments/search-safe-reader.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["source_reader"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-revision-store"
@@ -160,7 +182,8 @@ wave = 2
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-revision-store.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["revision_store"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-materializer"
@@ -208,7 +231,10 @@ wave = 3
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-lexical.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+functions = "crates/search-lexical/FUNCTIONS.md"
+config_sections = ["lexical"]
+qualification = "qualification/qdrant/W3_QUALIFICATION.md"
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-model-provider"
@@ -232,6 +258,7 @@ wave = 3
 optional = false
 soft_src_line_target = 7000
 assignment = "swarm/assignments/search-projection-planner.md"
+functions = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-point-identity"]
 
 [[package]]
@@ -244,6 +271,7 @@ wave = 3
 optional = false
 soft_src_line_target = 4500
 assignment = "swarm/assignments/search-point-identity.md"
+functions = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
 deps = ["search-contracts", "search-domain"]
 
 [[package]]
@@ -256,7 +284,10 @@ wave = 3
 optional = false
 soft_src_line_target = 5500
 assignment = "swarm/assignments/search-qdrant-supervisor.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+functions = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+config_sections = ["qdrant_process"]
+qualification = "qualification/qdrant/W3_QUALIFICATION.md"
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-qdrant-bridge"
@@ -268,7 +299,10 @@ wave = 3
 optional = false
 soft_src_line_target = 7000
 assignment = "swarm/assignments/search-qdrant-bridge.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+functions = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+config_sections = ["qdrant_data"]
+qualification = "qualification/qdrant/W3_QUALIFICATION.md"
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-publication"
@@ -280,6 +314,7 @@ wave = 3
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-publication.md"
+functions = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
 deps = ["search-contracts", "search-domain", "search-ports", "search-projection-planner", "search-point-identity"]
 
 [[package]]
@@ -292,6 +327,7 @@ wave = 3
 optional = false
 soft_src_line_target = 4500
 assignment = "swarm/assignments/search-epoch-pins.md"
+functions = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
 deps = ["search-contracts", "search-domain", "search-ports"]
 
 [[package]]
@@ -304,7 +340,9 @@ wave = 3
 optional = false
 soft_src_line_target = 4500
 assignment = "swarm/assignments/search-index-reclaimer.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-epoch-pins"]
+functions = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+config_sections = ["index_reclaim"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-epoch-pins"]
 
 [[package]]
 name = "search-access"
@@ -328,7 +366,8 @@ wave = 5
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-overlay.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-unitizer", "search-lexical"]
+config_sections = ["overlay"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-unitizer", "search-lexical"]
 
 [[package]]
 name = "search-exact"
@@ -364,7 +403,8 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-query-planner.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-access"]
+config_sections = ["query"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-access"]
 
 [[package]]
 name = "search-retrieval-executor"
@@ -376,7 +416,8 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-retrieval-executor.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-query-planner", "search-lexical", "search-epoch-pins", "search-access"]
+config_sections = ["scheduler"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-query-planner", "search-lexical", "search-epoch-pins", "search-access"]
 
 [[package]]
 name = "search-candidate-validator"
@@ -412,7 +453,8 @@ wave = 4
 optional = false
 soft_src_line_target = 6500
 assignment = "swarm/assignments/search-handles.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["handles"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-result-projector"
@@ -436,7 +478,8 @@ wave = 4
 optional = false
 soft_src_line_target = 6000
 assignment = "swarm/assignments/search-continuation.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-query-planner", "search-access", "search-epoch-pins"]
+config_sections = ["continuations"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-query-planner", "search-access", "search-epoch-pins"]
 
 [[package]]
 name = "search-retention"
@@ -448,7 +491,8 @@ wave = 7
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-retention.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-epoch-pins", "search-index-reclaimer", "search-handles"]
+config_sections = ["retention"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-epoch-pins", "search-index-reclaimer", "search-handles"]
 
 [[package]]
 name = "search-eval"
@@ -460,7 +504,8 @@ wave = 4
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-eval.md"
-deps = ["search-contracts", "search-domain"]
+config_sections = ["observability"]
+deps = ["search-contracts", "search-domain", "search-config"]
 
 [[package]]
 name = "search-provider-protocol"
@@ -472,7 +517,8 @@ wave = 1
 optional = false
 soft_src_line_target = 7500
 assignment = "swarm/assignments/search-provider-protocol.md"
-deps = ["search-contracts", "search-domain", "search-ports"]
+config_sections = ["protocol"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config"]
 
 [[package]]
 name = "search-eliot-adapter"
@@ -508,9 +554,10 @@ wave = 1
 optional = false
 soft_src_line_target = 6500
 assignment = "swarm/assignments/eliot-searchd.md"
+config_sections = ["optional_profiles"]
 progressive_composition = true
 active_default_feature = "wave1-shell"
-deps = ["search-contracts", "search-domain", "search-ports", "search-runtime-owner", "search-os-secrets", "search-control-redb", "search-source-admission", "search-source-registry", "search-source-identity", "search-source-reconcile", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "search-code-enricher", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer", "search-access", "search-overlay", "search-exact", "search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-comparator", "search-handles", "search-result-projector", "search-continuation", "search-retention", "search-eval", "search-provider-protocol"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-config", "search-runtime-owner", "search-os-secrets", "search-control-redb", "search-source-admission", "search-source-registry", "search-source-identity", "search-source-reconcile", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "search-code-enricher", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer", "search-access", "search-overlay", "search-exact", "search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-comparator", "search-handles", "search-result-projector", "search-continuation", "search-retention", "search-eval", "search-provider-protocol"]
 
 [[package]]
 name = "eliot-search"
@@ -522,7 +569,7 @@ wave = 1
 optional = false
 soft_src_line_target = 4500
 assignment = "swarm/assignments/eliot-search.md"
-deps = ["search-contracts", "search-ports", "search-provider-protocol"]
+deps = ["search-contracts", "search-ports", "search-config", "search-provider-protocol"]
 
 [[package]]
 name = "eliot-search-model-worker"
