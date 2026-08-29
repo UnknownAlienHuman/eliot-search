@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = 2
 project = "eliot-search"
 status = "DESIGNED_NOT_EXECUTED"
 topology_identity = "qdrant-baseline-v1"
@@ -9,9 +9,23 @@ shard_number = 1
 replication_factor = 1
 write_consistency_factor = 1
 collection_generations = "one_active_plus_migration_candidate"
-strict_mode_required = true
 loopback_only = true
 authentication_required = true
+
+[strict_mode]
+enabled = true
+unindexed_filtering_retrieve = false
+unindexed_filtering_update = false
+payload_indexes_before_ingest = true
+reject_unsupported_or_unindexed_filter = true
+
+[query_semantics]
+filtered_idf_required = true
+idf_parameter_shape = "search_params.idf.corpus"
+base_eligibility_shared_by_retrieval_and_idf = true
+mutation_wait_required = true
+mutation_ordering = "strong"
+mutation_success_requires_exact_readback = true
 
 [[sparse_vector]]
 name = "lex_code_v1"
