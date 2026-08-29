@@ -4,7 +4,9 @@ members = [
     "crates/search-contracts",
     "crates/search-domain",
     "crates/search-runtime/search-runtime-owner",
+    "crates/search-runtime/search-os-secrets",
     "crates/search-control-redb",
+    "crates/search-source/search-source-admission",
     "crates/search-source/search-source-registry",
     "crates/search-source/search-source-identity",
     "crates/search-source/search-source-reconcile",
@@ -17,9 +19,11 @@ members = [
     "crates/search-model-provider",
     "crates/search-index-qdrant/search-projection-planner",
     "crates/search-index-qdrant/search-point-identity",
+    "crates/search-index-qdrant/search-qdrant-supervisor",
     "crates/search-index-qdrant/search-qdrant-bridge",
     "crates/search-index-qdrant/search-publication",
     "crates/search-index-qdrant/search-epoch-pins",
+    "crates/search-index-qdrant/search-index-reclaimer",
     "crates/search-query/search-access",
     "crates/search-query/search-overlay",
     "crates/search-query/search-exact",
@@ -28,6 +32,7 @@ members = [
     "crates/search-query/search-retrieval-executor",
     "crates/search-query/search-candidate-validator",
     "crates/search-query/search-comparator",
+    "crates/search-query/search-handles",
     "crates/search-query/search-result-projector",
     "crates/search-query/search-continuation",
     "crates/search-runtime/search-retention",
@@ -51,7 +56,9 @@ repository = "https://github.com/UnknownAlienHuman/eliot-search"
 search-contracts = { path = "crates/search-contracts" }
 search-domain = { path = "crates/search-domain" }
 search-runtime-owner = { path = "crates/search-runtime/search-runtime-owner" }
+search-os-secrets = { path = "crates/search-runtime/search-os-secrets" }
 search-control-redb = { path = "crates/search-control-redb" }
+search-source-admission = { path = "crates/search-source/search-source-admission" }
 search-source-registry = { path = "crates/search-source/search-source-registry" }
 search-source-identity = { path = "crates/search-source/search-source-identity" }
 search-source-reconcile = { path = "crates/search-source/search-source-reconcile" }
@@ -64,9 +71,11 @@ search-lexical = { path = "crates/search-lexical" }
 search-model-provider = { path = "crates/search-model-provider" }
 search-projection-planner = { path = "crates/search-index-qdrant/search-projection-planner" }
 search-point-identity = { path = "crates/search-index-qdrant/search-point-identity" }
+search-qdrant-supervisor = { path = "crates/search-index-qdrant/search-qdrant-supervisor" }
 search-qdrant-bridge = { path = "crates/search-index-qdrant/search-qdrant-bridge" }
 search-publication = { path = "crates/search-index-qdrant/search-publication" }
 search-epoch-pins = { path = "crates/search-index-qdrant/search-epoch-pins" }
+search-index-reclaimer = { path = "crates/search-index-qdrant/search-index-reclaimer" }
 search-access = { path = "crates/search-query/search-access" }
 search-overlay = { path = "crates/search-query/search-overlay" }
 search-exact = { path = "crates/search-query/search-exact" }
@@ -75,6 +84,7 @@ search-query-planner = { path = "crates/search-query/search-query-planner" }
 search-retrieval-executor = { path = "crates/search-query/search-retrieval-executor" }
 search-candidate-validator = { path = "crates/search-query/search-candidate-validator" }
 search-comparator = { path = "crates/search-query/search-comparator" }
+search-handles = { path = "crates/search-query/search-handles" }
 search-result-projector = { path = "crates/search-query/search-result-projector" }
 search-continuation = { path = "crates/search-query/search-continuation" }
 search-retention = { path = "crates/search-runtime/search-retention" }

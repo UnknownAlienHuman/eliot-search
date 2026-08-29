@@ -1,5 +1,6 @@
 # Implementation handoff
 
+- [PRE_IMPLEMENTATION_AUDIT.md](PRE_IMPLEMENTATION_AUDIT.md) — ownership/dependency audit of the initial swarm scaffold.
 - [CRATE_MATRIX.md](CRATE_MATRIX.md) — one-agent/one-package ownership and line budgets.
 - [IMPLEMENTATION_WAVES.md](IMPLEMENTATION_WAVES.md) — dependency-safe launch order mapped to P00–P18.
 - [SWARM_PROTOCOL.md](SWARM_PROTOCOL.md) — work isolation, contract-change and review rules.
