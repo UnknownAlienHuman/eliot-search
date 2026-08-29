@@ -1,24 +1,13 @@
 name: W9 Product Pulse contracts
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/w9-product-pulse.yml"
-      - "crates/search-eval/**"
-      - "docs/evaluation/**"
-      - "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
-      - "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
-      - "qualification/product-pulse/**"
-      - "config/w9-product-pulse.toml"
-      - "swarm/w9-product-pulse.toml"
-      - "tools/validate-w9-product-pulse.ps1"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: w9-product-pulse-${{ github.event.pull_request.number || github.ref }}
+  group: w9-product-pulse-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
