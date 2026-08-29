@@ -1,18 +1,6 @@
 name: W5 current-workspace contract structure
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/w5-current-contracts.yml"
-      - "docs/current/**"
-      - "docs/config/W5_CURRENT_SETTINGS_1.0.md"
-      - "config/w5-current.toml"
-      - "swarm/w5-current.toml"
-      - "qualification/rust-syntax/**"
-      - "crates/search-source/search-source-reconcile/FUNCTIONS.md"
-      - "crates/search-query/search-overlay/FUNCTIONS.md"
-      - "crates/search-prep/search-code-enricher/FUNCTIONS.md"
-      - "tools/validate-w5-current.ps1"
   workflow_dispatch:
 
 permissions:
