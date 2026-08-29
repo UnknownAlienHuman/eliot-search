@@ -1,0 +1,47 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "UNQUALIFIED"
+qualified_at = ""
+qualification_receipt_ref = ""
+reviewer_receipt_ref = ""
+
+[parser]
+provider = "UNSELECTED"
+crate_name = ""
+version = ""
+source_ref = ""
+source_checksum = ""
+license_receipt_ref = ""
+
+[grammar]
+language = "rust"
+version = ""
+source_ref = ""
+source_checksum = ""
+license_receipt_ref = ""
+
+[profile]
+query_or_walker_revision = 0
+normalization_revision = 0
+cfg_policy_id = ""
+assurance_mapping_revision = 0
+golden_fixture_digest = ""
+profile_digest = ""
+
+[safety]
+executes_cargo = false
+executes_rustc = false
+executes_build_scripts = false
+expands_macros = false
+uses_network = false
+resolves_packages = false
+uses_credential_prompts = false
+claims_compiler_semantics = false
+
+[selection]
+latest_allowed = false
+version_range_allowed = false
+floating_git_revision_allowed = false
+compile_only_acceptance_allowed = false
+single_valid_file_acceptance_allowed = false
