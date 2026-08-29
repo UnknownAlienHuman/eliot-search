@@ -46,6 +46,21 @@ Recompiles/re-executes under the stored contract fence and suppresses previously
 candidate fingerprints. A changed/expired dependency returns `SNAPSHOT_EXPIRED` or explicit replan gap,
 not a transparent corpus switch.
 
+## Cancellation and deadlines
+
+- Creation checks cancellation/deadline before token generation, pin acquisition and record insertion.
+- If cancellation or deadline occurs after pin/record acquisition but before token delivery, the package
+  releases the exact pin/window and invalidates the orphan record; uncertain durable insertion is
+  resolved by stable operation identity rather than blind reminting.
+- Expansion checks cancellation/deadline before pin renewal, before planner/executor dispatch, between
+  bounded candidate windows and immediately before terminal emission.
+- Cancellation after a window was read or recomputed but before emission returns no candidates and does
+  not mark them issued.
+- A durable expansion cancelled after dependent work starts preserves the stored replan checkpoint and
+  reports truthful incomplete coverage; it cannot switch to a newer fence.
+- Deadline expiry never extends TTL or pin lifetime beyond configured maxima and never suppresses a
+  `SNAPSHOT_EXPIRED`/security failure.
+
 ## Lifecycle
 
 ### `invalidate(scope, generation, store) -> InvalidationReceipt`
@@ -67,4 +82,5 @@ expired. Durable ordinary queries and durable unsaved targets remain always reje
 Token entropy/opacity/redaction; foreign binding denial; raw Qdrant cursor/score/point ID absent;
 restart invalidates ephemeral and releases pin; TTL/count/pin bounds; durable ordinary-query/unsaved
 rejection; durable record owns no process pin; stable issued suppression; security/view/route drift;
-expired fence returns `SNAPSHOT_EXPIRED`; no silent refresh.
+cancellation/deadline before creation, after pin acquisition and immediately before emission; orphan
+record/pin cleanup; expired fence returns `SNAPSHOT_EXPIRED`; no silent refresh.
