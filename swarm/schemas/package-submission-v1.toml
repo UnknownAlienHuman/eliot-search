@@ -1,0 +1,300 @@
+schema_version = 1
+record_kind = "package_submission_v1"
+status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
+owner = "integration-owner_from_writer_submission"
+canonicalization = "exact_utf8_lf_sha256"
+record_layout = "swarm/submissions/<package>/<submission_id>.toml"
+immutable = true
+unknown_fields = "reject"
+source_content_allowed = false
+secret_content_allowed = false
+max_changed_files = 2048
+max_command_outcomes = 256
+max_unavailable_checks = 128
+max_contract_change_refs = 64
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "ticket_lease_context",
+  "repository", "changed_files", "public_handoff_candidate", "command_outcomes",
+  "evidence", "size", "residual_state", "signature",
+]
+
+[[field]]
+path = "identity.submission_id"
+kind = "OpaqueId"
+required = true
+canonical_order = 1
+rules = ["non_empty", "unique_per_package"]
+
+[[field]]
+path = "identity.operation_id"
+kind = "Sha256Digest"
+required = true
+canonical_order = 2
+rules = ["domain_separated_record_submission_v1", "stable_for_equal_input"]
+
+[[field]]
+path = "identity.package"
+kind = "PackageName"
+required = true
+canonical_order = 3
+rules = ["matches_ticket_and_lease"]
+
+[[field]]
+path = "identity.stage"
+kind = "StageId"
+required = true
+canonical_order = 4
+rules = ["matches_ticket_and_lease"]
+
+[[field]]
+path = "identity.submitted_at"
+kind = "Rfc3339Utc"
+required = true
+canonical_order = 5
+rules = ["recorded_not_inferred"]
+
+[[field]]
+path = "ticket_lease_context.ticket_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 6
+rules = ["kind_assignment_ticket_v1"]
+
+[[field]]
+path = "ticket_lease_context.ticket_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 7
+rules = ["exact_record_digest"]
+
+[[field]]
+path = "ticket_lease_context.lease_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 8
+rules = ["kind_writer_lease_v1", "acknowledged_and_not_revoked"]
+
+[[field]]
+path = "ticket_lease_context.lease_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 9
+rules = ["exact_record_digest"]
+
+[[field]]
+path = "ticket_lease_context.context_manifest_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 10
+rules = ["matches_ticket_and_lease"]
+
+[[field]]
+path = "ticket_lease_context.context_manifest_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 11
+rules = ["exact_record_digest"]
+
+[[field]]
+path = "repository.base_commit"
+kind = "GitObjectId"
+required = true
+canonical_order = 12
+rules = ["matches_ticket"]
+
+[[field]]
+path = "repository.final_commit"
+kind = "GitObjectId"
+required = true
+canonical_order = 13
+rules = ["descends_from_base_commit", "exact_immutable_commit"]
+
+[[field]]
+path = "repository.branch_or_worktree"
+kind = "OpaqueWorktreeRef"
+required = true
+canonical_order = 14
+rules = ["matches_lease"]
+
+[[field]]
+path = "repository.write_scope"
+kind = "RepositoryGlob"
+required = true
+canonical_order = 15
+rules = ["matches_lease_and_function_registry"]
+
+[[field]]
+path = "changed_files[]"
+kind = "OrderedChangedFileRecord"
+required = true
+canonical_order = 16
+rules = ["complete", "sorted_lexicographically", "unique", "all_inside_write_scope"]
+
+[[field]]
+path = "changed_files[].path"
+kind = "RepositoryRelativeSafePath"
+required = true
+canonical_order = 17
+rules = ["inside_write_scope", "no_traversal"]
+
+[[field]]
+path = "changed_files[].status"
+kind = "ClosedEnum"
+required = true
+canonical_order = 18
+rules = ["one_of_added_modified_deleted_renamed"]
+
+[[field]]
+path = "changed_files[].old_blob"
+kind = "OptionalGitObjectId"
+required = true
+canonical_order = 19
+rules = ["required_for_modified_deleted_renamed"]
+
+[[field]]
+path = "changed_files[].new_blob"
+kind = "OptionalGitObjectId"
+required = true
+canonical_order = 20
+rules = ["required_for_added_modified_renamed"]
+
+[[field]]
+path = "public_handoff_candidate.api_manifest_ref"
+kind = "ImmutableArtifactRef"
+required = true
+canonical_order = 21
+rules = ["deterministic_lexicographic_public_file_manifest"]
+
+[[field]]
+path = "public_handoff_candidate.api_schema_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 22
+rules = ["hash_exact_api_manifest_bytes"]
+
+[[field]]
+path = "public_handoff_candidate.configuration_digest"
+kind = "OptionalSha256Digest"
+required = true
+canonical_order = 23
+rules = ["null_only_when_package_owns_no_configuration"]
+
+[[field]]
+path = "public_handoff_candidate.fixture_digest_set"
+kind = "OrderedDigestSet"
+required = true
+canonical_order = 24
+rules = ["sorted", "accepted_fixture_owners"]
+
+[[field]]
+path = "public_handoff_candidate.error_reason_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 25
+rules = ["covers_public_error_and_reason_surface"]
+
+[[field]]
+path = "public_handoff_candidate.compatibility"
+kind = "ClosedCompatibilityClass"
+required = true
+canonical_order = 26
+rules = ["one_of_compatible_additive_breaking_internal_only"]
+
+[[field]]
+path = "command_outcomes[]"
+kind = "OrderedRawCommandOutcomeRef"
+required = true
+canonical_order = 27
+rules = ["exact_command_environment_artifact_exit_and_raw_output_digest"]
+
+[[field]]
+path = "evidence.required_results[]"
+kind = "OrderedEvidenceRef"
+required = true
+canonical_order = 28
+rules = ["covers_ticket_requirements"]
+
+[[field]]
+path = "evidence.unavailable_checks[]"
+kind = "OrderedUnavailableCheck"
+required = true
+canonical_order = 29
+rules = ["all_ticket_unavailable_checks_accounted"]
+
+[[field]]
+path = "evidence.contract_change_refs[]"
+kind = "OrderedImmutableRecordRef"
+required = true
+canonical_order = 30
+rules = ["only_integration_owned_contract_change_records"]
+
+[[field]]
+path = "size.handwritten_src_lines"
+kind = "u32"
+required = true
+canonical_order = 31
+rules = ["recomputed_from_final_commit"]
+
+[[field]]
+path = "size.package_test_lines"
+kind = "u32"
+required = true
+canonical_order = 32
+rules = ["recomputed_from_final_commit"]
+
+[[field]]
+path = "size.split_review_required"
+kind = "bool"
+required = true
+canonical_order = 33
+rules = ["derived_from_ticket_threshold"]
+
+[[field]]
+path = "size.split_review_ref"
+kind = "OptionalImmutableRecordRef"
+required = true
+canonical_order = 34
+rules = ["required_when_split_review_required"]
+
+[[field]]
+path = "residual_state.known_failures[]"
+kind = "OrderedContentMinimizedFinding"
+required = true
+canonical_order = 35
+rules = ["no_hidden_failure"]
+
+[[field]]
+path = "residual_state.deferred_nonowned_work[]"
+kind = "OrderedContentMinimizedFinding"
+required = true
+canonical_order = 36
+rules = ["owner_and_followup_explicit"]
+
+[[field]]
+path = "residual_state.no_placeholder_success_attestation"
+kind = "bool"
+required = true
+canonical_order = 37
+rules = ["must_be_true"]
+
+[[field]]
+path = "signature.writer_identity"
+kind = "ActorIdentity"
+required = true
+canonical_order = 38
+rules = ["matches_ticket_writer"]
+
+[[field]]
+path = "signature.record_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 39
+rules = ["exact_record_digest_rule"]
+
+[[field]]
+path = "signature.writer_signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 40
+rules = ["writer_identity_bound"]

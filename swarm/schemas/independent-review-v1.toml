@@ -1,0 +1,221 @@
+schema_version = 1
+record_kind = "independent_review_v1"
+status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
+owner = "independent-reviewer-through-integration-owner"
+canonicalization = "exact_utf8_lf_sha256"
+record_layout = "swarm/reviews/<package>/<review_id>.toml"
+immutable = true
+unknown_fields = "reject"
+verdicts = ["ACCEPT_SUBMISSION_FOR_INTEGRATION", "REQUEST_CHANGES", "REJECT", "SUPERSEDED"]
+source_content_allowed = false
+secret_content_allowed = false
+max_findings = 256
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "submission", "actors",
+  "scope_review", "contract_review", "evidence_review", "api_review", "findings",
+  "verdict", "signature",
+]
+
+[[field]]
+path = "identity.review_id"
+kind = "OpaqueId"
+required = true
+canonical_order = 1
+rules = ["non_empty", "unique_per_submission_attempt"]
+
+[[field]]
+path = "identity.operation_id"
+kind = "Sha256Digest"
+required = true
+canonical_order = 2
+rules = ["domain_separated_record_review_v1", "stable_for_equal_input"]
+
+[[field]]
+path = "identity.package"
+kind = "PackageName"
+required = true
+canonical_order = 3
+rules = ["matches_submission"]
+
+[[field]]
+path = "identity.reviewed_at"
+kind = "Rfc3339Utc"
+required = true
+canonical_order = 4
+rules = ["recorded_not_inferred"]
+
+[[field]]
+path = "submission.ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 5
+rules = ["kind_package_submission_v1"]
+
+[[field]]
+path = "submission.sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 6
+rules = ["exact_record_digest"]
+
+[[field]]
+path = "actors.writer"
+kind = "ActorIdentity"
+required = true
+canonical_order = 7
+rules = ["matches_submission_and_ticket"]
+
+[[field]]
+path = "actors.reviewer"
+kind = "ActorIdentity"
+required = true
+canonical_order = 8
+rules = ["different_from_writer", "matches_ticket_or_review_replacement_receipt"]
+
+[[field]]
+path = "actors.independence_declaration"
+kind = "ClosedEnum"
+required = true
+canonical_order = 9
+rules = ["equals_NO_CONFLICT_DECLARED"]
+
+[[field]]
+path = "scope_review.complete_diff_recomputed"
+kind = "bool"
+required = true
+canonical_order = 10
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "scope_review.all_paths_inside_write_scope"
+kind = "bool"
+required = true
+canonical_order = 11
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "scope_review.base_final_commit_relationship_verified"
+kind = "bool"
+required = true
+canonical_order = 12
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "contract_review.primary_contract_satisfied"
+kind = "bool"
+required = true
+canonical_order = 13
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "contract_review.stage_obligations_satisfied"
+kind = "bool"
+required = true
+canonical_order = 14
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "contract_review.dependency_handoffs_match"
+kind = "bool"
+required = true
+canonical_order = 15
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "contract_review.ownership_boundaries_preserved"
+kind = "bool"
+required = true
+canonical_order = 16
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "evidence_review.raw_outcomes_reproduced"
+kind = "ClosedEnum"
+required = true
+canonical_order = 17
+rules = ["PASS_UNAVAILABLE_OR_FAIL_WITH_FINDING", "PASS_required_for_accept_unless_ticket_marks_unavailable"]
+
+[[field]]
+path = "evidence_review.failure_cancellation_recovery_checked"
+kind = "bool"
+required = true
+canonical_order = 18
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "evidence_review.security_content_audit_checked"
+kind = "bool"
+required = true
+canonical_order = 19
+rules = ["must_be_true_when_applicable"]
+
+[[field]]
+path = "evidence_review.unavailable_checks_visible"
+kind = "bool"
+required = true
+canonical_order = 20
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "api_review.recomputed_api_schema_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 21
+rules = ["matches_submission_candidate_for_accept"]
+
+[[field]]
+path = "api_review.recomputed_configuration_digest"
+kind = "OptionalSha256Digest"
+required = true
+canonical_order = 22
+rules = ["matches_submission_candidate"]
+
+[[field]]
+path = "api_review.compatibility_class"
+kind = "ClosedCompatibilityClass"
+required = true
+canonical_order = 23
+rules = ["independently_classified"]
+
+[[field]]
+path = "api_review.line_budget_satisfied"
+kind = "bool"
+required = true
+canonical_order = 24
+rules = ["must_be_true_for_accept"]
+
+[[field]]
+path = "findings[]"
+kind = "OrderedReviewFinding"
+required = true
+canonical_order = 25
+rules = ["unique_finding_id", "severity_and_required_action_explicit", "content_minimized"]
+
+[[field]]
+path = "verdict.value"
+kind = "ClosedEnum"
+required = true
+canonical_order = 26
+rules = ["one_of_declared_verdicts", "accept_requires_no_unresolved_blocker_or_critical_finding"]
+
+[[field]]
+path = "verdict.reason_codes[]"
+kind = "OrderedClosedReasonCode"
+required = true
+canonical_order = 27
+rules = ["non_empty_for_non_accept"]
+
+[[field]]
+path = "signature.record_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 28
+rules = ["exact_record_digest_rule"]
+
+[[field]]
+path = "signature.reviewer_signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 29
+rules = ["reviewer_identity_bound"]

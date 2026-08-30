@@ -1,0 +1,251 @@
+schema_version = 1
+record_kind = "context_manifest_v1"
+status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
+owner = "integration-owner"
+canonicalization = "exact_utf8_lf_sha256"
+record_layout = "swarm/context-manifests/<package>/<context_record_sha256>.toml"
+immutable = true
+unknown_fields = "reject"
+source_content_in_record = false
+secret_content_in_record = false
+absolute_local_paths_allowed = false
+max_source_files = 32
+max_registry_fragments = 16
+max_accepted_handoffs = 16
+writer_visible_artifact_count = 1
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "draft", "artifact",
+  "sources", "registry_fragments", "accepted_handoffs", "verification", "signature",
+]
+
+[[field]]
+path = "identity.context_id"
+kind = "OpaqueId"
+required = true
+canonical_order = 1
+rules = ["non_empty", "unique_per_materialization"]
+
+[[field]]
+path = "identity.operation_id"
+kind = "Sha256Digest"
+required = true
+canonical_order = 2
+rules = ["domain_separated_materialize_context_v1", "stable_for_equal_input"]
+
+[[field]]
+path = "identity.package"
+kind = "PackageName"
+required = true
+canonical_order = 3
+rules = ["exists_in_package_registry"]
+
+[[field]]
+path = "identity.stage"
+kind = "StageId"
+required = true
+canonical_order = 4
+rules = ["package_belongs_to_stage"]
+
+[[field]]
+path = "identity.wave"
+kind = "u16"
+required = true
+canonical_order = 5
+rules = ["equals_stage_wave"]
+
+[[field]]
+path = "identity.base_commit"
+kind = "GitObjectId"
+required = true
+canonical_order = 6
+rules = ["exact_immutable_commit", "not_branch_or_latest"]
+
+[[field]]
+path = "draft.path"
+kind = "RepositoryRelativePath"
+required = true
+canonical_order = 7
+rules = ["under_swarm_context_drafts", "exists_at_base_commit"]
+
+[[field]]
+path = "draft.git_blob_id"
+kind = "GitObjectId"
+required = true
+canonical_order = 8
+rules = ["matches_base_commit_path"]
+
+[[field]]
+path = "draft.exact_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 9
+rules = ["hash_exact_blob_bytes"]
+
+[[field]]
+path = "artifact.ref"
+kind = "ImmutableArtifactRef"
+required = true
+canonical_order = 10
+rules = ["one_writer_visible_artifact"]
+
+[[field]]
+path = "artifact.sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 11
+rules = ["readback_verified"]
+
+[[field]]
+path = "artifact.bytes"
+kind = "u64"
+required = true
+canonical_order = 12
+rules = ["greater_than_zero", "within_context_budget"]
+
+[[field]]
+path = "artifact.format"
+kind = "ClosedEnum"
+required = true
+canonical_order = 13
+rules = ["equals_ELIOT_SWARM_CONTEXT_1"]
+
+[[field]]
+path = "sources[]"
+kind = "OrderedContextSourceRecord"
+required = true
+canonical_order = 14
+rules = ["declared_draft_order", "unique_order_and_path", "count_matches_draft"]
+
+[[field]]
+path = "sources[].order"
+kind = "u32"
+required = true
+canonical_order = 15
+rules = ["contiguous_from_zero"]
+
+[[field]]
+path = "sources[].repository_path"
+kind = "RepositoryRelativeSafePath"
+required = true
+canonical_order = 16
+rules = ["declared_by_draft", "not_architecture_or_implementation_source"]
+
+[[field]]
+path = "sources[].git_blob_id"
+kind = "GitObjectId"
+required = true
+canonical_order = 17
+rules = ["matches_base_commit_path"]
+
+[[field]]
+path = "sources[].exact_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 18
+rules = ["hash_exact_blob_bytes"]
+
+[[field]]
+path = "sources[].exact_bytes"
+kind = "u64"
+required = true
+canonical_order = 19
+rules = ["matches_exact_blob_length"]
+
+[[field]]
+path = "sources[].materialization"
+kind = "ClosedEnum"
+required = true
+canonical_order = 20
+rules = ["equals_UTF8_LF"]
+
+[[field]]
+path = "sources[].materialized_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 21
+rules = ["hash_normalized_payload"]
+
+[[field]]
+path = "sources[].materialized_bytes"
+kind = "u64"
+required = true
+canonical_order = 22
+rules = ["matches_normalized_payload_length"]
+
+[[field]]
+path = "registry_fragments[]"
+kind = "OrderedRegistryFragmentRecord"
+required = true
+canonical_order = 23
+rules = ["declared_draft_order", "exact_one_selector_match", "count_matches_draft"]
+
+[[field]]
+path = "accepted_handoffs[]"
+kind = "OrderedAcceptedHandoffRef"
+required = true
+canonical_order = 24
+rules = ["sorted_by_package", "all_declared_slots_satisfied", "no_extra_handoff"]
+
+[[field]]
+path = "verification.source_count"
+kind = "u32"
+required = true
+canonical_order = 25
+rules = ["equals_sources_length"]
+
+[[field]]
+path = "verification.registry_fragment_count"
+kind = "u32"
+required = true
+canonical_order = 26
+rules = ["equals_registry_fragments_length"]
+
+[[field]]
+path = "verification.accepted_handoff_count"
+kind = "u32"
+required = true
+canonical_order = 27
+rules = ["equals_accepted_handoffs_length"]
+
+[[field]]
+path = "verification.readback_verified"
+kind = "bool"
+required = true
+canonical_order = 28
+rules = ["must_be_true"]
+
+[[field]]
+path = "verification.forbidden_path_scan_passed"
+kind = "bool"
+required = true
+canonical_order = 29
+rules = ["must_be_true"]
+
+[[field]]
+path = "signature.created_at"
+kind = "Rfc3339Utc"
+required = true
+canonical_order = 30
+rules = ["recorded_not_inferred"]
+
+[[field]]
+path = "signature.materializer_identity"
+kind = "ActorIdentity"
+required = true
+canonical_order = 31
+rules = ["integration_owner"]
+
+[[field]]
+path = "signature.reviewer_identity"
+kind = "ActorIdentity"
+required = true
+canonical_order = 32
+rules = ["different_from_materializer"]
+
+[[field]]
+path = "signature.record_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 33
+rules = ["computed_over_exact_record_bytes_with_digest_field_excluded_by_schema_rule"]

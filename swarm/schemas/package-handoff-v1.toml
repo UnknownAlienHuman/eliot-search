@@ -1,0 +1,201 @@
+schema_version = 1
+record_kind = "package_handoff_v1"
+status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
+owner = "integration-owner"
+canonicalization = "exact_utf8_lf_sha256"
+record_layout = "swarm/handoffs/<package>/<api_schema_digest>.toml"
+immutable = true
+unknown_fields = "reject"
+source_content_allowed = false
+secret_content_allowed = false
+wave_or_gate_acceptance_claim_allowed = false
+max_dependency_handoffs = 32
+max_evidence_refs = 256
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "submission_review",
+  "accepted_code", "public_surface", "dependencies", "evidence", "compatibility",
+  "supersession", "signature",
+]
+
+[[field]]
+path = "identity.handoff_id"
+kind = "OpaqueId"
+required = true
+canonical_order = 1
+rules = ["non_empty", "unique_per_package_api_digest"]
+
+[[field]]
+path = "identity.operation_id"
+kind = "Sha256Digest"
+required = true
+canonical_order = 2
+rules = ["domain_separated_publish_package_handoff_v1", "stable_for_equal_input"]
+
+[[field]]
+path = "identity.package"
+kind = "PackageName"
+required = true
+canonical_order = 3
+rules = ["matches_submission_review"]
+
+[[field]]
+path = "identity.stage"
+kind = "StageId"
+required = true
+canonical_order = 4
+rules = ["matches_ticket_and_review"]
+
+[[field]]
+path = "identity.accepted_at"
+kind = "Rfc3339Utc"
+required = true
+canonical_order = 5
+rules = ["recorded_not_inferred"]
+
+[[field]]
+path = "submission_review.submission_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 6
+rules = ["kind_package_submission_v1"]
+
+[[field]]
+path = "submission_review.submission_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 7
+rules = ["exact_record_digest"]
+
+[[field]]
+path = "submission_review.review_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 8
+rules = ["kind_independent_review_v1", "verdict_accept_submission_for_integration"]
+
+[[field]]
+path = "submission_review.review_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 9
+rules = ["exact_record_digest"]
+
+[[field]]
+path = "accepted_code.base_commit"
+kind = "GitObjectId"
+required = true
+canonical_order = 10
+rules = ["matches_submission"]
+
+[[field]]
+path = "accepted_code.final_commit"
+kind = "GitObjectId"
+required = true
+canonical_order = 11
+rules = ["matches_reviewed_submission"]
+
+[[field]]
+path = "accepted_code.changed_files_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 12
+rules = ["hash_canonical_complete_changed_file_manifest"]
+
+[[field]]
+path = "public_surface.api_manifest_ref"
+kind = "ImmutableArtifactRef"
+required = true
+canonical_order = 13
+rules = ["reviewed_and_readback_verified"]
+
+[[field]]
+path = "public_surface.api_schema_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 14
+rules = ["recomputed_by_integration_owner"]
+
+[[field]]
+path = "public_surface.configuration_digest"
+kind = "OptionalSha256Digest"
+required = true
+canonical_order = 15
+rules = ["recomputed_by_integration_owner"]
+
+[[field]]
+path = "public_surface.fixture_digest_set"
+kind = "OrderedDigestSet"
+required = true
+canonical_order = 16
+rules = ["matches_submission_and_review"]
+
+[[field]]
+path = "public_surface.error_reason_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 17
+rules = ["matches_reviewed_public_surface"]
+
+[[field]]
+path = "dependencies[]"
+kind = "OrderedAcceptedPackageHandoff"
+required = true
+canonical_order = 18
+rules = ["matches_ticket_submission_review", "sorted_by_package"]
+
+[[field]]
+path = "evidence[]"
+kind = "OrderedAcceptedEvidenceRef"
+required = true
+canonical_order = 19
+rules = ["reviewed", "raw_outcome_digest_present", "unavailable_remains_explicit"]
+
+[[field]]
+path = "compatibility.class"
+kind = "ClosedCompatibilityClass"
+required = true
+canonical_order = 20
+rules = ["matches_independent_review"]
+
+[[field]]
+path = "compatibility.consumer_actions[]"
+kind = "OrderedConsumerAction"
+required = true
+canonical_order = 21
+rules = ["complete_for_breaking_or_additive_changes"]
+
+[[field]]
+path = "supersession.supersedes_handoff_ref"
+kind = "OptionalImmutableRecordRef"
+required = true
+canonical_order = 22
+rules = ["same_package", "old_record_remains_immutable"]
+
+[[field]]
+path = "supersession.supersedes_handoff_sha256"
+kind = "OptionalSha256Digest"
+required = true
+canonical_order = 23
+rules = ["matches_superseded_ref_or_null"]
+
+[[field]]
+path = "signature.integration_owner_identity"
+kind = "ActorIdentity"
+required = true
+canonical_order = 24
+rules = ["integration_owner"]
+
+[[field]]
+path = "signature.record_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 25
+rules = ["exact_record_digest_rule"]
+
+[[field]]
+path = "signature.integration_signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 26
+rules = ["integration_owner_identity_bound"]
