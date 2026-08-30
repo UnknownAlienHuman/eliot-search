@@ -38,6 +38,10 @@ jobs:
         shell: pwsh
         run: ./tools/validate-p00-ticket-drafts.ps1 -Json
 
+      - name: Validate ticket issuance record schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
+
       - name: Validate functions, configuration and W3 qualification
         shell: pwsh
         run: ./tools/validate-implementation-packets.ps1 -Json
