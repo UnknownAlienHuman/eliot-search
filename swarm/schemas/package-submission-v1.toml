@@ -62,11 +62,11 @@ canonical_order = 6
 rules = ["kind_assignment_ticket_v1"]
 
 [[field]]
-path = "ticket_lease_context.ticket_sha256"
+path = "ticket_lease_context.ticket_exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 7
-rules = ["exact_record_digest"]
+rules = ["equals_ticket_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "ticket_lease_context.lease_ref"
@@ -76,25 +76,25 @@ canonical_order = 8
 rules = ["kind_writer_lease_v1", "acknowledged_and_not_revoked"]
 
 [[field]]
-path = "ticket_lease_context.lease_sha256"
+path = "ticket_lease_context.lease_exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 9
-rules = ["exact_record_digest"]
+rules = ["equals_lease_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "ticket_lease_context.context_manifest_ref"
 kind = "ImmutableRecordRef"
 required = true
 canonical_order = 10
-rules = ["matches_ticket_and_lease"]
+rules = ["matches_ticket_and_lease", "kind_context_manifest_v1"]
 
 [[field]]
-path = "ticket_lease_context.context_manifest_sha256"
+path = "ticket_lease_context.context_manifest_exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 11
-rules = ["exact_record_digest"]
+rules = ["equals_context_manifest_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "repository.base_commit"
@@ -297,4 +297,4 @@ path = "signature.writer_signature_ref"
 kind = "ImmutableSignatureRef"
 required = true
 canonical_order = 40
-rules = ["writer_identity_bound"]
+rules = ["writer_identity_bound", "signed_payload_sha256_matches_record_sha256"]
