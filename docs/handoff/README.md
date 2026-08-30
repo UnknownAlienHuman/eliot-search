@@ -23,6 +23,8 @@
 - [W3_IMPLEMENTATION_PACKET.md](W3_IMPLEMENTATION_PACKET.md) — lexical/Qdrant/publication/pin/reclaim.
 - [`../../qualification/qdrant/README.md`](../../qualification/qdrant/README.md) — unqualified
   P05–P07 artifact/schema/probe contract.
+- [W4_IMPLEMENTATION_PACKET.md](W4_IMPLEMENTATION_PACKET.md) — access, bounded planning/execution,
+  exact source validation, handles, results, continuations and evaluation seams.
 - [`../../qualification/query/W4_QUALIFICATION.md`](../../qualification/query/W4_QUALIFICATION.md) —
   bounded P08 query evidence contract.
 - [W5_IMPLEMENTATION_PACKET.md](W5_IMPLEMENTATION_PACKET.md) — currentness/overlay/Rust structure.
