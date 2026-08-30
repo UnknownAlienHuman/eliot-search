@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = 2
 record_kind = "assignment_ticket_draft"
 status = "DRAFT_ONLY_NOT_ISSUED"
 claimable = false
@@ -15,13 +15,13 @@ issuance_status = "BLOCKED_ON_IDENTITY_DIGEST_AND_CONTEXT_FREEZE"
 
 [unresolved_identity]
 ticket_id = "UNASSIGNED"
-lease_id = "UNASSIGNED"
 writer = "UNASSIGNED"
 reviewer = "UNASSIGNED"
 issued_at = ""
 base_commit = "UNSELECTED"
 branch_or_worktree = "UNSELECTED"
-ticket_canonical_digest = "UNAVAILABLE"
+ticket_signed_payload_sha256 = "UNAVAILABLE"
+ticket_exact_record_file_sha256 = "UNAVAILABLE"
 integration_signature_ref = ""
 
 [repository_fence]
@@ -84,5 +84,7 @@ issuance_requirements = [
   "assign_distinct_writer_and_reviewer",
   "materialize_and_verify_context_bundle",
   "compute_all_registry_and_instruction_SHA256_digests",
-  "issue_ticket_and_writer_lease_as_new_records",
+  "issue_assignment_ticket_as_new_record",
+  "issue_writer_lease_as_new_record_after_ticket_readback",
+  "record_writer_acknowledgement_as_append_only_lease_event",
 ]
