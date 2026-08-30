@@ -1,0 +1,51 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "DESIGNED_NOT_EXECUTED"
+owner = "integration-owner"
+qualification = "qualification/ticket-issuance/TICKET_ISSUANCE_QUALIFICATION.md"
+baseline = "qualification/ticket-issuance/baseline.toml"
+fixture_registry = "qualification/ticket-issuance/fixtures.toml"
+probe_registry = "qualification/ticket-issuance/probes.toml"
+operation_registry = "swarm/control-plane-operations.toml"
+record_schema_registry = "swarm/control-plane-schema.toml"
+type_registry = "swarm/schemas/types-v1.toml"
+validator = "tools/validate-ticket-issuance-conformance.ps1"
+manual_workflow = ".github/workflows/ticket-issuance-conformance.yml"
+workflow_policy = "manual_only"
+record_schema_count = 8
+operation_count = 12
+fixture_count = 52
+probe_count = 64
+failure_code_count = 31
+recovery_disposition_count = 4
+all_probes_mandatory = true
+all_probe_results_initial = "UNAVAILABLE"
+prose_only_evidence = "reject"
+
+[authority]
+produces_materialized_context = false
+issues_assignment_ticket = false
+issues_writer_lease = false
+records_writer_acknowledgement = false
+records_package_submission = false
+records_independent_review = false
+publishes_package_handoff = false
+accepts_gate = false
+accepts_wave = false
+advances_launch_state = false
+
+[content]
+real_control_record_instances_allowed = false
+real_actor_assignment_allowed = false
+real_secret_or_source_content_allowed = false
+absolute_local_paths_allowed = false
+mutable_git_refs_allowed = false
+synthetic_fixture_descriptors_only = true
+
+[evidence]
+raw_output_required_for_PASS = true
+independent_reviewer_receipt_required_for_PASS = true
+UNAVAILABLE_may_be_inferred_as_PASS = false
+structural_validation_is_runtime_evidence = false
+workflow_success_is_authority = false
