@@ -1,0 +1,371 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+package_registry = "swarm/crates.toml"
+launch_authority = "swarm/launch-state.toml"
+status = "bounded-function-packets"
+package_count = 45
+function_packet_count = 42
+foundation_contract_package_count = 3
+ordinary_agent_architecture_access = "exception-only"
+
+# `search-contracts`, `search-domain` and `search-ports` consume the exact P00 contract pack rather than
+# one package-local FUNCTIONS.md. Every other package has exactly one primary function packet below.
+# Presence here is bounded context, not implementation authorization.
+
+[[foundation]]
+package = "search-contracts"
+wave = 0
+assignment = "swarm/assignments/search-contracts.md"
+primary_contract = "docs/contracts/p00/README.md"
+write_scope = "crates/search-contracts/**"
+
+[[foundation]]
+package = "search-domain"
+wave = 0
+assignment = "swarm/assignments/search-domain.md"
+primary_contract = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+write_scope = "crates/search-domain/**"
+
+[[foundation]]
+package = "search-ports"
+wave = 0
+assignment = "swarm/assignments/search-ports.md"
+primary_contract = "docs/contracts/p00/PORT_OPERATIONS.md"
+write_scope = "crates/search-ports/**"
+
+[[package]]
+name = "search-config"
+wave = 1
+assignment = "swarm/assignments/search-config.md"
+functions = "crates/search-config/FUNCTIONS.md"
+stage_packet = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-config/**"
+
+[[package]]
+name = "search-runtime-owner"
+wave = 1
+assignment = "swarm/assignments/search-runtime-owner.md"
+functions = "crates/search-runtime/search-runtime-owner/FUNCTIONS.md"
+stage_packet = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-runtime/search-runtime-owner/**"
+
+[[package]]
+name = "search-os-secrets"
+wave = 1
+assignment = "swarm/assignments/search-os-secrets.md"
+functions = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+stage_packet = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-runtime/search-os-secrets/**"
+
+[[package]]
+name = "search-control-redb"
+wave = 1
+assignment = "swarm/assignments/search-control-redb.md"
+functions = "crates/search-control-redb/FUNCTIONS.md"
+stage_packet = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-control-redb/**"
+
+[[package]]
+name = "search-source-admission"
+wave = 2
+assignment = "swarm/assignments/search-source-admission.md"
+functions = "crates/search-source/search-source-admission/FUNCTIONS.md"
+stage_packet = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-source/search-source-admission/**"
+
+[[package]]
+name = "search-source-registry"
+wave = 2
+assignment = "swarm/assignments/search-source-registry.md"
+functions = "crates/search-source/search-source-registry/FUNCTIONS.md"
+stage_packet = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-source/search-source-registry/**"
+
+[[package]]
+name = "search-source-identity"
+wave = 2
+assignment = "swarm/assignments/search-source-identity.md"
+functions = "crates/search-source/search-source-identity/FUNCTIONS.md"
+stage_packet = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-source/search-source-identity/**"
+
+[[package]]
+name = "search-source-reconcile"
+wave = 5
+assignment = "swarm/assignments/search-source-reconcile.md"
+functions = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+stage_packet = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-source/search-source-reconcile/**"
+
+[[package]]
+name = "search-safe-reader"
+wave = 2
+assignment = "swarm/assignments/search-safe-reader.md"
+functions = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+stage_packet = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-source/search-safe-reader/**"
+
+[[package]]
+name = "search-revision-store"
+wave = 2
+assignment = "swarm/assignments/search-revision-store.md"
+functions = "crates/search-source/search-revision-store/FUNCTIONS.md"
+stage_packet = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-source/search-revision-store/**"
+
+[[package]]
+name = "search-materializer"
+wave = 2
+assignment = "swarm/assignments/search-materializer.md"
+functions = "crates/search-prep/search-materializer/FUNCTIONS.md"
+stage_packet = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-prep/search-materializer/**"
+
+[[package]]
+name = "search-unitizer"
+wave = 2
+assignment = "swarm/assignments/search-unitizer.md"
+functions = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+stage_packet = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-prep/search-unitizer/**"
+
+[[package]]
+name = "search-code-enricher"
+wave = 5
+assignment = "swarm/assignments/search-code-enricher.md"
+functions = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+stage_packet = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-prep/search-code-enricher/**"
+
+[[package]]
+name = "search-lexical"
+wave = 3
+assignment = "swarm/assignments/search-lexical.md"
+functions = "crates/search-lexical/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-lexical/**"
+
+[[package]]
+name = "search-model-provider"
+wave = 10
+assignment = "swarm/assignments/search-model-provider.md"
+functions = "crates/search-model-provider/FUNCTIONS.md"
+stage_packet = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-model-provider/**"
+
+[[package]]
+name = "search-projection-planner"
+wave = 3
+assignment = "swarm/assignments/search-projection-planner.md"
+functions = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-index-qdrant/search-projection-planner/**"
+
+[[package]]
+name = "search-point-identity"
+wave = 3
+assignment = "swarm/assignments/search-point-identity.md"
+functions = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-index-qdrant/search-point-identity/**"
+
+[[package]]
+name = "search-qdrant-supervisor"
+wave = 3
+assignment = "swarm/assignments/search-qdrant-supervisor.md"
+functions = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-index-qdrant/search-qdrant-supervisor/**"
+
+[[package]]
+name = "search-qdrant-bridge"
+wave = 3
+assignment = "swarm/assignments/search-qdrant-bridge.md"
+functions = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-index-qdrant/search-qdrant-bridge/**"
+
+[[package]]
+name = "search-publication"
+wave = 3
+assignment = "swarm/assignments/search-publication.md"
+functions = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-index-qdrant/search-publication/**"
+
+[[package]]
+name = "search-epoch-pins"
+wave = 3
+assignment = "swarm/assignments/search-epoch-pins.md"
+functions = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-index-qdrant/search-epoch-pins/**"
+
+[[package]]
+name = "search-index-reclaimer"
+wave = 3
+assignment = "swarm/assignments/search-index-reclaimer.md"
+functions = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+stage_packet = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-index-qdrant/search-index-reclaimer/**"
+
+[[package]]
+name = "search-access"
+wave = 4
+assignment = "swarm/assignments/search-access.md"
+functions = "crates/search-query/search-access/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-access/**"
+
+[[package]]
+name = "search-overlay"
+wave = 5
+assignment = "swarm/assignments/search-overlay.md"
+functions = "crates/search-query/search-overlay/FUNCTIONS.md"
+stage_packet = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-overlay/**"
+
+[[package]]
+name = "search-exact"
+wave = 6
+assignment = "swarm/assignments/search-exact.md"
+functions = "crates/search-query/search-exact/FUNCTIONS.md"
+stage_packet = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-exact/**"
+
+[[package]]
+name = "search-subject-resolver"
+wave = 6
+assignment = "swarm/assignments/search-subject-resolver.md"
+functions = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+stage_packet = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-subject-resolver/**"
+
+[[package]]
+name = "search-query-planner"
+wave = 4
+assignment = "swarm/assignments/search-query-planner.md"
+functions = "crates/search-query/search-query-planner/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-query-planner/**"
+
+[[package]]
+name = "search-retrieval-executor"
+wave = 4
+assignment = "swarm/assignments/search-retrieval-executor.md"
+functions = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-retrieval-executor/**"
+
+[[package]]
+name = "search-candidate-validator"
+wave = 4
+assignment = "swarm/assignments/search-candidate-validator.md"
+functions = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-candidate-validator/**"
+
+[[package]]
+name = "search-comparator"
+wave = 6
+assignment = "swarm/assignments/search-comparator.md"
+functions = "crates/search-query/search-comparator/FUNCTIONS.md"
+stage_packet = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-comparator/**"
+
+[[package]]
+name = "search-handles"
+wave = 4
+assignment = "swarm/assignments/search-handles.md"
+functions = "crates/search-query/search-handles/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-handles/**"
+
+[[package]]
+name = "search-result-projector"
+wave = 4
+assignment = "swarm/assignments/search-result-projector.md"
+functions = "crates/search-query/search-result-projector/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-result-projector/**"
+
+[[package]]
+name = "search-continuation"
+wave = 4
+assignment = "swarm/assignments/search-continuation.md"
+functions = "crates/search-query/search-continuation/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-query/search-continuation/**"
+
+[[package]]
+name = "search-retention"
+wave = 7
+assignment = "swarm/assignments/search-retention.md"
+functions = "crates/search-runtime/search-retention/FUNCTIONS.md"
+stage_packet = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-runtime/search-retention/**"
+
+[[package]]
+name = "search-eval"
+wave = 4
+assignment = "swarm/assignments/search-eval.md"
+functions = "crates/search-eval/FUNCTIONS.md"
+stage_packet = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-eval/**"
+
+[[package]]
+name = "search-provider-protocol"
+wave = 1
+assignment = "swarm/assignments/search-provider-protocol.md"
+functions = "crates/search-provider-protocol/FUNCTIONS.md"
+stage_packet = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-provider-protocol/**"
+
+[[package]]
+name = "search-eliot-adapter"
+wave = 8
+assignment = "swarm/assignments/search-eliot-adapter.md"
+functions = "crates/search-eliot-adapter/FUNCTIONS.md"
+stage_packet = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-eliot-adapter/**"
+
+[[package]]
+name = "search-research-export-adapter"
+wave = 8
+assignment = "swarm/assignments/search-research-export-adapter.md"
+functions = "crates/search-research-export-adapter/FUNCTIONS.md"
+stage_packet = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+write_scope = "crates/search-research-export-adapter/**"
+
+[[package]]
+name = "eliot-searchd"
+wave = 1
+assignment = "swarm/assignments/eliot-searchd.md"
+functions = "bins/eliot-searchd/FUNCTIONS.md"
+stage_packet = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+write_scope = "bins/eliot-searchd/**"
+
+[[package]]
+name = "eliot-search"
+wave = 1
+assignment = "swarm/assignments/eliot-search.md"
+functions = "bins/eliot-search/FUNCTIONS.md"
+stage_packet = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+write_scope = "bins/eliot-search/**"
+
+[[package]]
+name = "eliot-search-model-worker"
+wave = 10
+assignment = "swarm/assignments/eliot-search-model-worker.md"
+functions = "bins/eliot-search-model-worker/FUNCTIONS.md"
+stage_packet = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+write_scope = "bins/eliot-search-model-worker/**"
+
+[[package]]
+name = "eliot-search-doc-worker"
+wave = 10
+assignment = "swarm/assignments/eliot-search-doc-worker.md"
+functions = "bins/eliot-search-doc-worker/FUNCTIONS.md"
+stage_packet = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+write_scope = "bins/eliot-search-doc-worker/**"

@@ -14,7 +14,7 @@ jobs:
   validate:
     name: Validate topology and implementation packets
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,6 +25,10 @@ jobs:
       - name: Validate registry, Cargo and launch state
         shell: pwsh
         run: ./tools/validate-swarm.ps1 -Json
+
+      - name: Validate exact primary function packet coverage
+        shell: pwsh
+        run: ./tools/validate-function-packets.ps1 -Json
 
       - name: Validate functions, configuration and W3 qualification
         shell: pwsh
