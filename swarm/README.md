@@ -22,7 +22,8 @@ search-contracts
 - `stage-readsets.toml` — exact replacement context for the **23 package assignments** reused after their
   earliest wave;
 - `gates.toml` — central G0–G6 evidence requirements;
-- `launch-state.toml` — current authorization and advancement conditions.
+- `launch-state.toml` — current authorization and advancement conditions;
+- `orchestration.toml` — issued ticket/lease/submission/review/handoff state machine and record layouts.
 
 These registries are complementary:
 
@@ -40,19 +41,62 @@ stage-readsets.toml
   replaces earlier stage documents with accepted public handoffs when a package returns later
 
 launch-state.toml
-  tells the orchestrator whether a ticket may be issued now
+  tells the orchestrator whether an issued ticket may be considered for readiness
+
+orchestration.toml
+  tells the orchestrator how an issued ticket becomes a lease, submission, review and handoff
 ```
 
-Presence in the first four files is never implementation authorization.
+Presence in these files is never implementation authorization by itself.
+
+## Drafts versus issued records
+
+P00 pre-issuance preparation is intentionally split:
+
+```text
+swarm/ticket-drafts/     non-claimable assignment boundaries
+swarm/context-drafts/    source lists and registry selectors to materialize at an exact base commit
+
+swarm/tickets/           issued immutable tickets only
+swarm/context-manifests/ materialized immutable one-artifact writer contexts
+swarm/leases/            active/historical writer leases
+swarm/submissions/       package implementation submissions
+swarm/reviews/           independent package review receipts
+swarm/handoffs/          accepted append-only package/API handoffs
+```
+
+A draft has status `DRAFT_ONLY_NOT_ISSUED` or `UNMATERIALIZED_DRAFT`. It cannot enter the orchestration
+state machine, authorize work, create a lease or be acknowledged by a writer.
+
+At issuance, the integration owner selects an exact base commit, materializes the declared files and
+registry fragments into one immutable writer-visible context artifact, assigns distinct writer/reviewer
+identities and creates new ticket/context/lease records. The draft itself is never copied verbatim into
+the issued-ticket directory.
+
+The current P00 draft inventory is:
+
+```text
+search-contracts  AUTHORIZED launch class, but ticket not issued
+search-domain     CONDITIONAL; accepted contracts handoff required
+search-ports      CONDITIONAL; accepted contracts handoff required
+```
+
+Current claimable-record counts remain zero.
 
 ## Agent and integration files
 
 - `assignments/` — one capability assignment per package;
 - `ASSIGNMENT_PROTOCOL.md` — ticket, context, implementation and handoff procedure;
+- `ASSIGNMENT_TICKET_TEMPLATE.md` — issued ticket template;
+- `WRITER_LEASE_TEMPLATE.md` — package-local writer lease template;
+- `CONTEXT_MANIFEST_TEMPLATE.md` — issuance-time context materialization manifest;
+- `SUBMISSION_TEMPLATE.md` — package implementation submission record;
+- `REVIEW_RECEIPT_TEMPLATE.md` — independent review record;
 - `INTEGRATION_OWNER.md` — root/cross-package owner;
 - `CONTRACT_CHANGE_TEMPLATE.md` — missing/changed contract or port request;
 - `PACKAGE_HANDOFF_TEMPLATE.md` — completion receipt;
 - `REVIEW_CHECKLIST.md` — package and integration review;
+- `../docs/handoff/P00_DRAFT_CONTROL_PLANE.md` — P00 draft and issuance semantics;
 - `../docs/handoff/SWARM_STAGE_READSETS.md` — exact stage-context assembly and examples.
 
 ## Context rule
@@ -61,6 +105,10 @@ An earliest-wave package receives its package/function entries, assignment/base 
 stage shared read set. A package reused later receives one replacement override. The previous stage
 packet and dependency implementation internals are not replayed; exact accepted public handoff receipts
 replace them.
+
+At issuance, repository source files and exact registry fragments are recorded with per-source SHA-256
+and combined into one immutable context artifact. The writer receives that artifact plus bounded accepted
+handoff/fixture references, not broad repository access.
 
 `eliot-searchd` is progressively re-ticketed after W1 for source, index, query, currentness, proof,
 lifecycle, generic-edge and optional composition. These are sequential one-writer package assignments,
@@ -74,8 +122,9 @@ search-eval           W9 Product Pulse, then W10 candidate-specific evaluation
 search-publication    W7 lifecycle, then W10 scale migration
 ```
 
-Static context is capped at sixteen files. Ticket-added handoff and fixture references are separately
-bounded. Architecture access remains exception-only after a concrete contract challenge.
+Static context is capped at sixteen files before materialization. Ticket-added handoff and fixture
+references are separately bounded. Architecture access remains exception-only after a concrete contract
+challenge.
 
 ## Current state
 
@@ -87,10 +136,16 @@ later stages:             BLOCKED
 stage assignments:        68
 later-stage overrides:    23
 unique reused packages:   13
-maximum static files:     16
-runtime evidence:         absent
+P00 ticket drafts:         3
+P00 context drafts:        3
+materialized contexts:     0
+issued tickets:            0
+active writer leases:      0
+submissions/reviews:       0 / 0
+accepted package handoffs: 0
+runtime evidence:          absent
 ```
 
-The orchestrator verifies all registry digests and accepted dependency/prior-stage handoffs, creates an
-isolated package worktree, rejects out-of-scope writes and merges accepted packages in dependency/stage
-order.
+The orchestrator verifies all registry/context/ticket digests and accepted dependency/prior-stage
+handoffs, creates an isolated package worktree, rejects out-of-scope writes and merges accepted packages
+in dependency/stage order.
