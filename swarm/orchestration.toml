@@ -1,12 +1,26 @@
-schema_version = 1
+schema_version = 2
 project = "eliot-search"
 package_registry = "swarm/crates.toml"
+function_registry = "swarm/function-packets.toml"
+stage_registry = "swarm/stages.toml"
+stage_readset_registry = "swarm/stage-readsets.toml"
 launch_state = "swarm/launch-state.toml"
 gate_registry = "swarm/gates.toml"
 assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
+writer_lease_template = "swarm/WRITER_LEASE_TEMPLATE.md"
+context_manifest_template = "swarm/CONTEXT_MANIFEST_TEMPLATE.md"
+submission_template = "swarm/SUBMISSION_TEMPLATE.md"
+review_receipt_template = "swarm/REVIEW_RECEIPT_TEMPLATE.md"
 package_handoff_template = "swarm/PACKAGE_HANDOFF_TEMPLATE.md"
 api_handoff_template = "swarm/API_HANDOFF_TEMPLATE.md"
 wave_receipt_template = "swarm/WAVE_RECEIPT_TEMPLATE.md"
+ticket_draft_manifest = "swarm/ticket-drafts/manifest.toml"
+context_draft_manifest = "swarm/context-drafts/manifest.toml"
+issued_ticket_layout = "swarm/tickets/<package>/<ticket-id>.toml"
+materialized_context_layout = "swarm/context-manifests/<package>/<context-digest>.toml"
+writer_lease_layout = "swarm/leases/<package>/<lease-id>.toml"
+submission_layout = "swarm/submissions/<package>/<submission-id>.toml"
+review_layout = "swarm/reviews/<package>/<review-id>.toml"
 accepted_handoff_layout = "swarm/handoffs/<package>/<api_digest>.toml"
 
 states = [
@@ -24,21 +38,47 @@ one_active_writer_per_package = true
 package_writer_may_edit_launch_state = false
 package_writer_may_edit_assignment = false
 package_writer_may_edit_dependency_handoff = false
+package_writer_may_edit_ticket_context_lease_review = false
 accepted_receipts_are_append_only = true
 consumer_uses_branch_head = false
 consumer_requires_exact_commit_and_api_digest = true
+
+[drafts]
+status_values = ["DRAFT_ONLY_NOT_ISSUED", "UNMATERIALIZED_DRAFT"]
+drafts_are_orchestration_states = false
+draft_presence_authorizes_work = false
+draft_presence_creates_lease = false
+draft_may_be_writer_acknowledged = false
+draft_may_be_copied_verbatim_to_issued_ticket = false
+issued_ticket_requires_new_immutable_record = true
+issued_ticket_requires_exact_base_commit = true
+issued_ticket_requires_materialized_context_manifest = true
+issued_ticket_requires_writer_and_independent_reviewer = true
+issued_ticket_requires_instruction_and_registry_digests = true
+conditional_ticket_requires_accepted_dependency_handoffs = true
+materialized_context_is_append_only = true
+materialized_context_artifact_count = 1
+architecture_master_in_ordinary_context = false
+dependency_implementation_source_in_context = false
 
 [ready]
 requires_launch_authorization = true
 requires_all_direct_dependency_handoffs = true
 requires_no_active_lease = true
 requires_optional_prerequisites_when_applicable = true
+requires_issued_ticket_not_draft = true
+requires_materialized_context = true
 
 [lease]
 required_fields = [
   "lease_id",
+  "ticket_id",
+  "ticket_digest",
+  "context_manifest_digest",
+  "context_artifact_digest",
   "package",
   "writer",
+  "reviewer",
   "wave",
   "stage",
   "base_commit",
@@ -60,14 +100,19 @@ requires_scope_check = true
 requires_api_digest = true
 requires_raw_test_outcomes = true
 requires_dependency_digest_check = true
+requires_context_and_lease_digest_check = true
 requires_ownership_review = true
 requires_line_budget_check = true
+reviewer_must_be_independent_from_writer = true
 
 [acceptance]
 required_fields = [
   "package",
   "ticket_id",
   "lease_id",
+  "context_manifest_digest",
+  "submission_digest",
+  "review_digest",
   "base_commit",
   "final_commit",
   "assignment_sha256",
@@ -96,22 +141,22 @@ condition = "launch authorized and dependencies accepted"
 [[transition]]
 from = "READY"
 to = "LEASED"
-condition = "valid immutable ticket and no competing lease"
+condition = "new issued immutable ticket, materialized context and no competing lease"
 
 [[transition]]
 from = "LEASED"
 to = "IMPLEMENTING"
-condition = "writer acknowledges exact ticket/base/read set"
+condition = "writer acknowledges exact ticket, lease, base and context artifact"
 
 [[transition]]
 from = "IMPLEMENTING"
 to = "REVIEW"
-condition = "complete package and API handoff submitted"
+condition = "complete package submission and API handoff candidate recorded"
 
 [[transition]]
 from = "REVIEW"
 to = "ACCEPTED"
-condition = "package and integration review accepted"
+condition = "independent package and integration review accepted"
 
 [[transition]]
 from = "REVIEW"
@@ -121,7 +166,7 @@ condition = "review receipt contains exact rejection reasons"
 [[transition]]
 from = "REJECTED"
 to = "READY"
-condition = "new ticket revision issued by integration owner"
+condition = "new ticket revision and materialized context issued by integration owner"
 
 [[transition]]
 from = "BLOCKED|READY|LEASED|IMPLEMENTING|REVIEW|REJECTED"
