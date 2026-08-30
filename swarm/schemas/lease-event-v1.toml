@@ -51,11 +51,11 @@ canonical_order = 4
 rules = ["kind_writer_lease_v1"]
 
 [[field]]
-path = "lease.sha256"
+path = "lease.exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 5
-rules = ["exact_record_digest"]
+rules = ["equals_lease_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "event.kind"
@@ -100,11 +100,11 @@ canonical_order = 11
 rules = ["ABSENT_only_for_first_event", "same_lease"]
 
 [[field]]
-path = "chain.previous_event_sha256"
+path = "chain.previous_event_exact_record_file_sha256"
 kind = "OptionalSha256Digest"
 required = true
 canonical_order = 12
-rules = ["matches_previous_event_or_ABSENT"]
+rules = ["matches_previous_event_ref_exact_record_file_sha256_or_ABSENT", "not_signed_payload_sha256"]
 
 [[field]]
 path = "signature.record_sha256"
@@ -118,4 +118,4 @@ path = "signature.signature_ref"
 kind = "ImmutableSignatureRef"
 required = true
 canonical_order = 14
-rules = ["actor_identity_bound"]
+rules = ["actor_identity_bound", "signed_payload_sha256_matches_record_sha256"]
