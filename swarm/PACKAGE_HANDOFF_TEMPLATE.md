@@ -1,61 +1,80 @@
-# Package handoff
+# Accepted package handoff rendering guide
+
+This guide is a human review view of `swarm/schemas/package-handoff-v1.toml`. The machine schema is
+normative. Only the integration owner publishes the immutable record after an accepted independent
+review.
+
+Canonical record path:
+
+```text
+swarm/handoffs/<package>/<handoff_id>.toml
+```
+
+`handoff_id` is unique record/path identity. `api_schema_digest` is public-surface identity and is not
+used as the filename.
 
 ## Identity
 
-- Package / assignment / wave:
-- Base and final commits:
-- Agent / reviewer:
-- Accepted dependency commits and API/port digests:
+- `identity.handoff_id`
+- `identity.operation_id`
+- `identity.package`
+- `identity.stage`
+- `identity.accepted_at`
 
-## Changed files and scope
+## Submission and review
 
-List every changed file. Record any integration-owner exception; otherwise every path must remain under
-the package directory.
+- `submission_review.submission_ref`
+- `submission_review.submission_sha256`
+- `submission_review.review_ref`
+- `submission_review.review_sha256`
+
+The referenced review has decision `ACCEPT_SUBMISSION_FOR_INTEGRATION`, binds the exact submission and
+has no unresolved blocking finding.
+
+## Accepted code
+
+- `accepted_code.base_commit`
+- `accepted_code.final_commit`
+- `accepted_code.changed_files_digest`
 
 ## Public surface
 
-- added/changed public records or package-owned opaque types;
-- ports implemented and consumed;
-- canonical public API/schema/port digest;
-- operation inventory with idempotency, cancellation, deadline and bounds;
-- proof that no vendor/native type or credential crosses the API.
+- `public_surface.api_manifest_ref`
+- `public_surface.api_schema_digest`
+- `public_surface.configuration_digest`
+- `public_surface.fixture_digest_set`
+- `public_surface.error_reason_digest`
 
-## State ownership
+Configuration absence is explicit `OptionalV1` `ABSENT`.
 
-- mutable state owned here;
-- dependency-owned state referenced only opaquely;
-- confirmation that no second store/catalog/handle/policy/deletion owner was introduced.
+## Dependencies and evidence
 
-## Failure mapping
+- `dependencies[]`
+- `evidence[]`
 
-| Local typed error | Public reason | Protocol error | Retryability | Disclosure |
-|---|---|---|---|---|
+Every dependency is an accepted immutable package handoff. Every evidence entry binds an immutable
+artifact, artifact digest, raw-outcome digest and availability state.
 
-## Tests and raw outcomes
+## Compatibility
 
-Record exact commands and raw pass/fail/skip summaries, platform, toolchain and external artifact
-versions/digests. Never infer a pass for an unavailable command.
+- `compatibility.class`
+- `compatibility.consumer_actions[]`
 
-## Dependencies and qualification
+Compatibility actions use the closed `ConsumerActionCode` registry. Free-form hidden migration
+instructions are invalid.
 
-- added/removed dependencies;
-- ADR/license/source/security qualification;
-- fake/conformance fixture digest.
+## Supersession and signature
 
-## Size
+- `supersession.supersedes_handoff_ref`
+- `supersession.supersedes_handoff_sha256`
+- `signature.integration_owner_identity`
+- `signature.record_sha256`
+- `signature.integration_signature_ref`
 
-- hand-written Rust lines / largest module;
-- split review required and decision.
+A correction creates a new handoff and append-only supersession receipt. Existing accepted records are
+never edited.
 
-## Residual state
+## Non-claims
 
-- known failures/skips/blockers;
-- contract/port change requests;
-- follow-up integration work.
-
-## Reviewer receipt
-
-- ownership and dependency/port direction respected;
-- security/currentness invariants preserved;
-- tests reproduce;
-- accept/reject with reasons.
+A package handoff accepts one package implementation/public surface only. It does not accept G0–G6,
+Product Pulse, a wave, optional depth or launch-state advancement.
