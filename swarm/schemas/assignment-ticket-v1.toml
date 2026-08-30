@@ -126,11 +126,11 @@ canonical_order = 15
 rules = ["kind_context_manifest_v1", "same_package_stage_base"]
 
 [[field]]
-path = "context.manifest_sha256"
+path = "context.manifest_exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 16
-rules = ["exact_record_digest"]
+rules = ["equals_manifest_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "context.artifact_ref"
@@ -144,7 +144,7 @@ path = "context.artifact_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 18
-rules = ["matches_context_manifest"]
+rules = ["matches_context_manifest_and_artifact_ref"]
 
 [[field]]
 path = "instructions[]"
@@ -228,4 +228,4 @@ path = "signature.integration_signature_ref"
 kind = "ImmutableSignatureRef"
 required = true
 canonical_order = 30
-rules = ["issuer_identity_bound"]
+rules = ["issuer_identity_bound", "signed_payload_sha256_matches_record_sha256"]
