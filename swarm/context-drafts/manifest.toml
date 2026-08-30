@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = 2
 project = "eliot-search"
 architecture_version = "8.4"
 status = "NON_CLAIMABLE_CONTEXT_DRAFTS"
@@ -7,6 +7,11 @@ phase = "P00"
 draft_count = 3
 materialized_context_count = 0
 writer_visible_artifact_count_per_context = 1
+ordinary_static_source_file_ceiling = 16
+p00_exact_contract_pack_source_file_ceiling = 24
+p00_exact_contract_pack_exception_packages = ["search-contracts"]
+max_registry_fragments_per_context = 6
+max_accepted_handoff_slots_per_context = 1
 context_manifest_template = "swarm/CONTEXT_MANIFEST_TEMPLATE.md"
 materialized_layout = "swarm/context-manifests/<package>/<context_record_sha256>.toml"
 
@@ -15,18 +20,21 @@ package = "search-contracts"
 path = "swarm/context-drafts/p00/search-contracts.toml"
 status = "UNMATERIALIZED_DRAFT"
 claimable = false
+source_ceiling_class = "P00_EXACT_CONTRACT_PACK"
 
 [[draft]]
 package = "search-domain"
 path = "swarm/context-drafts/p00/search-domain.toml"
 status = "UNMATERIALIZED_DRAFT"
 claimable = false
+source_ceiling_class = "ORDINARY"
 
 [[draft]]
 package = "search-ports"
 path = "swarm/context-drafts/p00/search-ports.toml"
 status = "UNMATERIALIZED_DRAFT"
 claimable = false
+source_ceiling_class = "ORDINARY"
 
 [invariants]
 base_commit_required_at_materialization = true
@@ -37,3 +45,6 @@ canonical_order_required = true
 architecture_master_allowed = false
 dependency_implementation_source_allowed = false
 materialized_context_may_be_amended = false
+p00_exception_requires_manifest_closed_exact_pack = true
+p00_exception_may_add_ad_hoc_sources = false
+p00_exception_writer_visible_artifact_count = 1
