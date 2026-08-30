@@ -203,10 +203,18 @@ if ($launchPackageCount -ne $packages.Count -or $launchLibraryCount -ne $actualL
 }
 $activeWave = [int](Get-TomlInt $launch "active_wave")
 $authorized = @(Get-TomlArray $launch "authorized_packages")
-$conditional = @(Get-TomlArray $launch "conditionally_authorized_packages")
+$conditional = @(Get-TomlArray $launch "conditional_packages")
 foreach ($name in @($authorized + $conditional)) {
     if (-not $packages.Contains($name)) { Add-Error "Launch state names unknown package $name."; continue }
     if ($packages[$name].Wave -ne $activeWave) { Add-Error "Launch-authorized $name is W$($packages[$name].Wave), active wave is W$activeWave." }
+}
+if ($activeWave -eq 0) {
+    if (-not (Same-Set $authorized @('search-contracts'))) {
+        Add-Error "P00/W0 authorized package set must equal [search-contracts]."
+    }
+    if (-not (Same-Set $conditional @('search-domain', 'search-ports'))) {
+        Add-Error "P00/W0 conditional package set must equal [search-domain, search-ports]."
+    }
 }
 
 $p00RequiredFiles = @(Get-TomlArray $p00Manifest "required_files")
