@@ -6,20 +6,30 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ticket-issuance-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    name: Validate ticket issuance control plane
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate repository topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json
 
       - name: Validate P00 zero-state drafts
         shell: pwsh
-        run: ./tools/validate-p00-ticket-drafts.ps1
+        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
 
       - name: Validate ticket issuance contracts
         shell: pwsh
-        run: ./tools/validate-ticket-issuance-contracts.ps1
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
