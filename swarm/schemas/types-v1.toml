@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = 2
 registry_kind = "control_plane_types_v1"
 status = "SCHEMA_ONLY_NOT_IMPLEMENTED"
 owner = "integration-owner"
@@ -116,9 +116,62 @@ canonical = true
 [[type]]
 name = "ClosedReasonCode"
 representation = "string"
-pattern = "^[A-Z][A-Z0-9_]{1,127}$"
+allowed = [
+  "DRAFT_NOT_VALID",
+  "DRAFT_NOT_NONCLAIMABLE",
+  "CONTEXT_DRAFT_INVALID",
+  "CONTEXT_SOURCE_MISSING",
+  "CONTEXT_SOURCE_NOT_UTF8",
+  "CONTEXT_SELECTOR_UNSUPPORTED",
+  "CONTEXT_SELECTOR_NOT_UNIQUE",
+  "CONTEXT_FORBIDDEN_PATH",
+  "CONTEXT_HANDOFF_MISSING",
+  "CONTEXT_HANDOFF_MISMATCH",
+  "CONTEXT_BUDGET_EXCEEDED",
+  "CONTEXT_MATERIALIZATION_CANCELLED",
+  "CONTEXT_MATERIALIZATION_OUTCOME_UNKNOWN",
+  "TICKET_PREREQUISITE_MISSING",
+  "TICKET_WRITER_REVIEWER_CONFLICT",
+  "TICKET_ISSUE_OUTCOME_UNKNOWN",
+  "TICKET_OPERATION_CONFLICT",
+  "PACKAGE_LEASE_CONFLICT",
+  "LEASE_ACKNOWLEDGEMENT_MISMATCH",
+  "LEASE_REVOKED_OR_SUPERSEDED",
+  "SUBMISSION_SCOPE_VIOLATION",
+  "SUBMISSION_DIFF_INCOMPLETE",
+  "SUBMISSION_EVIDENCE_INCOMPLETE",
+  "SUBMISSION_LINE_BUDGET_VIOLATION",
+  "REVIEW_NOT_INDEPENDENT",
+  "REVIEW_RECALCULATION_MISMATCH",
+  "PACKAGE_HANDOFF_NOT_ACCEPTED",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
 canonical = true
-rules = ["registered_or_record_schema_closed_set", "content_minimized"]
+rules = ["closed_failure_surface", "content_minimized"]
+
+[[type]]
+name = "LeaseEventReasonCode"
+representation = "string"
+allowed = ["WRITER_ACKNOWLEDGED", "PACKAGE_SUBMITTED", "LEASE_REVOKED", "LEASE_SUPERSEDED"]
+canonical = true
+rules = ["closed_lease_lifecycle_surface", "details_external_when_sensitive"]
+
+[[type]]
+name = "SupersessionReasonCode"
+representation = "string"
+allowed = ["RECORD_CORRECTION", "RECORD_REPLACEMENT", "AUTHORITY_REVOKED", "CONTRACT_SUPERSEDED", "EVIDENCE_SUPERSEDED"]
+canonical = true
+rules = ["closed_supersession_surface", "details_external_when_sensitive"]
+
+[[type]]
+name = "ConsumerActionCode"
+representation = "string"
+allowed = ["NO_ACTION", "REVALIDATE_COMPATIBILITY", "ADOPT_ADDITIVE_SURFACE", "MIGRATE_BEFORE_STAGE", "BLOCK_UNTIL_MIGRATED"]
+canonical = true
+rules = ["closed_consumer_action_surface"]
 
 [[type]]
 name = "ClosedEnum"
@@ -145,13 +198,13 @@ canonical = true
 [[type]]
 name = "ImmutableRecordRef"
 representation = "ordered_record"
-canonical_fields = ["repository", "commit", "path", "git_blob_id", "exact_file_sha256", "record_kind"]
+canonical_fields = ["repository", "commit", "path", "git_blob_id", "exact_record_file_sha256", "record_kind"]
 rules = [
   "repository_is_RepositoryName",
   "commit_is_GitObjectId",
   "path_is_RepositoryRelativeSafePath",
   "git_blob_id_is_GitObjectId",
-  "exact_file_sha256_is_Sha256Digest",
+  "exact_record_file_sha256_is_Sha256Digest",
   "record_kind_is_ClosedControlRecordKind",
   "all_fields_readback_verified",
 ]
@@ -163,7 +216,8 @@ canonical_fields = ["store_profile_ref", "artifact_id", "bytes", "sha256"]
 rules = [
   "store_profile_ref_is_qualified_opaque_id",
   "artifact_id_is_OpaqueId",
-  "bytes_is_positive_u64",
+  "bytes_is_u64",
+  "zero_length_allowed_when_exact",
   "sha256_is_Sha256Digest",
   "readback_verified",
   "no_local_absolute_path",
@@ -431,7 +485,7 @@ representation = "ordered_record"
 canonical_fields = ["consumer_package", "action_code", "due_before_stage", "details_digest"]
 rules = [
   "consumer_package_is_PackageName",
-  "action_code_is_ClosedReasonCode",
+  "action_code_is_ConsumerActionCode",
   "due_before_stage_is_StageId",
   "details_digest_is_OptionalSha256Digest",
 ]
