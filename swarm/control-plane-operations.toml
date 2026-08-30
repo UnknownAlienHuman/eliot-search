@@ -1,0 +1,297 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "CONTRACT_ONLY_NOT_IMPLEMENTED"
+owner = "integration-owner"
+operation_contract = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
+record_schema_registry = "swarm/control-plane-schema.toml"
+type_registry = "swarm/schemas/types-v1.toml"
+orchestration_registry = "swarm/orchestration.toml"
+qualification_manifest = "qualification/ticket-issuance/manifest.toml"
+validator = "tools/validate-ticket-issuance-conformance.ps1"
+manual_workflow = ".github/workflows/ticket-issuance-conformance.yml"
+workflow_policy = "manual_only"
+unknown_operations = "reject"
+unknown_failure_codes = "reject"
+operation_count = 12
+pure_operation_count = 2
+mutation_operation_count = 9
+read_only_recovery_operation_count = 1
+
+operation_kinds = ["PURE", "MUTATION", "READ_ONLY_RECOVERY"]
+recovery_dispositions = [
+  "RECOVERED_SUCCEEDED",
+  "SAFE_TO_RETRY",
+  "CONFLICT",
+  "PRESERVE_OUTCOME_UNKNOWN",
+]
+
+[[operation]]
+id = "validate_ticket_draft"
+kind = "PURE"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["assignment_ticket_draft_v2", "package_registry", "function_registry", "stage_registry", "launch_state"]
+output_kinds = ["validated_ticket_draft"]
+domain_separator = ""
+idempotency = "deterministic_equal_input_equal_output"
+cancellation = "side_effect_free_check_between_bounded_validation_steps"
+deadline = "finite_caller_deadline_or_explicit_ABSENT"
+recovery = "not_applicable_no_mutation"
+state_transition = "none"
+failure_codes = ["DRAFT_NOT_VALID", "DRAFT_NOT_NONCLAIMABLE"]
+
+[[operation]]
+id = "validate_context_draft"
+kind = "PURE"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["writer_context_draft_v2", "context_draft_manifest_v2", "package_registry", "function_registry", "stage_registry", "launch_state"]
+output_kinds = ["validated_context_draft"]
+domain_separator = ""
+idempotency = "deterministic_equal_input_equal_output"
+cancellation = "side_effect_free_check_between_bounded_validation_steps"
+deadline = "finite_caller_deadline_or_explicit_ABSENT"
+recovery = "not_applicable_no_mutation"
+state_transition = "none"
+failure_codes = ["CONTEXT_DRAFT_INVALID", "CONTEXT_FORBIDDEN_PATH", "CONTEXT_BUDGET_EXCEEDED"]
+
+[[operation]]
+id = "materialize_context"
+kind = "MUTATION"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["validated_context_draft", "immutable_base_commit", "accepted_package_handoffs", "bounded_artifact_store"]
+output_kinds = ["context_manifest_v1", "writer_context_artifact"]
+domain_separator = "materialize_context_v1"
+idempotency = "same_operation_and_input_returns_original_manifest_and_artifact"
+cancellation = "clean_before_publish_unknown_after_possible_publish"
+deadline = "finite_required"
+recovery = "exact_manifest_artifact_git_blob_and_digest_readback"
+state_transition = "BLOCKED_to_BLOCKED_context_materialized_only"
+failure_codes = [
+  "CONTEXT_SOURCE_MISSING",
+  "CONTEXT_SOURCE_NOT_UTF8",
+  "CONTEXT_SELECTOR_UNSUPPORTED",
+  "CONTEXT_SELECTOR_NOT_UNIQUE",
+  "CONTEXT_FORBIDDEN_PATH",
+  "CONTEXT_HANDOFF_MISSING",
+  "CONTEXT_HANDOFF_MISMATCH",
+  "CONTEXT_BUDGET_EXCEEDED",
+  "CONTEXT_MATERIALIZATION_CANCELLED",
+  "CONTEXT_MATERIALIZATION_OUTCOME_UNKNOWN",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "issue_assignment_ticket"
+kind = "MUTATION"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["validated_ticket_draft", "context_manifest_v1", "writer_identity", "reviewer_identity", "immutable_repository_fence", "bounded_evidence_plan"]
+output_kinds = ["assignment_ticket_v1"]
+domain_separator = "issue_assignment_ticket_v1"
+idempotency = "same_operation_and_input_returns_original_ticket"
+cancellation = "clean_before_commit_unknown_after_possible_commit"
+deadline = "finite_required"
+recovery = "exact_ticket_path_git_blob_complete_file_digest_and_input_identity_readback"
+state_transition = "BLOCKED_to_READY_when_launch_and_prerequisites_hold"
+failure_codes = [
+  "TICKET_PREREQUISITE_MISSING",
+  "TICKET_WRITER_REVIEWER_CONFLICT",
+  "TICKET_ISSUE_OUTCOME_UNKNOWN",
+  "TICKET_OPERATION_CONFLICT",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "issue_writer_lease"
+kind = "MUTATION"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["assignment_ticket_v1", "context_manifest_v1", "current_package_lease_state"]
+output_kinds = ["writer_lease_v1"]
+domain_separator = "issue_writer_lease_v1"
+idempotency = "same_operation_and_input_returns_original_lease"
+cancellation = "clean_before_commit_unknown_after_possible_commit"
+deadline = "finite_required"
+recovery = "exact_lease_path_git_blob_complete_file_digest_and_input_identity_readback"
+state_transition = "READY_to_LEASED"
+failure_codes = [
+  "TICKET_PREREQUISITE_MISSING",
+  "PACKAGE_LEASE_CONFLICT",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "acknowledge_writer_lease"
+kind = "MUTATION"
+authority = "integration-owner_recording_exact_writer_event"
+actor = "ticket_writer"
+input_kinds = ["writer_lease_v1", "assignment_ticket_v1", "context_manifest_v1", "writer_acknowledgement"]
+output_kinds = ["lease_event_v1_ACKNOWLEDGED"]
+domain_separator = "acknowledge_writer_lease_v1"
+idempotency = "same_operation_and_input_returns_original_acknowledgement_event"
+cancellation = "clean_before_commit_unknown_after_possible_commit"
+deadline = "finite_required"
+recovery = "exact_event_chain_and_complete_file_digest_readback"
+state_transition = "LEASED_to_IMPLEMENTING"
+failure_codes = [
+  "LEASE_ACKNOWLEDGEMENT_MISMATCH",
+  "LEASE_REVOKED_OR_SUPERSEDED",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "revoke_or_supersede_lease"
+kind = "MUTATION"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["writer_lease_v1", "current_lease_event_chain", "lease_terminal_event_request"]
+output_kinds = ["lease_event_v1_REVOKED_or_SUPERSEDED"]
+domain_separator = "revoke_or_supersede_lease_v1"
+idempotency = "same_operation_and_input_returns_original_terminal_event"
+cancellation = "clean_before_commit_unknown_after_possible_commit"
+deadline = "finite_required"
+recovery = "exact_terminal_event_chain_and_complete_file_digest_readback"
+state_transition = "active_state_to_SUPERSEDED_or_authority_removed"
+failure_codes = [
+  "LEASE_REVOKED_OR_SUPERSEDED",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "record_package_submission"
+kind = "MUTATION"
+authority = "integration-owner_recording_writer_submission"
+actor = "ticket_writer"
+input_kinds = ["acknowledged_active_writer_lease", "immutable_final_commit", "complete_changed_file_manifest", "public_surface_candidate", "bounded_evidence_set", "line_report"]
+output_kinds = ["package_submission_v1", "lease_event_v1_SUBMITTED"]
+domain_separator = "record_package_submission_v1"
+idempotency = "submission_and_SUBMITTED_event_committed_in_one_git_commit_for_equal_input"
+cancellation = "clean_before_commit_unknown_after_possible_joint_commit"
+deadline = "finite_required"
+recovery = "joint_submission_and_event_exact_commit_readback"
+state_transition = "IMPLEMENTING_to_REVIEW"
+failure_codes = [
+  "LEASE_REVOKED_OR_SUPERSEDED",
+  "SUBMISSION_SCOPE_VIOLATION",
+  "SUBMISSION_DIFF_INCOMPLETE",
+  "SUBMISSION_EVIDENCE_INCOMPLETE",
+  "SUBMISSION_LINE_BUDGET_VIOLATION",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "record_independent_review"
+kind = "MUTATION"
+authority = "integration-owner_recording_independent_reviewer_result"
+actor = "ticket_reviewer_or_accepted_replacement"
+input_kinds = ["package_submission_v1", "independent_recalculation", "bounded_findings", "closed_verdict"]
+output_kinds = ["independent_review_v1"]
+domain_separator = "record_independent_review_v1"
+idempotency = "same_operation_and_input_returns_original_review"
+cancellation = "clean_before_commit_unknown_after_possible_commit"
+deadline = "finite_required"
+recovery = "exact_review_path_git_blob_complete_file_digest_and_submission_binding_readback"
+state_transition = "REVIEW_to_REVIEW_or_REJECTED"
+failure_codes = [
+  "REVIEW_NOT_INDEPENDENT",
+  "REVIEW_RECALCULATION_MISMATCH",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "publish_package_handoff"
+kind = "MUTATION"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["package_submission_v1", "accepted_independent_review_v1", "integration_recalculation"]
+output_kinds = ["package_handoff_v1"]
+domain_separator = "publish_package_handoff_v1"
+idempotency = "same_operation_and_input_returns_original_handoff"
+cancellation = "clean_before_commit_unknown_after_possible_commit"
+deadline = "finite_required"
+recovery = "exact_handoff_path_git_blob_complete_file_digest_and_review_binding_readback"
+state_transition = "REVIEW_to_ACCEPTED"
+failure_codes = [
+  "REVIEW_RECALCULATION_MISMATCH",
+  "PACKAGE_HANDOFF_NOT_ACCEPTED",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "supersede_control_record"
+kind = "MUTATION"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["old_immutable_control_record", "compatible_replacement_record", "closed_supersession_reason"]
+output_kinds = ["compatible_replacement_record", "supersession_receipt_v1"]
+domain_separator = "supersede_control_record_v1"
+idempotency = "same_operation_and_input_returns_original_replacement_and_receipt"
+cancellation = "clean_before_joint_commit_unknown_after_possible_joint_commit"
+deadline = "finite_required"
+recovery = "joint_replacement_and_receipt_exact_commit_readback"
+state_transition = "current_state_to_SUPERSEDED_for_old_record"
+failure_codes = [
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[[operation]]
+id = "recover_control_operation"
+kind = "READ_ONLY_RECOVERY"
+authority = "integration-owner"
+actor = "integration-owner"
+input_kinds = ["operation_id", "canonical_input_digest", "intended_target_paths", "repository_read_view"]
+output_kinds = ["closed_recovery_disposition"]
+domain_separator = "recover_control_operation_v1"
+idempotency = "read_only_equal_repository_view_equal_disposition"
+cancellation = "side_effect_free_and_never_converts_unknown_to_success"
+deadline = "finite_required"
+recovery = "not_applicable_this_is_recovery"
+state_transition = "none"
+failure_codes = [
+  "CONTROL_OPERATION_CONFLICT",
+  "CONTROL_RECORD_SCHEMA_MISMATCH",
+  "CONTROL_RECORD_DIGEST_MISMATCH",
+  "CONTROL_RECORD_QUARANTINED",
+]
+
+[invariants]
+pure_operations_create_records = false
+mutation_operations_require_operation_id = true
+mutation_operations_require_exact_post_write_readback = true
+same_operation_different_input = "CONTROL_OPERATION_CONFLICT"
+blind_retry_after_possible_write_allowed = false
+partial_multi_record_success_allowed = false
+control_record_in_place_mutation_allowed = false
+package_writer_may_publish_integration_records = false
+package_handoff_may_advance_gate_or_wave = false
+workflow_result_may_issue_authority = false
