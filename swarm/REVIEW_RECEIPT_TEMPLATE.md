@@ -15,53 +15,66 @@ swarm/reviews/<package>/<review_id>.toml
 - `identity.review_id`
 - `identity.operation_id`
 - `identity.package`
-- `identity.stage`
 - `identity.reviewed_at`
-- `identity.reviewer`
 - `submission.ref`
 - `submission.sha256`
-- `submission.final_commit`
-- `submission.writer`
 
-The reviewer differs from the writer and declares no material conflict.
+The submission ref is an immutable `package_submission_v1` record and the SHA-256 is its external exact
+complete-file digest.
 
-## Recomputed checks
+## Actors and independence
 
-### Scope
+- `actors.writer`
+- `actors.reviewer`
+- `actors.independence_declaration = NO_CONFLICT_DECLARED`
 
-- `scope.complete_diff_digest`
-- `scope.write_scope_match`
-- `scope.out_of_scope_files[]`
+The writer matches the submission/ticket. The reviewer is different from the writer and matches the
+ticket or an integration-owned reviewer-replacement record.
 
-### Contract and public surface
+## Scope review
 
-- `contract.primary_contract_digest`
-- `contract.current_stage_digest`
-- `contract.api_schema_digest`
-- `contract.configuration_digest`
-- `contract.error_reason_digest`
-- `dependencies[]`
+- `scope_review.complete_diff_recomputed`
+- `scope_review.all_paths_inside_write_scope`
+- `scope_review.base_final_commit_relationship_verified`
 
-### Evidence and size
+All three values must be true for acceptance.
 
-- `evidence_review.required_results[]`
+## Contract review
+
+- `contract_review.primary_contract_satisfied`
+- `contract_review.stage_obligations_satisfied`
+- `contract_review.dependency_handoffs_match`
+- `contract_review.ownership_boundaries_preserved`
+
+All four values must be true for acceptance.
+
+## Evidence review
+
 - `evidence_review.raw_outcomes_reproduced`
-- `evidence_review.unavailable_checks[]`
-- `size.handwritten_src_lines`
-- `size.package_test_lines`
-- `size.split_review_status`
+- `evidence_review.failure_cancellation_recovery_checked`
+- `evidence_review.security_content_audit_checked`
+- `evidence_review.unavailable_checks_visible`
 
-Every value is independently recomputed from the exact submission/final commit or remains explicitly
-unavailable. The review cannot trust a writer's summary in place of source/evidence readback.
+`raw_outcomes_reproduced` uses the exact closed PASS/UNAVAILABLE/FAIL-with-finding semantics declared by
+the schema. Unavailable checks remain visible and cannot be converted into a pass.
+
+## API and size review
+
+- `api_review.recomputed_api_schema_digest`
+- `api_review.recomputed_configuration_digest`
+- `api_review.compatibility_class`
+- `api_review.line_budget_satisfied`
+
+The configuration digest uses explicit `OptionalV1`. Digests and compatibility are independently
+recomputed from the exact submission/final commit.
 
 ## Findings and verdict
 
 - `findings[]`
-- `verdict.decision`
-- `verdict.blocking_reason_codes[]`
-- `verdict.accepted_submission_sha256`
+- `verdict.value`
+- `verdict.reason_codes[]`
 
-Allowed decisions are:
+Allowed verdicts are:
 
 ```text
 ACCEPT_SUBMISSION_FOR_INTEGRATION
@@ -70,15 +83,17 @@ REJECT
 SUPERSEDED
 ```
 
-Acceptance requires the exact submission digest, no blocking finding, scope pass, contract pass, evidence
-pass and line-budget pass. It permits only the integration owner to construct a package handoff after
-final digest verification.
+Acceptance requires no unresolved blocker or critical finding and every mandatory scope, contract,
+evidence and line-budget condition. It permits only the integration owner to construct a package handoff
+after final digest verification.
 
 ## Signature
 
-- `signature.reviewer_identity`
 - `signature.record_sha256`
 - `signature.reviewer_signature_ref`
 
-The review remains immutable and append-only. A later correction requires a new review and, where
-applicable, a supersession receipt.
+The signature binds the reviewer identity. The embedded digest is the signed-payload digest; complete-file
+identity remains external.
+
+The review is immutable and append-only. A correction requires a new review and, where applicable, a
+supersession receipt.
