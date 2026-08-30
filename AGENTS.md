@@ -91,9 +91,17 @@ root/package instructions
 + one later-stage override when applicable
 ```
 
-The declared static context is capped at sixteen files before canonical materialization. A ticket may add
-only bounded exact accepted handoff receipts and named fixture references. It may not add the
-architecture master, previous stage packets or another package's source tree.
+An ordinary package context is capped at sixteen declared source files before canonical materialization.
+The sole P00 exception is `search-contracts`: its exact manifest-closed P00 contract pack may contain up
+to twenty-four declared source files because one writer owns the shared schema freeze. That exception:
+
+- must equal the exact P00 manifest plus the fixed integration instructions/registry fragments;
+- must materialize to exactly one writer-visible artifact;
+- may not add ad-hoc architecture, dependency-source or unrelated stage files;
+- does not apply to `search-domain`, `search-ports` or any W1+ package.
+
+A ticket may add only bounded exact accepted handoff receipts and named fixture references. It may not add
+the architecture master, previous stage packets or another package's source tree.
 
 A package first used at its earliest wave needs no override. A package reused later must have exactly one
 `stage.package` override with:
