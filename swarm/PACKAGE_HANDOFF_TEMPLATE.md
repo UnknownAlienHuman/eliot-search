@@ -24,12 +24,13 @@ used as the filename.
 ## Submission and review
 
 - `submission_review.submission_ref`
-- `submission_review.submission_sha256`
+- `submission_review.submission_exact_record_file_sha256`
 - `submission_review.review_ref`
-- `submission_review.review_sha256`
+- `submission_review.review_exact_record_file_sha256`
 
-The referenced review has decision `ACCEPT_SUBMISSION_FOR_INTEGRATION`, binds the exact submission and
-has no unresolved blocking finding.
+Both digests identify complete committed control-record files and equal the exact digests inside their
+immutable refs. Neither is the referenced record's embedded signed-payload digest. The review has verdict
+`ACCEPT_SUBMISSION_FOR_INTEGRATION`, binds the exact submission and has no unresolved blocking finding.
 
 ## Accepted code
 
@@ -66,13 +67,14 @@ instructions are invalid.
 ## Supersession and signature
 
 - `supersession.supersedes_handoff_ref`
-- `supersession.supersedes_handoff_sha256`
+- `supersession.supersedes_handoff_exact_record_file_sha256`
 - `signature.integration_owner_identity`
 - `signature.record_sha256`
 - `signature.integration_signature_ref`
 
 A correction creates a new handoff and append-only supersession receipt. Existing accepted records are
-never edited.
+never edited. The optional superseded-handoff digest is a complete-file digest, never a signed-payload
+digest.
 
 ## Non-claims
 
