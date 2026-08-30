@@ -7,8 +7,15 @@ record_layout = "swarm/leases/<package>/events/<event_id>.toml"
 immutable = true
 unknown_fields = "reject"
 event_kinds = ["ACKNOWLEDGED", "SUBMITTED", "REVOKED", "SUPERSEDED"]
+event_reason_type = "LeaseEventReasonCode"
 source_content_allowed = false
 secret_content_allowed = false
+
+[event_reason_codes]
+ACKNOWLEDGED = "WRITER_ACKNOWLEDGED"
+SUBMITTED = "PACKAGE_SUBMITTED"
+REVOKED = "LEASE_REVOKED"
+SUPERSEDED = "LEASE_SUPERSEDED"
 
 canonical_field_order = [
   "schema_version", "record_kind", "status", "identity", "lease", "event",
@@ -66,10 +73,10 @@ rules = ["recorded_not_inferred"]
 
 [[field]]
 path = "event.reason_code"
-kind = "ClosedReasonCode"
+kind = "LeaseEventReasonCode"
 required = true
 canonical_order = 8
-rules = ["non_empty", "content_minimized"]
+rules = ["exact_mapping_from_event_kind", "details_external_when_sensitive"]
 
 [[field]]
 path = "actor.identity"
