@@ -1,4 +1,4 @@
-schema_version = 5
+schema_version = 6
 project = "eliot-search"
 package_registry = "swarm/crates.toml"
 function_registry = "swarm/function-packets.toml"
@@ -8,8 +8,12 @@ launch_state = "swarm/launch-state.toml"
 gate_registry = "swarm/gates.toml"
 control_plane_schema_registry = "swarm/control-plane-schema.toml"
 control_plane_type_registry = "swarm/schemas/types-v1.toml"
+control_plane_operation_registry = "swarm/control-plane-operations.toml"
 control_plane_validator = "tools/validate-ticket-issuance-contracts.ps1"
 control_plane_manual_workflow = ".github/workflows/ticket-issuance-contracts.yml"
+ticket_issuance_qualification_manifest = "qualification/ticket-issuance/manifest.toml"
+ticket_issuance_conformance_validator = "tools/validate-ticket-issuance-conformance.ps1"
+ticket_issuance_conformance_workflow = ".github/workflows/ticket-issuance-conformance.yml"
 workflow_policy = "manual_only"
 ticket_issuance_operation_contract = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
 assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
@@ -76,6 +80,8 @@ dependency_implementation_source_in_context = false
 [record_validation]
 schema_registry_required = true
 type_registry_required = true
+operation_registry_required = true
+qualification_manifest_required = true
 reason_registries_required = true
 record_kind_must_match_schema = true
 all_field_kinds_must_resolve = true
