@@ -10,6 +10,7 @@ swarm/crates.toml                  package path, direct dependencies, earliest w
 swarm/function-packets.toml        primary contract/FUNCTIONS.md and package-only write scope
 swarm/stages.toml                  W0–W10 package composition, shared_read_set and gate/receipt order
 swarm/stage-readsets.toml          supplements and prior-handoff replacement for package reentries
+swarm/context-drafts/manifest.toml exact pre-materialization source ceilings and P00 exception
 swarm/launch-state.toml            current authorization only
 swarm/orchestration.toml           record progression and exact control-record layouts
 swarm/control-plane-schema.toml    record schema and closed reason-type registry
@@ -155,7 +156,9 @@ Before materializing context or issuing records, the integration owner verifies:
 7. override declares replacement/prior-handoff-only/no-dependency-source/no-shared-edit floors;
 8. every context source and selector exists and resolves exactly once at the immutable base commit;
 9. every forbidden prior-stage or architecture/dependency source is absent;
-10. static context is at most sixteen files and emits one bounded writer artifact;
+10. ordinary static context has at most sixteen source files and emits one bounded writer artifact;
+    the sole `search-contracts` P00 exception has at most twenty-four sources, equals the manifest-closed
+    exact contract pack plus fixed integration instructions, and also emits exactly one writer artifact;
 11. `swarm/launch-state.toml` authorizes the package now;
 12. every direct dependency and prior stage has an accepted immutable package/API handoff;
 13. all required provider/artifact/profile identities are exact and independently qualified;
