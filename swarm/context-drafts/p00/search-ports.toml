@@ -25,6 +25,7 @@ preserve_declared_order = true
 record_source_sha256 = true
 record_fragment_sha256 = true
 
+[content]
 source_files = [
   "AGENTS.md",
   "crates/search-ports/AGENTS.md",
@@ -41,7 +42,6 @@ source_files = [
   "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md",
   "docs/contracts/p00/REASON_CODES.md",
 ]
-
 registry_fragments = [
   "swarm/crates.toml::package[name=search-ports]",
   "swarm/function-packets.toml::foundation[package=search-ports]",
@@ -49,11 +49,9 @@ registry_fragments = [
   "swarm/launch-state.toml::conditional_packages[search-ports]",
   "swarm/launch-state.toml::conditional_activation.search-ports",
 ]
-
 accepted_handoff_slots = [
   "search-contracts::accepted_package_and_api_handoff",
 ]
-
 forbidden_paths = [
   "docs/architecture/**",
   "crates/search-contracts/src/**",
@@ -65,7 +63,6 @@ forbidden_paths = [
   "swarm/reviews/**",
   "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
 ]
-
 required_unavailable_checks = [
   "accepted_search_contracts_handoff",
   "real_stable_windows_toolchain",

@@ -53,6 +53,7 @@ split_review_total_lines = 8500
 hard_total_lines = 10000
 one_active_writer = true
 
+[deliverables]
 required_outputs = [
   "package_implementation_inside_write_scope",
   "package_local_contract_property_negative_tests",
@@ -61,7 +62,6 @@ required_outputs = [
   "raw_command_outcome_refs",
   "residual_risks_and_contract_changes",
 ]
-
 required_evidence = [
   "recipe_set_exact_test",
   "recipe_result_union_exact_test",
@@ -79,7 +79,6 @@ required_evidence = [
   "public_reason_registry_exact_test",
   "public_vendor_type_guard",
 ]
-
 issuance_requirements = [
   "select_exact_base_commit",
   "assign_distinct_writer_and_reviewer",

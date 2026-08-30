@@ -55,6 +55,7 @@ split_review_total_lines = 8500
 hard_total_lines = 10000
 one_active_writer = true
 
+[deliverables]
 required_outputs = [
   "vendor_neutral_port_traits_inside_write_scope",
   "bounded_support_types_and_conformance_fakes",
@@ -62,7 +63,6 @@ required_outputs = [
   "package_handoff_candidate",
   "raw_command_outcome_refs",
 ]
-
 required_evidence = [
   "public_vendor_type_guard",
   "complete_method_semantics",
@@ -73,7 +73,6 @@ required_evidence = [
   "typed_error_mapping",
   "dependency_guard_search_contracts_only",
 ]
-
 issuance_requirements = [
   "accept_search_contracts_package_handoff",
   "bind_exact_contracts_commit_and_API_schema_digest",

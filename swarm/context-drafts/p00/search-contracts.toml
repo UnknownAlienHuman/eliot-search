@@ -25,6 +25,7 @@ preserve_declared_order = true
 record_source_sha256 = true
 record_fragment_sha256 = true
 
+[content]
 source_files = [
   "AGENTS.md",
   "crates/search-contracts/AGENTS.md",
@@ -46,16 +47,13 @@ source_files = [
   "docs/contracts/p00/REASON_CODES.md",
   "docs/contracts/p00/PORT_OPERATIONS.md",
 ]
-
 registry_fragments = [
   "swarm/crates.toml::package[name=search-contracts]",
   "swarm/function-packets.toml::foundation[package=search-contracts]",
   "swarm/stages.toml::stage[id=W0]",
   "swarm/launch-state.toml::authorized_packages[search-contracts]",
 ]
-
 accepted_handoff_slots = []
-
 forbidden_paths = [
   "docs/architecture/**",
   "crates/*/src/** except crates/search-contracts/src/**",
@@ -69,7 +67,6 @@ forbidden_paths = [
   "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
   "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
 ]
-
 required_unavailable_checks = [
   "real_stable_windows_toolchain",
   "generated_Cargo_lock",
