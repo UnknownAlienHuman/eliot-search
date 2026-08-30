@@ -52,18 +52,18 @@ canonical_order = 5
 rules = ["kind_assignment_ticket_v1"]
 
 [[field]]
-path = "ticket.sha256"
+path = "ticket.exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 6
-rules = ["exact_record_digest"]
+rules = ["equals_ticket_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "context.manifest_ref"
 kind = "ImmutableRecordRef"
 required = true
 canonical_order = 7
-rules = ["matches_ticket"]
+rules = ["matches_ticket", "kind_context_manifest_v1"]
 
 [[field]]
 path = "context.artifact_sha256"
@@ -168,4 +168,4 @@ path = "signature.integration_signature_ref"
 kind = "ImmutableSignatureRef"
 required = true
 canonical_order = 22
-rules = ["issuer_identity_bound"]
+rules = ["issuer_identity_bound", "signed_payload_sha256_matches_record_sha256"]
