@@ -16,7 +16,8 @@ pwsh -NoProfile -File tools/validate-swarm.ps1 -Json
 ```
 
 Checks Cargo/registry/package/assignment identity, exact internal dependency parity, graph cycles/waves,
-launch state, line limits and the P00 contract manifest.
+launch state, line limits and the P00 contract manifest. At P00/W0 it also requires exactly
+`search-contracts` authorized and exactly `search-domain` plus `search-ports` conditional.
 
 ### `validate-function-packets.ps1`
 
@@ -36,8 +37,8 @@ pwsh -NoProfile -File tools/validate-stage-readsets.ps1 -Json
 ```
 
 Checks W0–W10 stage composition, 68 stage-package assignments, 23 later-stage overrides, exact reentry
-replacement contexts, prior-handoff-only consumption, sixteen-file static context ceilings and unchanged
-P00/W0 launch authority.
+replacement contexts, prior-handoff-only consumption, sixteen-file later-stage static context ceilings
+and unchanged P00/W0 launch authority.
 
 ## P00 draft and issuance control plane
 
@@ -55,6 +56,11 @@ Checks:
 - unresolved writer/reviewer/base/ticket/context identities;
 - domain and ports remain conditional on an accepted `search-contracts` handoff;
 - exact context source files, registry selectors and accepted-handoff slots;
+- ordinary P00 contexts remain at or below sixteen source files;
+- the sole `search-contracts` exception remains at or below twenty-four sources and equals the exact
+  manifest-closed P00 contract pack plus its fixed integration instructions in canonical order;
+- every context remains within six registry fragments, one accepted-handoff slot and exactly one
+  writer-visible artifact;
 - no architecture master, dependency implementation source or forbidden control record;
 - all issued-record roots remain zero-state;
 - orchestration schema v5 and launch-state P00/W0 parity;
