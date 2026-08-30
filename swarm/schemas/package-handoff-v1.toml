@@ -61,11 +61,11 @@ canonical_order = 6
 rules = ["kind_package_submission_v1"]
 
 [[field]]
-path = "submission_review.submission_sha256"
+path = "submission_review.submission_exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 7
-rules = ["exact_record_digest"]
+rules = ["equals_submission_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "submission_review.review_ref"
@@ -75,11 +75,11 @@ canonical_order = 8
 rules = ["kind_independent_review_v1", "verdict_accept_submission_for_integration"]
 
 [[field]]
-path = "submission_review.review_sha256"
+path = "submission_review.review_exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 9
-rules = ["exact_record_digest"]
+rules = ["equals_review_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "accepted_code.base_commit"
@@ -173,11 +173,11 @@ canonical_order = 22
 rules = ["same_package", "old_record_remains_immutable", "ABSENT_when_no_prior_handoff"]
 
 [[field]]
-path = "supersession.supersedes_handoff_sha256"
+path = "supersession.supersedes_handoff_exact_record_file_sha256"
 kind = "OptionalSha256Digest"
 required = true
 canonical_order = 23
-rules = ["matches_superseded_ref_or_ABSENT"]
+rules = ["matches_superseded_ref_exact_record_file_sha256_or_ABSENT", "not_signed_payload_sha256"]
 
 [[field]]
 path = "signature.integration_owner_identity"
@@ -198,4 +198,4 @@ path = "signature.integration_signature_ref"
 kind = "ImmutableSignatureRef"
 required = true
 canonical_order = 26
-rules = ["integration_owner_identity_bound"]
+rules = ["integration_owner_identity_bound", "signed_payload_sha256_matches_record_sha256"]
