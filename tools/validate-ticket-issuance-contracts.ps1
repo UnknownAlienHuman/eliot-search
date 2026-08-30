@@ -137,6 +137,7 @@ function Assert-WorkflowPolicy([string]$Path, [string]$Text) {
 
 $controlPath = 'swarm/control-plane-schema.toml'
 $typesPath = 'swarm/schemas/types-v1.toml'
+$schemaReadmePath = 'swarm/schemas/README.md'
 $orchestrationPath = 'swarm/orchestration.toml'
 $launchPath = 'swarm/launch-state.toml'
 $operationsPath = 'docs/handoff/TICKET_ISSUANCE_OPERATIONS.md'
@@ -146,6 +147,7 @@ $workflowPath = '.github/workflows/ticket-issuance-contracts.yml'
 
 $control = Read-File $controlPath
 $types = Read-File $typesPath
+$schemaReadme = Read-File $schemaReadmePath
 $orchestration = Read-File $orchestrationPath
 $launch = Read-File $launchPath
 $operations = Read-File $operationsPath
@@ -197,6 +199,26 @@ $expectedFailures = @(
     'CONTROL_OPERATION_CONFLICT',
     'CONTROL_RECORD_QUARANTINED'
 )
+
+$legacyAmbiguousRecordDigestPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($legacyPath in @(
+    'draft.exact_sha256',
+    'context.manifest_sha256',
+    'ticket.sha256',
+    'lease.sha256',
+    'chain.previous_event_sha256',
+    'ticket_lease_context.ticket_sha256',
+    'ticket_lease_context.lease_sha256',
+    'ticket_lease_context.context_manifest_sha256',
+    'submission.sha256',
+    'submission_review.submission_sha256',
+    'submission_review.review_sha256',
+    'supersession.supersedes_handoff_sha256',
+    'old_record.sha256',
+    'replacement_record.sha256'
+)) {
+    [void]$legacyAmbiguousRecordDigestPaths.Add($legacyPath)
+}
 
 if ((Get-Int $types 'schema_version') -ne 2 -or (Get-String $types 'registry_kind') -cne 'control_plane_types_v1') {
     Fail 'Invalid type registry identity.'
@@ -349,6 +371,7 @@ if (-not (Same-Sequence $closedKinds @($schemas.Keys))) {
 }
 
 $totalFields = 0
+$totalSignatureRefs = 0
 $schemaFieldPaths = @{}
 $schemaFieldKinds = @{}
 foreach ($entry in $schemas.GetEnumerator()) {
@@ -392,6 +415,7 @@ foreach ($entry in $schemas.GetEnumerator()) {
     $fieldRulesMap = @{}
     $lastGroup = ''
     $signatureCount = 0
+    $signatureRefCount = 0
 
     for ($i = 1; $i -lt $fields.Count; $i++) {
         $fieldPath = Get-String $fields[$i] 'path'
@@ -419,6 +443,12 @@ foreach ($entry in $schemas.GetEnumerator()) {
         if ($fieldKind -ceq 'ClosedEnum' -and ($rules -join ' ') -notmatch '(?:equals_|one_of_|PASS_)') {
             Fail "$path field $fieldPath has an open enum."
         }
+        if ($legacyAmbiguousRecordDigestPaths.Contains($fieldPath)) {
+            Fail "$path retains ambiguous control-record digest field $fieldPath."
+        }
+        if ($fieldPath -match 'exact_record_file_sha256$' -and ($rules -join ' ') -notmatch 'not_signed_payload_sha256') {
+            Fail "$path field $fieldPath does not distinguish complete-file from signed-payload identity."
+        }
 
         $group = ($fieldPath -split '\.', 2)[0]
         if ($group.EndsWith('[]')) { $group = $group.Substring(0, $group.Length - 2) }
@@ -433,6 +463,16 @@ foreach ($entry in $schemas.GetEnumerator()) {
                 Fail "$path has wrong embedded digest semantics."
             }
         }
+        if ($fieldPath -match '^signature\.(?:signature_ref|[A-Za-z0-9_]+_signature_ref)$') {
+            $signatureRefCount++
+            $totalSignatureRefs++
+            if ($fieldKind -cne 'ImmutableSignatureRef') {
+                Fail "$path field $fieldPath must use ImmutableSignatureRef."
+            }
+            if (($rules -join ' ') -notmatch 'signed_payload_sha256_matches_record_sha256') {
+                Fail "$path field $fieldPath does not bind the signed-payload digest."
+            }
+        }
     }
 
     if (-not (Same-Set @($seenOrder) @(1..($fields.Count - 1)))) {
@@ -441,6 +481,9 @@ foreach ($entry in $schemas.GetEnumerator()) {
     if ($signatureCount -ne 1) {
         Fail "$path must define one signature.record_sha256."
     }
+    if ($signatureRefCount -lt 1) {
+        Fail "$path must define at least one immutable signature ref."
+    }
 
     $expectedGroups = @($canonicalGroups | Select-Object -Skip 3)
     if (-not (Same-Sequence @($orderedGroups) $expectedGroups)) {
@@ -448,6 +491,14 @@ foreach ($entry in $schemas.GetEnumerator()) {
     }
 
     switch ($kind) {
+        'context_manifest_v1' {
+            if ([string]$fieldKindMap['draft.exact_file_sha256'] -cne 'Sha256Digest') {
+                Fail "$path must bind exact draft-file bytes explicitly."
+            }
+            if ($signatureRefCount -ne 2 -or [string]$fieldKindMap['signature.materializer_signature_ref'] -cne 'ImmutableSignatureRef' -or [string]$fieldKindMap['signature.reviewer_signature_ref'] -cne 'ImmutableSignatureRef') {
+                Fail "$path must carry distinct materializer and reviewer signatures."
+            }
+        }
         'lease_event_v1' {
             if ([string]$fieldKindMap['event.reason_code'] -cne 'LeaseEventReasonCode') {
                 Fail "$path event.reason_code must use LeaseEventReasonCode."
@@ -522,6 +573,11 @@ if (-not (Same-Sequence @(Get-Array $acceptanceSection 'required_fields') @($sch
 if (-not (Get-Bool $acceptanceSection 'ticket_lease_context_is_transitively_bound_through_submission')) {
     Fail 'Package handoff must bind ticket/lease/context transitively through the reviewed submission.'
 }
+Require-Tokens $orchestrationPath $orchestration @(
+    'from = "REJECTED"',
+    'to = "READY"',
+    'new materialized context and assignment-ticket revision exist, launch/dependencies remain valid and no active lease exists'
+)
 
 if ((Get-Int $launch 'orchestration_registry_schema_version') -ne 5 -or (Get-String $launch 'orchestration_registry_path') -cne $orchestrationPath) {
     Fail 'Launch state does not pin orchestration schema v5.'
@@ -533,6 +589,12 @@ Require-Tokens $canonicalizationPath $canonicalization @(
     'fixed-point self-hash',
     'UTF-8',
     'LF (`0A`)'
+)
+Require-Tokens $schemaReadmePath $schemaReadme @(
+    'ticket.exact_record_file_sha256',
+    'submission.exact_record_file_sha256',
+    'Generic `ticket.sha256`, `submission.sha256`, `review.sha256`',
+    'distinct materializer and reviewer signature refs'
 )
 Require-Tokens $operationsPath $operations @(
     'CONTROL_OPERATION_CONFLICT',
@@ -592,6 +654,7 @@ $result = [ordered]@{
     types = $typeMap.Count
     records = $schemas.Count
     fields = $totalFields
+    signature_refs = $totalSignatureRefs
     workflows = $workflowFiles.Count
     issued_records = 0
     errors = @($errors)
@@ -601,7 +664,7 @@ if ($Json) {
     $result | ConvertTo-Json -Depth 6
 }
 else {
-    Write-Host "Ticket issuance schemas: types=$($result.types) records=$($result.records) fields=$($result.fields) workflows=$($result.workflows)"
+    Write-Host "Ticket issuance schemas: types=$($result.types) records=$($result.records) fields=$($result.fields) signatures=$($result.signature_refs) workflows=$($result.workflows)"
     foreach ($error in $errors) {
         Write-Host "ERROR: $error" -ForegroundColor Red
     }
