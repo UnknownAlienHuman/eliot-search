@@ -12,12 +12,15 @@ swarm/context-drafts/<stage>/<package>.toml
 At ticket issuance, the integration owner resolves the draft against one exact base commit and produces:
 
 ```text
-swarm/context-manifests/<package>/<context-digest>.toml
+swarm/context-manifests/<package>/<context_record_sha256>.toml
 ```
 
-The context materializer extracts exact registry records, reads exact files, records per-source SHA-256
-and emits one immutable writer-visible artifact in declared order. A changed source byte, selector,
-accepted handoff or order creates a different context.
+`context_record_sha256` is the external SHA-256 of the complete committed context-manifest file. It is
+not the embedded signed-payload digest and is never calculated from a moving branch.
+
+The context materializer extracts exact registry records, reads exact files, records per-source Git blob,
+exact-byte and normalized UTF-8/LF identities, and emits one immutable writer-visible artifact in declared
+order. A changed source byte, selector, accepted handoff, order or base commit creates a different context.
 
 Drafts are non-claimable, unmaterialized and may not contain the architecture master, another package's
 source tree, mutable dependency branches, source bodies or secrets.
