@@ -1,0 +1,56 @@
+schema_version = 1
+component = "ticket_issuance_planner_v1"
+status = "ADVISORY_DRY_RUN_ONLY"
+owner = "integration-owner-tooling"
+
+contract = "docs/handoff/TICKET_ISSUANCE_PLANNER.md"
+digest_contract = "docs/handoff/TICKET_ISSUANCE_PLANNER_DIGEST_RULE.md"
+plan_schema = "swarm/ticket-issuance-plan-schema.toml"
+digest_profile = "swarm/ticket-issuance-plan-digest-v1.toml"
+implementation = "tools/plan-ticket-issuance.py"
+powershell_wrapper = "tools/plan-ticket-issuance.ps1"
+structural_validator = "tools/validate-ticket-issuance-plan.ps1"
+qualification_readme = "qualification/ticket-issuance/README.md"
+qualification_cases = "qualification/ticket-issuance/cases.toml"
+qualification_runner = "qualification/ticket-issuance/run_planner_tests.py"
+qualification_tests = "qualification/ticket-issuance/test_plan_ticket_issuance.py"
+manual_workflow = ".github/workflows/ticket-issuance-plan-qualified.yml"
+
+[authority]
+output_is_control_record = false
+output_is_claimable = false
+output_is_evidence_receipt = false
+may_materialize_context = false
+may_issue_ticket = false
+may_issue_or_acknowledge_lease = false
+may_authorize_implementation = false
+may_record_submission_or_review = false
+may_publish_package_handoff = false
+may_accept_gate_or_wave = false
+may_advance_launch_state = false
+
+[execution]
+deterministic = true
+network_required = false
+third_party_python_dependencies = false
+repository_mutations = false
+protected_root_writes = false
+working_tree_source_of_truth = false
+exact_base_commit_validation_supported = true
+
+[limits]
+max_plan_bytes = 262144
+max_checks = 256
+max_reason_codes = 64
+max_context_sources = 32
+max_registry_fragments = 16
+max_accepted_handoffs = 16
+zero_means_unlimited = false
+
+[current_disposition]
+materialized_contexts = 0
+issued_tickets = 0
+active_leases = 0
+accepted_package_handoffs = 0
+launch_stage = "P00"
+launch_wave = 0
