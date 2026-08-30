@@ -2,28 +2,68 @@
 
 P00 is the only architecture-authorized implementation entry point. W1+ remains blocked.
 
+## Pre-issuance state
+
+The repository contains three **non-claimable** P00 ticket/context drafts:
+
+```text
+search-contracts  — launch class AUTHORIZED
+search-domain     — CONDITIONAL on accepted search-contracts handoff/API digest
+search-ports      — CONDITIONAL on accepted search-contracts handoff/API digest
+```
+
+Draft paths:
+
+```text
+swarm/ticket-drafts/p00/<package>.toml
+swarm/context-drafts/p00/<package>.toml
+```
+
+They do not authorize a writer, create a lease or identify a base commit. Before work begins, the
+integration owner must materialize the exact context at one base commit, assign distinct writer/reviewer
+identities and issue a new immutable ticket plus writer lease. See
+`docs/handoff/P00_DRAFT_CONTROL_PLANE.md`.
+
+Current control-plane state remains:
+
+```text
+materialized contexts: 0
+issued tickets:        0
+active writer leases:  0
+submissions:           0
+accepted reviews:      0
+accepted handoffs:     0
+```
+
 ## Writer A — `search-contracts`
 
-Deliver strong IDs, exact tagged schemas, eleven request/results, validated-only candidates, opaque
-wire handles/server records, explicit `QuerySnapshotFence`, separate emission security fence, reason
-namespaces and canonical JSON/CBOR. No I/O, ports or vendor types.
+After a valid issued ticket and acknowledged writer lease, deliver strong IDs, exact tagged schemas,
+eleven request/results, validated-only candidates, opaque wire handles/server records, explicit
+`QuerySnapshotFence`, separate emission security fence, reason namespaces and canonical JSON/CBOR. No
+I/O, ports or vendor types.
 
 ## Integration checkpoint A
 
-Verify architecture/pack hashes, zero challenges, schema/result/handle/snapshot fixtures and publish the
-accepted contracts API/schema digest.
+Independently review the exact submission against its ticket/context/lease; verify architecture/pack
+hashes, zero challenges, schema/result/handle/snapshot fixtures and publish the accepted package/API
+handoff. A package review is not yet the W0 receipt.
 
 ## Writers B and C
 
-From that immutable handoff:
+Only after the accepted `search-contracts` handoff/API digest is bound into separately issued tickets:
 
 - `search-domain`: pure transitions, snapshot/plan fingerprints, eligibility, drift, ordering, coverage.
 - `search-ports`: shared vendor-neutral traits and conformance fakes.
 
+The two packages may proceed in parallel with separate one-writer leases bound to the same accepted
+contracts handoff. They receive no contracts implementation source.
+
 ## Integration checkpoint B
 
-Pin the real Windows-compatible toolchain/dependencies, generate lockfile, run formatting,
-workspace/W0 tests, dependency/API guards and license policy, then publish W0 receipt.
+After all three package submissions receive independent review and append-only accepted handoffs, pin
+the real Windows-compatible toolchain/dependencies, generate lockfile, run formatting, workspace/W0
+tests, dependency/API guards and license policy, then publish W0 receipt and advance launch state in one
+separately reviewed integration change.
 
 ## Required evidence
 
@@ -62,4 +102,5 @@ public_vendor_type_guard
 dependency_direction_guard
 ```
 
-Unavailable checks do not become a green receipt.
+Unavailable checks do not become a green package handoff or W0 receipt. Structural validation of the
+drafts proves only that they are bounded and non-claimable.

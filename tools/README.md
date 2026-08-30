@@ -55,6 +55,32 @@ Checks:
 - root authority/assignment/handoff documentation parity;
 - every repository workflow remains read-only and `workflow_dispatch` only.
 
+## P00 draft ticket/control validation
+
+```powershell
+pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1
+pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1 -Json
+```
+
+Checks:
+
+- exactly three non-claimable P00 ticket drafts and three unmaterialized context drafts;
+- exact package/launch class/write scope/line budgets for contracts, domain and ports;
+- unresolved writer/reviewer/base/ticket/context identities and zero claimable records;
+- domain/ports remain conditional on an accepted `search-contracts` handoff;
+- exact ordered source files, registry selectors and accepted-handoff slots for each context;
+- per-source/fragment digest materialization requirements and one writer-visible context artifact;
+- no architecture master, implementation source or forbidden control records in draft contexts;
+- issued-ticket, materialized-context, lease, submission, review, handoff and wave-receipt directories
+  contain no real records before issuance;
+- draft states are excluded from the orchestration state machine;
+- `READY → LEASED` requires a new issued ticket and materialized context;
+- P00/W0 launch authority remains unchanged;
+- all workflows remain manual-only/read-only.
+
+A PASS proves only that drafts are bounded, honest and non-claimable. It does not issue a ticket, create a
+writer lease or accept a package.
+
 ## Implementation-packet validation
 
 ```powershell

@@ -1,0 +1,51 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "DRAFT_ONLY_NOT_ISSUED"
+stage = "W0"
+phase = "P00"
+draft_count = 3
+issued_ticket_count = 0
+active_lease_count = 0
+submission_count = 0
+accepted_review_count = 0
+package_handoff_count = 0
+wave_receipt_count = 0
+context_draft_manifest = "swarm/context-drafts/manifest.toml"
+assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
+writer_lease_template = "swarm/WRITER_LEASE_TEMPLATE.md"
+context_manifest_template = "swarm/CONTEXT_MANIFEST_TEMPLATE.md"
+submission_template = "swarm/SUBMISSION_TEMPLATE.md"
+review_template = "swarm/REVIEW_RECEIPT_TEMPLATE.md"
+
+[[draft]]
+package = "search-contracts"
+path = "swarm/ticket-drafts/p00/search-contracts.toml"
+launch_class = "AUTHORIZED"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-domain"
+path = "swarm/ticket-drafts/p00/search-domain.toml"
+launch_class = "CONDITIONAL"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-ports"
+path = "swarm/ticket-drafts/p00/search-ports.toml"
+launch_class = "CONDITIONAL"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[invariants]
+draft_is_orchestration_state = false
+draft_may_authorize = false
+draft_may_create_lease = false
+draft_may_be_writer_acknowledged = false
+issued_ticket_requires_new_record = true
+issued_ticket_requires_exact_base_commit = true
+issued_ticket_requires_materialized_context = true
+issued_ticket_requires_writer_and_reviewer = true
+conditional_ticket_requires_accepted_dependency_handoffs = true

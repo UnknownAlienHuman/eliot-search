@@ -1,7 +1,8 @@
 # Authority and source-of-truth map
 
 This map resolves conflicts between architecture, accepted public handoffs, machine registries,
-configuration/qualification packets, stage contexts and package instructions.
+configuration/qualification packets, stage contexts, assignment control records and package
+instructions.
 
 ## Precedence
 
@@ -23,13 +24,20 @@ configuration/qualification packets, stage contexts and package instructions.
    policy and bounded section packet.
 10. **Qualification registry/packet** — exact artifact/probe/schema requirements; never a success
     receipt.
-11. **`swarm/launch-state.toml`** — current implementation authorization only.
-12. **Package assignment and function-registry primary packet** — owned behavior, operation semantics,
+11. **`swarm/launch-state.toml`** — current package authorization/conditional status only.
+12. **Issued immutable assignment ticket, materialized context manifest and active writer lease** — exact
+    writer/base/read/write/dependency/evidence fence for one package implementation.
+13. **Package assignment and function-registry primary packet** — owned behavior, operation semantics,
     failures, recovery, bounds and tests.
-13. **Current stage shared packet plus applicable later-stage supplement** — narrow additive obligations;
+14. **Current stage shared packet plus applicable later-stage supplement** — narrow additive obligations;
     cannot weaken the accepted base API.
-14. **Root/family/package `AGENTS.md`** — operational read/write rules within the machine registries.
-15. **README/human matrix** — navigation and explanation only.
+15. **Root/family/package `AGENTS.md`** — operational read/write rules within the machine registries and
+    issued ticket.
+16. **README/human matrix and non-claimable ticket/context drafts** — preparation/navigation only.
+
+`swarm/ticket-drafts/**` and `swarm/context-drafts/**` have **no implementation authority**. They do not
+enter the orchestration state machine, create a lease or identify a base commit. Issuance always creates
+new immutable records under `swarm/tickets/`, `swarm/context-manifests/` and `swarm/leases/`.
 
 ## Domain-specific authority
 
@@ -46,9 +54,11 @@ configuration/qualification packets, stage contexts and package instructions.
 | What a reused package reads at W7/W8/W9/W10 | `swarm/stage-readsets.toml` |
 | Which package owns a configuration section | `config/sections.toml` |
 | Exact section fields/defaults/bounds/change obligations | section packet + accepted owner digest |
-| Which stage packet and qualification apply | `swarm/stages.toml` plus accepted ticket |
+| Which stage packet and qualification apply | `swarm/stages.toml` plus issued ticket |
 | Which earlier behavior a later writer may rely on | exact accepted prior-stage handoff/API digest |
-| May an agent start now | `swarm/launch-state.toml` |
+| May a ticket be considered for issuance | `swarm/launch-state.toml` plus accepted prerequisites |
+| What exact context and writer may act | issued ticket + materialized context + active lease |
+| Does a committed ticket/context draft authorize work | never; draft status is non-claimable |
 | Which package owns mutable state | function packet + assignment + `PRIMITIVE_OWNERSHIP.md` |
 | Which adapter implements a port | `PORT_CATALOG.md` and accepted adapter handoff |
 | Is a Qdrant/provider/profile accepted | immutable qualification/evidence receipt |
@@ -69,10 +79,17 @@ configuration/qualification packets, stage contexts and package instructions.
 - Section owner/packet/Cargo dependency mismatch blocks merge.
 - A qualification packet specifies what must be proven; empty/UNAVAILABLE evidence never enables a
   capability.
+- A draft placed in an issued-ticket/context/lease directory, or a draft with selected writer/base/
+  digest/lease fields, blocks merge.
+- An issued ticket without one exact materialized context, writer/reviewer separation, registry/
+  instruction digests and prerequisite handoffs is invalid.
+- A package submission without a complete package-only diff, raw outcomes and matching ticket/context/
+  lease identities cannot enter review.
+- A review prepared by the writer or represented as a gate/wave receipt is invalid.
 - Package `AGENTS.md` and assignment dependency prose are explanatory. Exact dependency closure is
   `swarm/crates.toml`; exact function/write closure is `swarm/function-packets.toml`; exact stage context
   closure is `swarm/stages.toml` plus `swarm/stage-readsets.toml`.
-- An assignment, function packet, stage entry or context override cannot authorize a future wave.
+- An assignment, function packet, stage entry, context override or draft cannot authorize a future wave.
 - A README cannot add a field, port, reason code, dependency, capability or authority.
 
 ## Bounded-context rule
@@ -81,13 +98,35 @@ An earliest-wave writer receives only root/package instructions, exact package/f
 entries, one assignment, one primary function/contract packet, current-stage shared files, accepted
 direct handoffs and named fixtures.
 
+Before the writer receives anything, the integration owner materializes the exact source files and
+registry fragments declared by the context draft at one base commit, records every source/fragment
+SHA-256 and publishes one immutable context artifact. The issued ticket and lease bind that artifact.
+
 A later-stage writer additionally receives its one exact override. An **accepted prior-stage handoff**
 replaces the earlier stage packet and implementation history. The integration owner must not mount both
 the prior implementation packet and the new replacement context.
 
-Static context is capped at sixteen files. Ticket-added handoff receipts and fixture references are also
-bounded. A writer that finds a missing load-bearing contract stops and opens a contract change; it does
-not widen its own read set or inspect dependency internals.
+Static context is capped at sixteen files before declared context materialization. Ticket-added handoff
+receipts and fixture references are also bounded. A writer that finds a missing load-bearing contract
+stops and opens a contract change; it does not widen its own read set or inspect dependency internals.
+
+## Ticket, submission and review rule
+
+```text
+non-claimable draft
+→ new issued ticket + materialized context
+→ active writer lease
+→ package-only submission
+→ independent review
+→ append-only accepted package/API handoff
+```
+
+Changing the base commit, context source, assignment, registry, dependency handoff or writer creates a
+superseding ticket/context/lease. A writer cannot amend its context, edit control-plane records,
+self-review, self-accept or advance launch state.
+
+A package review permits the integration owner to construct a package handoff only. It is not a gate or
+wave receipt.
 
 ## Stage/receipt rule
 
@@ -104,8 +143,8 @@ W9 closes G5 and requires G4 plus W7_LIFECYCLE
 W10 closes candidate-specific G6 and requires accepted P15/G5
 ```
 
-This prevents package/stage presence or a non-central lifecycle receipt from being mistaken for product
-acceptance.
+This prevents package/stage/draft presence or a non-central lifecycle receipt from being mistaken for
+product acceptance.
 
 ## Freeze rule
 
