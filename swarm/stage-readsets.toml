@@ -1,0 +1,586 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+package_registry = "swarm/crates.toml"
+function_registry = "swarm/function-packets.toml"
+stage_registry = "swarm/stages.toml"
+launch_authority = "swarm/launch-state.toml"
+status = "bounded-stage-overrides"
+override_count = 23
+max_static_context_files = 16
+max_ticket_handoff_receipts = 16
+max_ticket_fixture_refs = 16
+ordinary_agent_architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+previous_stage_document_replay_allowed = false
+
+# Packages used only at their earliest wave need no override. Every later package assignment has exactly
+# one replacement override. Previous stage documents are replaced by immutable accepted public handoff
+# receipts; implementation internals are never carried forward. Stage machine packets are integration-
+# owner registries and are not ordinary agent context files.
+
+[[override]]
+id = "W2.eliot-searchd"
+stage = "W2"
+wave = 2
+package = "eliot-searchd"
+role = "source_spine_composition"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W1"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = []
+forbidden_prior_stage_packets = ["docs/handoff/W1_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_eliot-searchd_W1_API", "accepted_W1_receipt"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 7
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W3.eliot-searchd"
+stage = "W3"
+wave = 3
+package = "eliot-searchd"
+role = "indexed_profile_composition"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W2"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = []
+forbidden_prior_stage_packets = [
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = ["accepted_eliot-searchd_W2_API", "accepted_W2_G1_receipt"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 8
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W4.eliot-searchd"
+stage = "W4"
+wave = 4
+package = "eliot-searchd"
+role = "query_profile_composition"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W3"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = []
+forbidden_prior_stage_packets = [
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = ["accepted_eliot-searchd_W3_API", "accepted_W3_receipt"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 8
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W5.eliot-searchd"
+stage = "W5"
+wave = 5
+package = "eliot-searchd"
+role = "current_workspace_composition"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W4"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = []
+forbidden_prior_stage_packets = [
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W4_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = ["accepted_eliot-searchd_W4_API", "accepted_W4_G2_receipt"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 10
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W6.eliot-searchd"
+stage = "W6"
+wave = 6
+package = "eliot-searchd"
+role = "proof_profile_composition"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W5"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = []
+forbidden_prior_stage_packets = [
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W4_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W5_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = ["accepted_eliot-searchd_W5_API", "accepted_W5_receipt"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 8
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.eliot-searchd"
+stage = "W7"
+wave = 7
+package = "eliot-searchd"
+role = "lifecycle_profile_composition"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W6"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = []
+forbidden_prior_stage_packets = [
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W4_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W5_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W6_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = ["accepted_eliot-searchd_W6_API", "accepted_W6_G3_receipt"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 10
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.search-revision-store"
+stage = "W7"
+wave = 7
+package = "search-revision-store"
+role = "revision_lifecycle_ports"
+status = "BLOCKED"
+base_stage = "W2"
+prior_stage = "W2"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = ["config/sections/revision_store.md"]
+forbidden_prior_stage_packets = ["docs/handoff/W2_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-revision-store_W2_API", "accepted_W6_G3_receipt"]
+write_scope = "crates/search-source/search-revision-store/**"
+static_context_file_count = 11
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.search-access"
+stage = "W7"
+wave = 7
+package = "search-access"
+role = "restrictive_security_hardening"
+status = "BLOCKED"
+base_stage = "W4"
+prior_stage = "W4"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-query/search-access/W7_HARDENING.md"]
+additional_files = []
+forbidden_prior_stage_packets = ["docs/handoff/W4_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-access_W4_API", "accepted_W6_G3_receipt"]
+write_scope = "crates/search-query/search-access/**"
+static_context_file_count = 11
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.search-handles"
+stage = "W7"
+wave = 7
+package = "search-handles"
+role = "durable_handle_hardening"
+status = "BLOCKED"
+base_stage = "W4"
+prior_stage = "W4"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-query/search-handles/W7_HARDENING.md"]
+additional_files = ["config/sections/handles.md"]
+forbidden_prior_stage_packets = ["docs/handoff/W4_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-handles_W4_API", "accepted_W6_G3_receipt"]
+write_scope = "crates/search-query/search-handles/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.search-continuation"
+stage = "W7"
+wave = 7
+package = "search-continuation"
+role = "continuation_lifecycle_hardening"
+status = "BLOCKED"
+base_stage = "W4"
+prior_stage = "W4"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-query/search-continuation/W7_HARDENING.md"]
+additional_files = ["config/sections/continuations.md"]
+forbidden_prior_stage_packets = ["docs/handoff/W4_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-continuation_W4_API", "accepted_W6_G3_receipt"]
+write_scope = "crates/search-query/search-continuation/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.search-candidate-validator"
+stage = "W7"
+wave = 7
+package = "search-candidate-validator"
+role = "lifecycle_emission_checkpoint"
+status = "BLOCKED"
+base_stage = "W4"
+prior_stage = "W4"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-query/search-candidate-validator/W7_HARDENING.md"]
+additional_files = []
+forbidden_prior_stage_packets = ["docs/handoff/W4_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-candidate-validator_W4_API", "accepted_W6_G3_receipt"]
+write_scope = "crates/search-query/search-candidate-validator/**"
+static_context_file_count = 11
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.search-publication"
+stage = "W7"
+wave = 7
+package = "search-publication"
+role = "lifecycle_publication_hardening"
+status = "BLOCKED"
+base_stage = "W3"
+prior_stage = "W3"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-index-qdrant/search-publication/W7_HARDENING.md"]
+additional_files = []
+forbidden_prior_stage_packets = ["docs/handoff/W3_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-publication_W3_API", "accepted_W6_G3_receipt"]
+write_scope = "crates/search-index-qdrant/search-publication/**"
+static_context_file_count = 11
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W7.search-index-reclaimer"
+stage = "W7"
+wave = 7
+package = "search-index-reclaimer"
+role = "reclaim_purge_receipt_boundary"
+status = "BLOCKED"
+base_stage = "W3"
+prior_stage = "W3"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"]
+additional_files = ["config/sections/index_reclaim.md"]
+forbidden_prior_stage_packets = ["docs/handoff/W3_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-index-reclaimer_W3_API", "accepted_W6_G3_receipt"]
+write_scope = "crates/search-index-qdrant/search-index-reclaimer/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W8.search-provider-protocol"
+stage = "W8"
+wave = 8
+package = "search-provider-protocol"
+role = "generic_edge_hardening"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W1"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-provider-protocol/W8_HARDENING.md"]
+additional_files = ["config/sections/protocol.md"]
+forbidden_prior_stage_packets = ["docs/handoff/W1_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-provider-protocol_W1_API", "accepted_W7_LIFECYCLE_receipt"]
+write_scope = "crates/search-provider-protocol/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W8.eliot-searchd"
+stage = "W8"
+wave = 8
+package = "eliot-searchd"
+role = "generic_edge_composition"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W7"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+additional_files = ["config/sections/protocol.md"]
+forbidden_prior_stage_packets = [
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W4_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W5_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W6_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W7_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = ["accepted_eliot-searchd_W7_API", "accepted_W7_LIFECYCLE_receipt"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W8.eliot-search"
+stage = "W8"
+wave = 8
+package = "eliot-search"
+role = "standalone_client"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W1"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["bins/eliot-search/W8_CLIENT.md"]
+additional_files = []
+forbidden_prior_stage_packets = ["docs/handoff/W1_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_eliot-search_W1_API", "accepted_search-provider-protocol_W8_API"]
+write_scope = "bins/eliot-search/**"
+static_context_file_count = 11
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W9.search-eval"
+stage = "W9"
+wave = 9
+package = "search-eval"
+role = "product_pulse_owner"
+status = "BLOCKED"
+base_stage = "W4"
+prior_stage = "W4"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = []
+additional_files = [
+  "config/sections/observability.md",
+  "qualification/product-pulse/baseline.toml",
+  "qualification/product-pulse/corpus.toml",
+  "qualification/product-pulse/metrics.toml",
+  "qualification/product-pulse/probes.toml",
+  "qualification/product-pulse/gate-map.toml",
+]
+forbidden_prior_stage_packets = ["docs/handoff/W4_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = ["accepted_search-eval_W4_API", "accepted_W7_LIFECYCLE_receipt", "accepted_W8_G4_receipt"]
+write_scope = "crates/search-eval/**"
+static_context_file_count = 16
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W10.eliot-searchd"
+stage = "W10"
+wave = 10
+package = "eliot-searchd"
+role = "optional_activation_integration"
+status = "BLOCKED"
+base_stage = "W1"
+prior_stage = "W8"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+additional_files = ["config/sections/optional_profiles.md"]
+forbidden_prior_stage_packets = [
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W4_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W5_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W6_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W7_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W8_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = ["accepted_eliot-searchd_W8_API", "accepted_W9_G5_receipt", "candidate_specific_G6_inputs"]
+write_scope = "bins/eliot-searchd/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W10.search-qdrant-bridge"
+stage = "W10"
+wave = 10
+package = "search-qdrant-bridge"
+role = "scale_topology_data_plane"
+status = "BLOCKED"
+base_stage = "W3"
+prior_stage = "W3"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"]
+additional_files = ["qualification/optional-depth/scale-profile.toml"]
+forbidden_prior_stage_packets = ["docs/handoff/W3_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = [
+  "accepted_search-qdrant-bridge_W3_API",
+  "accepted_W9_G5_receipt",
+  "candidate_specific_G6_inputs",
+]
+write_scope = "crates/search-index-qdrant/search-qdrant-bridge/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W10.search-publication"
+stage = "W10"
+wave = 10
+package = "search-publication"
+role = "scale_migration_state_machine"
+status = "BLOCKED"
+base_stage = "W3"
+prior_stage = "W7"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+additional_files = ["qualification/optional-depth/scale-profile.toml"]
+forbidden_prior_stage_packets = [
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W7_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = [
+  "accepted_search-publication_W7_API",
+  "accepted_W9_G5_receipt",
+  "candidate_specific_G6_inputs",
+]
+write_scope = "crates/search-index-qdrant/search-publication/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W10.search-epoch-pins"
+stage = "W10"
+wave = 10
+package = "search-epoch-pins"
+role = "scale_route_pin_drain"
+status = "BLOCKED"
+base_stage = "W3"
+prior_stage = "W3"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"]
+additional_files = ["qualification/optional-depth/scale-profile.toml"]
+forbidden_prior_stage_packets = ["docs/handoff/W3_IMPLEMENTATION_PACKET.md"]
+required_prior_handoffs = [
+  "accepted_search-epoch-pins_W3_API",
+  "accepted_W9_G5_receipt",
+  "candidate_specific_G6_inputs",
+]
+write_scope = "crates/search-index-qdrant/search-epoch-pins/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W10.search-index-reclaimer"
+stage = "W10"
+wave = 10
+package = "search-index-reclaimer"
+role = "scale_old_route_reclaim"
+status = "BLOCKED"
+base_stage = "W3"
+prior_stage = "W7"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"]
+additional_files = ["qualification/optional-depth/scale-profile.toml"]
+forbidden_prior_stage_packets = [
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W7_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = [
+  "accepted_search-index-reclaimer_W7_API",
+  "accepted_W9_G5_receipt",
+  "candidate_specific_G6_inputs",
+]
+write_scope = "crates/search-index-qdrant/search-index-reclaimer/**"
+static_context_file_count = 12
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false
+
+[[override]]
+id = "W10.search-eval"
+stage = "W10"
+wave = 10
+package = "search-eval"
+role = "candidate_specific_optional_evaluation"
+status = "BLOCKED"
+base_stage = "W4"
+prior_stage = "W9"
+replace_previous_stage_context = true
+accepted_prior_stage_handoff_only = true
+supplements = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+additional_files = [
+  "qualification/optional-depth/baseline.toml",
+  "qualification/optional-depth/probes.toml",
+  "qualification/optional-depth/gate-map.toml",
+  "qualification/optional-depth/fixture-owners.toml",
+]
+forbidden_prior_stage_packets = [
+  "docs/handoff/W4_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W9_IMPLEMENTATION_PACKET.md",
+]
+required_prior_handoffs = [
+  "accepted_search-eval_W9_API",
+  "accepted_W9_G5_receipt",
+  "candidate_specific_G6_inputs",
+]
+write_scope = "crates/search-eval/**"
+static_context_file_count = 15
+architecture_access = "exception-only"
+dependency_implementation_reads_allowed = false
+shared_registry_edits_allowed = false

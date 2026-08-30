@@ -40,9 +40,12 @@ owns = [
 [[owner]]
 package = "eliot-search"
 function_contract = "bins/eliot-search/FUNCTIONS.md"
+client_contract = "bins/eliot-search/W8_CLIENT.md"
 owns = [
   "standalone_cli_argument_mapping",
-  "protocol_session_and_rendering",
+  "local_endpoint_and_pairing_client",
+  "protocol_session_and_capability_consumption",
+  "truthful_progress_terminal_rendering",
   "explicit_exit_status",
 ]
 

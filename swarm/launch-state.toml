@@ -7,6 +7,12 @@ library_package_count = 41
 binary_package_count = 4
 package_registry_schema_version = 7
 package_registry_path = "swarm/crates.toml"
+function_packet_registry_schema_version = 1
+function_packet_registry_path = "swarm/function-packets.toml"
+stage_registry_schema_version = 1
+stage_registry_path = "swarm/stages.toml"
+stage_readset_registry_schema_version = 1
+stage_readset_registry_path = "swarm/stage-readsets.toml"
 configuration_registry_path = "config/sections.toml"
 qdrant_qualification = "qualification/qdrant/W3_QUALIFICATION.md"
 query_qualification = "qualification/query/W4_QUALIFICATION.md"
@@ -15,8 +21,9 @@ proof_qualification = "qualification/proof/W6_QUALIFICATION.md"
 active_stage = "P00"
 active_wave = 0
 
-# Cargo/package presence, a FUNCTIONS.md packet, qualification template or future wave is never
-# implementation authorization. This file and accepted immutable wave receipts are authoritative.
+# Cargo/package presence, a FUNCTIONS.md packet, stage/read-set entry, qualification template or future
+# wave is never implementation authorization. This file and accepted immutable wave receipts are
+# authoritative.
 
 authorized_packages = [
   "search-contracts",

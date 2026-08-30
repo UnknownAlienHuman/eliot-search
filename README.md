@@ -34,9 +34,33 @@ The workspace contains **41 library packages and 4 binaries**. One writer owns o
 package targets at most 7,500 `src/` lines unless its assignment sets a lower target; split review is
 mandatory before 8,500 total hand-written lines and 10,000 is a hard stop.
 
-The machine authority is [`swarm/crates.toml`](swarm/crates.toml). Current implementation authorization
-is only [`swarm/launch-state.toml`](swarm/launch-state.toml). Future wave packets are bounded read sets,
-not permission to start work.
+Four machine registries define the bounded agent packet:
+
+```text
+swarm/crates.toml             package path, dependencies, earliest wave and assignment
+swarm/function-packets.toml   primary function/contract packet and package write scope
+swarm/stages.toml             W0–W10 package sets and shared current-stage context
+swarm/stage-readsets.toml     replacement context for packages reused at later stages
+```
+
+Current implementation authorization is only
+[`swarm/launch-state.toml`](swarm/launch-state.toml). Registry or future-stage presence is not permission
+to start work.
+
+The stage registry contains **68 package-stage assignments**. All 45 packages appear once at their
+earliest wave; **23 later-stage assignments across 13 reused packages** receive replacement contexts.
+Previous stage packets and dependency implementation internals are replaced by accepted public handoffs
+plus one narrow current-stage supplement. Static package context is capped at sixteen files, with the
+architecture master available only through the contract-challenge process.
+
+Important progressive reentries include:
+
+```text
+eliot-searchd        W1 → W2 → W3 → W4 → W5 → W6 → W7 → W8 → W10
+search-publication  W3 → W7 → W10
+eliot-search         W1 → W8 standalone client delta
+search-eval          W4 → W9 Product Pulse → W10 candidate evaluation
+```
 
 ## Prepared product slices
 
@@ -57,12 +81,13 @@ not permission to start work.
 - **W9 / P15:** Windows Product Pulse contract with 49 mandatory control cases, 33 metrics and 60
   mandatory G5 probes. Corpus, baselines, environment and acceptance policy remain unselected.
 - **W10 / P16–P18:** candidate-specific optional model, document and advanced-scale contracts with
-  exact artifact/profile qualification, measured incremental benefit, migration/rollback and complete
+  exact artifact/profile qualification, paired incremental evaluation, migration/rollback and complete
   removal back to the accepted P15 baseline.
 
-Handoff indexes are under [`docs/handoff/`](docs/handoff/README.md). External/provider qualification
-registries are under [`qualification/`](qualification/). Empty, disabled, unselected or unavailable
-records are explicit non-acceptance states.
+Handoff indexes are under [`docs/handoff/`](docs/handoff/README.md). The exact stage-context assembly is
+[`docs/handoff/SWARM_STAGE_READSETS.md`](docs/handoff/SWARM_STAGE_READSETS.md). External/provider
+qualification registries are under [`qualification/`](qualification/). Empty, disabled, unselected or
+unavailable records are explicit non-acceptance states.
 
 ## Configuration
 
@@ -85,7 +110,11 @@ Current P00/W0 order remains:
 3. integration owner publishes W0 receipt
 ```
 
-Every W1+ package remains blocked. W10 additionally requires:
+Every W1+ package remains blocked. W7 emits a separate lifecycle prerequisite receipt rather than a
+central gate. W8 requires G3 plus that lifecycle receipt; W9 requires G4 plus lifecycle; W10 requires the
+independently accepted P15/G5 Product Pulse.
+
+W10 additionally requires:
 
 ```text
 accepted P15 Product Pulse + independent review
@@ -96,8 +125,8 @@ accepted P15 Product Pulse + independent review
 + migration/rollback proof when applicable
 ```
 
-Package presence, Cargo feature, configuration, worker readiness, a model/version name or a successful
-unit test cannot authorize optional depth.
+Package/stage presence, Cargo feature, configuration, worker readiness, a model/version name or a
+successful unit test cannot authorize optional depth.
 
 ## Non-overclaim rules
 
@@ -127,6 +156,7 @@ generate `Cargo.lock` and execute the real policy/test suite.
 ```text
 business/runtime implementation: absent
 accepted package wave receipts: absent
+stage assignments/readsets: 68 / 23 structurally prepared
 Qdrant/model/document/scale artifacts: unselected
 Product Pulse: not accepted
 optional depth: disabled and unauthorized

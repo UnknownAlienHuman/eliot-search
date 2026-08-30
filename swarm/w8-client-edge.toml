@@ -74,6 +74,7 @@ role = "standalone_client"
 optional = false
 assignment = "swarm/assignments/eliot-search.md"
 functions = "bins/eliot-search/FUNCTIONS.md"
+client = "bins/eliot-search/W8_CLIENT.md"
 cross_sections = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "14", "15", "17", "18"]
 accepted_handoffs_required = [
   "search-contracts",

@@ -30,16 +30,22 @@ runtime, quantization, document engine, limit/coordinate policy or scale topolog
 | `search-publication` | P16-P18 migration | package `FUNCTIONS.md` + `P18_SCALE.md` | package only |
 | `search-epoch-pins` | P16-P18 migration | package `FUNCTIONS.md` + `P18_SCALE.md` | package only |
 | `search-index-reclaimer` | P16-P18 migration | package `FUNCTIONS.md` + `P18_SCALE.md` | package only |
-| `search-eval` | evidence only | accepted W9/P15 API and candidate-run ticket | no candidate code |
+| `search-eval` | P16-P18 candidate evidence | accepted W9 `FUNCTIONS.md` + `crates/search-eval/W10_OPTIONAL_EVALUATION.md` | package only |
 
 Shared profile selection, external dependency/Cargo changes, configuration registry, qualification
 evidence, daemon feature wiring, fixtures and gate receipts remain integration-owner changes.
 
 ## Read set
 
-`swarm/w10-optional-depth.toml` is the machine read-set registry. A package writer reads its local
-instructions/functions, relevant profile template, cross-contract, W10 settings and accepted direct
-handoffs only. Architecture access is exception-only.
+`swarm/w10-optional-depth.toml` is the candidate machine packet. `swarm/stage-readsets.toml` replaces
+previous-stage documents for reused packages with exact accepted public handoffs and one current-stage
+delta. A package writer reads its local instructions/functions, current candidate/profile packet,
+current W10 contract/settings/qualification and accepted direct/prior-stage handoffs only. Architecture
+access is exception-only.
+
+The W10 `search-eval` writer does not reread the W4 or W9 implementation packets. It receives the exact
+accepted W9/P15 package/API/report/reviewer receipts, `W10_OPTIONAL_EVALUATION.md`, current candidate
+qualification registries and candidate-specific fixture/operation receipts.
 
 ## Model order
 
@@ -49,9 +55,9 @@ search-model-provider contract implementation and pure fakes
 -> exact artifact/runtime/model/tokenizer qualification
 -> rerank-only or dense/multivector candidate plan
 -> candidate generation when persistent vectors exist
--> incremental Product Pulse
+-> search-eval paired baseline/candidate campaign
 -> removal/rollback proof
--> G6 review
+-> G6 independent review
 -> staged daemon activation
 ```
 
@@ -66,9 +72,9 @@ document worker no-execute/resource shell and fake provider
 -> malformed/fuzz/archive/page/object/remote-resource qualification
 -> coordinate/loss-map and assurance goldens
 -> candidate representation/projection generation
--> incremental Product Pulse
+-> search-eval paired baseline/candidate campaign
 -> removal/rollback proof
--> G6 review
+-> G6 independent review
 -> staged daemon activation
 ```
 
@@ -86,11 +92,29 @@ accepted measured one-shard bottleneck
 -> exact equivalence and fault validation
 -> guarded redb route switch
 -> old-route pin drain and exact reclaim
--> measured benefit and rollback proof
--> G6 review
+-> search-eval paired benefit/nonregression/rollback campaign
+-> G6 independent review
 ```
 
 A Qdrant alias is never the route commit. Active schema/topology is never changed in place.
+
+## Candidate evaluation boundary
+
+`search-eval` owns candidate-specific measurement meaning only:
+
+- exact accepted P15 baseline plus one candidate identity;
+- pre-registered paired baseline/candidate task, metric, denominator and threshold policy;
+- candidate fixture extension with independent oracle labels;
+- separate cold/warm/preparation/migration/recovery lanes;
+- incremental quality and resource cost;
+- access/currentness/content/authority noninterference;
+- worker/provider/migration/removal fault matrix;
+- complete optional removal plus accepted P15 regression;
+- immutable five-record G6 evidence candidate.
+
+It does not select or execute a provider directly, open Search/provider/Qdrant stores, control daemon
+activation, mutate routes, choose post-hoc thresholds or self-accept G6. Operation receipts are consumed
+through exact package/public evidence contracts.
 
 ## Required G6 evidence
 
@@ -118,6 +142,8 @@ Each package handoff includes:
 - line count and split review status;
 - explicit unavailable runtime/G6 evidence.
 
+The `search-eval` reentry additionally reports exact accepted W9/P15 baseline identity, candidate campaign
+schema/metric digest and proves that prior package behavior and cumulative line budget were not reset.
 Package writers cannot mark a shared qualification probe PASS or accept their own gate.
 
 ## Hard stop conditions
@@ -125,6 +151,7 @@ Package writers cannot mark a shared qualification probe PASS or accept their ow
 - P15 report/reviewer receipt missing or mismatched;
 - provider/topology/artifact/runtime/ADR/feature not exact;
 - one ticket attempts multiple candidates;
+- W10 evaluator rereads/reinterprets W9 implementation history instead of consuming the accepted handoff;
 - network, auto-download/update, training/learning or persistent content cache;
 - model output treated as evidence/answer/exact proof or rerank widens candidates;
 - document worker can execute code, follow remote resources or escape temp/root policy;
@@ -134,7 +161,7 @@ Package writers cannot mark a shared qualification probe PASS or accept their ow
 - material benefit/cost/safety/removal evidence absent;
 - scale without measured bottleneck or incomplete migration/pin/rollback matrix;
 - configuration/worker readiness claims activation;
-- automatic provider switching or package self-acceptance.
+- automatic provider switching or package/evaluator self-acceptance.
 
 ## Current state
 
@@ -145,6 +172,7 @@ model worker: ABSENT
 document candidate: DISABLED
 document worker: ABSENT
 scale candidate: DISABLED
+search-eval candidate campaign: BLOCKED
 G6 probe templates: 45 DISABLED
 G6 accepted candidates: NONE
 baseline P15 behavior: authoritative

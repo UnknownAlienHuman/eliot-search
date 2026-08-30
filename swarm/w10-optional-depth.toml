@@ -129,6 +129,36 @@ contract = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
 write_scope = "crates/search-index-qdrant/search-index-reclaimer/**"
 accepted_handoffs_required = ["search-contracts", "search-domain", "search-ports", "search-epoch-pins"]
 
+[[packet]]
+package = "search-eval"
+stages = ["P16", "P17", "P18"]
+assignment = "swarm/assignments/search-eval.md"
+functions = "crates/search-eval/FUNCTIONS.md"
+contract = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+write_scope = "crates/search-eval/**"
+role = "candidate-evaluation-owner"
+soft_src_line_target = 7500
+accepted_handoffs_required = [
+  "accepted_P15_Product_Pulse",
+  "accepted_search-eval_W9_API",
+  "candidate_specific_ADR_and_G6_inputs",
+  "exact_selected_candidate_package_API_digests",
+]
+read_set = [
+  "AGENTS.md",
+  "crates/search-eval/AGENTS.md",
+  "swarm/assignments/search-eval.md",
+  "crates/search-eval/FUNCTIONS.md",
+  "crates/search-eval/W10_OPTIONAL_EVALUATION.md",
+  "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md",
+  "qualification/optional-depth/W10_QUALIFICATION.md",
+  "qualification/optional-depth/baseline.toml",
+  "qualification/optional-depth/probes.toml",
+  "qualification/optional-depth/gate-map.toml",
+  "qualification/optional-depth/fixture-owners.toml",
+  "config/w10-optional-depth.toml",
+]
+
 [integration]
 shared_evidence_and_registry_edits = "integration-owner-only"
 package_writer_may_select_provider = false
