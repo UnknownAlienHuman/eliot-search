@@ -56,6 +56,31 @@ cannot also be append-only record-path identity.
 The current repository contains three P00 drafts and zero issued tickets, contexts, leases, submissions,
 accepted reviews, supersessions or package handoffs. A draft never authorizes an agent.
 
+## Structural validation
+
+Run locally from the exact branch/worktree:
+
+```powershell
+pwsh -NoProfile -File tools/validate-swarm.ps1 -Json
+pwsh -NoProfile -File tools/validate-function-packets.ps1 -Json
+pwsh -NoProfile -File tools/validate-stage-readsets.ps1 -Json
+pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1 -Json
+pwsh -NoProfile -File tools/validate-ticket-issuance-contracts.ps1 -Mode All -Json
+pwsh -NoProfile -File tools/validate-implementation-packets.ps1 -Json
+pwsh -NoProfile -File tools/validate-current-packets.ps1 -Json
+pwsh -NoProfile -File tools/validate-w5-current.ps1 -Json
+pwsh -NoProfile -File tools/validate-proof-packets.ps1 -Json
+pwsh -NoProfile -File tools/validate-w7-lifecycle.ps1 -Json
+pwsh -NoProfile -File tools/validate-w8-client-edge.ps1 -Json
+pwsh -NoProfile -File tools/validate-w9-product-pulse.ps1 -Json
+pwsh -NoProfile -File tools/validate-w10-optional-depth.ps1 -Json
+```
+
+The ticket-control validator uses a quote-aware TOML array scanner so selectors such as
+`package[name=search-contracts]` cannot terminate an array early. It validates both the P00 zero state
+and the closed issuance schemas. Passing this suite proves structural closure only; it is not Windows
+runtime qualification, ticket/lease issuance, package acceptance, G0 or W0 evidence.
+
 ## Stage packets
 
 - [`../contracts/p00/README.md`](../contracts/p00/README.md) — exact W0 contract implementation pack.
