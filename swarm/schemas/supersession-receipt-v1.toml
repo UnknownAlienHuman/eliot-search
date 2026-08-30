@@ -53,11 +53,11 @@ canonical_order = 5
 rules = ["exists_and_digest_verified"]
 
 [[field]]
-path = "old_record.sha256"
+path = "old_record.exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 6
-rules = ["exact_record_digest"]
+rules = ["equals_old_record_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "replacement_record.kind"
@@ -74,11 +74,11 @@ canonical_order = 8
 rules = ["exists_and_digest_verified", "different_from_old_record"]
 
 [[field]]
-path = "replacement_record.sha256"
+path = "replacement_record.exact_record_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 9
-rules = ["exact_record_digest"]
+rules = ["equals_replacement_record_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
 
 [[field]]
 path = "replacement_record.explicitly_supersedes_old"
@@ -120,4 +120,4 @@ path = "signature.integration_signature_ref"
 kind = "ImmutableSignatureRef"
 required = true
 canonical_order = 15
-rules = ["actor_identity_bound"]
+rules = ["actor_identity_bound", "signed_payload_sha256_matches_record_sha256"]
