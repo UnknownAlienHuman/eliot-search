@@ -10,71 +10,81 @@ Canonical record path:
 swarm/context-manifests/<package>/<context_record_sha256>.toml
 ```
 
-## Identity and draft binding
+`context_record_sha256` is the external SHA-256 of the complete committed manifest file. It is different
+from the embedded signed-payload digest.
+
+## Identity
 
 - `identity.context_id`
 - `identity.operation_id`
 - `identity.package`
 - `identity.stage`
+- `identity.wave`
 - `identity.base_commit`
+
+## Draft binding
+
 - `draft.path`
 - `draft.git_blob_id`
-- `draft.exact_file_sha256`
+- `draft.exact_sha256`
+
+The draft path and Git blob must exist at the immutable base commit. `draft.exact_sha256` hashes the exact
+committed draft bytes.
 
 ## Writer-visible artifact
 
 - `artifact.ref`
 - `artifact.sha256`
 - `artifact.bytes`
-- `artifact.count = 1`
-- `artifact.format = ELIOT_WRITER_CONTEXT_V1`
+- `artifact.format = ELIOT_SWARM_CONTEXT_1`
 
-The artifact is bounded materialized content derived only from declared sources and fragments. The
-manifest contains identities and metadata, not embedded source bodies.
+The schema-level `writer_visible_artifact_count` is one. The artifact is bounded materialized content
+derived only from declared sources and fragments. The manifest contains identities and metadata, not
+embedded source bodies.
 
 ## Source records
 
-Each `sources[]` element records:
+- `sources[]`
+- `sources[].order`
+- `sources[].repository_path`
+- `sources[].git_blob_id`
+- `sources[].exact_sha256`
+- `sources[].exact_bytes`
+- `sources[].materialization = UTF8_LF`
+- `sources[].materialized_sha256`
+- `sources[].materialized_bytes`
 
-- declared order;
-- repository-relative source path;
-- exact Git blob ID;
-- exact committed SHA-256 and byte length;
-- materialization mode `UTF8_LF`;
-- normalized SHA-256 and byte length.
+Every source preserves declared draft order. The exact committed identity and normalized UTF-8/LF
+identity are recorded separately and never compared as though they were the same byte sequence.
 
-Undecodable UTF-8, missing blobs, forbidden paths and undeclared sources fail closed.
+## Registry fragments and accepted handoffs
 
-## Registry fragments
+- `registry_fragments[]`
+- `accepted_handoffs[]`
 
-Each `registry_fragments[]` element records:
+Every registry selector resolves exactly once. Every accepted handoff is immutable, declared by the draft
+and bound by package, accepted commit, API/configuration/evidence digests and compatibility class.
 
-- declared order;
-- registry path and closed selector;
-- source Git blob and exact source digest;
-- selector match count exactly one;
-- fragment digest and length.
+## Verification
 
-## Accepted handoffs
-
-Each `accepted_handoffs[]` element is an immutable accepted package handoff. Mutable branches,
-implementation source and unaccepted API sketches are invalid.
-
-## Verification and signature
-
-- `verification.materializer`
-- `verification.independent_reviewer`
-- `verification.created_at`
-- `verification.forbidden_path_scan`
 - `verification.source_count`
-- `verification.fragment_count`
-- `verification.handoff_count`
-- `signature.record_sha256`
-- `signature.materializer_signature_ref`
-- `signature.reviewer_signature_ref`
+- `verification.registry_fragment_count`
+- `verification.accepted_handoff_count`
+- `verification.readback_verified = true`
+- `verification.forbidden_path_scan_passed = true`
 
-Materializer and independent reviewer are different actors. `signature.record_sha256` is the
-signed-payload digest; `context_record_sha256` is the external complete-file digest used in the path.
+Counts equal their arrays. Missing blobs, undecodable UTF-8, architecture/dependency implementation
+sources and undeclared paths fail closed.
+
+## Signature
+
+- `signature.created_at`
+- `signature.materializer_identity`
+- `signature.reviewer_identity`
+- `signature.record_sha256`
+
+Materializer and reviewer are different actors. `signature.record_sha256` is the signed-payload digest;
+`context_record_sha256` is the external complete-file digest used in the path.
 
 Any changed source byte, selector, accepted handoff, ordering or base commit creates a new manifest and
 artifact. An acknowledged context is never amended.
