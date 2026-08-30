@@ -68,8 +68,20 @@ owner:
 7. independently reads back the committed manifest and artifact;
 8. binds their immutable identities into the assignment ticket.
 
-The writer receives one context artifact, not the full repository and not the architecture master. This
-keeps the mounted artifact count bounded even where `search-contracts` requires the complete P00 pack.
+The writer receives one context artifact, not the full repository and not the architecture master. The
+ordinary P00 source-file ceiling is sixteen. `search-domain` and `search-ports` remain under that ceiling.
+The sole exception is `search-contracts`, which may declare up to twenty-four source files because its
+one W0 writer must consume the complete exact P00 schema pack. That exception must equal:
+
+```text
+fixed integration instructions
++ exact docs/contracts/p00/manifest.toml closure in canonical order
++ exact package/function/stage/launch registry fragments
+```
+
+It cannot add ad-hoc architecture material, dependency source, foreign crate source or unrelated stage
+packets. It still materializes to exactly one writer-visible artifact. The exact limits and exception set
+are machine-owned by `swarm/context-drafts/manifest.toml`.
 
 Changing any source byte, registry selector, accepted handoff, ordering or base commit creates a different
 context and ticket. A context artifact cannot be amended after writer acknowledgement.
@@ -172,6 +184,8 @@ uses `ConsumerActionCode`. Unknown reason or action values fail closed.
 - mutable branch, `latest`, unresolved base or unassigned writer/reviewer in an issued record;
 - context source or registry selector not present at the exact base commit;
 - architecture master, another package source tree or unlisted previous-stage implementation mounted;
+- source count exceeds the exact ceiling class or the P00 exception contains any source outside its
+  manifest-closed contract pack plus fixed integration instructions;
 - second active lease for one package;
 - implementation begins before the `ACKNOWLEDGED` lease event;
 - write scope wider than the package registry;
