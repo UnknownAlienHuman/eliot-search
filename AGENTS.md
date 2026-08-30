@@ -21,6 +21,10 @@ A writer reads only:
     immutable ticket;
 11. named package-local/shared fixture references owned by the applicable qualification registry.
 
+At issuance, these sources are materialized at one exact base commit into the immutable writer-context
+artifact bound by the ticket and lease. The writer does not browse the repository to assemble additional
+context.
+
 W0 foundation writers consume their exact P00 contract-pack entry rather than a package-local
 `FUNCTIONS.md`. For a reused package, accepted public handoffs **replace previous-stage documents**;
 prior stage packets and dependency implementation internals are not accumulated into the new context.
@@ -38,13 +42,42 @@ stops work and uses `CONTRACT_CHANGE_TEMPLATE.md`.
   registry.
 - `swarm/stage-readsets.toml` is the exact replacement-context registry for every package reused after
   its earliest wave.
+- `swarm/orchestration.toml` is the exact issued-ticket/context/lease/submission/review/handoff state
+  machine.
 - Dependency prose in package instructions is explanatory and cannot override any machine registry.
 - Cargo manifest and `swarm/crates.toml` dependency sets must match before merge.
-- `swarm/launch-state.toml` alone decides whether a package may run now.
-- Presence in Cargo, a future stage, README, function packet, stage/read-set entry, qualification packet
-  or assignment is not authorization.
+- `swarm/launch-state.toml` alone decides whether an **issued ticket** may be considered for readiness.
+- Presence in Cargo, a future stage, README, function packet, stage/read-set entry, qualification packet,
+  assignment or ticket/context draft is not authorization.
 - A package agent never selects an external artifact version or marks a qualification probe `PASS`
   without an integration-owned ticket and immutable executed evidence.
+
+## Draft, ticket and lease rule
+
+Files under:
+
+```text
+swarm/ticket-drafts/**
+swarm/context-drafts/**
+```
+
+are non-claimable preparation only. An agent must not interpret `launch_class = AUTHORIZED` inside a
+draft as an issued assignment. A valid implementation start requires all of:
+
+```text
+new issued immutable ticket
++ exact materialized context manifest/artifact
++ active writer lease
++ writer acknowledgement
++ launch/prerequisite checks
+```
+
+Drafts retain unresolved writer/reviewer/base/context/ticket identities and never create a lease. The
+writer cannot edit ticket/context/lease/submission/review/handoff/launch records, add files to an
+acknowledged context, substitute a moving branch or self-review.
+
+`search-domain` and `search-ports` remain conditional even though drafts exist; their tickets cannot be
+issued before the accepted `search-contracts` package/API handoff is bound.
 
 ## Stage-context rule
 
@@ -58,9 +91,9 @@ root/package instructions
 + one later-stage override when applicable
 ```
 
-The static context is capped at sixteen files. A ticket may add only bounded exact accepted handoff
-receipts and named fixture references. It may not add the architecture master, previous stage packets or
-another package's source tree.
+The declared static context is capped at sixteen files before canonical materialization. A ticket may add
+only bounded exact accepted handoff receipts and named fixture references. It may not add the
+architecture master, previous stage packets or another package's source tree.
 
 A package first used at its earliest wave needs no override. A package reused later must have exactly one
 `stage.package` override with:
@@ -83,7 +116,7 @@ Missing or contradictory context stops the ticket. The writer may not widen its 
   `config/sections.toml`, qualification registries, shared fixtures and cross-package changes belong to
   the integration owner;
 - a package that owns a configuration section implements the section validator/digest/change behavior
-  inside its package but does not edit the central registry or another owner's settings;
+  inside the package but does not edit the central registry or another owner's settings;
 - package agents do not repair/redefine dependencies or an accepted prior-stage API; they request a
   contract/port/configuration change.
 
@@ -118,6 +151,8 @@ Missing or contradictory context stops the ticket. The writer may not widen its 
     replayed earlier implementation packet or dependency internals.
 22. W7 lifecycle completion is a separate prerequisite receipt; it is not silently equated with a
     central gate.
+23. A package draft, structural validator or review candidate is not an issued assignment, accepted
+    handoff, gate or wave receipt.
 
 ## Layer ownership
 
@@ -176,7 +211,7 @@ unspecified behavior from another package's implementation.
 - no `todo!()`, fake receipt, placeholder success, silent fallback or unbounded queue;
 - Windows x64 is first qualified runtime;
 - no wildcard/floating git dependency or baseline Python/Node runtime;
-- preserve exact commands, artifacts and unavailable checks in the handoff.
+- preserve exact commands, artifacts and unavailable checks in the submission/handoff.
 
 ## GitHub connector access
 
@@ -199,8 +234,12 @@ Automatic GitHub Actions runs are disabled.
 - Do not enable CodeQL default setup, Dependabot schedules, Pages builds, release automation, or status
   bots by convention.
 
-## Handoff
+## Submission and handoff
 
-Use `PACKAGE_HANDOFF_TEMPLATE.md`; review follows `REVIEW_CHECKLIST.md`. Publish an immutable public
-API/port/configuration digest sufficient for downstream and later-stage work without implementation
-internals, prior-stage documents or the architecture master.
+The writer submits through `SUBMISSION_TEMPLATE.md`; independent review uses
+`REVIEW_RECEIPT_TEMPLATE.md`. An accepted review allows the integration owner to publish an immutable
+package/API handoff following `PACKAGE_HANDOFF_TEMPLATE.md` and `REVIEW_CHECKLIST.md`.
+
+A package submission/review cannot self-accept, advance launch state or satisfy a wave/gate receipt.
+Published handoffs must give downstream and later-stage work exact API/port/configuration digests without
+implementation internals, prior-stage documents or the architecture master.
