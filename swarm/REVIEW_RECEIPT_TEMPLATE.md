@@ -17,10 +17,11 @@ swarm/reviews/<package>/<review_id>.toml
 - `identity.package`
 - `identity.reviewed_at`
 - `submission.ref`
-- `submission.sha256`
+- `submission.exact_record_file_sha256`
 
-The submission ref is an immutable `package_submission_v1` record and the SHA-256 is its external exact
-complete-file digest.
+The submission ref is an immutable `package_submission_v1` record. The digest is the SHA-256 of the
+complete committed submission record and equals the exact digest inside the ref; it is not the
+submission's embedded signed-payload digest.
 
 ## Actors and independence
 
