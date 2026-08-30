@@ -8,7 +8,7 @@ draft_count = 3
 materialized_context_count = 0
 writer_visible_artifact_count_per_context = 1
 context_manifest_template = "swarm/CONTEXT_MANIFEST_TEMPLATE.md"
-materialized_layout = "swarm/context-manifests/<package>/<context-digest>.toml"
+materialized_layout = "swarm/context-manifests/<package>/<context_record_sha256>.toml"
 
 [[draft]]
 package = "search-contracts"
