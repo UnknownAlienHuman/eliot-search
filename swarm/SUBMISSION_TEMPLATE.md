@@ -18,13 +18,15 @@ swarm/submissions/<package>/<submission_id>.toml
 - `identity.stage`
 - `identity.submitted_at`
 - `ticket_lease_context.ticket_ref`
-- `ticket_lease_context.ticket_sha256`
+- `ticket_lease_context.ticket_exact_record_file_sha256`
 - `ticket_lease_context.lease_ref`
-- `ticket_lease_context.lease_sha256`
+- `ticket_lease_context.lease_exact_record_file_sha256`
 - `ticket_lease_context.context_manifest_ref`
-- `ticket_lease_context.context_manifest_sha256`
+- `ticket_lease_context.context_manifest_exact_record_file_sha256`
 
-The lease must be acknowledged, active and non-superseded.
+Every record digest is the SHA-256 of the complete committed file and equals the exact digest inside its
+immutable ref. None is an embedded `signature.record_sha256`. The lease must be acknowledged, active and
+non-superseded.
 
 ## Repository and complete diff
 
