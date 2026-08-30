@@ -109,7 +109,7 @@ required_fields = [
   "identity.package",
   "identity.stage",
   "ticket.ref",
-  "ticket.sha256",
+  "ticket.exact_record_file_sha256",
   "context.manifest_ref",
   "context.artifact_sha256",
   "actors.writer",
@@ -161,9 +161,9 @@ required_fields = [
   "identity.stage",
   "identity.accepted_at",
   "submission_review.submission_ref",
-  "submission_review.submission_sha256",
+  "submission_review.submission_exact_record_file_sha256",
   "submission_review.review_ref",
-  "submission_review.review_sha256",
+  "submission_review.review_exact_record_file_sha256",
   "accepted_code.base_commit",
   "accepted_code.final_commit",
   "accepted_code.changed_files_digest",
@@ -177,7 +177,7 @@ required_fields = [
   "compatibility.class",
   "compatibility.consumer_actions[]",
   "supersession.supersedes_handoff_ref",
-  "supersession.supersedes_handoff_sha256",
+  "supersession.supersedes_handoff_exact_record_file_sha256",
   "signature.integration_owner_identity",
   "signature.record_sha256",
   "signature.integration_signature_ref",
@@ -230,7 +230,7 @@ condition = "review receipt contains exact rejection reasons"
 [[transition]]
 from = "REJECTED"
 to = "READY"
-condition = "new ticket revision, context and lease issued by integration owner"
+condition = "new materialized context and assignment-ticket revision exist, launch/dependencies remain valid and no active lease exists"
 
 [[transition]]
 from = "BLOCKED|READY|LEASED|IMPLEMENTING|REVIEW|REJECTED"
