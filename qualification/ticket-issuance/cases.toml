@@ -1,0 +1,140 @@
+schema_version = 1
+suite = "ticket_issuance_planner_v1"
+status = "STRUCTURAL_CONFORMANCE_NOT_AUTHORITY"
+contract = "docs/handoff/TICKET_ISSUANCE_PLANNER.md"
+planner = "tools/plan-ticket-issuance.py"
+plan_schema = "swarm/ticket-issuance-plan-schema.toml"
+digest_profile = "swarm/ticket-issuance-plan-digest-v1.toml"
+case_count = 18
+
+[[case]]
+id = "PLAN-001"
+name = "search-contracts missing selection"
+mutation = "NONE"
+expected_decision = "BLOCKED_MISSING_SELECTION"
+expected_reasons = []
+
+[[case]]
+id = "PLAN-002"
+name = "deterministic repeated planning"
+mutation = "NONE"
+expected = "byte_identical_plan_and_digest"
+
+[[case]]
+id = "PLAN-003"
+name = "complete valid selection"
+mutation = "NONE"
+expected_decision = "READY_FOR_CONTEXT_MATERIALIZATION_PREVIEW"
+expected_reasons = []
+
+[[case]]
+id = "PLAN-004"
+name = "base commit only"
+mutation = "SELECTION_BASE_ONLY"
+expected_decision = "BLOCKED_CONFLICT"
+expected_reasons = ["PARTIAL_ISSUANCE_SELECTION"]
+
+[[case]]
+id = "PLAN-005"
+name = "writer and reviewer identical"
+mutation = "SAME_ACTOR"
+expected_decision = "BLOCKED_CONFLICT"
+expected_reasons = ["WRITER_REVIEWER_CONFLICT"]
+
+[[case]]
+id = "PLAN-006"
+name = "invalid actor identity"
+mutation = "INVALID_ACTOR"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["ACTOR_IDENTITY_INVALID"]
+
+[[case]]
+id = "PLAN-007"
+name = "abbreviated base commit"
+mutation = "ABBREVIATED_BASE"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["BASE_COMMIT_INVALID"]
+
+[[case]]
+id = "PLAN-008"
+name = "context source missing"
+mutation = "DELETE_CONTEXT_SOURCE"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SOURCE_MISSING"]
+
+[[case]]
+id = "PLAN-009"
+name = "context source symlink"
+mutation = "SYMLINK_CONTEXT_SOURCE"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SOURCE_SYMLINK"]
+
+[[case]]
+id = "PLAN-010"
+name = "context path traversal"
+mutation = "CONTEXT_TRAVERSAL"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SOURCE_FORBIDDEN"]
+
+[[case]]
+id = "PLAN-011"
+name = "unsupported registry selector"
+mutation = "INVALID_SELECTOR"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SELECTOR_INVALID"]
+
+[[case]]
+id = "PLAN-012"
+name = "claimable ticket draft"
+mutation = "CLAIMABLE_DRAFT"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["DRAFT_BECAME_CLAIMABLE"]
+
+[[case]]
+id = "PLAN-013"
+name = "premature ticket identity"
+mutation = "PREMATURE_TICKET_ID"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["DRAFT_IDENTITY_PREMATURELY_RESOLVED"]
+
+[[case]]
+id = "PLAN-014"
+name = "conditional package missing contracts handoff"
+mutation = "SELECT_SEARCH_DOMAIN"
+expected_decision = "BLOCKED_PREREQUISITE"
+expected_reasons = ["HANDOFF_SLOT_UNSATISFIED"]
+
+[[case]]
+id = "PLAN-015"
+name = "unexpected handoff for search-contracts"
+mutation = "EXTRA_HANDOFF"
+expected_decision = "BLOCKED_CONFLICT"
+expected_reasons = ["HANDOFF_SET_UNEXPECTED"]
+
+[[case]]
+id = "PLAN-016"
+name = "protected root contains issued record"
+mutation = "ADD_ISSUED_TICKET"
+expected_decision = "BLOCKED_CONFLICT"
+expected_reasons = ["PROTECTED_ROOT_NOT_ZERO_STATE"]
+
+[[case]]
+id = "PLAN-017"
+name = "automatic workflow trigger"
+mutation = "ADD_PUSH_TRIGGER"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["WORKFLOW_POLICY_VIOLATION"]
+
+[[case]]
+id = "PLAN-018"
+name = "protected output path"
+mutation = "OUTPUT_UNDER_TICKETS"
+expected_decision = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["OUTPUT_PATH_PROTECTED"]
+
+[invariants]
+all_plans_have_empty_mutations = true
+all_authority_flags_are_false = true
+plan_digest_excludes_only_plan_sha256 = true
+planner_writes_no_protected_record = true
+planner_does_not_advance_launch = true
