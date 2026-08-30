@@ -1,60 +1,81 @@
-# Package implementation submission
+# Package submission rendering guide
 
-A submission is prepared from the writer's package-only branch and recorded by the integration owner. It
-is review input, not package acceptance.
+This guide is a human review view of `swarm/schemas/package-submission-v1.toml`. A writer produces the
+package-only commit and evidence; the integration owner records the immutable submission. The machine
+schema is normative.
 
-## Identity
+Canonical record path:
 
-- Submission ID:
-- Ticket / lease / context digests:
-- Package / stage / wave:
-- Base commit:
-- Final commit:
-- Writer:
-- Submitted at:
-- State: `REVIEW`
+```text
+swarm/submissions/<package>/<submission_id>.toml
+```
 
-## Diff and scope
+## Identity and authority chain
 
-- Complete changed-file list:
-- Exact package write scope:
-- Out-of-scope files: `[]`
-- Cargo/dependency/feature changes requested separately:
-- Contract-change request refs:
+- `identity.submission_id`
+- `identity.operation_id`
+- `identity.package`
+- `identity.stage`
+- `identity.submitted_at`
+- `ticket_lease_context.ticket_ref`
+- `ticket_lease_context.ticket_exact_record_file_sha256`
+- `ticket_lease_context.lease_ref`
+- `ticket_lease_context.lease_exact_record_file_sha256`
+- `ticket_lease_context.context_manifest_ref`
+- `ticket_lease_context.context_manifest_exact_record_file_sha256`
+
+Every record digest is the SHA-256 of the complete committed file and equals the exact digest inside its
+immutable ref. None is an embedded `signature.record_sha256`. The lease must be acknowledged, active and
+non-superseded.
+
+## Repository and complete diff
+
+- `repository.base_commit`
+- `repository.final_commit`
+- `repository.branch_or_worktree`
+- `repository.write_scope`
+- `changed_files[]`
+
+Every changed file includes path, closed status, old blob and new blob wrappers. The list is complete,
+sorted, unique and wholly inside the leased package scope.
 
 ## Public handoff candidate
 
-- Public API/schema digest:
-- Configuration digest:
-- Fixture/golden digest set:
-- Error/reason registry digest:
-- Compatibility classification:
-- Consumer migration notes:
+- `public_handoff_candidate.api_manifest_ref`
+- `public_handoff_candidate.api_schema_digest`
+- `public_handoff_candidate.configuration_digest`
+- `public_handoff_candidate.fixture_digest_set`
+- `public_handoff_candidate.error_reason_digest`
+- `public_handoff_candidate.compatibility`
 
-## Raw command outcomes
+Configuration absence is explicit `OptionalV1` `ABSENT`; TOML `null`, omission and sentinel strings are
+invalid.
 
-| Command | Environment/artifact identity | Exit/result | Raw-output ref/digest |
-|---|---|---|---|
+## Commands and evidence
 
-## Evidence
+- `command_outcomes[]`
+- `evidence.required_results[]`
+- `evidence.unavailable_checks[]`
+- `evidence.contract_change_refs[]`
 
-- Deterministic/property tests:
-- Negative/security tests:
-- Cancellation/deadline/unknown-outcome tests:
-- Fault/reopen tests:
-- Platform/provider qualification evidence:
-- Explicit `UNAVAILABLE` checks:
+Raw output remains in immutable artifacts. An unavailable check remains visible and cannot be inferred
+from another command.
 
 ## Size and residual state
 
-- Hand-written `src/` lines:
-- Package-local test lines:
-- Split review required/completed:
-- Known risks:
-- Deferred non-owned work:
-- No placeholder/fake-success attestation:
+- `size.handwritten_src_lines`
+- `size.package_test_lines`
+- `size.split_review_required`
+- `size.split_review_ref`
+- `residual_state.known_failures[]`
+- `residual_state.deferred_nonowned_work[]`
+- `residual_state.no_placeholder_success_attestation = true`
 
-## Writer signature
+## Signature and non-claims
 
-- Writer acknowledgement:
-- Submission canonical digest:
+- `signature.writer_identity`
+- `signature.record_sha256`
+- `signature.writer_signature_ref`
+
+The submission is independent-review input only. It does not accept the package, publish a handoff,
+satisfy a gate or advance a wave.

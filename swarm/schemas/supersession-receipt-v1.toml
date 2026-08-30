@@ -1,0 +1,123 @@
+schema_version = 1
+record_kind = "supersession_receipt_v1"
+status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
+owner = "integration-owner"
+canonicalization = "exact_utf8_lf_sha256"
+record_layout = "swarm/supersessions/<record_kind>/<receipt_id>.toml"
+immutable = true
+unknown_fields = "reject"
+source_content_allowed = false
+secret_content_allowed = false
+old_record_deletion_allowed = false
+replacement_record_required = true
+reason_type = "SupersessionReasonCode"
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "old_record",
+  "replacement_record", "reason", "actor", "signature",
+]
+
+[[field]]
+path = "identity.receipt_id"
+kind = "OpaqueId"
+required = true
+canonical_order = 1
+rules = ["non_empty", "unique"]
+
+[[field]]
+path = "identity.operation_id"
+kind = "Sha256Digest"
+required = true
+canonical_order = 2
+rules = ["domain_separated_supersede_control_record_v1", "stable_for_equal_input"]
+
+[[field]]
+path = "identity.occurred_at"
+kind = "Rfc3339Utc"
+required = true
+canonical_order = 3
+rules = ["recorded_not_inferred"]
+
+[[field]]
+path = "old_record.kind"
+kind = "ClosedControlRecordKind"
+required = true
+canonical_order = 4
+rules = ["one_of_registered_control_record_kinds"]
+
+[[field]]
+path = "old_record.ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 5
+rules = ["exists_and_digest_verified"]
+
+[[field]]
+path = "old_record.exact_record_file_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 6
+rules = ["equals_old_record_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
+
+[[field]]
+path = "replacement_record.kind"
+kind = "ClosedControlRecordKind"
+required = true
+canonical_order = 7
+rules = ["compatible_with_old_record_kind"]
+
+[[field]]
+path = "replacement_record.ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 8
+rules = ["exists_and_digest_verified", "different_from_old_record"]
+
+[[field]]
+path = "replacement_record.exact_record_file_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 9
+rules = ["equals_replacement_record_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
+
+[[field]]
+path = "replacement_record.explicitly_supersedes_old"
+kind = "bool"
+required = true
+canonical_order = 10
+rules = ["must_be_true"]
+
+[[field]]
+path = "reason.code"
+kind = "SupersessionReasonCode"
+required = true
+canonical_order = 11
+rules = ["closed_supersession_reason", "content_minimized"]
+
+[[field]]
+path = "reason.details_digest"
+kind = "OptionalSha256Digest"
+required = true
+canonical_order = 12
+rules = ["raw_sensitive_details_remain_external"]
+
+[[field]]
+path = "actor.identity"
+kind = "ActorIdentity"
+required = true
+canonical_order = 13
+rules = ["integration_owner"]
+
+[[field]]
+path = "signature.record_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 14
+rules = ["exact_record_digest_rule"]
+
+[[field]]
+path = "signature.integration_signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 15
+rules = ["actor_identity_bound", "signed_payload_sha256_matches_record_sha256"]

@@ -1,61 +1,48 @@
-# Development tools
+# Development and structural-validation tools
 
-These utilities are never linked into production binaries. All repository workflows are manual-only.
+These utilities are repository-development tools only. They are never linked into production binaries,
+do not issue control records and do not create package, gate or wave acceptance.
 
-## Swarm topology validation
+Every workflow under `.github/workflows/` is `workflow_dispatch`-only, declares `contents: read` and
+disables checkout credential persistence. A workflow run is structural evidence only.
+
+## Core topology
+
+### `validate-swarm.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-swarm.ps1
 pwsh -NoProfile -File tools/validate-swarm.ps1 -Json
 ```
 
-Checks Cargo/registry/package/assignment identity, exact internal dependencies, cycles/waves, launch
-state, line limits and the P00 manifest.
+Checks Cargo/registry/package/assignment identity, exact internal dependency parity, graph cycles/waves,
+launch state, line limits and the P00 contract manifest. At P00/W0 it also requires exactly
+`search-contracts` authorized and exactly `search-domain` plus `search-ports` conditional.
 
-## All-package function packet coverage
+### `validate-function-packets.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-function-packets.ps1
 pwsh -NoProfile -File tools/validate-function-packets.ps1 -Json
 ```
 
-Checks exact equality between 45 package entries and the 3 foundation plus 42 package-local primary
+Checks exact equality between all 45 packages and their three foundation plus 42 package-local primary
 function packets, including assignment/wave/write-scope parity and operation-contract structure.
 
-## Stage and later-package read-set validation
+### `validate-stage-readsets.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-stage-readsets.ps1
 pwsh -NoProfile -File tools/validate-stage-readsets.ps1 -Json
 ```
 
-Checks:
+Checks W0–W10 stage composition, 68 stage-package assignments, 23 later-stage overrides, exact reentry
+replacement contexts, prior-handoff-only consumption, sixteen-file later-stage static context ceilings
+and unchanged P00/W0 launch authority.
 
-- exact W0–W10 stage registry and central gate references;
-- **68 stage-package assignments** covering all 45 packages at their earliest wave and progressive
-  daemon composition through W7;
-- W1/W2, W3/W4 and W5/W6 contribution/closure pairs for G1/G2/G3;
-- separate `W7_LIFECYCLE` completion receipt before W8/W9;
-- **23 later-stage overrides** covering every package assignment after its earliest wave and no
-  unnecessary override for an earliest-wave package;
-- exact package/wave/base-stage/immediate-prior-stage/write-scope parity across package, function, stage
-  and read-set registries;
-- prior stage packets replaced by accepted public handoffs;
-- exact W7 lifecycle, W8 protocol/daemon/CLI, W9 Product Pulse and W10 activation/scale/evaluation
-  supplements;
-- W8 standalone CLI receives `bins/eliot-search/W8_CLIENT.md` rather than the W1 packet;
-- W10 `search-eval` receives `W10_OPTIONAL_EVALUATION.md` and accepted W9/P15 handoffs rather than W4/W9
-  implementation history;
-- the `eliot-searchd` feature ladder receives separate W2, W3, W4, W5, W6 and W7 package tickets;
-- integration machine packets remain out of ordinary agent context;
-- static context count recomputation and sixteen-file ceiling;
-- no architecture-master or dependency-implementation reads;
-- launch-state links to every machine registry while remaining P00/W0;
-- only `search-contracts` authorized and domain/ports conditional;
-- root authority/assignment/handoff documentation parity;
-- every repository workflow remains read-only and `workflow_dispatch` only.
+## P00 draft and issuance control plane
 
-## P00 draft ticket/control validation
+### `validate-p00-ticket-drafts.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1
@@ -64,75 +51,113 @@ pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1 -Json
 
 Checks:
 
-- exactly three non-claimable P00 ticket drafts and three unmaterialized context drafts;
+- exactly three non-claimable schema-v2 P00 ticket drafts and three schema-v2 unmaterialized context
+  drafts;
+- ticket drafts contain no lease identity and keep signed-payload and complete-file digest slots separate;
+- context drafts keep manifest-record and writer-artifact refs/digests separate;
 - exact package/launch class/write scope/line budgets for contracts, domain and ports;
-- unresolved writer/reviewer/base/ticket/context identities and zero claimable records;
-- domain/ports remain conditional on an accepted `search-contracts` handoff;
-- exact ordered source files, registry selectors and accepted-handoff slots for each context;
-- per-source/fragment digest materialization requirements and one writer-visible context artifact;
-- no architecture master, implementation source or forbidden control records in draft contexts;
-- issued-ticket, materialized-context, lease, submission, review, handoff and wave-receipt directories
-  contain no real records before issuance;
-- draft states are excluded from the orchestration state machine;
-- `READY → LEASED` requires a new issued ticket and materialized context;
-- P00/W0 launch authority remains unchanged;
-- all workflows remain manual-only/read-only.
+- unresolved writer/reviewer/base/ticket/context identities;
+- domain and ports remain conditional on an accepted `search-contracts` handoff;
+- exact context source files, registry selectors, accepted-handoff slots and unavailable-check order;
+- ordinary P00 contexts remain at or below sixteen source files;
+- the sole `search-contracts` exception remains at or below twenty-four sources and equals the exact
+  manifest-closed P00 contract pack plus its fixed integration instructions in canonical order;
+- every context remains within six registry fragments, one accepted-handoff slot and exactly one
+  writer-visible artifact;
+- no architecture master, dependency implementation source or forbidden control record;
+- all issued-record roots remain zero-state;
+- orchestration schema v5 and launch-state P00/W0 parity;
+- every workflow remains manual-only, read-only and credential-free.
 
-A PASS proves only that drafts are bounded, honest and non-claimable. It does not issue a ticket, create a
-writer lease or accept a package.
+A PASS proves only that drafts remain bounded and non-claimable.
 
-## Implementation-packet validation
+### `validate-ticket-issuance-contracts.ps1`
+
+```powershell
+pwsh -NoProfile -File tools/validate-ticket-issuance-contracts.ps1
+pwsh -NoProfile -File tools/validate-ticket-issuance-contracts.ps1 -Json
+```
+
+Checks:
+
+- `types-v1.toml` schema v2 contains exactly 47 unique, resolvable types with no alias cycle;
+- exact closed `ClosedReasonCode`, `LeaseEventReasonCode`, `SupersessionReasonCode` and
+  `ConsumerActionCode` registries;
+- all eight record schemas are registered once and use exact canonical layouts;
+- every field kind resolves and every array path uses an element type rather than a list-of-list;
+- canonical top-level group order and contiguous field order;
+- generic `ClosedEnum` fields carry exact equality/allowed-set rules;
+- embedded `signature.record_sha256` retains signed-payload semantics while complete-file SHA-256
+  remains external;
+- every consumed control-record digest uses an explicit `exact_record_file_sha256` field name and rejects
+  ambiguous `ticket.sha256`, `lease.sha256`, `submission.sha256`, `review.sha256` and equivalent paths;
+- every signed record carries at least one `ImmutableSignatureRef` bound to its signed-payload digest;
+- `context_manifest_v1` carries distinct materializer and reviewer signature refs;
+- orchestration lease/acceptance field sets exactly match `writer_lease_v1` and `package_handoff_v1`;
+- rejected work returns to `READY` through a new context/ticket revision and no active lease, rather than
+  bypassing the separate `READY → LEASED` transition;
+- package handoff paths use `handoff_id`, not API digest identity;
+- documentation, orchestration and launch-state layouts/reason bindings agree;
+- no legacy hyphenated control-record placeholders remain in normative issuance docs;
+- all workflows are manual-only/read-only/credential-free;
+- issued record directories remain zero-state.
+
+A PASS is schema closure only. It is not context materialization, ticket/lease issuance, package acceptance,
+G0/W0 evidence or runtime qualification.
+
+## Implementation and qualification packets
+
+### `validate-implementation-packets.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-implementation-packets.ps1
 pwsh -NoProfile -File tools/validate-implementation-packets.ps1 -Json
 ```
 
-Checks legacy `swarm/crates.toml` function links, configuration ownership/example parity,
-`search-config` dependencies, secret/autoupgrade floors and W3 Qdrant packets.
+Checks package function links, configuration ownership/example parity, `search-config` dependencies,
+secret/autoupgrade floors and W3 Qdrant packets.
 
-## W4 registry and W5 qualification validation
+### `validate-current-packets.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-current-packets.ps1
 pwsh -NoProfile -File tools/validate-current-packets.ps1 -Json
 ```
 
-Checks W4 function/qualification registration; W5 function links; launch qualification-path parity;
-locked currentness/unsaved/no-execute baseline flags; and 42 mandatory W5 probes.
+Checks W4 function/qualification registration, W5 function links, launch qualification-path parity,
+locked currentness/unsaved/no-execute baseline flags and mandatory W5 probes.
 
-## W5 deep current-workspace validation
+### `validate-w5-current.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-w5-current.ps1
 pwsh -NoProfile -File tools/validate-w5-current.ps1 -Json
 ```
 
-Checks the complete W5 cross-contract, three owner packets, stage settings and finite bounds, 42
-currentness/overlay probes, 17 unselected Rust parser probes, exact G3 W5/W6 evidence partition,
-package-local write scopes and manual-only workflow wiring.
+Checks the W5 cross-contract, owner packets, finite settings, currentness/overlay probes, unselected Rust
+parser probes, exact G3 evidence partition and package-local write scopes.
 
-## W6 proof packet validation
+### `validate-proof-packets.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-proof-packets.ps1
 pwsh -NoProfile -File tools/validate-proof-packets.ps1 -Json
 ```
 
-Checks resolver/comparator/exact links, P00/W0 launch preservation, locked ambiguity/non-normative/
-frozen-denominator rules, unselected regex/structural profiles, 52 mandatory probes and G3 evidence.
+Checks resolver/comparator/exact links, ambiguity/non-normative/frozen-denominator rules, unselected
+regex/structural profiles, mandatory probes and G3 evidence.
 
-## W7 lifecycle validation
+### `validate-w7-lifecycle.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-w7-lifecycle.ps1
 pwsh -NoProfile -File tools/validate-w7-lifecycle.ps1 -Json
 ```
 
-Checks restrictive-security, retention, mark/sweep, purge, restore, handle/continuation/candidate,
-publication/reclaim and receipt-separation contracts. Evidence remains unexecuted.
+Checks restrictive security, retention, mark/sweep, purge, restore, handles/continuations, publication,
+reclaim and lifecycle receipt separation. Evidence remains unexecuted.
 
-## W8 client-edge validation
+### `validate-w8-client-edge.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-w8-client-edge.ps1
@@ -140,29 +165,32 @@ pwsh -NoProfile -File tools/validate-w8-client-edge.ps1 -Json
 ```
 
 Checks generic-edge ownership, recipe closure, authority boundaries, locked settings, standalone client
-contract, 50 probe states, G4 mapping and blocked/unqualified status.
+contract, probe states, G4 mapping and blocked/unqualified status.
 
-## W9 Product Pulse validation
+### `validate-w9-product-pulse.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-w9-product-pulse.ps1
 pwsh -NoProfile -File tools/validate-w9-product-pulse.ps1 -Json
 ```
 
-Checks Product Pulse roles, 49 corpus cases, 33 metrics, S30 targets, 60 mandatory probes, six-ID G5
-map, locked fairness/privacy/verdict settings and manual-only CI.
+Checks Product Pulse roles, corpus cases, metrics, targets, mandatory probes, G5 mapping, locked
+fairness/privacy/verdict settings and unchanged P00/W0 authority.
 
-## W10 optional-depth validation
+### `validate-w10-optional-depth.ps1`
 
 ```powershell
 pwsh -NoProfile -File tools/validate-w10-optional-depth.ps1
 pwsh -NoProfile -File tools/validate-w10-optional-depth.ps1 -Json
 ```
 
-Checks three unselected candidate profiles; nine package/integration/evaluation ownership packets;
-model/document worker, daemon, scale and `search-eval` candidate-evaluation contracts; 45 disabled probe
-templates; candidate-specific five-ID G6 maps; locked content/migration/removal settings; manual-only
-workflows; and unchanged P00/W0 authority.
+Checks unselected candidate profiles, package/integration/evaluation ownership packets, model/document
+workers, daemon/scale/evaluation contracts, disabled probe templates, G6 maps, locked
+content/migration/removal settings and unchanged P00/W0 authority.
 
-Passing any structural validator is not runtime, Windows-security, Qdrant, current-workspace, parser,
-comparison, exact-proof, Product Pulse, provider, optional-depth, package, wave or gate evidence.
+## Evidence boundary
+
+Passing any structural validator is not Rust compilation, runtime behavior, Windows security, Qdrant,
+current-workspace, parser, exact-proof, Product Pulse, provider, optional-depth, package, gate or wave
+evidence. Unavailable execution checks remain explicitly `UNAVAILABLE`; they are never inferred from a
+schema or workflow PASS.

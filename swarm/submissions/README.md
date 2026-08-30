@@ -3,11 +3,15 @@
 Canonical layout:
 
 ```text
-swarm/submissions/<package>/<submission-id>.toml
+swarm/submissions/<package>/<submission_id>.toml
 ```
 
-A submission binds one ticket/lease/context, base/final commit, complete package-only diff, candidate
-public API/configuration digest, raw test outcomes, unavailable checks and line budget. It is review input,
-not acceptance.
+A submission binds one acknowledged, active ticket/lease/context chain; immutable base and final commits;
+a complete sorted package-only diff; candidate public API/configuration identities; raw command outcomes;
+unavailable checks; evidence; line budget and residual state. Configuration absence uses explicit
+`OptionalV1` `ABSENT`, never TOML `null` or field omission.
 
-Use `swarm/SUBMISSION_TEMPLATE.md`. This directory currently contains no package submission.
+A submission is independent-review input, not package acceptance, gate evidence or a wave receipt.
+
+Use `swarm/SUBMISSION_TEMPLATE.md` and `swarm/schemas/package-submission-v1.toml`. This directory
+currently contains no package submission.

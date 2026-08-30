@@ -3,10 +3,12 @@
 ## Machine authorities and launch procedure
 
 - [AUTHORITY_MAP.md](AUTHORITY_MAP.md) — conflict precedence and source-of-truth ownership.
-- [SWARM_LAUNCH_INDEX.md](SWARM_LAUNCH_INDEX.md) — deterministic ticket construction, authorization
-  preflight, write enforcement and review.
+- [SWARM_LAUNCH_INDEX.md](SWARM_LAUNCH_INDEX.md) — deterministic context/ticket/lease construction,
+  authorization preflight, write enforcement and review.
 - [P00_DRAFT_CONTROL_PLANE.md](P00_DRAFT_CONTROL_PLANE.md) — non-claimable P00 ticket/context drafts,
   issuance-time materialization, writer leases, submissions and independent reviews.
+- [TICKET_ISSUANCE_OPERATIONS.md](TICKET_ISSUANCE_OPERATIONS.md) — exact idempotent materialization,
+  ticket/lease/submission/review/handoff operations, recovery decisions and typed failures.
 - [SWARM_STAGE_READSETS.md](SWARM_STAGE_READSETS.md) — exact current-stage context assembly,
   replacement semantics, ceilings and progressive-package examples.
 - [STAGE_READSET_AUDIT.md](STAGE_READSET_AUDIT.md) — current structural closure and non-claims.
@@ -20,25 +22,39 @@
   package assignments reused after their earliest wave.
 - [`../../swarm/orchestration.toml`](../../swarm/orchestration.toml) — issued-ticket, materialized-context,
   lease, submission, review, acceptance and wave-advance state machine.
+- [`../../swarm/control-plane-schema.toml`](../../swarm/control-plane-schema.toml) — closed control-record
+  schema registry, exact layouts, append-only rules, reason-type bindings and validator wiring.
+- [`../../swarm/schemas/types-v1.toml`](../../swarm/schemas/types-v1.toml) — closed scalar/composite,
+  failure, lease-event, supersession and consumer-action type registries.
 - [`../../swarm/launch-state.toml`](../../swarm/launch-state.toml) — sole current implementation
   authorization.
 
 ## P00 draft and issued-record layouts
 
 ```text
-swarm/ticket-drafts/p00/<package>.toml       non-claimable draft
-swarm/context-drafts/p00/<package>.toml      unmaterialized context source list
+swarm/ticket-drafts/p00/<package>.toml                         non-claimable draft
+swarm/context-drafts/p00/<package>.toml                        unmaterialized context source list
 
-swarm/tickets/<package>/<ticket-id>.toml     issued immutable ticket
-swarm/context-manifests/<package>/<digest>   exact materialized writer context
-swarm/leases/<package>/<lease-id>.toml       writer lease
-swarm/submissions/<package>/<id>.toml        package submission
-swarm/reviews/<package>/<id>.toml            independent review
-swarm/handoffs/<package>/<api-digest>.toml   accepted package/API handoff
+swarm/context-manifests/<package>/<context_record_sha256>.toml immutable materialized context manifest
+swarm/tickets/<package>/<ticket_id>.toml                       issued immutable ticket
+swarm/leases/<package>/<lease_id>.toml                         writer lease
+swarm/leases/<package>/events/<event_id>.toml                  append-only lease event
+swarm/submissions/<package>/<submission_id>.toml               package submission
+swarm/reviews/<package>/<review_id>.toml                       independent review
+swarm/handoffs/<package>/<handoff_id>.toml                     accepted package/API handoff
+swarm/supersessions/<record_kind>/<receipt_id>.toml            append-only replacement receipt
 ```
 
+The valid progression is context materialization → ticket issuance → lease issuance → writer
+acknowledgement → package-only implementation → submission → independent review → package handoff.
+A draft, ticket or lease cannot imply a later record.
+
+A package handoff is named by its unique `handoff_id`, not by `api_schema_digest`. The same public API
+digest may legitimately survive multiple accepted implementation/evidence revisions, so API identity
+cannot also be append-only record-path identity.
+
 The current repository contains three P00 drafts and zero issued tickets, contexts, leases, submissions,
-accepted reviews or package handoffs. A draft never authorizes an agent.
+accepted reviews, supersessions or package handoffs. A draft never authorizes an agent.
 
 ## Stage packets
 
@@ -94,3 +110,7 @@ Part I Architecture 8.4 remains normative. Human docs, drafts, function/stage/re
 qualification designs never override exact machine registries, issued immutable tickets, accepted
 API/evidence digests or launch state. `DRAFT_ONLY_NOT_ISSUED`, `UNMATERIALIZED_DRAFT`, `UNSELECTED`,
 `UNQUALIFIED`, `UNAVAILABLE`, `DISABLED`, `BLOCKED` and `NOT_ACCEPTED` are explicit non-success states.
+
+Every repository workflow is `workflow_dispatch`-only, uses read-only contents permission and disables
+checkout credential persistence. A workflow run is structural evidence only; it never issues a ticket,
+lease, package handoff, gate receipt or wave receipt.

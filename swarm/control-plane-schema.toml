@@ -1,0 +1,106 @@
+schema_version = 3
+project = "eliot-search"
+architecture_version = "8.4"
+status = "SCHEMA_ONLY_NOT_IMPLEMENTED"
+owner = "integration-owner"
+canonicalization = "swarm/RECEIPT_CANONICALIZATION.md"
+operation_contract = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
+orchestration_registry = "swarm/orchestration.toml"
+type_registry = "swarm/schemas/types-v1.toml"
+type_registry_schema_version = 2
+failure_reason_type = "ClosedReasonCode"
+lease_event_reason_type = "LeaseEventReasonCode"
+supersession_reason_type = "SupersessionReasonCode"
+consumer_action_type = "ConsumerActionCode"
+validator = "tools/validate-ticket-issuance-contracts.ps1"
+manual_workflow = ".github/workflows/ticket-issuance-contracts.yml"
+workflow_policy = "manual_only"
+unknown_load_bearing_fields = "reject"
+records_are_append_only = true
+in_place_mutation_allowed = false
+source_content_allowed = false
+secret_content_allowed = false
+absolute_local_paths_allowed = false
+dependency_implementation_source_allowed = false
+embedded_record_sha256_semantics = "signed_payload_sha256_before_signature_table"
+exact_record_file_sha256_location = "external_consumer_operation_or_git_manifest_only"
+self_referential_complete_file_digest_allowed = false
+array_path_kind_semantics = "element_type"
+
+required_schema_files = [
+  "swarm/schemas/types-v1.toml",
+  "swarm/schemas/context-manifest-v1.toml",
+  "swarm/schemas/assignment-ticket-v1.toml",
+  "swarm/schemas/writer-lease-v1.toml",
+  "swarm/schemas/lease-event-v1.toml",
+  "swarm/schemas/package-submission-v1.toml",
+  "swarm/schemas/independent-review-v1.toml",
+  "swarm/schemas/package-handoff-v1.toml",
+  "swarm/schemas/supersession-receipt-v1.toml",
+]
+
+[[record]]
+kind = "context_manifest_v1"
+path = "swarm/schemas/context-manifest-v1.toml"
+canonical_layout = "swarm/context-manifests/<package>/<context_record_sha256>.toml"
+producer = "integration-owner"
+consumer = "ticket_issuer_and_writer"
+
+[[record]]
+kind = "assignment_ticket_v1"
+path = "swarm/schemas/assignment-ticket-v1.toml"
+canonical_layout = "swarm/tickets/<package>/<ticket_id>.toml"
+producer = "integration-owner"
+consumer = "writer_lease_issuer"
+
+[[record]]
+kind = "writer_lease_v1"
+path = "swarm/schemas/writer-lease-v1.toml"
+canonical_layout = "swarm/leases/<package>/<lease_id>.toml"
+producer = "integration-owner"
+consumer = "writer_and_orchestrator"
+
+[[record]]
+kind = "lease_event_v1"
+path = "swarm/schemas/lease-event-v1.toml"
+canonical_layout = "swarm/leases/<package>/events/<event_id>.toml"
+producer = "writer_or_integration_owner_under_closed_event_rules"
+consumer = "orchestrator"
+
+[[record]]
+kind = "package_submission_v1"
+path = "swarm/schemas/package-submission-v1.toml"
+canonical_layout = "swarm/submissions/<package>/<submission_id>.toml"
+producer = "integration-owner_from_writer_submission"
+consumer = "independent_reviewer"
+
+[[record]]
+kind = "independent_review_v1"
+path = "swarm/schemas/independent-review-v1.toml"
+canonical_layout = "swarm/reviews/<package>/<review_id>.toml"
+producer = "independent_reviewer_through_integration_owner"
+consumer = "package_handoff_publisher"
+
+[[record]]
+kind = "package_handoff_v1"
+path = "swarm/schemas/package-handoff-v1.toml"
+canonical_layout = "swarm/handoffs/<package>/<handoff_id>.toml"
+producer = "integration-owner"
+consumer = "direct_dependencies_later_stages_and_wave_reviewer"
+
+[[record]]
+kind = "supersession_receipt_v1"
+path = "swarm/schemas/supersession-receipt-v1.toml"
+canonical_layout = "swarm/supersessions/<record_kind>/<receipt_id>.toml"
+producer = "integration-owner"
+consumer = "orchestrator_and_reviewers"
+
+[current_disposition]
+schema_files = 9
+type_registry_files = 1
+record_schema_files = 8
+registered_types = 47
+implementation = "ABSENT"
+executed_schema_conformance = "UNAVAILABLE"
+issued_records = 0
+accepted_handoffs = 0

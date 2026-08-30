@@ -1,71 +1,102 @@
-# Assignment ticket
+# Assignment ticket rendering guide
 
-This ticket is issued and frozen by the integration owner. The package writer does not edit it.
+This guide is a human review view of `swarm/schemas/assignment-ticket-v1.toml`. The machine schema is
+normative. The integration owner creates the immutable record; the package writer never edits it.
+
+Canonical record path:
+
+```text
+swarm/tickets/<package>/<ticket_id>.toml
+```
 
 ## Identity
 
-- Ticket ID:
-- Lease ID:
-- Package:
-- Wave / stage:
-- Writer:
-- Reviewer:
-- Issued at:
-- State: `LEASED`
+- `identity.ticket_id`
+- `identity.operation_id`
+- `identity.package`
+- `identity.stage`
+- `identity.wave`
+- `identity.issued_at`
+
+## Actors
+
+- `actors.writer`
+- `actors.reviewer`
+- `actors.issuer`
+
+Writer and reviewer must be valid, assigned and distinct. The issuer is the integration owner.
 
 ## Repository fence
 
-- Repository:
-- Base commit:
-- Branch/worktree:
-- Exact write scope:
-- Allowed Cargo feature profile:
+- `repository_fence.repository`
+- `repository_fence.base_commit`
+- `repository_fence.branch_or_worktree`
+- `repository_fence.write_scope`
+- `repository_fence.feature_profile`
 
-## Assignment fence
+The base commit is a full algorithm-tagged Git object ID. The worktree value is opaque and does not
+replace the base commit. The write scope exactly matches the function/package registry and cannot be
+broadened by this guide.
 
-- Assignment path:
-- Assignment SHA-256:
-- Root `AGENTS.md` digest:
-- Family `AGENTS.md` digest:
-- Package `AGENTS.md` digest:
-- Assignment protocol digest:
-- Port catalog digest:
+## Context
+
+- `context.manifest_ref`
+- `context.manifest_exact_record_file_sha256`
+- `context.artifact_ref`
+- `context.artifact_sha256`
+
+The context record and one writer-visible artifact must already exist and pass exact readback. The
+manifest digest is the complete committed record digest, not the manifest's embedded signed-payload
+digest. A ticket does not materialize context.
+
+## Instructions
+
+- `instructions[]`
+
+Every `OrderedInstructionDigest` element records declared order, repository path, Git blob ID, exact file
+SHA-256 and exact byte length. The array covers all required registry/instruction sources in the declared
+context order; local substitutions are invalid.
 
 ## Accepted dependency handoffs
 
-| Dependency | Accepted commit | API/schema digest | Handoff receipt |
-|---|---|---|---|
+- `dependencies[]`
 
-No dependency branch or mutable worktree is an accepted input.
+Each element binds the dependency package, immutable handoff record, accepted commit, API/schema digest,
+optional configuration digest, evidence digest and compatibility class. Branches and dependency
+implementation source are invalid inputs.
 
-## Allowed read set
+## Fixtures and evidence
 
-List only the bounded files and receipts supplied to the writer. Architecture-master access is
-exception-only through a contract-change request.
+- `fixtures[]`
+- `evidence.required_commands[]`
+- `evidence.required_evidence[]`
+- `evidence.unavailable_checks[]`
 
-## Required output
+Commands are bounded and include timeout, environment, expected exit class and evidence class.
+Unavailable checks remain explicit; compilation cannot substitute for missing execution evidence.
 
-- package implementation inside the write scope;
-- package-local tests and fixtures;
-- package handoff;
-- API/port handoff and canonical digest;
-- exact raw command outcomes;
-- residual risks and contract-change requests.
+## Limits
 
-## Required evidence
+- `limits.soft_src_lines`
+- `limits.split_review_total_lines`
+- `limits.hard_total_lines`
+- `limits.static_context_artifacts`
 
-List assignment-specific test/evidence IDs. A missing environment-dependent check remains
-`UNAVAILABLE`; it is not inferred from compilation.
+The static context artifact count equals one. The line limits equal or narrow the package registry and
+never exceed the repository hard stop.
 
-## Lease rules
+## Signature
 
-- One active lease for this package.
-- The writer acknowledges the exact ticket before implementation.
-- A base, assignment or dependency-digest change supersedes this ticket.
-- The writer cannot self-accept, advance launch state or broaden scope.
+- `signature.record_sha256`
+- `signature.integration_signature_ref`
 
-## Integration signature
+`signature.record_sha256` is the signed-payload digest, not a complete-file self-hash. Complete-file
+identity is recorded externally as `exact_record_file_sha256`.
 
-- Issuer:
-- Ticket canonical digest:
-- Signature/receipt ref:
+## Non-claims
+
+- the ticket contains no lease ID or lease state;
+- ticket presence does not create a writer lease;
+- implementation is unauthorized until a separate lease exists and the writer records an
+  `ACKNOWLEDGED` lease event;
+- the ticket cannot accept the package, a gate or a wave.

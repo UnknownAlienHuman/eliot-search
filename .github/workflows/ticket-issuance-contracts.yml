@@ -1,4 +1,4 @@
-name: P00 draft ticket control
+name: Ticket issuance contracts
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: p00-ticket-drafts-${{ github.ref }}
+  group: ticket-issuance-contracts-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
-    name: Validate non-claimable P00 drafts
+    name: Validate ticket issuance control plane
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -22,17 +22,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Validate package, function and stage registries
+      - name: Validate repository topology
         shell: pwsh
-        run: |
-          & ./tools/validate-swarm.ps1 -Json
-          & ./tools/validate-function-packets.ps1 -Json
-          & ./tools/validate-stage-readsets.ps1 -Json
+        run: ./tools/validate-swarm.ps1 -Json
 
-      - name: Validate non-claimable ticket, context, lease and review control plane
+      - name: Validate P00 zero-state drafts
         shell: pwsh
         run: ./tools/validate-p00-ticket-drafts.ps1 -Json
 
-      - name: Validate ticket issuance record schemas
+      - name: Validate ticket issuance contracts
         shell: pwsh
         run: ./tools/validate-ticket-issuance-contracts.ps1 -Json

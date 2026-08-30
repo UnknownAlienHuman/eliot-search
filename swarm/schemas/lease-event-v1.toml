@@ -1,0 +1,121 @@
+schema_version = 1
+record_kind = "lease_event_v1"
+status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
+owner = "integration-owner_recording_closed_writer_or_integration_event"
+canonicalization = "exact_utf8_lf_sha256"
+record_layout = "swarm/leases/<package>/events/<event_id>.toml"
+immutable = true
+unknown_fields = "reject"
+event_kinds = ["ACKNOWLEDGED", "SUBMITTED", "REVOKED", "SUPERSEDED"]
+event_reason_type = "LeaseEventReasonCode"
+source_content_allowed = false
+secret_content_allowed = false
+
+[event_reason_codes]
+ACKNOWLEDGED = "WRITER_ACKNOWLEDGED"
+SUBMITTED = "PACKAGE_SUBMITTED"
+REVOKED = "LEASE_REVOKED"
+SUPERSEDED = "LEASE_SUPERSEDED"
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "lease", "event",
+  "actor", "related_records", "chain", "signature",
+]
+
+[[field]]
+path = "identity.event_id"
+kind = "OpaqueId"
+required = true
+canonical_order = 1
+rules = ["non_empty", "unique_per_lease"]
+
+[[field]]
+path = "identity.operation_id"
+kind = "Sha256Digest"
+required = true
+canonical_order = 2
+rules = ["domain_separated_lease_event_v1", "stable_for_equal_input"]
+
+[[field]]
+path = "identity.package"
+kind = "PackageName"
+required = true
+canonical_order = 3
+rules = ["matches_lease"]
+
+[[field]]
+path = "lease.ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 4
+rules = ["kind_writer_lease_v1"]
+
+[[field]]
+path = "lease.exact_record_file_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 5
+rules = ["equals_lease_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
+
+[[field]]
+path = "event.kind"
+kind = "ClosedEnum"
+required = true
+canonical_order = 6
+rules = ["one_of_ACKNOWLEDGED_SUBMITTED_REVOKED_SUPERSEDED"]
+
+[[field]]
+path = "event.occurred_at"
+kind = "Rfc3339Utc"
+required = true
+canonical_order = 7
+rules = ["recorded_not_inferred"]
+
+[[field]]
+path = "event.reason_code"
+kind = "LeaseEventReasonCode"
+required = true
+canonical_order = 8
+rules = ["exact_mapping_from_event_kind", "details_external_when_sensitive"]
+
+[[field]]
+path = "actor.identity"
+kind = "ActorIdentity"
+required = true
+canonical_order = 9
+rules = ["ACKNOWLEDGED_requires_ticket_writer", "other_events_require_integration_owner_or_exact_writer_submission"]
+
+[[field]]
+path = "related_records[]"
+kind = "OrderedImmutableRecordRef"
+required = true
+canonical_order = 10
+rules = ["ACKNOWLEDGED_binds_ack_digest", "SUBMITTED_binds_submission", "SUPERSEDED_binds_replacement", "REVOKED_binds_revocation_receipt"]
+
+[[field]]
+path = "chain.previous_event_ref"
+kind = "OptionalImmutableRecordRef"
+required = true
+canonical_order = 11
+rules = ["ABSENT_only_for_first_event", "same_lease"]
+
+[[field]]
+path = "chain.previous_event_exact_record_file_sha256"
+kind = "OptionalSha256Digest"
+required = true
+canonical_order = 12
+rules = ["matches_previous_event_ref_exact_record_file_sha256_or_ABSENT", "not_signed_payload_sha256"]
+
+[[field]]
+path = "signature.record_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 13
+rules = ["exact_record_digest_rule"]
+
+[[field]]
+path = "signature.signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 14
+rules = ["actor_identity_bound", "signed_payload_sha256_matches_record_sha256"]

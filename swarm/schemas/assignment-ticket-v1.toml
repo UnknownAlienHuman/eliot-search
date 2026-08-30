@@ -1,0 +1,231 @@
+schema_version = 1
+record_kind = "assignment_ticket_v1"
+status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
+owner = "integration-owner"
+canonicalization = "exact_utf8_lf_sha256"
+record_layout = "swarm/tickets/<package>/<ticket_id>.toml"
+immutable = true
+unknown_fields = "reject"
+source_content_allowed = false
+secret_content_allowed = false
+mutable_branch_allowed = false
+max_instruction_digests = 32
+max_dependency_handoffs = 32
+max_fixture_refs = 64
+max_required_commands = 64
+max_unavailable_checks = 64
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "actors", "repository_fence",
+  "context", "instructions", "dependencies", "fixtures", "evidence", "limits", "signature",
+]
+
+[[field]]
+path = "identity.ticket_id"
+kind = "OpaqueId"
+required = true
+canonical_order = 1
+rules = ["non_empty", "unique_per_package"]
+
+[[field]]
+path = "identity.operation_id"
+kind = "Sha256Digest"
+required = true
+canonical_order = 2
+rules = ["domain_separated_issue_ticket_v1", "stable_for_equal_input"]
+
+[[field]]
+path = "identity.package"
+kind = "PackageName"
+required = true
+canonical_order = 3
+rules = ["exists_in_package_registry"]
+
+[[field]]
+path = "identity.stage"
+kind = "StageId"
+required = true
+canonical_order = 4
+rules = ["package_belongs_to_stage"]
+
+[[field]]
+path = "identity.wave"
+kind = "u16"
+required = true
+canonical_order = 5
+rules = ["equals_stage_wave"]
+
+[[field]]
+path = "identity.issued_at"
+kind = "Rfc3339Utc"
+required = true
+canonical_order = 6
+rules = ["recorded_not_inferred"]
+
+[[field]]
+path = "actors.writer"
+kind = "ActorIdentity"
+required = true
+canonical_order = 7
+rules = ["non_empty", "different_from_reviewer"]
+
+[[field]]
+path = "actors.reviewer"
+kind = "ActorIdentity"
+required = true
+canonical_order = 8
+rules = ["non_empty", "different_from_writer"]
+
+[[field]]
+path = "actors.issuer"
+kind = "ActorIdentity"
+required = true
+canonical_order = 9
+rules = ["integration_owner"]
+
+[[field]]
+path = "repository_fence.repository"
+kind = "RepositoryName"
+required = true
+canonical_order = 10
+rules = ["equals_UnknownAlienHuman_eliot_search_for_current_project"]
+
+[[field]]
+path = "repository_fence.base_commit"
+kind = "GitObjectId"
+required = true
+canonical_order = 11
+rules = ["exact_immutable_commit"]
+
+[[field]]
+path = "repository_fence.branch_or_worktree"
+kind = "OpaqueWorktreeRef"
+required = true
+canonical_order = 12
+rules = ["created_from_base_commit", "not_authoritative_without_base"]
+
+[[field]]
+path = "repository_fence.write_scope"
+kind = "RepositoryGlob"
+required = true
+canonical_order = 13
+rules = ["equals_function_registry_write_scope"]
+
+[[field]]
+path = "repository_fence.feature_profile"
+kind = "ClosedFeatureProfile"
+required = true
+canonical_order = 14
+rules = ["authorized_by_stage_and_launch"]
+
+[[field]]
+path = "context.manifest_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 15
+rules = ["kind_context_manifest_v1", "same_package_stage_base"]
+
+[[field]]
+path = "context.manifest_exact_record_file_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 16
+rules = ["equals_manifest_ref_exact_record_file_sha256", "not_signed_payload_sha256"]
+
+[[field]]
+path = "context.artifact_ref"
+kind = "ImmutableArtifactRef"
+required = true
+canonical_order = 17
+rules = ["matches_context_manifest"]
+
+[[field]]
+path = "context.artifact_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 18
+rules = ["matches_context_manifest_and_artifact_ref"]
+
+[[field]]
+path = "instructions[]"
+kind = "OrderedInstructionDigest"
+required = true
+canonical_order = 19
+rules = ["unique_repository_path", "all_required_registry_instruction_sources", "sorted_by_declared_context_order"]
+
+[[field]]
+path = "dependencies[]"
+kind = "OrderedAcceptedPackageHandoff"
+required = true
+canonical_order = 20
+rules = ["exact_direct_and_prior_stage_handoffs", "sorted_by_package", "no_branch_head"]
+
+[[field]]
+path = "fixtures[]"
+kind = "OrderedFixtureRef"
+required = true
+canonical_order = 21
+rules = ["bounded", "owned_by_applicable_fixture_registry"]
+
+[[field]]
+path = "evidence.required_commands[]"
+kind = "BoundedCommandSpec"
+required = true
+canonical_order = 22
+rules = ["exact_command_and_environment_requirements"]
+
+[[field]]
+path = "evidence.required_evidence[]"
+kind = "EvidenceRequirement"
+required = true
+canonical_order = 23
+rules = ["non_empty", "owner_and_acceptance_class_explicit"]
+
+[[field]]
+path = "evidence.unavailable_checks[]"
+kind = "UnavailableCheckRequirement"
+required = true
+canonical_order = 24
+rules = ["must_remain_visible_when_unavailable"]
+
+[[field]]
+path = "limits.soft_src_lines"
+kind = "u32"
+required = true
+canonical_order = 25
+rules = ["equals_or_narrows_registry_target"]
+
+[[field]]
+path = "limits.split_review_total_lines"
+kind = "u32"
+required = true
+canonical_order = 26
+rules = ["less_than_hard_limit"]
+
+[[field]]
+path = "limits.hard_total_lines"
+kind = "u32"
+required = true
+canonical_order = 27
+rules = ["at_most_10000"]
+
+[[field]]
+path = "limits.static_context_artifacts"
+kind = "u16"
+required = true
+canonical_order = 28
+rules = ["equals_one"]
+
+[[field]]
+path = "signature.record_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 29
+rules = ["exact_record_digest_rule"]
+
+[[field]]
+path = "signature.integration_signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 30
+rules = ["issuer_identity_bound", "signed_payload_sha256_matches_record_sha256"]
