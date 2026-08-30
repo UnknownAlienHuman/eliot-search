@@ -50,7 +50,7 @@ root/shared changes or dependency implementation access.
 - `lifecycle.issued_at`
 - `lifecycle.initial_state = LEASED`
 - `lifecycle.automatic_expiry = false`
-- `lifecycle.previous_active_lease_check = PASS`
+- `lifecycle.previous_active_lease_check = NONE_ACTIVE_VERIFIED`
 
 A second active non-superseded lease for the same package is rejected. Wall-clock time never silently
 expires or renews a lease.
