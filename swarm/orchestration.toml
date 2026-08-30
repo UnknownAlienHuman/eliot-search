@@ -1,4 +1,4 @@
-schema_version = 4
+schema_version = 5
 project = "eliot-search"
 package_registry = "swarm/crates.toml"
 function_registry = "swarm/function-packets.toml"
@@ -10,6 +10,7 @@ control_plane_schema_registry = "swarm/control-plane-schema.toml"
 control_plane_type_registry = "swarm/schemas/types-v1.toml"
 control_plane_validator = "tools/validate-ticket-issuance-contracts.ps1"
 control_plane_manual_workflow = ".github/workflows/ticket-issuance-contracts.yml"
+workflow_policy = "manual_only"
 ticket_issuance_operation_contract = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
 assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
 writer_lease_template = "swarm/WRITER_LEASE_TEMPLATE.md"
@@ -21,14 +22,18 @@ api_handoff_template = "swarm/API_HANDOFF_TEMPLATE.md"
 wave_receipt_template = "swarm/WAVE_RECEIPT_TEMPLATE.md"
 ticket_draft_manifest = "swarm/ticket-drafts/manifest.toml"
 context_draft_manifest = "swarm/context-drafts/manifest.toml"
-issued_ticket_layout = "swarm/tickets/<package>/<ticket-id>.toml"
-materialized_context_layout = "swarm/context-manifests/<package>/<context-digest>.toml"
-writer_lease_layout = "swarm/leases/<package>/<lease-id>.toml"
-lease_event_layout = "swarm/leases/<package>/events/<event-id>.toml"
-submission_layout = "swarm/submissions/<package>/<submission-id>.toml"
-review_layout = "swarm/reviews/<package>/<review-id>.toml"
-accepted_handoff_layout = "swarm/handoffs/<package>/<handoff-id>.toml"
-supersession_layout = "swarm/supersessions/<record-kind>/<receipt-id>.toml"
+issued_ticket_layout = "swarm/tickets/<package>/<ticket_id>.toml"
+materialized_context_layout = "swarm/context-manifests/<package>/<context_record_sha256>.toml"
+writer_lease_layout = "swarm/leases/<package>/<lease_id>.toml"
+lease_event_layout = "swarm/leases/<package>/events/<event_id>.toml"
+submission_layout = "swarm/submissions/<package>/<submission_id>.toml"
+review_layout = "swarm/reviews/<package>/<review_id>.toml"
+accepted_handoff_layout = "swarm/handoffs/<package>/<handoff_id>.toml"
+supersession_layout = "swarm/supersessions/<record_kind>/<receipt_id>.toml"
+failure_reason_type = "ClosedReasonCode"
+lease_event_reason_type = "LeaseEventReasonCode"
+supersession_reason_type = "SupersessionReasonCode"
+consumer_action_type = "ConsumerActionCode"
 
 states = [
   "BLOCKED",
@@ -71,6 +76,7 @@ dependency_implementation_source_in_context = false
 [record_validation]
 schema_registry_required = true
 type_registry_required = true
+reason_registries_required = true
 record_kind_must_match_schema = true
 all_field_kinds_must_resolve = true
 array_path_kind_is_element_type = true
@@ -98,24 +104,28 @@ requires_schema_valid_ticket_and_context = true
 
 [lease]
 required_fields = [
-  "lease_id",
-  "ticket_id",
-  "ticket_digest",
-  "context_manifest_digest",
-  "context_artifact_digest",
-  "package",
-  "writer",
-  "reviewer",
-  "wave",
-  "stage",
-  "base_commit",
-  "write_scope",
-  "assignment_path",
-  "assignment_sha256",
-  "instruction_digests",
-  "dependency_handoff_digests",
-  "feature_profile",
-  "issued_at",
+  "identity.lease_id",
+  "identity.operation_id",
+  "identity.package",
+  "identity.stage",
+  "ticket.ref",
+  "ticket.sha256",
+  "context.manifest_ref",
+  "context.artifact_sha256",
+  "actors.writer",
+  "actors.reviewer",
+  "actors.issuer",
+  "scope.base_commit",
+  "scope.branch_or_worktree",
+  "scope.write_scope",
+  "scope.feature_profile",
+  "dependencies[]",
+  "lifecycle.issued_at",
+  "lifecycle.initial_state",
+  "lifecycle.automatic_expiry",
+  "lifecycle.previous_active_lease_check",
+  "signature.record_sha256",
+  "signature.integration_signature_ref",
 ]
 automatic_expiry = false
 revocation_requires_integration_receipt = true
@@ -145,21 +155,34 @@ acceptance_verdict = "ACCEPT_SUBMISSION_FOR_INTEGRATION"
 
 [acceptance]
 required_fields = [
-  "package",
-  "ticket_id",
-  "lease_id",
-  "context_manifest_digest",
-  "submission_digest",
-  "review_digest",
-  "base_commit",
-  "final_commit",
-  "assignment_sha256",
-  "api_schema_digest",
-  "dependency_handoff_digests",
-  "evidence_refs",
-  "reviewer_receipt",
-  "accepted_at",
+  "identity.handoff_id",
+  "identity.operation_id",
+  "identity.package",
+  "identity.stage",
+  "identity.accepted_at",
+  "submission_review.submission_ref",
+  "submission_review.submission_sha256",
+  "submission_review.review_ref",
+  "submission_review.review_sha256",
+  "accepted_code.base_commit",
+  "accepted_code.final_commit",
+  "accepted_code.changed_files_digest",
+  "public_surface.api_manifest_ref",
+  "public_surface.api_schema_digest",
+  "public_surface.configuration_digest",
+  "public_surface.fixture_digest_set",
+  "public_surface.error_reason_digest",
+  "dependencies[]",
+  "evidence[]",
+  "compatibility.class",
+  "compatibility.consumer_actions[]",
+  "supersession.supersedes_handoff_ref",
+  "supersession.supersedes_handoff_sha256",
+  "signature.integration_owner_identity",
+  "signature.record_sha256",
+  "signature.integration_signature_ref",
 ]
+ticket_lease_context_is_transitively_bound_through_submission = true
 mutable_after_acceptance = false
 correction_mode = "new_receipt_supersedes_old"
 package_handoff_does_not_accept_gate_or_wave = true
