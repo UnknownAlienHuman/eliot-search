@@ -41,12 +41,13 @@ broadened by this guide.
 ## Context
 
 - `context.manifest_ref`
-- `context.manifest_sha256`
+- `context.manifest_exact_record_file_sha256`
 - `context.artifact_ref`
 - `context.artifact_sha256`
 
-The context record and one writer-visible artifact must already exist and pass exact readback. A ticket
-does not materialize context.
+The context record and one writer-visible artifact must already exist and pass exact readback. The
+manifest digest is the complete committed record digest, not the manifest's embedded signed-payload
+digest. A ticket does not materialize context.
 
 ## Instructions
 
