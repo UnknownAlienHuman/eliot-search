@@ -1,53 +1,80 @@
-# Writer lease
+# Writer lease rendering guide
 
-This record is issued by the integration owner after an immutable assignment ticket and context manifest
-exist. It grants only one package-local implementation lease; it does not accept the package or advance a
-wave.
+This guide is a human review view of `swarm/schemas/writer-lease-v1.toml`. The machine schema is
+normative. The integration owner creates the immutable lease only after a valid assignment ticket and
+materialized context exist.
+
+Canonical record path:
+
+```text
+swarm/leases/<package>/<lease_id>.toml
+```
 
 ## Identity
 
-- Lease ID:
-- Ticket ID / canonical digest:
-- Context manifest / artifact digest:
-- Package:
-- Stage / wave:
-- Writer identity:
-- Reviewer identity:
-- Base commit:
-- Worktree / branch:
-- Issued at:
-- State: `LEASED`
+- `identity.lease_id`
+- `identity.operation_id`
+- `identity.package`
+- `identity.stage`
+
+## Ticket and context
+
+- `ticket.ref`
+- `ticket.sha256`
+- `context.manifest_ref`
+- `context.artifact_sha256`
+
+All refs and digests are exact and must match the assignment ticket.
+
+## Actors
+
+- `actors.writer`
+- `actors.reviewer`
+- `actors.issuer`
+
+Writer and reviewer are distinct and match the ticket. The issuer is the integration owner.
 
 ## Scope
 
-- Exact write scope:
-- Allowed feature profile:
-- Accepted dependency handoff digests:
-- Required prior-stage handoff digests:
-- Maximum hand-written lines:
-- Split-review threshold:
+- `scope.base_commit`
+- `scope.branch_or_worktree`
+- `scope.write_scope`
+- `scope.feature_profile`
+- `dependencies[]`
 
-## Writer acknowledgement
-
-The writer acknowledges that:
-
-- only the exact context artifact is authorized;
-- the architecture master and dependency implementation internals are not mounted;
-- no path outside the write scope may change;
-- a missing contract stops work through a contract-change request;
-- source/provider/artifact selection requires an integration-owned ticket;
-- the writer cannot self-review, self-accept or edit launch/control-plane records.
+The lease grants only the exact package write scope at one immutable base commit. It cannot authorize
+root/shared changes or dependency implementation access.
 
 ## Lifecycle
 
-- A second active lease for the package is denied.
-- Changing base, context, assignment, write scope or dependency digest supersedes this lease.
-- Revocation requires an append-only integration-owner receipt.
-- Automatic expiry is not inferred from wall-clock time.
-- Submission or revocation ends implementation authority; historical records remain immutable.
+- `lifecycle.issued_at`
+- `lifecycle.initial_state = LEASED`
+- `lifecycle.automatic_expiry = false`
+- `lifecycle.previous_active_lease_check = PASS`
+
+A second active non-superseded lease for the same package is rejected. Wall-clock time never silently
+expires or renews a lease.
+
+The writer acknowledgement is not embedded into or inferred from the lease. It is a separate append-only
+record:
+
+```text
+swarm/leases/<package>/events/<event_id>.toml
+event.kind = ACKNOWLEDGED
+event.reason_code = WRITER_ACKNOWLEDGED
+```
+
+Only after that event passes exact readback may implementation begin. Submission, revocation and
+supersession also use append-only lifecycle events.
 
 ## Signature
 
-- Issuer:
-- Lease canonical digest:
-- Signature/receipt ref:
+- `signature.record_sha256`
+- `signature.integration_signature_ref`
+
+The embedded digest is the signed-payload digest. Complete-file identity is external.
+
+## Non-claims
+
+A lease cannot accept a package, select a provider/artifact, advance launch state, accept a gate or emit a
+wave receipt.
