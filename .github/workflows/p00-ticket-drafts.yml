@@ -32,3 +32,7 @@ jobs:
       - name: Validate non-claimable ticket, context, lease and review control plane
         shell: pwsh
         run: ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Validate ticket issuance record schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
