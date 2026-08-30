@@ -77,6 +77,16 @@ function Same([object[]]$Left, [object[]]$Right) {
     $true
 }
 
+function Same-Sequence([object[]]$Left, [object[]]$Right) {
+    $a = @($Left | ForEach-Object { [string]$_ })
+    $b = @($Right | ForEach-Object { [string]$_ })
+    if ($a.Count -ne $b.Count) { return $false }
+    for ($i = 0; $i -lt $a.Count; $i++) {
+        if ($a[$i] -cne $b[$i]) { return $false }
+    }
+    $true
+}
+
 function Empty-ControlDir([string]$Path) {
     $full = Join-Path $Root $Path
     if (-not (Test-Path $full -PathType Container)) {
@@ -92,6 +102,7 @@ function Empty-ControlDir([string]$Path) {
 
 $ticketManifest = Read-File 'swarm/ticket-drafts/manifest.toml'
 $contextManifest = Read-File 'swarm/context-drafts/manifest.toml'
+$p00Manifest = Read-File 'docs/contracts/p00/manifest.toml'
 $orchestration = Read-File 'swarm/orchestration.toml'
 $launch = Read-File 'swarm/launch-state.toml'
 
@@ -101,30 +112,76 @@ if ((Value $ticketManifest 'status') -cne 'DRAFT_ONLY_NOT_ISSUED' -or (Number $t
 foreach ($zero in @('issued_ticket_count', 'active_lease_count', 'submission_count', 'accepted_review_count', 'package_handoff_count', 'wave_receipt_count')) {
     if ((Number $ticketManifest $zero) -ne 0) { Fail "$zero must be zero." }
 }
-if ((Value $contextManifest 'status') -cne 'NON_CLAIMABLE_CONTEXT_DRAFTS' -or (Number $contextManifest 'draft_count') -ne 3 -or (Number $contextManifest 'materialized_context_count') -ne 0) {
+if ((Number $contextManifest 'schema_version') -ne 2 -or (Value $contextManifest 'status') -cne 'NON_CLAIMABLE_CONTEXT_DRAFTS' -or (Number $contextManifest 'draft_count') -ne 3 -or (Number $contextManifest 'materialized_context_count') -ne 0) {
     Fail 'Context draft manifest identity/count mismatch.'
 }
 if ((Number $contextManifest 'writer_visible_artifact_count_per_context') -ne 1) {
     Fail 'Each materialized context must be one artifact.'
 }
 
+$ordinarySourceCeiling = [int](Number $contextManifest 'ordinary_static_source_file_ceiling')
+$p00SourceCeiling = [int](Number $contextManifest 'p00_exact_contract_pack_source_file_ceiling')
+$exceptionPackages = @(Array $contextManifest 'p00_exact_contract_pack_exception_packages')
+$fragmentCeiling = [int](Number $contextManifest 'max_registry_fragments_per_context')
+$handoffCeiling = [int](Number $contextManifest 'max_accepted_handoff_slots_per_context')
+if ($ordinarySourceCeiling -ne 16 -or $p00SourceCeiling -ne 24) {
+    Fail 'Context source ceilings must remain ordinary=16 and P00 exact-pack=24.'
+}
+if (-not (Same $exceptionPackages @('search-contracts'))) {
+    Fail 'Only search-contracts may use the P00 exact-contract-pack source exception.'
+}
+if ($fragmentCeiling -ne 6 -or $handoffCeiling -ne 1) {
+    Fail 'Context fragment/handoff ceilings must remain 6/1.'
+}
+
 $expected = [ordered]@{
-    'search-contracts' = @{ Launch = 'AUTHORIZED'; Precondition = 'CURRENTLY_PRESENT'; Scope = 'crates/search-contracts/**'; Soft = 8000; Handoffs = 0 }
-    'search-domain' = @{ Launch = 'CONDITIONAL'; Precondition = 'ACCEPTED_SEARCH_CONTRACTS_HANDOFF_REQUIRED'; Scope = 'crates/search-domain/**'; Soft = 7000; Handoffs = 1 }
-    'search-ports' = @{ Launch = 'CONDITIONAL'; Precondition = 'ACCEPTED_SEARCH_CONTRACTS_HANDOFF_REQUIRED'; Scope = 'crates/search-ports/**'; Soft = 5500; Handoffs = 1 }
+    'search-contracts' = @{ Launch = 'AUTHORIZED'; Precondition = 'CURRENTLY_PRESENT'; Scope = 'crates/search-contracts/**'; Soft = 8000; Handoffs = 0; CeilingClass = 'P00_EXACT_CONTRACT_PACK' }
+    'search-domain' = @{ Launch = 'CONDITIONAL'; Precondition = 'ACCEPTED_SEARCH_CONTRACTS_HANDOFF_REQUIRED'; Scope = 'crates/search-domain/**'; Soft = 7000; Handoffs = 1; CeilingClass = 'ORDINARY' }
+    'search-ports' = @{ Launch = 'CONDITIONAL'; Precondition = 'ACCEPTED_SEARCH_CONTRACTS_HANDOFF_REQUIRED'; Scope = 'crates/search-ports/**'; Soft = 5500; Handoffs = 1; CeilingClass = 'ORDINARY' }
 }
 
 $manifestPackages = @(
     [regex]::Matches($ticketManifest, '(?m)^package\s*=\s*"([^"]+)"\s*$') |
         ForEach-Object { $_.Groups[1].Value }
 )
-$contextPackages = @(
-    [regex]::Matches($contextManifest, '(?m)^package\s*=\s*"([^"]+)"\s*$') |
-        ForEach-Object { $_.Groups[1].Value }
-)
-if (-not (Same $manifestPackages @($expected.Keys)) -or -not (Same $contextPackages @($expected.Keys))) {
+$contextDraftBlocks = [regex]::Split($contextManifest, '(?m)^\[\[draft\]\]\s*$')
+$contextPackages = [System.Collections.Generic.List[string]]::new()
+$contextCeilingClasses = @{}
+for ($i = 1; $i -lt $contextDraftBlocks.Count; $i++) {
+    $package = Value $contextDraftBlocks[$i] 'package'
+    if ([string]::IsNullOrWhiteSpace($package)) { continue }
+    if ($contextCeilingClasses.ContainsKey($package)) {
+        Fail "Duplicate context draft manifest package: $package"
+        continue
+    }
+    [void]$contextPackages.Add($package)
+    $contextCeilingClasses[$package] = Value $contextDraftBlocks[$i] 'source_ceiling_class'
+}
+if (-not (Same $manifestPackages @($expected.Keys)) -or -not (Same $contextPackages.ToArray() @($expected.Keys))) {
     Fail 'Draft package set mismatch.'
 }
+
+$p00RequiredPaths = @(
+    Array $p00Manifest 'required_files' |
+        ForEach-Object { "docs/contracts/p00/$_" }
+)
+if ($p00RequiredPaths.Count -ne 12) {
+    Fail 'P00 manifest required-file count must remain 12.'
+}
+$searchContractsFixedSources = @(
+    'AGENTS.md',
+    'crates/search-contracts/AGENTS.md',
+    'docs/handoff/AUTHORITY_MAP.md',
+    'swarm/ASSIGNMENT_PROTOCOL.md',
+    'swarm/assignments/search-contracts.md',
+    'docs/handoff/P00_BOOTSTRAP.md'
+)
+$expectedSearchContractsSources = @(
+    $searchContractsFixedSources +
+    $p00RequiredPaths[0] +
+    'docs/contracts/p00/manifest.toml' +
+    $p00RequiredPaths[1..($p00RequiredPaths.Count - 1)]
+)
 
 foreach ($entry in $expected.GetEnumerator()) {
     $package = [string]$entry.Key
@@ -193,12 +250,29 @@ foreach ($entry in $expected.GetEnumerator()) {
     if ((Value $context 'materialization_mode') -cne 'canonical_concatenated_bundle' -or (Number $context 'writer_visible_artifact_count') -ne 1) {
         Fail "$package context materialization contract mismatch."
     }
+    if ([string]$contextCeilingClasses[$package] -cne [string]$spec.CeilingClass) {
+        Fail "$package context ceiling class mismatch."
+    }
 
     $sources = @(Array $context 'source_files')
     $fragments = @(Array $context 'registry_fragments')
     $handoffs = @(Array $context 'accepted_handoff_slots')
     if ((Number $context 'source_file_count') -ne $sources.Count -or (Number $context 'registry_fragment_count') -ne $fragments.Count -or (Number $context 'accepted_handoff_slot_count') -ne $handoffs.Count) {
         Fail "$package context counts mismatch."
+    }
+
+    $sourceCeiling = if ($exceptionPackages -contains $package) { $p00SourceCeiling } else { $ordinarySourceCeiling }
+    if ($sources.Count -gt $sourceCeiling) {
+        Fail "$package context source count $($sources.Count) exceeds ceiling $sourceCeiling."
+    }
+    if ($fragments.Count -gt $fragmentCeiling) {
+        Fail "$package context fragment count $($fragments.Count) exceeds ceiling $fragmentCeiling."
+    }
+    if ($handoffs.Count -gt $handoffCeiling) {
+        Fail "$package context handoff slot count $($handoffs.Count) exceeds ceiling $handoffCeiling."
+    }
+    if ($package -eq 'search-contracts' -and -not (Same-Sequence $sources $expectedSearchContractsSources)) {
+        Fail 'search-contracts P00 exception must equal the exact manifest-closed contract pack and fixed integration sources in canonical order.'
     }
 
     foreach ($required in @(
@@ -303,6 +377,9 @@ $result = [ordered]@{
     ok = ($errors.Count -eq 0)
     ticket_drafts = 3
     context_drafts = 3
+    ordinary_source_ceiling = $ordinarySourceCeiling
+    p00_exception_source_ceiling = $p00SourceCeiling
+    p00_exception_packages = $exceptionPackages
     issued_tickets = 0
     active_leases = 0
     workflows = $workflowFiles.Count
@@ -314,7 +391,7 @@ if ($Json) {
     $result | ConvertTo-Json -Depth 6
 }
 else {
-    Write-Host "P00 draft control validation: drafts=3 contexts=3 issued=0 leases=0 workflows=$($result.workflows) launch=P00/W0"
+    Write-Host "P00 draft control validation: drafts=3 contexts=3 ordinary=$ordinarySourceCeiling exception=$p00SourceCeiling issued=0 leases=0 workflows=$($result.workflows) launch=P00/W0"
     foreach ($error in $errors) {
         Write-Host "ERROR: $error" -ForegroundColor Red
     }
