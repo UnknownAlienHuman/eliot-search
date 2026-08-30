@@ -5,6 +5,8 @@
 - [AUTHORITY_MAP.md](AUTHORITY_MAP.md) — conflict precedence and source-of-truth ownership.
 - [SWARM_LAUNCH_INDEX.md](SWARM_LAUNCH_INDEX.md) — deterministic ticket construction, authorization
   preflight, write enforcement and review.
+- [P00_DRAFT_CONTROL_PLANE.md](P00_DRAFT_CONTROL_PLANE.md) — non-claimable P00 ticket/context drafts,
+  issuance-time materialization, writer leases, submissions and independent reviews.
 - [SWARM_STAGE_READSETS.md](SWARM_STAGE_READSETS.md) — exact current-stage context assembly,
   replacement semantics, ceilings and progressive-package examples.
 - [STAGE_READSET_AUDIT.md](STAGE_READSET_AUDIT.md) — current structural closure and non-claims.
@@ -16,13 +18,32 @@
   sets and gate/completion-receipt order.
 - [`../../swarm/stage-readsets.toml`](../../swarm/stage-readsets.toml) — replacement contexts for all 23
   package assignments reused after their earliest wave.
+- [`../../swarm/orchestration.toml`](../../swarm/orchestration.toml) — issued-ticket, materialized-context,
+  lease, submission, review, acceptance and wave-advance state machine.
 - [`../../swarm/launch-state.toml`](../../swarm/launch-state.toml) — sole current implementation
   authorization.
+
+## P00 draft and issued-record layouts
+
+```text
+swarm/ticket-drafts/p00/<package>.toml       non-claimable draft
+swarm/context-drafts/p00/<package>.toml      unmaterialized context source list
+
+swarm/tickets/<package>/<ticket-id>.toml     issued immutable ticket
+swarm/context-manifests/<package>/<digest>   exact materialized writer context
+swarm/leases/<package>/<lease-id>.toml       writer lease
+swarm/submissions/<package>/<id>.toml        package submission
+swarm/reviews/<package>/<id>.toml            independent review
+swarm/handoffs/<package>/<api-digest>.toml   accepted package/API handoff
+```
+
+The current repository contains three P00 drafts and zero issued tickets, contexts, leases, submissions,
+accepted reviews or package handoffs. A draft never authorizes an agent.
 
 ## Stage packets
 
 - [`../contracts/p00/README.md`](../contracts/p00/README.md) — exact W0 contract implementation pack.
-- [P00_BOOTSTRAP.md](P00_BOOTSTRAP.md) — contracts → domain/ports → W0 receipt sequence.
+- [P00_BOOTSTRAP.md](P00_BOOTSTRAP.md) — draft issuance → contracts → domain/ports → W0 receipt sequence.
 - [W1_IMPLEMENTATION_PACKET.md](W1_IMPLEMENTATION_PACKET.md) — configuration, root ownership, OS
   secrets, bounded control journal, provider protocol, daemon and CLI shell.
 - [W2_IMPLEMENTATION_PACKET.md](W2_IMPLEMENTATION_PACKET.md) — source admission/identity/registry,
@@ -69,7 +90,7 @@
 - [PRIMITIVE_OWNERSHIP.md](PRIMITIVE_OWNERSHIP.md) — schema, meaning, trait and mutable-state ownership.
 - [IMPLEMENTATION_WAVES.md](IMPLEMENTATION_WAVES.md) — future dependency-safe sequence.
 
-Part I Architecture 8.4 remains normative. Human docs, function/stage/read-set packets and qualification
-designs never override exact machine registries, accepted API/evidence digests or launch state.
-`UNSELECTED`, `UNQUALIFIED`, `UNAVAILABLE`, `DISABLED`, `BLOCKED` and `NOT_ACCEPTED` are explicit
-non-success states.
+Part I Architecture 8.4 remains normative. Human docs, drafts, function/stage/read-set packets and
+qualification designs never override exact machine registries, issued immutable tickets, accepted
+API/evidence digests or launch state. `DRAFT_ONLY_NOT_ISSUED`, `UNMATERIALIZED_DRAFT`, `UNSELECTED`,
+`UNQUALIFIED`, `UNAVAILABLE`, `DISABLED`, `BLOCKED` and `NOT_ACCEPTED` are explicit non-success states.
