@@ -20,11 +20,13 @@ swarm/leases/<package>/<lease_id>.toml
 ## Ticket and context
 
 - `ticket.ref`
-- `ticket.sha256`
+- `ticket.exact_record_file_sha256`
 - `context.manifest_ref`
 - `context.artifact_sha256`
 
-All refs and digests are exact and must match the assignment ticket.
+The ticket digest is the SHA-256 of the complete committed assignment-ticket record and equals the exact
+digest inside the immutable ref. It is not `signature.record_sha256`. All refs and digests must match the
+assignment ticket.
 
 ## Actors
 
