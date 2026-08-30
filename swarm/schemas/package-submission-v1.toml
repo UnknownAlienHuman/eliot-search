@@ -178,7 +178,7 @@ path = "public_handoff_candidate.configuration_digest"
 kind = "OptionalSha256Digest"
 required = true
 canonical_order = 23
-rules = ["null_only_when_package_owns_no_configuration"]
+rules = ["ABSENT_only_when_package_owns_no_configuration"]
 
 [[field]]
 path = "public_handoff_candidate.fixture_digest_set"
