@@ -1,0 +1,67 @@
+name: Ticket issuance dry-run plan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ticket-issuance-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Qualify fail-closed advisory planner
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Compile planner and qualification suite
+        shell: pwsh
+        run: |
+          python -m py_compile `
+            tools/plan-ticket-issuance.py `
+            qualification/ticket-issuance/test_plan_ticket_issuance.py
+
+      - name: Run planner conformance tests
+        shell: pwsh
+        run: python qualification/ticket-issuance/test_plan_ticket_issuance.py
+
+      - name: Produce actual non-authoritative P00 plan
+        shell: pwsh
+        run: |
+          python tools/plan-ticket-issuance.py `
+            --package search-contracts `
+            --output ticket-issuance-plan.json
+
+          $plan = Get-Content ticket-issuance-plan.json -Raw | ConvertFrom-Json
+          if ($plan.decision -ne 'BLOCKED_MISSING_SELECTION') {
+            throw "Unexpected decision: $($plan.decision)"
+          }
+          if ($plan.mutations.Count -ne 0) {
+            throw 'Planner emitted a mutation.'
+          }
+          foreach ($field in @(
+            'authorizes_ticket_issuance',
+            'creates_writer_lease',
+            'authorizes_implementation',
+            'publishes_package_handoff',
+            'advances_launch_state'
+          )) {
+            if ($plan.$field -ne $false) {
+              throw "Planner enabled authority field: $field"
+            }
+          }
+
+      - name: Revalidate P00 and control-plane schemas
+        shell: pwsh
+        run: |
+          & ./tools/validate-swarm.ps1 -Json
+          & ./tools/validate-p00-ticket-drafts.ps1 -Json
+          & ./tools/validate-ticket-issuance-contracts.ps1 -Json
