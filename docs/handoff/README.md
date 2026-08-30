@@ -1,12 +1,21 @@
 # Implementation handoff
 
-## Machine authorities
+## Machine authorities and launch procedure
 
 - [AUTHORITY_MAP.md](AUTHORITY_MAP.md) — conflict precedence and source-of-truth ownership.
-- [`../../swarm/crates.toml`](../../swarm/crates.toml) — exact package path, dependency, wave,
+- [SWARM_LAUNCH_INDEX.md](SWARM_LAUNCH_INDEX.md) — deterministic ticket construction, authorization
+  preflight, write enforcement and review.
+- [SWARM_STAGE_READSETS.md](SWARM_STAGE_READSETS.md) — exact current-stage context assembly,
+  replacement semantics, ceilings and progressive-package examples.
+- [STAGE_READSET_AUDIT.md](STAGE_READSET_AUDIT.md) — current structural closure and non-claims.
+- [`../../swarm/crates.toml`](../../swarm/crates.toml) — exact package path, dependency, earliest wave,
   assignment, configuration and qualification registry.
 - [`../../swarm/function-packets.toml`](../../swarm/function-packets.toml) — exact primary function/
   contract packet and package-local write scope for all 45 packages.
+- [`../../swarm/stages.toml`](../../swarm/stages.toml) — exact W0–W10 package composition, shared read
+  sets and gate/completion-receipt order.
+- [`../../swarm/stage-readsets.toml`](../../swarm/stage-readsets.toml) — replacement contexts for all 23
+  package assignments reused after their earliest wave.
 - [`../../swarm/launch-state.toml`](../../swarm/launch-state.toml) — sole current implementation
   authorization.
 
@@ -38,14 +47,14 @@
 - [`../../qualification/lifecycle/README.md`](../../qualification/lifecycle/README.md) — unexecuted P13
   lifecycle evidence contract.
 - [W8_IMPLEMENTATION_PACKET.md](W8_IMPLEMENTATION_PACKET.md) — generic client edge, standalone CLI and
-  optional leaf profiles.
+  optional leaf profiles; the reused CLI delta is `bins/eliot-search/W8_CLIENT.md`.
 - [`../../qualification/client-edge/README.md`](../../qualification/client-edge/README.md) — unexecuted
   P14 client-edge probe contract.
 - [W9_IMPLEMENTATION_PACKET.md](W9_IMPLEMENTATION_PACKET.md) — Product Pulse/Windows evaluation.
 - [`../../qualification/product-pulse/README.md`](../../qualification/product-pulse/README.md) —
   unexecuted P15 corpus/metric/probe/evidence contract.
 - [W10_IMPLEMENTATION_PACKET.md](W10_IMPLEMENTATION_PACKET.md) — optional model/document/scale ownership,
-  gate, migration and removal.
+  candidate-specific `search-eval` evidence, gate, migration and removal.
 - [`../../qualification/optional-depth/README.md`](../../qualification/optional-depth/README.md) —
   disabled P16–P18 provider/topology templates and G6 probes.
 
@@ -60,7 +69,7 @@
 - [PRIMITIVE_OWNERSHIP.md](PRIMITIVE_OWNERSHIP.md) — schema, meaning, trait and mutable-state ownership.
 - [IMPLEMENTATION_WAVES.md](IMPLEMENTATION_WAVES.md) — future dependency-safe sequence.
 
-Part I Architecture 8.4 remains normative. Human docs, function packets and qualification designs never
-override exact dependency/function registries, accepted API digests, executed evidence or launch state.
+Part I Architecture 8.4 remains normative. Human docs, function/stage/read-set packets and qualification
+designs never override exact machine registries, accepted API/evidence digests or launch state.
 `UNSELECTED`, `UNQUALIFIED`, `UNAVAILABLE`, `DISABLED`, `BLOCKED` and `NOT_ACCEPTED` are explicit
 non-success states.

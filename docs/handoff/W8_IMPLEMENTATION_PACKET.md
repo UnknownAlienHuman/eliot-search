@@ -14,12 +14,13 @@ authorization, evidence admission, memory, synthesis, task completion or finish 
 |---|---|---|
 | `search-provider-protocol` | pairing, binding, connection/request lifecycle, binding-filtered capability projection | `crates/search-provider-protocol/W8_HARDENING.md` |
 | `eliot-searchd` | generic-edge composition, authoritative capability inputs, standalone grant minting, optional-profile activation | `bins/eliot-searchd/W8_INTEGRATION.md` |
-| `eliot-search` | thin standalone client, truthful rendering and exit status | `bins/eliot-search/FUNCTIONS.md` |
+| `eliot-search` | thin standalone client, pairing/session/request mapping, truthful rendering and exit status | `bins/eliot-search/W8_CLIENT.md` over accepted base `FUNCTIONS.md` |
 | `search-eliot-adapter` | optional ELIOT scope/view/result mapping with authority guard | `crates/search-eliot-adapter/FUNCTIONS.md` |
 | `search-research-export-adapter` | optional retained-materialization export as `eliotr.normalized.v1` | `crates/search-research-export-adapter/FUNCTIONS.md` |
 
-Exact per-writer read sets are in `swarm/w8-client-edge.toml`. The cross-package authority and lifecycle
-contract is `docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md`.
+Exact per-writer machine packets are in `swarm/w8-client-edge.toml`. Reused-package replacement contexts
+are in `swarm/stage-readsets.toml`. The cross-package authority and lifecycle contract is
+`docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md`.
 
 ## Implementation order
 
@@ -29,14 +30,34 @@ accepted W0-W7 handoffs and G3/W7 receipts
 search-provider-protocol W8 hardening
     ↓
 eliot-searchd generic-edge composition
-    ├─ eliot-search standalone CLI
+    ├─ eliot-search standalone CLI W8 reentry
     ├─ optional search-eliot-adapter
     └─ optional search-research-export-adapter
 ```
 
 The protocol package may be implemented/reviewed before daemon integration. The CLI starts only from an
-accepted protocol handoff. Optional leaf adapters start only after the generic edge is accepted and their
-feature/config/profile/binding activation closure is complete.
+accepted W1 CLI handoff plus the accepted W8 protocol handoff. Its W8 writer reads the base CLI public
+contract, `W8_CLIENT.md`, the current W8 shared packet and immutable handoffs—not the W1 implementation
+packet or another package's source. Optional leaf adapters start only after the generic edge is accepted
+and their feature/config/profile/binding activation closure is complete.
+
+## Standalone CLI boundary
+
+The W8 client delta owns only:
+
+- closed command/recipe/version/scope/view/budget/deadline parsing;
+- exact local endpoint identity and no scan/attach-to-any-responder behavior;
+- guarded pairing proof input and opaque binding/session state;
+- binding-filtered capability consumption as planning data, never permission;
+- generic request dispatch, monotonic progress and exactly one terminal result;
+- opaque handle expansion through the server;
+- truthful rendering and distinct partial/degraded/ambiguous/unauthorized/unavailable/cancelled/expired
+  exit states;
+- bounded close/disconnect cleanup.
+
+It cannot open redb, CAS, Qdrant, source inventory or secret store; mint a grant; decode handle tokens;
+submit raw Qdrant filters/point IDs/cursors; widen scope; switch provider/recipe silently; or convert a
+partial result into complete success.
 
 ## Generic-edge acceptance
 
@@ -102,13 +123,17 @@ mapping is `qualification/client-edge/gate-map.toml` and preserves the existing 
 ## Hard stop conditions
 
 - unauthenticated descriptor/request/expansion;
+- pairing proof in argv, history, environment, logs, errors or receipts;
+- endpoint scan or trust inferred from any responding process/ACL/local-user state;
 - pairing replay or revocation acknowledgement before dependent invalidation;
 - hidden membership/name/count/reason leakage;
 - requested scope or adapter mapping widening authority;
 - result containing client disposition/completion/reusable authorization;
 - client/adapter direct redb/CAS/Qdrant/secret-store path;
+- raw Qdrant filter, point ID, cursor or handle-token decoding in the CLI;
 - handle expansion without final live recheck;
 - silent continuation refresh against newer state;
+- partial/degraded/ambiguous result rendered as ordinary complete success;
 - optional profile active without complete activation closure;
 - ELIOT reverse authority/credential/write path;
 - ordinary Research export transferring ownership or exporting unsaved/purged content;

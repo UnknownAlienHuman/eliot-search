@@ -87,6 +87,19 @@ package = "search-index-reclaimer"
 contract = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
 owns = ["old_route_exact_reclaim_after_drain"]
 
+[[owner]]
+role = "evaluation-package"
+package = "search-eval"
+functions = "crates/search-eval/FUNCTIONS.md"
+contract = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+owns = [
+  "candidate_specific_incremental_campaign",
+  "paired_baseline_candidate_metrics",
+  "optional_noninterference_and_fault_audit",
+  "removal_and_p15_regression_report",
+  "g6_evidence_candidate_without_self_acceptance",
+]
+
 [global_invariants]
 accepted_p15_required = true
 dedicated_adr_per_candidate = true
