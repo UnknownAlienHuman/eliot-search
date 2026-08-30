@@ -26,10 +26,10 @@ from the embedded signed-payload digest.
 
 - `draft.path`
 - `draft.git_blob_id`
-- `draft.exact_sha256`
+- `draft.exact_file_sha256`
 
-The draft path and Git blob must exist at the immutable base commit. `draft.exact_sha256` hashes the exact
-committed draft bytes.
+The draft path and Git blob must exist at the immutable base commit. `draft.exact_file_sha256` hashes the
+exact committed draft bytes and is distinct from every normalized source/materialized artifact digest.
 
 ## Writer-visible artifact
 
@@ -82,8 +82,11 @@ sources and undeclared paths fail closed.
 - `signature.materializer_identity`
 - `signature.reviewer_identity`
 - `signature.record_sha256`
+- `signature.materializer_signature_ref`
+- `signature.reviewer_signature_ref`
 
-Materializer and reviewer are different actors. `signature.record_sha256` is the signed-payload digest;
+Materializer and reviewer are different actors and each signature ref binds that actor to the same
+signed-payload digest. `signature.record_sha256` is the signed-payload digest;
 `context_record_sha256` is the external complete-file digest used in the path.
 
 Any changed source byte, selector, accepted handoff, ordering or base commit creates a new manifest and
