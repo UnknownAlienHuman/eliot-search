@@ -10,6 +10,7 @@ source_content_allowed = false
 secret_content_allowed = false
 old_record_deletion_allowed = false
 replacement_record_required = true
+reason_type = "SupersessionReasonCode"
 
 canonical_field_order = [
   "schema_version", "record_kind", "status", "identity", "old_record",
@@ -88,10 +89,10 @@ rules = ["must_be_true"]
 
 [[field]]
 path = "reason.code"
-kind = "ClosedReasonCode"
+kind = "SupersessionReasonCode"
 required = true
 canonical_order = 11
-rules = ["non_empty", "content_minimized"]
+rules = ["closed_supersession_reason", "content_minimized"]
 
 [[field]]
 path = "reason.details_digest"
