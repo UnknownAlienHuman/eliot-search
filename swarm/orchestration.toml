@@ -1,4 +1,4 @@
-schema_version = 2
+schema_version = 3
 project = "eliot-search"
 package_registry = "swarm/crates.toml"
 function_registry = "swarm/function-packets.toml"
@@ -6,6 +6,8 @@ stage_registry = "swarm/stages.toml"
 stage_readset_registry = "swarm/stage-readsets.toml"
 launch_state = "swarm/launch-state.toml"
 gate_registry = "swarm/gates.toml"
+control_plane_schema_registry = "swarm/control-plane-schema.toml"
+ticket_issuance_operation_contract = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
 assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
 writer_lease_template = "swarm/WRITER_LEASE_TEMPLATE.md"
 context_manifest_template = "swarm/CONTEXT_MANIFEST_TEMPLATE.md"
@@ -19,9 +21,11 @@ context_draft_manifest = "swarm/context-drafts/manifest.toml"
 issued_ticket_layout = "swarm/tickets/<package>/<ticket-id>.toml"
 materialized_context_layout = "swarm/context-manifests/<package>/<context-digest>.toml"
 writer_lease_layout = "swarm/leases/<package>/<lease-id>.toml"
+lease_event_layout = "swarm/leases/<package>/events/<event-id>.toml"
 submission_layout = "swarm/submissions/<package>/<submission-id>.toml"
 review_layout = "swarm/reviews/<package>/<review-id>.toml"
 accepted_handoff_layout = "swarm/handoffs/<package>/<api_digest>.toml"
+supersession_layout = "swarm/supersessions/<record-kind>/<receipt-id>.toml"
 
 states = [
   "BLOCKED",
@@ -61,6 +65,20 @@ materialized_context_artifact_count = 1
 architecture_master_in_ordinary_context = false
 dependency_implementation_source_in_context = false
 
+[record_validation]
+schema_registry_required = true
+record_kind_must_match_schema = true
+unknown_load_bearing_fields_rejected = true
+canonical_field_order_required = true
+signed_payload_sha256_embedded = true
+exact_record_file_sha256_stored_externally = true
+self_referential_complete_file_digest_allowed = false
+exact_git_blob_and_path_readback_required = true
+operation_id_required_for_mutation = true
+same_operation_different_input = "CONTROL_OPERATION_CONFLICT"
+unknown_outcome_requires_exact_readback = true
+append_only_supersession_required = true
+
 [ready]
 requires_launch_authorization = true
 requires_all_direct_dependency_handoffs = true
@@ -68,6 +86,7 @@ requires_no_active_lease = true
 requires_optional_prerequisites_when_applicable = true
 requires_issued_ticket_not_draft = true
 requires_materialized_context = true
+requires_schema_valid_ticket_and_context = true
 
 [lease]
 required_fields = [
@@ -93,6 +112,16 @@ required_fields = [
 automatic_expiry = false
 revocation_requires_integration_receipt = true
 second_active_lease = "deny"
+acknowledgement_requires_append_only_lease_event = true
+
+[submission]
+requires_acknowledged_active_lease = true
+requires_complete_sorted_unique_diff = true
+requires_all_paths_inside_write_scope = true
+requires_exact_api_manifest = true
+requires_raw_command_outcomes = true
+requires_unavailable_checks_visible = true
+requires_line_budget_report = true
 
 [review]
 requires_complete_changed_file_list = true
@@ -104,6 +133,7 @@ requires_context_and_lease_digest_check = true
 requires_ownership_review = true
 requires_line_budget_check = true
 reviewer_must_be_independent_from_writer = true
+acceptance_verdict = "ACCEPT_SUBMISSION_FOR_INTEGRATION"
 
 [acceptance]
 required_fields = [
@@ -124,6 +154,7 @@ required_fields = [
 ]
 mutable_after_acceptance = false
 correction_mode = "new_receipt_supersedes_old"
+package_handoff_does_not_accept_gate_or_wave = true
 
 [wave_advance]
 authority = "integration-owner"
@@ -136,27 +167,27 @@ launch_state_and_receipt_same_reviewed_change = true
 [[transition]]
 from = "BLOCKED"
 to = "READY"
-condition = "launch authorized and dependencies accepted"
+condition = "launch authorized, dependencies accepted, issued schema-valid ticket and materialized context"
 
 [[transition]]
 from = "READY"
 to = "LEASED"
-condition = "new issued immutable ticket, materialized context and no competing lease"
+condition = "schema-valid writer lease, no competing lease and exact ticket/context readback"
 
 [[transition]]
 from = "LEASED"
 to = "IMPLEMENTING"
-condition = "writer acknowledges exact ticket, lease, base and context artifact"
+condition = "append-only ACKNOWLEDGED lease event binds exact ticket, lease, base and context artifact"
 
 [[transition]]
 from = "IMPLEMENTING"
 to = "REVIEW"
-condition = "complete package submission and API handoff candidate recorded"
+condition = "schema-valid complete package submission and API handoff candidate recorded"
 
 [[transition]]
 from = "REVIEW"
 to = "ACCEPTED"
-condition = "independent package and integration review accepted"
+condition = "independent review accepted and integration-owner package handoff published"
 
 [[transition]]
 from = "REVIEW"
@@ -166,9 +197,9 @@ condition = "review receipt contains exact rejection reasons"
 [[transition]]
 from = "REJECTED"
 to = "READY"
-condition = "new ticket revision and materialized context issued by integration owner"
+condition = "new ticket revision, context and lease issued by integration owner"
 
 [[transition]]
 from = "BLOCKED|READY|LEASED|IMPLEMENTING|REVIEW|REJECTED"
 to = "SUPERSEDED"
-condition = "integration-owner supersession receipt"
+condition = "append-only integration-owner supersession receipt references replacement record"
