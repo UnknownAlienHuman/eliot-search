@@ -1,0 +1,74 @@
+schema_version = 1
+record_kind = "writer_context_draft"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+authorizes_implementation = false
+package = "search-ports"
+stage = "W0"
+phase = "P00"
+wave = 0
+base_commit = "UNSELECTED"
+materialized_context_ref = "UNAVAILABLE"
+materialized_context_sha256 = "UNAVAILABLE"
+materialization_mode = "canonical_concatenated_bundle"
+writer_visible_artifact_count = 1
+source_file_count = 14
+registry_fragment_count = 5
+accepted_handoff_slot_count = 1
+
+[canonicalization]
+encoding = "UTF-8"
+line_endings = "LF"
+path_header_format = "--- repository-path: <path> ---"
+registry_header_format = "--- registry-selector: <path>::<selector> ---"
+preserve_declared_order = true
+record_source_sha256 = true
+record_fragment_sha256 = true
+
+source_files = [
+  "AGENTS.md",
+  "crates/search-ports/AGENTS.md",
+  "docs/handoff/AUTHORITY_MAP.md",
+  "swarm/ASSIGNMENT_PROTOCOL.md",
+  "swarm/assignments/search-ports.md",
+  "docs/handoff/P00_BOOTSTRAP.md",
+  "docs/contracts/p00/manifest.toml",
+  "docs/contracts/p00/CANONICAL_TYPES.md",
+  "docs/contracts/p00/TYPE_REGISTRY.md",
+  "docs/contracts/p00/SUPPORT_SCHEMAS.md",
+  "docs/contracts/p00/CONTRACT_CHALLENGES.md",
+  "docs/contracts/p00/PORT_OPERATIONS.md",
+  "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md",
+  "docs/contracts/p00/REASON_CODES.md",
+]
+
+registry_fragments = [
+  "swarm/crates.toml::package[name=search-ports]",
+  "swarm/function-packets.toml::foundation[package=search-ports]",
+  "swarm/stages.toml::stage[id=W0]",
+  "swarm/launch-state.toml::conditional_packages[search-ports]",
+  "swarm/launch-state.toml::conditional_activation.search-ports",
+]
+
+accepted_handoff_slots = [
+  "search-contracts::accepted_package_and_api_handoff",
+]
+
+forbidden_paths = [
+  "docs/architecture/**",
+  "crates/search-contracts/src/**",
+  "crates/*/src/** except crates/search-ports/src/**",
+  "bins/**",
+  "swarm/tickets/**",
+  "swarm/leases/**",
+  "swarm/submissions/**",
+  "swarm/reviews/**",
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+]
+
+required_unavailable_checks = [
+  "accepted_search_contracts_handoff",
+  "real_stable_windows_toolchain",
+  "generated_Cargo_lock",
+  "public_port_conformance_integration",
+]

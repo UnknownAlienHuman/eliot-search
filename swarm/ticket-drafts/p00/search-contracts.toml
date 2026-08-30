@@ -1,0 +1,89 @@
+schema_version = 1
+record_kind = "assignment_ticket_draft"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+authorizes_implementation = false
+creates_lease = false
+may_be_writer_acknowledged = false
+package = "search-contracts"
+stage = "W0"
+phase = "P00"
+wave = 0
+launch_class = "AUTHORIZED"
+launch_precondition = "CURRENTLY_PRESENT"
+issuance_status = "BLOCKED_ON_IDENTITY_DIGEST_AND_CONTEXT_FREEZE"
+
+[unresolved_identity]
+ticket_id = "UNASSIGNED"
+lease_id = "UNASSIGNED"
+writer = "UNASSIGNED"
+reviewer = "UNASSIGNED"
+issued_at = ""
+base_commit = "UNSELECTED"
+branch_or_worktree = "UNSELECTED"
+ticket_canonical_digest = "UNAVAILABLE"
+integration_signature_ref = ""
+
+[repository_fence]
+repository = "UnknownAlienHuman/eliot-search"
+write_scope = "crates/search-contracts/**"
+feature_profile = "P00_FOUNDATION"
+package_registry_path = "swarm/crates.toml"
+function_registry_path = "swarm/function-packets.toml"
+stage_registry_path = "swarm/stages.toml"
+launch_state_path = "swarm/launch-state.toml"
+registry_digests = "UNRESOLVED_AT_ISSUANCE"
+
+[context]
+context_draft = "swarm/context-drafts/p00/search-contracts.toml"
+context_manifest_ref = "UNAVAILABLE"
+context_artifact_ref = "UNAVAILABLE"
+context_artifact_sha256 = "UNAVAILABLE"
+writer_visible_artifact_count = 1
+architecture_access = "exception-only"
+
+[dependencies]
+required_handoff_packages = []
+accepted_handoff_refs = []
+status = "NOT_REQUIRED"
+
+[limits]
+soft_src_lines = 8000
+split_review_total_lines = 8500
+hard_total_lines = 10000
+one_active_writer = true
+
+required_outputs = [
+  "package_implementation_inside_write_scope",
+  "package_local_contract_property_negative_tests",
+  "public_API_schema_digest",
+  "package_handoff_candidate",
+  "raw_command_outcome_refs",
+  "residual_risks_and_contract_changes",
+]
+
+required_evidence = [
+  "recipe_set_exact_test",
+  "recipe_result_union_exact_test",
+  "emitted_candidate_always_validated_test",
+  "validation_gap_contains_no_evidence_test",
+  "subject_ambiguity_excludes_resolved_evidence_test",
+  "wire_source_handle_contains_no_source_identity_test",
+  "wire_continuation_contains_no_binding_or_plan_test",
+  "opaque_handle_possession_never_authorizes_test",
+  "query_snapshot_fence_exact_fields_test",
+  "query_snapshot_fingerprint_golden_test",
+  "membership_array_schema_rejection_test",
+  "unknown_load_bearing_field_fails_closed",
+  "canonical_json_cbor_roundtrip_fixtures",
+  "public_reason_registry_exact_test",
+  "public_vendor_type_guard",
+]
+
+issuance_requirements = [
+  "select_exact_base_commit",
+  "assign_distinct_writer_and_reviewer",
+  "materialize_and_verify_context_bundle",
+  "compute_all_registry_and_instruction_SHA256_digests",
+  "issue_ticket_and_writer_lease_as_new_records",
+]

@@ -1,0 +1,79 @@
+schema_version = 1
+record_kind = "writer_context_draft"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+authorizes_implementation = false
+package = "search-contracts"
+stage = "W0"
+phase = "P00"
+wave = 0
+base_commit = "UNSELECTED"
+materialized_context_ref = "UNAVAILABLE"
+materialized_context_sha256 = "UNAVAILABLE"
+materialization_mode = "canonical_concatenated_bundle"
+writer_visible_artifact_count = 1
+source_file_count = 19
+registry_fragment_count = 4
+accepted_handoff_slot_count = 0
+
+[canonicalization]
+encoding = "UTF-8"
+line_endings = "LF"
+path_header_format = "--- repository-path: <path> ---"
+registry_header_format = "--- registry-selector: <path>::<selector> ---"
+preserve_declared_order = true
+record_source_sha256 = true
+record_fragment_sha256 = true
+
+source_files = [
+  "AGENTS.md",
+  "crates/search-contracts/AGENTS.md",
+  "docs/handoff/AUTHORITY_MAP.md",
+  "swarm/ASSIGNMENT_PROTOCOL.md",
+  "swarm/assignments/search-contracts.md",
+  "docs/handoff/P00_BOOTSTRAP.md",
+  "docs/contracts/p00/README.md",
+  "docs/contracts/p00/manifest.toml",
+  "docs/contracts/p00/CANONICAL_TYPES.md",
+  "docs/contracts/p00/TYPE_REGISTRY.md",
+  "docs/contracts/p00/SUPPORT_SCHEMAS.md",
+  "docs/contracts/p00/CONTRACT_CHALLENGES.md",
+  "docs/contracts/p00/SOURCE_GRAPH.md",
+  "docs/contracts/p00/RECIPES.md",
+  "docs/contracts/p00/QUERY_AND_RESULTS.md",
+  "docs/contracts/p00/RECIPE_RESULTS.md",
+  "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md",
+  "docs/contracts/p00/REASON_CODES.md",
+  "docs/contracts/p00/PORT_OPERATIONS.md",
+]
+
+registry_fragments = [
+  "swarm/crates.toml::package[name=search-contracts]",
+  "swarm/function-packets.toml::foundation[package=search-contracts]",
+  "swarm/stages.toml::stage[id=W0]",
+  "swarm/launch-state.toml::authorized_packages[search-contracts]",
+]
+
+accepted_handoff_slots = []
+
+forbidden_paths = [
+  "docs/architecture/**",
+  "crates/*/src/** except crates/search-contracts/src/**",
+  "bins/**",
+  "swarm/tickets/**",
+  "swarm/leases/**",
+  "swarm/submissions/**",
+  "swarm/reviews/**",
+  "swarm/handoffs/**",
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W2_IMPLEMENTATION_PACKET.md",
+  "docs/handoff/W3_IMPLEMENTATION_PACKET.md",
+]
+
+required_unavailable_checks = [
+  "real_stable_windows_toolchain",
+  "generated_Cargo_lock",
+  "cargo_fmt_workspace",
+  "cargo_check_workspace",
+  "cargo_deny_policy",
+]

@@ -1,0 +1,85 @@
+schema_version = 1
+record_kind = "assignment_ticket_draft"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+authorizes_implementation = false
+creates_lease = false
+may_be_writer_acknowledged = false
+package = "search-ports"
+stage = "W0"
+phase = "P00"
+wave = 0
+launch_class = "CONDITIONAL"
+launch_precondition = "ACCEPTED_SEARCH_CONTRACTS_HANDOFF_REQUIRED"
+issuance_status = "BLOCKED_ON_CONTRACTS_HANDOFF_IDENTITY_DIGEST_AND_CONTEXT_FREEZE"
+
+[unresolved_identity]
+ticket_id = "UNASSIGNED"
+lease_id = "UNASSIGNED"
+writer = "UNASSIGNED"
+reviewer = "UNASSIGNED"
+issued_at = ""
+base_commit = "UNSELECTED"
+branch_or_worktree = "UNSELECTED"
+ticket_canonical_digest = "UNAVAILABLE"
+integration_signature_ref = ""
+
+[repository_fence]
+repository = "UnknownAlienHuman/eliot-search"
+write_scope = "crates/search-ports/**"
+feature_profile = "P00_FOUNDATION"
+package_registry_path = "swarm/crates.toml"
+function_registry_path = "swarm/function-packets.toml"
+stage_registry_path = "swarm/stages.toml"
+launch_state_path = "swarm/launch-state.toml"
+registry_digests = "UNRESOLVED_AT_ISSUANCE"
+
+[context]
+context_draft = "swarm/context-drafts/p00/search-ports.toml"
+context_manifest_ref = "UNAVAILABLE"
+context_artifact_ref = "UNAVAILABLE"
+context_artifact_sha256 = "UNAVAILABLE"
+writer_visible_artifact_count = 1
+architecture_access = "exception-only"
+
+[dependencies]
+required_handoff_packages = ["search-contracts"]
+accepted_handoff_refs = []
+required_contract_commit = "UNSELECTED"
+required_contract_api_schema_digest = "UNAVAILABLE"
+status = "UNAVAILABLE"
+
+[limits]
+soft_src_lines = 5500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+one_active_writer = true
+
+required_outputs = [
+  "vendor_neutral_port_traits_inside_write_scope",
+  "bounded_support_types_and_conformance_fakes",
+  "public_API_method_digest",
+  "package_handoff_candidate",
+  "raw_command_outcome_refs",
+]
+
+required_evidence = [
+  "public_vendor_type_guard",
+  "complete_method_semantics",
+  "timeout_cancellation_partial_stale_generation_conformance",
+  "read_operation_no_durable_idempotency_row",
+  "mutation_requires_operation_identity",
+  "bounded_page_stream_support",
+  "typed_error_mapping",
+  "dependency_guard_search_contracts_only",
+]
+
+issuance_requirements = [
+  "accept_search_contracts_package_handoff",
+  "bind_exact_contracts_commit_and_API_schema_digest",
+  "select_exact_base_commit",
+  "assign_distinct_writer_and_reviewer",
+  "materialize_context_with_accepted_contracts_handoff",
+  "compute_all_registry_and_instruction_SHA256_digests",
+  "issue_ticket_and_writer_lease_as_new_records",
+]
