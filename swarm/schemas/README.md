@@ -57,7 +57,7 @@ Unknown load-bearing fields are rejected. Concrete record files use the top-leve
 order declared by their schema and UTF-8/LF exact-byte canonicalization. TOML `null`, field omission as
 optional semantics and open reason/action values are rejected.
 
-## Digest rule
+## Digest and signature rule
 
 V1 record schemas retain the field name `signature.record_sha256`. It is not a self-hash of the complete
 file. It means the signed payload SHA-256 over exact bytes before the `[signature]` table.
@@ -72,9 +72,25 @@ exact_record_file_sha256 over the complete committed file
 closed record kind
 ```
 
-These are different types and values. Full details are normative in
+Every field that repeats a consumed control-record digest uses an explicit name ending in
+`exact_record_file_sha256`, for example:
+
+```text
+ticket.exact_record_file_sha256
+submission.exact_record_file_sha256
+submission_review.review_exact_record_file_sha256
+```
+
+Generic `ticket.sha256`, `submission.sha256`, `review.sha256` and similar ambiguous record bindings are
+forbidden. Artifact, source-blob, API-schema and evidence digests retain their domain-specific names and
+must not be interpreted as control-record file identity.
+
+Every signed control record carries at least one `ImmutableSignatureRef` binding its actor to the embedded
+signed-payload digest. `context_manifest_v1` carries distinct materializer and reviewer signature refs.
+
+These values and identities are different. Full details are normative in
 `swarm/RECEIPT_CANONICALIZATION.md`. A validator rejects any implementation that attempts an embedded
-fixed-point complete-file digest.
+fixed-point complete-file digest or compares a signed-payload digest to a complete-file digest.
 
 ## Record paths
 
