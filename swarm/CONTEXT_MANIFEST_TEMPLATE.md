@@ -1,56 +1,80 @@
-# Materialized writer context manifest
+# Materialized writer-context rendering guide
 
-The integration owner creates this manifest from one non-claimable context draft at one exact base
-commit. The writer receives the resulting immutable artifact, not arbitrary repository access.
+This guide is a human review view of `swarm/schemas/context-manifest-v1.toml`. The machine schema is
+normative. The integration owner creates the immutable manifest from one non-claimable context draft at
+one exact base commit.
 
-## Identity
+Canonical record path:
 
-- Context manifest ID:
-- Package / stage / wave:
-- Base commit:
-- Source context draft path / digest:
-- Materialization mode:
-- Materialized artifact ref:
-- Materialized artifact SHA-256:
-- Writer-visible artifact count:
-- Created at:
+```text
+swarm/context-manifests/<package>/<context_record_sha256>.toml
+```
 
-## Source files
+## Identity and draft binding
 
-| Order | Repository path | Blob identity | SHA-256 | Bytes |
-|---:|---|---|---|---:|
+- `identity.context_id`
+- `identity.operation_id`
+- `identity.package`
+- `identity.stage`
+- `identity.base_commit`
+- `draft.path`
+- `draft.git_blob_id`
+- `draft.exact_file_sha256`
+
+## Writer-visible artifact
+
+- `artifact.ref`
+- `artifact.sha256`
+- `artifact.bytes`
+- `artifact.count = 1`
+- `artifact.format = ELIOT_WRITER_CONTEXT_V1`
+
+The artifact is bounded materialized content derived only from declared sources and fragments. The
+manifest contains identities and metadata, not embedded source bodies.
+
+## Source records
+
+Each `sources[]` element records:
+
+- declared order;
+- repository-relative source path;
+- exact Git blob ID;
+- exact committed SHA-256 and byte length;
+- materialization mode `UTF8_LF`;
+- normalized SHA-256 and byte length.
+
+Undecodable UTF-8, missing blobs, forbidden paths and undeclared sources fail closed.
 
 ## Registry fragments
 
-| Order | Registry path | Selector | Source SHA-256 | Fragment SHA-256 |
-|---:|---|---|---|---|
+Each `registry_fragments[]` element records:
 
-## Accepted dynamic handoffs
+- declared order;
+- registry path and closed selector;
+- source Git blob and exact source digest;
+- selector match count exactly one;
+- fragment digest and length.
 
-| Dependency/prior stage | Accepted commit | Public API/config/evidence digest | Receipt ref |
-|---|---|---|---|
+## Accepted handoffs
 
-## Canonical materialization
+Each `accepted_handoffs[]` element is an immutable accepted package handoff. Mutable branches,
+implementation source and unaccepted API sketches are invalid.
 
-- UTF-8 only; reject undecodable source.
-- Normalize line endings to LF only when the draft explicitly authorizes materialization normalization.
-- Prefix every source file and registry fragment with its exact path/selector header.
-- Preserve declared order; do not sort implicitly after draft validation.
-- Include no architecture-master text, source bodies, secrets or dependency implementation source unless
-  the exact draft explicitly and lawfully names them.
-- Any changed source byte, selector, dynamic handoff or order creates a new manifest/artifact digest.
+## Verification and signature
 
-## Verification
+- `verification.materializer`
+- `verification.independent_reviewer`
+- `verification.created_at`
+- `verification.forbidden_path_scan`
+- `verification.source_count`
+- `verification.fragment_count`
+- `verification.handoff_count`
+- `signature.record_sha256`
+- `signature.materializer_signature_ref`
+- `signature.reviewer_signature_ref`
 
-- All source files existed at the exact base commit.
-- Every registry selector matched exactly one record.
-- Static/dynamic ceilings were respected.
-- Forbidden paths/patterns were absent.
-- The materialized artifact digest was independently recomputed.
+Materializer and independent reviewer are different actors. `signature.record_sha256` is the
+signed-payload digest; `context_record_sha256` is the external complete-file digest used in the path.
 
-## Signature
-
-- Materializer:
-- Reviewer:
-- Manifest canonical digest:
-- Verification receipt:
+Any changed source byte, selector, accepted handoff, ordering or base commit creates a new manifest and
+artifact. An acknowledged context is never amended.
