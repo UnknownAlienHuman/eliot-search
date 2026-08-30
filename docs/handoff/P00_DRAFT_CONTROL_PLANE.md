@@ -110,7 +110,7 @@ independent tickets, contexts and leases bound to the same accepted contracts ha
 
 ## 4. Draft non-claims
 
-Every committed ticket draft must retain:
+Every committed schema-v2 ticket draft must retain:
 
 ```text
 status = DRAFT_ONLY_NOT_ISSUED
@@ -120,11 +120,22 @@ creates_lease = false
 base_commit = UNSELECTED
 writer = UNASSIGNED
 reviewer = UNASSIGNED
-ticket_digest = UNAVAILABLE
-context_digest = UNAVAILABLE
+ticket_signed_payload_sha256 = UNAVAILABLE
+ticket_exact_record_file_sha256 = UNAVAILABLE
 ```
 
-Every context draft remains `UNMATERIALIZED_DRAFT` with no selected base commit, manifest or artifact.
+It contains no `lease_id`. Lease identity is created only by the separate lease-issuance operation after
+exact assignment-ticket readback.
+
+Every schema-v2 context draft remains `UNMATERIALIZED_DRAFT` with:
+
+```text
+base_commit = UNSELECTED
+materialized_context_manifest_ref = UNAVAILABLE
+materialized_context_record_sha256 = UNAVAILABLE
+materialized_context_artifact_ref = UNAVAILABLE
+materialized_context_artifact_sha256 = UNAVAILABLE
+```
 
 A draft may describe launch eligibility and prerequisites, but it may not use `READY`, `LEASED`,
 `IMPLEMENTING`, `REVIEW` or `ACCEPTED` as its record state.
