@@ -15,6 +15,7 @@ swarm/tickets/<package>/<ticket_id>.toml
 - `identity.operation_id`
 - `identity.package`
 - `identity.stage`
+- `identity.wave`
 - `identity.issued_at`
 
 ## Actors
@@ -49,15 +50,11 @@ does not materialize context.
 
 ## Instructions
 
-- `instructions.assignment`
-- `instructions.root_agent_rules`
-- `instructions.family_agent_rules`
-- `instructions.package_agent_rules`
-- `instructions.assignment_protocol`
-- `instructions.port_catalog`
-- `instructions.additional[]`
+- `instructions[]`
 
-Every instruction ref is immutable and independently digest-verified.
+Every `OrderedInstructionDigest` element records declared order, repository path, Git blob ID, exact file
+SHA-256 and exact byte length. The array covers all required registry/instruction sources in the declared
+context order; local substitutions are invalid.
 
 ## Accepted dependency handoffs
 
@@ -71,20 +68,21 @@ implementation source are invalid inputs.
 
 - `fixtures[]`
 - `evidence.required_commands[]`
-- `evidence.required_results[]`
+- `evidence.required_evidence[]`
 - `evidence.unavailable_checks[]`
 
-Commands are bounded and include timeout/environment/evidence class. Unavailable checks remain explicit;
-compilation cannot substitute for missing execution evidence.
+Commands are bounded and include timeout, environment, expected exit class and evidence class.
+Unavailable checks remain explicit; compilation cannot substitute for missing execution evidence.
 
 ## Limits
 
 - `limits.soft_src_lines`
-- `limits.split_review_lines`
+- `limits.split_review_total_lines`
 - `limits.hard_total_lines`
-- `limits.max_context_files`
-- `limits.max_context_artifacts`
-- `limits.one_active_writer`
+- `limits.static_context_artifacts`
+
+The static context artifact count equals one. The line limits equal or narrow the package registry and
+never exceed the repository hard stop.
 
 ## Signature
 
