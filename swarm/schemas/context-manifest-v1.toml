@@ -76,11 +76,11 @@ canonical_order = 8
 rules = ["matches_base_commit_path"]
 
 [[field]]
-path = "draft.exact_sha256"
+path = "draft.exact_file_sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 9
-rules = ["hash_exact_blob_bytes"]
+rules = ["hash_exact_blob_bytes", "not_materialized_payload_digest"]
 
 [[field]]
 path = "artifact.ref"
@@ -94,7 +94,7 @@ path = "artifact.sha256"
 kind = "Sha256Digest"
 required = true
 canonical_order = 11
-rules = ["readback_verified"]
+rules = ["matches_artifact_ref", "readback_verified"]
 
 [[field]]
 path = "artifact.bytes"
@@ -249,3 +249,17 @@ kind = "Sha256Digest"
 required = true
 canonical_order = 33
 rules = ["signed_payload_sha256_before_signature_table", "exact_record_file_sha256_stored_externally"]
+
+[[field]]
+path = "signature.materializer_signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 34
+rules = ["materializer_identity_bound", "signed_payload_sha256_matches_record_sha256"]
+
+[[field]]
+path = "signature.reviewer_signature_ref"
+kind = "ImmutableSignatureRef"
+required = true
+canonical_order = 35
+rules = ["reviewer_identity_bound", "signed_payload_sha256_matches_record_sha256"]
