@@ -51,11 +51,14 @@ pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1 -Json
 
 Checks:
 
-- exactly three non-claimable P00 ticket drafts and three unmaterialized context drafts;
+- exactly three non-claimable schema-v2 P00 ticket drafts and three schema-v2 unmaterialized context
+  drafts;
+- ticket drafts contain no lease identity and keep signed-payload and complete-file digest slots separate;
+- context drafts keep manifest-record and writer-artifact refs/digests separate;
 - exact package/launch class/write scope/line budgets for contracts, domain and ports;
 - unresolved writer/reviewer/base/ticket/context identities;
 - domain and ports remain conditional on an accepted `search-contracts` handoff;
-- exact context source files, registry selectors and accepted-handoff slots;
+- exact context source files, registry selectors, accepted-handoff slots and unavailable-check order;
 - ordinary P00 contexts remain at or below sixteen source files;
 - the sole `search-contracts` exception remains at or below twenty-four sources and equals the exact
   manifest-closed P00 contract pack plus its fixed integration instructions in canonical order;
@@ -86,7 +89,13 @@ Checks:
 - generic `ClosedEnum` fields carry exact equality/allowed-set rules;
 - embedded `signature.record_sha256` retains signed-payload semantics while complete-file SHA-256
   remains external;
+- every consumed control-record digest uses an explicit `exact_record_file_sha256` field name and rejects
+  ambiguous `ticket.sha256`, `lease.sha256`, `submission.sha256`, `review.sha256` and equivalent paths;
+- every signed record carries at least one `ImmutableSignatureRef` bound to its signed-payload digest;
+- `context_manifest_v1` carries distinct materializer and reviewer signature refs;
 - orchestration lease/acceptance field sets exactly match `writer_lease_v1` and `package_handoff_v1`;
+- rejected work returns to `READY` through a new context/ticket revision and no active lease, rather than
+  bypassing the separate `READY → LEASED` transition;
 - package handoff paths use `handoff_id`, not API digest identity;
 - documentation, orchestration and launch-state layouts/reason bindings agree;
 - no legacy hyphenated control-record placeholders remain in normative issuance docs;
