@@ -7,6 +7,8 @@
   preflight, write enforcement and review.
 - [P00_DRAFT_CONTROL_PLANE.md](P00_DRAFT_CONTROL_PLANE.md) — non-claimable P00 ticket/context drafts,
   issuance-time materialization, writer leases, submissions and independent reviews.
+- [TICKET_ISSUANCE_OPERATIONS.md](TICKET_ISSUANCE_OPERATIONS.md) — exact idempotent materialization,
+  ticket/lease/submission/review/handoff operations, recovery decisions and typed failures.
 - [SWARM_STAGE_READSETS.md](SWARM_STAGE_READSETS.md) — exact current-stage context assembly,
   replacement semantics, ceilings and progressive-package examples.
 - [STAGE_READSET_AUDIT.md](STAGE_READSET_AUDIT.md) — current structural closure and non-claims.
@@ -20,25 +22,35 @@
   package assignments reused after their earliest wave.
 - [`../../swarm/orchestration.toml`](../../swarm/orchestration.toml) — issued-ticket, materialized-context,
   lease, submission, review, acceptance and wave-advance state machine.
+- [`../../swarm/control-plane-schema.toml`](../../swarm/control-plane-schema.toml) — closed control-record
+  schema registry, layouts, append-only rules and structural validator wiring.
+- [`../../swarm/schemas/types-v1.toml`](../../swarm/schemas/types-v1.toml) — closed scalar/composite type
+  registry for every field kind used by issued control records.
 - [`../../swarm/launch-state.toml`](../../swarm/launch-state.toml) — sole current implementation
   authorization.
 
 ## P00 draft and issued-record layouts
 
 ```text
-swarm/ticket-drafts/p00/<package>.toml       non-claimable draft
-swarm/context-drafts/p00/<package>.toml      unmaterialized context source list
+swarm/ticket-drafts/p00/<package>.toml         non-claimable draft
+swarm/context-drafts/p00/<package>.toml        unmaterialized context source list
 
-swarm/tickets/<package>/<ticket-id>.toml     issued immutable ticket
-swarm/context-manifests/<package>/<digest>   exact materialized writer context
-swarm/leases/<package>/<lease-id>.toml       writer lease
-swarm/submissions/<package>/<id>.toml        package submission
-swarm/reviews/<package>/<id>.toml            independent review
-swarm/handoffs/<package>/<api-digest>.toml   accepted package/API handoff
+swarm/tickets/<package>/<ticket-id>.toml       issued immutable ticket
+swarm/context-manifests/<package>/<digest>     exact materialized writer context
+swarm/leases/<package>/<lease-id>.toml         writer lease
+swarm/leases/<package>/events/<event-id>.toml  append-only lease event
+swarm/submissions/<package>/<id>.toml          package submission
+swarm/reviews/<package>/<id>.toml              independent review
+swarm/handoffs/<package>/<handoff-id>.toml     accepted package/API handoff
+swarm/supersessions/<kind>/<receipt-id>.toml   append-only replacement receipt
 ```
 
+A package handoff is named by its unique `handoff-id`, not by `api_schema_digest`. The same public API
+digest may legitimately survive multiple accepted implementation/evidence revisions, so API identity
+cannot also be append-only record-path identity.
+
 The current repository contains three P00 drafts and zero issued tickets, contexts, leases, submissions,
-accepted reviews or package handoffs. A draft never authorizes an agent.
+accepted reviews, supersessions or package handoffs. A draft never authorizes an agent.
 
 ## Stage packets
 

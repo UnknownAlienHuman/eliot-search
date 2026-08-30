@@ -3,7 +3,7 @@ record_kind = "package_handoff_v1"
 status = "SCHEMA_ONLY_NOT_AN_INSTANCE"
 owner = "integration-owner"
 canonicalization = "exact_utf8_lf_sha256"
-record_layout = "swarm/handoffs/<package>/<api_schema_digest>.toml"
+record_layout = "swarm/handoffs/<package>/<handoff_id>.toml"
 immutable = true
 unknown_fields = "reject"
 source_content_allowed = false
@@ -23,7 +23,7 @@ path = "identity.handoff_id"
 kind = "OpaqueId"
 required = true
 canonical_order = 1
-rules = ["non_empty", "unique_per_package_api_digest"]
+rules = ["non_empty", "unique_per_package", "record_path_identity_not_api_digest"]
 
 [[field]]
 path = "identity.operation_id"
@@ -114,7 +114,7 @@ path = "public_surface.api_schema_digest"
 kind = "Sha256Digest"
 required = true
 canonical_order = 14
-rules = ["recomputed_by_integration_owner"]
+rules = ["recomputed_by_integration_owner", "not_record_path_identity"]
 
 [[field]]
 path = "public_surface.configuration_digest"
@@ -170,14 +170,14 @@ path = "supersession.supersedes_handoff_ref"
 kind = "OptionalImmutableRecordRef"
 required = true
 canonical_order = 22
-rules = ["same_package", "old_record_remains_immutable"]
+rules = ["same_package", "old_record_remains_immutable", "ABSENT_when_no_prior_handoff"]
 
 [[field]]
 path = "supersession.supersedes_handoff_sha256"
 kind = "OptionalSha256Digest"
 required = true
 canonical_order = 23
-rules = ["matches_superseded_ref_or_null"]
+rules = ["matches_superseded_ref_or_ABSENT"]
 
 [[field]]
 path = "signature.integration_owner_identity"

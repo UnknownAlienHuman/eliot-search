@@ -1,0 +1,447 @@
+schema_version = 1
+registry_kind = "control_plane_types_v1"
+status = "SCHEMA_ONLY_NOT_IMPLEMENTED"
+owner = "integration-owner"
+unknown_types = "reject"
+implicit_string_coercion_allowed = false
+implicit_null_allowed = false
+implicit_map_order_allowed = false
+all_text_utf8 = true
+all_machine_text_lf = true
+array_path_suffix = "[]"
+array_path_kind_semantics = "element_type"
+whole_collection_kind_requires_non_array_path = true
+built_in_kinds = ["bool", "u16", "u32", "u64"]
+
+[[type]]
+name = "OpaqueId"
+representation = "string"
+pattern = "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+canonical = true
+rules = ["non_empty", "case_sensitive", "no_path_separator", "no_whitespace"]
+
+[[type]]
+name = "PackageName"
+representation = "string"
+pattern = "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+max_bytes = 96
+canonical = true
+rules = ["must_exist_in_swarm_crates_registry"]
+
+[[type]]
+name = "StageId"
+representation = "string"
+allowed = ["W0", "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10"]
+canonical = true
+
+[[type]]
+name = "Sha256Digest"
+representation = "string"
+pattern = "^[0-9a-f]{64}$"
+canonical = true
+rules = ["lowercase_hex", "algorithm_is_sha256"]
+
+[[type]]
+name = "GitObjectId"
+representation = "tagged_string"
+patterns = ["^sha1:[0-9a-f]{40}$", "^sha256:[0-9a-f]{64}$"]
+canonical = true
+rules = ["algorithm_tag_required", "lowercase_hex", "repository_object_format_must_match"]
+
+[[type]]
+name = "Rfc3339Utc"
+representation = "string"
+pattern = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+canonical = true
+rules = ["utc_only", "whole_second_precision", "calendar_validity_required"]
+
+[[type]]
+name = "RepositoryName"
+representation = "string"
+pattern = "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+max_bytes = 192
+canonical = true
+rules = ["owner_and_repository", "no_url", "no_git_suffix_normalization"]
+
+[[type]]
+name = "RepositoryRelativeSafePath"
+representation = "string"
+pattern = "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
+max_bytes = 512
+canonical = true
+rules = ["forward_slashes_only", "no_empty_segment", "no_dot_or_dotdot_segment", "no_leading_slash", "case_sensitive"]
+
+[[type]]
+name = "RepositoryRelativePath"
+representation = "RepositoryRelativeSafePath"
+canonical = true
+
+[[type]]
+name = "RepositoryGlob"
+representation = "string"
+pattern = "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*/\\*\\*$"
+max_bytes = 520
+canonical = true
+rules = ["package_directory_recursive_only", "no_negation", "no_alternation", "no_dot_or_dotdot_segment"]
+
+[[type]]
+name = "ActorIdentity"
+representation = "string"
+pattern = "^actor:(user|service|reviewer|integration):[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+max_bytes = 160
+canonical = true
+rules = ["explicit_actor_class", "case_sensitive", "no_display_name_as_identity"]
+
+[[type]]
+name = "OpaqueWorktreeRef"
+representation = "string"
+pattern = "^worktree:[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+max_bytes = 265
+canonical = true
+rules = ["opaque_locator_only", "base_commit_is_separate_authority", "no_local_absolute_path", "no_dot_or_dotdot_segment"]
+
+[[type]]
+name = "ClosedFeatureProfile"
+representation = "string"
+pattern = "^[A-Z][A-Z0-9_]{0,63}$"
+canonical = true
+rules = ["must_be_declared_by_stage_or_adr", "not_free_form_provider_name"]
+
+[[type]]
+name = "ClosedCompatibilityClass"
+representation = "string"
+allowed = ["COMPATIBLE", "ADDITIVE", "BREAKING", "INTERNAL_ONLY"]
+canonical = true
+
+[[type]]
+name = "ClosedReasonCode"
+representation = "string"
+pattern = "^[A-Z][A-Z0-9_]{1,127}$"
+canonical = true
+rules = ["registered_or_record_schema_closed_set", "content_minimized"]
+
+[[type]]
+name = "ClosedEnum"
+representation = "string"
+pattern = "^[A-Z][A-Z0-9_]{0,127}$"
+canonical = true
+rules = ["field_schema_must_declare_exact_allowed_or_equals_rule", "free_form_values_forbidden"]
+
+[[type]]
+name = "ClosedControlRecordKind"
+representation = "string"
+allowed = [
+  "context_manifest_v1",
+  "assignment_ticket_v1",
+  "writer_lease_v1",
+  "lease_event_v1",
+  "package_submission_v1",
+  "independent_review_v1",
+  "package_handoff_v1",
+  "supersession_receipt_v1",
+]
+canonical = true
+
+[[type]]
+name = "ImmutableRecordRef"
+representation = "ordered_record"
+canonical_fields = ["repository", "commit", "path", "git_blob_id", "exact_file_sha256", "record_kind"]
+rules = [
+  "repository_is_RepositoryName",
+  "commit_is_GitObjectId",
+  "path_is_RepositoryRelativeSafePath",
+  "git_blob_id_is_GitObjectId",
+  "exact_file_sha256_is_Sha256Digest",
+  "record_kind_is_ClosedControlRecordKind",
+  "all_fields_readback_verified",
+]
+
+[[type]]
+name = "ImmutableArtifactRef"
+representation = "ordered_record"
+canonical_fields = ["store_profile_ref", "artifact_id", "bytes", "sha256"]
+rules = [
+  "store_profile_ref_is_qualified_opaque_id",
+  "artifact_id_is_OpaqueId",
+  "bytes_is_positive_u64",
+  "sha256_is_Sha256Digest",
+  "readback_verified",
+  "no_local_absolute_path",
+]
+
+[[type]]
+name = "ImmutableSignatureRef"
+representation = "ordered_record"
+canonical_fields = ["approval_profile_ref", "approval_artifact_ref", "signed_payload_sha256", "actor_identity"]
+rules = [
+  "approval_profile_ref_is_qualified_opaque_id",
+  "approval_artifact_ref_is_ImmutableArtifactRef",
+  "signed_payload_sha256_is_Sha256Digest",
+  "actor_identity_is_ActorIdentity",
+  "does_not_imply_specific_crypto_algorithm_without_profile",
+]
+
+[[type]]
+name = "OptionalV1"
+representation = "ordered_record"
+canonical_fields = ["state", "value"]
+state_values = ["ABSENT", "PRESENT"]
+rules = [
+  "TOML_null_is_forbidden",
+  "ABSENT_requires_value_empty_string",
+  "PRESENT_requires_value_canonical_for_wrapped_type",
+  "state_and_value_always_present",
+]
+
+[[type]]
+name = "OptionalGitObjectId"
+representation = "OptionalV1<GitObjectId>"
+canonical = true
+
+[[type]]
+name = "OptionalSha256Digest"
+representation = "OptionalV1<Sha256Digest>"
+canonical = true
+
+[[type]]
+name = "OptionalImmutableRecordRef"
+representation = "OptionalV1<ImmutableRecordRef>"
+canonical = true
+
+[[type]]
+name = "OrderedDigestSet"
+representation = "list<Sha256Digest>"
+canonical = true
+rules = ["lexicographically_sorted", "unique", "empty_list_explicitly_allowed"]
+
+[[type]]
+name = "OrderedImmutableRecordRef"
+representation = "ImmutableRecordRef"
+canonical = true
+rules = ["array_element_order_defined_by_field_rules"]
+
+[[type]]
+name = "OrderedAcceptedPackageHandoff"
+representation = "ordered_record"
+canonical_fields = ["package", "handoff_ref", "accepted_commit", "api_schema_digest", "configuration_digest", "evidence_digest", "compatibility"]
+rules = [
+  "package_is_PackageName",
+  "handoff_ref_is_ImmutableRecordRef_of_package_handoff_v1",
+  "accepted_commit_is_GitObjectId",
+  "api_schema_digest_is_Sha256Digest",
+  "configuration_digest_is_OptionalSha256Digest",
+  "evidence_digest_is_Sha256Digest",
+  "compatibility_is_ClosedCompatibilityClass",
+]
+
+[[type]]
+name = "OrderedAcceptedHandoffRef"
+representation = "OrderedAcceptedPackageHandoff"
+canonical = true
+rules = ["compatibility_alias_for_context_manifest_v1"]
+
+[[type]]
+name = "OrderedFixtureRef"
+representation = "ordered_record"
+canonical_fields = ["fixture_id", "owner_package", "artifact_ref", "fixture_digest", "qualification_status"]
+rules = [
+  "fixture_id_is_OpaqueId",
+  "owner_package_is_PackageName",
+  "artifact_ref_is_ImmutableArtifactRef",
+  "fixture_digest_is_Sha256Digest",
+  "qualification_status_is_ClosedEnum",
+]
+
+[[type]]
+name = "OrderedRawCommandOutcomeRef"
+representation = "ordered_record"
+canonical_fields = ["command_id", "command_digest", "environment_digest", "artifact_digest", "exit_class", "raw_output_ref", "raw_output_sha256"]
+rules = [
+  "command_id_is_OpaqueId",
+  "content_not_embedded",
+  "raw_output_ref_is_ImmutableArtifactRef",
+  "all_digests_are_Sha256Digest",
+  "exit_class_is_ClosedEnum",
+]
+
+[[type]]
+name = "OrderedContentMinimizedFinding"
+representation = "ordered_record"
+canonical_fields = ["finding_id", "severity", "reason_code", "details_digest", "owner", "required_action"]
+rules = [
+  "finding_id_is_OpaqueId",
+  "severity_is_ClosedEnum",
+  "reason_code_is_ClosedReasonCode",
+  "details_digest_is_OptionalSha256Digest",
+  "owner_is_ActorIdentity_or_PackageName",
+  "required_action_is_ClosedEnum",
+  "no_source_or_secret_content",
+]
+
+[[type]]
+name = "OrderedContextSourceRecord"
+representation = "ordered_record"
+canonical_fields = ["order", "repository_path", "git_blob_id", "exact_sha256", "exact_bytes", "materialization", "materialized_sha256", "materialized_bytes"]
+rules = [
+  "order_is_u32",
+  "repository_path_is_RepositoryRelativeSafePath",
+  "git_blob_id_is_GitObjectId",
+  "exact_sha256_is_Sha256Digest",
+  "exact_bytes_is_u64",
+  "materialization_is_ClosedEnum_UTF8_LF",
+  "materialized_sha256_is_Sha256Digest",
+  "materialized_bytes_is_u64",
+]
+
+[[type]]
+name = "OrderedRegistryFragmentRecord"
+representation = "ordered_record"
+canonical_fields = ["order", "registry_path", "selector", "source_git_blob_id", "source_exact_sha256", "selector_match_count", "fragment_sha256", "fragment_bytes"]
+rules = [
+  "order_is_u32",
+  "registry_path_is_RepositoryRelativeSafePath",
+  "selector_uses_closed_v1_grammar",
+  "source_git_blob_id_is_GitObjectId",
+  "source_exact_sha256_is_Sha256Digest",
+  "selector_match_count_equals_one",
+  "fragment_sha256_is_Sha256Digest",
+  "fragment_bytes_is_u64",
+]
+
+[[type]]
+name = "OrderedInstructionDigest"
+representation = "ordered_record"
+canonical_fields = ["order", "repository_path", "git_blob_id", "exact_file_sha256", "exact_bytes"]
+rules = [
+  "order_is_u32",
+  "repository_path_is_RepositoryRelativeSafePath",
+  "git_blob_id_is_GitObjectId",
+  "exact_file_sha256_is_Sha256Digest",
+  "exact_bytes_is_u64",
+]
+
+[[type]]
+name = "BoundedCommandSpec"
+representation = "ordered_record"
+canonical_fields = ["command_id", "command_digest", "environment_profile", "timeout_seconds", "expected_exit_class", "evidence_class"]
+rules = [
+  "command_id_is_OpaqueId",
+  "command_digest_is_Sha256Digest",
+  "environment_profile_is_OpaqueId",
+  "timeout_seconds_is_positive_u32",
+  "expected_exit_class_is_ClosedEnum",
+  "evidence_class_is_ClosedEnum",
+  "credentials_and_raw_secrets_forbidden",
+]
+
+[[type]]
+name = "EvidenceRequirement"
+representation = "ordered_record"
+canonical_fields = ["requirement_id", "evidence_class", "owner_package", "acceptance_class", "artifact_required"]
+rules = [
+  "requirement_id_is_OpaqueId",
+  "evidence_class_is_ClosedEnum",
+  "owner_package_is_PackageName",
+  "acceptance_class_is_ClosedEnum",
+  "artifact_required_is_bool",
+]
+
+[[type]]
+name = "UnavailableCheckRequirement"
+representation = "ordered_record"
+canonical_fields = ["check_id", "reason_code", "required_visibility", "fallback_allowed"]
+rules = [
+  "check_id_is_OpaqueId",
+  "reason_code_is_ClosedReasonCode",
+  "required_visibility_is_bool_true",
+  "fallback_allowed_is_bool",
+]
+
+[[type]]
+name = "OrderedChangedFileRecord"
+representation = "ordered_record"
+canonical_fields = ["path", "status", "old_blob", "new_blob"]
+rules = [
+  "path_is_RepositoryRelativeSafePath",
+  "status_is_ClosedEnum",
+  "old_blob_is_OptionalGitObjectId",
+  "new_blob_is_OptionalGitObjectId",
+]
+
+[[type]]
+name = "OrderedEvidenceRef"
+representation = "ordered_record"
+canonical_fields = ["requirement_id", "evidence_class", "artifact_ref", "artifact_sha256", "acceptance_class"]
+rules = [
+  "requirement_id_is_OpaqueId",
+  "evidence_class_is_ClosedEnum",
+  "artifact_ref_is_ImmutableArtifactRef",
+  "artifact_sha256_is_Sha256Digest",
+  "acceptance_class_is_ClosedEnum",
+]
+
+[[type]]
+name = "OrderedUnavailableCheck"
+representation = "ordered_record"
+canonical_fields = ["check_id", "status", "reason_code", "evidence_ref"]
+rules = [
+  "check_id_is_OpaqueId",
+  "status_is_ClosedEnum",
+  "reason_code_is_ClosedReasonCode",
+  "evidence_ref_is_OptionalImmutableRecordRef",
+]
+
+[[type]]
+name = "OrderedReviewFinding"
+representation = "ordered_record"
+canonical_fields = ["finding_id", "severity", "reason_code", "details_digest", "owner", "required_action", "blocking"]
+rules = [
+  "finding_id_is_OpaqueId",
+  "severity_is_ClosedEnum",
+  "reason_code_is_ClosedReasonCode",
+  "details_digest_is_OptionalSha256Digest",
+  "owner_is_ActorIdentity_or_PackageName",
+  "required_action_is_ClosedEnum",
+  "blocking_is_bool",
+  "no_source_or_secret_content",
+]
+
+[[type]]
+name = "OrderedClosedReasonCode"
+representation = "ClosedReasonCode"
+canonical = true
+rules = ["array_element_order_and_uniqueness_defined_by_field_rules"]
+
+[[type]]
+name = "OrderedAcceptedEvidenceRef"
+representation = "ordered_record"
+canonical_fields = ["requirement_id", "evidence_class", "artifact_ref", "artifact_sha256", "raw_outcome_digest", "availability"]
+rules = [
+  "requirement_id_is_OpaqueId",
+  "evidence_class_is_ClosedEnum",
+  "artifact_ref_is_ImmutableArtifactRef",
+  "artifact_sha256_is_Sha256Digest",
+  "raw_outcome_digest_is_Sha256Digest",
+  "availability_is_ClosedEnum",
+]
+
+[[type]]
+name = "OrderedConsumerAction"
+representation = "ordered_record"
+canonical_fields = ["consumer_package", "action_code", "due_before_stage", "details_digest"]
+rules = [
+  "consumer_package_is_PackageName",
+  "action_code_is_ClosedReasonCode",
+  "due_before_stage_is_StageId",
+  "details_digest_is_OptionalSha256Digest",
+]
+
+[invariants]
+empty_list_is_explicit = true
+unordered_map_in_machine_record_allowed = false
+TOML_datetime_native_type_allowed = false
+TOML_null_allowed = false
+floating_point_allowed = false
+negative_unsigned_integer_allowed = false
+zero_as_unlimited_allowed = false
+array_field_kind_is_element_type = true

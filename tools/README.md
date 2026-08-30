@@ -71,8 +71,8 @@ Checks:
 - exact ordered source files, registry selectors and accepted-handoff slots for each context;
 - per-source/fragment digest materialization requirements and one writer-visible context artifact;
 - no architecture master, implementation source or forbidden control records in draft contexts;
-- issued-ticket, materialized-context, lease, submission, review, handoff and wave-receipt directories
-  contain no real records before issuance;
+- issued-ticket, materialized-context, lease, submission, review, handoff, supersession and wave-receipt
+  directories contain no real records before issuance;
 - draft states are excluded from the orchestration state machine;
 - `READY → LEASED` requires a new issued ticket and materialized context;
 - P00/W0 launch authority remains unchanged;
@@ -80,6 +80,31 @@ Checks:
 
 A PASS proves only that drafts are bounded, honest and non-claimable. It does not issue a ticket, create a
 writer lease or accept a package.
+
+## Ticket issuance and control-record schema validation
+
+```powershell
+pwsh -NoProfile -File tools/validate-ticket-issuance-contracts.ps1
+pwsh -NoProfile -File tools/validate-ticket-issuance-contracts.ps1 -Json
+```
+
+Checks:
+
+- the closed `types-v1.toml` registry has unique names and no unresolved aliases/generic inner types;
+- all eight record schemas are registered exactly once and use the registered canonical layout;
+- every field kind resolves to a built-in or named type;
+- `path[]` kinds are element types rather than accidental list-of-list declarations;
+- field paths/orders are unique and canonical orders are contiguous from one;
+- every generic closed enum has an exact equality/allowed-set rule;
+- embedded `signature.record_sha256` keeps signed-payload semantics while exact full-file digest remains
+  external;
+- package handoff records use unique `handoff-id` paths instead of API digest paths;
+- canonicalization, issuance/recovery operations and orchestration wiring remain present;
+- issued control directories remain zero-state;
+- the dedicated workflow remains read-only and `workflow_dispatch` only.
+
+A PASS is schema closure only. It is not materialization, issuance, runtime, package, gate or wave
+evidence.
 
 ## Implementation-packet validation
 

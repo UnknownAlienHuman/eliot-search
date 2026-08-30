@@ -1,4 +1,4 @@
-schema_version = 3
+schema_version = 4
 project = "eliot-search"
 package_registry = "swarm/crates.toml"
 function_registry = "swarm/function-packets.toml"
@@ -7,6 +7,9 @@ stage_readset_registry = "swarm/stage-readsets.toml"
 launch_state = "swarm/launch-state.toml"
 gate_registry = "swarm/gates.toml"
 control_plane_schema_registry = "swarm/control-plane-schema.toml"
+control_plane_type_registry = "swarm/schemas/types-v1.toml"
+control_plane_validator = "tools/validate-ticket-issuance-contracts.ps1"
+control_plane_manual_workflow = ".github/workflows/ticket-issuance-contracts.yml"
 ticket_issuance_operation_contract = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
 assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
 writer_lease_template = "swarm/WRITER_LEASE_TEMPLATE.md"
@@ -24,7 +27,7 @@ writer_lease_layout = "swarm/leases/<package>/<lease-id>.toml"
 lease_event_layout = "swarm/leases/<package>/events/<event-id>.toml"
 submission_layout = "swarm/submissions/<package>/<submission-id>.toml"
 review_layout = "swarm/reviews/<package>/<review-id>.toml"
-accepted_handoff_layout = "swarm/handoffs/<package>/<api_digest>.toml"
+accepted_handoff_layout = "swarm/handoffs/<package>/<handoff-id>.toml"
 supersession_layout = "swarm/supersessions/<record-kind>/<receipt-id>.toml"
 
 states = [
@@ -67,7 +70,11 @@ dependency_implementation_source_in_context = false
 
 [record_validation]
 schema_registry_required = true
+type_registry_required = true
 record_kind_must_match_schema = true
+all_field_kinds_must_resolve = true
+array_path_kind_is_element_type = true
+whole_collection_kind_requires_non_array_path = true
 unknown_load_bearing_fields_rejected = true
 canonical_field_order_required = true
 signed_payload_sha256_embedded = true
@@ -78,6 +85,7 @@ operation_id_required_for_mutation = true
 same_operation_different_input = "CONTROL_OPERATION_CONFLICT"
 unknown_outcome_requires_exact_readback = true
 append_only_supersession_required = true
+handoff_filename_uses_unique_handoff_id = true
 
 [ready]
 requires_launch_authorization = true
@@ -155,6 +163,8 @@ required_fields = [
 mutable_after_acceptance = false
 correction_mode = "new_receipt_supersedes_old"
 package_handoff_does_not_accept_gate_or_wave = true
+api_digest_is_not_record_identity = true
+handoff_id_is_record_path_identity = true
 
 [wave_advance]
 authority = "integration-owner"

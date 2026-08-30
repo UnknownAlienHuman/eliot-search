@@ -90,14 +90,14 @@ path = "chain.previous_event_ref"
 kind = "OptionalImmutableRecordRef"
 required = true
 canonical_order = 11
-rules = ["null_only_for_first_event", "same_lease"]
+rules = ["ABSENT_only_for_first_event", "same_lease"]
 
 [[field]]
 path = "chain.previous_event_sha256"
 kind = "OptionalSha256Digest"
 required = true
 canonical_order = 12
-rules = ["matches_previous_event_or_null"]
+rules = ["matches_previous_event_or_ABSENT"]
 
 [[field]]
 path = "signature.record_sha256"
