@@ -1,0 +1,103 @@
+schema_version = 1
+record_kind = "ticket_issuance_plan_v1"
+status = "ADVISORY_NON_AUTHORITATIVE"
+owner = "integration-owner-tooling"
+contract = "docs/handoff/TICKET_ISSUANCE_PLANNER.md"
+canonicalization = "canonical_json_utf8_lf_sorted_keys_compact"
+domain_separator = "eliot-search/ticket-issuance-plan/v1\\0"
+unknown_fields = "reject"
+
+output_is_control_record = false
+output_is_evidence_receipt = false
+output_is_claimable = false
+output_may_be_written_under_protected_roots = false
+
+protected_roots = [
+  "swarm/context-manifests",
+  "swarm/tickets",
+  "swarm/leases",
+  "swarm/submissions",
+  "swarm/reviews",
+  "swarm/handoffs",
+  "swarm/supersessions",
+  "swarm/wave-receipts",
+]
+
+closed_decisions = [
+  "READY_FOR_CONTEXT_MATERIALIZATION_PREVIEW",
+  "BLOCKED_MISSING_SELECTION",
+  "BLOCKED_PREREQUISITE",
+  "BLOCKED_CONFLICT",
+  "INVALID_REPOSITORY_STATE",
+]
+
+closed_reason_codes = [
+  "PACKAGE_UNKNOWN",
+  "PACKAGE_STAGE_MISMATCH",
+  "PACKAGE_REGISTRY_MISMATCH",
+  "DRAFT_PAIR_MISSING",
+  "DRAFT_PAIR_MISMATCH",
+  "DRAFT_BECAME_CLAIMABLE",
+  "DRAFT_IDENTITY_PREMATURELY_RESOLVED",
+  "CONTEXT_SOURCE_MISSING",
+  "CONTEXT_SOURCE_SYMLINK",
+  "CONTEXT_SOURCE_FORBIDDEN",
+  "CONTEXT_SELECTOR_INVALID",
+  "HANDOFF_SLOT_UNSATISFIED",
+  "HANDOFF_SET_UNEXPECTED",
+  "PARTIAL_ISSUANCE_SELECTION",
+  "BASE_COMMIT_INVALID",
+  "BASE_COMMIT_SOURCE_MISSING",
+  "ACTOR_IDENTITY_INVALID",
+  "WRITER_REVIEWER_CONFLICT",
+  "PROTECTED_ROOT_NOT_ZERO_STATE",
+  "ACTIVE_LEASE_CONFLICT",
+  "CONTROL_SCHEMA_MISMATCH",
+  "WORKFLOW_POLICY_VIOLATION",
+  "OUTPUT_PATH_PROTECTED",
+  "OUTPUT_WRITE_FAILED",
+]
+
+canonical_top_level_order = [
+  "schema_version",
+  "record_kind",
+  "status",
+  "repository",
+  "package",
+  "stage",
+  "launch",
+  "selection",
+  "drafts",
+  "prerequisites",
+  "checks",
+  "decision",
+  "reason_codes",
+  "mutations",
+  "authorizes_ticket_issuance",
+  "creates_writer_lease",
+  "authorizes_implementation",
+  "publishes_package_handoff",
+  "advances_launch_state",
+  "plan_sha256",
+]
+
+[limits]
+max_reason_codes = 64
+max_checks = 256
+max_sources = 32
+max_registry_fragments = 16
+max_handoffs = 16
+max_output_bytes = 262144
+zero_means_unlimited = false
+
+[invariants]
+mutations_must_be_empty = true
+authorizes_ticket_issuance_must_be_false = true
+creates_writer_lease_must_be_false = true
+authorizes_implementation_must_be_false = true
+publishes_package_handoff_must_be_false = true
+advances_launch_state_must_be_false = true
+branch_head_is_authority = false
+working_tree_absolute_path_in_output = false
+wall_clock_time_in_output = false
+random_identity_in_output = false
