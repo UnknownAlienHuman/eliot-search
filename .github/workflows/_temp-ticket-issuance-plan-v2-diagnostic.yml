@@ -1,0 +1,99 @@
+name: Temporary planner v2 diagnostic
+
+on:
+  push:
+    branches:
+      - "prep/ticket-issuance-planner-v2"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-ticket-issuance-plan-v2-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    name: Fix invariant assertion and print current planner failures
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Fix mixed-polarity schema invariant validation
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          path = Path("tools/validate-ticket-issuance-plan.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''    if isinstance(invariants, dict):
+                  v.require(all(value is True for value in invariants.values()), "schema-invariants-true", "all fail-closed invariants are enabled")'''
+          new = '''    if isinstance(invariants, dict):
+                  true_invariants = (
+                      "mutations_must_be_empty",
+                      "authorizes_context_materialization_must_be_false",
+                      "authorizes_ticket_issuance_must_be_false",
+                      "creates_writer_lease_must_be_false",
+                      "authorizes_implementation_must_be_false",
+                      "publishes_package_handoff_must_be_false",
+                      "advances_launch_state_must_be_false",
+                      "repository_inputs_are_immutable_git_tree_only",
+                  )
+                  false_invariants = (
+                      "branch_head_is_authority",
+                      "wall_clock_time_in_output",
+                      "random_identity_in_output",
+                  )
+                  v.require(
+                      set(invariants) == set(true_invariants) | set(false_invariants),
+                      "schema-invariant-keys",
+                      "schema invariant key set is closed",
+                  )
+                  for key in true_invariants:
+                      v.require(invariants.get(key) is True, f"schema-invariant:{key}", f"{key} is true")
+                  for key in false_invariants:
+                      v.require(invariants.get(key) is False, f"schema-invariant:{key}", f"{key} is false")'''
+          if text.count(old) != 1:
+              raise SystemExit("expected one legacy invariant assertion")
+          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          '@ | python -
+
+      - name: Remove temporary diagnostic workflow
+        shell: pwsh
+        run: Remove-Item .github/workflows/_temp-ticket-issuance-plan-v2-diagnostic.yml -Force
+
+      - name: Commit diagnostic fix before immutable-tree read
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/validate-ticket-issuance-plan.py .github/workflows/_temp-ticket-issuance-plan-v2-diagnostic.yml
+          git commit -m "fix: validate planner schema invariant polarity"
+          git push origin HEAD:refs/heads/prep/ticket-issuance-planner-v2
+
+      - name: Produce diagnostic advisory plan
+        shell: pwsh
+        run: |
+          python tools/plan-ticket-issuance.py `
+            --package search-contracts `
+            --output artifacts/ticket-issuance-plans/diagnostic.json
+          $nativeExit = $LASTEXITCODE
+          $plan = Get-Content artifacts/ticket-issuance-plans/diagnostic.json -Raw | ConvertFrom-Json
+          Write-Host "planner_exit=$nativeExit"
+          Write-Host "decision=$($plan.decision)"
+          Write-Host "reason_codes=$($plan.reason_codes -join ',')"
+          $failed = @($plan.checks | Where-Object { $_.status -eq 'FAIL' })
+          Write-Host "failed_check_count=$($failed.Count)"
+          $failed | ConvertTo-Json -Depth 8
+          exit 0
+
+      - name: Run structural validator for complete diagnostics
+        shell: pwsh
+        continue-on-error: true
+        run: ./tools/validate-ticket-issuance-plan.ps1 -Json
