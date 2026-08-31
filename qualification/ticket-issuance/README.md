@@ -7,7 +7,13 @@ This directory qualifies only the read-only schema-v2 advisory planner.
 ```powershell
 python -m py_compile `
   tools/plan-ticket-issuance.py `
+  tools/ticket_issuance_planner_v2/core.py `
+  tools/ticket_issuance_planner_v2/drafts.py `
+  tools/ticket_issuance_planner_v2/context.py `
+  tools/ticket_issuance_planner_v2/control.py `
+  tools/ticket_issuance_planner_v2/plan.py `
   tools/validate-ticket-issuance-plan.py `
+  qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
   qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
 
 python qualification/ticket-issuance/test_plan_ticket_issuance_v2.py

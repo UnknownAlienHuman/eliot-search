@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PLANNER_PATH = REPOSITORY_ROOT / "tools/plan-ticket-issuance.py"
-SPEC = importlib.util.spec_from_file_location("ticket_issuance_planner_v2", PLANNER_PATH)
+SPEC = importlib.util.spec_from_file_location("ticket_issuance_planner_v2_cli", PLANNER_PATH)
 assert SPEC and SPEC.loader
 planner = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = planner

@@ -11,11 +11,20 @@ index = "docs/handoff/TICKET_ISSUANCE_PLANNER_INDEX.md"
 plan_schema = "swarm/ticket-issuance-plan-schema-v2.toml"
 digest_profile = "swarm/ticket-issuance-plan-digest-v2.toml"
 implementation = "tools/plan-ticket-issuance.py"
+implementation_modules = [
+  "tools/ticket_issuance_planner_v2/__init__.py",
+  "tools/ticket_issuance_planner_v2/core.py",
+  "tools/ticket_issuance_planner_v2/drafts.py",
+  "tools/ticket_issuance_planner_v2/context.py",
+  "tools/ticket_issuance_planner_v2/control.py",
+  "tools/ticket_issuance_planner_v2/plan.py",
+]
 powershell_wrapper = "tools/plan-ticket-issuance.ps1"
 structural_validator = "tools/validate-ticket-issuance-plan.py"
 structural_validator_wrapper = "tools/validate-ticket-issuance-plan.ps1"
 qualification_readme = "qualification/ticket-issuance/README.md"
 qualification_cases = "qualification/ticket-issuance/cases-v2.toml"
+qualification_fixture = "qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py"
 qualification_tests = "qualification/ticket-issuance/test_plan_ticket_issuance_v2.py"
 manual_workflow = ".github/workflows/ticket-issuance-plan.yml"
 artifact_root = "artifacts/ticket-issuance-plans"

@@ -132,6 +132,25 @@ The PowerShell wrapper invokes the standard-library Python validator
 Its JSON output keeps all package, G0, W0 and W1 authority claims false. A PASS proves only that the
 acceptance boundary is structurally closed; it does not create any record or authorize implementation.
 
+### Ticket issuance advisory planner v2
+
+```powershell
+pwsh -NoProfile -File tools/plan-ticket-issuance.ps1 `
+  -Package search-contracts `
+  -Output artifacts/ticket-issuance-plans/search-contracts.json
+
+pwsh -NoProfile -File tools/validate-ticket-issuance-plan.ps1 -Json
+```
+
+The dependency-free planner reads one immutable Git tree, validates schema-v2 P00 drafts,
+manifest-owned 16/24 source ceilings, exact selectors, accepted prerequisite handoffs, current-package
+control conflicts and workflow policy, then emits a deterministic advisory JSON decision. Output is
+limited to stdout or ignored files under `artifacts/ticket-issuance-plans/`.
+
+`READY_FOR_CONTEXT_MATERIALIZATION_PREVIEW` authorizes nothing. The planner never materializes context,
+issues a ticket or lease, publishes a handoff, accepts G0/W0 or advances launch state. The validator runs
+the 30-case corpus and requires the current repository decision to remain `BLOCKED_MISSING_SELECTION`.
+
 ## Implementation and qualification packets
 
 ### `validate-implementation-packets.ps1`

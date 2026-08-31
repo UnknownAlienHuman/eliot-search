@@ -9,6 +9,8 @@
   issuance-time materialization, writer leases, submissions and independent reviews.
 - [TICKET_ISSUANCE_OPERATIONS.md](TICKET_ISSUANCE_OPERATIONS.md) — exact idempotent materialization,
   ticket/lease/submission/review/handoff operations, recovery decisions and typed failures.
+- [TICKET_ISSUANCE_PLANNER_INDEX.md](TICKET_ISSUANCE_PLANNER_INDEX.md) — executable immutable-tree
+  schema-v2 preflight, 30-case corpus and non-circular advisory plan digest; it creates no authority.
 - [P00_FOUNDATION_ACCEPTANCE_MATRIX.md](P00_FOUNDATION_ACCEPTANCE_MATRIX.md) — exact package-handoff,
   G0/W0 acceptance and reviewed W1-unlock boundary; machine registry:
   [`../../swarm/p00-foundation-acceptance.toml`](../../swarm/p00-foundation-acceptance.toml).
