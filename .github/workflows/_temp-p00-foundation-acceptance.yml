@@ -1,4 +1,4 @@
-name: Temporary P00 draft parser repair and validation
+name: Temporary P00 validator parser repair
 
 on:
   push:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   repair-and-validate:
-    name: Repair parser and execute Windows validation
+    name: Repair parsers and execute Windows validation
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -24,20 +24,29 @@ jobs:
           persist-credentials: true
           fetch-depth: 1
 
-      - name: Patch TOML array terminator parsing
+      - name: Patch bracketed TOML array terminators
         shell: pwsh
         run: |
           @'
           from pathlib import Path
 
-          path = Path("tools/validate-p00-ticket-drafts.ps1")
-          text = path.read_text(encoding="utf-8")
-          old = r"""    $match = [regex]::Match($Text, ('(?ms)^{0}\s*=\s*\[(.*?)\]' -f [regex]::Escape($Key)))"""
-          new = r"""    $match = [regex]::Match($Text, ('(?ms)^{0}[ \t]*=[ \t]*\[(.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)))"""
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f"expected exactly one legacy Array regex, found {count}")
-          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          replacements = {
+              Path("tools/validate-p00-ticket-drafts.ps1"): (
+                  r"""    $match = [regex]::Match($Text, ('(?ms)^{0}\s*=\s*\[(.*?)\]' -f [regex]::Escape($Key)))""",
+                  r"""    $match = [regex]::Match($Text, ('(?ms)^{0}[ \t]*=[ \t]*\[(.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)))""",
+              ),
+              Path("tools/validate-ticket-issuance-contracts.ps1"): (
+                  r"""    $pattern = '(?ms)^{0}\s*=\s*\[(.*?)\]' -f [regex]::Escape($Key)""",
+                  r"""    $pattern = '(?ms)^{0}[ \t]*=[ \t]*\[(.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)""",
+              ),
+          }
+
+          for path, (old, new) in replacements.items():
+              text = path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one legacy array regex, found {count}")
+              path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
           '@ | python -
 
       - name: Remove temporary automatic workflow from validation tree
@@ -68,11 +77,11 @@ jobs:
         shell: pwsh
         run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
 
-      - name: Commit verified parser repair and remove temporary workflow
+      - name: Commit verified parser repairs and remove temporary workflow
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tools/validate-p00-ticket-drafts.ps1 .github/workflows/_temp-p00-foundation-acceptance.yml
-          git commit -m "fix: parse bracketed TOML selector arrays exactly"
+          git add tools/validate-p00-ticket-drafts.ps1 tools/validate-ticket-issuance-contracts.ps1 .github/workflows/_temp-p00-foundation-acceptance.yml
+          git commit -m "fix: parse bracketed TOML arrays exactly"
           git push origin HEAD:refs/heads/prep/p00-foundation-acceptance-matrix
