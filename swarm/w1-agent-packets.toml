@@ -1,0 +1,161 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "W1"
+wave = 1
+status = "BLOCKED_ON_G0_AND_W0"
+requires_accepted_gates = ["G0"]
+requires_accepted_receipts = ["W0"]
+package_count = 7
+ticket_manifest = "swarm/ticket-drafts/w1/manifest.toml"
+context_manifest = "swarm/context-drafts/w1/manifest.toml"
+launch_authority = "swarm/launch-state.toml"
+architecture_access = "exception-only"
+one_writer_one_package = true
+parallel_packages_after_prerequisites = true
+parallel_milestones_within_package = false
+implementation_authorized_by_this_registry = false
+
+[[package]]
+name = "search-config"
+path = "crates/search-config"
+phase = "P01"
+execution_group = "A"
+assignment = "swarm/assignments/search-config.md"
+functions = "crates/search-config/FUNCTIONS.md"
+write_scope = "crates/search-config/**"
+soft_src_lines = 5500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts"]
+ticket_draft = "swarm/ticket-drafts/w1/search-config.toml"
+context_draft = "swarm/context-drafts/w1/search-config.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-runtime-owner"
+path = "crates/search-runtime/search-runtime-owner"
+phase = "P01"
+execution_group = "B"
+assignment = "swarm/assignments/search-runtime-owner.md"
+functions = "crates/search-runtime/search-runtime-owner/FUNCTIONS.md"
+write_scope = "crates/search-runtime/search-runtime-owner/**"
+soft_src_lines = 4500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/instance.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w1/search-runtime-owner.toml"
+context_draft = "swarm/context-drafts/w1/search-runtime-owner.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-os-secrets"
+path = "crates/search-runtime/search-os-secrets"
+phase = "P01"
+execution_group = "B"
+assignment = "swarm/assignments/search-os-secrets.md"
+functions = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+write_scope = "crates/search-runtime/search-os-secrets/**"
+soft_src_lines = 3500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/secrets.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w1/search-os-secrets.toml"
+context_draft = "swarm/context-drafts/w1/search-os-secrets.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-control-redb"
+path = "crates/search-control-redb"
+phase = "P02"
+execution_group = "B"
+assignment = "swarm/assignments/search-control-redb.md"
+functions = "crates/search-control-redb/FUNCTIONS.md"
+write_scope = "crates/search-control-redb/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/control.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w1/search-control-redb.toml"
+context_draft = "swarm/context-drafts/w1/search-control-redb.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-provider-protocol"
+path = "crates/search-provider-protocol"
+phase = "P02"
+execution_group = "B"
+assignment = "swarm/assignments/search-provider-protocol.md"
+functions = "crates/search-provider-protocol/FUNCTIONS.md"
+write_scope = "crates/search-provider-protocol/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/protocol.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w1/search-provider-protocol.toml"
+context_draft = "swarm/context-drafts/w1/search-provider-protocol.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+phase = "P02"
+execution_group = "C"
+assignment = "swarm/assignments/eliot-searchd.md"
+functions = "bins/eliot-searchd/FUNCTIONS.md"
+write_scope = "bins/eliot-searchd/**"
+soft_src_lines = 6500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/optional_profiles.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config", "search-runtime-owner", "search-os-secrets", "search-control-redb", "search-provider-protocol"]
+ticket_draft = "swarm/ticket-drafts/w1/eliot-searchd.toml"
+context_draft = "swarm/context-drafts/w1/eliot-searchd.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "eliot-search"
+path = "bins/eliot-search"
+phase = "P02"
+execution_group = "C"
+assignment = "swarm/assignments/eliot-search.md"
+functions = "bins/eliot-search/FUNCTIONS.md"
+write_scope = "bins/eliot-search/**"
+soft_src_lines = 4500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-ports", "search-config", "search-provider-protocol"]
+ticket_draft = "swarm/ticket-drafts/w1/eliot-search.toml"
+context_draft = "swarm/context-drafts/w1/eliot-search.toml"
+one_active_writer = true
+claimable = false
+
+[execution]
+group_order = ["A", "B", "C"]
+group_A_packages = ["search-config"]
+group_B_packages = ["search-runtime-owner", "search-os-secrets", "search-control-redb", "search-provider-protocol"]
+group_C_packages = ["eliot-searchd", "eliot-search"]
+group_B_requires_accepted_handoffs = ["search-config"]
+eliot_searchd_requires_all_group_B_handoffs = true
+eliot_search_requires_accepted_handoffs = ["search-config", "search-provider-protocol"]
+
+[current_state]
+accepted_G0 = false
+accepted_W0 = false
+materialized_W1_contexts = 0
+issued_W1_tickets = 0
+active_W1_leases = 0
+accepted_W1_package_handoffs = 0
+W1_receipt = "ABSENT"
