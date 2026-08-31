@@ -1,0 +1,115 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "W2"
+wave = 2
+status = "BLOCKED_ON_G0_AND_W1"
+requires_accepted_gates = ["G0"]
+requires_accepted_receipts = ["W1"]
+agent_registry = "swarm/w2-agent-packets.toml"
+ticket_manifest = "swarm/ticket-drafts/w2/manifest.toml"
+context_manifest = "swarm/context-drafts/w2/manifest.toml"
+stage_readset_registry = "swarm/stage-readsets.toml"
+package_count = 8
+milestone_count = 32
+one_writer_one_package = true
+sequential_milestones_per_package = true
+parallel_milestones_within_package = false
+implementation_authorized_by_this_registry = false
+
+[[package]]
+name = "search-source-admission"
+path = "crates/search-source/search-source-admission"
+phase = "P03"
+write_scope = "crates/search-source/search-source-admission/**"
+packet = "docs/handoff/w2-packages/search-source-admission.md"
+milestone_ids = ["A0", "A1", "A2", "A3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-source-identity"
+path = "crates/search-source/search-source-identity"
+phase = "P03"
+write_scope = "crates/search-source/search-source-identity/**"
+packet = "docs/handoff/w2-packages/search-source-identity.md"
+milestone_ids = ["I0", "I1", "I2", "I3"]
+required_handoff_packages = ["search-contracts", "search-domain"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-safe-reader"
+path = "crates/search-source/search-safe-reader"
+phase = "P03"
+write_scope = "crates/search-source/search-safe-reader/**"
+packet = "docs/handoff/w2-packages/search-safe-reader.md"
+milestone_ids = ["SR0", "SR1", "SR2", "SR3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-revision-store"
+path = "crates/search-source/search-revision-store"
+phase = "P04"
+write_scope = "crates/search-source/search-revision-store/**"
+packet = "docs/handoff/w2-packages/search-revision-store.md"
+milestone_ids = ["V0", "V1", "V2", "V3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-materializer"
+path = "crates/search-prep/search-materializer"
+phase = "P04"
+write_scope = "crates/search-prep/search-materializer/**"
+packet = "docs/handoff/w2-packages/search-materializer.md"
+milestone_ids = ["M0", "M1", "M2", "M3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-unitizer"
+path = "crates/search-prep/search-unitizer"
+phase = "P04"
+write_scope = "crates/search-prep/search-unitizer/**"
+packet = "docs/handoff/w2-packages/search-unitizer.md"
+milestone_ids = ["U0", "U1", "U2", "U3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-source-registry"
+path = "crates/search-source/search-source-registry"
+phase = "P03"
+write_scope = "crates/search-source/search-source-registry/**"
+packet = "docs/handoff/w2-packages/search-source-registry.md"
+milestone_ids = ["RG0", "RG1", "RG2", "RG3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-source-identity", "search-source-admission"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+phase = "P04"
+write_scope = "bins/eliot-searchd/**"
+packet = "docs/handoff/w2-packages/eliot-searchd.md"
+milestone_ids = ["D20", "D21", "D22", "D23"]
+required_handoff_packages = ["eliot-searchd", "search-source-admission", "search-source-registry", "search-source-identity", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer"]
+one_active_milestone = true
+claimable = false
+
+[current_state]
+accepted_G0 = false
+accepted_W1 = false
+materialized_contexts = 0
+issued_tickets = 0
+active_leases = 0
+accepted_package_handoffs = 0
+W2_G1_receipt = "ABSENT"
