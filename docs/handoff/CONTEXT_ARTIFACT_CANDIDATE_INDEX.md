@@ -23,10 +23,21 @@
 - [`../../qualification/context-artifact/README.md`](../../qualification/context-artifact/README.md) — commands and evidence ceiling.
 - [`../../.github/workflows/context-artifact-candidate.yml`](../../.github/workflows/context-artifact-candidate.yml) — manual Windows qualification.
 
+## Next materialization prerequisites
+
+- [`ACCEPTED_EVIDENCE_DIGEST_V1.md`](ACCEPTED_EVIDENCE_DIGEST_V1.md) — exact semantic digest derived from an accepted handoff's committed `evidence[]` array.
+- [`../../swarm/type-rule-profiles-v1.toml`](../../swarm/type-rule-profiles-v1.toml) — binds `OrderedAcceptedPackageHandoff.evidence_digest` to that profile.
+- [`../../swarm/accepted-evidence-digest-v1.toml`](../../swarm/accepted-evidence-digest-v1.toml) — canonical machine format and limits.
+
+The immutable handoff reference remains authority. The derived evidence digest is required only to build
+the bounded accepted-handoff projection for a future `context_manifest_v1`; it cannot replace exact
+handoff readback or create package, gate, wave or implementation authority.
+
 ## Current disposition
 
 ```text
 search-contracts artifact candidate: buildable at an exact commit
+accepted-handoff evidence profile:    specified; no accepted handoff currently exists
 immutable artifact store/ref:         unselected / absent
 materializer and reviewer:            unselected
 committed context_manifest_v1:        absent
