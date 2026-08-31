@@ -1,0 +1,49 @@
+name: Temporary P00 foundation acceptance validation
+
+on:
+  push:
+    branches:
+      - "prep/p00-foundation-acceptance-matrix"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-p00-foundation-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Execute P00 acceptance validation on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Remove temporary automatic workflow from validation tree
+        shell: pwsh
+        run: Remove-Item .github/workflows/_temp-p00-foundation-acceptance.yml -Force
+
+      - name: Compile Python validator
+        shell: pwsh
+        run: python -m py_compile tools/validate-p00-foundation-acceptance.py
+
+      - name: Validate P00 foundation acceptance closure
+        shell: pwsh
+        run: python tools/validate-p00-foundation-acceptance.py --json
+
+      - name: Revalidate repository topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json
+
+      - name: Revalidate P00 drafts
+        shell: pwsh
+        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Revalidate ticket issuance schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
