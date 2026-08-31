@@ -1,0 +1,293 @@
+schema_version = 1
+registry_kind = "p00_foundation_acceptance_v1"
+project = "eliot-search"
+architecture_version = "8.4"
+status = "DESIGNED_NOT_EXECUTED"
+owner = "integration-owner"
+stage = "W0"
+phase = "P00"
+wave = 0
+gate = "G0"
+completion_receipt = "W0"
+package_count = 3
+checkpoint_count = 4
+g0_evidence_count = 10
+package_registry = "swarm/crates.toml"
+function_registry = "swarm/function-packets.toml"
+stage_registry = "swarm/stages.toml"
+gate_registry = "swarm/gates.toml"
+launch_state = "swarm/launch-state.toml"
+orchestration_registry = "swarm/orchestration.toml"
+control_plane_schema = "swarm/control-plane-schema.toml"
+ticket_draft_manifest = "swarm/ticket-drafts/manifest.toml"
+context_draft_manifest = "swarm/context-drafts/manifest.toml"
+operation_contract = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
+human_matrix = "docs/handoff/P00_FOUNDATION_ACCEPTANCE_MATRIX.md"
+validator = "tools/validate-p00-foundation-acceptance.ps1"
+manual_workflow = ".github/workflows/p00-foundation-acceptance.yml"
+
+[authority]
+manifest_authorizes_implementation = false
+manifest_accepts_package = false
+manifest_accepts_gate = false
+manifest_accepts_wave = false
+manifest_advances_launch_state = false
+package_writer_may_publish_handoff = false
+package_writer_may_accept_own_review = false
+reviewer_may_advance_wave = false
+integration_owner_may_skip_record = false
+
+[[package]]
+name = "search-contracts"
+order = 0
+launch_class = "AUTHORIZED"
+ticket_draft = "swarm/ticket-drafts/p00/search-contracts.toml"
+context_draft = "swarm/context-drafts/p00/search-contracts.toml"
+write_scope = "crates/search-contracts/**"
+required_handoff_packages = []
+required_control_records = [
+  "context_manifest_v1",
+  "assignment_ticket_v1",
+  "writer_lease_v1",
+  "lease_event_v1:ACKNOWLEDGED",
+  "package_submission_v1",
+  "independent_review_v1:ACCEPT_SUBMISSION_FOR_INTEGRATION",
+  "package_handoff_v1",
+]
+acceptance_output = "package_handoff_v1"
+unlocks_conditional_packages = ["search-domain", "search-ports"]
+may_run_parallel_with = []
+
+[[package]]
+name = "search-domain"
+order = 1
+launch_class = "CONDITIONAL"
+ticket_draft = "swarm/ticket-drafts/p00/search-domain.toml"
+context_draft = "swarm/context-drafts/p00/search-domain.toml"
+write_scope = "crates/search-domain/**"
+required_handoff_packages = ["search-contracts"]
+required_control_records = [
+  "context_manifest_v1",
+  "assignment_ticket_v1",
+  "writer_lease_v1",
+  "lease_event_v1:ACKNOWLEDGED",
+  "package_submission_v1",
+  "independent_review_v1:ACCEPT_SUBMISSION_FOR_INTEGRATION",
+  "package_handoff_v1",
+]
+acceptance_output = "package_handoff_v1"
+unlocks_conditional_packages = []
+may_run_parallel_with = ["search-ports"]
+
+[[package]]
+name = "search-ports"
+order = 2
+launch_class = "CONDITIONAL"
+ticket_draft = "swarm/ticket-drafts/p00/search-ports.toml"
+context_draft = "swarm/context-drafts/p00/search-ports.toml"
+write_scope = "crates/search-ports/**"
+required_handoff_packages = ["search-contracts"]
+required_control_records = [
+  "context_manifest_v1",
+  "assignment_ticket_v1",
+  "writer_lease_v1",
+  "lease_event_v1:ACKNOWLEDGED",
+  "package_submission_v1",
+  "independent_review_v1:ACCEPT_SUBMISSION_FOR_INTEGRATION",
+  "package_handoff_v1",
+]
+acceptance_output = "package_handoff_v1"
+unlocks_conditional_packages = []
+may_run_parallel_with = ["search-domain"]
+
+[[checkpoint]]
+id = "P00-A"
+order = 0
+name = "issue_search_contracts"
+requires = [
+  "search-contracts launch authorization",
+  "exact immutable base commit",
+  "distinct writer and reviewer",
+  "materialized context exact readback",
+  "no competing package lease",
+]
+produces = [
+  "search-contracts assignment_ticket_v1",
+  "search-contracts writer_lease_v1",
+  "search-contracts ACKNOWLEDGED lease_event_v1",
+]
+claim_ceiling = "IMPLEMENTATION_AUTHORITY_FOR_ONE_PACKAGE_ONLY"
+
+[[checkpoint]]
+id = "P00-B"
+order = 1
+name = "accept_search_contracts"
+requires = [
+  "search-contracts package-only final commit",
+  "complete package_submission_v1",
+  "independent accepted review",
+  "integration-owner exact recomputation",
+]
+produces = ["accepted search-contracts package_handoff_v1"]
+claim_ceiling = "PACKAGE_ACCEPTANCE_ONLY"
+
+[[checkpoint]]
+id = "P00-C"
+order = 2
+name = "issue_and_accept_domain_ports"
+requires = [
+  "accepted immutable search-contracts package handoff",
+  "exact search-contracts public API/schema digest",
+  "separate package contexts, tickets, leases and reviewers",
+]
+produces = [
+  "accepted search-domain package_handoff_v1",
+  "accepted search-ports package_handoff_v1",
+]
+claim_ceiling = "THREE_ACCEPTED_PACKAGES_NOT_W0"
+
+[[checkpoint]]
+id = "P00-D"
+order = 3
+name = "close_g0_and_w0"
+requires = [
+  "three accepted package handoffs",
+  "all ten G0 evidence records PASS",
+  "immutable raw output for every G0 evidence record",
+  "independent evidence review",
+  "no active writer lease",
+  "zero unreviewed submission",
+]
+produces = [
+  "accepted G0 receipt",
+  "accepted W0 wave receipt",
+  "reviewed launch-state advance to W1",
+]
+claim_ceiling = "W1_MAY_BE_AUTHORIZED_BY_SEPARATE_REVIEWED_CHANGE"
+
+[[evidence]]
+id = "architecture_hash_challenge"
+owner = "integration-owner"
+source_packages = []
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "workspace_registry_assignment_parity"
+owner = "integration-owner"
+source_packages = []
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "dependency_graph_acyclic"
+owner = "integration-owner"
+source_packages = []
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "dependency_direction_policy"
+owner = "integration-owner"
+source_packages = ["search-contracts", "search-domain", "search-ports"]
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "recipe_set_exact"
+owner = "search-contracts"
+source_packages = ["search-contracts"]
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "epoch_and_sentinel_contract"
+owner = "search-contracts"
+source_packages = ["search-contracts"]
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "canonical_public_schema_fixtures"
+owner = "search-contracts"
+source_packages = ["search-contracts"]
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "reason_code_registry"
+owner = "search-contracts"
+source_packages = ["search-contracts"]
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "contract_domain_tests"
+owner = "integration-owner"
+source_packages = ["search-contracts", "search-domain", "search-ports"]
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[[evidence]]
+id = "dependency_source_and_license_policy"
+owner = "integration-owner"
+source_packages = ["search-contracts", "search-domain", "search-ports"]
+required_state = "PASS"
+current_state = "UNAVAILABLE"
+raw_output_required = true
+independent_review_required = true
+
+[w0_acceptance]
+required_packages = ["search-contracts", "search-domain", "search-ports"]
+required_package_record = "package_handoff_v1"
+required_gate = "G0"
+required_wave_receipt = "W0"
+required_evidence_state = "PASS"
+raw_output_required = true
+independent_review_required = true
+requires_no_active_writer_leases = true
+requires_zero_unreviewed_submissions = true
+requires_append_only_package_handoffs = true
+package_handoff_does_not_accept_gate_or_wave = true
+receipt_and_launch_update_same_reviewed_change = true
+
+[w1_unlock]
+stage = "W1"
+current_state = "BLOCKED"
+requires_accepted_gate = "G0"
+requires_accepted_receipt = "W0"
+requires_launch_state_active_wave = 1
+requires_launch_state_stage = "P01-P02"
+configuration_or_stage_presence_authorizes = false
+package_presence_authorizes = false
+manual_workflow_authorizes = false
+
+[current_repository_state]
+materialized_contexts = 0
+issued_tickets = 0
+active_writer_leases = 0
+submissions = 0
+accepted_reviews = 0
+accepted_package_handoffs = 0
+accepted_g0_receipt = false
+accepted_w0_receipt = false
+active_stage = "P00"
+active_wave = 0
