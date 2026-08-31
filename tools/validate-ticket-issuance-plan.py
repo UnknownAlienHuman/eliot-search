@@ -203,7 +203,30 @@ def validate(root: Path) -> dict[str, Any]:
     invariants = schema.get("invariants")
     v.require(isinstance(invariants, dict) and bool(invariants), "schema-invariants", "invariant table exists")
     if isinstance(invariants, dict):
-        v.require(all(value is True for value in invariants.values()), "schema-invariants-true", "all fail-closed invariants are enabled")
+        true_invariants = (
+            "mutations_must_be_empty",
+            "authorizes_context_materialization_must_be_false",
+            "authorizes_ticket_issuance_must_be_false",
+            "creates_writer_lease_must_be_false",
+            "authorizes_implementation_must_be_false",
+            "publishes_package_handoff_must_be_false",
+            "advances_launch_state_must_be_false",
+            "repository_inputs_are_immutable_git_tree_only",
+        )
+        false_invariants = (
+            "branch_head_is_authority",
+            "wall_clock_time_in_output",
+            "random_identity_in_output",
+        )
+        v.require(
+            set(invariants) == set(true_invariants) | set(false_invariants),
+            "schema-invariant-keys",
+            "schema invariant key set is closed",
+        )
+        for key in true_invariants:
+            v.require(invariants.get(key) is True, f"schema-invariant:{key}", f"{key} is true")
+        for key in false_invariants:
+            v.require(invariants.get(key) is False, f"schema-invariant:{key}", f"{key} is false")
     for key in ("output_is_control_record", "output_is_evidence_receipt", "output_is_claimable"):
         v.require(schema.get(key) is False, f"schema:{key}", f"{key} is false")
 
