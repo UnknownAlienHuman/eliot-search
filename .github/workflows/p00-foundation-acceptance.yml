@@ -1,0 +1,43 @@
+name: P00 foundation acceptance contracts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p00-foundation-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate non-authoritative P00 acceptance matrix
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Compile acceptance validator
+        shell: pwsh
+        run: python -m py_compile tools/validate-p00-foundation-acceptance.py
+
+      - name: Validate repository topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json
+
+      - name: Validate non-claimable P00 drafts
+        shell: pwsh
+        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Validate ticket issuance schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
+
+      - name: Validate P00 package, G0, W0 and W1 boundaries
+        shell: pwsh
+        run: ./tools/validate-p00-foundation-acceptance.ps1 -Json
