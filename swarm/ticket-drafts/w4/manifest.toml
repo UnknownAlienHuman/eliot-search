@@ -1,0 +1,97 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "DRAFT_ONLY_NOT_ISSUED"
+stage = "W4"
+wave = 4
+phases = ["P08"]
+draft_count = 9
+ticket_draft_schema_version = 2
+issued_ticket_count = 0
+active_lease_count = 0
+submission_count = 0
+accepted_review_count = 0
+package_handoff_count = 0
+wave_receipt_count = 0
+requires_accepted_gates = ["G1"]
+requires_accepted_receipts = ["W3"]
+packet_registry = "swarm/w4-agent-packets.toml"
+qualification_contract = "qualification/query/W4_QUALIFICATION.md"
+assignment_ticket_template = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
+writer_lease_template = "swarm/WRITER_LEASE_TEMPLATE.md"
+
+[[draft]]
+package = "search-access"
+path = "swarm/ticket-drafts/w4/search-access.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-handles"
+path = "swarm/ticket-drafts/w4/search-handles.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-eval"
+path = "swarm/ticket-drafts/w4/search-eval.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-query-planner"
+path = "swarm/ticket-drafts/w4/search-query-planner.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-candidate-validator"
+path = "swarm/ticket-drafts/w4/search-candidate-validator.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-retrieval-executor"
+path = "swarm/ticket-drafts/w4/search-retrieval-executor.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-result-projector"
+path = "swarm/ticket-drafts/w4/search-result-projector.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-continuation"
+path = "swarm/ticket-drafts/w4/search-continuation.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "eliot-searchd"
+path = "swarm/ticket-drafts/w4/eliot-searchd.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[invariants]
+draft_is_orchestration_state = false
+draft_may_authorize = false
+draft_may_create_lease = false
+draft_may_enable_query_product = false
+issued_ticket_requires_new_record = true
+issued_ticket_requires_exact_base_commit = true
+issued_ticket_requires_materialized_context = true
+issued_ticket_requires_writer_and_reviewer = true
+issued_ticket_requires_accepted_G1_and_W3 = true
+issued_ticket_requires_exact_dependency_handoffs = true
+issued_ticket_requires_query_qualification_inputs = true
