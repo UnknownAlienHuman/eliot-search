@@ -1,0 +1,15 @@
+schema_version = 2
+profile = "ticket_issuance_plan_digest_v2"
+plan_schema = "swarm/ticket-issuance-plan-schema-v2.toml"
+contract = "docs/handoff/TICKET_ISSUANCE_PLANNER_DIGEST_V2.md"
+algorithm = "SHA-256"
+domain_separator_ascii = "eliot-search/ticket-issuance-plan/v2\\0"
+canonicalization = "canonical_json_utf8_lf_sorted_keys_compact"
+canonical_payload = "complete_canonical_plan_object_with_plan_sha256_field_omitted"
+embedded_field = "plan_sha256"
+embedded_value_is_complete_file_digest = false
+self_referential_digest_allowed = false
+placeholder_replacement_allowed = false
+parsed_reserialization_allowed = false
+external_complete_file_digest_allowed = true
+external_complete_file_digest_is_distinct = true
