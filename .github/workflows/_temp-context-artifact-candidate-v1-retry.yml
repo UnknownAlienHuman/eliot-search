@@ -1,4 +1,4 @@
-name: Temporary context artifact candidate v1 retry
+name: Temporary context artifact candidate v1 connector handoff
 
 on:
   push:
@@ -9,14 +9,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: temp-context-artifact-candidate-v1-retry-${{ github.ref }}
+  group: temp-context-artifact-candidate-v1-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   integrate-and-qualify:
-    name: Integrate candidate builder and execute full Windows qualification
+    name: Build qualified non-workflow tree for connector publication
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - name: Checkout exact branch revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,7 +24,18 @@ jobs:
           persist-credentials: true
           fetch-depth: 1
 
-      - name: Materialize candidate layer
+      - name: Detect one-shot bootstrap input
+        id: bootstrap
+        shell: pwsh
+        run: |
+          if (Test-Path .bootstrap/context-artifact-v1.00.b64) {
+            "present=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            "present=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+
+      - name: Write verified archive materializer
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: |
           @'
@@ -70,20 +81,25 @@ jobs:
                   path = Path(*pure.parts)
                   path.parent.mkdir(parents=True, exist_ok=True)
                   path.write_bytes(bundle.read(info))
-          '@ | python -
+          '@ | Set-Content -Path "$env:RUNNER_TEMP/materialize-context-candidate.py" -Encoding utf8
 
-      - name: Remove temporary bootstrap inputs and workflows
+      - name: Build isolated qualification tree
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: |
-          Remove-Item .bootstrap -Recurse -Force
-          Remove-Item .github/workflows/_temp-context-artifact-candidate-v1.yml -Force
+          git rev-parse HEAD | Set-Content "$env:RUNNER_TEMP/base-sha.txt" -Encoding ascii
+          python "$env:RUNNER_TEMP/materialize-context-candidate.py"
           Remove-Item .github/workflows/_temp-context-artifact-candidate-v1-retry.yml -Force
+          Remove-Item .bootstrap -Recurse -Force
+          Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Temporary qualified context artifact candidate tree"
 
-      - name: Check textual integrity
-        shell: pwsh
-        run: git diff --check
-
-      - name: Compile builder, validator and corpus
+      - name: Compile builder validator and corpus
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: |
           python -m py_compile `
@@ -96,44 +112,43 @@ jobs:
             tools/validate-context-artifact-candidate.py `
             qualification/context-artifact/test_context_artifact_candidate_v1.py
 
-      - name: Commit final tree before immutable-tree checks
-        shell: pwsh
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Add deterministic context artifact candidate builder"
-          git push origin HEAD:refs/heads/prep/context-artifact-candidate-v1
-
       - name: Run twenty-case candidate corpus
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: python qualification/context-artifact/test_context_artifact_candidate_v1.py
 
-      - name: Validate candidate registry, schema and current build
+      - name: Validate candidate registry schema and current build
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: ./tools/validate-context-artifact-candidate.ps1 -Json
 
       - name: Revalidate ticket issuance planner
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: ./tools/validate-ticket-issuance-plan.ps1 -Json
 
       - name: Revalidate repository topology
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: ./tools/validate-swarm.ps1 -Json
 
       - name: Revalidate P00 drafts
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: ./tools/validate-p00-ticket-drafts.ps1 -Json
 
       - name: Revalidate ticket issuance schemas
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
 
       - name: Revalidate P00 acceptance boundary
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: ./tools/validate-p00-foundation-acceptance.ps1 -Json
 
       - name: Build and inspect current search-contracts candidate
+        if: steps.bootstrap.outputs.present == 'true'
         shell: pwsh
         run: |
           $format = git rev-parse --show-object-format
@@ -144,25 +159,31 @@ jobs:
             -BaseCommit $base `
             -OutputRoot artifacts/context-artifact-candidates/workflow `
             -PrintResult
-
-          $candidate = Get-ChildItem `
-            artifacts/context-artifact-candidates/workflow/search-contracts/*.json |
-            Select-Object -First 1
+          $candidate = Get-ChildItem artifacts/context-artifact-candidates/workflow/search-contracts/*.json | Select-Object -First 1
           $record = Get-Content $candidate.FullName -Raw | ConvertFrom-Json
-          if ($record.status -ne 'ARTIFACT_CANDIDATE_NOT_STORED_NOT_SIGNED') {
-            throw "Unexpected candidate status: $($record.status)"
-          }
-          if ($record.reason_codes.Count -ne 0) {
-            throw "Unexpected candidate reasons: $($record.reason_codes -join ',')"
-          }
-          if ($record.control_record_mutations.Count -ne 0) {
-            throw 'Candidate emitted a control-record mutation.'
-          }
-          if ($record.manifest_projection.schema_instance -ne $false) {
-            throw 'Candidate projected a context manifest schema instance.'
-          }
+          if ($record.status -ne 'ARTIFACT_CANDIDATE_NOT_STORED_NOT_SIGNED') { throw "Unexpected candidate status: $($record.status)" }
+          if ($record.reason_codes.Count -ne 0) { throw "Unexpected candidate reasons: $($record.reason_codes -join ',')" }
+          if ($record.control_record_mutations.Count -ne 0) { throw 'Candidate emitted a control-record mutation.' }
+          if ($record.manifest_projection.schema_instance -ne $false) { throw 'Candidate projected a context manifest schema instance.' }
           foreach ($property in $record.authority.PSObject.Properties) {
-            if ($property.Value -ne $false) {
-              throw "Candidate enabled authority field: $($property.Name)"
-            }
+            if ($property.Value -ne $false) { throw "Candidate enabled authority field: $($property.Name)" }
           }
+
+      - name: Rebuild connector-publishable tree
+        if: steps.bootstrap.outputs.present == 'true'
+        shell: pwsh
+        run: |
+          $base = (Get-Content "$env:RUNNER_TEMP/base-sha.txt" -Raw).Trim()
+          git reset --hard $base
+          python "$env:RUNNER_TEMP/materialize-context-candidate.py"
+          New-Item -ItemType Directory -Path .bootstrap-final -Force | Out-Null
+          Copy-Item .github/workflows/context-artifact-candidate.yml .bootstrap-final/context-artifact-candidate.yml.txt
+          Remove-Item .github/workflows/context-artifact-candidate.yml -Force
+          Remove-Item .bootstrap -Recurse -Force
+          Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add deterministic context artifact candidate builder"
+          git push origin HEAD:refs/heads/prep/context-artifact-candidate-v1
