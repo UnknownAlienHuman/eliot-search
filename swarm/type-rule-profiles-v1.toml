@@ -1,0 +1,14 @@
+schema_version = 1
+registry_kind = "control_plane_type_rule_profiles_v1"
+status = "SEMANTIC_RULE_BINDINGS"
+owner = "integration-owner"
+unknown_bindings = "reject"
+
+[[binding]]
+type = "OrderedAcceptedPackageHandoff"
+field = "evidence_digest"
+profile = "accepted_evidence_digest_v1"
+profile_path = "swarm/accepted-evidence-digest-v1.toml"
+source_record_kind = "package_handoff_v1"
+source_field = "evidence[]"
+rule = "derive_from_exact_committed_handoff_evidence_array_without_using_it_as_record_identity"

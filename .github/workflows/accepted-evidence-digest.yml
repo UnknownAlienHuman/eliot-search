@@ -1,0 +1,39 @@
+name: Accepted evidence digest v1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Compile implementation and qualification
+        shell: pwsh
+        run: |
+          python -m py_compile `
+            tools/accepted_evidence_digest_v1.py `
+            tools/compute-accepted-evidence-digest.py `
+            tools/validate-accepted-evidence-digest.py `
+            qualification/accepted-evidence/test_accepted_evidence_digest_v1.py
+
+      - name: Run semantic digest corpus
+        shell: pwsh
+        run: python qualification/accepted-evidence/test_accepted_evidence_digest_v1.py
+
+      - name: Validate registry and workflow closure
+        shell: pwsh
+        run: ./tools/validate-accepted-evidence-digest.ps1 -Json
+
+      - name: Revalidate ticket issuance schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
