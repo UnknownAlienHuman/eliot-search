@@ -1,0 +1,68 @@
+schema_version = 2
+record_kind = "assignment_ticket_draft"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+authorizes_implementation = false
+creates_lease = false
+may_be_writer_acknowledged = false
+package = "search-materializer"
+stage = "W2"
+phase = "P04"
+wave = 2
+launch_class = "BLOCKED_STAGE"
+launch_precondition = "ACCEPTED_G0_AND_W1_REQUIRED"
+issuance_status = "BLOCKED_ON_G0_W1_DEPENDENCY_HANDOFFS_IDENTITY_DIGEST_AND_CONTEXT_FREEZE"
+
+[unresolved_identity]
+ticket_id = "UNASSIGNED"
+writer = "UNASSIGNED"
+reviewer = "UNASSIGNED"
+issued_at = ""
+base_commit = "UNSELECTED"
+branch_or_worktree = "UNSELECTED"
+ticket_signed_payload_sha256 = "UNAVAILABLE"
+ticket_exact_record_file_sha256 = "UNAVAILABLE"
+integration_signature_ref = ""
+
+[repository_fence]
+repository = "UnknownAlienHuman/eliot-search"
+write_scope = "crates/search-prep/search-materializer/**"
+feature_profile = "W2_DIRECT_SOURCE_SPINE"
+package_registry_path = "swarm/crates.toml"
+function_registry_path = "swarm/function-packets.toml"
+stage_registry_path = "swarm/stages.toml"
+packet_registry_path = "swarm/w2-agent-packets.toml"
+stage_readset_registry_path = "swarm/stage-readsets.toml"
+launch_state_path = "swarm/launch-state.toml"
+registry_digests = "UNRESOLVED_AT_ISSUANCE"
+
+[stage_prerequisites]
+required_gates = ["G0"]
+required_receipts = ["W1"]
+accepted_gate_refs = []
+accepted_receipt_refs = []
+status = "UNAVAILABLE"
+
+[context]
+context_draft = "swarm/context-drafts/w2/search-materializer.toml"
+context_manifest_ref = "UNAVAILABLE"
+context_artifact_ref = "UNAVAILABLE"
+context_artifact_sha256 = "UNAVAILABLE"
+writer_visible_artifact_count = 1
+architecture_access = "exception-only"
+
+[dependencies]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports"]
+accepted_handoff_refs = []
+status = "UNAVAILABLE"
+
+[limits]
+soft_src_lines = 7000
+split_review_total_lines = 8500
+hard_total_lines = 10000
+one_active_writer = true
+
+[deliverables]
+required_outputs = ["deterministic_baseline_materialization_maps_and_assurance", "package_local_contract_property_negative_fault_tests", "public_API_schema_digest", "package_handoff_candidate", "raw_command_outcome_refs", "residual_risks_and_contract_changes"]
+required_evidence = ["encoding_newline_unicode_goldens", "coordinate_and_loss_map_validation", "loss_lowers_assurance", "exact_revision_only_input_guard", "baseline_no_execute_no_optional_provider"]
+issuance_requirements = ["accept_G0_and_W1", "bind_exact_dependency_package_handoffs", "select_exact_base_commit", "assign_distinct_writer_and_reviewer", "materialize_and_verify_one_context_bundle", "compute_registry_instruction_and_dependency_digests", "issue_assignment_ticket_as_new_record", "issue_writer_lease_after_ticket_readback", "record_writer_acknowledgement_as_append_only_lease_event"]

@@ -1,0 +1,87 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "NON_CLAIMABLE_CONTEXT_DRAFTS"
+stage = "W2"
+wave = 2
+phases = ["P03", "P04"]
+draft_count = 8
+context_draft_schema_version = 2
+materialized_context_count = 0
+writer_visible_artifact_count_per_context = 1
+ordinary_static_source_file_ceiling = 16
+max_registry_fragments_per_context = 4
+max_accepted_handoff_slots_per_context = 9
+requires_accepted_gates = ["G0"]
+requires_accepted_receipts = ["W1"]
+packet_registry = "swarm/w2-agent-packets.toml"
+context_manifest_template = "swarm/CONTEXT_MANIFEST_TEMPLATE.md"
+materialized_layout = "swarm/context-manifests/<package>/<context_record_sha256>.toml"
+
+[[draft]]
+package = "search-source-admission"
+path = "swarm/context-drafts/w2/search-source-admission.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[[draft]]
+package = "search-source-identity"
+path = "swarm/context-drafts/w2/search-source-identity.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[[draft]]
+package = "search-safe-reader"
+path = "swarm/context-drafts/w2/search-safe-reader.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[[draft]]
+package = "search-revision-store"
+path = "swarm/context-drafts/w2/search-revision-store.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[[draft]]
+package = "search-materializer"
+path = "swarm/context-drafts/w2/search-materializer.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[[draft]]
+package = "search-unitizer"
+path = "swarm/context-drafts/w2/search-unitizer.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[[draft]]
+package = "search-source-registry"
+path = "swarm/context-drafts/w2/search-source-registry.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[[draft]]
+package = "eliot-searchd"
+path = "swarm/context-drafts/w2/eliot-searchd.toml"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+source_ceiling_class = "ORDINARY"
+
+[invariants]
+base_commit_required_at_materialization = true
+per_source_sha256_required = true
+registry_selector_must_match_exactly_one_record = true
+accepted_handoff_digests_required_when_declared = true
+canonical_order_required = true
+architecture_master_allowed = false
+dependency_implementation_source_allowed = false
+materialized_context_may_be_amended = false
+manifest_and_artifact_identities_are_distinct = true
+one_writer_visible_artifact = true
