@@ -1,0 +1,34 @@
+name: W1 milestone packets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w1-milestone-packets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate W1 bounded milestone packets
+        shell: pwsh
+        run: ./tools/validate-w1-milestone-packets.ps1 -Json
+
+      - name: Revalidate W1 non-claimable drafts
+        shell: pwsh
+        run: ./tools/validate-w1-agent-drafts.ps1 -Json
+
+      - name: Revalidate topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json
