@@ -1,0 +1,104 @@
+schema_version = 1
+suite = "w3_milestone_packets_v1"
+status = "STRUCTURAL_NOT_EXECUTED"
+case_count = 20
+
+[[case]]
+id = "exact_nine_package_set"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_thirty_six_milestones"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "four_per_package"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "sequential_order"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "one_writer_one_package"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_parallel_same_package"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "write_scope_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "dependency_handoffs_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "packet_paths_exist"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "ticket_context_linkage"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "g1_w2_g1_blocking"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "qdrant_qualification_blocking"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "zero_authority"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "indexed_mode_disabled"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_architecture_read"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_prior_stage_packet_read"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_dependency_src_read"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "daemon_reentry_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exit_checkpoint_required"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "manual_readonly_workflow"
+mandatory = true
+result = "UNAVAILABLE"
