@@ -1,0 +1,216 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "W3"
+wave = 3
+status = "BLOCKED_ON_G1_W2_G1_AND_QDRANT_QUALIFICATION"
+requires_accepted_gates = ["G1"]
+requires_accepted_receipts = ["W2_G1"]
+package_count = 9
+ticket_manifest = "swarm/ticket-drafts/w3/manifest.toml"
+context_manifest = "swarm/context-drafts/w3/manifest.toml"
+qualification_contract = "qualification/qdrant/W3_QUALIFICATION.md"
+artifact_registry = "qualification/qdrant/artifact.toml"
+collection_schema = "qualification/qdrant/collection-schema.toml"
+probe_registry = "qualification/qdrant/probes.toml"
+stage_readset_registry = "swarm/stage-readsets.toml"
+launch_authority = "swarm/launch-state.toml"
+architecture_access = "exception-only"
+one_writer_one_package = true
+parallel_packages_after_prerequisites = true
+implementation_authorized_by_this_registry = false
+indexed_mode_enabled = false
+
+[[package]]
+name = "search-lexical"
+path = "crates/search-lexical"
+phase = "P05"
+execution_group = "A"
+assignment = "swarm/assignments/search-lexical.md"
+functions = "crates/search-lexical/FUNCTIONS.md"
+write_scope = "crates/search-lexical/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/lexical.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w3/search-lexical.toml"
+context_draft = "swarm/context-drafts/w3/search-lexical.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity"
+phase = "P05"
+execution_group = "A"
+assignment = "swarm/assignments/search-point-identity.md"
+functions = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+write_scope = "crates/search-index-qdrant/search-point-identity/**"
+soft_src_lines = 4500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-domain"]
+ticket_draft = "swarm/ticket-drafts/w3/search-point-identity.toml"
+context_draft = "swarm/context-drafts/w3/search-point-identity.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor"
+phase = "P05"
+execution_group = "A"
+assignment = "swarm/assignments/search-qdrant-supervisor.md"
+functions = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+write_scope = "crates/search-index-qdrant/search-qdrant-supervisor/**"
+soft_src_lines = 5500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/qdrant_process.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w3/search-qdrant-supervisor.toml"
+context_draft = "swarm/context-drafts/w3/search-qdrant-supervisor.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge"
+phase = "P05"
+execution_group = "A"
+assignment = "swarm/assignments/search-qdrant-bridge.md"
+functions = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+write_scope = "crates/search-index-qdrant/search-qdrant-bridge/**"
+soft_src_lines = 7000
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/qdrant_data.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w3/search-qdrant-bridge.toml"
+context_draft = "swarm/context-drafts/w3/search-qdrant-bridge.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins"
+phase = "P06"
+execution_group = "A"
+assignment = "swarm/assignments/search-epoch-pins.md"
+functions = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+write_scope = "crates/search-index-qdrant/search-epoch-pins/**"
+soft_src_lines = 4500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports"]
+ticket_draft = "swarm/ticket-drafts/w3/search-epoch-pins.toml"
+context_draft = "swarm/context-drafts/w3/search-epoch-pins.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner"
+phase = "P06"
+execution_group = "B"
+assignment = "swarm/assignments/search-projection-planner.md"
+functions = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+write_scope = "crates/search-index-qdrant/search-projection-planner/**"
+soft_src_lines = 7000
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-point-identity"]
+ticket_draft = "swarm/ticket-drafts/w3/search-projection-planner.toml"
+context_draft = "swarm/context-drafts/w3/search-projection-planner.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer"
+phase = "P07"
+execution_group = "B"
+assignment = "swarm/assignments/search-index-reclaimer.md"
+functions = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+write_scope = "crates/search-index-qdrant/search-index-reclaimer/**"
+soft_src_lines = 4500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/index_reclaim.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config", "search-epoch-pins"]
+ticket_draft = "swarm/ticket-drafts/w3/search-index-reclaimer.toml"
+context_draft = "swarm/context-drafts/w3/search-index-reclaimer.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-publication"
+path = "crates/search-index-qdrant/search-publication"
+phase = "P07"
+execution_group = "C"
+assignment = "swarm/assignments/search-publication.md"
+functions = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+write_scope = "crates/search-index-qdrant/search-publication/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-projection-planner", "search-point-identity"]
+ticket_draft = "swarm/ticket-drafts/w3/search-publication.toml"
+context_draft = "swarm/context-drafts/w3/search-publication.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+phase = "P07"
+execution_group = "D"
+assignment = "swarm/assignments/eliot-searchd.md"
+functions = "bins/eliot-searchd/FUNCTIONS.md"
+write_scope = "bins/eliot-searchd/**"
+soft_src_lines = 6500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["eliot-searchd", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer"]
+ticket_draft = "swarm/ticket-drafts/w3/eliot-searchd.toml"
+context_draft = "swarm/context-drafts/w3/eliot-searchd.toml"
+one_active_writer = true
+claimable = false
+
+[execution]
+group_order = ["A", "B", "C", "D"]
+group_A_packages = ["search-lexical", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-epoch-pins"]
+group_B_packages = ["search-projection-planner", "search-index-reclaimer"]
+group_C_packages = ["search-publication"]
+group_D_packages = ["eliot-searchd"]
+projection_planner_requires = ["search-point-identity"]
+index_reclaimer_requires = ["search-epoch-pins"]
+publication_requires = ["search-projection-planner", "search-point-identity"]
+daemon_requires_all_W3_library_handoffs = true
+daemon_requires_prior_stage_handoffs = ["eliot-searchd", "W2_G1"]
+
+[qualification]
+artifact_status = "UNQUALIFIED"
+server_artifact_selected = false
+client_revision_selected = false
+collection_schema_accepted = false
+mandatory_probes_executed = false
+independent_reviewer_receipt = false
+automatic_download = false
+automatic_upgrade = false
+indexed_mode_enabled = false
+
+[current_state]
+accepted_G1 = false
+accepted_W2_G1 = false
+materialized_W3_contexts = 0
+issued_W3_tickets = 0
+active_W3_leases = 0
+accepted_W3_package_handoffs = 0
+W3_receipt = "ABSENT"
