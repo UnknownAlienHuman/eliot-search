@@ -1,0 +1,105 @@
+schema_version = 2
+record_kind = "ticket_issuance_plan_v2"
+status = "ADVISORY_NON_AUTHORITATIVE"
+owner = "integration-owner-tooling"
+canonicalization = "canonical_json_utf8_lf_sorted_keys_compact"
+domain_separator_ascii = "eliot-search/ticket-issuance-plan/v2\\0"
+unknown_fields = "reject"
+output_artifact_root = "artifacts/ticket-issuance-plans"
+
+output_is_control_record = false
+output_is_evidence_receipt = false
+output_is_claimable = false
+all_other_output_paths_allowed = false
+working_tree_input_allowed = false
+
+closed_decisions = [
+  "READY_FOR_CONTEXT_MATERIALIZATION_PREVIEW",
+  "BLOCKED_MISSING_SELECTION",
+  "BLOCKED_PREREQUISITE",
+  "BLOCKED_CONFLICT",
+  "INVALID_REPOSITORY_STATE",
+]
+
+closed_reason_codes = [
+  "GIT_REPOSITORY_INVALID",
+  "PACKAGE_UNKNOWN",
+  "PACKAGE_STAGE_MISMATCH",
+  "PACKAGE_REGISTRY_MISMATCH",
+  "DRAFT_MANIFEST_MISMATCH",
+  "DRAFT_PAIR_MISSING",
+  "DRAFT_PAIR_MISMATCH",
+  "DRAFT_UNKNOWN_FIELD",
+  "DRAFT_BECAME_CLAIMABLE",
+  "DRAFT_IDENTITY_PREMATURELY_RESOLVED",
+  "CONTEXT_BUDGET_EXCEEDED",
+  "CONTEXT_SOURCE_MISSING",
+  "CONTEXT_SOURCE_NOT_REGULAR",
+  "CONTEXT_SOURCE_NOT_UTF8",
+  "CONTEXT_SOURCE_FORBIDDEN",
+  "CONTEXT_SELECTOR_INVALID",
+  "CONTEXT_SELECTOR_NOT_UNIQUE",
+  "HANDOFF_SLOT_UNSATISFIED",
+  "HANDOFF_SET_UNEXPECTED",
+  "HANDOFF_RECORD_INVALID",
+  "HANDOFF_RECORD_SUPERSEDED",
+  "PARTIAL_ISSUANCE_SELECTION",
+  "BASE_COMMIT_INVALID",
+  "ACTOR_IDENTITY_INVALID",
+  "WRITER_REVIEWER_CONFLICT",
+  "CURRENT_PACKAGE_CONTROL_RECORD_EXISTS",
+  "W0_ALREADY_ACCEPTED",
+  "CONTROL_SCHEMA_MISMATCH",
+  "WORKFLOW_POLICY_VIOLATION",
+  "OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT",
+  "OUTPUT_PATH_SYMLINK",
+  "OUTPUT_WRITE_FAILED",
+]
+
+required_top_level_fields = [
+  "schema_version",
+  "record_kind",
+  "status",
+  "repository",
+  "package",
+  "stage",
+  "launch",
+  "selection",
+  "drafts",
+  "prerequisites",
+  "checks",
+  "decision",
+  "reason_codes",
+  "mutations",
+  "authorizes_context_materialization",
+  "authorizes_ticket_issuance",
+  "creates_writer_lease",
+  "authorizes_implementation",
+  "publishes_package_handoff",
+  "advances_launch_state",
+  "plan_sha256",
+]
+
+[limits]
+max_plan_bytes = 262144
+max_checks = 512
+max_reason_codes = 32
+max_source_files = 24
+max_registry_fragments = 6
+max_accepted_handoffs = 1
+max_source_bytes = 4194304
+max_context_source_bytes = 16777216
+zero_means_unlimited = false
+
+[invariants]
+mutations_must_be_empty = true
+authorizes_context_materialization_must_be_false = true
+authorizes_ticket_issuance_must_be_false = true
+creates_writer_lease_must_be_false = true
+authorizes_implementation_must_be_false = true
+publishes_package_handoff_must_be_false = true
+advances_launch_state_must_be_false = true
+repository_inputs_are_immutable_git_tree_only = true
+branch_head_is_authority = false
+wall_clock_time_in_output = false
+random_identity_in_output = false
