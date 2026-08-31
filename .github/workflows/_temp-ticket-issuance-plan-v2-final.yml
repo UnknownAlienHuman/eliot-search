@@ -1,0 +1,172 @@
+name: Temporary final planner v2 qualification
+
+on:
+  push:
+    branches:
+      - "prep/ticket-issuance-planner-v2"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-ticket-issuance-plan-v2-final-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fix-and-qualify:
+    name: Apply exact fix and execute full Windows qualification
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact branch revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Separate registry target from ticket soft budget
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          def replace_once(relative: str, old: str, new: str) -> None:
+              path = Path(relative)
+              text = path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{relative}: expected one replacement marker, found {count}")
+              path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+
+          replace_once(
+              "tools/ticket_issuance_planner_v2/drafts.py",
+              '''    path = package_row.get("path") if package_row else None
+          soft_target = package_row.get("soft_src_line_target") if package_row else None
+          fence_ok = (''',
+              '''    path = package_row.get("path") if package_row else None
+          registry_soft_target = (
+              package_row.get("soft_src_line_target") if package_row else None
+          )
+          ticket_soft_limit = limits.get("soft_src_lines")
+          split_review_limit = limits.get("split_review_total_lines")
+          hard_limit = limits.get("hard_total_lines")
+          line_limits_ok = (
+              isinstance(registry_soft_target, int)
+              and isinstance(ticket_soft_limit, int)
+              and isinstance(split_review_limit, int)
+              and isinstance(hard_limit, int)
+              and 0 < registry_soft_target <= ticket_soft_limit
+              and ticket_soft_limit <= split_review_limit <= hard_limit
+              and split_review_limit == 8500
+              and hard_limit == 10000
+          )
+          fence_ok = (''',
+          )
+          replace_once(
+              "tools/ticket_issuance_planner_v2/drafts.py",
+              '''        and ticket_context.get("architecture_access") == "exception-only"
+                  and limits.get("soft_src_lines") == soft_target
+                  and limits.get("split_review_total_lines") == 8500
+                  and limits.get("hard_total_lines") == 10000
+                  and limits.get("one_active_writer") is True''',
+              '''        and ticket_context.get("architecture_access") == "exception-only"
+                  and line_limits_ok
+                  and limits.get("one_active_writer") is True''',
+          )
+          replace_once(
+              "qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py",
+              'soft = {"search-contracts": 7500, "search-domain": 7000, "search-ports": 5500}[package]',
+              'soft = {"search-contracts": 8000, "search-domain": 7000, "search-ports": 5500}[package]',
+          )
+          replace_once(
+              "docs/handoff/TICKET_ISSUANCE_PLANNER_V2.md",
+              '''Legacy collapsed context fields are rejected. Ticket/context package, stage, phase, wave, path, write
+          scope, feature profile, limits, dependency slots and sentinel state must agree.''',
+              '''Legacy collapsed context fields are rejected. Ticket/context package, stage, phase, wave, path, write
+          scope, feature profile, dependency slots and sentinel state must agree. Package-registry
+          `soft_src_line_target` and ticket `soft_src_lines` are distinct: the planner requires
+          `registry target <= ticket soft <= split review <= hard limit`; the P00 draft validator retains the exact
+          package-specific values.''',
+          )
+          '@ | python -
+
+      - name: Remove temporary final workflow
+        shell: pwsh
+        run: Remove-Item .github/workflows/_temp-ticket-issuance-plan-v2-final.yml -Force
+
+      - name: Commit final tree before immutable-tree checks
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add `
+            tools/ticket_issuance_planner_v2/drafts.py `
+            qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
+            docs/handoff/TICKET_ISSUANCE_PLANNER_V2.md `
+            .github/workflows/_temp-ticket-issuance-plan-v2-final.yml
+          git commit -m "fix: distinguish package target from ticket soft budget"
+          git push origin HEAD:refs/heads/prep/ticket-issuance-planner-v2
+
+      - name: Check textual integrity
+        shell: pwsh
+        run: git diff --check
+
+      - name: Compile planner, modules, validator and corpus
+        shell: pwsh
+        run: |
+          python -m py_compile `
+            tools/plan-ticket-issuance.py `
+            tools/ticket_issuance_planner_v2/__init__.py `
+            tools/ticket_issuance_planner_v2/core.py `
+            tools/ticket_issuance_planner_v2/drafts.py `
+            tools/ticket_issuance_planner_v2/context.py `
+            tools/ticket_issuance_planner_v2/control.py `
+            tools/ticket_issuance_planner_v2/plan.py `
+            tools/validate-ticket-issuance-plan.py `
+            qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
+            qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
+
+      - name: Run 30-case planner conformance corpus
+        shell: pwsh
+        run: python qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
+
+      - name: Validate planner registry and current repository result
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-plan.ps1 -Json
+
+      - name: Revalidate repository topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json
+
+      - name: Revalidate P00 drafts
+        shell: pwsh
+        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Revalidate ticket issuance schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
+
+      - name: Revalidate P00 acceptance boundary
+        shell: pwsh
+        run: ./tools/validate-p00-foundation-acceptance.ps1 -Json
+
+      - name: Produce and inspect current advisory plan
+        shell: pwsh
+        run: |
+          ./tools/plan-ticket-issuance.ps1 `
+            -Package search-contracts `
+            -Output artifacts/ticket-issuance-plans/search-contracts.json
+          $plan = Get-Content artifacts/ticket-issuance-plans/search-contracts.json -Raw | ConvertFrom-Json
+          if ($plan.decision -ne 'BLOCKED_MISSING_SELECTION') { throw "Unexpected decision: $($plan.decision)" }
+          if ($plan.reason_codes.Count -ne 0) { throw "Unexpected reasons: $($plan.reason_codes -join ',')" }
+          if ($plan.mutations.Count -ne 0) { throw 'Planner emitted a mutation.' }
+          foreach ($field in @(
+            'authorizes_context_materialization',
+            'authorizes_ticket_issuance',
+            'creates_writer_lease',
+            'authorizes_implementation',
+            'publishes_package_handoff',
+            'advances_launch_state'
+          )) {
+            if ($plan.$field -ne $false) { throw "Planner enabled authority: $field" }
+          }
