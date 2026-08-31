@@ -40,38 +40,34 @@ jobs:
 
           replace_once(
               "tools/ticket_issuance_planner_v2/drafts.py",
-              '''    path = package_row.get("path") if package_row else None
-          soft_target = package_row.get("soft_src_line_target") if package_row else None
-          fence_ok = (''',
-              '''    path = package_row.get("path") if package_row else None
-          registry_soft_target = (
-              package_row.get("soft_src_line_target") if package_row else None
-          )
-          ticket_soft_limit = limits.get("soft_src_lines")
-          split_review_limit = limits.get("split_review_total_lines")
-          hard_limit = limits.get("hard_total_lines")
-          line_limits_ok = (
-              isinstance(registry_soft_target, int)
-              and isinstance(ticket_soft_limit, int)
-              and isinstance(split_review_limit, int)
-              and isinstance(hard_limit, int)
-              and 0 < registry_soft_target <= ticket_soft_limit
-              and ticket_soft_limit <= split_review_limit <= hard_limit
-              and split_review_limit == 8500
-              and hard_limit == 10000
-          )
-          fence_ok = (''',
+              '    soft_target = package_row.get("soft_src_line_target") if package_row else None',
+              "\n".join([
+                  '    registry_soft_target = (',
+                  '        package_row.get("soft_src_line_target") if package_row else None',
+                  '    )',
+                  '    ticket_soft_limit = limits.get("soft_src_lines")',
+                  '    split_review_limit = limits.get("split_review_total_lines")',
+                  '    hard_limit = limits.get("hard_total_lines")',
+                  '    line_limits_ok = (',
+                  '        isinstance(registry_soft_target, int)',
+                  '        and isinstance(ticket_soft_limit, int)',
+                  '        and isinstance(split_review_limit, int)',
+                  '        and isinstance(hard_limit, int)',
+                  '        and 0 < registry_soft_target <= ticket_soft_limit',
+                  '        and ticket_soft_limit <= split_review_limit <= hard_limit',
+                  '        and split_review_limit == 8500',
+                  '        and hard_limit == 10000',
+                  '    )',
+              ]),
           )
           replace_once(
               "tools/ticket_issuance_planner_v2/drafts.py",
-              '''        and ticket_context.get("architecture_access") == "exception-only"
-                  and limits.get("soft_src_lines") == soft_target
-                  and limits.get("split_review_total_lines") == 8500
-                  and limits.get("hard_total_lines") == 10000
-                  and limits.get("one_active_writer") is True''',
-              '''        and ticket_context.get("architecture_access") == "exception-only"
-                  and line_limits_ok
-                  and limits.get("one_active_writer") is True''',
+              "\n".join([
+                  '        and limits.get("soft_src_lines") == soft_target',
+                  '        and limits.get("split_review_total_lines") == 8500',
+                  '        and limits.get("hard_total_lines") == 10000',
+              ]),
+              '        and line_limits_ok',
           )
           replace_once(
               "qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py",
@@ -80,13 +76,17 @@ jobs:
           )
           replace_once(
               "docs/handoff/TICKET_ISSUANCE_PLANNER_V2.md",
-              '''Legacy collapsed context fields are rejected. Ticket/context package, stage, phase, wave, path, write
-          scope, feature profile, limits, dependency slots and sentinel state must agree.''',
-              '''Legacy collapsed context fields are rejected. Ticket/context package, stage, phase, wave, path, write
-          scope, feature profile, dependency slots and sentinel state must agree. Package-registry
-          `soft_src_line_target` and ticket `soft_src_lines` are distinct: the planner requires
-          `registry target <= ticket soft <= split review <= hard limit`; the P00 draft validator retains the exact
-          package-specific values.''',
+              "\n".join([
+                  'Legacy collapsed context fields are rejected. Ticket/context package, stage, phase, wave, path, write',
+                  'scope, feature profile, limits, dependency slots and sentinel state must agree.',
+              ]),
+              "\n".join([
+                  'Legacy collapsed context fields are rejected. Ticket/context package, stage, phase, wave, path, write',
+                  'scope, feature profile, dependency slots and sentinel state must agree. Package-registry',
+                  '`soft_src_line_target` and ticket `soft_src_lines` are distinct: the planner requires',
+                  '`registry target <= ticket soft <= split review <= hard limit`; the P00 draft validator retains the exact',
+                  'package-specific values.',
+              ]),
           )
           '@ | python -
 
