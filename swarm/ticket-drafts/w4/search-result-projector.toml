@@ -1,0 +1,77 @@
+schema_version = 2
+record_kind = "assignment_ticket_draft"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+authorizes_implementation = false
+creates_lease = false
+may_be_writer_acknowledged = false
+package = "search-result-projector"
+stage = "W4"
+phase = "P08"
+wave = 4
+launch_class = "BLOCKED_STAGE"
+launch_precondition = "ACCEPTED_G1_AND_W3_REQUIRED"
+issuance_status = "BLOCKED_ON_G1_W3_DEPENDENCY_HANDOFFS_QUERY_QUALIFICATION_IDENTITY_DIGEST_AND_CONTEXT_FREEZE"
+
+[unresolved_identity]
+ticket_id = "UNASSIGNED"
+writer = "UNASSIGNED"
+reviewer = "UNASSIGNED"
+issued_at = ""
+base_commit = "UNSELECTED"
+branch_or_worktree = "UNSELECTED"
+ticket_signed_payload_sha256 = "UNAVAILABLE"
+ticket_exact_record_file_sha256 = "UNAVAILABLE"
+integration_signature_ref = ""
+
+[repository_fence]
+repository = "UnknownAlienHuman/eliot-search"
+write_scope = "crates/search-query/search-result-projector/**"
+feature_profile = "W4_BASELINE_QUERY_PRODUCT"
+package_registry_path = "swarm/crates.toml"
+function_registry_path = "swarm/function-packets.toml"
+stage_registry_path = "swarm/stages.toml"
+packet_registry_path = "swarm/w4-agent-packets.toml"
+stage_readset_registry_path = "swarm/stage-readsets.toml"
+launch_state_path = "swarm/launch-state.toml"
+registry_digests = "UNRESOLVED_AT_ISSUANCE"
+
+[stage_prerequisites]
+required_gates = ["G1"]
+required_receipts = ["W3"]
+accepted_gate_refs = []
+accepted_receipt_refs = []
+status = "UNAVAILABLE"
+
+[context]
+context_draft = "swarm/context-drafts/w4/search-result-projector.toml"
+context_manifest_ref = "UNAVAILABLE"
+context_artifact_ref = "UNAVAILABLE"
+context_artifact_sha256 = "UNAVAILABLE"
+writer_visible_artifact_count = 1
+architecture_access = "exception-only"
+
+[dependencies]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-candidate-validator", "search-handles"]
+accepted_handoff_refs = []
+status = "UNAVAILABLE"
+
+[qualification]
+contract = "qualification/query/W4_QUALIFICATION.md"
+baseline_manifest = "qualification/query/baseline.toml"
+probe_registry = "qualification/query/probes.toml"
+status = "DESIGNED_NOT_EXECUTED"
+mandatory_probe_evidence = "UNAVAILABLE"
+independent_reviewer_receipt = "ABSENT"
+query_product_enabled = false
+
+[limits]
+soft_src_lines = 7000
+split_review_total_lines = 8500
+hard_total_lines = 10000
+one_active_writer = true
+
+[deliverables]
+required_outputs = ["compact_truthful_result_cards_and_source_handles", "package_local_contract_property_negative_fault_tests", "public_API_schema_digest", "package_handoff_candidate", "raw_command_outcome_refs", "residual_risks_and_contract_changes"]
+required_evidence = ["validated_source_only_result_projection", "coverage_freshness_assurance_and_gap_preservation", "truncation_records_omission", "full_file_default_forbidden", "content_and_foreign_scope_disclosure_guard"]
+issuance_requirements = ["accept_G1_and_W3", "bind_exact_dependency_package_handoffs", "bind_query_qualification_inputs", "select_exact_base_commit", "assign_distinct_writer_and_reviewer", "materialize_and_verify_one_context_bundle", "issue_assignment_ticket_as_new_record", "issue_writer_lease_after_ticket_readback", "record_writer_acknowledgement_as_append_only_lease_event"]
