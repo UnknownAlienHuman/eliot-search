@@ -1,0 +1,198 @@
+schema_version = 2
+suite = "ticket_issuance_planner_v2"
+status = "STRUCTURAL_CONFORMANCE_NOT_AUTHORITY"
+contract = "docs/handoff/TICKET_ISSUANCE_PLANNER_V2.md"
+planner = "tools/plan-ticket-issuance.py"
+plan_schema = "swarm/ticket-issuance-plan-schema-v2.toml"
+digest_profile = "swarm/ticket-issuance-plan-digest-v2.toml"
+case_count = 30
+
+[[case]]
+id = "PLAN2-001"
+name = "missing selection"
+expected = "BLOCKED_MISSING_SELECTION"
+expected_reasons = []
+
+[[case]]
+id = "PLAN2-002"
+name = "deterministic repeated plan"
+expected = "BYTE_IDENTICAL"
+expected_reasons = []
+
+[[case]]
+id = "PLAN2-003"
+name = "complete contracts selection"
+expected = "READY_FOR_CONTEXT_MATERIALIZATION_PREVIEW"
+expected_reasons = []
+
+[[case]]
+id = "PLAN2-004"
+name = "partial selection"
+expected = "BLOCKED_CONFLICT"
+expected_reasons = ["PARTIAL_ISSUANCE_SELECTION"]
+
+[[case]]
+id = "PLAN2-005"
+name = "invalid actor identity"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["ACTOR_IDENTITY_INVALID"]
+
+[[case]]
+id = "PLAN2-006"
+name = "writer reviewer collision"
+expected = "BLOCKED_CONFLICT"
+expected_reasons = ["WRITER_REVIEWER_CONFLICT"]
+
+[[case]]
+id = "PLAN2-007"
+name = "abbreviated base commit"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["BASE_COMMIT_INVALID"]
+
+[[case]]
+id = "PLAN2-008"
+name = "working tree ignored"
+expected = "BLOCKED_MISSING_SELECTION"
+expected_reasons = []
+
+[[case]]
+id = "PLAN2-009"
+name = "claimable draft"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["DRAFT_BECAME_CLAIMABLE"]
+
+[[case]]
+id = "PLAN2-010"
+name = "premature ticket identity"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["DRAFT_IDENTITY_PREMATURELY_RESOLVED"]
+
+[[case]]
+id = "PLAN2-011"
+name = "legacy schema field"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["DRAFT_UNKNOWN_FIELD"]
+
+[[case]]
+id = "PLAN2-012"
+name = "exact contracts pack drift"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["DRAFT_MANIFEST_MISMATCH"]
+
+[[case]]
+id = "PLAN2-013"
+name = "ordinary source ceiling exceeded"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_BUDGET_EXCEEDED"]
+
+[[case]]
+id = "PLAN2-014"
+name = "context source missing"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SOURCE_MISSING"]
+
+[[case]]
+id = "PLAN2-015"
+name = "context source symlink"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SOURCE_NOT_REGULAR"]
+
+[[case]]
+id = "PLAN2-016"
+name = "context source not UTF-8"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SOURCE_NOT_UTF8"]
+
+[[case]]
+id = "PLAN2-017"
+name = "forbidden context source"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SOURCE_FORBIDDEN"]
+
+[[case]]
+id = "PLAN2-018"
+name = "invalid selector grammar"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SELECTOR_INVALID"]
+
+[[case]]
+id = "PLAN2-019"
+name = "selector not unique"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["CONTEXT_SELECTOR_NOT_UNIQUE"]
+
+[[case]]
+id = "PLAN2-020"
+name = "conditional handoff missing"
+expected = "BLOCKED_PREREQUISITE"
+expected_reasons = ["HANDOFF_SLOT_UNSATISFIED"]
+
+[[case]]
+id = "PLAN2-021"
+name = "valid conditional handoff"
+expected = "READY_FOR_CONTEXT_MATERIALIZATION_PREVIEW"
+expected_reasons = []
+
+[[case]]
+id = "PLAN2-022"
+name = "invalid handoff signature"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["HANDOFF_RECORD_INVALID"]
+
+[[case]]
+id = "PLAN2-023"
+name = "unexpected current-package handoff"
+expected = "BLOCKED_CONFLICT"
+expected_reasons = ["CURRENT_PACKAGE_CONTROL_RECORD_EXISTS"]
+
+[[case]]
+id = "PLAN2-024"
+name = "current package control record"
+expected = "BLOCKED_CONFLICT"
+expected_reasons = ["CURRENT_PACKAGE_CONTROL_RECORD_EXISTS"]
+
+[[case]]
+id = "PLAN2-025"
+name = "nested README metadata bypass"
+expected = "BLOCKED_CONFLICT"
+expected_reasons = ["CURRENT_PACKAGE_CONTROL_RECORD_EXISTS"]
+
+[[case]]
+id = "PLAN2-026"
+name = "W0 receipt exists"
+expected = "BLOCKED_CONFLICT"
+expected_reasons = ["W0_ALREADY_ACCEPTED"]
+
+[[case]]
+id = "PLAN2-027"
+name = "automatic workflow trigger"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["WORKFLOW_POLICY_VIOLATION"]
+
+[[case]]
+id = "PLAN2-028"
+name = "output outside artifact root"
+expected = "INVALID_REPOSITORY_STATE"
+expected_reasons = ["OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT"]
+
+[[case]]
+id = "PLAN2-029"
+name = "output inside artifact root"
+expected = "BLOCKED_MISSING_SELECTION"
+expected_reasons = []
+
+[[case]]
+id = "PLAN2-030"
+name = "zero authority and non-circular digest"
+expected = "INVARIANT"
+expected_reasons = []
+
+[invariants]
+all_repository_inputs_from_immutable_git_tree = true
+all_plans_have_empty_mutations = true
+all_authority_flags_are_false = true
+plan_digest_excludes_only_plan_sha256 = true
+ordinary_context_ceiling_is_manifest_owned = true
+exact_contract_pack_is_manifest_closed = true
+planner_writes_only_under_artifact_root_or_stdout = true
+planner_does_not_advance_launch = true

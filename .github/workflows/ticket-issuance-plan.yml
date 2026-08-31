@@ -1,0 +1,92 @@
+name: Ticket issuance advisory planner v2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ticket-issuance-plan-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Qualify schema-v2 fail-closed planner
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Compile planner, validator and corpus
+        shell: pwsh
+        run: |
+          python -m py_compile `
+            tools/plan-ticket-issuance.py `
+            tools/ticket_issuance_planner_v2/__init__.py `
+            tools/ticket_issuance_planner_v2/core.py `
+            tools/ticket_issuance_planner_v2/drafts.py `
+            tools/ticket_issuance_planner_v2/context.py `
+            tools/ticket_issuance_planner_v2/control.py `
+            tools/ticket_issuance_planner_v2/plan.py `
+            tools/validate-ticket-issuance-plan.py `
+            qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
+            qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
+
+      - name: Run 30-case planner conformance corpus
+        shell: pwsh
+        run: python qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
+
+      - name: Validate planner registry, schema and current result
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-plan.ps1 -Json
+
+      - name: Revalidate repository topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json
+
+      - name: Revalidate P00 drafts
+        shell: pwsh
+        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Revalidate ticket issuance schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
+
+      - name: Revalidate P00 acceptance boundary
+        shell: pwsh
+        run: ./tools/validate-p00-foundation-acceptance.ps1 -Json
+
+      - name: Produce and inspect current advisory plan
+        shell: pwsh
+        run: |
+          ./tools/plan-ticket-issuance.ps1 `
+            -Package search-contracts `
+            -Output artifacts/ticket-issuance-plans/search-contracts.json
+
+          $plan = Get-Content artifacts/ticket-issuance-plans/search-contracts.json -Raw | ConvertFrom-Json
+          if ($plan.decision -ne 'BLOCKED_MISSING_SELECTION') {
+            throw "Unexpected current decision: $($plan.decision)"
+          }
+          if ($plan.reason_codes.Count -ne 0) {
+            throw "Unexpected current reason codes: $($plan.reason_codes -join ',')"
+          }
+          if ($plan.mutations.Count -ne 0) {
+            throw 'Planner emitted a mutation.'
+          }
+          foreach ($field in @(
+            'authorizes_context_materialization',
+            'authorizes_ticket_issuance',
+            'creates_writer_lease',
+            'authorizes_implementation',
+            'publishes_package_handoff',
+            'advances_launch_state'
+          )) {
+            if ($plan.$field -ne $false) {
+              throw "Planner enabled authority field: $field"
+            }
+          }
