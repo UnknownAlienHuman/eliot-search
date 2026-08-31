@@ -1,0 +1,217 @@
+name: Temporary ticket issuance planner v2 qualification
+
+on:
+  push:
+    branches:
+      - "prep/ticket-issuance-planner-v2"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-ticket-issuance-plan-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synchronize-and-qualify:
+    name: Synchronize final tree and qualify on Windows
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact branch revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Synchronize registry, fixture and navigation
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          def replace_once(relative: str, old: str, new: str) -> None:
+              path = Path(relative)
+              text = path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{relative}: expected one replacement marker, found {count}")
+              path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+
+          replace_once(
+              "swarm/ticket-issuance-planner-v2.toml",
+              'implementation = "tools/plan-ticket-issuance.py"\npowershell_wrapper = "tools/plan-ticket-issuance.ps1"',
+              '''implementation = "tools/plan-ticket-issuance.py"
+          implementation_modules = [
+            "tools/ticket_issuance_planner_v2/__init__.py",
+            "tools/ticket_issuance_planner_v2/core.py",
+            "tools/ticket_issuance_planner_v2/drafts.py",
+            "tools/ticket_issuance_planner_v2/context.py",
+            "tools/ticket_issuance_planner_v2/control.py",
+            "tools/ticket_issuance_planner_v2/plan.py",
+          ]
+          powershell_wrapper = "tools/plan-ticket-issuance.ps1"''',
+          )
+          replace_once(
+              "swarm/ticket-issuance-planner-v2.toml",
+              'qualification_cases = "qualification/ticket-issuance/cases-v2.toml"\nqualification_tests = "qualification/ticket-issuance/test_plan_ticket_issuance_v2.py"',
+              'qualification_cases = "qualification/ticket-issuance/cases-v2.toml"\nqualification_fixture = "qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py"\nqualification_tests = "qualification/ticket-issuance/test_plan_ticket_issuance_v2.py"',
+          )
+          replace_once(
+              "qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py",
+              'spec_from_file_location("ticket_issuance_planner_v2", PLANNER_PATH)',
+              'spec_from_file_location("ticket_issuance_planner_v2_cli", PLANNER_PATH)',
+          )
+          replace_once(
+              "docs/handoff/TICKET_ISSUANCE_PLANNER_INDEX.md",
+              '- [`../../tools/plan-ticket-issuance.py`](../../tools/plan-ticket-issuance.py) — dependency-free immutable-tree planner.\n- [`../../tools/plan-ticket-issuance.ps1`](../../tools/plan-ticket-issuance.ps1) — Windows wrapper.',
+              '- [`../../tools/plan-ticket-issuance.py`](../../tools/plan-ticket-issuance.py) — dependency-free CLI and compatibility entrypoint.\n- [`../../tools/ticket_issuance_planner_v2/`](../../tools/ticket_issuance_planner_v2/) — bounded immutable-tree, draft, context, control and plan modules.\n- [`../../tools/plan-ticket-issuance.ps1`](../../tools/plan-ticket-issuance.ps1) — Windows wrapper.',
+          )
+          replace_once(
+              "docs/handoff/TICKET_ISSUANCE_PLANNER_INDEX.md",
+              '- [`../../qualification/ticket-issuance/cases-v2.toml`](../../qualification/ticket-issuance/cases-v2.toml) — 30-case inventory.\n- [`../../qualification/ticket-issuance/test_plan_ticket_issuance_v2.py`](../../qualification/ticket-issuance/test_plan_ticket_issuance_v2.py) — substantive conformance suite.',
+              '- [`../../qualification/ticket-issuance/cases-v2.toml`](../../qualification/ticket-issuance/cases-v2.toml) — 30-case inventory.\n- [`../../qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py`](../../qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py) — deterministic committed-Git fixture.\n- [`../../qualification/ticket-issuance/test_plan_ticket_issuance_v2.py`](../../qualification/ticket-issuance/test_plan_ticket_issuance_v2.py) — substantive conformance suite.',
+          )
+          replace_once(
+              "qualification/ticket-issuance/README.md",
+              '''python -m py_compile `
+            tools/plan-ticket-issuance.py `
+            tools/validate-ticket-issuance-plan.py `
+            qualification/ticket-issuance/test_plan_ticket_issuance_v2.py''',
+              '''python -m py_compile `
+            tools/plan-ticket-issuance.py `
+            tools/ticket_issuance_planner_v2/core.py `
+            tools/ticket_issuance_planner_v2/drafts.py `
+            tools/ticket_issuance_planner_v2/context.py `
+            tools/ticket_issuance_planner_v2/control.py `
+            tools/ticket_issuance_planner_v2/plan.py `
+            tools/validate-ticket-issuance-plan.py `
+            qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
+            qualification/ticket-issuance/test_plan_ticket_issuance_v2.py''',
+          )
+          replace_once(
+              "docs/handoff/README.md",
+              '''- [TICKET_ISSUANCE_OPERATIONS.md](TICKET_ISSUANCE_OPERATIONS.md) — exact idempotent materialization,
+            ticket/lease/submission/review/handoff operations, recovery decisions and typed failures.
+          - [P00_FOUNDATION_ACCEPTANCE_MATRIX.md](P00_FOUNDATION_ACCEPTANCE_MATRIX.md) — exact package-handoff,''',
+              '''- [TICKET_ISSUANCE_OPERATIONS.md](TICKET_ISSUANCE_OPERATIONS.md) — exact idempotent materialization,
+            ticket/lease/submission/review/handoff operations, recovery decisions and typed failures.
+          - [TICKET_ISSUANCE_PLANNER_INDEX.md](TICKET_ISSUANCE_PLANNER_INDEX.md) — executable immutable-tree
+            schema-v2 preflight, 30-case corpus and non-circular advisory plan digest; it creates no authority.
+          - [P00_FOUNDATION_ACCEPTANCE_MATRIX.md](P00_FOUNDATION_ACCEPTANCE_MATRIX.md) — exact package-handoff,''',
+          )
+          replace_once(
+              "tools/README.md",
+              '''Its JSON output keeps all package, G0, W0 and W1 authority claims false. A PASS proves only that the
+          acceptance boundary is structurally closed; it does not create any record or authorize implementation.
+
+          ## Implementation and qualification packets''',
+              '''Its JSON output keeps all package, G0, W0 and W1 authority claims false. A PASS proves only that the
+          acceptance boundary is structurally closed; it does not create any record or authorize implementation.
+
+          ### Ticket issuance advisory planner v2
+
+          ```powershell
+          pwsh -NoProfile -File tools/plan-ticket-issuance.ps1 `
+            -Package search-contracts `
+            -Output artifacts/ticket-issuance-plans/search-contracts.json
+
+          pwsh -NoProfile -File tools/validate-ticket-issuance-plan.ps1 -Json
+          ```
+
+          The dependency-free planner reads one immutable Git tree, validates schema-v2 P00 drafts,
+          manifest-owned 16/24 source ceilings, exact selectors, accepted prerequisite handoffs, current-package
+          control conflicts and workflow policy, then emits a deterministic advisory JSON decision. Output is
+          limited to stdout or ignored files under `artifacts/ticket-issuance-plans/`.
+
+          `READY_FOR_CONTEXT_MATERIALIZATION_PREVIEW` authorizes nothing. The planner never materializes context,
+          issues a ticket or lease, publishes a handoff, accepts G0/W0 or advances launch state. The validator runs
+          the 30-case corpus and requires the current repository decision to remain `BLOCKED_MISSING_SELECTION`.
+
+          ## Implementation and qualification packets''',
+          )
+          '@ | python -
+
+      - name: Remove temporary automatic workflow
+        shell: pwsh
+        run: Remove-Item .github/workflows/_temp-ticket-issuance-plan-v2.yml -Force
+
+      - name: Commit final validation tree before immutable-tree checks
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add `
+            swarm/ticket-issuance-planner-v2.toml `
+            qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
+            qualification/ticket-issuance/README.md `
+            docs/handoff/TICKET_ISSUANCE_PLANNER_INDEX.md `
+            docs/handoff/README.md `
+            tools/README.md `
+            .github/workflows/_temp-ticket-issuance-plan-v2.yml
+          git commit -m "docs: synchronize planner v2 registry and navigation"
+          git push origin HEAD:refs/heads/prep/ticket-issuance-planner-v2
+
+      - name: Check textual integrity
+        shell: pwsh
+        run: git diff --check
+
+      - name: Compile planner, modules, validator and corpus
+        shell: pwsh
+        run: |
+          python -m py_compile `
+            tools/plan-ticket-issuance.py `
+            tools/ticket_issuance_planner_v2/__init__.py `
+            tools/ticket_issuance_planner_v2/core.py `
+            tools/ticket_issuance_planner_v2/drafts.py `
+            tools/ticket_issuance_planner_v2/context.py `
+            tools/ticket_issuance_planner_v2/control.py `
+            tools/ticket_issuance_planner_v2/plan.py `
+            tools/validate-ticket-issuance-plan.py `
+            qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
+            qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
+
+      - name: Run 30-case planner conformance corpus
+        shell: pwsh
+        run: python qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
+
+      - name: Validate planner registry and current repository result
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-plan.ps1 -Json
+
+      - name: Revalidate repository topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json
+
+      - name: Revalidate P00 drafts
+        shell: pwsh
+        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Revalidate ticket issuance schemas
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
+
+      - name: Revalidate P00 acceptance boundary
+        shell: pwsh
+        run: ./tools/validate-p00-foundation-acceptance.ps1 -Json
+
+      - name: Produce and inspect current advisory plan
+        shell: pwsh
+        run: |
+          ./tools/plan-ticket-issuance.ps1 `
+            -Package search-contracts `
+            -Output artifacts/ticket-issuance-plans/search-contracts.json
+          $plan = Get-Content artifacts/ticket-issuance-plans/search-contracts.json -Raw | ConvertFrom-Json
+          if ($plan.decision -ne 'BLOCKED_MISSING_SELECTION') { throw "Unexpected decision: $($plan.decision)" }
+          if ($plan.reason_codes.Count -ne 0) { throw "Unexpected reasons: $($plan.reason_codes -join ',')" }
+          if ($plan.mutations.Count -ne 0) { throw 'Planner emitted a mutation.' }
+          foreach ($field in @(
+            'authorizes_context_materialization',
+            'authorizes_ticket_issuance',
+            'creates_writer_lease',
+            'authorizes_implementation',
+            'publishes_package_handoff',
+            'advances_launch_state'
+          )) {
+            if ($plan.$field -ne $false) { throw "Planner enabled authority: $field" }
+          }
