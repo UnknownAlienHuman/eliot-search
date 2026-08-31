@@ -50,7 +50,7 @@ function Flag([string]$Text, [string]$Key) {
 }
 
 function Array([string]$Text, [string]$Key) {
-    $match = [regex]::Match($Text, ('(?ms)^{0}\s*=\s*\[(.*?)\]' -f [regex]::Escape($Key)))
+    $match = [regex]::Match($Text, ('(?ms)^{0}[ \t]*=[ \t]*\[(.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)))
     if (-not $match.Success) { return @() }
     @(
         [regex]::Matches($match.Groups[1].Value, '"([^"\r\n]+)"') |

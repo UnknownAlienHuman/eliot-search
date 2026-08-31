@@ -9,6 +9,9 @@
   issuance-time materialization, writer leases, submissions and independent reviews.
 - [TICKET_ISSUANCE_OPERATIONS.md](TICKET_ISSUANCE_OPERATIONS.md) — exact idempotent materialization,
   ticket/lease/submission/review/handoff operations, recovery decisions and typed failures.
+- [P00_FOUNDATION_ACCEPTANCE_MATRIX.md](P00_FOUNDATION_ACCEPTANCE_MATRIX.md) — exact package-handoff,
+  G0/W0 acceptance and reviewed W1-unlock boundary; machine registry:
+  [`../../swarm/p00-foundation-acceptance.toml`](../../swarm/p00-foundation-acceptance.toml).
 - [SWARM_STAGE_READSETS.md](SWARM_STAGE_READSETS.md) — exact current-stage context assembly,
   replacement semantics, ceilings and progressive-package examples.
 - [STAGE_READSET_AUDIT.md](STAGE_READSET_AUDIT.md) — current structural closure and non-claims.
@@ -60,6 +63,8 @@ accepted reviews, supersessions or package handoffs. A draft never authorizes an
 
 - [`../contracts/p00/README.md`](../contracts/p00/README.md) — exact W0 contract implementation pack.
 - [P00_BOOTSTRAP.md](P00_BOOTSTRAP.md) — draft issuance → contracts → domain/ports → W0 receipt sequence.
+- [P00_FOUNDATION_ACCEPTANCE_MATRIX.md](P00_FOUNDATION_ACCEPTANCE_MATRIX.md) — P00-A through P00-D,
+  exact G0 evidence ownership, W0 receipt contents and conditions that still leave W1 blocked.
 - [W1_IMPLEMENTATION_PACKET.md](W1_IMPLEMENTATION_PACKET.md) — configuration, root ownership, OS
   secrets, bounded control journal, provider protocol, daemon and CLI shell.
 - [W2_IMPLEMENTATION_PACKET.md](W2_IMPLEMENTATION_PACKET.md) — source admission/identity/registry,

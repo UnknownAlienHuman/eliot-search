@@ -105,6 +105,33 @@ Checks:
 A PASS is schema closure only. It is not context materialization, ticket/lease issuance, package acceptance,
 G0/W0 evidence or runtime qualification.
 
+### `validate-p00-foundation-acceptance.ps1`
+
+```powershell
+pwsh -NoProfile -File tools/validate-p00-foundation-acceptance.ps1
+pwsh -NoProfile -File tools/validate-p00-foundation-acceptance.ps1 -Json
+```
+
+The PowerShell wrapper invokes the standard-library Python validator
+`tools/validate-p00-foundation-acceptance.py`. It checks:
+
+- exact topological package order: contracts, then conditional domain/ports;
+- complete context → ticket → lease → acknowledgement → submission → independent review → handoff
+  ladder for each package;
+- exact package-only scopes and distinct conditional predecessor/parallelism declarations;
+- exact P00-A through P00-D checkpoint sequence;
+- equality between the ten machine acceptance evidence rows and the exact G0 evidence registry;
+- raw-output and independent-review requirements for every G0 evidence item;
+- exact W0 package set and W1 `G0` plus `W0` prerequisites;
+- current P00/W0 launch classification and zero-state counters;
+- non-claimable schema-v2 ticket/context drafts and exact conditional handoff slots;
+- package/function/stage/gate/orchestration/launch registry parity;
+- zero issued records under all protected roots;
+- matrix/navigation closure and manual-only/read-only/credential-free workflows.
+
+Its JSON output keeps all package, G0, W0 and W1 authority claims false. A PASS proves only that the
+acceptance boundary is structurally closed; it does not create any record or authorize implementation.
+
 ## Implementation and qualification packets
 
 ### `validate-implementation-packets.ps1`
