@@ -1,0 +1,44 @@
+schema_version = 1
+profile = "accepted_evidence_digest_v1"
+case_count = 10
+status = "EXECUTABLE_CONFORMANCE_CORPUS"
+
+[[case]]
+id = "empty_evidence"
+expected = "PASS"
+
+[[case]]
+id = "deterministic_repeat"
+expected = "PASS"
+
+[[case]]
+id = "exact_magic_and_canonical_json"
+expected = "PASS"
+
+[[case]]
+id = "evidence_order_changes_digest"
+expected = "PASS"
+
+[[case]]
+id = "duplicate_requirement_id"
+expected = "REJECT"
+
+[[case]]
+id = "unknown_evidence_field"
+expected = "REJECT"
+
+[[case]]
+id = "artifact_digest_mismatch"
+expected = "REJECT"
+
+[[case]]
+id = "invalid_identifier"
+expected = "REJECT"
+
+[[case]]
+id = "null_or_float"
+expected = "REJECT"
+
+[[case]]
+id = "evidence_count_overflow"
+expected = "REJECT"

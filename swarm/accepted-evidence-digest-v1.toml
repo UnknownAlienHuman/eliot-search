@@ -1,0 +1,34 @@
+schema_version = 1
+profile = "accepted_evidence_digest_v1"
+status = "SEMANTIC_DIGEST_PROFILE"
+owner = "integration-owner"
+source_record_kind = "package_handoff_v1"
+source_field = "evidence[]"
+consumer_type = "OrderedAcceptedPackageHandoff"
+consumer_field = "evidence_digest"
+magic_line = "ELIOT_ACCEPTED_EVIDENCE_MANIFEST_1"
+canonicalization = "magic_lf_plus_one_canonical_json_utf8_lf_record_per_evidence_item"
+record_order = "exact_committed_evidence_array_order"
+record_field_order = [
+  "requirement_id",
+  "evidence_class",
+  "artifact_ref",
+  "artifact_sha256",
+  "raw_outcome_digest",
+  "availability",
+]
+max_records = 256
+max_manifest_bytes = 4194304
+self_referential_digest_allowed = false
+parsed_handoff_reserialization_is_record_identity = false
+
+[invariants]
+requirement_id_unique = true
+unknown_fields = "reject"
+null_allowed = false
+floating_point_allowed = false
+artifact_sha256_equals_artifact_ref_sha256 = true
+manifest_terminal_lf_required = true
+digest_algorithm = "sha256"
+exact_handoff_record_still_bound_by_handoff_ref = true
+empty_evidence_manifest_allowed = true
