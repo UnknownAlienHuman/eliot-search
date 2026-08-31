@@ -28,16 +28,21 @@
 - [`ACCEPTED_EVIDENCE_DIGEST_V1.md`](ACCEPTED_EVIDENCE_DIGEST_V1.md) — exact semantic digest derived from an accepted handoff's committed `evidence[]` array.
 - [`../../swarm/type-rule-profiles-v1.toml`](../../swarm/type-rule-profiles-v1.toml) — binds `OrderedAcceptedPackageHandoff.evidence_digest` to that profile.
 - [`../../swarm/accepted-evidence-digest-v1.toml`](../../swarm/accepted-evidence-digest-v1.toml) — canonical machine format and limits.
+- [`CONTEXT_MATERIALIZATION_PLAN_INDEX.md`](CONTEXT_MATERIALIZATION_PLAN_INDEX.md) — compiles the candidate, immutable artifact/readback declaration, actor selection and dual signature refs into exact prospective `context_manifest_v1` bytes while preserving zero authority.
 
 The immutable handoff reference remains authority. The derived evidence digest is required only to build
 the bounded accepted-handoff projection for a future `context_manifest_v1`; it cannot replace exact
 handoff readback or create package, gate, wave or implementation authority.
+
+The materialization planner is also non-authoritative: it writes only ignored plan/payload/prospective
+manifest artifacts, never mutates `swarm/context-manifests/**`, and leaves every authority field false.
 
 ## Current disposition
 
 ```text
 search-contracts artifact candidate: buildable at an exact commit
 accepted-handoff evidence profile:    specified; no accepted handoff currently exists
+materialization plan compiler:         available; external store/actor/signature inputs absent
 immutable artifact store/ref:         unselected / absent
 materializer and reviewer:            unselected
 committed context_manifest_v1:        absent
