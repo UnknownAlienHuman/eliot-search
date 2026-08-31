@@ -1,0 +1,78 @@
+schema_version = 1
+component = "context_artifact_builder_v1"
+status = "EXECUTABLE_CANDIDATE_BUILDER_ONLY"
+owner = "integration-owner-tooling"
+stage = "W0"
+phase = "P00"
+contract = "docs/handoff/CONTEXT_ARTIFACT_CANDIDATE_V1.md"
+digest_contract = "docs/handoff/CONTEXT_ARTIFACT_CANDIDATE_DIGEST_V1.md"
+index = "docs/handoff/CONTEXT_ARTIFACT_CANDIDATE_INDEX.md"
+candidate_schema = "swarm/context-artifact-candidate-schema-v1.toml"
+digest_profile = "swarm/context-artifact-candidate-digest-v1.toml"
+implementation = "tools/build-context-artifact-candidate.py"
+implementation_modules = [
+  "tools/context_artifact_builder_v1/__init__.py",
+  "tools/context_artifact_builder_v1/core.py",
+  "tools/context_artifact_builder_v1/bundle.py",
+  "tools/context_artifact_builder_v1/extract.py",
+  "tools/context_artifact_builder_v1/build.py",
+]
+powershell_wrapper = "tools/build-context-artifact-candidate.ps1"
+structural_validator = "tools/validate-context-artifact-candidate.py"
+structural_validator_wrapper = "tools/validate-context-artifact-candidate.ps1"
+qualification_readme = "qualification/context-artifact/README.md"
+qualification_cases = "qualification/context-artifact/cases-v1.toml"
+qualification_tests = "qualification/context-artifact/test_context_artifact_candidate_v1.py"
+manual_workflow = ".github/workflows/context-artifact-candidate.yml"
+artifact_root = "artifacts/context-artifact-candidates"
+artifact_format = "ELIOT_SWARM_CONTEXT_1"
+planner_component = "swarm/ticket-issuance-planner-v2.toml"
+context_manifest_schema = "swarm/schemas/context-manifest-v1.toml"
+
+[authority]
+materializes_authoritative_context = false
+creates_context_manifest_record = false
+creates_immutable_artifact_ref = false
+creates_assignment_ticket = false
+creates_writer_lease = false
+authorizes_implementation = false
+publishes_package_handoff = false
+accepts_gate_or_wave = false
+advances_launch_state = false
+
+[execution]
+deterministic = true
+network_required = false
+third_party_python_dependencies = false
+repository_inputs_from_immutable_git_tree = true
+working_tree_source_of_truth = false
+source_materialization = "UTF8_LF"
+registry_fragment_materialization = "CANONICAL_JSON_UTF8_LF"
+accepted_handoff_materialization = "EXACT_UTF8_LF"
+length_framed_bundle = true
+bundle_roundtrip_verification = true
+ordinary_artifact_writes_only = true
+control_root_writes = false
+idempotent_equal_output = true
+conflicting_existing_output_fails = true
+
+[limits]
+max_source_files = 24
+max_registry_fragments = 6
+max_accepted_handoffs = 1
+max_source_bytes = 4194304
+max_context_source_bytes = 16777216
+max_bundle_bytes = 20971520
+max_candidate_metadata_bytes = 1048576
+max_preflight_checks = 512
+
+[current_disposition]
+search_contracts_candidate_buildable_at_exact_commit = true
+materialized_contexts = 0
+issued_tickets = 0
+active_leases = 0
+accepted_package_handoffs = 0
+accepted_g0 = false
+accepted_w0 = false
+active_phase = "P00"
+active_wave = 0
