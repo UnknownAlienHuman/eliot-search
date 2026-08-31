@@ -1,0 +1,85 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "DRAFT_ONLY_NOT_ISSUED"
+stage = "W2"
+wave = 2
+phases = ["P03", "P04"]
+draft_count = 8
+ticket_draft_schema_version = 2
+issued_ticket_count = 0
+active_lease_count = 0
+submission_count = 0
+accepted_review_count = 0
+package_handoff_count = 0
+wave_receipt_count = 0
+requires_accepted_gates = ["G0"]
+requires_accepted_receipts = ["W1"]
+packet_registry = "swarm/w2-agent-packets.toml"
+
+[[draft]]
+package = "search-source-admission"
+path = "swarm/ticket-drafts/w2/search-source-admission.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-source-identity"
+path = "swarm/ticket-drafts/w2/search-source-identity.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-safe-reader"
+path = "swarm/ticket-drafts/w2/search-safe-reader.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-revision-store"
+path = "swarm/ticket-drafts/w2/search-revision-store.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-materializer"
+path = "swarm/ticket-drafts/w2/search-materializer.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-unitizer"
+path = "swarm/ticket-drafts/w2/search-unitizer.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "search-source-registry"
+path = "swarm/ticket-drafts/w2/search-source-registry.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[[draft]]
+package = "eliot-searchd"
+path = "swarm/ticket-drafts/w2/eliot-searchd.toml"
+launch_class = "BLOCKED_STAGE"
+status = "DRAFT_ONLY_NOT_ISSUED"
+claimable = false
+
+[invariants]
+draft_is_orchestration_state = false
+draft_may_authorize = false
+draft_may_create_lease = false
+issued_ticket_requires_new_record = true
+issued_ticket_requires_exact_base_commit = true
+issued_ticket_requires_materialized_context = true
+issued_ticket_requires_writer_and_reviewer = true
+issued_ticket_requires_accepted_G0_and_W1 = true
+issued_ticket_requires_exact_dependency_handoffs = true
