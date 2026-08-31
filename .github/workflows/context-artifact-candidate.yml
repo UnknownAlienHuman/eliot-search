@@ -22,6 +22,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Stabilize fixture Git line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Compile builder, validator and corpus
         shell: pwsh
         run: |

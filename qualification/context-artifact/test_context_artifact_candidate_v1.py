@@ -67,6 +67,9 @@ self_referential_digest_allowed = false
 class ContextArtifactCandidateV1Tests(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = FixtureRepository()
+        # Fixture repositories must preserve exact committed line endings on every host.
+        self.repo._git("config", "core.autocrlf", "false")
+        self.repo._git("config", "core.eol", "lf")
         install_builder_contract(self.repo)
 
     def tearDown(self) -> None:
