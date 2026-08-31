@@ -195,7 +195,22 @@ def load_draft_pair(
     )
     limits = ticket.get("limits") if isinstance(ticket.get("limits"), dict) else {}
     path = package_row.get("path") if package_row else None
-    soft_target = package_row.get("soft_src_line_target") if package_row else None
+    registry_soft_target = (
+        package_row.get("soft_src_line_target") if package_row else None
+    )
+    ticket_soft_limit = limits.get("soft_src_lines")
+    split_review_limit = limits.get("split_review_total_lines")
+    hard_limit = limits.get("hard_total_lines")
+    line_limits_ok = (
+        isinstance(registry_soft_target, int)
+        and isinstance(ticket_soft_limit, int)
+        and isinstance(split_review_limit, int)
+        and isinstance(hard_limit, int)
+        and 0 < registry_soft_target <= ticket_soft_limit
+        and ticket_soft_limit <= split_review_limit <= hard_limit
+        and split_review_limit == 8500
+        and hard_limit == 10000
+    )
     fence_ok = (
         repository_fence.get("repository") == REPOSITORY_NAME
         and repository_fence.get("write_scope") == f"{path}/**"
@@ -209,9 +224,7 @@ def load_draft_pair(
         == "UNRESOLVED_AT_ISSUANCE"
         and ticket_context.get("writer_visible_artifact_count") == 1
         and ticket_context.get("architecture_access") == "exception-only"
-        and limits.get("soft_src_lines") == soft_target
-        and limits.get("split_review_total_lines") == 8500
-        and limits.get("hard_total_lines") == 10000
+        and line_limits_ok
         and limits.get("one_active_writer") is True
     )
     if fence_ok:

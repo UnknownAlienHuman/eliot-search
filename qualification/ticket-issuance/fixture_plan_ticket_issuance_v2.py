@@ -86,7 +86,7 @@ class FixtureRepository:
             if conditional
             else 'required_handoff_packages = []\naccepted_handoff_refs = []\nstatus = "NOT_REQUIRED"'
         )
-        soft = {"search-contracts": 7500, "search-domain": 7000, "search-ports": 5500}[package]
+        soft = {"search-contracts": 8000, "search-domain": 7000, "search-ports": 5500}[package]
         precondition = (
             "CURRENTLY_PRESENT"
             if not conditional

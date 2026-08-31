@@ -117,7 +117,10 @@ materialized_context_artifact_sha256
 ```
 
 Legacy collapsed context fields are rejected. Ticket/context package, stage, phase, wave, path, write
-scope, feature profile, limits, dependency slots and sentinel state must agree.
+scope, feature profile, dependency slots and sentinel state must agree. Package-registry
+`soft_src_line_target` and ticket `soft_src_lines` are distinct: the planner requires
+`registry target <= ticket soft <= split review <= hard limit`; the P00 draft validator retains the exact
+package-specific values.
 
 ## 4. Context budgets and exact pack
 
