@@ -1,0 +1,67 @@
+schema_version = 2
+component = "ticket_issuance_planner_v2"
+status = "ADVISORY_DRY_RUN_ONLY"
+owner = "integration-owner-tooling"
+stage = "W0"
+phase = "P00"
+draft_schema_version = 2
+contract = "docs/handoff/TICKET_ISSUANCE_PLANNER_V2.md"
+digest_contract = "docs/handoff/TICKET_ISSUANCE_PLANNER_DIGEST_V2.md"
+index = "docs/handoff/TICKET_ISSUANCE_PLANNER_INDEX.md"
+plan_schema = "swarm/ticket-issuance-plan-schema-v2.toml"
+digest_profile = "swarm/ticket-issuance-plan-digest-v2.toml"
+implementation = "tools/plan-ticket-issuance.py"
+powershell_wrapper = "tools/plan-ticket-issuance.ps1"
+structural_validator = "tools/validate-ticket-issuance-plan.py"
+structural_validator_wrapper = "tools/validate-ticket-issuance-plan.ps1"
+qualification_readme = "qualification/ticket-issuance/README.md"
+qualification_cases = "qualification/ticket-issuance/cases-v2.toml"
+qualification_tests = "qualification/ticket-issuance/test_plan_ticket_issuance_v2.py"
+manual_workflow = ".github/workflows/ticket-issuance-plan.yml"
+artifact_root = "artifacts/ticket-issuance-plans"
+
+[authority]
+output_is_control_record = false
+output_is_claimable = false
+output_is_evidence_receipt = false
+may_materialize_context = false
+may_issue_ticket = false
+may_issue_or_acknowledge_lease = false
+may_authorize_implementation = false
+may_record_submission_or_review = false
+may_publish_package_handoff = false
+may_accept_gate_or_wave = false
+may_advance_launch_state = false
+
+[execution]
+deterministic = true
+network_required = false
+third_party_python_dependencies = false
+repository_inputs_from_immutable_git_tree = true
+working_tree_source_of_truth = false
+repository_mutations = false
+control_root_writes = false
+ordinary_artifact_write_optional = true
+exact_base_commit_validation_supported = true
+schema_v2_drafts_required = true
+manifest_owned_context_ceilings_required = true
+
+[limits]
+max_plan_bytes = 262144
+max_checks = 512
+max_reason_codes = 32
+max_source_files = 24
+max_registry_fragments = 6
+max_accepted_handoffs = 1
+max_source_bytes = 4194304
+max_context_source_bytes = 16777216
+
+[current_disposition]
+materialized_contexts = 0
+issued_tickets = 0
+active_leases = 0
+accepted_package_handoffs = 0
+accepted_g0 = false
+accepted_w0 = false
+active_phase = "P00"
+active_wave = 0
