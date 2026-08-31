@@ -1,0 +1,80 @@
+schema_version = 2
+record_kind = "writer_context_draft"
+status = "UNMATERIALIZED_DRAFT"
+claimable = false
+authorizes_implementation = false
+package = "search-provider-protocol"
+stage = "W1"
+phase = "P02"
+wave = 1
+base_commit = "UNSELECTED"
+materialized_context_manifest_ref = "UNAVAILABLE"
+materialized_context_record_sha256 = "UNAVAILABLE"
+materialized_context_artifact_ref = "UNAVAILABLE"
+materialized_context_artifact_sha256 = "UNAVAILABLE"
+materialization_mode = "canonical_concatenated_bundle"
+writer_visible_artifact_count = 1
+source_file_count = 14
+registry_fragment_count = 3
+accepted_handoff_slot_count = 4
+
+[canonicalization]
+encoding = "UTF-8"
+line_endings = "LF"
+path_header_format = "--- repository-path: <path> ---"
+registry_header_format = "--- registry-selector: <path>::<selector> ---"
+preserve_declared_order = true
+record_source_sha256 = true
+record_fragment_sha256 = true
+
+[stage_prerequisites]
+required_gates = ["G0"]
+required_receipts = ["W0"]
+status = "UNAVAILABLE"
+
+[content]
+source_files = [
+  "AGENTS.md",
+  "crates/search-provider-protocol/AGENTS.md",
+  "crates/search-provider-protocol/Cargo.toml",
+  "crates/search-provider-protocol/README.md",
+  "docs/handoff/AUTHORITY_MAP.md",
+  "swarm/ASSIGNMENT_PROTOCOL.md",
+  "swarm/assignments/search-provider-protocol.md",
+  "crates/search-provider-protocol/FUNCTIONS.md",
+  "docs/handoff/W1_IMPLEMENTATION_PACKET.md",
+  "docs/config/CONFIGURATION_1.0.md",
+  "docs/handoff/PORT_CATALOG.md",
+  "docs/handoff/P00_FOUNDATION_ACCEPTANCE_MATRIX.md",
+  "swarm/launch-state.toml",
+  "config/sections/protocol.md",
+]
+registry_fragments = [
+  "swarm/crates.toml::package[name=search-provider-protocol]",
+  "swarm/function-packets.toml::package[name=search-provider-protocol]",
+  "swarm/stages.toml::stage[id=W1]",
+]
+accepted_handoff_slots = [
+  "search-contracts::accepted_package_and_api_handoff",
+  "search-domain::accepted_package_and_api_handoff",
+  "search-ports::accepted_package_and_api_handoff",
+  "search-config::accepted_package_and_api_handoff",
+]
+forbidden_paths = [
+  "docs/architecture/**",
+  "crates/*/src/** except crates/search-provider-protocol/src/**",
+  "bins/*/src/** except own package when package is binary",
+  "swarm/tickets/**",
+  "swarm/leases/**",
+  "swarm/submissions/**",
+  "swarm/reviews/**",
+  "swarm/handoffs/** except exact accepted dependency records",
+]
+required_unavailable_checks = [
+  "accepted_G0_receipt",
+  "accepted_W0_receipt",
+  "accepted_direct_dependency_handoffs",
+  "real_stable_windows_toolchain",
+  "generated_Cargo_lock",
+  "package_and_workspace_integration_tests",
+]
