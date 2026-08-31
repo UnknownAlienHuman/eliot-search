@@ -1,0 +1,103 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "W1"
+wave = 1
+status = "BLOCKED_ON_G0_AND_W0"
+requires_accepted_gates = ["G0"]
+requires_accepted_receipts = ["W0"]
+agent_registry = "swarm/w1-agent-packets.toml"
+ticket_manifest = "swarm/ticket-drafts/w1/manifest.toml"
+context_manifest = "swarm/context-drafts/w1/manifest.toml"
+package_count = 7
+milestone_count = 28
+one_writer_one_package = true
+sequential_milestones_per_package = true
+parallel_milestones_within_package = false
+implementation_authorized_by_this_registry = false
+
+[[package]]
+name = "search-config"
+path = "crates/search-config"
+phase = "P01"
+write_scope = "crates/search-config/**"
+packet = "docs/handoff/w1-packages/search-config.md"
+milestone_ids = ["C0", "C1", "C2", "C3"]
+required_handoff_packages = ["search-contracts"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-runtime-owner"
+path = "crates/search-runtime/search-runtime-owner"
+phase = "P01"
+write_scope = "crates/search-runtime/search-runtime-owner/**"
+packet = "docs/handoff/w1-packages/search-runtime-owner.md"
+milestone_ids = ["R0", "R1", "R2", "R3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-os-secrets"
+path = "crates/search-runtime/search-os-secrets"
+phase = "P01"
+write_scope = "crates/search-runtime/search-os-secrets/**"
+packet = "docs/handoff/w1-packages/search-os-secrets.md"
+milestone_ids = ["S0", "S1", "S2", "S3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-control-redb"
+path = "crates/search-control-redb"
+phase = "P02"
+write_scope = "crates/search-control-redb/**"
+packet = "docs/handoff/w1-packages/search-control-redb.md"
+milestone_ids = ["J0", "J1", "J2", "J3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-provider-protocol"
+path = "crates/search-provider-protocol"
+phase = "P02"
+write_scope = "crates/search-provider-protocol/**"
+packet = "docs/handoff/w1-packages/search-provider-protocol.md"
+milestone_ids = ["P0", "P1", "P2", "P3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+phase = "P02"
+write_scope = "bins/eliot-searchd/**"
+packet = "docs/handoff/w1-packages/eliot-searchd.md"
+milestone_ids = ["D0", "D1", "D2", "D3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config", "search-runtime-owner", "search-os-secrets", "search-control-redb", "search-provider-protocol"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "eliot-search"
+path = "bins/eliot-search"
+phase = "P02"
+write_scope = "bins/eliot-search/**"
+packet = "docs/handoff/w1-packages/eliot-search.md"
+milestone_ids = ["L0", "L1", "L2", "L3"]
+required_handoff_packages = ["search-contracts", "search-ports", "search-config", "search-provider-protocol"]
+one_active_milestone = true
+claimable = false
+
+[current_state]
+accepted_G0 = false
+accepted_W0 = false
+materialized_contexts = 0
+issued_tickets = 0
+active_leases = 0
+accepted_package_handoffs = 0
+W1_receipt = "ABSENT"
