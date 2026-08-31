@@ -1,0 +1,83 @@
+schema_version = 1
+suite = "context_artifact_candidate_v1"
+case_count = 20
+
+[[case]]
+id = "CAC1-001"
+name = "ready search-contracts candidate"
+
+[[case]]
+id = "CAC1-002"
+name = "deterministic candidate and bundle"
+
+[[case]]
+id = "CAC1-003"
+name = "working tree is ignored"
+
+[[case]]
+id = "CAC1-004"
+name = "CRLF source normalization"
+
+[[case]]
+id = "CAC1-005"
+name = "lone CR source normalization"
+
+[[case]]
+id = "CAC1-006"
+name = "length framing tolerates header-like source text"
+
+[[case]]
+id = "CAC1-007"
+name = "missing committed source fails closed"
+
+[[case]]
+id = "CAC1-008"
+name = "non-UTF8 source fails closed"
+
+[[case]]
+id = "CAC1-009"
+name = "NUL source fails closed"
+
+[[case]]
+id = "CAC1-010"
+name = "unsupported selector fails closed"
+
+[[case]]
+id = "CAC1-011"
+name = "non-unique selector fails closed"
+
+[[case]]
+id = "CAC1-012"
+name = "conditional package requires accepted handoff"
+
+[[case]]
+id = "CAC1-013"
+name = "valid accepted handoff is embedded exactly"
+
+[[case]]
+id = "CAC1-014"
+name = "invalid accepted handoff signature fails closed"
+
+[[case]]
+id = "CAC1-015"
+name = "unexpected handoff fails closed"
+
+[[case]]
+id = "CAC1-016"
+name = "existing current-package control record conflicts"
+
+[[case]]
+id = "CAC1-017"
+name = "output outside candidate root is rejected"
+
+[[case]]
+id = "CAC1-018"
+name = "equal existing output is idempotent"
+
+[[case]]
+id = "CAC1-019"
+name = "different existing output is a conflict"
+
+[[case]]
+id = "CAC1-020"
+name = "digest projection and authority ceiling"

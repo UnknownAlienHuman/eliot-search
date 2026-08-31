@@ -1,0 +1,84 @@
+schema_version = 1
+record_kind = "context_artifact_candidate_v1"
+status = "ARTIFACT_CANDIDATE_NOT_STORED_NOT_SIGNED"
+canonicalization = "canonical_json_utf8_lf_sorted_keys_compact"
+artifact_format = "ELIOT_SWARM_CONTEXT_1"
+artifact_root = "artifacts/context-artifact-candidates"
+immutable_control_record = false
+unknown_top_level_fields = "reject"
+planner_reason_registry = "swarm/ticket-issuance-plan-schema-v2.toml"
+additional_failure_codes = [
+  "CONTEXT_ARTIFACT_BUILDER_CONTRACT_MISMATCH",
+  "CONTEXT_SOURCE_CONTAINS_NUL",
+  "REGISTRY_FRAGMENT_NONCANONICAL",
+  "BUNDLE_FORMAT_INVALID",
+  "BUNDLE_SIZE_EXCEEDED",
+  "OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT",
+  "OUTPUT_PATH_SYMLINK",
+  "CANDIDATE_OUTPUT_CONFLICT",
+  "CANDIDATE_OUTPUT_WRITE_FAILED",
+]
+required_top_level_fields = [
+  "schema_version",
+  "record_kind",
+  "status",
+  "candidate_id",
+  "repository",
+  "package",
+  "draft",
+  "artifact_candidate",
+  "candidate_metadata_path",
+  "sources",
+  "registry_fragments",
+  "accepted_handoffs",
+  "required_unavailable_checks",
+  "preflight_checks",
+  "reason_codes",
+  "verification",
+  "manifest_projection",
+  "ordinary_artifact_writes",
+  "control_record_mutations",
+  "authority",
+  "candidate_sha256",
+]
+required_unresolved_manifest_fields = [
+  "identity.context_id",
+  "identity.operation_id",
+  "artifact.ref",
+  "verification.readback_verified",
+  "signature.created_at",
+  "signature.materializer_identity",
+  "signature.reviewer_identity",
+  "signature.record_sha256",
+  "signature.materializer_signature_ref",
+  "signature.reviewer_signature_ref",
+  "record_path.context_record_sha256",
+  "record_path.git_commit",
+  "record_path.git_blob_id",
+  "record_path.exact_record_file_sha256",
+]
+
+[authority]
+materializes_authoritative_context = false
+creates_context_manifest_record = false
+creates_immutable_artifact_ref = false
+creates_assignment_ticket = false
+creates_writer_lease = false
+authorizes_implementation = false
+publishes_package_handoff = false
+accepts_gate_or_wave = false
+advances_launch_state = false
+
+[invariants]
+working_tree_used_as_input_must_be_false = true
+reason_codes_must_be_empty_on_success = true
+control_record_mutations_must_be_empty = true
+bundle_roundtrip_verified_must_be_true = true
+authoritative_artifact_store_readback_verified_must_be_false = true
+manifest_projection_schema_instance_must_be_false = true
+manifest_projection_unresolved_fields_must_be_exact = true
+candidate_id_is_domain_separated_bundle_digest = true
+candidate_sha256_is_non_circular_metadata_digest = true
+local_candidate_file_is_immutable_artifact_ref = false
+wall_clock_time_in_candidate = false
+random_identity_in_candidate = false

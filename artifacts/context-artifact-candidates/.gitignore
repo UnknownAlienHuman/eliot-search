@@ -1,0 +1,4 @@
+*.context
+*.json
+*.tmp-*
+!.gitignore
