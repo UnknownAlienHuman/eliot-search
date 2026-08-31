@@ -1,0 +1,38 @@
+name: W3 milestone packets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w3-milestone-packets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate W3 bounded milestone packets
+        shell: pwsh
+        run: ./tools/validate-w3-milestone-packets.ps1 -Json
+
+      - name: Revalidate W3 non-claimable drafts
+        shell: pwsh
+        run: ./tools/validate-w3-agent-drafts.ps1 -Json
+
+      - name: Revalidate Qdrant packet structure
+        shell: pwsh
+        run: ./tools/validate-implementation-packets.ps1 -Json
+
+      - name: Revalidate topology
+        shell: pwsh
+        run: ./tools/validate-swarm.ps1 -Json

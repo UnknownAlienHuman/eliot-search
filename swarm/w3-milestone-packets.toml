@@ -1,0 +1,141 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "W3"
+wave = 3
+status = "BLOCKED_ON_G1_W2_G1_AND_QDRANT_QUALIFICATION"
+requires_accepted_gates = ["G1"]
+requires_accepted_receipts = ["W2_G1"]
+agent_registry = "swarm/w3-agent-packets.toml"
+ticket_manifest = "swarm/ticket-drafts/w3/manifest.toml"
+context_manifest = "swarm/context-drafts/w3/manifest.toml"
+qualification_contract = "qualification/qdrant/W3_QUALIFICATION.md"
+package_count = 9
+milestone_count = 36
+one_writer_one_package = true
+sequential_milestones_per_package = true
+parallel_milestones_within_package = false
+implementation_authorized_by_this_registry = false
+indexed_mode_enabled = false
+
+[[package]]
+name = "search-lexical"
+path = "crates/search-lexical"
+phase = "P05"
+write_scope = "crates/search-lexical/**"
+packet = "docs/handoff/w3-packages/search-lexical.md"
+milestone_ids = ["LX0", "LX1", "LX2", "LX3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity"
+phase = "P05"
+write_scope = "crates/search-index-qdrant/search-point-identity/**"
+packet = "docs/handoff/w3-packages/search-point-identity.md"
+milestone_ids = ["PI0", "PI1", "PI2", "PI3"]
+required_handoff_packages = ["search-contracts", "search-domain"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor"
+phase = "P05"
+write_scope = "crates/search-index-qdrant/search-qdrant-supervisor/**"
+packet = "docs/handoff/w3-packages/search-qdrant-supervisor.md"
+milestone_ids = ["QS0", "QS1", "QS2", "QS3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge"
+phase = "P05"
+write_scope = "crates/search-index-qdrant/search-qdrant-bridge/**"
+packet = "docs/handoff/w3-packages/search-qdrant-bridge.md"
+milestone_ids = ["QB0", "QB1", "QB2", "QB3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins"
+phase = "P06"
+write_scope = "crates/search-index-qdrant/search-epoch-pins/**"
+packet = "docs/handoff/w3-packages/search-epoch-pins.md"
+milestone_ids = ["EP0", "EP1", "EP2", "EP3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner"
+phase = "P06"
+write_scope = "crates/search-index-qdrant/search-projection-planner/**"
+packet = "docs/handoff/w3-packages/search-projection-planner.md"
+milestone_ids = ["PP0", "PP1", "PP2", "PP3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-point-identity"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer"
+phase = "P07"
+write_scope = "crates/search-index-qdrant/search-index-reclaimer/**"
+packet = "docs/handoff/w3-packages/search-index-reclaimer.md"
+milestone_ids = ["IR0", "IR1", "IR2", "IR3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config", "search-epoch-pins"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "search-publication"
+path = "crates/search-index-qdrant/search-publication"
+phase = "P07"
+write_scope = "crates/search-index-qdrant/search-publication/**"
+packet = "docs/handoff/w3-packages/search-publication.md"
+milestone_ids = ["PUB0", "PUB1", "PUB2", "PUB3"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-projection-planner", "search-point-identity"]
+one_active_milestone = true
+claimable = false
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+phase = "P07"
+write_scope = "bins/eliot-searchd/**"
+packet = "docs/handoff/w3-packages/eliot-searchd.md"
+milestone_ids = ["IDX0", "IDX1", "IDX2", "IDX3"]
+required_handoff_packages = ["eliot-searchd", "search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer"]
+one_active_milestone = true
+claimable = false
+
+[transition]
+require_raw_command_outcomes = true
+require_no_blocking_contract_challenge = true
+require_package_only_diff = true
+require_dependency_handoff_digests = true
+require_qualification_receipts_where_applicable = true
+require_line_budget = true
+advance_launch_state = false
+publish_package_handoff = false
+enable_indexed_mode = false
+
+[current_state]
+accepted_G1 = false
+accepted_W2_G1 = false
+qualified_qdrant_artifact = false
+accepted_collection_schema = false
+executed_mandatory_probes = 0
+materialized_contexts = 0
+issued_tickets = 0
+active_leases = 0
+accepted_package_handoffs = 0
+W3_receipt = "ABSENT"
