@@ -53,7 +53,7 @@ function Get-Bool([string]$Text, [string]$Key, [bool]$Required = $true) {
 }
 
 function Get-Array([string]$Text, [string]$Key) {
-    $pattern = '(?ms)^{0}\s*=\s*\[(.*?)\]' -f [regex]::Escape($Key)
+    $pattern = '(?ms)^{0}[ \t]*=[ \t]*\[(.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)
     $match = [regex]::Match($Text, $pattern)
     if (-not $match.Success) { return @() }
     @(
