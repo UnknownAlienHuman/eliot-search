@@ -1,0 +1,124 @@
+schema_version = 1
+suite = "w4_agent_drafts_v1"
+status = "STRUCTURAL_NOT_EXECUTED"
+case_count = 24
+
+[[case]]
+id = "exact_nine_package_set"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_group_order"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "g1_w3_blocking"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "ticket_drafts_nonclaimable"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "context_drafts_nonclaimable"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "zero_issued_records"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "one_writer_one_package"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "package_write_scope_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "registry_assignment_function_parity"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "context_source_ceiling"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "context_registry_fragment_ceiling"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "dependency_handoff_slot_exactness"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_architecture_master"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_dependency_implementation_source"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_w1_w2_w3_packet_replay"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "query_baseline_not_executed"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "mandatory_query_probes_unavailable"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "query_product_disabled"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "planner_and_validator_predecessors"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "executor_projector_continuation_predecessors"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "access_and_currentness_noninterference_boundary"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "handle_continuation_no_authority"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "daemon_reentry_replacement"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "manual_readonly_workflow"
+mandatory = true
+result = "UNAVAILABLE"

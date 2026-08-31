@@ -1,0 +1,213 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+stage = "W4"
+wave = 4
+status = "BLOCKED_ON_G1_W3_AND_QUERY_QUALIFICATION"
+requires_accepted_gates = ["G1"]
+requires_accepted_receipts = ["W3"]
+qualification_contract = "qualification/query/W4_QUALIFICATION.md"
+package_count = 9
+ticket_manifest = "swarm/ticket-drafts/w4/manifest.toml"
+context_manifest = "swarm/context-drafts/w4/manifest.toml"
+stage_readset_registry = "swarm/stage-readsets.toml"
+launch_authority = "swarm/launch-state.toml"
+architecture_access = "exception-only"
+one_writer_one_package = true
+parallel_packages_after_prerequisites = true
+implementation_authorized_by_this_registry = false
+query_product_enabled = false
+
+[[package]]
+name = "search-access"
+path = "crates/search-query/search-access"
+phase = "P08"
+execution_group = "A"
+assignment = "swarm/assignments/search-access.md"
+functions = "crates/search-query/search-access/FUNCTIONS.md"
+write_scope = "crates/search-query/search-access/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports"]
+ticket_draft = "swarm/ticket-drafts/w4/search-access.toml"
+context_draft = "swarm/context-drafts/w4/search-access.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-handles"
+path = "crates/search-query/search-handles"
+phase = "P08"
+execution_group = "A"
+assignment = "swarm/assignments/search-handles.md"
+functions = "crates/search-query/search-handles/FUNCTIONS.md"
+write_scope = "crates/search-query/search-handles/**"
+soft_src_lines = 6500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/handles.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w4/search-handles.toml"
+context_draft = "swarm/context-drafts/w4/search-handles.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-eval"
+path = "crates/search-eval"
+phase = "P08"
+execution_group = "A"
+assignment = "swarm/assignments/search-eval.md"
+functions = "crates/search-eval/FUNCTIONS.md"
+write_scope = "crates/search-eval/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/observability.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-config"]
+ticket_draft = "swarm/ticket-drafts/w4/search-eval.toml"
+context_draft = "swarm/context-drafts/w4/search-eval.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-query-planner"
+path = "crates/search-query/search-query-planner"
+phase = "P08"
+execution_group = "B"
+assignment = "swarm/assignments/search-query-planner.md"
+functions = "crates/search-query/search-query-planner/FUNCTIONS.md"
+write_scope = "crates/search-query/search-query-planner/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/query.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config", "search-access"]
+ticket_draft = "swarm/ticket-drafts/w4/search-query-planner.toml"
+context_draft = "swarm/context-drafts/w4/search-query-planner.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-candidate-validator"
+path = "crates/search-query/search-candidate-validator"
+phase = "P08"
+execution_group = "B"
+assignment = "swarm/assignments/search-candidate-validator.md"
+functions = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+write_scope = "crates/search-query/search-candidate-validator/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-access"]
+ticket_draft = "swarm/ticket-drafts/w4/search-candidate-validator.toml"
+context_draft = "swarm/context-drafts/w4/search-candidate-validator.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-retrieval-executor"
+path = "crates/search-query/search-retrieval-executor"
+phase = "P08"
+execution_group = "C"
+assignment = "swarm/assignments/search-retrieval-executor.md"
+functions = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+write_scope = "crates/search-query/search-retrieval-executor/**"
+soft_src_lines = 7500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/scheduler.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config", "search-query-planner", "search-lexical", "search-epoch-pins", "search-access"]
+ticket_draft = "swarm/ticket-drafts/w4/search-retrieval-executor.toml"
+context_draft = "swarm/context-drafts/w4/search-retrieval-executor.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-result-projector"
+path = "crates/search-query/search-result-projector"
+phase = "P08"
+execution_group = "C"
+assignment = "swarm/assignments/search-result-projector.md"
+functions = "crates/search-query/search-result-projector/FUNCTIONS.md"
+write_scope = "crates/search-query/search-result-projector/**"
+soft_src_lines = 7000
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-candidate-validator", "search-handles"]
+ticket_draft = "swarm/ticket-drafts/w4/search-result-projector.toml"
+context_draft = "swarm/context-drafts/w4/search-result-projector.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "search-continuation"
+path = "crates/search-query/search-continuation"
+phase = "P08"
+execution_group = "C"
+assignment = "swarm/assignments/search-continuation.md"
+functions = "crates/search-query/search-continuation/FUNCTIONS.md"
+write_scope = "crates/search-query/search-continuation/**"
+soft_src_lines = 6000
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = ["config/sections/continuations.md"]
+required_handoff_packages = ["search-contracts", "search-domain", "search-ports", "search-config", "search-query-planner", "search-access", "search-epoch-pins"]
+ticket_draft = "swarm/ticket-drafts/w4/search-continuation.toml"
+context_draft = "swarm/context-drafts/w4/search-continuation.toml"
+one_active_writer = true
+claimable = false
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+phase = "P08"
+execution_group = "D"
+assignment = "swarm/assignments/eliot-searchd.md"
+functions = "bins/eliot-searchd/FUNCTIONS.md"
+write_scope = "bins/eliot-searchd/**"
+soft_src_lines = 6500
+split_review_total_lines = 8500
+hard_total_lines = 10000
+config_packets = []
+required_handoff_packages = ["eliot-searchd", "search-access", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-handles", "search-result-projector", "search-continuation", "search-eval"]
+ticket_draft = "swarm/ticket-drafts/w4/eliot-searchd.toml"
+context_draft = "swarm/context-drafts/w4/eliot-searchd.toml"
+one_active_writer = true
+claimable = false
+
+[execution]
+group_order = ["A", "B", "C", "D"]
+group_A_packages = ["search-access", "search-handles", "search-eval"]
+group_B_packages = ["search-query-planner", "search-candidate-validator"]
+group_C_packages = ["search-retrieval-executor", "search-result-projector", "search-continuation"]
+group_D_packages = ["eliot-searchd"]
+query_planner_requires = ["search-access"]
+candidate_validator_requires = ["search-access"]
+retrieval_executor_requires = ["search-query-planner", "search-access", "search-lexical", "search-epoch-pins"]
+result_projector_requires = ["search-candidate-validator", "search-handles"]
+continuation_requires = ["search-query-planner", "search-access", "search-epoch-pins"]
+daemon_requires_all_W4_library_handoffs = true
+daemon_requires_prior_stage_handoffs = ["eliot-searchd", "W3"]
+
+[qualification]
+contract = "qualification/query/W4_QUALIFICATION.md"
+baseline_manifest = "qualification/query/baseline.toml"
+probe_registry = "qualification/query/probes.toml"
+status = "DESIGNED_NOT_EXECUTED"
+mandatory_probe_evidence = "UNAVAILABLE"
+independent_reviewer_receipt = "ABSENT"
+query_product_enabled = false
+
+[current_state]
+accepted_G1 = false
+accepted_W3 = false
+materialized_W4_contexts = 0
+issued_W4_tickets = 0
+active_W4_leases = 0
+accepted_W4_package_handoffs = 0
+W4_G2_receipt = "ABSENT"
