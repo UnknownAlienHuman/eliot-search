@@ -1,0 +1,52 @@
+schema_version = 1
+profile = "context_materialization_plan_v1"
+case_count = 12
+status = "EXECUTABLE_CONFORMANCE_CORPUS"
+
+[[case]]
+id = "missing_selection"
+expected = "BLOCKED_MISSING_EXTERNAL_INPUT"
+
+[[case]]
+id = "absent_signatures"
+expected = "READY_FOR_DUAL_SIGNATURE_COLLECTION"
+
+[[case]]
+id = "present_signatures"
+expected = "READY_FOR_INTEGRATION_OWNER_READBACK_AND_COMMIT"
+
+[[case]]
+id = "partial_signature_set"
+expected = "BLOCKED_PARTIAL_SIGNATURE_SET"
+
+[[case]]
+id = "actor_conflict"
+expected = "REJECT"
+
+[[case]]
+id = "artifact_mismatch"
+expected = "REJECT"
+
+[[case]]
+id = "signature_payload_mismatch"
+expected = "REJECT"
+
+[[case]]
+id = "candidate_digest_mismatch"
+expected = "REJECT"
+
+[[case]]
+id = "bundle_mismatch"
+expected = "REJECT"
+
+[[case]]
+id = "idempotent_write_and_conflict"
+expected = "PASS"
+
+[[case]]
+id = "accepted_handoff_projection"
+expected = "PASS"
+
+[[case]]
+id = "operation_id_signature_independence"
+expected = "PASS"

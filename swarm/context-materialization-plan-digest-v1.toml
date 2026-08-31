@@ -1,0 +1,10 @@
+schema_version = 1
+profile = "context_materialization_plan_digest_v1"
+domain_separator_ascii = "eliot-search/context-materialization-plan/v1\\0"
+canonicalization = "canonical_json_utf8_lf_sorted_keys_compact"
+digest_algorithm = "sha256"
+digest_field = "plan_sha256"
+digest_field_excluded_from_input = true
+self_referential_digest_allowed = false
+wall_clock_time_in_plan_allowed = false
+random_identity_in_plan_allowed = false
