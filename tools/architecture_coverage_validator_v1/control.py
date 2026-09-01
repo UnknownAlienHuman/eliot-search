@@ -1,8 +1,28 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from .common import ROOT, load, require, rows, validate_module_ref
+from .common import ROOT, load, read, require, rows, validate_module_ref
+
+
+def _manual_workflow(errors: list[str], path: str) -> None:
+    require(errors, (ROOT / path).is_file(), f"missing workflow {path}")
+    if not (ROOT / path).is_file():
+        return
+    text = read(path)
+    for token in ("workflow_dispatch:", "contents: read", "persist-credentials: false"):
+        require(errors, token in text, f"{path}: missing {token}")
+    for forbidden in (
+        "\n  push:",
+        "\n  pull_request:",
+        "\n  pull_request_target:",
+        "\n  schedule:",
+        "\n  workflow_run:",
+        "\n  repository_dispatch:",
+        "\n  workflow_call:",
+    ):
+        require(errors, forbidden not in text, f"{path}: automatic trigger {forbidden.strip()}")
 
 
 def validate_control(
@@ -11,213 +31,158 @@ def validate_control(
     schemas: dict[str, Any],
 ) -> dict[str, Any]:
     manifest = topology["manifest"]
+    package_rows = topology["package_rows"]
     packages = topology["packages"]
     modules = topology["modules"]
-    operations = load(manifest["operation_registry"])
-    tasks = load(manifest["task_registry"])
-    delivery_doc = load(manifest["delivery_registry"])
-    cases_doc = load("qualification/architecture-coverage/cases-v1.toml")
-    launch = load("swarm/launch-state.toml")
 
-    require(errors, operations.get("status") == "SOURCE_DERIVED_OPERATION_OWNERSHIP_CLOSED_NOT_IMPLEMENTED", "operation registry status changed")
-    require(errors, operations.get("function_registry") == "swarm/function-packets.toml", "operation function registry mismatch")
-    require(errors, operations.get("module_registry") == "swarm/module-packets.toml", "operation module registry mismatch")
-    require(errors, operations.get("package_count") == 45, "operation package count mismatch")
-    require(errors, operations.get("foundation_package_count") == 3, "operation foundation count mismatch")
-    require(errors, operations.get("package_function_source_count") == 42, "operation function-source count mismatch")
-    require(errors, operations.get("operation_count") == "DERIVED_BY_VALIDATOR", "operation count must remain source-derived")
-    require(errors, operations.get("implementation_authorized_by_this_registry") is False, "operation registry authorizes implementation")
+    task_doc = load(manifest["task_registry"])
+    operation_doc = load(manifest["operation_registry"])
+    delivery_doc = load(manifest["delivery_slice_registry"])
+    qualification_doc = load("qualification/architecture-coverage/cases-v1.toml")
+    launch = load(manifest["launch_authority"])
+    package_doc = load(manifest["package_registry"])
+    p00_manifest = load(manifest["p00_contract_manifest"])
 
-    identity = operations.get("identity", {})
-    require(errors, identity.get("format") == "<package>::<operation>", "qualified operation identity format changed")
-    require(errors, identity.get("package_qualified_identity_required") is True, "package-qualified operation identity disabled")
-    require(errors, identity.get("duplicate_unqualified_operation_names_allowed") is True, "unqualified operation collision rule changed")
-    require(errors, identity.get("duplicate_package_qualified_operation_names_allowed") is False, "qualified operation collisions allowed")
+    require(errors, manifest.get("schema_version") == 1, "coverage manifest schema version mismatch")
+    require(errors, manifest.get("status") == "STATIC_COVERAGE_CLOSED_NOT_IMPLEMENTED", "coverage status mismatch")
+    require(errors, manifest.get("implementation_authorized") is False, "coverage manifest authorizes implementation")
+    require(errors, manifest.get("runtime_evidence_available") is False, "coverage manifest claims runtime evidence")
+    require(errors, manifest.get("package_acceptance_claimed") is False, "coverage manifest claims package acceptance")
+    require(errors, manifest.get("gate_or_wave_acceptance_claimed") is False, "coverage manifest claims gate/wave acceptance")
+    require(errors, manifest.get("launch_state_changed") is False, "coverage manifest claims launch-state change")
 
-    extraction = operations.get("extraction", {})
-    require(errors, extraction.get("minimum_operations_per_nonfoundation_package") == 1, "minimum operation count weakened")
-    require(errors, extraction.get("ignore_test_fixture_and_example_blocks") is True, "fixture/example exclusion disabled")
-    require(errors, extraction.get("ignore_Rust_trait_methods_in_package_FUNCTIONS") is False, "trait operations excluded")
-
-    ownership = operations.get("ownership", {})
-    for key in (
-        "every_operation_enters_through_public_entry_module",
-        "internal_delegation_must_remain_within_declared_package_modules",
-        "operation_source_must_be_package_local",
-    ):
-        require(errors, ownership.get(key) is True, f"operation ownership invariant disabled: {key}")
-    require(errors, ownership.get("operation_owner_source") == "function_registry_package", "operation owner source changed")
-    require(errors, ownership.get("public_entry_module_source") == "module_registry_package", "public entry source changed")
-    require(errors, ownership.get("cross_package_operation_implementation_allowed") is False, "cross-package operation implementation allowed")
-
-    operation_invariants = operations.get("invariants", {})
-    for key in (
-        "missing_function_source_blocks_merge",
-        "function_source_without_registered_package_blocks_merge",
-        "registered_package_without_discovered_operation_blocks_merge",
-        "operation_without_declared_public_entry_blocks_merge",
-        "operation_implementation_outside_package_write_scope_blocks_merge",
-    ):
-        require(errors, operation_invariants.get(key) is True, f"operation merge guard disabled: {key}")
-    require(errors, operation_invariants.get("placeholder_success_allowed") is False, "placeholder success allowed")
-
-    expected_foundations = {
-        "search_contracts": ("search-contracts", "docs/contracts/p00/README.md", "lib"),
-        "search_domain": ("search-domain", "docs/contracts/p00/SUPPORT_SCHEMAS.md", "lib"),
-        "search_ports": ("search-ports", "docs/contracts/p00/PORT_OPERATIONS.md", "lib"),
+    count_pairs = {
+        "package_count": len(package_rows),
+        "package_function_packet_count": len(topology["function_rows"]),
+        "foundation_contract_package_count": len(topology["foundation_rows"]),
+        "module_packet_count": len(topology["module_rows"]),
+        "architecture_section_count": topology["section_count"],
+        "capability_cell_count": topology["capability_count"],
+        "invariant_count": topology["invariant_count"],
+        "shared_port_count": topology["port_count"],
+        "p00_schema_or_registry_count": schemas["schema_total"],
+        "p00_type_registry_symbol_count": schemas["type_registry_symbols"],
+        "p00_named_type_completion_count": schemas["completion_symbols"],
+        "p00_recipe_body_count": schemas["recipe_count"],
+        "reason_code_count": schemas["reason_count"],
+        "configuration_section_count": topology["config_count"],
     }
-    foundation_table = operations.get("foundation", {})
-    for key, (package, source, public_entry) in expected_foundations.items():
-        row = foundation_table.get(key, {})
-        require(errors, row.get("package") == package, f"operation foundation {key}: package mismatch")
-        require(errors, row.get("source") == source, f"operation foundation {key}: source mismatch")
-        require(errors, row.get("public_entry_module") == public_entry, f"operation foundation {key}: public entry mismatch")
+    for key, actual in count_pairs.items():
+        require(errors, manifest.get(key) == actual, f"coverage manifest {key} mismatch: {manifest.get(key)} != {actual}")
+    require(
+        errors,
+        manifest.get("p00_support_and_record_schema_count")
+        == schemas["schema_total"] - schemas["type_registry_symbols"] - schemas["completion_symbols"],
+        "coverage manifest support/record schema count mismatch",
+    )
 
-    require(errors, tasks.get("status") == "STATIC_TASK_OWNERSHIP_CLOSED_NOT_IMPLEMENTED", "task registry status changed")
-    require(errors, tasks.get("package_registry") == "swarm/crates.toml", "task package registry mismatch")
-    require(errors, tasks.get("delivery_registry") == "swarm/coverage/delivery-slices.toml", "task delivery registry mismatch")
-    require(errors, tasks.get("package_assignment_task_count") == 45, "task assignment count mismatch")
-    require(errors, tasks.get("delivery_slice_task_count") == 19, "task delivery count mismatch")
-    require(errors, tasks.get("implementation_authorized_by_this_registry") is False, "task registry authorizes implementation")
+    architecture_digest = manifest.get("architecture_section_sha256")
+    require(errors, architecture_digest == p00_manifest.get("architecture_sha256"), "architecture digest differs from P00 manifest")
+    require(errors, architecture_digest == package_doc.get("architecture_sha256"), "architecture digest differs from package registry")
+    require(errors, architecture_digest == launch.get("architecture_sha256"), "architecture digest differs from launch state")
+    require(errors, manifest.get("base_commit") == "73ab0c415960ec1322f4b367a2325ce7916301b0", "coverage audit base commit changed")
 
-    package_tasks = tasks.get("package_assignment_tasks", {})
-    for key in (
-        "one_assignment_per_package",
-        "assignment_file_required",
-        "assignment_must_name_owned_state_or_behavior",
-        "assignment_must_name_forbidden_or_non_owned_behavior",
-        "assignment_must_name_exact_package_write_scope",
-        "assignment_must_not_override_dependency_or_function_registry",
-    ):
-        require(errors, package_tasks.get(key) is True, f"package task invariant disabled: {key}")
-    require(errors, package_tasks.get("source") == "swarm/crates.toml::package.assignment", "package task source mismatch")
+    require(errors, launch.get("active_stage") == "P00", "launch stage moved from P00")
+    require(errors, launch.get("active_wave") == 0, "launch wave moved from W0")
+    require(errors, launch.get("authorized_packages") == ["search-contracts"], "authorized package set changed")
 
-    delivery_tasks = tasks.get("delivery_tasks", {})
-    for key in (
-        "one_registry_entry_per_delivery_slice",
-        "primary_package_set_required",
-        "module_set_required",
-        "required_outputs_required",
-        "exit_evidence_required",
-    ):
-        require(errors, delivery_tasks.get(key) is True, f"delivery task invariant disabled: {key}")
-    require(errors, delivery_tasks.get("source") == "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#H17", "delivery task source mismatch")
+    require(errors, task_doc.get("status") == "STATIC_TASK_OWNERSHIP_NOT_EXECUTED", "task registry status mismatch")
+    require(errors, task_doc.get("package_assignment_task_count") == 45, "task registry package count mismatch")
+    require(errors, task_doc.get("delivery_slice_task_count") == 19, "task registry delivery count mismatch")
+    require(errors, task_doc.get("one_assignment_per_package") is True, "task registry one-assignment rule disabled")
+    require(errors, task_doc.get("orphan_assignment_blocks_merge") is True, "task registry orphan guard disabled")
+    require(errors, task_doc.get("assignment_may_change_package_dependencies") is False, "task registry permits dependency changes")
+    require(errors, task_doc.get("assignment_may_authorize_implementation") is False, "task registry authorizes implementation")
+    require(errors, task_doc.get("delivery_slice_may_accept_itself") is False, "delivery slice can self-accept")
+    require(errors, task_doc.get("gate_or_wave_acceptance_created") is False, "task registry creates gate/wave acceptance")
+    require(errors, task_doc.get("launch_state_changed") is False, "task registry changes launch state")
 
-    qualification_tasks = tasks.get("qualification_tasks", {})
-    require(errors, qualification_tasks.get("source_roots") == ["qualification", "tests"], "qualification task roots mismatch")
-    for root in qualification_tasks.get("source_roots", []):
-        require(errors, (ROOT / root).is_dir(), f"qualification source root missing: {root}")
-    for key in (
-        "qualification_is_evidence_requirement_not_success",
-        "unavailable_or_unexecuted_state_must_not_authorize",
-        "package_writer_may_not_accept_own_evidence",
-    ):
-        require(errors, qualification_tasks.get(key) is True, f"qualification task invariant disabled: {key}")
-
-    task_invariants = tasks.get("invariants", {})
-    for key in (
-        "package_without_assignment_blocks_merge",
-        "orphan_assignment_file_blocks_merge",
-        "delivery_slice_without_owner_blocks_merge",
-        "delivery_slice_without_exit_evidence_blocks_merge",
-        "package_absent_from_all_delivery_slices_blocks_merge",
-    ):
-        require(errors, task_invariants.get(key) is True, f"task merge guard disabled: {key}")
-    require(errors, task_invariants.get("assignment_or_delivery_presence_authorizes_implementation") is False, "task presence authorizes implementation")
+    assignment_paths = {
+        row.get("assignment")
+        for row in package_rows.values()
+        if isinstance(row.get("assignment"), str)
+    }
+    require(errors, len(assignment_paths) == 45, "package assignments must be unique for all 45 packages")
+    actual_assignments = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "swarm/assignments").glob("*.md")
+        if path.name != "README.md"
+    }
+    require(errors, actual_assignments == assignment_paths, f"assignment task closure mismatch: {sorted(actual_assignments ^ assignment_paths)}")
 
     delivery_rows = rows(delivery_doc, "slice", "id")
-    require(errors, set(delivery_rows) == {f"P{i:02d}" for i in range(19)}, "delivery registry must contain P00-P18")
-    covered_packages: set[str] = set()
+    source_delivery_ids = {
+        match.group(1)
+        for match in re.finditer(
+            r"^###\s+(P\d{2})\s+[—-]\s+.+$",
+            read(manifest["architecture_master"]),
+            flags=re.MULTILINE,
+        )
+    }
+    require(errors, source_delivery_ids == {f"P{i:02d}" for i in range(19)}, "architecture source must contain P00-P18")
+    require(errors, set(delivery_rows) == source_delivery_ids, "delivery-slice registry mismatch")
+    require(errors, manifest.get("delivery_slice_count") == len(delivery_rows), "coverage manifest delivery-slice count mismatch")
+
+    packages_with_delivery: set[str] = set()
     for slice_id, row in delivery_rows.items():
         owners = row.get("primary_packages")
         refs = row.get("modules")
-        outputs = row.get("required_outputs")
-        evidence = row.get("exit_evidence")
-        require(errors, isinstance(owners, list) and len(owners) > 0, f"{slice_id}: package owners missing")
+        require(errors, isinstance(owners, list) and len(owners) > 0, f"{slice_id}: primary packages missing")
         require(errors, isinstance(refs, list) and len(refs) > 0, f"{slice_id}: module refs missing")
-        require(errors, isinstance(outputs, list) and len(outputs) > 0, f"{slice_id}: required outputs missing")
-        require(errors, isinstance(evidence, list) and len(evidence) > 0, f"{slice_id}: exit evidence missing")
         for package in owners if isinstance(owners, list) else []:
             require(errors, package in packages, f"{slice_id}: unknown package {package}")
-            covered_packages.add(package)
+            packages_with_delivery.add(package)
         for ref in refs if isinstance(refs, list) else []:
             validate_module_ref(errors, ref, modules, slice_id)
-    require(errors, covered_packages == packages, f"packages absent from delivery slices: {sorted(packages - covered_packages)}")
+        qualification_roots = row.get("qualification_roots", [])
+        require(errors, isinstance(qualification_roots, list), f"{slice_id}: qualification_roots must be an array")
+        for root in qualification_roots if isinstance(qualification_roots, list) else []:
+            require(errors, isinstance(root, str) and (ROOT / root).exists(), f"{slice_id}: missing qualification root {root}")
+    require(errors, packages_with_delivery == packages, f"packages without delivery ownership: {sorted(packages - packages_with_delivery)}")
 
-    case_rows = cases_doc.get("case")
-    require(errors, cases_doc.get("schema_version") == 1, "coverage case schema mismatch")
-    require(errors, cases_doc.get("suite") == "architecture_coverage_closure_v1", "coverage case suite mismatch")
-    require(errors, cases_doc.get("status") == "STRUCTURAL_NOT_EXECUTED", "coverage case status changed")
-    require(errors, cases_doc.get("case_count") == 40, "coverage case_count must be 40")
-    require(errors, isinstance(case_rows, list) and len(case_rows) == 40, "coverage case inventory must contain 40 rows")
-    if isinstance(case_rows, list):
-        ids = [row.get("id") for row in case_rows if isinstance(row, dict)]
-        require(errors, len(ids) == len(set(ids)) == 40, "coverage case IDs must be unique")
-        for row in case_rows:
-            require(errors, isinstance(row, dict) and row.get("mandatory") is True, "coverage case must be mandatory")
-            require(errors, isinstance(row, dict) and row.get("result") == "UNAVAILABLE", "coverage case must remain UNAVAILABLE")
+    require(errors, operation_doc.get("status") == "SOURCE_DERIVED_OPERATION_OWNERSHIP_NOT_IMPLEMENTED", "operation registry status mismatch")
+    require(errors, operation_doc.get("package_function_source_count") == 42, "operation registry function-source count mismatch")
+    require(errors, operation_doc.get("foundation_operation_source_count") == 3, "operation registry foundation count mismatch")
+    require(errors, operation_doc.get("operation_identity") == "<package>::<operation>", "operation identity rule mismatch")
+    require(errors, operation_doc.get("operation_count") == "DERIVED_FROM_REGISTERED_MARKDOWN", "operation count must remain source-derived")
+    require(errors, operation_doc.get("all_registered_operations_have_exact_package_owner") is True, "operation package ownership disabled")
+    require(errors, operation_doc.get("all_operations_enter_public_entry_module") is True, "operation entry-module rule disabled")
+    require(errors, operation_doc.get("undocumented_public_operation_allowed") is False, "undocumented operations allowed")
+    require(errors, operation_doc.get("dynamic_operation_registration_allowed") is False, "dynamic operation registration allowed")
+    require(errors, operation_doc.get("operation_inventory_authorizes_implementation") is False, "operation registry authorizes implementation")
+    require(errors, operation_doc.get("operation_inventory_accepts_package") is False, "operation registry accepts package")
+    require(errors, operation_doc.get("operation_inventory_changes_launch_state") is False, "operation registry changes launch state")
+    require(errors, operation_doc.get("function_registry") == manifest.get("function_registry"), "operation/function registry path mismatch")
+    require(errors, operation_doc.get("module_registry") == manifest.get("module_registry"), "operation/module registry path mismatch")
+    require(errors, topology["operation_count"] > 0, "source-derived operation inventory is empty")
 
-    count_checks = {
-        "package_count": len(packages),
-        "foundation_package_count": len(topology["foundation_rows"]),
-        "package_function_packet_count": len(topology["function_rows"]),
-        "module_packet_count": len(topology["module_rows"]),
-        "package_assignment_task_count": len(topology["assignment_paths"]),
-        "architecture_section_count": topology["section_count"],
-        "architecture_invariant_count": topology["invariant_count"],
-        "capability_cell_count": topology["capability_count"],
-        "shared_port_count": topology["port_count"],
-        "configuration_section_count": topology["config_count"],
-        "type_registry_named_symbol_count": schemas["type_registry_symbols"],
-        "named_type_completion_count": schemas["completion_symbols"],
-        "p00_schema_or_registry_count": schemas["schema_total"],
-        "canonical_primitive_family_count": schemas["primitive_families"],
-        "recipe_count": schemas["recipe_count"],
-        "delivery_slice_count": len(delivery_rows),
-    }
-    for key, actual in count_checks.items():
-        require(errors, manifest.get(key) == actual, f"coverage manifest count mismatch for {key}: {manifest.get(key)} != {actual}")
-    require(errors, manifest.get("support_and_record_schema_count") == 97, "support/record schema count must be 97")
+    foundation_rows = rows(operation_doc, "foundation", "package")
+    require(errors, set(foundation_rows) == {"search-contracts", "search-domain", "search-ports"}, "operation foundation set mismatch")
+    for package, row in foundation_rows.items():
+        require(errors, row.get("source") == topology["foundation_rows"][package].get("primary_contract"), f"{package}: foundation source mismatch")
+        require(errors, row.get("public_entry_module") in modules.get(package, set()), f"{package}: foundation public entry module missing")
 
-    for key in (
-        "one_shape_owner_per_schema",
-        "one_state_owner_per_mutable_schema",
-        "one_trait_owner_per_shared_port",
-        "one_concrete_implementation_owner_per_shared_port",
-        "one_primary_owner_set_per_capability_cell",
-        "one_package_module_packet_per_package",
-        "one_assignment_task_per_package",
-        "all_packages_covered_by_delivery_slice",
-    ):
-        require(errors, manifest.get(key) is True, f"coverage invariant disabled: {key}")
-    for key in (
-        "implementation_authorized_by_this_manifest",
-        "package_acceptance_claimed",
-        "gate_or_wave_acceptance_claimed",
-        "runtime_evidence_available",
-        "product_acceptance_claimed",
-    ):
-        require(errors, manifest.get(key) is False, f"coverage authority flag enabled: {key}")
+    case_rows = rows(qualification_doc, "case", "id")
+    require(errors, qualification_doc.get("case_count") == 40, "architecture coverage case count must be 40")
+    require(errors, len(case_rows) == 40, "architecture coverage must contain 40 unique cases")
+    for case_id, row in case_rows.items():
+        require(errors, row.get("mandatory") is True, f"coverage case {case_id} must be mandatory")
+        require(errors, row.get("result") == "UNAVAILABLE", f"coverage case {case_id} has premature evidence")
 
-    corrections = manifest.get("known_corrections", {})
-    require(errors, corrections.get("source_owner_generation") == "BLAKE3_DIGEST_PART_I_WINS", "SourceOwnerGeneration correction missing")
-    require(errors, corrections.get("residency_policy_port_implementation") == "search-revision-store", "ResidencyPolicyPort correction missing")
-    require(errors, corrections.get("clock_port_implementation") == "eliot-searchd_private_platform_adapter", "ClockPort correction missing")
-    require(errors, corrections.get("missing_named_type_contracts") == "CLOSED_BY_TYPE_COMPLETIONS_PC_018", "named type correction missing")
+    required_files = p00_manifest.get("required_files")
+    require(errors, p00_manifest.get("required_file_count") == 13, "P00 required-file count must be 13")
+    require(errors, isinstance(required_files, list) and len(required_files) == 13, "P00 required_files array must contain 13 entries")
+    require(errors, isinstance(required_files, list) and "TYPE_COMPLETIONS.md" in required_files, "TYPE_COMPLETIONS is not part of P00 contract pack")
+    completion_text = read(manifest["type_completion_contract"])
+    for token in ("RecipeIdV1", "RecipeBodyV1", "ComparisonAxis", "ProtocolRange", "PackageOpaque", "PC-018"):
+        source_text = completion_text if token != "PC-018" else read("docs/contracts/p00/CONTRACT_CHALLENGES.md")
+        require(errors, token in source_text, f"P00 type completion evidence missing {token}")
 
-    require(errors, launch.get("active_stage") == "P00" and launch.get("active_wave") == 0, "launch authority moved from P00/W0")
-    require(errors, launch.get("authorized_packages") == ["search-contracts"], "authorized package set changed")
-
-    workflow = ROOT / ".github/workflows/architecture-coverage.yml"
-    require(errors, workflow.is_file(), "architecture coverage workflow missing")
-    if workflow.is_file():
-        workflow_text = workflow.read_text(encoding="utf-8")
-        for token in ("workflow_dispatch:", "contents: read", "persist-credentials: false", "validate-architecture-coverage.ps1"):
-            require(errors, token in workflow_text, f"coverage workflow missing {token}")
-        for token in ("\n  push:", "\n  pull_request:", "\n  schedule:", "\n  workflow_run:", "\n  repository_dispatch:"):
-            require(errors, token not in workflow_text, f"automatic coverage workflow trigger {token.strip()}")
+    _manual_workflow(errors, ".github/workflows/architecture-coverage.yml")
 
     return {
-        "delivery_count": len(delivery_rows),
-        "qualification_case_count": len(case_rows) if isinstance(case_rows, list) else 0,
+        "assignment_tasks": len(assignment_paths),
+        "delivery_slices": len(delivery_rows),
+        "derived_operations": topology["operation_count"],
+        "qualification_cases": len(case_rows),
     }
