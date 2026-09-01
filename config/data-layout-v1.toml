@@ -1,0 +1,66 @@
+schema_version = 1
+project = "eliot-search"
+status = "FROZEN_LAYOUT_NOT_RUNTIME_EVIDENCE"
+platform = "windows_x64_primary"
+root_locator = "CONFIGURED_ABSOLUTE_PATH"
+root_must_be_dedicated = true
+root_must_not_be_repository_checkout = true
+root_must_not_be_source_identity = true
+owner_only_acl_required = true
+inherited_broad_acl_forbidden = true
+symlink_or_reparse_escape_forbidden = true
+plaintext_secret_storage_forbidden = true
+
+[directories]
+control = "control"
+objects = "objects"
+qdrant = "qdrant"
+runtime = "runtime"
+temporary = "tmp"
+backups = "backups"
+quarantine = "quarantine"
+
+[control]
+redb_relative_path = "control/control.redb"
+redb_role = "CONTROL_JOURNAL_ONLY"
+searchable_corpus_forbidden = true
+
+[objects]
+revision_store_relative_path = "objects/revisions"
+materialization_store_relative_path = "objects/materializations"
+content_addressed = true
+residency_key_required = true
+
+[qdrant]
+data_relative_path = "qdrant/data"
+snapshots_relative_path = "qdrant/snapshots"
+sole_search_index = true
+raw_collection_name_public = false
+
+[runtime]
+locks_relative_path = "runtime/locks"
+sockets_relative_path = "runtime/ipc"
+receipts_relative_path = "runtime/receipts"
+restart_invalid_state_relative_path = "runtime/ephemeral"
+unsaved_bytes_must_remain_memory_only = true
+
+[temporary]
+relative_path = "tmp"
+same_volume_atomic_replace_required = true
+startup_scavenge_required = true
+may_contain_plaintext_secrets = false
+may_contain_unsaved_buffers = false
+
+[migration]
+manifest_relative_path = "control/migration-manifest.toml"
+in_progress_marker_relative_path = "control/MIGRATION_IN_PROGRESS"
+committed_marker_relative_path = "control/MIGRATION_COMMITTED"
+rollback_marker_relative_path = "control/ROLLBACK_REQUIRED"
+unknown_outcome_requires_quarantine = true
+forward_only_without_rollback_receipt_forbidden = true
+
+[backup_restore]
+paired_manifest_relative_path = "backups/paired-recovery-manifest.toml"
+redb_and_qdrant_pairing_required = true
+restore_defaults_to = "RESTORE_PENDING_REVALIDATION"
+indexed_admission_requires_readback = true

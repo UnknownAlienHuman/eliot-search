@@ -1,0 +1,11 @@
+[alias]
+check-all = "check --workspace --all-targets --locked"
+test-all = "test --workspace --all-targets --locked"
+clippy-all = "clippy --workspace --all-targets --locked -- -D warnings"
+doc-all = "doc --workspace --no-deps --locked"
+
+[build]
+incremental = true
+
+[net]
+retry = 2
