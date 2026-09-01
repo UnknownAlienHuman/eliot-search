@@ -8,10 +8,14 @@ Part I wins; contradictions stop work and update this pack through the integrati
 
 - `search-contracts`: every file except port-support implementation ownership remains with
   `search-ports` as marked.
-- `search-domain`: canonical types, type registry/completions, support schemas, source graph,
-  query/results, recipe results and reasons, then accepted contracts digest.
+- `search-domain`: canonical types, named type completions, support schemas, source graph,
+  query/results, recipe results and reasons, plus the accepted frozen `search-contracts` API/type digest.
 - `search-ports`: canonical types, type registry/completions port-support sections, support schemas port
   note, port operations, reasons and accepted contracts digest.
+
+The bounded `search-domain` context does not duplicate the full raw type registry after
+`search-contracts` is accepted; the immutable accepted API/type digest is the authority for all other
+shared shapes.
 
 ## Files
 
