@@ -24,19 +24,12 @@ jobs:
           persist-credentials: true
           fetch-depth: 1
 
-      - name: Apply reviewed exact routing, structural-role, re-entry and parser refinements
-        run: |
-          python tools/patch-coverage-router-v2.py
-          python tools/patch-coverage-closure-v3.py
-          python tools/patch-progressive-reentry-v3.py
-          python tools/patch-legacy-coverage-parser-v3.py
-
       - name: Generate exact relation graph and bounded package maps
         run: |
           python tools/generate-coverage-graph-v2.py --json
           python tools/generate-package-maps-v2.py --json
 
-      - name: Validate graph, maps, Cargo topology and legacy architecture closure
+      - name: Validate graph, maps, Cargo topology and architecture closure
         run: |
           python tools/generate-coverage-graph-v2.py --check --json
           python tools/generate-package-maps-v2.py --check --json
@@ -73,12 +66,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
-            tools/coverage_graph_v2.py \
-            tools/validate-coverage-graph-v2.py \
-            tools/validate-architecture-coverage.py \
-            tools/package_maps_v2.py \
-            tools/validate-package-maps-v2.py \
-            swarm/coverage/ports.toml \
             swarm/coverage/manifest.toml \
             swarm/coverage/operation-modules.toml \
             swarm/coverage/documentation-nodes.toml \
@@ -94,5 +81,5 @@ jobs:
             echo "No generated changes."
             exit 0
           fi
-          git commit -m "coverage: generate exact package relation maps [generated-coverage]"
+          git commit -m "coverage: refresh exact package relation maps [generated-coverage]"
           git push origin HEAD:audit/coverage-recheck-v2
