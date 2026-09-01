@@ -1,11 +1,19 @@
 schema_version = 1
 project = "eliot-search"
 status = "STATIC_SCHEMA_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
-schema_or_registry_count = 116
+canonical_id_counter_count = 50
+record_or_registry_count = 116
+schema_or_registry_count = 166
+canonical_primitive_family_count = 12
 one_shape_owner_per_schema = true
 one_state_owner_per_mutable_schema = true
 shape_owner_package_default = "search-contracts"
 implementation_authorized_by_this_registry = false
+
+[[packet]]
+id = "primitives"
+path = "swarm/coverage/schemas-primitives.toml"
+schema_count = 50
 
 [[packet]]
 id = "core"
