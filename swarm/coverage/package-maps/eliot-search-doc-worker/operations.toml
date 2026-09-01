@@ -1,0 +1,148 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "eliot-search-doc-worker"
+operation_count = 14
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "eliot-search-doc-worker::admit_materialization_request"
+name = "admit_materialization_request"
+module = "input"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Request inspection"]
+route_kind = "semantic"
+score = 28
+
+[[operation]]
+id = "eliot-search-doc-worker::begin_drain"
+name = "begin_drain"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Health and lifecycle"]
+route_kind = "semantic"
+score = 64
+
+[[operation]]
+id = "eliot-search-doc-worker::cancel_request"
+name = "cancel_request"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Cancellation, deadlines and cleanup"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search-doc-worker::cleanup_request_workspace"
+name = "cleanup_request_workspace"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Cancellation, deadlines and cleanup"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search-doc-worker::emit_terminal"
+name = "emit_terminal"
+module = "protocol"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Materialization"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search-doc-worker::health_snapshot"
+name = "health_snapshot"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Health and lifecycle"]
+route_kind = "semantic"
+score = 36
+
+[[operation]]
+id = "eliot-search-doc-worker::inspect_container_and_input"
+name = "inspect_container_and_input"
+module = "input"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Request inspection"]
+route_kind = "semantic"
+score = 89
+
+[[operation]]
+id = "eliot-search-doc-worker::load_qualified_provider"
+name = "load_qualified_provider"
+module = "provider"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Startup and profile admission"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "eliot-search-doc-worker::materialize"
+name = "materialize"
+module = "materialize"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Materialization"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "eliot-search-doc-worker::open_private_session"
+name = "open_private_session"
+module = "protocol"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Startup and profile admission"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "eliot-search-doc-worker::shutdown_and_remove"
+name = "shutdown_and_remove"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Health and lifecycle"]
+route_kind = "semantic"
+score = 64
+
+[[operation]]
+id = "eliot-search-doc-worker::validate_materialization_output"
+name = "validate_materialization_output"
+module = "input"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Materialization"]
+route_kind = "semantic"
+score = 8
+
+[[operation]]
+id = "eliot-search-doc-worker::validate_provider_profile"
+name = "validate_provider_profile"
+module = "provider"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Startup and profile admission"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "eliot-search-doc-worker::verify_inherited_sandbox"
+name = "verify_inherited_sandbox"
+module = "sandbox"
+public_entry_module = "main"
+sources = ["bins/eliot-search-doc-worker/FUNCTIONS.md"]
+source_contexts = ["Startup and profile admission"]
+route_kind = "package_rule"
+score = 100

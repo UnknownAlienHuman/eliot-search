@@ -1,0 +1,1086 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-retention"
+node_count = 98
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/retention.md#retention-configuration-contract"
+path = "config/sections/retention.md"
+line = 1
+level = 1
+heading = "[retention] configuration contract"
+kind = "configuration_contract"
+modules = ["search-retention:config"]
+route_kind = "config_owner"
+rationale = "retention"
+
+[[node]]
+id = "config/sections/retention.md#fields"
+path = "config/sections/retention.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-retention:config"]
+route_kind = "config_owner"
+rationale = "retention"
+
+[[node]]
+id = "config/sections/retention.md#required-section-api"
+path = "config/sections/retention.md"
+line = 22
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-retention:config"]
+route_kind = "config_owner"
+rationale = "retention"
+
+[[node]]
+id = "config/sections/retention.md#invariants"
+path = "config/sections/retention.md"
+line = 36
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-retention:config"]
+route_kind = "config_owner"
+rationale = "retention"
+
+[[node]]
+id = "config/sections/retention.md#required-tests"
+path = "config/sections/retention.md"
+line = 42
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-retention:config"]
+route_kind = "config_owner"
+rationale = "retention"
+
+[[node]]
+id = "crates/search-runtime/search-retention/AGENTS.md#agent-contract-search-retention"
+path = "crates/search-runtime/search-retention/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-retention"
+kind = "implementation_contract_root"
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-runtime/search-retention/AGENTS.md#ownership"
+path = "crates/search-runtime/search-retention/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/AGENTS.md#forbidden-ownership"
+path = "crates/search-runtime/search-retention/AGENTS.md"
+line = 15
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/AGENTS.md#dependencies"
+path = "crates/search-runtime/search-retention/AGENTS.md"
+line = 21
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/AGENTS.md#size"
+path = "crates/search-runtime/search-retention/AGENTS.md"
+line = 26
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#function-contract-search-retention"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-retention"
+kind = "implementation_contract_root"
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#state-ownership"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 13
+level = 2
+heading = "State ownership"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#retention-roots"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 28
+level = 2
+heading = "Retention roots"
+kind = "implementation_contract"
+modules = ["search-retention:roots"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#validateretentionpolicy"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 49
+level = 2
+heading = "validateretentionpolicy"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#collectdurableroots"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 61
+level = 2
+heading = "collectdurableroots"
+kind = "implementation_contract"
+modules = ["search-retention:roots"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#augmentwithactivepins"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 76
+level = 2
+heading = "augmentwithactivepins"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#beginsweepgeneration"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 90
+level = 2
+heading = "beginsweepgeneration"
+kind = "implementation_contract"
+modules = ["search-retention:sweep"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#markreachable"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 103
+level = 2
+heading = "markreachable"
+kind = "implementation_contract"
+modules = ["search-retention:mark"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#checkpointmark"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 117
+level = 2
+heading = "checkpointmark"
+kind = "implementation_contract"
+modules = ["search-retention:mark"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#finalizemarkmanifest"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 127
+level = 2
+heading = "finalizemarkmanifest"
+kind = "implementation_contract"
+modules = ["search-retention:mark"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#plansweep"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 138
+level = 2
+heading = "plansweep"
+kind = "implementation_contract"
+modules = ["search-retention:sweep"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#executesweepbatch"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 151
+level = 2
+heading = "executesweepbatch"
+kind = "implementation_contract"
+modules = ["search-retention:sweep"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#resumesweep"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 166
+level = 2
+heading = "resumesweep"
+kind = "implementation_contract"
+modules = ["search-retention:sweep"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#completesweep"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 177
+level = 2
+heading = "completesweep"
+kind = "implementation_contract"
+modules = ["search-retention:sweep"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#purge-operations"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 188
+level = 2
+heading = "Purge operations"
+kind = "implementation_contract"
+modules = ["search-retention:purge"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#validatepurgerequest"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 190
+level = 3
+heading = "validatepurgerequest"
+kind = "implementation_contract"
+modules = ["search-retention:purge"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#installpurgefence"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 201
+level = 3
+heading = "installpurgefence"
+kind = "implementation_contract"
+modules = ["search-retention:purge"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#buildpurgeplan"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 215
+level = 3
+heading = "buildpurgeplan"
+kind = "implementation_contract"
+modules = ["search-retention:purge"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#executepurgelayer"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 237
+level = 3
+heading = "executepurgelayer"
+kind = "implementation_contract"
+modules = ["search-retention:purge"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#emitclientrevocationevent"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 251
+level = 3
+heading = "emitclientrevocationevent"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#finalizepurgereceipt"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 261
+level = 3
+heading = "finalizepurgereceipt"
+kind = "implementation_contract"
+modules = ["search-retention:purge"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#recovery-and-restore-operations"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 284
+level = 2
+heading = "Recovery and restore operations"
+kind = "implementation_contract"
+modules = ["search-retention:restore"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#buildpairedrecoverymanifest"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 286
+level = 3
+heading = "buildpairedrecoverymanifest"
+kind = "implementation_contract"
+modules = ["search-retention:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#validaterestoremanifest"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 300
+level = 3
+heading = "validaterestoremanifest"
+kind = "implementation_contract"
+modules = ["search-retention:restore"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#enterrestorequarantine"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 317
+level = 3
+heading = "enterrestorequarantine"
+kind = "implementation_contract"
+modules = ["search-retention:restore"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#revalidaterestoresources"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 327
+level = 3
+heading = "revalidaterestoresources"
+kind = "implementation_contract"
+modules = ["search-retention:restore"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#planrestoreadmission"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 338
+level = 3
+heading = "planrestoreadmission"
+kind = "implementation_contract"
+modules = ["search-retention:restore"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#commitrestoreadmission"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 349
+level = 3
+heading = "commitrestoreadmission"
+kind = "implementation_contract"
+modules = ["search-retention:restore"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#invalidation-operations"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 360
+level = 2
+heading = "Invalidation operations"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#buildlifecycleinvalidationset"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 362
+level = 3
+heading = "buildlifecycleinvalidationset"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#verifyinvalidationcompletion"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 372
+level = 3
+heading = "verifyinvalidationcompletion"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#configuration-functions"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 381
+level = 2
+heading = "Configuration functions"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#cancellation-deadlines-idempotency-and-crash-semantics"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 398
+level = 2
+heading = "Cancellation, deadlines, idempotency and crash semantics"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#typed-failures-and-reasons"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 409
+level = 2
+heading = "Typed failures and reasons"
+kind = "implementation_error_contract"
+modules = ["search-retention:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-runtime/search-retention/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+line = 438
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/README.md#search-retention"
+path = "crates/search-runtime/search-retention/README.md"
+line = 1
+level = 1
+heading = "search-retention"
+kind = "implementation_contract_root"
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-runtime/search-retention/README.md#owns"
+path = "crates/search-runtime/search-retention/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-retention/README.md#must-not-own"
+path = "crates/search-runtime/search-retention/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-recovery-rebuild-and-backup"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1644
+level = 2
+heading = "S28. Recovery, rebuild and backup"
+kind = "architecture_section"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "architecture_section_registry"
+rationale = "S28"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-1-rebuildability-first"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1646
+level = 3
+heading = "S28.1 Rebuildability first"
+kind = "architecture_node"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-2-paired-recovery-manifest"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1659
+level = 3
+heading = "S28.2 Paired recovery manifest"
+kind = "architecture_node"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-3-purge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1673
+level = 3
+heading = "S28.3 Purge"
+kind = "architecture_node"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-4-cas-retention-and-mark-and-sweep"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1685
+level = 3
+heading = "S28.4 CAS retention and mark-and-sweep"
+kind = "architecture_node"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s36-property-and-fault-proofs"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2093
+level = 2
+heading = "S36. Property and fault proofs"
+kind = "architecture_section"
+modules = ["search-retention:recovery"]
+route_kind = "architecture_section_registry"
+rationale = "S36"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p13-access-handles-purge-and-restore-boundaries"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2912
+level = 3
+heading = "P13 — Access, handles, purge and restore boundaries"
+kind = "delivery_contract"
+modules = ["search-retention:mark", "search-retention:purge", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+route_kind = "delivery_registry"
+rationale = "P13"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#w7-lifecycle-settings-1-0"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W7 lifecycle settings 1.0"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#principle"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 5
+level = 2
+heading = "Principle"
+kind = "principle_or_invariant"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#security-and-invalidation"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 18
+level = 2
+heading = "Security and invalidation"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#handles-and-continuations"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 27
+level = 2
+heading = "Handles and continuations"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#revision-store"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 36
+level = 2
+heading = "Revision store"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#retention"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 42
+level = 2
+heading = "Retention"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#purge"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 51
+level = 2
+heading = "Purge"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#backup-and-restore"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 60
+level = 2
+heading = "Backup and restore"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#composite-reconfiguration"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 69
+level = 2
+heading = "Composite reconfiguration"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#redaction"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 88
+level = 2
+heading = "Redaction"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#required-tests"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 94
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-retention:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#w7-lifecycle-purge-and-restore-implementation-packet"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore implementation packet"
+kind = "implementation_handoff"
+modules = ["search-retention:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-retention:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 23
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-retention:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-retention:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 76
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-retention:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 96
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-retention:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/lifecycle/README.md#w7-lifecycle-purge-and-restore-qualification"
+path = "qualification/lifecycle/README.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore qualification"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#w7-security-lifecycle-retention-purge-and-restore-qualification-contract"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W7 security lifecycle, retention, purge and restore qualification contract"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#owners"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#frozen-inputs"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#execution-order"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 48
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#mandatory-properties"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 69
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#restrictive-security-and-active-requests"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 71
+level = 3
+heading = "Restrictive security and active requests"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#handles-continuations-and-candidate-emission"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 82
+level = 3
+heading = "Handles, continuations and candidate emission"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#retention-and-mark-sweep"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 94
+level = 3
+heading = "Retention and mark/sweep"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#purge"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 106
+level = 3
+heading = "Purge"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#backup-and-restore"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 119
+level = 3
+heading = "Backup and restore"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#boundary-and-receipt-truthfulness"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 133
+level = 3
+heading = "Boundary and receipt truthfulness"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#stop-conditions"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 142
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#evidence-products"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 164
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#current-disposition"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 170
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-retention:purge", "search-retention:restore"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#search-retention-implementation-packet"
+path = "swarm/assignments/search-retention.md"
+line = 1
+level = 1
+heading = "search-retention implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#mission"
+path = "swarm/assignments/search-retention.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#owns"
+path = "swarm/assignments/search-retention.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#must-not-own"
+path = "swarm/assignments/search-retention.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#logical-primitives"
+path = "swarm/assignments/search-retention.md"
+line = 34
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#logical-operations"
+path = "swarm/assignments/search-retention.md"
+line = 38
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#required-invariants"
+path = "swarm/assignments/search-retention.md"
+line = 49
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-retention:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#typed-failure-surface"
+path = "swarm/assignments/search-retention.md"
+line = 59
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#exit-tests-evidence"
+path = "swarm/assignments/search-retention.md"
+line = 68
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#suggested-internal-modules"
+path = "swarm/assignments/search-retention.md"
+line = 79
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retention.md#size-split"
+path = "swarm/assignments/search-retention.md"
+line = 94
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-retention:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

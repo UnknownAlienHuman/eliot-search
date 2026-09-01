@@ -1,0 +1,261 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-retrieval-executor"
+outbound_dependency_count = 8
+inbound_dependency_count = 1
+architecture_relation_count = 9
+configuration_relation_count = 1
+recipe_relation_count = 6
+port_relation_count = 0
+schema_relation_count = 1
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-contracts"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-domain"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-ports"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-config"
+consumer = "search-retrieval-executor"
+consumer_module = "config"
+consumer_earliest_wave = 4
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-query-planner"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-query-planner"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-lexical"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-lexical"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-epoch-pins"
+consumer = "search-retrieval-executor"
+consumer_module = "pins"
+consumer_earliest_wave = 4
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-retrieval-executor->search-access"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-access"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-retrieval-executor"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-retrieval-executor"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S19"
+modules = ["search-retrieval-executor:contamination"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S21"
+modules = ["search-retrieval-executor:fusion"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S30"
+modules = ["search-retrieval-executor:scheduler"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C23"
+modules = ["search-retrieval-executor:cleanup", "search-retrieval-executor:contamination", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:scheduler"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-07"
+modules = ["search-retrieval-executor:legs"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-21"
+modules = ["search-retrieval-executor:fusion"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-22"
+modules = ["search-retrieval-executor:contamination"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P08"
+modules = ["search-retrieval-executor:fusion", "search-retrieval-executor:scheduler"]
+required_outputs = ["server_owned_plans", "bounded_safe_legs", "deterministic_fusion", "source_backed_candidates", "compact_cards", "handles_and_continuations", "baseline_eval_harness"]
+exit_evidence = ["access_noninterference", "deterministic_cards", "raw_grep_read_baseline"]
+
+[[architecture]]
+kind = "delivery"
+id = "P16"
+modules = ["search-retrieval-executor:legs"]
+required_outputs = ["isolated_model_worker", "versioned_dense_profile", "measured_fusion_or_rerank", "baseline_fallback"]
+exit_evidence = ["measured_incremental_benefit", "resource_and_safety_receipts", "worker_removal_returns_to_P15"]
+
+[[configuration]]
+section = "scheduler"
+module = "config"
+contract = "config/sections/scheduler.md"
+reload = "APPLY_LIVE"
+
+[[recipe]]
+id = "locate@1"
+module = "legs"
+request_schema = "SearchRecipeRequest"
+result_schema = "SearchCandidateSet"
+
+[[recipe]]
+id = "find_text@1"
+module = "legs"
+request_schema = "SearchRecipeRequest"
+result_schema = "SearchCandidateSet"
+
+[[recipe]]
+id = "inspect_entity@1"
+module = "legs"
+request_schema = "SearchRecipeRequest"
+result_schema = "EntityInspectionResult"
+
+[[recipe]]
+id = "compare_implementations@1"
+module = "legs"
+request_schema = "SearchRecipeRequest"
+result_schema = "CompareImplementationsResult"
+
+[[recipe]]
+id = "explore_entity@1"
+module = "legs"
+request_schema = "SearchRecipeRequest"
+result_schema = "EntityExplorationResult"
+
+[[recipe]]
+id = "corpus_profile@1"
+module = "fusion"
+request_schema = "SearchRecipeRequest"
+result_schema = "CorpusProfileResult"
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "leg_execution"
+owner_roles = ["state_owner"]
+modules = ["legs"]
+schemas = ["LegExecutionSummary"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]

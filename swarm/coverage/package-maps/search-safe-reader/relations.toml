@@ -1,0 +1,143 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-safe-reader"
+outbound_dependency_count = 4
+inbound_dependency_count = 2
+architecture_relation_count = 4
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-safe-reader->search-contracts"
+consumer = "search-safe-reader"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-safe-reader->search-domain"
+consumer = "search-safe-reader"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-safe-reader->search-ports"
+consumer = "search-safe-reader"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-safe-reader->search-config"
+consumer = "search-safe-reader"
+consumer_module = "config"
+consumer_earliest_wave = 2
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-safe-reader"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-safe-reader"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-reconcile->search-safe-reader"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-safe-reader"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S16"
+modules = ["search-safe-reader:stable_read"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C06"
+modules = ["search-safe-reader:git_object", "search-safe-reader:platform", "search-safe-reader:stable_read"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-03"
+modules = ["search-safe-reader:stable_read"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P03"
+modules = ["search-safe-reader:git_object", "search-safe-reader:stable_read"]
+required_outputs = ["admitted_roots_and_sources", "source_and_path_identity", "memberships_and_portfolios", "coherent_source_views", "stable_no_execute_reads", "source_owner_cutover"]
+exit_evidence = ["rename_hardlink_case_reparse", "unstable_read", "no_execute", "dual_writer_denial", "cutover_wire_and_state_machine"]
+
+[[configuration]]
+section = "source_reader"
+module = "config"
+contract = "config/sections/source_reader.md"
+reload = "APPLY_LIVE"
+
+[[port]]
+name = "SafeReaderPort"
+module = "stable_read"
+methods = ["resolve_final_source", "stable_read", "read_git_object_no_execute"]
+method_modules = ["platform", "stable_read", "git_object"]

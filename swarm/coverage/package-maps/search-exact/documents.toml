@@ -1,0 +1,679 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-exact"
+node_count = 61
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-query/search-exact/AGENTS.md#agent-contract-search-exact"
+path = "crates/search-query/search-exact/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-exact"
+kind = "implementation_contract_root"
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-exact/AGENTS.md#ownership"
+path = "crates/search-query/search-exact/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-exact/AGENTS.md"
+line = 13
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/AGENTS.md#dependencies"
+path = "crates/search-query/search-exact/AGENTS.md"
+line = 19
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/AGENTS.md#size"
+path = "crates/search-query/search-exact/AGENTS.md"
+line = 23
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#function-contract-search-exact"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-exact"
+kind = "implementation_contract_root"
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#state-and-authority"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 11
+level = 2
+heading = "State and authority"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#predicate-profiles"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 25
+level = 2
+heading = "Predicate profiles"
+kind = "implementation_contract"
+modules = ["search-exact:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#validatepredicateprofile"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 53
+level = 2
+heading = "validatepredicateprofile"
+kind = "implementation_contract"
+modules = ["search-exact:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#compilepredicate"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 67
+level = 2
+heading = "compilepredicate"
+kind = "implementation_contract"
+modules = ["search-exact:predicate"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#freezedenominator"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 80
+level = 2
+heading = "freezedenominator"
+kind = "implementation_contract"
+modules = ["search-exact:denominator"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#compileexactscan"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 110
+level = 2
+heading = "compileexactscan"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#validateplanbeforeexecution"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 127
+level = 2
+heading = "validateplanbeforeexecution"
+kind = "implementation_contract"
+modules = ["search-exact:plan"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#executeitem"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 139
+level = 2
+heading = "executeitem"
+kind = "implementation_contract"
+modules = ["search-exact:execute"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#executeexactscan"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 161
+level = 2
+heading = "executeexactscan"
+kind = "implementation_contract"
+modules = ["search-exact:execute"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#checkpointexecution"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 184
+level = 2
+heading = "checkpointexecution"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#resumeexecution"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 198
+level = 2
+heading = "resumeexecution"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#classifycompleteness"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 212
+level = 2
+heading = "classifycompleteness"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#verifyexecutionreport"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 234
+level = 2
+heading = "verifyexecutionreport"
+kind = "implementation_contract"
+modules = ["search-exact:report"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#revalidatecompletenegative"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 248
+level = 2
+heading = "revalidatecompletenegative"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#cancellation-deadlines-idempotency-and-crash-semantics"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 258
+level = 2
+heading = "Cancellation, deadlines, idempotency and crash semantics"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#typed-failures-and-reasons"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 270
+level = 2
+heading = "Typed failures and reasons"
+kind = "implementation_error_contract"
+modules = ["search-exact:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-query/search-exact/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+line = 298
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-exact:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/README.md#search-exact"
+path = "crates/search-query/search-exact/README.md"
+line = 1
+level = 1
+heading = "search-exact"
+kind = "implementation_contract_root"
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-exact/README.md#owns"
+path = "crates/search-query/search-exact/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-exact/README.md#must-not-own"
+path = "crates/search-query/search-exact/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-exact-verification-plane"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1522
+level = 2
+heading = "S25. Exact verification plane"
+kind = "architecture_section"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+route_kind = "architecture_section_registry"
+rationale = "S25"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-1-compile-then-execute"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1524
+level = 3
+heading = "S25.1 Compile then execute"
+kind = "architecture_node"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-2-complete-negative-claim"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1547
+level = 3
+heading = "S25.2 Complete negative claim"
+kind = "architecture_node"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-3-live-scope-drift"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1561
+level = 3
+heading = "S25.3 Live-scope drift"
+kind = "architecture_node"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s36-property-and-fault-proofs"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2093
+level = 2
+heading = "S36. Property and fault proofs"
+kind = "architecture_section"
+modules = ["search-exact:recovery"]
+route_kind = "architecture_section_registry"
+rationale = "S36"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p12-exact-scan-and-proof-reports"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2906
+level = 3
+heading = "P12 — Exact scan and proof reports"
+kind = "delivery_contract"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+route_kind = "delivery_registry"
+rationale = "P12"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#w6-subject-resolution-comparison-and-exact-proof-implementation-packet"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W6 subject-resolution, comparison and exact-proof implementation packet"
+kind = "implementation_handoff"
+modules = ["search-exact:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#packages"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Packages"
+kind = "implementation_handoff"
+modules = ["search-exact:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 17
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-exact:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 36
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-exact:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-exact:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 75
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-exact:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/proof/README.md#w6-comparison-and-exact-proof-qualification"
+path = "qualification/proof/README.md"
+line = 1
+level = 1
+heading = "W6 comparison and exact-proof qualification"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#w6-subject-resolution-comparison-and-exact-proof-qualification-contract"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W6 subject resolution, comparison and exact-proof qualification contract"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#owners"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#frozen-inputs"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 30
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#execution-order"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 47
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#mandatory-properties"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 66
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#subject-resolution"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 68
+level = 3
+heading = "Subject resolution"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#cross-repository-comparison"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Cross-repository comparison"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#exact-proof"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 95
+level = 3
+heading = "Exact proof"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#stop-conditions"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 111
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#evidence-products"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 130
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#current-disposition"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 136
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-exact:denominator", "search-exact:report"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#search-exact-implementation-packet"
+path = "swarm/assignments/search-exact.md"
+line = 1
+level = 1
+heading = "search-exact implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#mission"
+path = "swarm/assignments/search-exact.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#owns"
+path = "swarm/assignments/search-exact.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#must-not-own"
+path = "swarm/assignments/search-exact.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#logical-primitives"
+path = "swarm/assignments/search-exact.md"
+line = 32
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#logical-operations"
+path = "swarm/assignments/search-exact.md"
+line = 36
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#required-invariants"
+path = "swarm/assignments/search-exact.md"
+line = 43
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-exact:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#typed-failure-surface"
+path = "swarm/assignments/search-exact.md"
+line = 52
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#exit-tests-evidence"
+path = "swarm/assignments/search-exact.md"
+line = 60
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#suggested-internal-modules"
+path = "swarm/assignments/search-exact.md"
+line = 70
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-exact.md#size-split"
+path = "swarm/assignments/search-exact.md"
+line = 84
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-exact:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

@@ -1,0 +1,129 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-research-export-adapter"
+outbound_dependency_count = 4
+inbound_dependency_count = 0
+architecture_relation_count = 8
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-research-export-adapter->search-contracts"
+consumer = "search-research-export-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-research-export-adapter->search-domain"
+consumer = "search-research-export-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-research-export-adapter->search-ports"
+consumer = "search-research-export-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-research-export-adapter->search-provider-protocol"
+consumer = "search-research-export-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S1"
+modules = ["search-research-export-adapter:admission"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S32"
+modules = ["search-research-export-adapter:export"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C30"
+modules = ["search-research-export-adapter:export"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-04"
+modules = ["search-research-export-adapter:export"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-17"
+modules = ["search-research-export-adapter:export"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-29"
+modules = ["search-research-export-adapter:admission"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-30"
+modules = ["search-research-export-adapter:cutover"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P14"
+modules = ["search-research-export-adapter:export", "search-research-export-adapter:manifest"]
+required_outputs = ["provider_envelope_flow_control", "pairing_and_grants", "capability_descriptor", "generic_evidence_edge", "optional_ELIOT_mapping", "optional_Research_export"]
+exit_evidence = ["no_reverse_authority", "generic_round_trip", "optional_ELIOT_fixture", "normalized_bundle_round_trip", "cutover_receipt_validation"]

@@ -1,0 +1,68 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-point-identity"
+operation_count = 6
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-point-identity::compare_existing_identity"
+name = "compare_existing_identity"
+module = "key"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 12
+
+[[operation]]
+id = "search-point-identity::derive_point_identity"
+name = "derive_point_identity"
+module = "key"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 12
+
+[[operation]]
+id = "search-point-identity::derive_qdrant_uuid"
+name = "derive_qdrant_uuid"
+module = "uuid"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-point-identity::encode_canonical_key"
+name = "encode_canonical_key"
+module = "canonical"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-point-identity::full_digest"
+name = "full_digest"
+module = "digest"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 113
+
+[[operation]]
+id = "search-point-identity::validate_identity_payload"
+name = "validate_identity_payload"
+module = "key"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 12

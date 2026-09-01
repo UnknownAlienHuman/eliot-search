@@ -1,0 +1,87 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "eliot-search-model-worker"
+outbound_dependency_count = 4
+inbound_dependency_count = 0
+architecture_relation_count = 2
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-search-model-worker->search-contracts"
+consumer = "eliot-search-model-worker"
+consumer_module = "main"
+consumer_earliest_wave = 10
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "bins/eliot-search-model-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-search-model-worker->search-ports"
+consumer = "eliot-search-model-worker"
+consumer_module = "main"
+consumer_earliest_wave = 10
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "bins/eliot-search-model-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-search-model-worker->search-provider-protocol"
+consumer = "eliot-search-model-worker"
+consumer_module = "protocol"
+consumer_earliest_wave = 10
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-search-model-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-search-model-worker->search-model-provider"
+consumer = "eliot-search-model-worker"
+consumer_module = "model"
+consumer_earliest_wave = 10
+producer = "search-model-provider"
+producer_module = "api"
+producer_earliest_wave = 10
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-search-model-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S29"
+modules = ["eliot-search-model-worker:model"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P16"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+required_outputs = ["isolated_model_worker", "versioned_dense_profile", "measured_fusion_or_rerank", "baseline_fallback"]
+exit_evidence = ["measured_incremental_benefit", "resource_and_safety_receipts", "worker_removal_returns_to_P15"]

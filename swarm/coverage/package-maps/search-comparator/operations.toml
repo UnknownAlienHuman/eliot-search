@@ -1,0 +1,128 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-comparator"
+operation_count = 12
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-comparator::align_evidence_roles"
+name = "align_evidence_roles"
+module = "alignment"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "search-comparator::assemble_behavior_set"
+name = "assemble_behavior_set"
+module = "behavior"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-comparator::classify_conflict"
+name = "classify_conflict"
+module = "conflicts"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 8
+
+[[operation]]
+id = "search-comparator::collapse_repository_lineages"
+name = "collapse_repository_lineages"
+module = "lineage"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 86
+
+[[operation]]
+id = "search-comparator::compare_axes"
+name = "compare_axes"
+module = "alignment"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "search-comparator::compute_comparison_coverage"
+name = "compute_comparison_coverage"
+module = "coverage"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-comparator::normalize_behavior_signature"
+name = "normalize_behavior_signature"
+module = "behavior"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 98
+
+[[operation]]
+id = "search-comparator::order_recommended_reading"
+name = "order_recommended_reading"
+module = "result"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-comparator::partition_configuration_variants"
+name = "partition_configuration_variants"
+module = "conflicts"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 8
+
+[[operation]]
+id = "search-comparator::revalidate_comparison"
+name = "revalidate_comparison"
+module = "lineage"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-comparator::validate_comparable_implementation"
+name = "validate_comparable_implementation"
+module = "input"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 12
+
+[[operation]]
+id = "search-comparator::validate_comparison_request"
+name = "validate_comparison_request"
+module = "input"
+public_entry_module = "api"
+sources = ["crates/search-query/search-comparator/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 26

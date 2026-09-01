@@ -1,0 +1,188 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-materializer"
+operation_count = 18
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-materializer::build_coordinate_map"
+name = "build_coordinate_map"
+module = "maps"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Coordinate and loss maps"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-materializer::build_loss_map"
+name = "build_loss_map"
+module = "maps"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Coordinate and loss maps"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-materializer::canonicalize_materialization"
+name = "canonicalize_materialization"
+module = "product"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Materialization and receipt"]
+route_kind = "semantic"
+score = 18
+
+[[operation]]
+id = "search-materializer::classify_profile_change"
+name = "classify_profile_change"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-materializer::classify_provider_failure"
+name = "classify_provider_failure"
+module = "provider"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Optional provider boundary"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-materializer::decode_text_or_code"
+name = "decode_text_or_code"
+module = "decode"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Baseline decoding and normalization"]
+route_kind = "semantic"
+score = 99
+
+[[operation]]
+id = "search-materializer::derive_assurance"
+name = "derive_assurance"
+module = "assurance"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Coordinate and loss maps"]
+route_kind = "semantic"
+score = 88
+
+[[operation]]
+id = "search-materializer::detect_or_validate_encoding"
+name = "detect_or_validate_encoding"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Baseline decoding and normalization"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "search-materializer::materialize_text_or_code"
+name = "materialize_text_or_code"
+module = "decode"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Materialization and receipt"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "search-materializer::normalize_representation"
+name = "normalize_representation"
+module = "normalize"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Baseline decoding and normalization"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-materializer::open_exact_revision"
+name = "open_exact_revision"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Request and revision acquisition"]
+route_kind = "semantic"
+score = 23
+
+[[operation]]
+id = "search-materializer::prepare_admission"
+name = "prepare_admission"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Materialization and receipt"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-materializer::profile_digest"
+name = "profile_digest"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-materializer::validate_map_bundle"
+name = "validate_map_bundle"
+module = "maps"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Coordinate and loss maps"]
+route_kind = "semantic"
+score = 52
+
+[[operation]]
+id = "search-materializer::validate_materialization_request"
+name = "validate_materialization_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Request and revision acquisition"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-materializer::validate_materializer_profile"
+name = "validate_materializer_profile"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-materializer::validate_provider_descriptor"
+name = "validate_provider_descriptor"
+module = "provider"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Optional provider boundary"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-materializer::verify_materialization"
+name = "verify_materialization"
+module = "product"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-materializer/FUNCTIONS.md"]
+source_contexts = ["Materialization and receipt"]
+route_kind = "semantic"
+score = 18

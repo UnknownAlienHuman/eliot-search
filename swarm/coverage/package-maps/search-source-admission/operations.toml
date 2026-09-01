@@ -1,0 +1,168 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-source-admission"
+operation_count = 16
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-source-admission::classify_policy_change"
+name = "classify_policy_change"
+module = "policy"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Policy operations"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-source-admission::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-source-admission::evaluate"
+name = "evaluate"
+module = "decision"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Decision and receipt operations"]
+route_kind = "semantic"
+score = 41
+
+[[operation]]
+id = "search-source-admission::evaluate_batch"
+name = "evaluate_batch"
+module = "batch"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Batch operations"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-source-admission::issue_receipt"
+name = "issue_receipt"
+module = "receipt"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Decision and receipt operations"]
+route_kind = "semantic"
+score = 123
+
+[[operation]]
+id = "search-source-admission::normalize_policy"
+name = "normalize_policy"
+module = "policy"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Policy operations"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-source-admission::observation_digest"
+name = "observation_digest"
+module = "observation"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Observation operations"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-source-admission::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-source-admission::policy_fingerprint"
+name = "policy_fingerprint"
+module = "policy"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Policy operations"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-source-admission::redacted_decision_view"
+name = "redacted_decision_view"
+module = "decision"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Decision and receipt operations"]
+route_kind = "semantic"
+score = 116
+
+[[operation]]
+id = "search-source-admission::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-source-admission::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-source-admission::validate_observation"
+name = "validate_observation"
+module = "observation"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Observation operations"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-source-admission::validate_policy_schema"
+name = "validate_policy_schema"
+module = "policy"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Policy operations"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-source-admission::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-source-admission::verify_receipt"
+name = "verify_receipt"
+module = "receipt"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-admission/FUNCTIONS.md"]
+source_contexts = ["Decision and receipt operations"]
+route_kind = "semantic"
+score = 123

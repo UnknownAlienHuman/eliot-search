@@ -1,0 +1,178 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-unitizer"
+operation_count = 17
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-unitizer::build_occurrence"
+name = "build_occurrence"
+module = "occurrence"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Boundary and occurrence operations"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-unitizer::build_unit_manifest"
+name = "build_unit_manifest"
+module = "manifest"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Manifest operations"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-unitizer::canonicalize_unit_manifest"
+name = "canonicalize_unit_manifest"
+module = "manifest"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Manifest operations"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-unitizer::classify_profile_change"
+name = "classify_profile_change"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-unitizer::derive_unit_id"
+name = "derive_unit_id"
+module = "identity"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Boundary and occurrence operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-unitizer::diff_unit_manifests"
+name = "diff_unit_manifests"
+module = "diff"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Manifest operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-unitizer::manifest_digest"
+name = "manifest_digest"
+module = "manifest"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Manifest operations"]
+route_kind = "semantic"
+score = 122
+
+[[operation]]
+id = "search-unitizer::profile_digest"
+name = "profile_digest"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-unitizer::redacted_manifest_view"
+name = "redacted_manifest_view"
+module = "manifest"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Redaction and disclosure"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-unitizer::scan_boundaries"
+name = "scan_boundaries"
+module = "boundaries"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Boundary and occurrence operations"]
+route_kind = "semantic"
+score = 119
+
+[[operation]]
+id = "search-unitizer::unitize"
+name = "unitize"
+module = "api"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Main operation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-unitizer::unitize_batch"
+name = "unitize_batch"
+module = "batch"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Batch operations"]
+route_kind = "semantic"
+score = 106
+
+[[operation]]
+id = "search-unitizer::validate_configuration_predicate"
+name = "validate_configuration_predicate"
+module = "occurrence"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Boundary and occurrence operations"]
+route_kind = "semantic"
+score = 21
+
+[[operation]]
+id = "search-unitizer::validate_unit_anchor"
+name = "validate_unit_anchor"
+module = "occurrence"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Boundary and occurrence operations"]
+route_kind = "semantic"
+score = 35
+
+[[operation]]
+id = "search-unitizer::validate_unitization_request"
+name = "validate_unitization_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Request validation"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-unitizer::validate_unitizer_profile"
+name = "validate_unitizer_profile"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-unitizer::verify_unit_manifest"
+name = "verify_unit_manifest"
+module = "manifest"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-unitizer/FUNCTIONS.md"]
+source_contexts = ["Manifest operations"]
+route_kind = "semantic"
+score = 122

@@ -1,0 +1,78 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-query-planner"
+operation_count = 7
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-query-planner::allocate_leg_budgets"
+name = "allocate_leg_budgets"
+module = "budget"
+public_entry_module = "api"
+sources = ["crates/search-query/search-query-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-query-planner::capture_query_snapshot"
+name = "capture_query_snapshot"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-query-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-query-planner::compile_plan"
+name = "compile_plan"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-query/search-query-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 95
+
+[[operation]]
+id = "search-query-planner::fingerprint_plan"
+name = "fingerprint_plan"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-query/search-query-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "search-query-planner::fingerprint_snapshot"
+name = "fingerprint_snapshot"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-query-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-query-planner::normalize_recipe"
+name = "normalize_recipe"
+module = "recipe"
+public_entry_module = "api"
+sources = ["crates/search-query/search-query-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-query-planner::validate_drift"
+name = "validate_drift"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-query-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 11

@@ -1,0 +1,1295 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-access"
+node_count = 117
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#agent-contract-search-access"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-access"
+kind = "implementation_contract_root"
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#mission"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#ownership"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#allowed-dependencies"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#required-logical-surface"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#failure-surface"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 46
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 51
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#size-and-split-guard"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 62
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/AGENTS.md#definition-of-done"
+path = "crates/search-query/search-access/AGENTS.md"
+line = 70
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#function-contract-search-access"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-access"
+kind = "implementation_contract_root"
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#grant-and-scope-operations"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Grant and scope operations"
+kind = "implementation_contract"
+modules = ["search-access:scope"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#validategrant-claims-binding-installation-now-result-validatedgrant-accesserror"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "validategrant(claims, binding, installation, now) -> Result<ValidatedGrant, AccessError>"
+kind = "implementation_operation"
+modules = ["search-access:grant"]
+route_kind = "operation_route"
+rationale = "search-access::validate_grant"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#intersectscope-requested-grant-authoritativesnapshot-result-authorizedscope-accesserror"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "intersectscope(requested, grant, authoritativesnapshot) -> Result<AuthorizedScope, AccessError>"
+kind = "implementation_operation"
+modules = ["search-access:scope"]
+route_kind = "operation_route"
+rationale = "search-access::intersect_scope"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#compilebaseeligibility-scope-route-snapshot-result-baseeligibilityplan-accesserror"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 21
+level = 3
+heading = "compilebaseeligibility(scope, route, snapshot) -> Result<BaseEligibilityPlan, AccessError>"
+kind = "implementation_operation"
+modules = ["search-access:snapshot"]
+route_kind = "operation_route"
+rationale = "search-access::compile_base_eligibility"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#compilesafelegs-scope-routes-overlapproofs-budget-result-boundedlist-saferetrievalleg-accesserro"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 27
+level = 3
+heading = "compilesafelegs(scope, routes, overlapproofs, budget) -> Result<BoundedList<SafeRetrievalLeg>, AccessError>"
+kind = "implementation_operation"
+modules = ["search-access:legs"]
+route_kind = "operation_route"
+rationale = "search-access::compile_safe_legs"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#live-security-operations"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 34
+level = 2
+heading = "Live security operations"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#beginsecuritymutation-command-operationid-control-result-securitymutationguard-accesserror"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 36
+level = 3
+heading = "beginsecuritymutation(command, operationid, control) -> Result<SecurityMutationGuard, AccessError>"
+kind = "implementation_operation"
+modules = ["search-access:barrier"]
+route_kind = "operation_route"
+rationale = "search-access::begin_security_mutation"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#commitandpublishrestriction-guard-ports-context-result-securitymutationreceipt-accesserror"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 41
+level = 3
+heading = "commitandpublishrestriction(guard, ports, context) -> Result<SecurityMutationReceipt, AccessError>"
+kind = "implementation_operation"
+modules = ["search-access:barrier"]
+route_kind = "operation_route"
+rationale = "search-access::commit_and_publish_restriction"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#recheckliveaccess-requestfence-livestate-checkpoint-result-accesspermit-accesserror"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 48
+level = 3
+heading = "recheckliveaccess(requestfence, livestate, checkpoint) -> Result<AccessPermit, AccessError>"
+kind = "implementation_operation"
+modules = ["search-access:invalidation"]
+route_kind = "operation_route"
+rationale = "search-access::recheck_live_access"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#classifycontaminatedlegs-execution-previous-current-contaminationdecision"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 54
+level = 3
+heading = "classifycontaminatedlegs(execution, previous, current) -> ContaminationDecision"
+kind = "implementation_operation"
+modules = ["search-access:legs"]
+route_kind = "operation_route"
+rationale = "search-access::classify_contaminated_legs"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#failure-cancellation-and-bounds"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 59
+level = 2
+heading = "Failure, cancellation and bounds"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/FUNCTIONS.md#required-fixtures"
+path = "crates/search-query/search-access/FUNCTIONS.md"
+line = 66
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/README.md#search-access"
+path = "crates/search-query/search-access/README.md"
+line = 1
+level = 1
+heading = "search-access"
+kind = "implementation_contract_root"
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-access/README.md#owns"
+path = "crates/search-query/search-access/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/README.md#must-not-own"
+path = "crates/search-query/search-access/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#w7-hardening-search-access"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 1
+level = 1
+heading = "W7 hardening — search-access"
+kind = "implementation_contract_root"
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#restrictive-mutation-state-machine"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 6
+level = 2
+heading = "Restrictive mutation state machine"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#classifysecuritychange"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 20
+level = 2
+heading = "classifysecuritychange"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#installliverestriction"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 37
+level = 2
+heading = "installliverestriction"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#buildinvalidationrequest"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 48
+level = 2
+heading = "buildinvalidationrequest"
+kind = "implementation_contract"
+modules = ["search-access:invalidation"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#acceptinvalidationreceipts"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 58
+level = 2
+heading = "acceptinvalidationreceipts"
+kind = "implementation_contract"
+modules = ["search-access:invalidation"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#checkpoints"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 68
+level = 2
+heading = "Checkpoints"
+kind = "implementation_contract"
+modules = ["search-access:checkpoint"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#active-request-contamination"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 87
+level = 2
+heading = "Active request contamination"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-access/W7_HARDENING.md#required-tests"
+path = "crates/search-query/search-access/W7_HARDENING.md"
+line = 98
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-projection-membership-isolation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 577
+level = 2
+heading = "S8. Projection membership isolation"
+kind = "architecture_section"
+modules = ["search-access:legs"]
+route_kind = "architecture_section_registry"
+rationale = "S8"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-1-baseline-physical-rule"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 579
+level = 3
+heading = "S8.1 Baseline physical rule"
+kind = "architecture_node"
+modules = ["search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-2-payload-non-disclosure"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 589
+level = 3
+heading = "S8.2 Payload non-disclosure"
+kind = "architecture_node"
+modules = ["search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-3-query-time-duplicate-membership-routing"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 602
+level = 3
+heading = "S8.3 Query-time duplicate-membership routing"
+kind = "architecture_node"
+modules = ["search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-4-future-physical-deduplication"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 608
+level = 3
+heading = "S8.4 Future physical deduplication"
+kind = "architecture_node"
+modules = ["search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-query-snapshots-pins-and-reclamation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 975
+level = 2
+heading = "S14. Query snapshots, pins and reclamation"
+kind = "architecture_section"
+modules = ["search-access:barrier"]
+route_kind = "architecture_section_registry"
+rationale = "S14"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-1-read-only-hot-path"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 977
+level = 3
+heading = "S14.1 Read-only hot path"
+kind = "architecture_node"
+modules = ["search-access:barrier"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-2-in-memory-epoch-and-route-pin"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1000
+level = 3
+heading = "S14.2 In-memory epoch and route pin"
+kind = "architecture_node"
+modules = ["search-access:barrier"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-3-reclamation-watermark"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1006
+level = 3
+heading = "S14.3 Reclamation watermark"
+kind = "architecture_node"
+modules = ["search-access:barrier"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-4-live-security-fences-override-snapshots"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1016
+level = 3
+heading = "S14.4 Live security fences override snapshots"
+kind = "architecture_node"
+modules = ["search-access:barrier"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-access-compilation-and-noninterference"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1193
+level = 2
+heading = "S19. Access compilation and noninterference"
+kind = "architecture_section"
+modules = ["search-access:grant", "search-access:legs"]
+route_kind = "architecture_section_registry"
+rationale = "S19"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-1-searchreadgrant"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1195
+level = 3
+heading = "S19.1 SearchReadGrant"
+kind = "architecture_node"
+modules = ["search-access:grant", "search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-2-searchtaskplan"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1228
+level = 3
+heading = "S19.2 SearchTaskPlan"
+kind = "architecture_node"
+modules = ["search-access:grant", "search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-3-retrieval-legs"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1258
+level = 3
+heading = "S19.3 Retrieval legs"
+kind = "architecture_node"
+modules = ["search-access:grant", "search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-4-no-post-filter-only-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1264
+level = 3
+heading = "S19.4 No post-filter-only security"
+kind = "architecture_node"
+modules = ["search-access:grant", "search-access:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s36-property-and-fault-proofs"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2093
+level = 2
+heading = "S36. Property and fault proofs"
+kind = "architecture_section"
+modules = ["search-access:invalidation"]
+route_kind = "architecture_section_registry"
+rationale = "S36"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["search-access:grant", "search-access:legs"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p13-access-handles-purge-and-restore-boundaries"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2912
+level = 3
+heading = "P13 — Access, handles, purge and restore boundaries"
+kind = "delivery_contract"
+modules = ["search-access:barrier"]
+route_kind = "delivery_registry"
+rationale = "P13"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#w7-lifecycle-settings-1-0"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W7 lifecycle settings 1.0"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#principle"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 5
+level = 2
+heading = "Principle"
+kind = "principle_or_invariant"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#security-and-invalidation"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 18
+level = 2
+heading = "Security and invalidation"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#handles-and-continuations"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 27
+level = 2
+heading = "Handles and continuations"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#revision-store"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 36
+level = 2
+heading = "Revision store"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#retention"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 42
+level = 2
+heading = "Retention"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#purge"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 51
+level = 2
+heading = "Purge"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#backup-and-restore"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 60
+level = 2
+heading = "Backup and restore"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#composite-reconfiguration"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 69
+level = 2
+heading = "Composite reconfiguration"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#redaction"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 88
+level = 2
+heading = "Redaction"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#required-tests"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 94
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-access:barrier"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#w7-lifecycle-purge-and-restore-implementation-packet"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore implementation packet"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 23
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 76
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 96
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-access:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/lifecycle/README.md#w7-lifecycle-purge-and-restore-qualification"
+path = "qualification/lifecycle/README.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore qualification"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#w7-security-lifecycle-retention-purge-and-restore-qualification-contract"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W7 security lifecycle, retention, purge and restore qualification contract"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#owners"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#frozen-inputs"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#execution-order"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 48
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#mandatory-properties"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 69
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#restrictive-security-and-active-requests"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 71
+level = 3
+heading = "Restrictive security and active requests"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#handles-continuations-and-candidate-emission"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 82
+level = 3
+heading = "Handles, continuations and candidate emission"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#retention-and-mark-sweep"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 94
+level = 3
+heading = "Retention and mark/sweep"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#purge"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 106
+level = 3
+heading = "Purge"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#backup-and-restore"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 119
+level = 3
+heading = "Backup and restore"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#boundary-and-receipt-truthfulness"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 133
+level = 3
+heading = "Boundary and receipt truthfulness"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#stop-conditions"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 142
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#evidence-products"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 164
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#current-disposition"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 170
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-access:invalidation"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/query/README.md#w4-query-qualification"
+path = "qualification/query/README.md"
+line = 1
+level = 1
+heading = "W4 query qualification"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#w4-bounded-query-product-qualification-contract"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W4 bounded query product qualification contract"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#owners"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#frozen-inputs"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-order"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 45
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#mandatory-properties"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 60
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#admission-and-noninterference"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 62
+level = 3
+heading = "Admission and noninterference"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#snapshot-and-planning"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 72
+level = 3
+heading = "Snapshot and planning"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-and-validation"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Execution and validation"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#results-handles-and-continuations"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 91
+level = 3
+heading = "Results, handles and continuations"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#stop-conditions"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 105
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#evidence-products"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 121
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#current-disposition"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 127
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-access:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "swarm/assignments/search-access.md#search-access-implementation-packet"
+path = "swarm/assignments/search-access.md"
+line = 1
+level = 1
+heading = "search-access implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-access.md#mission"
+path = "swarm/assignments/search-access.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#owns"
+path = "swarm/assignments/search-access.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#must-not-own"
+path = "swarm/assignments/search-access.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#logical-primitives"
+path = "swarm/assignments/search-access.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#logical-operations"
+path = "swarm/assignments/search-access.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#required-invariants"
+path = "swarm/assignments/search-access.md"
+line = 44
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-access:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-access.md#typed-failure-surface"
+path = "swarm/assignments/search-access.md"
+line = 52
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#exit-tests-evidence"
+path = "swarm/assignments/search-access.md"
+line = 61
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#suggested-internal-modules"
+path = "swarm/assignments/search-access.md"
+line = 70
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-access.md#size-split"
+path = "swarm/assignments/search-access.md"
+line = 87
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-access:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

@@ -1,0 +1,580 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-projection-planner"
+node_count = 52
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#agent-contract-search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-projection-planner"
+kind = "implementation_contract_root"
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#mission"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#ownership"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#forbidden-ownership"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#allowed-dependencies"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 30
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#required-logical-surface"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 35
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#failure-surface"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 45
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 50
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#size-and-split-guard"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 62
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/AGENTS.md#definition-of-done"
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+line = 70
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#function-contract-search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-projection-planner"
+kind = "implementation_contract_root"
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#operations"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 5
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#validateprojectioninput-input-profiles-result-validatedprojectioninput-projectionerror"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 7
+level = 3
+heading = "validateprojectioninput(input, profiles) -> Result<ValidatedProjectionInput, ProjectionError>"
+kind = "implementation_operation"
+modules = ["search-projection-planner:input"]
+route_kind = "operation_route"
+rationale = "search-projection-planner::validate_projection_input"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#buildminimalpayload-unit-membership-profileset-epoch-result-minimalpointpayload-projectionerror"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 12
+level = 3
+heading = "buildminimalpayload(unit, membership, profileset, epoch) -> Result<MinimalPointPayload, ProjectionError>"
+kind = "implementation_operation"
+modules = ["search-projection-planner:point_set"]
+route_kind = "operation_route"
+rationale = "search-projection-planner::build_minimal_payload"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#buildpointspec-input-identityport-result-pointspec-projectionerror"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 17
+level = 3
+heading = "buildpointspec(input, identityport) -> Result<PointSpec, ProjectionError>"
+kind = "implementation_operation"
+modules = ["search-projection-planner:point_set"]
+route_kind = "operation_route"
+rationale = "search-projection-planner::build_point_spec"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#planprojection-input-profiles-budget-result-projectionplan-projectionerror"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "planprojection(input, profiles, budget) -> Result<ProjectionPlan, ProjectionError>"
+kind = "implementation_operation"
+modules = ["search-projection-planner:point_set"]
+route_kind = "operation_route"
+rationale = "search-projection-planner::plan_projection"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#canonicalizemanifest-points-result-projectionmanifest-projectionerror"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 27
+level = 3
+heading = "canonicalizemanifest(points) -> Result<ProjectionManifest, ProjectionError>"
+kind = "implementation_operation"
+modules = ["search-projection-planner:manifest"]
+route_kind = "operation_route"
+rationale = "search-projection-planner::canonicalize_manifest"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#diffmanifests-old-new-result-manifestdiff-projectionerror"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 32
+level = 3
+heading = "diffmanifests(old, new) -> Result<ManifestDiff, ProjectionError>"
+kind = "implementation_operation"
+modules = ["search-projection-planner:diff"]
+route_kind = "operation_route"
+rationale = "search-projection-planner::diff_manifests"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#validateschemarequirements-manifest-collectionschema-result-projectionerror"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 37
+level = 3
+heading = "validateschemarequirements(manifest, collectionschema) -> Result<(), ProjectionError>"
+kind = "implementation_operation"
+modules = ["search-projection-planner:schema"]
+route_kind = "operation_route"
+rationale = "search-projection-planner::validate_schema_requirements"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#semantics"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 42
+level = 2
+heading = "Semantics"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md#required-fixtures"
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+line = 47
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/README.md#search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner/README.md"
+line = 1
+level = 1
+heading = "search-projection-planner"
+kind = "implementation_contract_root"
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/README.md#owns"
+path = "crates/search-index-qdrant/search-projection-planner/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-projection-planner/README.md#must-not-own"
+path = "crates/search-index-qdrant/search-projection-planner/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-projection-membership-isolation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 577
+level = 2
+heading = "S8. Projection membership isolation"
+kind = "architecture_section"
+modules = ["search-projection-planner:point_set"]
+route_kind = "architecture_section_registry"
+rationale = "S8"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-1-baseline-physical-rule"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 579
+level = 3
+heading = "S8.1 Baseline physical rule"
+kind = "architecture_node"
+modules = ["search-projection-planner:point_set"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-2-payload-non-disclosure"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 589
+level = 3
+heading = "S8.2 Payload non-disclosure"
+kind = "architecture_node"
+modules = ["search-projection-planner:point_set"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-3-query-time-duplicate-membership-routing"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 602
+level = 3
+heading = "S8.3 Query-time duplicate-membership routing"
+kind = "architecture_node"
+modules = ["search-projection-planner:point_set"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-4-future-physical-deduplication"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 608
+level = 3
+heading = "S8.4 Future physical deduplication"
+kind = "architecture_node"
+modules = ["search-projection-planner:point_set"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-qdrant-collection-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 614
+level = 2
+heading = "S9. Qdrant collection contract"
+kind = "architecture_section"
+modules = ["search-projection-planner:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S9"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-1-baseline-topology"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 616
+level = 3
+heading = "S9.1 Baseline topology"
+kind = "architecture_node"
+modules = ["search-projection-planner:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-2-exact-build-pin"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 632
+level = 3
+heading = "S9.2 Exact build pin"
+kind = "architecture_node"
+modules = ["search-projection-planner:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-3-required-capability-probes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 641
+level = 3
+heading = "S9.3 Required capability probes"
+kind = "architecture_node"
+modules = ["search-projection-planner:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-4-named-vectors"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 661
+level = 3
+heading = "S9.4 Named vectors"
+kind = "architecture_node"
+modules = ["search-projection-planner:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-5-minimal-opaque-point-payload"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 674
+level = 3
+heading = "S9.5 Minimal opaque point payload"
+kind = "architecture_node"
+modules = ["search-projection-planner:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p06-lexical-encoder-and-collection-schema"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2870
+level = 3
+heading = "P06 — Lexical encoder and collection schema"
+kind = "delivery_contract"
+modules = ["search-projection-planner:manifest", "search-projection-planner:schema"]
+route_kind = "delivery_registry"
+rationale = "P06"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p18-optional-advanced-scale-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2943
+level = 3
+heading = "P18 — Optional advanced scale profile"
+kind = "delivery_contract"
+modules = ["search-projection-planner:migration"]
+route_kind = "delivery_registry"
+rationale = "P18"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#w3-implementation-packet-index"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W3 implementation packet index"
+kind = "implementation_handoff"
+modules = ["search-projection-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 6
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-projection-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#dependency-order"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 19
+level = 2
+heading = "Dependency order"
+kind = "implementation_handoff"
+modules = ["search-projection-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 39
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-projection-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#search-projection-planner-implementation-packet"
+path = "swarm/assignments/search-projection-planner.md"
+line = 1
+level = 1
+heading = "search-projection-planner implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#mission"
+path = "swarm/assignments/search-projection-planner.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#owns"
+path = "swarm/assignments/search-projection-planner.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#must-not-own"
+path = "swarm/assignments/search-projection-planner.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#logical-primitives"
+path = "swarm/assignments/search-projection-planner.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#logical-operations"
+path = "swarm/assignments/search-projection-planner.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#required-invariants"
+path = "swarm/assignments/search-projection-planner.md"
+line = 43
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-projection-planner:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#typed-failure-surface"
+path = "swarm/assignments/search-projection-planner.md"
+line = 51
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#exit-tests-evidence"
+path = "swarm/assignments/search-projection-planner.md"
+line = 59
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#suggested-internal-modules"
+path = "swarm/assignments/search-projection-planner.md"
+line = 68
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-projection-planner.md#size-split"
+path = "swarm/assignments/search-projection-planner.md"
+line = 84
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-projection-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

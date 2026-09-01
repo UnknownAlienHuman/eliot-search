@@ -1,0 +1,188 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-source-reconcile"
+operation_count = 18
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-source-reconcile::apply_live_change"
+name = "apply_live_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 52
+
+[[operation]]
+id = "search-source-reconcile::classify_freshness"
+name = "classify_freshness"
+module = "currentness"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 7
+
+[[operation]]
+id = "search-source-reconcile::commit_reconcile"
+name = "commit_reconcile"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-source-reconcile::compare_inventory"
+name = "compare_inventory"
+module = "inventory"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-source-reconcile::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-source-reconcile::execute_inventory_slice"
+name = "execute_inventory_slice"
+module = "inventory"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-source-reconcile::handle_live_head_mismatch"
+name = "handle_live_head_mismatch"
+module = "currentness"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-source-reconcile::ingest_watch_hint"
+name = "ingest_watch_hint"
+module = "gap"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-source-reconcile::observe_cursor_transition"
+name = "observe_cursor_transition"
+module = "gap"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-source-reconcile::open_observation_gap"
+name = "open_observation_gap"
+module = "gap"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 86
+
+[[operation]]
+id = "search-source-reconcile::plan_reconcile"
+name = "plan_reconcile"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-source-reconcile::plan_section_change"
+name = "plan_section_change"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-source-reconcile::preflight_current_workspace"
+name = "preflight_current_workspace"
+module = "currentness"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 7
+
+[[operation]]
+id = "search-source-reconcile::recover_reconcile_commit"
+name = "recover_reconcile_commit"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-source-reconcile::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-source-reconcile::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-source-reconcile::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-source-reconcile::verify_change_set"
+name = "verify_change_set"
+module = "inventory"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-reconcile/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100

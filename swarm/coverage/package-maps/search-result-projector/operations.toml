@@ -1,0 +1,68 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-result-projector"
+operation_count = 6
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-result-projector::bind_result"
+name = "bind_result"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-result-projector/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-result-projector::enforce_result_budget"
+name = "enforce_result_budget"
+module = "truncation"
+public_entry_module = "api"
+sources = ["crates/search-query/search-result-projector/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-result-projector::project_candidate_set"
+name = "project_candidate_set"
+module = "card"
+public_entry_module = "api"
+sources = ["crates/search-query/search-result-projector/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-result-projector::project_coverage"
+name = "project_coverage"
+module = "coverage"
+public_entry_module = "api"
+sources = ["crates/search-query/search-result-projector/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-result-projector::project_recipe_result"
+name = "project_recipe_result"
+module = "coverage"
+public_entry_module = "api"
+sources = ["crates/search-query/search-result-projector/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-result-projector::select_handle_subjects"
+name = "select_handle_subjects"
+module = "card"
+public_entry_module = "api"
+sources = ["crates/search-query/search-result-projector/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100

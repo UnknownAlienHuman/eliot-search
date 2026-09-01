@@ -1,0 +1,198 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "eliot-search"
+operation_count = 19
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "eliot-search::build_recipe_request"
+name = "build_recipe_request"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md", "bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Function contract — eliot-search", "Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::cancel_request"
+name = "cancel_request"
+module = "cancel"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md"]
+source_contexts = ["Function contract — eliot-search"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::classify_exit_status"
+name = "classify_exit_status"
+module = "exit"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 94
+
+[[operation]]
+id = "eliot-search::close_session"
+name = "close_session"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md", "bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Function contract — eliot-search", "Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::connect_and_authenticate"
+name = "connect_and_authenticate"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md"]
+source_contexts = ["Function contract — eliot-search"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::execute_request"
+name = "execute_request"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "eliot-search::expand_handle"
+name = "expand_handle"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md", "bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Function contract — eliot-search", "Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::fetch_capabilities"
+name = "fetch_capabilities"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md", "bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Function contract — eliot-search", "Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::map_exit_status"
+name = "map_exit_status"
+module = "exit"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md"]
+source_contexts = ["Function contract — eliot-search"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::open_session"
+name = "open_session"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "eliot-search::pair_and_bind"
+name = "pair_and_bind"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "eliot-search::parse_client_invocation"
+name = "parse_client_invocation"
+module = "args"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 13
+
+[[operation]]
+id = "eliot-search::parse_command"
+name = "parse_command"
+module = "args"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md"]
+source_contexts = ["Function contract — eliot-search"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::render_progress"
+name = "render_progress"
+module = "render"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "eliot-search::render_result"
+name = "render_result"
+module = "render"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md"]
+source_contexts = ["Function contract — eliot-search"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::render_terminal"
+name = "render_terminal"
+module = "render"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "eliot-search::request_standalone_grant"
+name = "request_standalone_grant"
+module = "pairing"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md"]
+source_contexts = ["Function contract — eliot-search"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::resolve_local_endpoint"
+name = "resolve_local_endpoint"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-search/W8_CLIENT.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search::run_request"
+name = "run_request"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-search/FUNCTIONS.md"]
+source_contexts = ["Function contract — eliot-search"]
+route_kind = "package_rule"
+score = 100

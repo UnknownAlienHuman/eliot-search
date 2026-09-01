@@ -1,0 +1,118 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-continuation"
+operation_count = 11
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-continuation::apply_live_limits"
+name = "apply_live_limits"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::create_durable_replan_checkpoint"
+name = "create_durable_replan_checkpoint"
+module = "issue"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Creation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::create_ephemeral"
+name = "create_ephemeral"
+module = "issue"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Creation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::expand_durable"
+name = "expand_durable"
+module = "resume"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Expansion"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::expand_ephemeral"
+name = "expand_ephemeral"
+module = "resume"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Expansion"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::expire"
+name = "expire"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Lifecycle"]
+route_kind = "semantic"
+score = 34
+
+[[operation]]
+id = "search-continuation::invalidate"
+name = "invalidate"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::invalidate_lifecycle_scope"
+name = "invalidate_lifecycle_scope"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/W7_HARDENING.md"]
+source_contexts = ["W7 hardening — search-continuation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::resolve"
+name = "resolve"
+module = "resume"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Expansion"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::revalidate"
+name = "revalidate"
+module = "reauthorize"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Expansion"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-continuation::token_digest"
+name = "token_digest"
+module = "token"
+public_entry_module = "api"
+sources = ["crates/search-query/search-continuation/FUNCTIONS.md"]
+source_contexts = ["Creation"]
+route_kind = "semantic"
+score = 127

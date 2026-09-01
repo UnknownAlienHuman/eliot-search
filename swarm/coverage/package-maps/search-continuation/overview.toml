@@ -1,0 +1,173 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-continuation"
+path = "crates/search-query/search-continuation"
+kind = "lib"
+family = "query"
+cell = "C27"
+earliest_wave = 4
+optional = false
+soft_src_line_target = 6000
+assignment = "swarm/assignments/search-continuation.md"
+function_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+qualification = "qualification/query/W4_QUALIFICATION.md"
+config_sections = ["continuations"]
+declared_dependencies = ["search-contracts", "search-domain", "search-ports", "search-config", "search-query-planner", "search-access", "search-epoch-pins"]
+module_count = 10
+operation_count = 11
+documentation_node_count = 115
+principle_node_count = 2
+outbound_dependency_count = 7
+inbound_dependency_count = 1
+architecture_relation_count = 5
+configuration_relation_count = 1
+recipe_relation_count = 1
+port_relation_count = 0
+schema_relation_count = 2
+operations_map = "swarm/coverage/package-maps/search-continuation/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-continuation/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-continuation/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 44
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 6
+
+[[module]]
+name = "config"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 11
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 1
+recipe_relation_count = 0
+dependency_relation_count = 1
+
+[[module]]
+name = "identity"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "token"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 19
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "issue"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 7
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "resume"
+role = "implementation"
+structural_rationale = ""
+operation_count = 3
+documentation_node_count = 28
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 1
+dependency_relation_count = 0
+
+[[module]]
+name = "reauthorize"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 7
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 1
+
+[[module]]
+name = "cleanup"
+role = "implementation"
+structural_rationale = ""
+operation_count = 3
+documentation_node_count = 33
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

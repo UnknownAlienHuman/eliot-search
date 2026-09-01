@@ -1,0 +1,1053 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "eliot-search-model-worker"
+node_count = 95
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "bins/eliot-search-model-worker/AGENTS.md#agent-contract-eliot-search-model-worker"
+path = "bins/eliot-search-model-worker/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — eliot-search-model-worker"
+kind = "implementation_contract_root"
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "bins/eliot-search-model-worker/AGENTS.md#gate-and-read-set"
+path = "bins/eliot-search-model-worker/AGENTS.md"
+line = 7
+level = 2
+heading = "Gate and read set"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/AGENTS.md#ownership"
+path = "bins/eliot-search-model-worker/AGENTS.md"
+line = 13
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/AGENTS.md#forbidden-ownership"
+path = "bins/eliot-search-model-worker/AGENTS.md"
+line = 21
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/AGENTS.md#invariants"
+path = "bins/eliot-search-model-worker/AGENTS.md"
+line = 29
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "bins/eliot-search-model-worker/AGENTS.md#size"
+path = "bins/eliot-search-model-worker/AGENTS.md"
+line = 35
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#function-contract-eliot-search-model-worker"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — eliot-search-model-worker"
+kind = "implementation_contract_root"
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#startup"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 11
+level = 2
+heading = "Startup"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#validatestartup-config-gatereceipts-artifactevidence-result-validatedmodelworkerconfig-workererr"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 13
+level = 3
+heading = "validatestartup(config, gatereceipts, artifactevidence) -> Result<ValidatedModelWorkerConfig, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::validate_startup"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#verifyinheritedcontainment-config-processcontext-result-containmentreceipt-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 23
+level = 3
+heading = "verifyinheritedcontainment(config, processcontext) -> Result<ContainmentReceipt, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:sandbox"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::verify_inherited_containment"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#loadqualifiedprovider-config-budget-cancel-result-modelworkerready-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 29
+level = 3
+heading = "loadqualifiedprovider(config, budget, cancel) -> Result<ModelWorkerReady, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::load_qualified_provider"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#openprivatesession-ready-daemonhello-result-modelworkersession-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 38
+level = 3
+heading = "openprivatesession(ready, daemonhello) -> Result<ModelWorkerSession, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:protocol"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::open_private_session"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#request-lifecycle"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 43
+level = 2
+heading = "Request lifecycle"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#admitrequest-session-envelope-limits-result-modelrequestguard-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 45
+level = 3
+heading = "admitrequest(session, envelope, limits) -> Result<ModelRequestGuard, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::admit_request"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#serveencode-guard-request-provider-resourceguard-result-modelworkerresponse-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 55
+level = 3
+heading = "serveencode(guard, request, provider, resourceguard) -> Result<ModelWorkerResponse, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:encode"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::serve_encode"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#servererank-guard-request-provider-resourceguard-result-modelworkerresponse-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 64
+level = 3
+heading = "servererank(guard, request, provider, resourceguard) -> Result<ModelWorkerResponse, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:rerank"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::serve_rerank"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#cancelrequest-session-requestid-canceloutcome"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 70
+level = 3
+heading = "cancelrequest(session, requestid) -> CancelOutcome"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::cancel_request"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#emitterminal-guard-responseorerror-result-workerterminalreceipt-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 79
+level = 3
+heading = "emitterminal(guard, responseorerror) -> Result<WorkerTerminalReceipt, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:protocol"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::emit_terminal"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#health-pressure-and-lifecycle"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 84
+level = 2
+heading = "Health, pressure and lifecycle"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#healthsnapshot-session-resources-modelworkerhealth"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 86
+level = 3
+heading = "healthsnapshot(session, resources) -> ModelWorkerHealth"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::health_snapshot"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#applyresourcepressure-policy-observation-workerpressuredecision"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 92
+level = 3
+heading = "applyresourcepressure(policy, observation) -> WorkerPressureDecision"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:resource"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::apply_resource_pressure"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#begindrain-session-reason-modelworkerdrainguard"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 98
+level = 3
+heading = "begindrain(session, reason) -> ModelWorkerDrainGuard"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::begin_drain"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#shutdownandremove-guard-cleanuppolicy-result-modelworkershutdownreceipt-workererror"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 103
+level = 3
+heading = "shutdownandremove(guard, cleanuppolicy) -> Result<ModelWorkerShutdownReceipt, WorkerError>"
+kind = "implementation_operation"
+modules = ["eliot-search-model-worker:lifecycle"]
+route_kind = "operation_route"
+rationale = "eliot-search-model-worker::shutdown_and_remove"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#crash-and-retry-semantics"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 112
+level = 2
+heading = "Crash and retry semantics"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#typed-failures"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 125
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["eliot-search-model-worker:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "bins/eliot-search-model-worker/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+line = 145
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-search-model-worker/README.md#eliot-search-model-worker"
+path = "bins/eliot-search-model-worker/README.md"
+line = 1
+level = 1
+heading = "eliot-search-model-worker"
+kind = "implementation_contract_root"
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s29-runtime-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1706
+level = 2
+heading = "S29. Runtime profiles"
+kind = "architecture_section"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "architecture_section_registry"
+rationale = "S29"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s29-1-content-minimized-observability"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1732
+level = 3
+heading = "S29.1 Content-minimized observability"
+kind = "architecture_node"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p16-optional-semantic-depth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2931
+level = 3
+heading = "P16 — Optional semantic depth"
+kind = "delivery_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "delivery_registry"
+rationale = "P16"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#w10-optional-depth-settings-1-0"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W10 optional-depth settings 1.0"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#field-modes"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 8
+level = 2
+heading = "Field modes"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#gate-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 17
+level = 2
+heading = "Gate settings"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#model-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 33
+level = 2
+heading = "Model settings"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#document-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 53
+level = 2
+heading = "Document settings"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#scale-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 71
+level = 2
+heading = "Scale settings"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#removal-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 78
+level = 2
+heading = "Removal settings"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#change-semantics"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 84
+level = 2
+heading = "Change semantics"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#required-settings-tests"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 93
+level = 2
+heading = "Required settings tests"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#w10-optional-depth-implementation-packet"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W10 optional-depth implementation packet"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-rule"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Candidate rule"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 21
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#read-set"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 38
+level = 2
+heading = "Read set"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#model-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 50
+level = 2
+heading = "Model order"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#document-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 67
+level = 2
+heading = "Document order"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#scale-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 83
+level = 2
+heading = "Scale order"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-evaluation-boundary"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Candidate evaluation boundary"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#required-g6-evidence"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 119
+level = 2
+heading = "Required G6 evidence"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-handoff-requirements"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 132
+level = 2
+heading = "Package handoff requirements"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 149
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#current-state"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 166
+level = 2
+heading = "Current state"
+kind = "implementation_handoff"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#w10-optional-depth-contracts-1-0"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W10 optional depth contracts 1.0"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#1-candidate-classes"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Candidate classes"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#2-gate-chain"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 29
+level = 2
+heading = "2. Gate chain"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#3-activation-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 46
+level = 2
+heading = "3. Activation state machine"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#4-model-profile-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 72
+level = 2
+heading = "4. Model profile identity"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-model-semantics"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 106
+level = 2
+heading = "5. Model semantics"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-1-candidate-nomination-only"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 108
+level = 3
+heading = "5.1 Candidate nomination only"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-2-rerank-is-a-closed-transform"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 114
+level = 3
+heading = "5.2 Rerank is a closed transform"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-3-access-and-scoring-noninterference"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 130
+level = 3
+heading = "5.3 Access and scoring noninterference"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-4-content-handling"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 140
+level = 3
+heading = "5.4 Content handling"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#6-model-worker-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 157
+level = 2
+heading = "6. Model worker boundary"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#7-persistent-model-vectors-and-collection-generations"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 179
+level = 2
+heading = "7. Persistent model vectors and collection generations"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#8-document-provider-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 201
+level = 2
+heading = "8. Document provider identity"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#9-document-worker-no-execute-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 228
+level = 2
+heading = "9. Document worker no-execute boundary"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#10-document-projection-migration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 254
+level = 2
+heading = "10. Document projection migration"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#11-measured-material-benefit"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 264
+level = 2
+heading = "11. Measured material benefit"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#12-removal-and-baseline-restoration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 284
+level = 2
+heading = "12. Removal and baseline restoration"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#13-advanced-scale-trigger"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 309
+level = 2
+heading = "13. Advanced scale trigger"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#14-p18-migration-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 333
+level = 2
+heading = "14. P18 migration state machine"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#15-p18-equivalence-and-fault-evidence"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 367
+level = 2
+heading = "15. P18 equivalence and fault evidence"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#16-capability-and-configuration-publication"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 385
+level = 2
+heading = "16. Capability and configuration publication"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#17-package-decomposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 409
+level = 2
+heading = "17. Package decomposition"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#18-hard-stop-conditions"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 424
+level = 2
+heading = "18. Hard stop conditions"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#19-current-disposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 441
+level = 2
+heading = "19. Current disposition"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "qualification/optional-depth/README.md#p16-p18-optional-depth-qualification"
+path = "qualification/optional-depth/README.md"
+line = 1
+level = 1
+heading = "P16-P18 optional-depth qualification"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#w10-optional-depth-qualification-contract"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W10 optional-depth qualification contract"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#1-candidate-specific-acceptance"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 8
+level = 2
+heading = "1. Candidate-specific acceptance"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#2-prerequisite-chain"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 22
+level = 2
+heading = "2. Prerequisite chain"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#3-common-qualification-sequence"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 38
+level = 2
+heading = "3. Common qualification sequence"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#4-model-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 56
+level = 2
+heading = "4. Model candidate"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#5-document-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 75
+level = 2
+heading = "5. Document candidate"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#6-scale-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 94
+level = 2
+heading = "6. Scale candidate"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#7-g6-evidence-interpretation"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 114
+level = 2
+heading = "7. G6 evidence interpretation"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#8-evidence-record"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 129
+level = 2
+heading = "8. Evidence record"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#9-activation-evidence"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 138
+level = 2
+heading = "9. Activation evidence"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#10-stop-conditions"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 152
+level = 2
+heading = "10. Stop conditions"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#11-current-disposition"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 169
+level = 2
+heading = "11. Current disposition"
+kind = "qualification_contract"
+modules = ["eliot-search-model-worker:model"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "swarm/assignments/eliot-search-model-worker.md#eliot-search-model-worker-implementation-packet"
+path = "swarm/assignments/eliot-search-model-worker.md"
+line = 1
+level = 1
+heading = "eliot-search-model-worker implementation packet"
+kind = "implementation_contract_root"
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/eliot-search-model-worker.md#mission"
+path = "swarm/assignments/eliot-search-model-worker.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-search-model-worker.md#owns"
+path = "swarm/assignments/eliot-search-model-worker.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-search-model-worker.md#must-not-own"
+path = "swarm/assignments/eliot-search-model-worker.md"
+line = 25
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-search-model-worker.md#required-operations"
+path = "swarm/assignments/eliot-search-model-worker.md"
+line = 33
+level = 2
+heading = "Required operations"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-search-model-worker.md#exit-evidence"
+path = "swarm/assignments/eliot-search-model-worker.md"
+line = 38
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-search-model-worker.md#size"
+path = "swarm/assignments/eliot-search-model-worker.md"
+line = 45
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["eliot-search-model-worker:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

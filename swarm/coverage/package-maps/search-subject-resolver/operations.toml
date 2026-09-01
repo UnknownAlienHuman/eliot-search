@@ -1,0 +1,128 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-subject-resolver"
+operation_count = 12
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-subject-resolver::assemble_resolution"
+name = "assemble_resolution"
+module = "ladder"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-subject-resolver::build_ambiguity_set"
+name = "build_ambiguity_set"
+module = "ambiguity"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-subject-resolver::collapse_equivalent_occurrences"
+name = "collapse_equivalent_occurrences"
+module = "ladder"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "semantic"
+score = 22
+
+[[operation]]
+id = "search-subject-resolver::issue_resolution_receipt"
+name = "issue_resolution_receipt"
+module = "redaction"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-subject-resolver::normalize_subject_request"
+name = "normalize_subject_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 87
+
+[[operation]]
+id = "search-subject-resolver::resolve_exact_name"
+name = "resolve_exact_name"
+module = "ladder"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "semantic"
+score = 36
+
+[[operation]]
+id = "search-subject-resolver::resolve_explicit_reference"
+name = "resolve_explicit_reference"
+module = "ladder"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "semantic"
+score = 36
+
+[[operation]]
+id = "search-subject-resolver::resolve_qualified_key"
+name = "resolve_qualified_key"
+module = "ladder"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "semantic"
+score = 36
+
+[[operation]]
+id = "search-subject-resolver::resolve_signature_and_kind"
+name = "resolve_signature_and_kind"
+module = "ladder"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "semantic"
+score = 36
+
+[[operation]]
+id = "search-subject-resolver::resolve_structural_lexical_candidates"
+name = "resolve_structural_lexical_candidates"
+module = "candidates"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "semantic"
+score = 100
+
+[[operation]]
+id = "search-subject-resolver::revalidate_resolution"
+name = "revalidate_resolution"
+module = "drift"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["Resolution-ladder fail-closed rule"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-subject-resolver::validate_resolution_context"
+name = "validate_resolution_context"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-subject-resolver/FUNCTIONS.md"]
+source_contexts = ["State and authority"]
+route_kind = "semantic"
+score = 12

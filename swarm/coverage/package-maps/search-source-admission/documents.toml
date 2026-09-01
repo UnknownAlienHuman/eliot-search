@@ -1,0 +1,800 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-source-admission"
+node_count = 72
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/source_admission.md#sourceadmission-configuration-contract"
+path = "config/sections/source_admission.md"
+line = 1
+level = 1
+heading = "[sourceadmission] configuration contract"
+kind = "configuration_contract"
+modules = ["search-source-admission:config"]
+route_kind = "config_owner"
+rationale = "source_admission"
+
+[[node]]
+id = "config/sections/source_admission.md#fields"
+path = "config/sections/source_admission.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-source-admission:config"]
+route_kind = "config_owner"
+rationale = "source_admission"
+
+[[node]]
+id = "config/sections/source_admission.md#required-section-api"
+path = "config/sections/source_admission.md"
+line = 22
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-source-admission:config"]
+route_kind = "config_owner"
+rationale = "source_admission"
+
+[[node]]
+id = "config/sections/source_admission.md#invariants"
+path = "config/sections/source_admission.md"
+line = 36
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-source-admission:config"]
+route_kind = "config_owner"
+rationale = "source_admission"
+
+[[node]]
+id = "config/sections/source_admission.md#required-tests"
+path = "config/sections/source_admission.md"
+line = 42
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-source-admission:config"]
+route_kind = "config_owner"
+rationale = "source_admission"
+
+[[node]]
+id = "crates/search-source/search-source-admission/AGENTS.md#agent-contract-search-source-admission"
+path = "crates/search-source/search-source-admission/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-source-admission"
+kind = "implementation_contract_root"
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-admission/AGENTS.md#ownership"
+path = "crates/search-source/search-source-admission/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/AGENTS.md#forbidden-ownership"
+path = "crates/search-source/search-source-admission/AGENTS.md"
+line = 14
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/AGENTS.md#dependencies"
+path = "crates/search-source/search-source-admission/AGENTS.md"
+line = 21
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/AGENTS.md#size"
+path = "crates/search-source/search-source-admission/AGENTS.md"
+line = 26
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#function-contract-search-source-admission"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-source-admission"
+kind = "implementation_contract_root"
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#global-rules"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-source-admission:api", "search-source-admission:policy"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#configuration-operations"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 18
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-source-admission:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#sectiondescriptor-configsectiondescriptor"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 20
+level = 3
+heading = "sectiondescriptor() -> ConfigSectionDescriptor"
+kind = "implementation_operation"
+modules = ["search-source-admission:config"]
+route_kind = "operation_route"
+rationale = "search-source-admission::section_descriptor"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#compileddefaults-configsectioninput"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "compileddefaults() -> ConfigSectionInput"
+kind = "implementation_operation"
+modules = ["search-source-admission:config"]
+route_kind = "operation_route"
+rationale = "search-source-admission::compiled_defaults"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#validatesection-input-platform-acceptedcapabilities-result-validatedadmissionconfig-admissionerr"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 24
+level = 3
+heading = "validatesection(input, platform, acceptedcapabilities) -> Result<ValidatedAdmissionConfig, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:config"]
+route_kind = "operation_route"
+rationale = "search-source-admission::validate_section"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#sectiondigest-validated-blake3digest32"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 30
+level = 3
+heading = "sectiondigest(validated) -> Blake3Digest32"
+kind = "implementation_operation"
+modules = ["search-source-admission:config"]
+route_kind = "operation_route"
+rationale = "search-source-admission::section_digest"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#plansectionchange-old-new-result-sectionreloaddecision-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 32
+level = 3
+heading = "plansectionchange(old, new) -> Result<SectionReloadDecision, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:config"]
+route_kind = "operation_route"
+rationale = "search-source-admission::plan_section_change"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#policy-operations"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 38
+level = 2
+heading = "Policy operations"
+kind = "implementation_contract"
+modules = ["search-source-admission:policy"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#validatepolicyschema-input-result-admissionpolicydraft-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 40
+level = 3
+heading = "validatepolicyschema(input) -> Result<AdmissionPolicyDraft, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:policy"]
+route_kind = "operation_route"
+rationale = "search-source-admission::validate_policy_schema"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#normalizepolicy-draft-result-canonicaladmissionpolicy-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 45
+level = 3
+heading = "normalizepolicy(draft) -> Result<CanonicalAdmissionPolicy, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:policy"]
+route_kind = "operation_route"
+rationale = "search-source-admission::normalize_policy"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#policyfingerprint-policy-policyfingerprint"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 50
+level = 3
+heading = "policyfingerprint(policy) -> PolicyFingerprint"
+kind = "implementation_operation"
+modules = ["search-source-admission:policy"]
+route_kind = "operation_route"
+rationale = "search-source-admission::policy_fingerprint"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#classifypolicychange-old-new-admissionpolicychange"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 55
+level = 3
+heading = "classifypolicychange(old, new) -> AdmissionPolicyChange"
+kind = "implementation_operation"
+modules = ["search-source-admission:policy"]
+route_kind = "operation_route"
+rationale = "search-source-admission::classify_policy_change"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#observation-operations"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 69
+level = 2
+heading = "Observation operations"
+kind = "implementation_contract"
+modules = ["search-source-admission:observation"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#validateobservation-input-policy-limits-result-admissionobservation-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 71
+level = 3
+heading = "validateobservation(input, policy, limits) -> Result<AdmissionObservation, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:observation"]
+route_kind = "operation_route"
+rationale = "search-source-admission::validate_observation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#observationdigest-observation-admissionobservationdigest"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 80
+level = 3
+heading = "observationdigest(observation) -> AdmissionObservationDigest"
+kind = "implementation_operation"
+modules = ["search-source-admission:observation"]
+route_kind = "operation_route"
+rationale = "search-source-admission::observation_digest"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#decision-and-receipt-operations"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 85
+level = 2
+heading = "Decision and receipt operations"
+kind = "implementation_contract"
+modules = ["search-source-admission:receipt"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#evaluate-policy-observation-budget-cancel-result-admissiondecision-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 87
+level = 3
+heading = "evaluate(policy, observation, budget, cancel) -> Result<AdmissionDecision, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:decision"]
+route_kind = "operation_route"
+rationale = "search-source-admission::evaluate"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#issuereceipt-policy-observation-decision-result-admissionreceipt-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 104
+level = 3
+heading = "issuereceipt(policy, observation, decision) -> Result<AdmissionReceipt, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:receipt"]
+route_kind = "operation_route"
+rationale = "search-source-admission::issue_receipt"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#verifyreceipt-receipt-currentpolicy-observation-result-verifiedadmissionreceipt-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 110
+level = 3
+heading = "verifyreceipt(receipt, currentpolicy, observation) -> Result<VerifiedAdmissionReceipt, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:receipt"]
+route_kind = "operation_route"
+rationale = "search-source-admission::verify_receipt"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#redacteddecisionview-decision-disclosure-admissiondecisionview"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 118
+level = 3
+heading = "redacteddecisionview(decision, disclosure) -> AdmissionDecisionView"
+kind = "implementation_operation"
+modules = ["search-source-admission:decision"]
+route_kind = "operation_route"
+rationale = "search-source-admission::redacted_decision_view"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#batch-operations"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 123
+level = 2
+heading = "Batch operations"
+kind = "implementation_contract"
+modules = ["search-source-admission:batch"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#evaluatebatch-policy-observations-limits-budget-cancel-result-admissionbatch-admissionerror"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 125
+level = 3
+heading = "evaluatebatch(policy, observations, limits, budget, cancel) -> Result<AdmissionBatch, AdmissionError>"
+kind = "implementation_operation"
+modules = ["search-source-admission:batch"]
+route_kind = "operation_route"
+rationale = "search-source-admission::evaluate_batch"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#cancellation-deadline-and-retry"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 131
+level = 2
+heading = "Cancellation, deadline and retry"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#typed-failures"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 137
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-source-admission:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-source/search-source-admission/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+line = 155
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/README.md#search-source-admission"
+path = "crates/search-source/search-source-admission/README.md"
+line = 1
+level = 1
+heading = "search-source-admission"
+kind = "implementation_contract_root"
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-admission/README.md#owns"
+path = "crates/search-source/search-source-admission/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-admission/README.md#must-not-own"
+path = "crates/search-source/search-source-admission/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-source-acquisition-and-change-reconciliation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1075
+level = 2
+heading = "S16. Source acquisition and change reconciliation"
+kind = "architecture_section"
+modules = ["search-source-admission:policy"]
+route_kind = "architecture_section_registry"
+rationale = "S16"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-1-watchers-are-hints"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1077
+level = 3
+heading = "S16.1 Watchers are hints"
+kind = "architecture_node"
+modules = ["search-source-admission:policy"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-2-query-freshness-preflight"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1087
+level = 3
+heading = "S16.2 Query freshness preflight"
+kind = "architecture_node"
+modules = ["search-source-admission:policy"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-3-stable-no-execute-read"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1093
+level = 3
+heading = "S16.3 Stable no-execute read"
+kind = "architecture_node"
+modules = ["search-source-admission:policy"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-4-reparse-points-links-and-path-escape"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1106
+level = 3
+heading = "S16.4 Reparse points, links and path escape"
+kind = "architecture_node"
+modules = ["search-source-admission:policy"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-5-default-exclusions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1110
+level = 3
+heading = "S16.5 Default exclusions"
+kind = "architecture_node"
+modules = ["search-source-admission:policy"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-6-sourceadmissionpolicy-and-sensitivity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1114
+level = 3
+heading = "S16.6 SourceAdmissionPolicy and sensitivity"
+kind = "architecture_node"
+modules = ["search-source-admission:policy"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p03-source-registry-and-direct-exact-spine"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2852
+level = 3
+heading = "P03 — Source registry and direct exact spine"
+kind = "delivery_contract"
+modules = ["search-source-admission:policy", "search-source-admission:receipt"]
+route_kind = "delivery_registry"
+rationale = "P03"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#w2-direct-source-spine-implementation-packet"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W2 direct source-spine implementation packet"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#source-pipeline"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Source pipeline"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 61
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 71
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#mutation-and-recovery"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 91
+level = 2
+heading = "Mutation and recovery"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#required-w2-tests-and-evidence"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 112
+level = 2
+heading = "Required W2 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#admission"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 3
+heading = "Admission"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#identity-and-registry"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 122
+level = 3
+heading = "Identity and registry"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#safe-read-and-revision"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 130
+level = 3
+heading = "Safe read and revision"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#preparation"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 139
+level = 3
+heading = "Preparation"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 148
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 161
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-source-admission:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#search-source-admission-implementation-packet"
+path = "swarm/assignments/search-source-admission.md"
+line = 1
+level = 1
+heading = "search-source-admission implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#mission"
+path = "swarm/assignments/search-source-admission.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#owns"
+path = "swarm/assignments/search-source-admission.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#must-not-own"
+path = "swarm/assignments/search-source-admission.md"
+line = 23
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#logical-primitives"
+path = "swarm/assignments/search-source-admission.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#logical-operations"
+path = "swarm/assignments/search-source-admission.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#required-invariants"
+path = "swarm/assignments/search-source-admission.md"
+line = 42
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-source-admission:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#typed-failure-surface"
+path = "swarm/assignments/search-source-admission.md"
+line = 50
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#exit-tests-evidence"
+path = "swarm/assignments/search-source-admission.md"
+line = 59
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#suggested-internal-modules"
+path = "swarm/assignments/search-source-admission.md"
+line = 68
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-admission.md#size-split"
+path = "swarm/assignments/search-source-admission.md"
+line = 81
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-source-admission:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

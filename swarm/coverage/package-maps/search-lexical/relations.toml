@@ -1,0 +1,158 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-lexical"
+outbound_dependency_count = 4
+inbound_dependency_count = 3
+architecture_relation_count = 4
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-lexical->search-contracts"
+consumer = "search-lexical"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-lexical/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-lexical->search-domain"
+consumer = "search-lexical"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-lexical/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-lexical->search-ports"
+consumer = "search-lexical"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-lexical/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-lexical->search-config"
+consumer = "search-lexical"
+consumer_module = "config"
+consumer_earliest_wave = 3
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-lexical/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-lexical"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-lexical"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-overlay->search-lexical"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-lexical"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-retrieval-executor->search-lexical"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-lexical"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S12"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C11"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-19"
+modules = ["search-lexical:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P06"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:tokenize"]
+required_outputs = ["one_selected_lexical_path", "golden_sparse_profiles", "payload_indexes", "collision_safe_point_identity", "exact_projection_manifests"]
+exit_evidence = ["reference_vectors", "collision_injection", "no_implicit_language_defaults", "no_membership_arrays"]
+
+[[configuration]]
+section = "lexical"
+module = "config"
+contract = "config/sections/lexical.md"
+reload = "NEW_COLLECTION_GENERATION"
+
+[[port]]
+name = "LexicalEncoderPort"
+module = "sparse"
+methods = ["profile", "encode_document", "encode_query", "fixture_digest"]
+method_modules = ["profile", "sparse", "sparse", "fixture"]

@@ -1,0 +1,1130 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-epoch-pins"
+node_count = 102
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#agent-contract-search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-epoch-pins"
+kind = "implementation_contract_root"
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#mission"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#ownership"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#forbidden-ownership"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#allowed-dependencies"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#required-logical-surface"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#failure-surface"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 44
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 49
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#size-and-split-guard"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 60
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md#definition-of-done"
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+line = 68
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#function-contract-search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-epoch-pins"
+kind = "implementation_contract_root"
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#operations"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 7
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#acquireepochpin-route-epoch-owner-limits-result-epochpinguard-pinerror"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 9
+level = 3
+heading = "acquireepochpin(route, epoch, owner, limits) -> Result<EpochPinGuard, PinError>"
+kind = "implementation_operation"
+modules = ["search-epoch-pins:acquire"]
+route_kind = "operation_route"
+rationale = "search-epoch-pins::acquire_epoch_pin"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#acquireroutepin-route-owner-limits-result-routepinguard-pinerror"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 14
+level = 3
+heading = "acquireroutepin(route, owner, limits) -> Result<RoutePinGuard, PinError>"
+kind = "implementation_operation"
+modules = ["search-epoch-pins:acquire"]
+route_kind = "operation_route"
+rationale = "search-epoch-pins::acquire_route_pin"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#renewcontinuationpin-guard-newexpiry-policy-result-pinrenewalreceipt-pinerror"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 18
+level = 3
+heading = "renewcontinuationpin(guard, newexpiry, policy) -> Result<PinRenewalReceipt, PinError>"
+kind = "implementation_operation"
+modules = ["search-epoch-pins:acquire"]
+route_kind = "operation_route"
+rationale = "search-epoch-pins::renew_continuation_pin"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#releaseownerpins-owner-pinreleasereceipt"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 23
+level = 3
+heading = "releaseownerpins(owner) -> PinReleaseReceipt"
+kind = "implementation_operation"
+modules = ["search-epoch-pins:release"]
+route_kind = "operation_route"
+rationale = "search-epoch-pins::release_owner_pins"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#snapshot-pinregistrysnapshot"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 27
+level = 3
+heading = "snapshot() -> PinRegistrySnapshot"
+kind = "implementation_operation"
+modules = ["search-epoch-pins:registry"]
+route_kind = "operation_route"
+rationale = "search-epoch-pins::snapshot"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#computereclamationwatermark-retired-snapshot-reclamationwatermark"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 32
+level = 3
+heading = "computereclamationwatermark(retired, snapshot) -> ReclamationWatermark"
+kind = "implementation_operation"
+modules = ["search-epoch-pins:watermark"]
+route_kind = "operation_route"
+rationale = "search-epoch-pins::compute_reclamation_watermark"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#expirecontinuationpins-now-policy-expiryreceipt"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 36
+level = 3
+heading = "expirecontinuationpins(now, policy) -> ExpiryReceipt"
+kind = "implementation_operation"
+modules = ["search-epoch-pins:cleanup"]
+route_kind = "operation_route"
+rationale = "search-epoch-pins::expire_continuation_pins"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#concurrency-and-failure-semantics"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 41
+level = 2
+heading = "Concurrency and failure semantics"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md#required-fixtures"
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+line = 47
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md#p18-advanced-scale-supplement-search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"
+line = 1
+level = 1
+heading = "P18 advanced-scale supplement — search-epoch-pins"
+kind = "implementation_contract_root"
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md#required-operations"
+path = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"
+line = 5
+level = 2
+heading = "Required operations"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md#invariants"
+path = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"
+line = 15
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-epoch-pins:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md#required-evidence"
+path = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"
+line = 24
+level = 2
+heading = "Required evidence"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/README.md#search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins/README.md"
+line = 1
+level = 1
+heading = "search-epoch-pins"
+kind = "implementation_contract_root"
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/README.md#owns"
+path = "crates/search-index-qdrant/search-epoch-pins/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-epoch-pins/README.md#must-not-own"
+path = "crates/search-index-qdrant/search-epoch-pins/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-query-snapshots-pins-and-reclamation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 975
+level = 2
+heading = "S14. Query snapshots, pins and reclamation"
+kind = "architecture_section"
+modules = ["search-epoch-pins:registry"]
+route_kind = "architecture_section_registry"
+rationale = "S14"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-1-read-only-hot-path"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 977
+level = 3
+heading = "S14.1 Read-only hot path"
+kind = "architecture_node"
+modules = ["search-epoch-pins:registry"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-2-in-memory-epoch-and-route-pin"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1000
+level = 3
+heading = "S14.2 In-memory epoch and route pin"
+kind = "architecture_node"
+modules = ["search-epoch-pins:registry"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-3-reclamation-watermark"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1006
+level = 3
+heading = "S14.3 Reclamation watermark"
+kind = "architecture_node"
+modules = ["search-epoch-pins:registry"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-4-live-security-fences-override-snapshots"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1016
+level = 3
+heading = "S14.4 Live security fences override snapshots"
+kind = "architecture_node"
+modules = ["search-epoch-pins:registry"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-handles-and-continuations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1567
+level = 2
+heading = "S26. Handles and continuations"
+kind = "architecture_section"
+modules = ["search-epoch-pins:registry"]
+route_kind = "architecture_section_registry"
+rationale = "S26"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-1-ephemeral-handles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1569
+level = 3
+heading = "S26.1 Ephemeral handles"
+kind = "architecture_node"
+modules = ["search-epoch-pins:registry"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-2-durable-source-handles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1582
+level = 3
+heading = "S26.2 Durable source handles"
+kind = "architecture_node"
+modules = ["search-epoch-pins:registry"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-3-continuation-stability"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1600
+level = 3
+heading = "S26.3 Continuation stability"
+kind = "architecture_node"
+modules = ["search-epoch-pins:registry"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p07-epoch-publication-and-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2876
+level = 3
+heading = "P07 — Epoch publication and recovery"
+kind = "delivery_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "delivery_registry"
+rationale = "P07"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p18-optional-advanced-scale-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2943
+level = 3
+heading = "P18 — Optional advanced scale profile"
+kind = "delivery_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "delivery_registry"
+rationale = "P18"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#w10-optional-depth-implementation-packet"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W10 optional-depth implementation packet"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-rule"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Candidate rule"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 21
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#read-set"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 38
+level = 2
+heading = "Read set"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#model-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 50
+level = 2
+heading = "Model order"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#document-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 67
+level = 2
+heading = "Document order"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#scale-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 83
+level = 2
+heading = "Scale order"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-evaluation-boundary"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Candidate evaluation boundary"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#required-g6-evidence"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 119
+level = 2
+heading = "Required G6 evidence"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-handoff-requirements"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 132
+level = 2
+heading = "Package handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 149
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#current-state"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 166
+level = 2
+heading = "Current state"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#w3-implementation-packet-index"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W3 implementation packet index"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 6
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#dependency-order"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 19
+level = 2
+heading = "Dependency order"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 39
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-epoch-pins:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#w10-optional-depth-contracts-1-0"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W10 optional depth contracts 1.0"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#1-candidate-classes"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Candidate classes"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#2-gate-chain"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 29
+level = 2
+heading = "2. Gate chain"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#3-activation-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 46
+level = 2
+heading = "3. Activation state machine"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#4-model-profile-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 72
+level = 2
+heading = "4. Model profile identity"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-model-semantics"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 106
+level = 2
+heading = "5. Model semantics"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-1-candidate-nomination-only"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 108
+level = 3
+heading = "5.1 Candidate nomination only"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-2-rerank-is-a-closed-transform"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 114
+level = 3
+heading = "5.2 Rerank is a closed transform"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-3-access-and-scoring-noninterference"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 130
+level = 3
+heading = "5.3 Access and scoring noninterference"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-4-content-handling"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 140
+level = 3
+heading = "5.4 Content handling"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#6-model-worker-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 157
+level = 2
+heading = "6. Model worker boundary"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#7-persistent-model-vectors-and-collection-generations"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 179
+level = 2
+heading = "7. Persistent model vectors and collection generations"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#8-document-provider-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 201
+level = 2
+heading = "8. Document provider identity"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#9-document-worker-no-execute-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 228
+level = 2
+heading = "9. Document worker no-execute boundary"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#10-document-projection-migration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 254
+level = 2
+heading = "10. Document projection migration"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#11-measured-material-benefit"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 264
+level = 2
+heading = "11. Measured material benefit"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#12-removal-and-baseline-restoration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 284
+level = 2
+heading = "12. Removal and baseline restoration"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#13-advanced-scale-trigger"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 309
+level = 2
+heading = "13. Advanced scale trigger"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#14-p18-migration-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 333
+level = 2
+heading = "14. P18 migration state machine"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#15-p18-equivalence-and-fault-evidence"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 367
+level = 2
+heading = "15. P18 equivalence and fault evidence"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#16-capability-and-configuration-publication"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 385
+level = 2
+heading = "16. Capability and configuration publication"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#17-package-decomposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 409
+level = 2
+heading = "17. Package decomposition"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#18-hard-stop-conditions"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 424
+level = 2
+heading = "18. Hard stop conditions"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#19-current-disposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 441
+level = 2
+heading = "19. Current disposition"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "qualification/qdrant/README.md#qdrant-qualification"
+path = "qualification/qdrant/README.md"
+line = 1
+level = 1
+heading = "Qdrant qualification"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#w3-qdrant-and-lexical-qualification-contract"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W3 Qdrant and lexical qualification contract"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#owners"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#frozen-inputs-required-before-execution"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 28
+level = 2
+heading = "Frozen inputs required before execution"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#qualification-order"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 43
+level = 2
+heading = "Qualification order"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mandatory-admission-properties"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 63
+level = 2
+heading = "Mandatory admission properties"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#process-and-secret-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 65
+level = 3
+heading = "Process and secret boundary"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#collection-and-filter-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 75
+level = 3
+heading = "Collection and filter boundary"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mutation-and-readback-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 88
+level = 3
+heading = "Mutation and readback boundary"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#lexical-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 97
+level = 3
+heading = "Lexical boundary"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#evidence-products"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 107
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#current-disposition"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 133
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-epoch-pins:registry"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#search-epoch-pins-implementation-packet"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 1
+level = 1
+heading = "search-epoch-pins implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#mission"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#owns"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#must-not-own"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#logical-primitives"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#logical-operations"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#required-invariants"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 44
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-epoch-pins:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#typed-failure-surface"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 52
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#exit-tests-evidence"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 60
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#suggested-internal-modules"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 69
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-epoch-pins.md#size-split"
+path = "swarm/assignments/search-epoch-pins.md"
+line = 83
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-epoch-pins:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

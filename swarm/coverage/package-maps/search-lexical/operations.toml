@@ -1,0 +1,138 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-lexical"
+operation_count = 13
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-lexical::describe_profile"
+name = "describe_profile"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 140
+
+[[operation]]
+id = "search-lexical::encode_document"
+name = "encode_document"
+module = "sparse"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-lexical::encode_query"
+name = "encode_query"
+module = "sparse"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-lexical::expand_identifier"
+name = "expand_identifier"
+module = "tokenize"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "search-lexical::map_terms"
+name = "map_terms"
+module = "tokenize"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "search-lexical::measure_collision_corpus"
+name = "measure_collision_corpus"
+module = "statistics"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 22
+
+[[operation]]
+id = "search-lexical::normalize_input"
+name = "normalize_input"
+module = "tokenize"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-lexical::profile_digest"
+name = "profile_digest"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 140
+
+[[operation]]
+id = "search-lexical::tokenize_document"
+name = "tokenize_document"
+module = "tokenize"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-lexical::tokenize_query"
+name = "tokenize_query"
+module = "tokenize"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-lexical::validate_profile"
+name = "validate_profile"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 140
+
+[[operation]]
+id = "search-lexical::weight_document"
+name = "weight_document"
+module = "sparse"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-lexical::weight_query"
+name = "weight_query"
+module = "sparse"
+public_entry_module = "api"
+sources = ["crates/search-lexical/FUNCTIONS.md"]
+source_contexts = ["Encoding operations"]
+route_kind = "semantic"
+score = 9

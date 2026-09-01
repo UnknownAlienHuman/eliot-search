@@ -1,0 +1,170 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-eval"
+outbound_dependency_count = 3
+inbound_dependency_count = 1
+architecture_relation_count = 13
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-eval->search-contracts"
+consumer = "search-eval"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-eval/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-eval->search-domain"
+consumer = "search-eval"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-eval/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-eval->search-config"
+consumer = "search-eval"
+consumer_module = "config"
+consumer_earliest_wave = 4
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-eval/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-eval"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-eval"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S2"
+modules = ["search-eval:campaign"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S30"
+modules = ["search-eval:metrics"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S35"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:safety"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S36"
+modules = ["search-eval:recovery", "search-eval:safety"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S37"
+modules = ["search-eval:review"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S39"
+modules = ["search-eval:review"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C29"
+modules = ["search-eval:campaign", "search-eval:evidence", "search-eval:metrics", "search-eval:review", "search-eval:safety", "search-eval:trial"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-28"
+modules = ["search-eval:evidence"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P08"
+modules = ["search-eval:corpus"]
+required_outputs = ["server_owned_plans", "bounded_safe_legs", "deterministic_fusion", "source_backed_candidates", "compact_cards", "handles_and_continuations", "baseline_eval_harness"]
+exit_evidence = ["access_noninterference", "deterministic_cards", "raw_grep_read_baseline"]
+
+[[architecture]]
+kind = "delivery"
+id = "P15"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+required_outputs = ["control_corpus", "ABC_evaluation", "latency_resource_fault_security_report", "protocol_stress", "content_minimized_telemetry_audit"]
+exit_evidence = ["all_S35_fixtures", "raw_acceptance_evidence", "independent_recalculation"]
+
+[[architecture]]
+kind = "delivery"
+id = "P16"
+modules = ["search-eval:metrics"]
+required_outputs = ["isolated_model_worker", "versioned_dense_profile", "measured_fusion_or_rerank", "baseline_fallback"]
+exit_evidence = ["measured_incremental_benefit", "resource_and_safety_receipts", "worker_removal_returns_to_P15"]
+
+[[architecture]]
+kind = "delivery"
+id = "P17"
+modules = ["search-eval:metrics"]
+required_outputs = ["isolated_document_worker", "qualified_provider", "coordinate_and_loss_maps", "baseline_fallback"]
+exit_evidence = ["Windows_packaging", "no_execute_resource_fuzz", "provider_removal"]
+
+[[architecture]]
+kind = "delivery"
+id = "P18"
+modules = ["search-eval:metrics"]
+required_outputs = ["measured_scale_change", "candidate_collection_build", "ordered_catchup", "final_barrier", "redb_route_cutover", "rollback"]
+exit_evidence = ["migration_state_kill_tests", "old_route_pin_drainage", "failed_candidate_discard", "scoring_currentness_noninterference", "rollback_plan"]
+
+[[configuration]]
+section = "observability"
+module = "config"
+contract = "config/sections/observability.md"
+reload = "APPLY_LIVE"

@@ -1,0 +1,4947 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "eliot-searchd"
+node_count = 449
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "bins/eliot-searchd/AGENTS.md#agent-contract-eliot-searchd"
+path = "bins/eliot-searchd/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — eliot-searchd"
+kind = "implementation_contract_root"
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "bins/eliot-searchd/AGENTS.md#ownership"
+path = "bins/eliot-searchd/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/AGENTS.md#forbidden-ownership"
+path = "bins/eliot-searchd/AGENTS.md"
+line = 14
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/AGENTS.md#dependencies"
+path = "bins/eliot-searchd/AGENTS.md"
+line = 21
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["eliot-searchd:adapters"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/AGENTS.md#size"
+path = "bins/eliot-searchd/AGENTS.md"
+line = 25
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#function-contract-eliot-searchd"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — eliot-searchd"
+kind = "implementation_contract_root"
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#global-rules"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 11
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["eliot-searchd:main"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composition-profile-operations"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 25
+level = 2
+heading = "Composition profile operations"
+kind = "implementation_contract"
+modules = ["eliot-searchd:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#validatecompositionprofile-profile-launchstate-acceptedreceipts-compiledfeatures-result-validate"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 27
+level = 3
+heading = "validatecompositionprofile(profile, launchstate, acceptedreceipts, compiledfeatures) -> Result<ValidatedCompositionProfile, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:profile"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::validate_composition_profile"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#compositiondigest-profile-compositionprofiledigest"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 36
+level = 3
+heading = "compositiondigest(profile) -> CompositionProfileDigest"
+kind = "implementation_operation"
+modules = ["eliot-searchd:profile"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::composition_digest"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#classifyprofilechange-old-new-daemoncompositionchange"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 41
+level = 3
+heading = "classifyprofilechange(old, new) -> DaemonCompositionChange"
+kind = "implementation_operation"
+modules = ["eliot-searchd:profile"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::classify_profile_change"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#configuration-acquisition-and-activation"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 47
+level = 2
+heading = "Configuration acquisition and activation"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#captureconfiginputs-filebytes-environment-cli-platform-result-capturedconfiginputs-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 49
+level = 3
+heading = "captureconfiginputs(filebytes, environment, cli, platform) -> Result<CapturedConfigInputs, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:config"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::capture_config_inputs"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#buildcandidateconfig-captured-registry-owners-result-effectiveconfigcandidate-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 54
+level = 3
+heading = "buildcandidateconfig(captured, registry, owners) -> Result<EffectiveConfigCandidate, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:config"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::build_candidate_config"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#planconfigactivation-current-candidate-dependencystate-result-daemonreconfigurationplan-daemoner"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 59
+level = 3
+heading = "planconfigactivation(current, candidate, dependencystate) -> Result<DaemonReconfigurationPlan, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:config"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::plan_config_activation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#executeconfigactivation-plan-ports-context-result-configactivationreceipt-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 64
+level = 3
+heading = "executeconfigactivation(plan, ports, context) -> Result<ConfigActivationReceipt, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:config"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::execute_config_activation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#recoverconfigactivation-operation-control-dependencies-result-configactivationrecovery-daemonerr"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 73
+level = 3
+heading = "recoverconfigactivation(operation, control, dependencies) -> Result<ConfigActivationRecovery, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:config"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::recover_config_activation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#w1-startup-shell"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 79
+level = 2
+heading = "W1 startup shell"
+kind = "implementation_contract"
+modules = ["eliot-searchd:startup"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#buildwave1shell-config-launchstate-acceptedw0-result-daemonbuilder-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 81
+level = 3
+heading = "buildwave1shell(config, launchstate, acceptedw0) -> Result<DaemonBuilder, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:startup"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::build_wave1_shell"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#acquireroot-builder-runtimeowner-context-result-owneddaemonbuilder-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 87
+level = 3
+heading = "acquireroot(builder, runtimeowner, context) -> Result<OwnedDaemonBuilder, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:startup"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::acquire_root"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#initializesecretsandcontrol-builder-secretport-controlport-context-result-controlleddaemonbuilde"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 92
+level = 3
+heading = "initializesecretsandcontrol(builder, secretport, controlport, context) -> Result<ControlledDaemonBuilder, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:startup"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::initialize_secrets_and_control"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#publishcontrolsnapshot-builder-snapshotport-context-result-snapshotdaemonbuilder-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 97
+level = 3
+heading = "publishcontrolsnapshot(builder, snapshotport, context) -> Result<SnapshotDaemonBuilder, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:startup"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::publish_control_snapshot"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#startproviderendpoint-builder-protocolport-context-result-wave1daemon-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 102
+level = 3
+heading = "startproviderendpoint(builder, protocolport, context) -> Result<Wave1Daemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:startup"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::start_provider_endpoint"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#progressive-capability-composition"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 108
+level = 2
+heading = "Progressive capability composition"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composesourcespine-daemon-acceptedw2-ports-context-result-directdaemon-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 110
+level = 3
+heading = "composesourcespine(daemon, acceptedw2, ports, context) -> Result<DirectDaemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:capability"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::compose_source_spine"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composeindexprofile-daemon-acceptedw3-artifactreceipts-ports-context-result-indexeddaemon-daemon"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 115
+level = 3
+heading = "composeindexprofile(daemon, acceptedw3, artifactreceipts, ports, context) -> Result<IndexedDaemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:capability"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::compose_index_profile"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composequeryprofile-daemon-acceptedw4-ports-context-result-querydaemon-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 123
+level = 3
+heading = "composequeryprofile(daemon, acceptedw4, ports, context) -> Result<QueryDaemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:capability"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::compose_query_profile"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composecurrentnessandproof-daemon-acceptedw5w6w7-ports-context-result-hardeneddaemon-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 128
+level = 3
+heading = "composecurrentnessandproof(daemon, acceptedw5w6w7, ports, context) -> Result<HardenedDaemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:capability"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::compose_currentness_and_proof"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composeclientedge-daemon-acceptedw8-ports-context-result-clientdaemon-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 133
+level = 3
+heading = "composeclientedge(daemon, acceptedw8, ports, context) -> Result<ClientDaemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:capability"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::compose_client_edge"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composeevaluationmode-daemon-acceptedw9-ports-context-result-evaluationcapabledaemon-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 138
+level = 3
+heading = "composeevaluationmode(daemon, acceptedw9, ports, context) -> Result<EvaluationCapableDaemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::compose_evaluation_mode"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#composeoptionalcandidate-daemon-acceptedw10candidate-ports-context-result-optionaldaemon-daemone"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 143
+level = 3
+heading = "composeoptionalcandidate(daemon, acceptedw10candidate, ports, context) -> Result<OptionalDaemon, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::compose_optional_candidate"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#concrete-adapter-construction"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 149
+level = 2
+heading = "Concrete adapter construction"
+kind = "implementation_contract"
+modules = ["eliot-searchd:adapters"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#constructplatformadapters-profile-config-owner-secretleases-result-privateadapterset-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 151
+level = 3
+heading = "constructplatformadapters(profile, config, owner, secretleases) -> Result<PrivateAdapterSet, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:adapters"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::construct_platform_adapters"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#bindports-capabilities-adapters-result-portbindingset-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 156
+level = 3
+heading = "bindports(capabilities, adapters) -> Result<PortBindingSet, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:adapters"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::bind_ports"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#verifydependencygraph-bindings-profile-result-dependencygraphreceipt-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 161
+level = 3
+heading = "verifydependencygraph(bindings, profile) -> Result<DependencyGraphReceipt, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:adapters"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::verify_dependency_graph"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#readiness-and-capability-publication"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 166
+level = 2
+heading = "Readiness and capability publication"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#collectdependencyhealth-services-deadline-cancel-dependencyhealthsnapshot"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 168
+level = 3
+heading = "collectdependencyhealth(services, deadline, cancel) -> DependencyHealthSnapshot"
+kind = "implementation_operation"
+modules = ["eliot-searchd:readiness"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::collect_dependency_health"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#derivereadiness-profile-config-control-routes-handlers-health-acceptedreceipts-readinessstate"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 173
+level = 3
+heading = "derivereadiness(profile, config, control, routes, handlers, health, acceptedreceipts) -> ReadinessState"
+kind = "implementation_operation"
+modules = ["eliot-searchd:readiness"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::derive_readiness"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#publishcapabilitysnapshot-readiness-bindingpolicy-snapshotport-operation-result-capabilitypublis"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 189
+level = 3
+heading = "publishcapabilitysnapshot(readiness, bindingpolicy, snapshotport, operation) -> Result<CapabilityPublishReceipt, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:capability"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::publish_capability_snapshot"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#request-admission-and-lifecycle"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 200
+level = 2
+heading = "Request admission and lifecycle"
+kind = "implementation_contract"
+modules = ["eliot-searchd:request"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#admitconnection-endpoint-protocol-bindingpolicy-limits-result-connectionguard-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 202
+level = 3
+heading = "admitconnection(endpoint, protocol, bindingpolicy, limits) -> Result<ConnectionGuard, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:connection"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::admit_connection"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#admitrequest-connection-request-snapshot-budget-cancel-result-requestguard-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 207
+level = 3
+heading = "admitrequest(connection, request, snapshot, budget, cancel) -> Result<RequestGuard, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:request"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::admit_request"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#dispatchrequest-guard-handlerregistry-context-result-terminalresult-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 213
+level = 3
+heading = "dispatchrequest(guard, handlerregistry, context) -> Result<TerminalResult, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:request"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::dispatch_request"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#cancelrequest-connection-requestid-canceloutcome"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 218
+level = 3
+heading = "cancelrequest(connection, requestid) -> CancelOutcome"
+kind = "implementation_operation"
+modules = ["eliot-searchd:request"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::cancel_request"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#handledisconnect-connection-disconnectcleanupreceipt"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 223
+level = 3
+heading = "handledisconnect(connection) -> DisconnectCleanupReceipt"
+kind = "implementation_operation"
+modules = ["eliot-searchd:connection"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::handle_disconnect"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#recovery"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 228
+level = 2
+heading = "Recovery"
+kind = "implementation_contract"
+modules = ["eliot-searchd:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#recoverstartup-config-launchstate-ownerobservation-controlobservation-processobservation-result-"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 230
+level = 3
+heading = "recoverstartup(config, launchstate, ownerobservation, controlobservation, processobservation) -> Result<StartupRecoveryPlan, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:recovery"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::recover_startup"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#recoveroperations-control-operationregistry-ports-context-result-operationrecoveryreceipt-daemon"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 236
+level = 3
+heading = "recoveroperations(control, operationregistry, ports, context) -> Result<OperationRecoveryReceipt, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:recovery"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::recover_operations"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#drain-and-shutdown"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 241
+level = 2
+heading = "Drain and shutdown"
+kind = "implementation_contract"
+modules = ["eliot-searchd:shutdown"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#begindrain-daemon-reason-operation-result-daemondrainguard-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 243
+level = 3
+heading = "begindrain(daemon, reason, operation) -> Result<DaemonDrainGuard, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:shutdown"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::begin_drain"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#drainrequests-guard-deadline-cancellationpolicy-result-requestdrainreceipt-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 248
+level = 3
+heading = "drainrequests(guard, deadline, cancellationpolicy) -> Result<RequestDrainReceipt, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:shutdown"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::drain_requests"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#shutdownservices-guard-services-deadline-result-serviceshutdownreceipt-daemonerror"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 253
+level = 3
+heading = "shutdownservices(guard, services, deadline) -> Result<ServiceShutdownReceipt, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:shutdown"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::shutdown_services"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#releaseowner-guard-servicereceipts-runtimeowner-deadline-result-daemonshutdownreceipt-daemonerro"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 258
+level = 3
+heading = "releaseowner(guard, servicereceipts, runtimeowner, deadline) -> Result<DaemonShutdownReceipt, DaemonError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:shutdown"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::release_owner"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#cancellation-deadline-and-crash-semantics"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 263
+level = 2
+heading = "Cancellation, deadline and crash semantics"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#typed-failures"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 270
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["eliot-searchd:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "bins/eliot-searchd/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "bins/eliot-searchd/FUNCTIONS.md"
+line = 293
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["eliot-searchd:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/README.md#eliot-searchd"
+path = "bins/eliot-searchd/README.md"
+line = 1
+level = 1
+heading = "eliot-searchd"
+kind = "implementation_contract_root"
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "bins/eliot-searchd/README.md#owns"
+path = "bins/eliot-searchd/README.md"
+line = 7
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/README.md#must-not-own"
+path = "bins/eliot-searchd/README.md"
+line = 15
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#w10-optional-depth-daemon-integration"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 1
+level = 1
+heading = "W10 optional-depth daemon integration"
+kind = "implementation_contract_root"
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#gate-evaluation"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 8
+level = 2
+heading = "Gate evaluation"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#evaluateoptionalcandidate-candidate-controlsnapshot-receipts-optionalcandidateeligibility"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 10
+level = 3
+heading = "evaluateoptionalcandidate(candidate, controlsnapshot, receipts) -> OptionalCandidateEligibility"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::evaluate_optional_candidate"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#verifycandidatereceiptchain-candidate-receipts-result-verifiedcandidatereceipts-optionaldeptherr"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 31
+level = 3
+heading = "verifycandidatereceiptchain(candidate, receipts) -> Result<VerifiedCandidateReceipts, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::verify_candidate_receipt_chain"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#worker-composition"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 37
+level = 2
+heading = "Worker composition"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#startmodelworker-candidate-processport-secretport-context-result-modelworkerguard-optionaldepthe"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 39
+level = 3
+heading = "startmodelworker(candidate, processport, secretport, context) -> Result<ModelWorkerGuard, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:startup"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::start_model_worker"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#startdocumentworker-candidate-processport-secretport-context-result-documentworkerguard-optional"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 48
+level = 3
+heading = "startdocumentworker(candidate, processport, secretport, context) -> Result<DocumentWorkerGuard, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:startup"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::start_document_worker"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#monitoroptionalworker-guard-policy-optionalworkerdecision"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 53
+level = 3
+heading = "monitoroptionalworker(guard, policy) -> OptionalWorkerDecision"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::monitor_optional_worker"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#candidate-preparation"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 59
+level = 2
+heading = "Candidate preparation"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#planoptionalactivation-candidate-current-ports-result-optionalactivationplan-optionaldeptherror"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 61
+level = 3
+heading = "planoptionalactivation(candidate, current, ports) -> Result<OptionalActivationPlan, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::plan_optional_activation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#stageoptionalcandidate-plan-workers-ports-context-result-optionalstagereceipt-optionaldeptherror"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 81
+level = 3
+heading = "stageoptionalcandidate(plan, workers, ports, context) -> Result<OptionalStageReceipt, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::stage_optional_candidate"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#buildcandidategeneration-plan-preparationports-publicationports-context-result-candidategenerati"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 87
+level = 3
+heading = "buildcandidategeneration(plan, preparationports, publicationports, context) -> Result<CandidateGenerationReceipt, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::build_candidate_generation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#validateoptionalcandidate-plan-candidatestate-evalreceipts-ports-context-result-optionalcandidat"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 93
+level = 3
+heading = "validateoptionalcandidate(plan, candidatestate, evalreceipts, ports, context) -> Result<OptionalCandidateValidation, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::validate_optional_candidate"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#activation-and-capability-publication"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 99
+level = 2
+heading = "Activation and capability publication"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#commitoptionalactivation-validated-controlport-currentsnapshot-mutation-result-optionalactivatio"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 101
+level = 3
+heading = "commitoptionalactivation(validated, controlport, currentsnapshot, mutation) -> Result<OptionalActivationCommit, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::commit_optional_activation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#publishoptionalcapabilitysnapshot-commit-snapshotport-context-result-capabilitypublishreceipt-op"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 113
+level = 3
+heading = "publishoptionalcapabilitysnapshot(commit, snapshotport, context) -> Result<CapabilityPublishReceipt, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:capability"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::publish_optional_capability_snapshot"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#authorizeoptionalrequest-binding-grant-capability-request-result-optionalrequestpermit-optionald"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 121
+level = 3
+heading = "authorizeoptionalrequest(binding, grant, capability, request) -> Result<OptionalRequestPermit, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:request"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::authorize_optional_request"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#failure-and-degradation"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 126
+level = 2
+heading = "Failure and degradation"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#classifyoptionalfailure-operation-worker-route-baseline-optionalfailuredecision"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 128
+level = 3
+heading = "classifyoptionalfailure(operation, worker, route, baseline) -> OptionalFailureDecision"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::classify_optional_failure"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#recoveroptionalactivation-operation-control-routes-workers-context-result-optionalrecoveryreceip"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 144
+level = 3
+heading = "recoveroptionalactivation(operation, control, routes, workers, context) -> Result<OptionalRecoveryReceipt, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::recover_optional_activation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#deactivation-and-removal"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 150
+level = 2
+heading = "Deactivation and removal"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#planoptionalremoval-candidate-current-reason-result-optionalremovalplan-optionaldeptherror"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 152
+level = 3
+heading = "planoptionalremoval(candidate, current, reason) -> Result<OptionalRemovalPlan, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::plan_optional_removal"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#commitbaselinerestore-plan-controlport-mutation-result-baselinerestorecommit-optionaldeptherror"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 157
+level = 3
+heading = "commitbaselinerestore(plan, controlport, mutation) -> Result<BaselineRestoreCommit, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::commit_baseline_restore"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#drainandremoveoptional-plan-pins-workers-reclaimer-context-result-optionalremovalreceipt-optiona"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 162
+level = 3
+heading = "drainandremoveoptional(plan, pins, workers, reclaimer, context) -> Result<OptionalRemovalReceipt, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::drain_and_remove_optional"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#p18-advanced-scale-integration"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 171
+level = 2
+heading = "P18 advanced-scale integration"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#planscalecandidate-profile-bottleneck-currentroute-result-scalemigrationplan-optionaldeptherror"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 173
+level = 3
+heading = "planscalecandidate(profile, bottleneck, currentroute) -> Result<ScaleMigrationPlan, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::plan_scale_candidate"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#commitscalerouteswitch-validated-control-mutation-result-scaleroutecommit-optionaldeptherror"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 179
+level = 3
+heading = "commitscalerouteswitch(validated, control, mutation) -> Result<ScaleRouteCommit, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::commit_scale_route_switch"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#rollbackscaleroute-plan-control-ports-context-result-scalerollbackreceipt-optionaldeptherror"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 184
+level = 3
+heading = "rollbackscaleroute(plan, control, ports, context) -> Result<ScaleRollbackReceipt, OptionalDepthError>"
+kind = "implementation_operation"
+modules = ["eliot-searchd:optional"]
+route_kind = "operation_route"
+rationale = "eliot-searchd::rollback_scale_route"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#configuration"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 190
+level = 2
+heading = "Configuration"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#typed-failures"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 200
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["eliot-searchd:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "bins/eliot-searchd/W10_INTEGRATION.md#required-tests-evidence"
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+line = 224
+level = 2
+heading = "Required tests / evidence"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#w8-integration-contract-eliot-searchd"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 1
+level = 1
+heading = "W8 integration contract — eliot-searchd"
+kind = "implementation_contract_root"
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#composegenericclientedge"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 6
+level = 2
+heading = "composegenericclientedge"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#buildauthoritativecapabilitysnapshot"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 25
+level = 2
+heading = "buildauthoritativecapabilitysnapshot"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#mintstandalonegrant"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 39
+level = 2
+heading = "mintstandalonegrant"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#activateoptionalprofile"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 52
+level = 2
+heading = "activateoptionalprofile"
+kind = "implementation_contract"
+modules = ["eliot-searchd:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#deactivateoptionalprofile"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 75
+level = 2
+heading = "deactivateoptionalprofile"
+kind = "implementation_contract"
+modules = ["eliot-searchd:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#serveproviderconnection"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 86
+level = 2
+heading = "serveproviderconnection"
+kind = "implementation_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#draingenericedge"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 99
+level = 2
+heading = "draingenericedge"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#coherent-availability-invariant"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 109
+level = 2
+heading = "Coherent availability invariant"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#forbidden-composition"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 121
+level = 2
+heading = "Forbidden composition"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "bins/eliot-searchd/W8_INTEGRATION.md#required-tests"
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+line = 130
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "config/sections/optional_profiles.md#optionalprofiles-configuration-contract"
+path = "config/sections/optional_profiles.md"
+line = 1
+level = 1
+heading = "[optionalprofiles] configuration contract"
+kind = "configuration_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "config_owner"
+rationale = "optional_profiles"
+
+[[node]]
+id = "config/sections/optional_profiles.md#fields"
+path = "config/sections/optional_profiles.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "config_owner"
+rationale = "optional_profiles"
+
+[[node]]
+id = "config/sections/optional_profiles.md#required-section-api"
+path = "config/sections/optional_profiles.md"
+line = 26
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "config_owner"
+rationale = "optional_profiles"
+
+[[node]]
+id = "config/sections/optional_profiles.md#gate-prerequisites"
+path = "config/sections/optional_profiles.md"
+line = 40
+level = 2
+heading = "Gate prerequisites"
+kind = "configuration_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "config_owner"
+rationale = "optional_profiles"
+
+[[node]]
+id = "config/sections/optional_profiles.md#change-semantics"
+path = "config/sections/optional_profiles.md"
+line = 55
+level = 2
+heading = "Change semantics"
+kind = "configuration_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "config_owner"
+rationale = "optional_profiles"
+
+[[node]]
+id = "config/sections/optional_profiles.md#invariants"
+path = "config/sections/optional_profiles.md"
+line = 70
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "config_owner"
+rationale = "optional_profiles"
+
+[[node]]
+id = "config/sections/optional_profiles.md#required-tests"
+path = "config/sections/optional_profiles.md"
+line = 83
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "config_owner"
+rationale = "optional_profiles"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#eliot-search-8-4-standalone-architecture-implementation-handoff-and-audit"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1
+level = 1
+heading = "ELIOT Search 8.4 — Standalone Architecture, Implementation Handoff, and Audit"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#single-authoritative-implementation-master-for-the-search-repository"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2
+level = 2
+heading = "Single authoritative implementation master for the Search repository"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#contents"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 16
+level = 2
+heading = "Contents"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-i-architecture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 25
+level = 1
+heading = "Part I — Architecture"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#eliot-search-architecture-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 28
+level = 1
+heading = "ELIOT Search Architecture 8.4"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#qdrant-only-retrieval-epoch-safe-micromodular-implementation-ready"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 29
+level = 2
+heading = "Qdrant-Only Retrieval, Epoch-Safe, Micromodular, Implementation-Ready"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s0-executive-decision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 38
+level = 2
+heading = "S0. Executive decision"
+kind = "architecture_section"
+modules = ["eliot-searchd:profile"]
+route_kind = "architecture_section_registry"
+rationale = "S0"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-product-boundary-and-client-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 79
+level = 2
+heading = "S1. Product boundary and client profiles"
+kind = "architecture_section"
+modules = ["eliot-searchd:profile"]
+route_kind = "architecture_section_registry"
+rationale = "S1"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-1-eliot-search-core"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 81
+level = 3
+heading = "S1.1 ELIOT Search core"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-2-standalone-clients"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 93
+level = 3
+heading = "S1.2 Standalone clients"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-3-optional-eliot-adapter"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 97
+level = 3
+heading = "S1.3 Optional ELIOT adapter"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-4-research-systems"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 108
+level = 3
+heading = "S1.4 Research systems"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s2-design-targets-and-non-goals"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 112
+level = 2
+heading = "S2. Design targets and non-goals"
+kind = "architecture_section"
+modules = ["eliot-searchd:profile"]
+route_kind = "architecture_section_registry"
+rationale = "S2"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s2-1-required-balance"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 114
+level = 3
+heading = "S2.1 Required balance"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s2-2-explicit-non-goals"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 125
+level = 3
+heading = "S2.2 Explicit non-goals"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s4-abstraction-layers"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 180
+level = 2
+heading = "S4. Abstraction layers"
+kind = "architecture_section"
+modules = ["eliot-searchd:adapters"]
+route_kind = "architecture_section_registry"
+rationale = "S4"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s5-micromodular-capability-map"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 196
+level = 2
+heading = "S5. Micromodular capability map"
+kind = "architecture_section"
+modules = ["eliot-searchd:adapters"]
+route_kind = "architecture_section_registry"
+rationale = "S5"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-qdrant-process-ownership-and-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1611
+level = 2
+heading = "S27. Qdrant process ownership and security"
+kind = "architecture_section"
+modules = ["eliot-searchd:startup"]
+route_kind = "architecture_section_registry"
+rationale = "S27"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-1-sole-supervisor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1613
+level = 3
+heading = "S27.1 Sole supervisor"
+kind = "architecture_node"
+modules = ["eliot-searchd:startup"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-2-secret-storage"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1630
+level = 3
+heading = "S27.2 Secret storage"
+kind = "architecture_node"
+modules = ["eliot-searchd:startup"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-3-strict-mode-and-indexes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1634
+level = 3
+heading = "S27.3 Strict mode and indexes"
+kind = "architecture_node"
+modules = ["eliot-searchd:startup"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-4-orphan-handling"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1638
+level = 3
+heading = "S27.4 Orphan handling"
+kind = "architecture_node"
+modules = ["eliot-searchd:startup"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-recovery-rebuild-and-backup"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1644
+level = 2
+heading = "S28. Recovery, rebuild and backup"
+kind = "architecture_section"
+modules = ["eliot-searchd:recovery"]
+route_kind = "architecture_section_registry"
+rationale = "S28"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-1-rebuildability-first"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1646
+level = 3
+heading = "S28.1 Rebuildability first"
+kind = "architecture_node"
+modules = ["eliot-searchd:recovery"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-2-paired-recovery-manifest"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1659
+level = 3
+heading = "S28.2 Paired recovery manifest"
+kind = "architecture_node"
+modules = ["eliot-searchd:recovery"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-3-purge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1673
+level = 3
+heading = "S28.3 Purge"
+kind = "architecture_node"
+modules = ["eliot-searchd:recovery"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-4-cas-retention-and-mark-and-sweep"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1685
+level = 3
+heading = "S28.4 CAS retention and mark-and-sweep"
+kind = "architecture_node"
+modules = ["eliot-searchd:recovery"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s29-runtime-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1706
+level = 2
+heading = "S29. Runtime profiles"
+kind = "architecture_section"
+modules = ["eliot-searchd:optional", "eliot-searchd:profile"]
+route_kind = "architecture_section_registry"
+rationale = "S29"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s29-1-content-minimized-observability"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1732
+level = 3
+heading = "S29.1 Content-minimized observability"
+kind = "architecture_node"
+modules = ["eliot-searchd:optional", "eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-resource-governance-and-candidate-slos"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1738
+level = 2
+heading = "S30. Resource governance and candidate SLOs"
+kind = "architecture_section"
+modules = ["eliot-searchd:readiness"]
+route_kind = "architecture_section_registry"
+rationale = "S30"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-1-resource-priorities"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1740
+level = 3
+heading = "S30.1 Resource priorities"
+kind = "architecture_node"
+modules = ["eliot-searchd:readiness"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-2-candidate-slos-not-claims"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1744
+level = 3
+heading = "S30.2 Candidate SLOs, not claims"
+kind = "architecture_node"
+modules = ["eliot-searchd:readiness"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-3-queryexecutionbudget-and-scheduler"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1757
+level = 3
+heading = "S30.3 QueryExecutionBudget and scheduler"
+kind = "architecture_node"
+modules = ["eliot-searchd:readiness"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s31-crate-and-dependency-architecture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1782
+level = 2
+heading = "S31. Crate and dependency architecture"
+kind = "architecture_section"
+modules = ["eliot-searchd:adapters"]
+route_kind = "architecture_section_registry"
+rationale = "S31"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-client-integration-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1831
+level = 2
+heading = "S32. Client integration contract"
+kind = "architecture_section"
+modules = ["eliot-searchd:connection"]
+route_kind = "architecture_section_registry"
+rationale = "S32"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-0-local-provider-transport"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1833
+level = 3
+heading = "S32.0 Local provider transport"
+kind = "architecture_node"
+modules = ["eliot-searchd:connection"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-1-generic-client-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1864
+level = 3
+heading = "S32.1 Generic client boundary"
+kind = "architecture_node"
+modules = ["eliot-searchd:connection"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-2-searchprovidercapabilitydescriptor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1878
+level = 3
+heading = "S32.2 SearchProviderCapabilityDescriptor"
+kind = "architecture_node"
+modules = ["eliot-searchd:connection"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-3-optional-eliot-compatibility-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1904
+level = 3
+heading = "S32.3 Optional ELIOT compatibility profile"
+kind = "architecture_node"
+modules = ["eliot-searchd:connection"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-4-optional-eliot-research-normalized-bundle-export"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1930
+level = 3
+heading = "S32.4 Optional Eliot Research normalized-bundle export"
+kind = "architecture_node"
+modules = ["eliot-searchd:connection"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s33-standalone-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2002
+level = 2
+heading = "S33. Standalone contract"
+kind = "architecture_section"
+modules = ["eliot-searchd:connection"]
+route_kind = "architecture_section_registry"
+rationale = "S33"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s35-evaluation-and-product-pulse"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2047
+level = 2
+heading = "S35. Evaluation and Product Pulse"
+kind = "architecture_section"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "architecture_section_registry"
+rationale = "S35"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s35-1-required-control-corpus"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2049
+level = 3
+heading = "S35.1 Required control corpus"
+kind = "architecture_node"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s35-2-baselines"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2069
+level = 3
+heading = "S35.2 Baselines"
+kind = "architecture_node"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s37-delivery-gates"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2117
+level = 2
+heading = "S37. Delivery gates"
+kind = "architecture_section"
+modules = ["eliot-searchd:profile"]
+route_kind = "architecture_section_registry"
+rationale = "S37"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g0-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2119
+level = 3
+heading = "Gate G0 — Contract"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g1-direct"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2123
+level = 3
+heading = "Gate G1 — Direct"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g2-lexical"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2127
+level = 3
+heading = "Gate G2 — Lexical"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g3-code"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2131
+level = 3
+heading = "Gate G3 — Code"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g4-generic-client-edge-and-optional-compatibility-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2135
+level = 3
+heading = "Gate G4 — Generic Client Edge and Optional Compatibility Profiles"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g5-product-acceptance"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2139
+level = 3
+heading = "Gate G5 — Product acceptance"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g6-optional-depth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2143
+level = 3
+heading = "Gate G6 — Optional depth"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s38-superseded-or-rejected-decisions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2149
+level = 2
+heading = "S38. Superseded or rejected decisions"
+kind = "architecture_section"
+modules = ["eliot-searchd:profile"]
+route_kind = "architecture_section_registry"
+rationale = "S38"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s39-implementation-readiness-verdict"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2171
+level = 2
+heading = "S39. Implementation readiness verdict"
+kind = "architecture_section"
+modules = ["eliot-searchd:profile"]
+route_kind = "architecture_section_registry"
+rationale = "S39"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-ii-codex-handoff"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2194
+level = 1
+heading = "Part II — Codex Handoff"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#eliot-search-codex-handoff-2-7"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2196
+level = 1
+heading = "ELIOT Search Codex Handoff 2.7"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#implementation-plan-for-the-embedded-architecture-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2197
+level = 2
+heading = "Implementation plan for the embedded Architecture 8.4"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h0-contract-challenge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2206
+level = 2
+heading = "H0. Contract challenge"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-repository-outcome"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2220
+level = 2
+heading = "H1. Repository outcome"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-1-workspace"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2222
+level = 3
+heading = "H1.1 Workspace"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-2-dependency-direction"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2255
+level = 3
+heading = "H1.2 Dependency direction"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-toolchain-licenses-and-unsafe-code"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2273
+level = 2
+heading = "H2. Toolchain, licenses and unsafe code"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-1-toolchain"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2275
+level = 3
+heading = "H2.1 Toolchain"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-2-dependency-policy"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2279
+level = 3
+heading = "H2.2 Dependency policy"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#deny-toml-intent"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2282
+level = 1
+heading = "deny.toml intent"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-3-unsafe-policy"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2298
+level = 3
+heading = "H2.3 Unsafe policy"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-4-production-runtime-exclusions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2302
+level = 3
+heading = "H2.4 Production runtime exclusions"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-public-contracts-to-implement-first"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2308
+level = 2
+heading = "H3. Public contracts to implement first"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-1-newtypes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2310
+level = 3
+heading = "H3.1 Newtypes"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-2-epoch-validation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2346
+level = 3
+heading = "H3.2 Epoch validation"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-3-membership-contracts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2368
+level = 3
+heading = "H3.3 Membership contracts"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-4-recipe-set"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2385
+level = 3
+heading = "H3.4 Recipe set"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-5-additional-load-bearing-contracts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2403
+level = 3
+heading = "H3.5 Additional load-bearing contracts"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h4-ports"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2427
+level = 2
+heading = "H4. Ports"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-redb-schema-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2452
+level = 2
+heading = "H5. redb schema boundary"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-1-required-tables"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2454
+level = 3
+heading = "H5.1 Required tables"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-2-snapshot-cache"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2482
+level = 3
+heading = "H5.2 Snapshot cache"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-3-restore-rule"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2488
+level = 3
+heading = "H5.3 Restore rule"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-cas-and-source-revisions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2494
+level = 2
+heading = "H6. CAS and source revisions"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-1-layout"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2496
+level = 3
+heading = "H6.1 Layout"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-2-retention"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2508
+level = 3
+heading = "H6.2 Retention"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-3-no-execute-test-corpus"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2512
+level = 3
+heading = "H6.3 No-execute test corpus"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-point-identity-implementation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2518
+level = 2
+heading = "H7. Point identity implementation"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-1-canonical-encoding"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2520
+level = 3
+heading = "H7.1 Canonical encoding"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-2-uuid-derivation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2524
+level = 3
+heading = "H7.2 UUID derivation"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-3-pre-upsert-collision-check"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2528
+level = 3
+heading = "H7.3 Pre-upsert collision check"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-qdrant-supervisor-and-bridge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2541
+level = 2
+heading = "H8. Qdrant supervisor and bridge"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-1-ownership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2543
+level = 3
+heading = "H8.1 Ownership"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-2-qualified-artifact"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2547
+level = 3
+heading = "H8.2 Qualified artifact"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-3-startup-fixture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2564
+level = 3
+heading = "H8.3 Startup fixture"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-4-process-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2578
+level = 3
+heading = "H8.4 Process security"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-lexical-encoder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2591
+level = 2
+heading = "H9. Lexical encoder"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-1-select-exactly-one-baseline-provider"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2593
+level = 3
+heading = "H9.1 Select exactly one baseline provider"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-2-golden-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2604
+level = 3
+heading = "H9.2 Golden profiles"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-3-exact-branches"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2618
+level = 3
+heading = "H9.3 Exact branches"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-qdrant-point-schema"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2624
+level = 2
+heading = "H10. Qdrant point schema"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-1-payload"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2626
+level = 3
+heading = "H10.1 Payload"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-2-payload-indexes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2630
+level = 3
+heading = "H10.2 Payload indexes"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-3-active-filter-builder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2634
+level = 3
+heading = "H10.3 Active filter builder"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-publication-coordinator"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2649
+level = 2
+heading = "H11. Publication coordinator"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-1-concurrency"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2651
+level = 3
+heading = "H11.1 Concurrency"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-2-exact-manifests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2655
+level = 3
+heading = "H11.2 Exact manifests"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-3-required-calls"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2659
+level = 3
+heading = "H11.3 Required calls"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-4-commit-point"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2663
+level = 3
+heading = "H11.4 Commit point"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-5-failpoints"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2667
+level = 3
+heading = "H11.5 Failpoints"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-6-operator-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2685
+level = 3
+heading = "H11.6 Operator recovery"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-query-pinning-and-continuations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2700
+level = 2
+heading = "H12. Query pinning and continuations"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-1-epochpinregistry"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2702
+level = 3
+heading = "H12.1 EpochPinRegistry"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-2-no-ordinary-durable-lease"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2706
+level = 3
+heading = "H12.2 No ordinary durable lease"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-3-continuation-classes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2710
+level = 3
+heading = "H12.3 Continuation classes"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-anchors-and-readback"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2723
+level = 2
+heading = "H13. Anchors and readback"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-1-coordinate-tests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2725
+level = 3
+heading = "H13.1 Coordinate tests"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-2-source-readback"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2737
+level = 3
+heading = "H13.2 Source readback"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-access-revocation-and-leakage-tests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2743
+level = 2
+heading = "H14. Access, revocation and leakage tests"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-1-one-membership-per-point"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2745
+level = 3
+heading = "H14.1 One membership per point"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-2-live-revocation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2756
+level = 3
+heading = "H14.2 Live revocation"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-3-facets-and-traces"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2760
+level = 3
+heading = "H14.3 Facets and traces"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-query-service-and-result-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2766
+level = 2
+heading = "H15. Query service and result cards"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-1-planner-budgets"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2770
+level = 3
+heading = "H15.1 Planner budgets"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-2-recipes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2774
+level = 3
+heading = "H15.2 Recipes"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-3-determinism"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2784
+level = 3
+heading = "H15.3 Determinism"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-4-compactness"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2788
+level = 3
+heading = "H15.4 Compactness"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-client-provider-edge-and-optional-compatibility-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2794
+level = 2
+heading = "H16. Client provider edge and optional compatibility profiles"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-1-protocol"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2796
+level = 3
+heading = "H16.1 Protocol"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-2-binding"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2800
+level = 3
+heading = "H16.2 Binding"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-3-no-authority-leak"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2804
+level = 3
+heading = "H16.3 No authority leak"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-4-durable-evidence-edge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2808
+level = 3
+heading = "H16.4 Durable evidence edge"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-5-capability-descriptor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2812
+level = 3
+heading = "H16.5 Capability descriptor"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-6-optional-normalized-bundle-export"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2816
+level = 3
+heading = "H16.6 Optional normalized-bundle export"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h17-pr-delivery-graph"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2822
+level = 2
+heading = "H17. PR delivery graph"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p01-runtime-owner-shell"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2840
+level = 3
+heading = "P01 — Runtime owner shell"
+kind = "delivery_contract"
+modules = ["eliot-searchd:startup"]
+route_kind = "delivery_registry"
+rationale = "P01"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p02-bounded-redb-journal"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2846
+level = 3
+heading = "P02 — Bounded redb journal"
+kind = "delivery_contract"
+modules = ["eliot-searchd:startup"]
+route_kind = "delivery_registry"
+rationale = "P02"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p05-managed-qdrant-process-and-capability-gate"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2864
+level = 3
+heading = "P05 — Managed Qdrant process and capability gate"
+kind = "delivery_contract"
+modules = ["eliot-searchd:startup"]
+route_kind = "delivery_registry"
+rationale = "P05"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p07-epoch-publication-and-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2876
+level = 3
+heading = "P07 — Epoch publication and recovery"
+kind = "delivery_contract"
+modules = ["eliot-searchd:recovery"]
+route_kind = "delivery_registry"
+rationale = "P07"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["eliot-searchd:request"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p09-change-feeds-and-overlays"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2888
+level = 3
+heading = "P09 — Change feeds and overlays"
+kind = "delivery_contract"
+modules = ["eliot-searchd:request"]
+route_kind = "delivery_registry"
+rationale = "P09"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p13-access-handles-purge-and-restore-boundaries"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2912
+level = 3
+heading = "P13 — Access, handles, purge and restore boundaries"
+kind = "delivery_contract"
+modules = ["eliot-searchd:recovery"]
+route_kind = "delivery_registry"
+rationale = "P13"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p14-generic-client-adapter-edge-and-optional-compatibility-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2918
+level = 3
+heading = "P14 — Generic Client Adapter Edge and Optional Compatibility Profiles"
+kind = "delivery_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "delivery_registry"
+rationale = "P14"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p15-product-pulse-and-windows-qualification"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2924
+level = 3
+heading = "P15 — Product Pulse and Windows qualification"
+kind = "delivery_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "delivery_registry"
+rationale = "P15"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p16-optional-semantic-depth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2931
+level = 3
+heading = "P16 — Optional semantic depth"
+kind = "delivery_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "delivery_registry"
+rationale = "P16"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p17-optional-document-materializer"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2937
+level = 3
+heading = "P17 — Optional document materializer"
+kind = "delivery_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "delivery_registry"
+rationale = "P17"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p18-optional-advanced-scale-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2943
+level = 3
+heading = "P18 — Optional advanced scale profile"
+kind = "delivery_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "delivery_registry"
+rationale = "P18"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h18-forbidden-shortcuts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2951
+level = 2
+heading = "H18. Forbidden shortcuts"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h19-definition-of-done-for-baseline"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2999
+level = 2
+heading = "H19. Definition of Done for baseline"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h20-first-codex-assignment"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3033
+level = 2
+heading = "H20. First Codex assignment"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-iii-consolidated-audit"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3059
+level = 1
+heading = "Part III — Consolidated Audit"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#consolidated-audit-of-eliot-search-8-2-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3061
+level = 1
+heading = "Consolidated audit of ELIOT Search 8.2 → 8.4"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#verdict"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3063
+level = 2
+heading = "Verdict"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#confirmed-defects-and-fixes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3073
+level = 2
+heading = "Confirmed defects and fixes"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#deliberate-simplifications"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3118
+level = 2
+heading = "Deliberate simplifications"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#still-unproved"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3127
+level = 2
+heading = "Still unproved"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#additional-defects-a-41-a-50-closed-in-8-4-2-5"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3140
+level = 2
+heading = "Additional defects A-41–A-50 closed in 8.4/2.5"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#claude-review-d-1-d-7-status-in-the-unified-document"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3155
+level = 2
+heading = "Claude review D-1–D-7 — status in the unified document"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#external-repository-alignment-fixes-a-51-a-63"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3167
+level = 2
+heading = "External-repository alignment fixes A-51–A-63"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#final-status"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3185
+level = 2
+heading = "Final status"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-iv-mechanical-validation-and-release-notes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3201
+level = 1
+heading = "Part IV — Mechanical Validation and Release Notes"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v1-single-file-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3203
+level = 2
+heading = "V1. Single-file contract"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v2-mechanical-checks-required-for-this-master"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3216
+level = 2
+heading = "V2. Mechanical checks required for this master"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v3-honest-execution-status"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3233
+level = 2
+heading = "V3. Honest execution status"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v4-implementation-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3248
+level = 2
+heading = "V4. Implementation boundary"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v5-external-repository-alignment-receipt"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3253
+level = 2
+heading = "V5. External-repository alignment receipt"
+kind = "architecture_node"
+modules = ["eliot-searchd:profile"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#w8-generic-client-edge-contracts-1-0"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W8 generic client edge contracts 1.0"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#1-actors-and-authority"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Actors and authority"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#2-protocol-and-recipe-closure"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 34
+level = 2
+heading = "2. Protocol and recipe closure"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#3-pairing-and-binding-lifecycle"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 59
+level = 2
+heading = "3. Pairing and binding lifecycle"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#3-1-pairing-state-machine"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 84
+level = 3
+heading = "3.1 Pairing state machine"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#3-2-reconnect"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 100
+level = 3
+heading = "3.2 Reconnect"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#4-connection-and-request-state"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 107
+level = 2
+heading = "4. Connection and request state"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#5-binding-filtered-capability-descriptor"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 144
+level = 2
+heading = "5. Binding-filtered capability descriptor"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#6-grants-and-requested-scope"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 163
+level = 2
+heading = "6. Grants and requested scope"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#7-generic-request-response-round-trip"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 183
+level = 2
+heading = "7. Generic request/response round trip"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#8-handle-and-continuation-expansion"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 210
+level = 2
+heading = "8. Handle and continuation expansion"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#9-client-owned-evidence-snapshot-pin-and-import"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 233
+level = 2
+heading = "9. Client-owned evidence snapshot, pin and import"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#10-standalone-cli-profile"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 251
+level = 2
+heading = "10. Standalone CLI profile"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#11-optional-eliot-compatibility-profile"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 273
+level = 2
+heading = "11. Optional ELIOT compatibility profile"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-optional-research-normalized-bundle-export"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 306
+level = 2
+heading = "12. Optional Research normalized-bundle export"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-1-eligibility"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 311
+level = 3
+heading = "12.1 Eligibility"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-2-wire-identity"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 323
+level = 3
+heading = "12.2 Wire identity"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-3-ownership-modes"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 337
+level = 3
+heading = "12.3 Ownership modes"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-4-bundle-assembly"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 350
+level = 3
+heading = "12.4 Bundle assembly"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#13-reconnect-retry-and-idempotency"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 360
+level = 2
+heading = "13. Reconnect, retry and idempotency"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#14-leakage-and-noninterference"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 373
+level = 2
+heading = "14. Leakage and noninterference"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#15-configuration-interaction"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 389
+level = 2
+heading = "15. Configuration interaction"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#16-failure-ownership"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 406
+level = 2
+heading = "16. Failure ownership"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#17-g4-exit-evidence"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 421
+level = 2
+heading = "17. G4 exit evidence"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#18-stop-conditions"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 444
+level = 2
+heading = "18. Stop conditions"
+kind = "implementation_contract"
+modules = ["eliot-searchd:capability", "eliot-searchd:connection"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#reconfiguration-contract-1-1-composite-obligations"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 1
+level = 1
+heading = "Reconfiguration contract 1.1 — Composite obligations"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#problem"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 8
+level = 2
+heading = "Problem"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#correct-model"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 26
+level = 2
+heading = "Correct model"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#composition-rules"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 62
+level = 2
+heading = "Composition rules"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#required-fixtures"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 77
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#w10-optional-depth-settings-1-0"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W10 optional-depth settings 1.0"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#field-modes"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 8
+level = 2
+heading = "Field modes"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#gate-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 17
+level = 2
+heading = "Gate settings"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#model-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 33
+level = 2
+heading = "Model settings"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#document-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 53
+level = 2
+heading = "Document settings"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#scale-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 71
+level = 2
+heading = "Scale settings"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#removal-settings"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 78
+level = 2
+heading = "Removal settings"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#change-semantics"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 84
+level = 2
+heading = "Change semantics"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md#required-settings-tests"
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+line = 93
+level = 2
+heading = "Required settings tests"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#w8-client-edge-settings-1-0"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W8 client-edge settings 1.0"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#1-scope"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 5
+level = 2
+heading = "1. Scope"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#2-field-modes"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 11
+level = 2
+heading = "2. Field modes"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#3-generic-edge"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 21
+level = 2
+heading = "3. Generic edge"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#4-standalone-cli"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 33
+level = 2
+heading = "4. Standalone CLI"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#5-optional-eliot-profile"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 42
+level = 2
+heading = "5. Optional ELIOT profile"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#6-optional-research-export-profile"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 57
+level = 2
+heading = "6. Optional Research export profile"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#7-composite-activation-and-rollback"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 74
+level = 2
+heading = "7. Composite activation and rollback"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#8-redaction"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 84
+level = 2
+heading = "8. Redaction"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#9-required-settings-tests"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 91
+level = 2
+heading = "9. Required settings tests"
+kind = "implementation_contract"
+modules = ["eliot-searchd:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#w9-product-pulse-settings-1-0"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W9 Product Pulse settings 1.0"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#modes"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 8
+level = 2
+heading = "Modes"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#tunable-values"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 16
+level = 2
+heading = "Tunable values"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#locked-fairness-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 25
+level = 2
+heading = "Locked fairness rules"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#locked-evidence-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 34
+level = 2
+heading = "Locked evidence rules"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#locked-safety-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 42
+level = 2
+heading = "Locked safety rules"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#verdict-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 48
+level = 2
+heading = "Verdict rules"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#required-settings-tests"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 58
+level = 2
+heading = "Required settings tests"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#w9-product-pulse-and-windows-qualification-contracts-1-0"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W9 Product Pulse and Windows qualification contracts 1.0"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#1-purpose-and-authority"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Purpose and authority"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-roles"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 31
+level = 2
+heading = "2. Roles"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-1-search-eval"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 33
+level = 3
+heading = "2.1 search-eval"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-2-integration-owner"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 47
+level = 3
+heading = "2.2 Integration owner"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-3-independent-reviewer"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 59
+level = 3
+heading = "2.3 Independent reviewer"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#3-frozen-control-corpus"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 65
+level = 2
+heading = "3. Frozen control corpus"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#3-1-oracle-independence"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 88
+level = 3
+heading = "3.1 Oracle independence"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#3-2-scope-parity"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 95
+level = 3
+heading = "3.2 Scope parity"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#4-baselines"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 102
+level = 2
+heading = "4. Baselines"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#4-1-preparation-cost"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 127
+level = 3
+heading = "4.1 Preparation cost"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#5-windows-qualification-environment"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 133
+level = 2
+heading = "5. Windows qualification environment"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-experiment-design"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 164
+level = 2
+heading = "6. Experiment design"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-1-blocked-paired-execution"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 166
+level = 3
+heading = "6.1 Blocked paired execution"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-2-cold-and-warm-lanes"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 175
+level = 3
+heading = "6.2 Cold and warm lanes"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-3-comparable-budgets"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 190
+level = 3
+heading = "6.3 Comparable budgets"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#7-metric-registry"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 197
+level = 2
+heading = "7. Metric registry"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#8-hard-safety-and-correctness-blockers"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 228
+level = 2
+heading = "8. Hard safety and correctness blockers"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#9-candidate-slo-checks"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 247
+level = 2
+heading = "9. Candidate SLO checks"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#10-material-product-benefit"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 263
+level = 2
+heading = "10. Material product benefit"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#11-fault-and-recovery-matrix"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 282
+level = 2
+heading = "11. Fault and recovery matrix"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#12-protocol-flow-control-stress"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 301
+level = 2
+heading = "12. Protocol-flow-control stress"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#13-source-admission-and-leakage-audit"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 317
+level = 2
+heading = "13. Source-admission and leakage audit"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#14-evidence-records"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 339
+level = 2
+heading = "14. Evidence records"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#15-product-pulse-report"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 364
+level = 2
+heading = "15. Product Pulse report"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#16-verdict-state-machine"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 383
+level = 2
+heading = "16. Verdict state machine"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#17-optional-depth-gate"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 410
+level = 2
+heading = "17. Optional-depth gate"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#18-bounded-agent-decomposition"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 417
+level = 2
+heading = "18. Bounded agent decomposition"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#19-hard-stop-conditions"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 431
+level = 2
+heading = "19. Hard stop conditions"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#20-current-disposition"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 444
+level = 2
+heading = "20. Current disposition"
+kind = "implementation_contract"
+modules = ["eliot-searchd:evaluation"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#w10-optional-depth-implementation-packet"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W10 optional-depth implementation packet"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-rule"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Candidate rule"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 21
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#read-set"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 38
+level = 2
+heading = "Read set"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#model-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 50
+level = 2
+heading = "Model order"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#document-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 67
+level = 2
+heading = "Document order"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#scale-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 83
+level = 2
+heading = "Scale order"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-evaluation-boundary"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Candidate evaluation boundary"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#required-g6-evidence"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 119
+level = 2
+heading = "Required G6 evidence"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-handoff-requirements"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 132
+level = 2
+heading = "Package handoff requirements"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 149
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#current-state"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 166
+level = 2
+heading = "Current state"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#w8-generic-client-edge-implementation-packet"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W8 generic client edge implementation packet"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#package-boundaries"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 11
+level = 2
+heading = "Package boundaries"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#implementation-order"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "Implementation order"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#standalone-cli-boundary"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 44
+level = 2
+heading = "Standalone CLI boundary"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#generic-edge-acceptance"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 62
+level = 2
+heading = "Generic-edge acceptance"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#optional-eliot-leaf"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 80
+level = 2
+heading = "Optional ELIOT leaf"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#optional-research-export-leaf"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Optional Research export leaf"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#configuration"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Configuration"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#qualification"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 117
+level = 2
+heading = "Qualification"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 123
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#honest-status"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 143
+level = 2
+heading = "Honest status"
+kind = "implementation_handoff"
+modules = ["eliot-searchd:main"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#w10-optional-depth-contracts-1-0"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W10 optional depth contracts 1.0"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#1-candidate-classes"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Candidate classes"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#2-gate-chain"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 29
+level = 2
+heading = "2. Gate chain"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#3-activation-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 46
+level = 2
+heading = "3. Activation state machine"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#4-model-profile-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 72
+level = 2
+heading = "4. Model profile identity"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-model-semantics"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 106
+level = 2
+heading = "5. Model semantics"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-1-candidate-nomination-only"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 108
+level = 3
+heading = "5.1 Candidate nomination only"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-2-rerank-is-a-closed-transform"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 114
+level = 3
+heading = "5.2 Rerank is a closed transform"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-3-access-and-scoring-noninterference"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 130
+level = 3
+heading = "5.3 Access and scoring noninterference"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-4-content-handling"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 140
+level = 3
+heading = "5.4 Content handling"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#6-model-worker-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 157
+level = 2
+heading = "6. Model worker boundary"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#7-persistent-model-vectors-and-collection-generations"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 179
+level = 2
+heading = "7. Persistent model vectors and collection generations"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#8-document-provider-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 201
+level = 2
+heading = "8. Document provider identity"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#9-document-worker-no-execute-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 228
+level = 2
+heading = "9. Document worker no-execute boundary"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#10-document-projection-migration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 254
+level = 2
+heading = "10. Document projection migration"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#11-measured-material-benefit"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 264
+level = 2
+heading = "11. Measured material benefit"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#12-removal-and-baseline-restoration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 284
+level = 2
+heading = "12. Removal and baseline restoration"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#13-advanced-scale-trigger"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 309
+level = 2
+heading = "13. Advanced scale trigger"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#14-p18-migration-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 333
+level = 2
+heading = "14. P18 migration state machine"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#15-p18-equivalence-and-fault-evidence"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 367
+level = 2
+heading = "15. P18 equivalence and fault evidence"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#16-capability-and-configuration-publication"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 385
+level = 2
+heading = "16. Capability and configuration publication"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#17-package-decomposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 409
+level = 2
+heading = "17. Package decomposition"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#18-hard-stop-conditions"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 424
+level = 2
+heading = "18. Hard stop conditions"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#19-current-disposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 441
+level = 2
+heading = "19. Current disposition"
+kind = "implementation_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "qualification/client-edge/README.md#w8-client-edge-qualification"
+path = "qualification/client-edge/README.md"
+line = 1
+level = 1
+heading = "W8 client-edge qualification"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#w8-generic-client-edge-qualification-contract"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W8 generic client edge qualification contract"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#1-entry-prerequisites"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 8
+level = 2
+heading = "1. Entry prerequisites"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#2-generic-qualification-sequence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 23
+level = 2
+heading = "2. Generic qualification sequence"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#3-pairing-and-binding-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 40
+level = 2
+heading = "3. Pairing and binding evidence"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#4-capability-descriptor-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 53
+level = 2
+heading = "4. Capability descriptor evidence"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#5-generic-request-and-handle-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 64
+level = 2
+heading = "5. Generic request and handle evidence"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#6-client-owned-evidence-fixture"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 80
+level = 2
+heading = "6. Client-owned evidence fixture"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#7-standalone-cli-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 94
+level = 2
+heading = "7. Standalone CLI evidence"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#8-optional-eliot-profile"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 102
+level = 2
+heading = "8. Optional ELIOT profile"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#9-optional-research-export-profile"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 119
+level = 2
+heading = "9. Optional Research export profile"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#10-evidence-record"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 137
+level = 2
+heading = "10. Evidence record"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#11-stop-conditions"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 160
+level = 2
+heading = "11. Stop conditions"
+kind = "qualification_contract"
+modules = ["eliot-searchd:connection"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/optional-depth/README.md#p16-p18-optional-depth-qualification"
+path = "qualification/optional-depth/README.md"
+line = 1
+level = 1
+heading = "P16-P18 optional-depth qualification"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#w10-optional-depth-qualification-contract"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W10 optional-depth qualification contract"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#1-candidate-specific-acceptance"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 8
+level = 2
+heading = "1. Candidate-specific acceptance"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#2-prerequisite-chain"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 22
+level = 2
+heading = "2. Prerequisite chain"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#3-common-qualification-sequence"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 38
+level = 2
+heading = "3. Common qualification sequence"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#4-model-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 56
+level = 2
+heading = "4. Model candidate"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#5-document-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 75
+level = 2
+heading = "5. Document candidate"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#6-scale-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 94
+level = 2
+heading = "6. Scale candidate"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#7-g6-evidence-interpretation"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 114
+level = 2
+heading = "7. G6 evidence interpretation"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#8-evidence-record"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 129
+level = 2
+heading = "8. Evidence record"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#9-activation-evidence"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 138
+level = 2
+heading = "9. Activation evidence"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#10-stop-conditions"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 152
+level = 2
+heading = "10. Stop conditions"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#11-current-disposition"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 169
+level = 2
+heading = "11. Current disposition"
+kind = "qualification_contract"
+modules = ["eliot-searchd:optional"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#eliot-searchd-implementation-packet"
+path = "swarm/assignments/eliot-searchd.md"
+line = 1
+level = 1
+heading = "eliot-searchd implementation packet"
+kind = "implementation_contract_root"
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#mission"
+path = "swarm/assignments/eliot-searchd.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#owns"
+path = "swarm/assignments/eliot-searchd.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#must-not-own"
+path = "swarm/assignments/eliot-searchd.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#logical-primitives"
+path = "swarm/assignments/eliot-searchd.md"
+line = 32
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#logical-operations"
+path = "swarm/assignments/eliot-searchd.md"
+line = 36
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#required-invariants"
+path = "swarm/assignments/eliot-searchd.md"
+line = 46
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["eliot-searchd:main"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#typed-failure-surface"
+path = "swarm/assignments/eliot-searchd.md"
+line = 55
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#exit-tests-evidence"
+path = "swarm/assignments/eliot-searchd.md"
+line = 65
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#suggested-internal-modules"
+path = "swarm/assignments/eliot-searchd.md"
+line = 76
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/eliot-searchd.md#size-split"
+path = "swarm/assignments/eliot-searchd.md"
+line = 92
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["eliot-searchd:main"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

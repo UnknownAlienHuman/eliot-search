@@ -1,0 +1,844 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-materializer"
+node_count = 76
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#agent-contract-search-materializer"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-materializer"
+kind = "implementation_contract_root"
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#mission"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#ownership"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#forbidden-ownership"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#allowed-dependencies"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 30
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#required-logical-surface"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 35
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#failure-surface"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 45
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 50
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#size-and-split-guard"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 61
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/AGENTS.md#definition-of-done"
+path = "crates/search-prep/search-materializer/AGENTS.md"
+line = 69
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#function-contract-search-materializer"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-materializer"
+kind = "implementation_contract_root"
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#global-rules"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 10
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-materializer:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#profile-operations"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 21
+level = 2
+heading = "Profile operations"
+kind = "implementation_contract"
+modules = ["search-materializer:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#validatematerializerprofile-input-result-validatedmaterializerprofile-materializeerror"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 23
+level = 3
+heading = "validatematerializerprofile(input) -> Result<ValidatedMaterializerProfile, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:profile"]
+route_kind = "operation_route"
+rationale = "search-materializer::validate_materializer_profile"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#profiledigest-profile-materializerprofileid"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 32
+level = 3
+heading = "profiledigest(profile) -> MaterializerProfileId"
+kind = "implementation_operation"
+modules = ["search-materializer:profile"]
+route_kind = "operation_route"
+rationale = "search-materializer::profile_digest"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#classifyprofilechange-old-new-materializerprofilechange"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 37
+level = 3
+heading = "classifyprofilechange(old, new) -> MaterializerProfileChange"
+kind = "implementation_operation"
+modules = ["search-materializer:profile"]
+route_kind = "operation_route"
+rationale = "search-materializer::classify_profile_change"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#request-and-revision-acquisition"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 42
+level = 2
+heading = "Request and revision acquisition"
+kind = "implementation_contract"
+modules = ["search-materializer:request"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#validatematerializationrequest-request-registryview-acceptedprofiles-limits-result-validatedmate"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 44
+level = 3
+heading = "validatematerializationrequest(request, registryview, acceptedprofiles, limits) -> Result<ValidatedMaterializationRequest, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:request"]
+route_kind = "operation_route"
+rationale = "search-materializer::validate_materialization_request"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#openexactrevision-request-revisionport-deadline-cancel-result-revisionbytesguard-materializeerro"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 52
+level = 3
+heading = "openexactrevision(request, revisionport, deadline, cancel) -> Result<RevisionBytesGuard, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:request"]
+route_kind = "operation_route"
+rationale = "search-materializer::open_exact_revision"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#baseline-decoding-and-normalization"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 59
+level = 2
+heading = "Baseline decoding and normalization"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#detectorvalidateencoding-bytes-request-profile-result-encodingdecision-materializeerror"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 61
+level = 3
+heading = "detectorvalidateencoding(bytes, request, profile) -> Result<EncodingDecision, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:request"]
+route_kind = "operation_route"
+rationale = "search-materializer::detect_or_validate_encoding"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#decodetextorcode-bytes-encoding-profile-budget-cancel-result-decodedrepresentation-materializeer"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 66
+level = 3
+heading = "decodetextorcode(bytes, encoding, profile, budget, cancel) -> Result<DecodedRepresentation, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:decode"]
+route_kind = "operation_route"
+rationale = "search-materializer::decode_text_or_code"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#normalizerepresentation-decoded-profile-budget-cancel-result-canonicalrepresentation-materialize"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 71
+level = 3
+heading = "normalizerepresentation(decoded, profile, budget, cancel) -> Result<CanonicalRepresentation, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:normalize"]
+route_kind = "operation_route"
+rationale = "search-materializer::normalize_representation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#coordinate-and-loss-maps"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 79
+level = 2
+heading = "Coordinate and loss maps"
+kind = "implementation_contract"
+modules = ["search-materializer:maps"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#buildcoordinatemap-native-decoded-canonical-profile-result-coordinatemap-materializeerror"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 81
+level = 3
+heading = "buildcoordinatemap(native, decoded, canonical, profile) -> Result<CoordinateMap, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:maps"]
+route_kind = "operation_route"
+rationale = "search-materializer::build_coordinate_map"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#buildlossmap-native-decoded-canonical-profile-result-lossmap-materializeerror"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 86
+level = 3
+heading = "buildlossmap(native, decoded, canonical, profile) -> Result<LossMap, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:maps"]
+route_kind = "operation_route"
+rationale = "search-materializer::build_loss_map"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#deriveassurance-mapbundle-warnings-profile-materializationassurance"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 91
+level = 3
+heading = "deriveassurance(mapbundle, warnings, profile) -> MaterializationAssurance"
+kind = "implementation_operation"
+modules = ["search-materializer:assurance"]
+route_kind = "operation_route"
+rationale = "search-materializer::derive_assurance"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#validatemapbundle-representation-coordinatemap-lossmap-profile-result-mapvalidationreceipt-mater"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 96
+level = 3
+heading = "validatemapbundle(representation, coordinatemap, lossmap, profile) -> Result<MapValidationReceipt, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:maps"]
+route_kind = "operation_route"
+rationale = "search-materializer::validate_map_bundle"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#materialization-and-receipt"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 101
+level = 2
+heading = "Materialization and receipt"
+kind = "implementation_contract"
+modules = ["search-materializer:product"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#materializetextorcode-request-revisionport-context-result-materializationproduct-materializeerro"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 103
+level = 3
+heading = "materializetextorcode(request, revisionport, context) -> Result<MaterializationProduct, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:decode"]
+route_kind = "operation_route"
+rationale = "search-materializer::materialize_text_or_code"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#canonicalizematerialization-product-result-canonicalmaterializationbytes-materializeerror"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 119
+level = 3
+heading = "canonicalizematerialization(product) -> Result<CanonicalMaterializationBytes, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:product"]
+route_kind = "operation_route"
+rationale = "search-materializer::canonicalize_materialization"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#verifymaterialization-product-request-profile-result-materializationverificationreceipt-material"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 124
+level = 3
+heading = "verifymaterialization(product, request, profile) -> Result<MaterializationVerificationReceipt, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:product"]
+route_kind = "operation_route"
+rationale = "search-materializer::verify_materialization"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#prepareadmission-product-artifactport-operation-deadline-result-materializationadmissionplan-mat"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 129
+level = 3
+heading = "prepareadmission(product, artifactport, operation, deadline) -> Result<MaterializationAdmissionPlan, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:request"]
+route_kind = "operation_route"
+rationale = "search-materializer::prepare_admission"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#optional-provider-boundary"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 135
+level = 2
+heading = "Optional provider boundary"
+kind = "implementation_contract"
+modules = ["search-materializer:provider"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#validateproviderdescriptor-descriptor-qualification-acceptedp15-result-qualifieddocumentprovider"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 137
+level = 3
+heading = "validateproviderdescriptor(descriptor, qualification, acceptedp15) -> Result<QualifiedDocumentProvider, MaterializeError>"
+kind = "implementation_operation"
+modules = ["search-materializer:provider"]
+route_kind = "operation_route"
+rationale = "search-materializer::validate_provider_descriptor"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#classifyproviderfailure-failure-baselinecapability-providerfallbackdecision"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 145
+level = 3
+heading = "classifyproviderfailure(failure, baselinecapability) -> ProviderFallbackDecision"
+kind = "implementation_operation"
+modules = ["search-materializer:provider"]
+route_kind = "operation_route"
+rationale = "search-materializer::classify_provider_failure"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#cancellation-deadline-and-retry"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 150
+level = 2
+heading = "Cancellation, deadline and retry"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#typed-failures"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 159
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-materializer:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-prep/search-materializer/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+line = 181
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-materializer:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/README.md#search-materializer"
+path = "crates/search-prep/search-materializer/README.md"
+line = 1
+level = 1
+heading = "search-materializer"
+kind = "implementation_contract_root"
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-prep/search-materializer/README.md#owns"
+path = "crates/search-prep/search-materializer/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-materializer/README.md#must-not-own"
+path = "crates/search-prep/search-materializer/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-materialization-and-enrichment"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1137
+level = 2
+heading = "S17. Materialization and enrichment"
+kind = "architecture_section"
+modules = ["search-materializer:maps", "search-materializer:product"]
+route_kind = "architecture_section_registry"
+rationale = "S17"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-1-baseline-formats"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1139
+level = 3
+heading = "S17.1 Baseline formats"
+kind = "architecture_node"
+modules = ["search-materializer:maps", "search-materializer:product"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-2-provider-neutrality"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1149
+level = 3
+heading = "S17.2 Provider neutrality"
+kind = "architecture_node"
+modules = ["search-materializer:maps", "search-materializer:product"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-3-parser-assurance"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1165
+level = 3
+heading = "S17.3 Parser assurance"
+kind = "architecture_node"
+modules = ["search-materializer:maps", "search-materializer:product"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-native-coordinates-and-anchors"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1476
+level = 2
+heading = "S24. Native coordinates and anchors"
+kind = "architecture_section"
+modules = ["search-materializer:maps"]
+route_kind = "architecture_section_registry"
+rationale = "S24"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-1-canonical-anchor-variants"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1478
+level = 3
+heading = "S24.1 Canonical anchor variants"
+kind = "architecture_node"
+modules = ["search-materializer:maps"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-2-derived-line-column-display"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1514
+level = 3
+heading = "S24.2 Derived line/column display"
+kind = "architecture_node"
+modules = ["search-materializer:maps"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p04-revision-cas-and-anchors"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2858
+level = 3
+heading = "P04 — Revision CAS and anchors"
+kind = "delivery_contract"
+modules = ["search-materializer:assurance", "search-materializer:decode", "search-materializer:maps"]
+route_kind = "delivery_registry"
+rationale = "P04"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p17-optional-document-materializer"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2937
+level = 3
+heading = "P17 — Optional document materializer"
+kind = "delivery_contract"
+modules = ["search-materializer:provider"]
+route_kind = "delivery_registry"
+rationale = "P17"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#w2-direct-source-spine-implementation-packet"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W2 direct source-spine implementation packet"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#source-pipeline"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Source pipeline"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 61
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 71
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#mutation-and-recovery"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 91
+level = 2
+heading = "Mutation and recovery"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#required-w2-tests-and-evidence"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 112
+level = 2
+heading = "Required W2 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#admission"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 3
+heading = "Admission"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#identity-and-registry"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 122
+level = 3
+heading = "Identity and registry"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#safe-read-and-revision"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 130
+level = 3
+heading = "Safe read and revision"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#preparation"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 139
+level = 3
+heading = "Preparation"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 148
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 161
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-materializer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#search-materializer-implementation-packet"
+path = "swarm/assignments/search-materializer.md"
+line = 1
+level = 1
+heading = "search-materializer implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#mission"
+path = "swarm/assignments/search-materializer.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#owns"
+path = "swarm/assignments/search-materializer.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#must-not-own"
+path = "swarm/assignments/search-materializer.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#logical-primitives"
+path = "swarm/assignments/search-materializer.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#logical-operations"
+path = "swarm/assignments/search-materializer.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#required-invariants"
+path = "swarm/assignments/search-materializer.md"
+line = 42
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-materializer:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#typed-failure-surface"
+path = "swarm/assignments/search-materializer.md"
+line = 50
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#exit-tests-evidence"
+path = "swarm/assignments/search-materializer.md"
+line = 58
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#suggested-internal-modules"
+path = "swarm/assignments/search-materializer.md"
+line = 67
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-materializer.md#size-split"
+path = "swarm/assignments/search-materializer.md"
+line = 83
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-materializer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

@@ -1,0 +1,108 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-research-export-adapter"
+operation_count = 10
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-research-export-adapter::assemble_bundle"
+name = "assemble_bundle"
+module = "export"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 33
+
+[[operation]]
+id = "search-research-export-adapter::build_manifest"
+name = "build_manifest"
+module = "manifest"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-research-export-adapter::compute_wire_digests"
+name = "compute_wire_digests"
+module = "digest"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-research-export-adapter::emit_export_receipt"
+name = "emit_export_receipt"
+module = "export"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-research-export-adapter::prepare_export"
+name = "prepare_export"
+module = "export"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-research-export-adapter::recover_export_operation"
+name = "recover_export_operation"
+module = "export"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-research-export-adapter::reopen_and_verify_native_content"
+name = "reopen_and_verify_native_content"
+module = "content"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-research-export-adapter::validate_bundle_paths"
+name = "validate_bundle_paths"
+module = "export"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 33
+
+[[operation]]
+id = "search-research-export-adapter::validate_ownership_mode"
+name = "validate_ownership_mode"
+module = "export"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 19
+
+[[operation]]
+id = "search-research-export-adapter::validate_profile_activation"
+name = "validate_profile_activation"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-research-export-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-research-export-adapter"]
+route_kind = "semantic"
+score = 115

@@ -1,0 +1,108 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-handles"
+operation_count = 10
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-handles::apply_live_limits"
+name = "apply_live_limits"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-handles::expand"
+name = "expand"
+module = "expand"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Resolution and expansion"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-handles::expire"
+name = "expire"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Lifecycle"]
+route_kind = "semantic"
+score = 33
+
+[[operation]]
+id = "search-handles::invalidate"
+name = "invalidate"
+module = "invalidate"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Lifecycle"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "search-handles::invalidate_lifecycle_scope"
+name = "invalidate_lifecycle_scope"
+module = "invalidate"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/W7_HARDENING.md"]
+source_contexts = ["Durable eligibility"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "search-handles::mint_durable_source"
+name = "mint_durable_source"
+module = "issue"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Minting"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-handles::mint_ephemeral"
+name = "mint_ephemeral"
+module = "issue"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Minting"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-handles::resolve"
+name = "resolve"
+module = "resolve"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Resolution and expansion"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-handles::revalidate"
+name = "revalidate"
+module = "resolve"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Resolution and expansion"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-handles::token_digest"
+name = "token_digest"
+module = "identity"
+public_entry_module = "api"
+sources = ["crates/search-query/search-handles/FUNCTIONS.md"]
+source_contexts = ["Minting"]
+route_kind = "package_rule"
+score = 100

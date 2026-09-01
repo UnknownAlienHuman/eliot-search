@@ -1,0 +1,198 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-safe-reader"
+operation_count = 19
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-safe-reader::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-safe-reader::observe_after_read"
+name = "observe_after_read"
+module = "stable_read"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Stable file acquisition"]
+route_kind = "semantic"
+score = 29
+
+[[operation]]
+id = "search-safe-reader::observe_before_read"
+name = "observe_before_read"
+module = "stable_read"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Stable file acquisition"]
+route_kind = "semantic"
+score = 29
+
+[[operation]]
+id = "search-safe-reader::observe_encoding"
+name = "observe_encoding"
+module = "encoding"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Encoding observation"]
+route_kind = "semantic"
+score = 128
+
+[[operation]]
+id = "search-safe-reader::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-safe-reader::read_batch"
+name = "read_batch"
+module = "batch"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Batch acquisition"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-safe-reader::read_bounded"
+name = "read_bounded"
+module = "stable_read"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Stable file acquisition"]
+route_kind = "semantic"
+score = 15
+
+[[operation]]
+id = "search-safe-reader::read_git_object_no_execute"
+name = "read_git_object_no_execute"
+module = "git_object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Git object acquisition"]
+route_kind = "semantic"
+score = 129
+
+[[operation]]
+id = "search-safe-reader::read_stably"
+name = "read_stably"
+module = "stable_read"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Stable file acquisition"]
+route_kind = "semantic"
+score = 15
+
+[[operation]]
+id = "search-safe-reader::redacted_read_view"
+name = "redacted_read_view"
+module = "stable_read"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Redaction and cleanup"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-safe-reader::release_read_product"
+name = "release_read_product"
+module = "stable_read"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Redaction and cleanup"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-safe-reader::resolve_final_handle"
+name = "resolve_final_handle"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Request and root validation"]
+route_kind = "semantic"
+score = 23
+
+[[operation]]
+id = "search-safe-reader::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-safe-reader::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-safe-reader::validate_git_object_request"
+name = "validate_git_object_request"
+module = "git_object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Git object acquisition"]
+route_kind = "semantic"
+score = 129
+
+[[operation]]
+id = "search-safe-reader::validate_read_request"
+name = "validate_read_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Request and root validation"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-safe-reader::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-safe-reader::verify_final_containment"
+name = "verify_final_containment"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Request and root validation"]
+route_kind = "semantic"
+score = 23
+
+[[operation]]
+id = "search-safe-reader::verify_pre_read_post"
+name = "verify_pre_read_post"
+module = "stable_read"
+public_entry_module = "api"
+sources = ["crates/search-source/search-safe-reader/FUNCTIONS.md"]
+source_contexts = ["Stable file acquisition"]
+route_kind = "semantic"
+score = 15

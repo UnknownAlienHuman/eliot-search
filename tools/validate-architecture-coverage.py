@@ -157,7 +157,7 @@ def exact_type_registry_symbols(type_registry: str) -> set[str]:
                     symbols.add(token)
     symbols.update(top_level_yaml_labels(identity))
 
-    semantic = section_between(type_registry, "## Baseline semantic registries", "## Coverage and freshness records")
+    semantic = section_between(type_registry, "## Baseline semantic registries", "## Coverage records")
     for block in fenced_blocks(semantic, "text"):
         for line in block.splitlines():
             match = re.match(r"^([A-Z][A-Za-z0-9_]+)\s*=", line.strip())
@@ -166,9 +166,9 @@ def exact_type_registry_symbols(type_registry: str) -> set[str]:
     if "`EntityKind`" in semantic:
         symbols.add("EntityKind")
 
-    coverage = section_between(type_registry, "## Coverage and freshness records", "## Port-support records")
+    coverage = section_between(type_registry, "## Coverage records", "## Port support records — owned by `search-ports`")
     symbols.update(top_level_yaml_labels(coverage))
-    port_support = section_between(type_registry, "## Port-support records", "## Ownership and visibility summary")
+    port_support = section_between(type_registry, "## Port support records — owned by `search-ports`", "## New-type rule")
     symbols.update(top_level_yaml_labels(port_support))
 
     return symbols
@@ -364,7 +364,7 @@ def main() -> int:
             validate_module_ref(errors, ref, modules, cell_id)
 
     # Invariants.
-    source_invariants = set(re.findall(r"^(INV-\d{2}):", architecture, flags=re.MULTILINE))
+    source_invariants = set(re.findall(r"^\s*(INV-\d{2}):", architecture, flags=re.MULTILINE))
     invariant_rows = rows(invariant_doc, "invariant", "id")
     fail(errors, source_invariants == {f"INV-{i:02d}" for i in range(1, 31)}, "architecture source must contain INV-01..INV-30")
     fail(errors, set(invariant_rows) == source_invariants, "invariant registry mismatch")
@@ -380,7 +380,7 @@ def main() -> int:
 
     # Shared ports and exact methods.
     port_source = read("docs/contracts/p00/PORT_OPERATIONS.md")
-    heading_matches = list(re.finditer(r"^### `([A-Za-z][A-Za-z0-9]+Port)`\s*$", port_source, flags=re.MULTILINE))
+    heading_matches = list(re.finditer(r"^### `([A-Za-z][A-Za-z0-9]+Port)`(?:[ \t]+[—-].*)?[ \t]*$", port_source, flags=re.MULTILINE))
     source_port_methods: dict[str, list[str]] = {}
     for index, match in enumerate(heading_matches):
         start = match.end()
@@ -390,11 +390,18 @@ def main() -> int:
     port_rows = rows(port_doc, "port", "name")
     fail(errors, len(source_port_methods) == 23, "PORT_OPERATIONS must define 23 ports")
     fail(errors, set(port_rows) == set(source_port_methods), "port registry set mismatch")
+    fail(errors, port_doc.get("schema_version") == 2, "port registry must be schema v2")
+    fail(errors, port_doc.get("method_count") == sum(len(value) for value in source_port_methods.values()), "port method total mismatch")
     for port_name, row in port_rows.items():
-        fail(errors, row.get("methods") == source_port_methods.get(port_name), f"{port_name}: method inventory mismatch")
+        methods = row.get("methods")
+        method_modules = row.get("method_modules")
+        fail(errors, methods == source_port_methods.get(port_name), f"{port_name}: method inventory mismatch")
+        fail(errors, isinstance(method_modules, list) and len(method_modules) == len(methods if isinstance(methods, list) else []), f"{port_name}: one method module per method required")
         package = row.get("implementation_package")
         module = row.get("implementation_module")
         validate_owner_pair(errors, package, module, modules, port_name, allow_none=False)
+        for method_name, method_module in zip(methods if isinstance(methods, list) else [], method_modules if isinstance(method_modules, list) else []):
+            validate_owner_pair(errors, package, method_module, modules, f"{port_name}.{method_name}", allow_none=False)
     fail(errors, port_rows.get("ResidencyPolicyPort", {}).get("implementation_package") == "search-revision-store", "ResidencyPolicyPort must be implemented by search-revision-store")
     fail(errors, port_rows.get("ClockPort", {}).get("implementation_package") == "eliot-searchd", "ClockPort must be the daemon private adapter")
 
@@ -404,11 +411,15 @@ def main() -> int:
     config_packets: set[str] = set()
     for name, row in config_rows.items():
         owner = row.get("owner")
-        packet = row.get("packet")
+        owner_module = row.get("owner_module")
+        packet = row.get("contract")
         fail(errors, owner in packages, f"config {name}: unknown owner {owner}")
-        fail(errors, isinstance(packet, str) and (ROOT / packet).is_file(), f"config {name}: missing packet {packet}")
+        fail(errors, isinstance(owner_module, str), f"config {name}: owner module missing")
+        if isinstance(owner, str) and isinstance(owner_module, str):
+            validate_module_ref(errors, f"{owner}:{owner_module}", modules, f"config {name}")
+        fail(errors, isinstance(packet, str) and (ROOT / packet).is_file(), f"config {name}: missing contract {packet}")
         if isinstance(packet, str):
-            fail(errors, packet not in config_packets, f"config {name}: duplicate packet path {packet}")
+            fail(errors, packet not in config_packets, f"config {name}: duplicate contract path {packet}")
             config_packets.add(packet)
 
     # Schema/type closure.
@@ -515,9 +526,17 @@ def main() -> int:
         fail(errors, row.get("request_schema") in schema_names, f"{recipe_id}: unknown request schema")
         fail(errors, row.get("result_schema") in schema_names, f"{recipe_id}: unknown result schema")
         owners = row.get("primary_execution_packages")
+        refs = row.get("execution_modules")
         fail(errors, isinstance(owners, list) and len(owners) > 0, f"{recipe_id}: execution owners missing")
+        fail(errors, isinstance(refs, list) and len(refs) == len(owners if isinstance(owners, list) else []), f"{recipe_id}: one execution module per owner required")
+        ref_packages: set[str] = set()
+        for ref in refs if isinstance(refs, list) else []:
+            validate_module_ref(errors, ref, modules, recipe_id)
+            if isinstance(ref, str) and ":" in ref:
+                ref_packages.add(ref.split(":", 1)[0])
         for package in owners if isinstance(owners, list) else []:
             fail(errors, package in packages, f"{recipe_id}: unknown execution package {package}")
+        fail(errors, ref_packages == set(owners if isinstance(owners, list) else []), f"{recipe_id}: execution module/package mismatch")
 
     # Reasons.
     reason_text = read("docs/contracts/p00/REASON_CODES.md")
@@ -589,7 +608,7 @@ def main() -> int:
         errors.append("architecture coverage workflow missing")
     else:
         workflow_text = workflow.read_text(encoding="utf-8")
-        for token in ("workflow_dispatch:", "contents: read", "persist-credentials: false", "validate-architecture-coverage.py"):
+        for token in ("workflow_dispatch:", "contents: read", "persist-credentials: false", "validate-architecture-coverage"):
             fail(errors, token in workflow_text, f"coverage workflow missing {token}")
         for token in ("\n  push:", "\n  pull_request:", "\n  schedule:", "\n  workflow_run:", "\n  repository_dispatch:"):
             fail(errors, token not in workflow_text, f"automatic coverage workflow trigger {token.strip()}")

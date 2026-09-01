@@ -1,0 +1,121 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-os-secrets"
+outbound_dependency_count = 4
+inbound_dependency_count = 1
+architecture_relation_count = 3
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-os-secrets->search-contracts"
+consumer = "search-os-secrets"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-os-secrets->search-domain"
+consumer = "search-os-secrets"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-os-secrets->search-ports"
+consumer = "search-os-secrets"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-os-secrets->search-config"
+consumer = "search-os-secrets"
+consumer_module = "config"
+consumer_earliest_wave = 1
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-os-secrets"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-os-secrets"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S27"
+modules = ["search-os-secrets:store"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P01"
+modules = ["search-os-secrets:store"]
+required_outputs = ["configuration_core", "single_data_root_owner", "opaque_secret_store", "provider_framing", "standalone_daemon_and_cli_shell"]
+exit_evidence = ["second_owner_denial", "crash_reopen_owner", "secret_non_disclosure", "cli_no_direct_store"]
+
+[[architecture]]
+kind = "delivery"
+id = "P05"
+modules = ["search-os-secrets:store"]
+required_outputs = ["exact_qualified_server_artifact", "supervised_loopback_process", "API_secret", "disposable_capability_suite"]
+exit_evidence = ["process_identity", "loopback_auth", "schema_mismatch", "range_missing_field_IDF_probes"]
+
+[[configuration]]
+section = "secrets"
+module = "config"
+contract = "config/sections/secrets.md"
+reload = "RESTART_DEPENDENCY"
+
+[[port]]
+name = "SecretStorePort"
+module = "store"
+methods = ["create_secret", "lease_secret", "rotate_secret", "delete_secret"]
+method_modules = ["store", "lease", "rotation", "store"]

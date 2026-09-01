@@ -1,0 +1,128 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-qdrant-supervisor"
+outbound_dependency_count = 4
+inbound_dependency_count = 1
+architecture_relation_count = 4
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-supervisor->search-contracts"
+consumer = "search-qdrant-supervisor"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-supervisor->search-domain"
+consumer = "search-qdrant-supervisor"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-supervisor->search-ports"
+consumer = "search-qdrant-supervisor"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-supervisor->search-config"
+consumer = "search-qdrant-supervisor"
+consumer_module = "config"
+consumer_earliest_wave = 3
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-qdrant-supervisor"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-qdrant-supervisor"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S9"
+modules = ["search-qdrant-supervisor:artifact"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S27"
+modules = ["search-qdrant-supervisor:identity", "search-qdrant-supervisor:process"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C15"
+modules = ["search-qdrant-supervisor:process"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P05"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:health", "search-qdrant-supervisor:process"]
+required_outputs = ["exact_qualified_server_artifact", "supervised_loopback_process", "API_secret", "disposable_capability_suite"]
+exit_evidence = ["process_identity", "loopback_auth", "schema_mismatch", "range_missing_field_IDF_probes"]
+
+[[configuration]]
+section = "qdrant_process"
+module = "config"
+contract = "config/sections/qdrant_process.md"
+reload = "RESTART_DEPENDENCY"
+
+[[port]]
+name = "ProcessSupervisorPort"
+module = "process"
+methods = ["qualify_artifact", "start_process", "verify_process_identity", "readiness", "shutdown_process"]
+method_modules = ["artifact", "process", "identity", "health", "shutdown"]

@@ -1,0 +1,1113 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-domain"
+outbound_dependency_count = 1
+inbound_dependency_count = 38
+architecture_relation_count = 5
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 60
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-domain->search-contracts"
+consumer = "search-domain"
+consumer_module = "lib"
+consumer_earliest_wave = 0
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-domain"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-access->search-domain"
+consumer = "search-access"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-access/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-candidate-validator->search-domain"
+consumer = "search-candidate-validator"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-code-enricher->search-domain"
+consumer = "search-code-enricher"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-comparator->search-domain"
+consumer = "search-comparator"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-comparator/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-continuation->search-domain"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-control-redb->search-domain"
+consumer = "search-control-redb"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-control-redb/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-eliot-adapter->search-domain"
+consumer = "search-eliot-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-eliot-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-epoch-pins->search-domain"
+consumer = "search-epoch-pins"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-eval->search-domain"
+consumer = "search-eval"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-eval/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-exact->search-domain"
+consumer = "search-exact"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-exact/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-handles->search-domain"
+consumer = "search-handles"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-handles/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-index-reclaimer->search-domain"
+consumer = "search-index-reclaimer"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-lexical->search-domain"
+consumer = "search-lexical"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-lexical/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-materializer->search-domain"
+consumer = "search-materializer"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-prep/search-materializer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-model-provider->search-domain"
+consumer = "search-model-provider"
+consumer_module = "api"
+consumer_earliest_wave = 10
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-model-provider/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-os-secrets->search-domain"
+consumer = "search-os-secrets"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-overlay->search-domain"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-point-identity->search-domain"
+consumer = "search-point-identity"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-projection-planner->search-domain"
+consumer = "search-projection-planner"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-provider-protocol->search-domain"
+consumer = "search-provider-protocol"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-provider-protocol/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-publication->search-domain"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-qdrant-bridge->search-domain"
+consumer = "search-qdrant-bridge"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-qdrant-supervisor->search-domain"
+consumer = "search-qdrant-supervisor"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-query-planner->search-domain"
+consumer = "search-query-planner"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-query-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-research-export-adapter->search-domain"
+consumer = "search-research-export-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-result-projector->search-domain"
+consumer = "search-result-projector"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-retention->search-domain"
+consumer = "search-retention"
+consumer_module = "api"
+consumer_earliest_wave = 7
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-runtime/search-retention/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-retrieval-executor->search-domain"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-revision-store->search-domain"
+consumer = "search-revision-store"
+consumer_module = "residency"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-revision-store/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-runtime-owner->search-domain"
+consumer = "search-runtime-owner"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-runtime/search-runtime-owner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-safe-reader->search-domain"
+consumer = "search-safe-reader"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-admission->search-domain"
+consumer = "search-source-admission"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-source-admission/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-identity->search-domain"
+consumer = "search-source-identity"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-source-identity/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-reconcile->search-domain"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-registry->search-domain"
+consumer = "search-source-registry"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-subject-resolver->search-domain"
+consumer = "search-subject-resolver"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-unitizer->search-domain"
+consumer = "search-unitizer"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[architecture]]
+kind = "architecture_section"
+id = "S3"
+modules = ["search-domain:decisions"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S34"
+modules = ["search-domain:outcomes"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C00"
+modules = ["search-domain:decisions"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-12"
+modules = ["search-domain:transitions"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P00"
+modules = ["search-domain:coverage", "search-domain:decisions", "search-domain:eligibility", "search-domain:transitions"]
+required_outputs = ["shared_contract_shapes", "pure_rules", "shared_vendor_neutral_ports", "recipe_and_reason_registries", "dependency_and_license_policy"]
+exit_evidence = ["contract_hash", "exact_recipe_set", "epoch_sentinel_rejection", "pure_property_tests", "dependency_direction"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "bounded_collections"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["BoundedList<T,L>", "BoundedSet<T,L>", "BoundedMap<K,V,L>", "BoundedText<L>", "BoundedBytes<L>", "BoundedCanonicalBytes<L>", "BoundedOpaqueBytes<L>", "BoundedTextOrBytes"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "opaque_and_display_wrappers"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["OpaqueId", "OpaqueRef", "OpaqueCanonicalBytes", "OpaqueHandleToken", "BoundedDisplayName", "BoundedDisplayPath", "BoundedName", "BoundedSymbolKey", "BoundedExpression", "BoundedObservation", "BoundedBehaviorSignature", "BoundedNonContentMetadata", "BoundedNonContentRankingTrace", "OpaqueAuthorizedFacetValue"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md", "docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "identity_and_reference_wrappers"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["InstallationId", "InstallationIncarnationId", "DataRootId", "BindingId", "WorkspaceId", "WorkspaceViewRevisionId", "RootBindingId", "PathBindingId", "RepositoryLineageId", "CollectionGenerationId", "CorpusId", "ReferencePortfolioId", "SourceNamespaceId", "SourceId", "SourceMembershipId", "ProjectionMembershipId", "SourceRevisionId", "MaterializationId", "RepresentationId", "UnitId", "AccessPartitionId", "ScoringPartitionId", "ScoringDocumentId", "AccessPolicyBindingId", "ResidencyPolicyBindingId", "ScopeDomainId", "AccessDomainId", "ConfidentialityDomainId", "EncryptionKeyDomainId", "RetentionDomainId", "ErasureDomainId", "GrantId", "RequestId", "PlanId", "CandidateId", "CutoverId", "BufferSnapshotId", "ImportedSnapshotId", "HandleId", "ContinuationId", "PublicationIntentId", "PublicationReceiptId"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "counter_and_version_wrappers"
+owner_roles = ["meaning_owner"]
+modules = ["ordering"]
+schemas = ["OwnerEpoch", "Epoch", "NonZeroRevision", "PortfolioRevision", "CollectionRouteRevision", "CatalogRevision", "MembershipRevision", "AccessPolicyRevision", "ShadowFenceRevision", "PurgeFenceRevision", "ObservationCursorRevision", "OverlayRevision", "PolicyRevision"]
+source_files = ["docs/contracts/p00/CANONICAL_TYPES.md", "docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "digest_and_profile_wrappers"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["Blake3Digest32", "Sha256Digest32", "VersionedContentDigest", "SourceOwnerGeneration", "ObjectResidencyKeyDigest", "PlanFingerprint", "QuerySnapshotFingerprint", "ArtifactDigest", "DigestRef", "HandleTokenDigest", "ProfileId", "ProjectionProfileSetId", "FusionProfileId", "RuleId", "RecipeFamilyId", "ReceiptRef", "GitObjectId"]
+source_files = ["docs/contracts/p00/CANONICAL_TYPES.md", "docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "semantic_registries"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["AssuranceClass", "ObservationFreshnessState", "EvidenceRole", "Modality", "EntityKind"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "tagged_reference_unions"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["CorpusOrPortfolioId", "WorkspaceOrCorpusRef", "SourceViewRef", "AuthorizedScopeRef", "ExactScanPlanRef"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "contract_bounds"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["ContractBoundsV1", "LimitClass"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "coverage_records"
+owner_roles = ["meaning_owner"]
+modules = ["coverage"]
+schemas = ["LegDescriptor", "CoverageGap", "CoverageUnknown", "ObservationFreshness"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "recipe_type_completions"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["RecipeIdV1", "RecipeBodyV1", "ComparisonAxis"]
+source_files = ["docs/contracts/p00/TYPE_COMPLETIONS.md", "docs/contracts/p00/RECIPES.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "protocol_range_completion"
+owner_roles = ["meaning_owner"]
+modules = ["ordering"]
+schemas = ["ProtocolRange"]
+source_files = ["docs/contracts/p00/TYPE_COMPLETIONS.md", "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "safe_leg"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["SafeLeg"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "leg_execution"
+owner_roles = ["meaning_owner"]
+modules = ["outcomes"]
+schemas = ["LegExecutionSummary"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "comparison_support"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["ConfigurationObservation", "BehaviorObservation", "BehaviorConflict"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "exact_support"
+owner_roles = ["meaning_owner"]
+modules = ["coverage"]
+schemas = ["ExactCompletenessRequirements", "ExactMatch", "ExactItemFailure"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "optional_provider_state"
+owner_roles = ["meaning_owner"]
+modules = ["visibility"]
+schemas = ["OptionalProviderState"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "membership_readiness"
+owner_roles = ["meaning_owner"]
+modules = ["visibility"]
+schemas = ["MembershipReadiness"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "progress_counts"
+owner_roles = ["meaning_owner"]
+modules = ["outcomes"]
+schemas = ["BoundedProgressCounts"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "handle_support"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["HandleExpansionRequest", "HandlePermit"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "runtime_and_route"
+owner_roles = ["meaning_owner"]
+modules = ["transitions"]
+schemas = ["SearchInstallation", "CollectionRoute"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "repository_workspace_identity"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["RepositoryLineage", "WorkspaceInstance"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "namespace_ownership"
+owner_roles = ["meaning_owner"]
+modules = ["transitions"]
+schemas = ["SourceNamespaceOwnership", "SourceOwnerCutoverReceipt"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "source_identity_binding"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["SourceIdentity", "PathBinding"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "source_revision"
+owner_roles = ["meaning_owner"]
+modules = ["currentness"]
+schemas = ["SourceRevision", "SourceRevisionRef"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "membership_portfolio"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["SourceMembership", "ReferencePortfolioRevision"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "residency"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["SearchObjectResidencyKey", "SourceResidencyProfileRef"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "materialization"
+owner_roles = ["meaning_owner"]
+modules = ["assurance"]
+schemas = ["Materialization"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "representation"
+owner_roles = ["meaning_owner"]
+modules = ["assurance"]
+schemas = ["Representation"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "projection_membership"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["ProjectionMembership"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "unit_occurrence"
+owner_roles = ["meaning_owner"]
+modules = ["assurance"]
+schemas = ["UnitOccurrence"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "source_workspace_view"
+owner_roles = ["meaning_owner"]
+modules = ["currentness"]
+schemas = ["SourceView", "WorkspaceViewRevision"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "source_admission_policy"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["SourceAdmissionPolicy"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "recipe_request"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["SearchRecipeRequest", "RequestedScope", "SubjectSelector"]
+source_files = ["docs/contracts/p00/RECIPES.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "read_grant"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["SearchReadGrantClaims"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "execution_budget"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["QueryExecutionBudget"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "query_plan"
+owner_roles = ["meaning_owner"]
+modules = ["currentness"]
+schemas = ["QuerySnapshotFence", "SearchTaskPlan", "SourceOwnerFence", "StateDependency", "ExactnessRequirements"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "emission_security_fence"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["EmissionSecurityFence"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "result_fence"
+owner_roles = ["meaning_owner"]
+modules = ["currentness"]
+schemas = ["ResultFence"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "candidate_result"
+owner_roles = ["meaning_owner"]
+modules = ["coverage"]
+schemas = ["SearchCandidateSet", "ValidatedSearchCandidate", "Coverage"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "candidate_validation_gap"
+owner_roles = ["meaning_owner"]
+modules = ["outcomes"]
+schemas = ["CandidateValidationGap"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "native_anchor"
+owner_roles = ["meaning_owner"]
+modules = ["assurance"]
+schemas = ["NativeAnchor"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "exact_plan_report"
+owner_roles = ["meaning_owner"]
+modules = ["coverage"]
+schemas = ["ExactPredicate", "ExactScanPlan", "ExactExecutionReport"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "recipe_result_header"
+owner_roles = ["meaning_owner"]
+modules = ["coverage"]
+schemas = ["RecipeResultHeader"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "subject_resolution_results"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["ResolvedSubject", "SubjectAmbiguitySet", "AmbiguousSubjectCandidate", "SubjectAmbiguityResult"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "inspection_exploration_results"
+owner_roles = ["meaning_owner"]
+modules = ["assurance"]
+schemas = ["EntityInspectionResult", "EvidenceObservation", "EntityExplorationResult", "EntityGraphNode", "EntityGraphEdge"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "comparison_results"
+owner_roles = ["meaning_owner"]
+modules = ["decisions"]
+schemas = ["CompareImplementationsResult", "CrossRepositoryBehaviorSet", "ComparableImplementation", "BehaviorComparison"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "corpus_results"
+owner_roles = ["meaning_owner"]
+modules = ["coverage"]
+schemas = ["CorpusProfileResult", "CorpusFacet", "CorpusDeltaResult", "CorpusChange"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "provenance_results"
+owner_roles = ["meaning_owner"]
+modules = ["assurance"]
+schemas = ["ProvenanceResult", "ProvenanceStep"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "handle_expansion_results"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["HandleExpansionResult", "HandleExpansionBody"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "recipe_result_union"
+owner_roles = ["meaning_owner"]
+modules = ["outcomes"]
+schemas = ["RecipeResultV1"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "provider_protocol"
+owner_roles = ["meaning_owner"]
+modules = ["outcomes"]
+schemas = ["ProtocolVersion", "ProviderEnvelope", "ProviderBodyV1"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "capability_descriptor"
+owner_roles = ["meaning_owner"]
+modules = ["visibility"]
+schemas = ["SearchProviderCapabilityDescriptor"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "wire_source_handle"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["SearchSourceHandle"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "wire_continuation_handle"
+owner_roles = ["meaning_owner"]
+modules = ["eligibility"]
+schemas = ["ContinuationHandle"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "source_handle_record"
+owner_roles = ["meaning_owner"]
+modules = ["transitions"]
+schemas = ["SearchSourceHandleRecord"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "continuation_record"
+owner_roles = ["meaning_owner"]
+modules = ["transitions"]
+schemas = ["ContinuationRecord"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "security_mutation"
+owner_roles = ["meaning_owner"]
+modules = ["transitions"]
+schemas = ["SecurityMutationBarrierState", "LiveDenySnapshotRef"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "publication_records"
+owner_roles = ["meaning_owner"]
+modules = ["transitions"]
+schemas = ["PublicationIntent", "PublicationReceipt", "AbandonedPublicationFence"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "purge_restore_records"
+owner_roles = ["meaning_owner"]
+modules = ["outcomes"]
+schemas = ["PurgeReceipt", "PairedRecoveryManifest", "RestoreDecision"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-reasons.toml"
+group = "reason_registries"
+owner_roles = ["meaning_owner"]
+modules = ["outcomes"]
+schemas = ["SearchReasonCodeV1", "ProtocolErrorCode", "ContractErrorCode"]
+source_files = ["docs/contracts/p00/REASON_CODES.md"]

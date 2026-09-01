@@ -1,0 +1,173 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-access"
+path = "crates/search-query/search-access"
+kind = "lib"
+family = "query"
+cell = "C18"
+earliest_wave = 4
+optional = false
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-access.md"
+function_source = "crates/search-query/search-access/FUNCTIONS.md"
+qualification = "qualification/query/W4_QUALIFICATION.md"
+config_sections = []
+declared_dependencies = ["search-contracts", "search-domain", "search-ports"]
+module_count = 10
+operation_count = 13
+documentation_node_count = 117
+principle_node_count = 2
+outbound_dependency_count = 3
+inbound_dependency_count = 6
+architecture_relation_count = 11
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 4
+operations_map = "swarm/coverage/package-maps/search-access/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-access/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-access/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 47
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 9
+
+[[module]]
+name = "grant"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 12
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 1
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "scope"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 7
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 1
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "legs"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 31
+architecture_relation_count = 6
+port_relation_count = 1
+port_method_relation_count = 1
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "checkpoint"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 6
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 1
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "barrier"
+role = "implementation"
+structural_rationale = ""
+operation_count = 4
+documentation_node_count = 25
+architecture_relation_count = 4
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "snapshot"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 6
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "invalidation"
+role = "implementation"
+structural_rationale = ""
+operation_count = 4
+documentation_node_count = 24
+architecture_relation_count = 2
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

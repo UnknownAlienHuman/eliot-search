@@ -96,6 +96,7 @@ def port_relations(manifest: dict[str, Any]) -> list[dict[str, Any]]:
                 "package": row.get("implementation_package"),
                 "module": row.get("implementation_module"),
                 "methods": string_list(row.get("methods")),
+                "method_modules": string_list(row.get("method_modules")),
             }
         )
     return result
@@ -194,6 +195,7 @@ def render_overview(
                 f"documentation_node_count = {module['documentation_node_count']}",
                 f"architecture_relation_count = {module['architecture_relation_count']}",
                 f"port_relation_count = {module['port_relation_count']}",
+                f"port_method_relation_count = {module['port_method_relation_count']}",
                 f"schema_relation_count = {module['schema_relation_count']}",
                 f"configuration_relation_count = {module['configuration_relation_count']}",
                 f"recipe_relation_count = {module['recipe_relation_count']}",
@@ -301,10 +303,14 @@ def render_relations(
                     f"id = {q(row['id'])}",
                     f"consumer = {q(row['consumer'])}",
                     f"consumer_module = {q(row['consumer_module'])}",
+                    f"consumer_earliest_wave = {row['consumer_earliest_wave']}",
                     f"producer = {q(row['producer'])}",
                     f"producer_module = {q(row['producer_module'])}",
+                    f"producer_earliest_wave = {row['producer_earliest_wave']}",
                     f"relationship = {q(row['relationship'])}",
                     f"contract_source = {q(row['contract_source'])}",
+                    f"requires_stage_reentry = {bool_text(bool(row['requires_stage_reentry']))}",
+                    f"reentry_stage = {q(row['reentry_stage'])}",
                     f"exact_accepted_handoff_required = {bool_text(bool(row['exact_accepted_handoff_required']))}",
                     "",
                 ]
@@ -351,6 +357,7 @@ def render_relations(
                 f"name = {q(row['name'])}",
                 f"module = {q(str(row['module']))}",
                 f"methods = {arr(row['methods'])}",
+                f"method_modules = {arr(row['method_modules'])}",
                 "",
             ]
         )

@@ -1,0 +1,157 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-exact"
+outbound_dependency_count = 4
+inbound_dependency_count = 1
+architecture_relation_count = 5
+configuration_relation_count = 0
+recipe_relation_count = 2
+port_relation_count = 1
+schema_relation_count = 2
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-exact->search-contracts"
+consumer = "search-exact"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-query/search-exact/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-exact->search-domain"
+consumer = "search-exact"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-exact/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-exact->search-ports"
+consumer = "search-exact"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-exact/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-exact->search-access"
+consumer = "search-exact"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-access"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-exact/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-exact"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-exact"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W6"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S25"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S36"
+modules = ["search-exact:recovery"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C20"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-08"
+modules = ["search-exact:denominator"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P12"
+modules = ["search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:report"]
+required_outputs = ["compile_execute_split", "frozen_denominator", "exact_predicate_profiles", "revision_drift_handling", "truthful_execution_report"]
+exit_evidence = ["complete_literal_negative", "non_backtracking_regex", "raw_vs_decoded_semantics", "unreadable_changed_cancelled_scope"]
+
+[[recipe]]
+id = "compile_exact_scan@1"
+module = "plan"
+request_schema = "SearchRecipeRequest"
+result_schema = "ExactScanPlan"
+
+[[recipe]]
+id = "execute_exact_scan@1"
+module = "execute"
+request_schema = "SearchRecipeRequest"
+result_schema = "ExactExecutionReport"
+
+[[port]]
+name = "ExactScannerPort"
+module = "execute"
+methods = ["compile_exact_scan", "execute_exact_scan"]
+method_modules = ["plan", "execute"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "exact_support"
+owner_roles = ["state_owner"]
+modules = ["report"]
+schemas = ["ExactCompletenessRequirements", "ExactMatch", "ExactItemFailure"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "exact_plan_report"
+owner_roles = ["state_owner"]
+modules = ["report"]
+schemas = ["ExactPredicate", "ExactScanPlan", "ExactExecutionReport"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]

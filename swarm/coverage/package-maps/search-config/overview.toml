@@ -1,0 +1,159 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-config"
+path = "crates/search-config"
+kind = "lib"
+family = "foundation"
+cell = "configuration mechanics"
+earliest_wave = 1
+optional = false
+soft_src_line_target = 5500
+assignment = "swarm/assignments/search-config.md"
+function_source = "crates/search-config/FUNCTIONS.md"
+qualification = "NONE"
+config_sections = []
+declared_dependencies = ["search-contracts"]
+module_count = 9
+operation_count = 10
+documentation_node_count = 90
+principle_node_count = 1
+outbound_dependency_count = 1
+inbound_dependency_count = 21
+architecture_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 0
+operations_map = "swarm/coverage/package-maps/search-config/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-config/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-config/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 32
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 22
+
+[[module]]
+name = "document"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 46
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "registry"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 47
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "layering"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 48
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "snapshot"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 52
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "diff"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 52
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "redaction"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 46
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

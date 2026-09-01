@@ -1,0 +1,248 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-revision-store"
+outbound_dependency_count = 4
+inbound_dependency_count = 1
+architecture_relation_count = 16
+configuration_relation_count = 1
+recipe_relation_count = 1
+port_relation_count = 2
+schema_relation_count = 3
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-revision-store->search-contracts"
+consumer = "search-revision-store"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-source/search-revision-store/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-revision-store->search-domain"
+consumer = "search-revision-store"
+consumer_module = "residency"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-revision-store/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-revision-store->search-ports"
+consumer = "search-revision-store"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-revision-store/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-revision-store->search-config"
+consumer = "search-revision-store"
+consumer_module = "config"
+consumer_earliest_wave = 2
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-revision-store/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-revision-store"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-revision-store"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S6"
+modules = ["search-revision-store:object"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S7"
+modules = ["search-revision-store:revision"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S15"
+modules = ["search-revision-store:anchor", "search-revision-store:revision"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S18"
+modules = ["search-revision-store:revision"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S24"
+modules = ["search-revision-store:anchor"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S25"
+modules = ["search-revision-store:revision"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S28"
+modules = ["search-revision-store:restore"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C07"
+modules = ["search-revision-store:object", "search-revision-store:residency", "search-revision-store:restore", "search-revision-store:revision"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-03"
+modules = ["search-revision-store:revision"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-15"
+modules = ["search-revision-store:anchor"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-17"
+modules = ["search-revision-store:lease"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-18"
+modules = ["search-revision-store:residency"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-27"
+modules = ["search-revision-store:address", "search-revision-store:object", "search-revision-store:residency"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P04"
+modules = ["search-revision-store:anchor", "search-revision-store:object", "search-revision-store:residency", "search-revision-store:revision"]
+required_outputs = ["residency_aware_immutable_CAS", "exact_revision_readback", "coordinate_and_loss_maps", "canonical_materialization", "deterministic_units"]
+exit_evidence = ["UTF8_CRLF_LSP_Git_anchor", "stale_path_readback", "cross_domain_dedup_denial", "copy_reencrypt_receipt"]
+
+[[architecture]]
+kind = "delivery"
+id = "P12"
+modules = ["search-revision-store:revision"]
+required_outputs = ["compile_execute_split", "frozen_denominator", "exact_predicate_profiles", "revision_drift_handling", "truthful_execution_report"]
+exit_evidence = ["complete_literal_negative", "non_backtracking_regex", "raw_vs_decoded_semantics", "unreadable_changed_cancelled_scope"]
+
+[[architecture]]
+kind = "delivery"
+id = "P13"
+modules = ["search-revision-store:lifecycle"]
+required_outputs = ["security_mutation_linearization", "durable_source_handles", "CAS_mark_and_sweep", "purge_receipts_and_tombstones", "restore_revalidation"]
+exit_evidence = ["revocation_during_query", "handle_denial", "purge_non_resurrection", "mismatched_restore_quarantine"]
+
+[[configuration]]
+section = "revision_store"
+module = "config"
+contract = "config/sections/revision_store.md"
+reload = "RESTART_DEPENDENCY"
+
+[[recipe]]
+id = "provenance@1"
+module = "revision"
+request_schema = "SearchRecipeRequest"
+result_schema = "ProvenanceResult"
+
+[[port]]
+name = "SourceRevisionStorePort"
+module = "revision"
+methods = ["admit_revision", "reopen_exact", "retain", "release_retention", "enumerate_mark_roots"]
+method_modules = ["revision", "revision", "lease", "lease", "lifecycle"]
+
+[[port]]
+name = "ResidencyPolicyPort"
+module = "residency"
+methods = ["resolve_residency", "authorize_copy_or_reencrypt", "record_transition"]
+method_modules = ["residency", "residency", "residency"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "source_revision"
+owner_roles = ["state_owner"]
+modules = ["revision"]
+schemas = ["SourceRevision", "SourceRevisionRef"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "residency"
+owner_roles = ["state_owner"]
+modules = ["residency"]
+schemas = ["SearchObjectResidencyKey", "SourceResidencyProfileRef"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "native_anchor"
+owner_roles = ["state_owner"]
+modules = ["anchor"]
+schemas = ["NativeAnchor"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]

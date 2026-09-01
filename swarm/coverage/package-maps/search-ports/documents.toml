@@ -1,0 +1,811 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-ports"
+node_count = 73
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#agent-contract-search-ports"
+path = "crates/search-ports/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-ports"
+kind = "implementation_contract_root"
+modules = ["search-ports:access", "search-ports:conformance", "search-ports:context", "search-ports:control", "search-ports:error", "search-ports:handles", "search-ports:index", "search-ports:lib", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source", "search-ports:stream"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#mission"
+path = "crates/search-ports/AGENTS.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#ownership"
+path = "crates/search-ports/AGENTS.md"
+line = 18
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#forbidden-ownership"
+path = "crates/search-ports/AGENTS.md"
+line = 26
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#dependency"
+path = "crates/search-ports/AGENTS.md"
+line = 34
+level = 2
+heading = "Dependency"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#port-families"
+path = "crates/search-ports/AGENTS.md"
+line = 39
+level = 2
+heading = "Port families"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#required-evidence"
+path = "crates/search-ports/AGENTS.md"
+line = 51
+level = 2
+heading = "Required evidence"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/AGENTS.md#size"
+path = "crates/search-ports/AGENTS.md"
+line = 60
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/README.md#search-ports"
+path = "crates/search-ports/README.md"
+line = 1
+level = 1
+heading = "search-ports"
+kind = "implementation_contract_root"
+modules = ["search-ports:access", "search-ports:conformance", "search-ports:context", "search-ports:control", "search-ports:error", "search-ports:handles", "search-ports:index", "search-ports:lib", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source", "search-ports:stream"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-ports/README.md#owns"
+path = "crates/search-ports/README.md"
+line = 10
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-ports/README.md#must-not-own"
+path = "crates/search-ports/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s3-non-negotiable-invariants"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 140
+level = 2
+heading = "S3. Non-negotiable invariants"
+kind = "architecture_section"
+modules = ["search-ports:conformance"]
+route_kind = "architecture_section_registry"
+rationale = "S3"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s4-abstraction-layers"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 180
+level = 2
+heading = "S4. Abstraction layers"
+kind = "architecture_section"
+modules = ["search-ports:conformance"]
+route_kind = "architecture_section_registry"
+rationale = "S4"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s31-crate-and-dependency-architecture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1782
+level = 2
+heading = "S31. Crate and dependency architecture"
+kind = "architecture_section"
+modules = ["search-ports:conformance"]
+route_kind = "architecture_section_registry"
+rationale = "S31"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p00-contract-freeze"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2824
+level = 3
+heading = "P00 — Contract freeze"
+kind = "delivery_contract"
+modules = ["search-ports:conformance"]
+route_kind = "delivery_registry"
+rationale = "P00"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#vendor-neutral-port-operation-inventory"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 1
+level = 1
+heading = "Vendor-neutral port operation inventory"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#runtime-and-control"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 9
+level = 2
+heading = "Runtime and control"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#clockport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 11
+level = 3
+heading = "ClockPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#secretstoreport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 17
+level = 3
+heading = "SecretStorePort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#processsupervisorport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 26
+level = 3
+heading = "ProcessSupervisorPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#controljournalport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 34
+level = 3
+heading = "ControlJournalPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#controlsnapshotport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 43
+level = 3
+heading = "ControlSnapshotPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#source-and-residency"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 48
+level = 2
+heading = "Source and residency"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#sourceadmissionport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 50
+level = 3
+heading = "SourceAdmissionPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#sourceinventoryport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 56
+level = 3
+heading = "SourceInventoryPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#sourceownershipport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 64
+level = 3
+heading = "SourceOwnershipPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#safereaderport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 70
+level = 3
+heading = "SafeReaderPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#sourcerevisionstoreport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 76
+level = 3
+heading = "SourceRevisionStorePort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#residencypolicyport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 84
+level = 3
+heading = "ResidencyPolicyPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#preparation-and-providers"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 90
+level = 2
+heading = "Preparation and providers"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#materializerport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 92
+level = 3
+heading = "MaterializerPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#unitizerport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 97
+level = 3
+heading = "UnitizerPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#codeenricherport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 102
+level = 3
+heading = "CodeEnricherPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#lexicalencoderport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 107
+level = 3
+heading = "LexicalEncoderPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#modelproviderport-optional"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 114
+level = 3
+heading = "ModelProviderPort — optional"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#index-and-publication-support"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 122
+level = 2
+heading = "Index and publication support"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#searchindexport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 124
+level = 3
+heading = "SearchIndexPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#searchindexadminport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 134
+level = 3
+heading = "SearchIndexAdminPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#epochpinport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 141
+level = 3
+heading = "EpochPinPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#query-security-services"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 148
+level = 2
+heading = "Query/security services"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#accesscompilerport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 150
+level = 3
+heading = "AccessCompilerPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#overlayport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 157
+level = 3
+heading = "OverlayPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#exactscannerport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 165
+level = 3
+heading = "ExactScannerPort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#handlestoreport"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 170
+level = 3
+heading = "HandleStorePort"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PORT_OPERATIONS.md#conformance-requirements"
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+line = 178
+level = 2
+heading = "Conformance requirements"
+kind = "implementation_contract"
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#p00-contract-implementation-pack"
+path = "docs/contracts/p00/README.md"
+line = 1
+level = 1
+heading = "P00 contract implementation pack"
+kind = "implementation_contract"
+modules = ["search-ports:conformance"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#read-sets"
+path = "docs/contracts/p00/README.md"
+line = 7
+level = 2
+heading = "Read sets"
+kind = "implementation_contract"
+modules = ["search-ports:conformance"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#files"
+path = "docs/contracts/p00/README.md"
+line = 20
+level = 2
+heading = "Files"
+kind = "implementation_contract"
+modules = ["search-ports:conformance"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#p00-supporting-type-registry"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 1
+level = 1
+heading = "P00 supporting type registry"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#visibility-and-owner-classes"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 6
+level = 2
+heading = "Visibility and owner classes"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#bounds-and-collections"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 18
+level = 2
+heading = "Bounds and collections"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#opaque-and-display-wrappers"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 48
+level = 2
+heading = "Opaque and display wrappers"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#identity-and-reference-registry"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 67
+level = 2
+heading = "Identity and reference registry"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#baseline-semantic-registries"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 130
+level = 2
+heading = "Baseline semantic registries"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#coverage-records"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 150
+level = 2
+heading = "Coverage records"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#port-support-records-owned-by-search-ports"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 180
+level = 2
+heading = "Port support records — owned by search-ports"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#new-type-rule"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 215
+level = 2
+heading = "New-type rule"
+kind = "implementation_contract"
+modules = ["search-ports:context"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-ports:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-ports.md#search-ports-implementation-packet"
+path = "swarm/assignments/search-ports.md"
+line = 1
+level = 1
+heading = "search-ports implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-ports:access", "search-ports:conformance", "search-ports:context", "search-ports:control", "search-ports:error", "search-ports:handles", "search-ports:index", "search-ports:lib", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source", "search-ports:stream"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-ports.md#mission"
+path = "swarm/assignments/search-ports.md"
+line = 11
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-ports.md#owns"
+path = "swarm/assignments/search-ports.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-ports.md#does-not-own"
+path = "swarm/assignments/search-ports.md"
+line = 21
+level = 2
+heading = "Does not own"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-ports.md#port-groups"
+path = "swarm/assignments/search-ports.md"
+line = 26
+level = 2
+heading = "Port groups"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-ports.md#invariants"
+path = "swarm/assignments/search-ports.md"
+line = 31
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-ports:lib"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-ports.md#evidence"
+path = "swarm/assignments/search-ports.md"
+line = 37
+level = 2
+heading = "Evidence"
+kind = "implementation_contract"
+modules = ["search-ports:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

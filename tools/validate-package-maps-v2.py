@@ -109,9 +109,22 @@ def main() -> int:
         cargo_internal = exact_internal_dependencies(manifest_path, set(graph["package_rows"]))
         fail(errors, cargo_internal == declared, f"{package}: Cargo/registry dependency mismatch: cargo={sorted(cargo_internal)} registry={sorted(declared)}")
         consumer_wave = int(row.get("wave", 0))
+        stage_readsets = read_toml("swarm/stage-readsets.toml", errors)
+        reentry_overrides = {
+            item.get("id"): item
+            for item in stage_readsets.get("override", [])
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
         for producer in declared:
             producer_wave = int(graph["package_rows"][producer].get("wave", 0))
-            fail(errors, producer_wave <= consumer_wave, f"{package}: depends on later-wave package {producer} ({producer_wave}>{consumer_wave})")
+            if producer_wave > consumer_wave:
+                override_id = f"W{producer_wave}.{package}"
+                override = reentry_overrides.get(override_id, {})
+                fail(errors, override.get("package") == package, f"{package}: later-wave dependency {producer} lacks exact {override_id} reentry")
+                fail(errors, override.get("wave") == producer_wave, f"{package}: {override_id} wave mismatch")
+                fail(errors, override.get("replace_previous_stage_context") is True, f"{package}: {override_id} must replace prior context")
+                fail(errors, override.get("accepted_prior_stage_handoff_only") is True, f"{package}: {override_id} must consume accepted handoff only")
+                fail(errors, override.get("dependency_implementation_reads_allowed") is False, f"{package}: {override_id} may not read dependency implementation")
     cycle = dependency_cycle(graph["package_rows"])
     fail(errors, not cycle, f"package dependency cycle: {cycle}")
 
@@ -173,6 +186,21 @@ def main() -> int:
     for row in graph["documentation_rows"]:
         if row["id"] in integration_ids:
             fail(errors, row["kind"] in {"governance", "navigation"}, f"{row['id']}: product-bearing node misclassified as integration")
+
+    # Port methods are source-exact and each enters one package-local module.
+    port_doc = read_toml(str(manifest.get("port_registry")), errors)
+    port_rows = rows(port_doc, "port", "name") if port_doc else {}
+    fail(errors, port_doc.get("schema_version") == 2, "port registry must be schema v2")
+    fail(errors, port_doc.get("port_count") == len(port_rows) == 23, "port registry count mismatch")
+    fail(errors, port_doc.get("method_count") == sum(len(row.get("methods", [])) for row in port_rows.values()), "port method count mismatch")
+    valid_module_refs = {row["id"] for row in graph["module_rows"]}
+    for port_name, row in port_rows.items():
+        methods = row.get("methods")
+        method_modules = row.get("method_modules")
+        package = row.get("implementation_package")
+        fail(errors, isinstance(methods, list) and isinstance(method_modules, list) and len(methods) == len(method_modules), f"{port_name}: one method module per method required")
+        for method_name, method_module in zip(methods if isinstance(methods, list) else [], method_modules if isinstance(method_modules, list) else []):
+            fail(errors, f"{package}:{method_module}" in valid_module_refs, f"{port_name}.{method_name}: invalid package-local method module")
 
     # Every implementation module is related; structural-only modules require explicit rationale.
     fail(errors, not graph["weak_modules"], f"weak implementation modules remain: {graph['weak_modules']}")

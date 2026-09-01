@@ -1,0 +1,833 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-query-planner"
+node_count = 75
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/query.md#query-configuration-contract"
+path = "config/sections/query.md"
+line = 1
+level = 1
+heading = "[query] configuration contract"
+kind = "configuration_contract"
+modules = ["search-query-planner:config"]
+route_kind = "config_owner"
+rationale = "query"
+
+[[node]]
+id = "config/sections/query.md#fields"
+path = "config/sections/query.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-query-planner:config"]
+route_kind = "config_owner"
+rationale = "query"
+
+[[node]]
+id = "config/sections/query.md#required-section-api"
+path = "config/sections/query.md"
+line = 23
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-query-planner:config"]
+route_kind = "config_owner"
+rationale = "query"
+
+[[node]]
+id = "config/sections/query.md#invariants"
+path = "config/sections/query.md"
+line = 37
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-query-planner:config"]
+route_kind = "config_owner"
+rationale = "query"
+
+[[node]]
+id = "config/sections/query.md#required-tests"
+path = "config/sections/query.md"
+line = 43
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-query-planner:config"]
+route_kind = "config_owner"
+rationale = "query"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#agent-contract-search-query-planner"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-query-planner"
+kind = "implementation_contract_root"
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#mission"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#ownership"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 23
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#allowed-dependencies"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 32
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#required-logical-surface"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 37
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#failure-surface"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 48
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 53
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#size-and-split-guard"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 65
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/AGENTS.md#definition-of-done"
+path = "crates/search-query/search-query-planner/AGENTS.md"
+line = 73
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#function-contract-search-query-planner"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-query-planner"
+kind = "implementation_contract_root"
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#operations"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#normalizerecipe-request-contracts-result-normalizedreciperequest-planerror"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "normalizerecipe(request, contracts) -> Result<NormalizedRecipeRequest, PlanError>"
+kind = "implementation_operation"
+modules = ["search-query-planner:recipe"]
+route_kind = "operation_route"
+rationale = "search-query-planner::normalize_recipe"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#capturequerysnapshot-controlsnapshot-sourceview-overlaystate-capabilitystate-result-querysnapsho"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 15
+level = 3
+heading = "capturequerysnapshot(controlsnapshot, sourceview, overlaystate, capabilitystate) -> Result<QuerySnapshotFence, PlanError>"
+kind = "implementation_operation"
+modules = ["search-query-planner:request"]
+route_kind = "operation_route"
+rationale = "search-query-planner::capture_query_snapshot"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#compileplan-recipe-grant-authorizedscope-snapshot-capabilities-budget-result-searchtaskplan-plan"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "compileplan(recipe, grant, authorizedscope, snapshot, capabilities, budget) -> Result<SearchTaskPlan, PlanError>"
+kind = "implementation_operation"
+modules = ["search-query-planner:plan"]
+route_kind = "operation_route"
+rationale = "search-query-planner::compile_plan"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#allocatelegbudgets-recipe-globalbudget-legdrafts-result-budgetallocation-planerror"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 29
+level = 3
+heading = "allocatelegbudgets(recipe, globalbudget, legdrafts) -> Result<BudgetAllocation, PlanError>"
+kind = "implementation_operation"
+modules = ["search-query-planner:budget"]
+route_kind = "operation_route"
+rationale = "search-query-planner::allocate_leg_budgets"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#fingerprintsnapshot-snapshot-querysnapshotfingerprint"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 34
+level = 3
+heading = "fingerprintsnapshot(snapshot) -> QuerySnapshotFingerprint"
+kind = "implementation_operation"
+modules = ["search-query-planner:request"]
+route_kind = "operation_route"
+rationale = "search-query-planner::fingerprint_snapshot"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#fingerprintplan-planwithoutfingerprint-planfingerprint"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 36
+level = 3
+heading = "fingerprintplan(planwithoutfingerprint) -> PlanFingerprint"
+kind = "implementation_operation"
+modules = ["search-query-planner:plan"]
+route_kind = "operation_route"
+rationale = "search-query-planner::fingerprint_plan"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#validatedrift-plan-currentnonsecurity-currentsecurity-plandriftdecision"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 41
+level = 3
+heading = "validatedrift(plan, currentnonsecurity, currentsecurity) -> PlanDriftDecision"
+kind = "implementation_operation"
+modules = ["search-query-planner:request"]
+route_kind = "operation_route"
+rationale = "search-query-planner::validate_drift"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#semantics"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 46
+level = 2
+heading = "Semantics"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/FUNCTIONS.md#required-fixtures"
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+line = 53
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/README.md#search-query-planner"
+path = "crates/search-query/search-query-planner/README.md"
+line = 1
+level = 1
+heading = "search-query-planner"
+kind = "implementation_contract_root"
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-query-planner/README.md#owns"
+path = "crates/search-query/search-query-planner/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-query-planner/README.md#must-not-own"
+path = "crates/search-query/search-query-planner/README.md"
+line = 18
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-access-compilation-and-noninterference"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1193
+level = 2
+heading = "S19. Access compilation and noninterference"
+kind = "architecture_section"
+modules = ["search-query-planner:scope"]
+route_kind = "architecture_section_registry"
+rationale = "S19"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-1-searchreadgrant"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1195
+level = 3
+heading = "S19.1 SearchReadGrant"
+kind = "architecture_node"
+modules = ["search-query-planner:scope"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-2-searchtaskplan"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1228
+level = 3
+heading = "S19.2 SearchTaskPlan"
+kind = "architecture_node"
+modules = ["search-query-planner:scope"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-3-retrieval-legs"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1258
+level = 3
+heading = "S19.3 Retrieval legs"
+kind = "architecture_node"
+modules = ["search-query-planner:scope"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-4-no-post-filter-only-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1264
+level = 3
+heading = "S19.4 No post-filter-only security"
+kind = "architecture_node"
+modules = ["search-query-planner:scope"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s20-query-recipes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1270
+level = 2
+heading = "S20. Query recipes"
+kind = "architecture_section"
+modules = ["search-query-planner:recipe"]
+route_kind = "architecture_section_registry"
+rationale = "S20"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s20-1-example-natural-language-path"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1291
+level = 3
+heading = "S20.1 Example natural-language path"
+kind = "architecture_node"
+modules = ["search-query-planner:recipe"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-subject-resolution-and-retrieval-planning"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1322
+level = 2
+heading = "S21. Subject resolution and retrieval planning"
+kind = "architecture_section"
+modules = ["search-query-planner:legs"]
+route_kind = "architecture_section_registry"
+rationale = "S21"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-1-subject-resolver"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1324
+level = 3
+heading = "S21.1 Subject resolver"
+kind = "architecture_node"
+modules = ["search-query-planner:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-2-retrieval-ladder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1336
+level = 3
+heading = "S21.2 Retrieval ladder"
+kind = "architecture_node"
+modules = ["search-query-planner:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-3-deterministic-fusion"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1349
+level = 3
+heading = "S21.3 Deterministic fusion"
+kind = "architecture_node"
+modules = ["search-query-planner:legs"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["search-query-planner:plan", "search-query-planner:recipe"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#recipe-registry-and-typed-request-families"
+path = "docs/contracts/p00/RECIPES.md"
+line = 1
+level = 1
+heading = "Recipe registry and typed request families"
+kind = "implementation_contract"
+modules = ["search-query-planner:recipe"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#exact-registry"
+path = "docs/contracts/p00/RECIPES.md"
+line = 5
+level = 2
+heading = "Exact registry"
+kind = "implementation_contract"
+modules = ["search-query-planner:recipe"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#common-request-envelope"
+path = "docs/contracts/p00/RECIPES.md"
+line = 25
+level = 2
+heading = "Common request envelope"
+kind = "implementation_contract"
+modules = ["search-query-planner:recipe"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#common-selectors"
+path = "docs/contracts/p00/RECIPES.md"
+line = 48
+level = 2
+heading = "Common selectors"
+kind = "implementation_contract"
+modules = ["search-query-planner:recipe"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#recipe-bodies"
+path = "docs/contracts/p00/RECIPES.md"
+line = 73
+level = 2
+heading = "Recipe bodies"
+kind = "implementation_contract"
+modules = ["search-query-planner:recipe"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#output-minimums"
+path = "docs/contracts/p00/RECIPES.md"
+line = 130
+level = 2
+heading = "Output minimums"
+kind = "implementation_contract"
+modules = ["search-query-planner:recipe"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-query-planner:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/query/README.md#w4-query-qualification"
+path = "qualification/query/README.md"
+line = 1
+level = 1
+heading = "W4 query qualification"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#w4-bounded-query-product-qualification-contract"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W4 bounded query product qualification contract"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#owners"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#frozen-inputs"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-order"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 45
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#mandatory-properties"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 60
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#admission-and-noninterference"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 62
+level = 3
+heading = "Admission and noninterference"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#snapshot-and-planning"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 72
+level = 3
+heading = "Snapshot and planning"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-and-validation"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Execution and validation"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#results-handles-and-continuations"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 91
+level = 3
+heading = "Results, handles and continuations"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#stop-conditions"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 105
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#evidence-products"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 121
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#current-disposition"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 127
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-query-planner:plan"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "swarm/assignments/search-query-planner.md#search-query-planner-implementation-packet"
+path = "swarm/assignments/search-query-planner.md"
+line = 1
+level = 1
+heading = "search-query-planner implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-query-planner.md#mission"
+path = "swarm/assignments/search-query-planner.md"
+line = 9
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-query-planner.md#owns"
+path = "swarm/assignments/search-query-planner.md"
+line = 14
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-query-planner.md#must-not-own"
+path = "swarm/assignments/search-query-planner.md"
+line = 19
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-query-planner.md#logical-operations"
+path = "swarm/assignments/search-query-planner.md"
+line = 25
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-query-planner.md#invariants"
+path = "swarm/assignments/search-query-planner.md"
+line = 34
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-query-planner:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-query-planner.md#exit-evidence"
+path = "swarm/assignments/search-query-planner.md"
+line = 45
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["search-query-planner:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

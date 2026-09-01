@@ -1,0 +1,1273 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-handles"
+node_count = 115
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/handles.md#handles-configuration-contract"
+path = "config/sections/handles.md"
+line = 1
+level = 1
+heading = "[handles] configuration contract"
+kind = "configuration_contract"
+modules = ["search-handles:config"]
+route_kind = "config_owner"
+rationale = "handles"
+
+[[node]]
+id = "config/sections/handles.md#fields"
+path = "config/sections/handles.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-handles:config"]
+route_kind = "config_owner"
+rationale = "handles"
+
+[[node]]
+id = "config/sections/handles.md#required-section-api"
+path = "config/sections/handles.md"
+line = 22
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-handles:config"]
+route_kind = "config_owner"
+rationale = "handles"
+
+[[node]]
+id = "config/sections/handles.md#invariants"
+path = "config/sections/handles.md"
+line = 36
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-handles:config"]
+route_kind = "config_owner"
+rationale = "handles"
+
+[[node]]
+id = "config/sections/handles.md#required-tests"
+path = "config/sections/handles.md"
+line = 42
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-handles:config"]
+route_kind = "config_owner"
+rationale = "handles"
+
+[[node]]
+id = "crates/search-query/search-handles/AGENTS.md#agent-contract-search-handles"
+path = "crates/search-query/search-handles/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-handles"
+kind = "implementation_contract_root"
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-handles/AGENTS.md#ownership"
+path = "crates/search-query/search-handles/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-handles/AGENTS.md"
+line = 15
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/AGENTS.md#dependencies"
+path = "crates/search-query/search-handles/AGENTS.md"
+line = 23
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/AGENTS.md#size"
+path = "crates/search-query/search-handles/AGENTS.md"
+line = 27
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#function-contract-search-handles"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-handles"
+kind = "implementation_contract_root"
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#minting"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Minting"
+kind = "implementation_contract"
+modules = ["search-handles:issue"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#mintephemeral-target-binding-policy-randomness-result-searchsourcehandle-handleerror"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "mintephemeral(target, binding, policy, randomness) -> Result<SearchSourceHandle, HandleError>"
+kind = "implementation_operation"
+modules = ["search-handles:issue"]
+route_kind = "operation_route"
+rationale = "search-handles::mint_ephemeral"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#mintdurablesource-target-retentionlease-binding-policy-ports-randomness-result-searchsourcehandl"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "mintdurablesource(target, retentionlease, binding, policy, ports, randomness) -> Result<SearchSourceHandle, HandleError>"
+kind = "implementation_operation"
+modules = ["search-handles:issue"]
+route_kind = "operation_route"
+rationale = "search-handles::mint_durable_source"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#tokendigest-handle-handletokendigest"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 21
+level = 3
+heading = "tokendigest(handle) -> HandleTokenDigest"
+kind = "implementation_operation"
+modules = ["search-handles:identity"]
+route_kind = "operation_route"
+rationale = "search-handles::token_digest"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#resolution-and-expansion"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 26
+level = 2
+heading = "Resolution and expansion"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#resolve-handle-store-result-searchsourcehandlerecord-handleerror"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 28
+level = 3
+heading = "resolve(handle, store) -> Result<SearchSourceHandleRecord, HandleError>"
+kind = "implementation_operation"
+modules = ["search-handles:resolve"]
+route_kind = "operation_route"
+rationale = "search-handles::resolve"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#revalidate-record-request-livestate-result-handlepermit-handleerror"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 33
+level = 3
+heading = "revalidate(record, request, livestate) -> Result<HandlePermit, HandleError>"
+kind = "implementation_operation"
+modules = ["search-handles:resolve"]
+route_kind = "operation_route"
+rationale = "search-handles::revalidate"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#expand-handle-request-livestate-ports-context-result-handleexpansion-handleerror"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 39
+level = 3
+heading = "expand(handle, request, livestate, ports, context) -> Result<HandleExpansion, HandleError>"
+kind = "implementation_operation"
+modules = ["search-handles:expand"]
+route_kind = "operation_route"
+rationale = "search-handles::expand"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#cancellation-and-deadlines"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 44
+level = 2
+heading = "Cancellation and deadlines"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#lifecycle"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 57
+level = 2
+heading = "Lifecycle"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#invalidate-scope-generation-store-invalidationreceipt"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 59
+level = 3
+heading = "invalidate(scope, generation, store) -> InvalidationReceipt"
+kind = "implementation_operation"
+modules = ["search-handles:invalidate"]
+route_kind = "operation_route"
+rationale = "search-handles::invalidate"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#expire-now-policy-store-expiryreceipt"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 64
+level = 3
+heading = "expire(now, policy, store) -> ExpiryReceipt"
+kind = "implementation_operation"
+modules = ["search-handles:cleanup"]
+route_kind = "operation_route"
+rationale = "search-handles::expire"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#applylivelimits-old-new-store-result-configapplyreceipt-handleerror"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 69
+level = 3
+heading = "applylivelimits(old, new, store) -> Result<ConfigApplyReceipt, HandleError>"
+kind = "implementation_operation"
+modules = ["search-handles:config"]
+route_kind = "operation_route"
+rationale = "search-handles::apply_live_limits"
+
+[[node]]
+id = "crates/search-query/search-handles/FUNCTIONS.md#required-fixtures"
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+line = 74
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/README.md#search-handles"
+path = "crates/search-query/search-handles/README.md"
+line = 1
+level = 1
+heading = "search-handles"
+kind = "implementation_contract_root"
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-handles/README.md#owns"
+path = "crates/search-query/search-handles/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/README.md#must-not-own"
+path = "crates/search-query/search-handles/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#w7-hardening-search-handles"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 1
+level = 1
+heading = "W7 hardening — search-handles"
+kind = "implementation_contract_root"
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#durable-eligibility"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 6
+level = 2
+heading = "Durable eligibility"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#invalidatelifecyclescope"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 22
+level = 2
+heading = "invalidatelifecyclescope"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#purge"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 36
+level = 2
+heading = "Purge"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#expansion-race-hardening"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 46
+level = 2
+heading = "Expansion race hardening"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#retention-lease-drift"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 60
+level = 2
+heading = "Retention lease drift"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#restore-import"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 66
+level = 2
+heading = "Restore/import"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-handles/W7_HARDENING.md#required-tests"
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+line = 76
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-candidate-validation-and-result-projection"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1415
+level = 2
+heading = "S23. Candidate validation and result projection"
+kind = "architecture_section"
+modules = ["search-handles:issue"]
+route_kind = "architecture_section_registry"
+rationale = "S23"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-1-validation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1417
+level = 3
+heading = "S23.1 Validation"
+kind = "architecture_node"
+modules = ["search-handles:issue"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-2-searchcandidateset"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1433
+level = 3
+heading = "S23.2 SearchCandidateSet"
+kind = "architecture_node"
+modules = ["search-handles:issue"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-3-compact-result-budget"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1462
+level = 3
+heading = "S23.3 Compact result budget"
+kind = "architecture_node"
+modules = ["search-handles:issue"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-handles-and-continuations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1567
+level = 2
+heading = "S26. Handles and continuations"
+kind = "architecture_section"
+modules = ["search-handles:resolve", "search-handles:token"]
+route_kind = "architecture_section_registry"
+rationale = "S26"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-1-ephemeral-handles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1569
+level = 3
+heading = "S26.1 Ephemeral handles"
+kind = "architecture_node"
+modules = ["search-handles:resolve", "search-handles:token"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-2-durable-source-handles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1582
+level = 3
+heading = "S26.2 Durable source handles"
+kind = "architecture_node"
+modules = ["search-handles:resolve", "search-handles:token"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s26-3-continuation-stability"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1600
+level = 3
+heading = "S26.3 Continuation stability"
+kind = "architecture_node"
+modules = ["search-handles:resolve", "search-handles:token"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["search-handles:issue"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p13-access-handles-purge-and-restore-boundaries"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2912
+level = 3
+heading = "P13 — Access, handles, purge and restore boundaries"
+kind = "delivery_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "delivery_registry"
+rationale = "P13"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#w7-lifecycle-settings-1-0"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W7 lifecycle settings 1.0"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#principle"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 5
+level = 2
+heading = "Principle"
+kind = "principle_or_invariant"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#security-and-invalidation"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 18
+level = 2
+heading = "Security and invalidation"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#handles-and-continuations"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 27
+level = 2
+heading = "Handles and continuations"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#revision-store"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 36
+level = 2
+heading = "Revision store"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#retention"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 42
+level = 2
+heading = "Retention"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#purge"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 51
+level = 2
+heading = "Purge"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#backup-and-restore"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 60
+level = 2
+heading = "Backup and restore"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#composite-reconfiguration"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 69
+level = 2
+heading = "Composite reconfiguration"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#redaction"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 88
+level = 2
+heading = "Redaction"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md#required-tests"
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+line = 94
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#provider-protocol-handles-security-and-lifecycle-schemas"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 1
+level = 1
+heading = "Provider protocol, handles, security and lifecycle schemas"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#protocol-version-and-envelope"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 3
+level = 2
+heading = "Protocol version and envelope"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#capability-descriptor"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 57
+level = 2
+heading = "Capability descriptor"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#public-handle-tokens"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 81
+level = 2
+heading = "Public handle tokens"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#server-side-source-handle-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 106
+level = 2
+heading = "Server-side source-handle records"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#server-side-continuation-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 170
+level = 2
+heading = "Server-side continuation records"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#security-mutation-state"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 204
+level = 2
+heading = "Security mutation state"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#publication-support-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 223
+level = 2
+heading = "Publication support records"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#purge-and-restore"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 255
+level = 2
+heading = "Purge and restore"
+kind = "implementation_contract"
+modules = ["search-handles:token"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#w7-lifecycle-purge-and-restore-implementation-packet"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore implementation packet"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 23
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 76
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 96
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-handles:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/lifecycle/README.md#w7-lifecycle-purge-and-restore-qualification"
+path = "qualification/lifecycle/README.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore qualification"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#w7-security-lifecycle-retention-purge-and-restore-qualification-contract"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W7 security lifecycle, retention, purge and restore qualification contract"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#owners"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#frozen-inputs"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#execution-order"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 48
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#mandatory-properties"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 69
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#restrictive-security-and-active-requests"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 71
+level = 3
+heading = "Restrictive security and active requests"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#handles-continuations-and-candidate-emission"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 82
+level = 3
+heading = "Handles, continuations and candidate emission"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#retention-and-mark-sweep"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 94
+level = 3
+heading = "Retention and mark/sweep"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#purge"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 106
+level = 3
+heading = "Purge"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#backup-and-restore"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 119
+level = 3
+heading = "Backup and restore"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#boundary-and-receipt-truthfulness"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 133
+level = 3
+heading = "Boundary and receipt truthfulness"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#stop-conditions"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 142
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#evidence-products"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 164
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#current-disposition"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 170
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-handles:invalidate"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/query/README.md#w4-query-qualification"
+path = "qualification/query/README.md"
+line = 1
+level = 1
+heading = "W4 query qualification"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#w4-bounded-query-product-qualification-contract"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W4 bounded query product qualification contract"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#owners"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#frozen-inputs"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-order"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 45
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#mandatory-properties"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 60
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#admission-and-noninterference"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 62
+level = 3
+heading = "Admission and noninterference"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#snapshot-and-planning"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 72
+level = 3
+heading = "Snapshot and planning"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-and-validation"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Execution and validation"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#results-handles-and-continuations"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 91
+level = 3
+heading = "Results, handles and continuations"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#stop-conditions"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 105
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#evidence-products"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 121
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#current-disposition"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 127
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-handles:expand"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "swarm/assignments/search-handles.md#search-handles-implementation-packet"
+path = "swarm/assignments/search-handles.md"
+line = 1
+level = 1
+heading = "search-handles implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-handles.md#mission"
+path = "swarm/assignments/search-handles.md"
+line = 9
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-handles.md#owns"
+path = "swarm/assignments/search-handles.md"
+line = 14
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-handles.md#must-not-own"
+path = "swarm/assignments/search-handles.md"
+line = 23
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-handles.md#logical-operations"
+path = "swarm/assignments/search-handles.md"
+line = 28
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-handles.md#invariants"
+path = "swarm/assignments/search-handles.md"
+line = 38
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-handles:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-handles.md#exit-evidence"
+path = "swarm/assignments/search-handles.md"
+line = 48
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["search-handles:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

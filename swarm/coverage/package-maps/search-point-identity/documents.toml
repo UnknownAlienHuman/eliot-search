@@ -1,0 +1,481 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-point-identity"
+node_count = 43
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#agent-contract-search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-point-identity"
+kind = "implementation_contract_root"
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#mission"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#ownership"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#forbidden-ownership"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#allowed-dependencies"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#required-logical-surface"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#failure-surface"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 44
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 49
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#size-and-split-guard"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 60
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/AGENTS.md#definition-of-done"
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+line = 68
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#function-contract-search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-point-identity"
+kind = "implementation_contract_root"
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#operations"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 5
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#encodecanonicalkey-key-result-canonicalpointkeybytes-pointidentityerror"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 7
+level = 3
+heading = "encodecanonicalkey(key) -> Result<CanonicalPointKeyBytes, PointIdentityError>"
+kind = "implementation_operation"
+modules = ["search-point-identity:canonical"]
+route_kind = "operation_route"
+rationale = "search-point-identity::encode_canonical_key"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#fulldigest-bytes-pointidentitydigest"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 12
+level = 3
+heading = "fulldigest(bytes) -> PointIdentityDigest"
+kind = "implementation_operation"
+modules = ["search-point-identity:digest"]
+route_kind = "operation_route"
+rationale = "search-point-identity::full_digest"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#deriveqdrantuuid-digest-qdrantpointuuid"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "deriveqdrantuuid(digest) -> QdrantPointUuid"
+kind = "implementation_operation"
+modules = ["search-point-identity:uuid"]
+route_kind = "operation_route"
+rationale = "search-point-identity::derive_qdrant_uuid"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#derivepointidentity-key-result-pointidentity-pointidentityerror"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 21
+level = 3
+heading = "derivepointidentity(key) -> Result<PointIdentity, PointIdentityError>"
+kind = "implementation_operation"
+modules = ["search-point-identity:key"]
+route_kind = "operation_route"
+rationale = "search-point-identity::derive_point_identity"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#compareexistingidentity-expected-observed-collisiondecision"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 26
+level = 3
+heading = "compareexistingidentity(expected, observed) -> CollisionDecision"
+kind = "implementation_operation"
+modules = ["search-point-identity:key"]
+route_kind = "operation_route"
+rationale = "search-point-identity::compare_existing_identity"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#validateidentitypayload-expected-payload-result-pointidentityerror"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 31
+level = 3
+heading = "validateidentitypayload(expected, payload) -> Result<(), PointIdentityError>"
+kind = "implementation_operation"
+modules = ["search-point-identity:key"]
+route_kind = "operation_route"
+rationale = "search-point-identity::validate_identity_payload"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#semantics"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 35
+level = 2
+heading = "Semantics"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md#required-fixtures"
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+line = 41
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/README.md#search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity/README.md"
+line = 1
+level = 1
+heading = "search-point-identity"
+kind = "implementation_contract_root"
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/README.md#owns"
+path = "crates/search-index-qdrant/search-point-identity/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-point-identity/README.md#must-not-own"
+path = "crates/search-index-qdrant/search-point-identity/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s11-collision-safe-point-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 751
+level = 2
+heading = "S11. Collision-safe point identity"
+kind = "architecture_section"
+modules = ["search-point-identity:collision", "search-point-identity:key"]
+route_kind = "architecture_section_registry"
+rationale = "S11"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s11-1-canonical-key"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 753
+level = 3
+heading = "S11.1 Canonical key"
+kind = "architecture_node"
+modules = ["search-point-identity:collision", "search-point-identity:key"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s11-2-id-derivation-and-collision-guard"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 769
+level = 3
+heading = "S11.2 ID derivation and collision guard"
+kind = "architecture_node"
+modules = ["search-point-identity:collision", "search-point-identity:key"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s11-3-projection-manifest"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 779
+level = 3
+heading = "S11.3 Projection manifest"
+kind = "architecture_node"
+modules = ["search-point-identity:collision", "search-point-identity:key"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p06-lexical-encoder-and-collection-schema"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2870
+level = 3
+heading = "P06 — Lexical encoder and collection schema"
+kind = "delivery_contract"
+modules = ["search-point-identity:collision", "search-point-identity:key"]
+route_kind = "delivery_registry"
+rationale = "P06"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#w3-implementation-packet-index"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W3 implementation packet index"
+kind = "implementation_handoff"
+modules = ["search-point-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 6
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-point-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#dependency-order"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 19
+level = 2
+heading = "Dependency order"
+kind = "implementation_handoff"
+modules = ["search-point-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 39
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-point-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#search-point-identity-implementation-packet"
+path = "swarm/assignments/search-point-identity.md"
+line = 1
+level = 1
+heading = "search-point-identity implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#mission"
+path = "swarm/assignments/search-point-identity.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#owns"
+path = "swarm/assignments/search-point-identity.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#must-not-own"
+path = "swarm/assignments/search-point-identity.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#logical-primitives"
+path = "swarm/assignments/search-point-identity.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#logical-operations"
+path = "swarm/assignments/search-point-identity.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#required-invariants"
+path = "swarm/assignments/search-point-identity.md"
+line = 42
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-point-identity:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#typed-failure-surface"
+path = "swarm/assignments/search-point-identity.md"
+line = 50
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#exit-tests-evidence"
+path = "swarm/assignments/search-point-identity.md"
+line = 57
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#suggested-internal-modules"
+path = "swarm/assignments/search-point-identity.md"
+line = 66
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-point-identity.md#size-split"
+path = "swarm/assignments/search-point-identity.md"
+line = 81
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-point-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

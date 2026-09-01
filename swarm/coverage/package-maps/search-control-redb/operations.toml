@@ -1,0 +1,208 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-control-redb"
+operation_count = 20
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-control-redb::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-control-redb::derive_journal_identity"
+name = "derive_journal_identity"
+module = "identity"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Journal identity and open"]
+route_kind = "semantic"
+score = 140
+
+[[operation]]
+id = "search-control-redb::execute_migration"
+name = "execute_migration"
+module = "migration"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Migration"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-control-redb::inspect_journal"
+name = "inspect_journal"
+module = "open"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Journal identity and open"]
+route_kind = "semantic"
+score = 36
+
+[[operation]]
+id = "search-control-redb::journal_health"
+name = "journal_health"
+module = "quarantine"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Quarantine and diagnostics"]
+route_kind = "semantic"
+score = 17
+
+[[operation]]
+id = "search-control-redb::open_or_create"
+name = "open_or_create"
+module = "open"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Journal identity and open"]
+route_kind = "semantic"
+score = 125
+
+[[operation]]
+id = "search-control-redb::plan_migration"
+name = "plan_migration"
+module = "migration"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Migration"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-control-redb::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-control-redb::prune_idempotency"
+name = "prune_idempotency"
+module = "idempotency"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Idempotency maintenance"]
+route_kind = "semantic"
+score = 121
+
+[[operation]]
+id = "search-control-redb::publish_snapshot_after_commit"
+name = "publish_snapshot_after_commit"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Control snapshot"]
+route_kind = "semantic"
+score = 122
+
+[[operation]]
+id = "search-control-redb::quarantine"
+name = "quarantine"
+module = "quarantine"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Quarantine and diagnostics"]
+route_kind = "semantic"
+score = 106
+
+[[operation]]
+id = "search-control-redb::read_snapshot"
+name = "read_snapshot"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Read and mutation transactions"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-control-redb::rebuild_control_snapshot"
+name = "rebuild_control_snapshot"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Control snapshot"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-control-redb::recover_snapshot_publication"
+name = "recover_snapshot_publication"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Control snapshot"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-control-redb::recover_transaction"
+name = "recover_transaction"
+module = "transaction"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Read and mutation transactions"]
+route_kind = "semantic"
+score = 121
+
+[[operation]]
+id = "search-control-redb::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-control-redb::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-control-redb::transact"
+name = "transact"
+module = "transaction"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Read and mutation transactions"]
+route_kind = "semantic"
+score = 46
+
+[[operation]]
+id = "search-control-redb::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-control-redb::verify_migration"
+name = "verify_migration"
+module = "migration"
+public_entry_module = "api"
+sources = ["crates/search-control-redb/FUNCTIONS.md"]
+source_contexts = ["Migration"]
+route_kind = "semantic"
+score = 110

@@ -1,0 +1,108 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-config"
+operation_count = 10
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-config::assemble_effective"
+name = "assemble_effective"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::diff"
+name = "diff"
+module = "diff"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::fingerprint"
+name = "fingerprint"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::merge_layers"
+name = "merge_layers"
+module = "layering"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::parse_document"
+name = "parse_document"
+module = "document"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::plan_reconfiguration"
+name = "plan_reconfiguration"
+module = "diff"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::project_section"
+name = "project_section"
+module = "registry"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::redacted_view"
+name = "redacted_view"
+module = "redaction"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::register_sections"
+name = "register_sections"
+module = "registry"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-config::validate_environment_key"
+name = "validate_environment_key"
+module = "layering"
+public_entry_module = "api"
+sources = ["crates/search-config/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100

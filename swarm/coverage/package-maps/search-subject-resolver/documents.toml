@@ -1,0 +1,734 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-subject-resolver"
+node_count = 66
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#agent-contract-search-subject-resolver"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-subject-resolver"
+kind = "implementation_contract_root"
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#mission"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#ownership"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 21
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#allowed-dependencies"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 27
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#required-logical-surface"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 32
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#failure-surface"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 41
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 46
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#size-and-split-guard"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 57
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/AGENTS.md#definition-of-done"
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+line = 65
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#function-contract-search-subject-resolver"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-subject-resolver"
+kind = "implementation_contract_root"
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#state-and-authority"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "State and authority"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#normalizesubjectrequest"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 26
+level = 2
+heading = "normalizesubjectrequest"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:request"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#validateresolutioncontext"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 43
+level = 2
+heading = "validateresolutioncontext"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#resolution-ladder-fail-closed-rule"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 57
+level = 2
+heading = "Resolution-ladder fail-closed rule"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:ladder"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#resolveexplicitreference"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 75
+level = 2
+heading = "resolveexplicitreference"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#resolvequalifiedkey"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 89
+level = 2
+heading = "resolvequalifiedkey"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#resolveexactname"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 102
+level = 2
+heading = "resolveexactname"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#resolvesignatureandkind"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 115
+level = 2
+heading = "resolvesignatureandkind"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#resolvestructurallexicalcandidates"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 128
+level = 2
+heading = "resolvestructurallexicalcandidates"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:candidates"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#collapseequivalentoccurrences"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 141
+level = 2
+heading = "collapseequivalentoccurrences"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#assembleresolution"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 154
+level = 2
+heading = "assembleresolution"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#buildambiguityset"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 189
+level = 2
+heading = "buildambiguityset"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#issueresolutionreceipt"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 202
+level = 2
+heading = "issueresolutionreceipt"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#revalidateresolution"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 214
+level = 2
+heading = "revalidateresolution"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#cancellation-deadlines-and-retry"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 225
+level = 2
+heading = "Cancellation, deadlines and retry"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#typed-failures-and-reasons"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 232
+level = 2
+heading = "Typed failures and reasons"
+kind = "implementation_error_contract"
+modules = ["search-subject-resolver:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+line = 248
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/README.md#search-subject-resolver"
+path = "crates/search-query/search-subject-resolver/README.md"
+line = 1
+level = 1
+heading = "search-subject-resolver"
+kind = "implementation_contract_root"
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/README.md#owns"
+path = "crates/search-query/search-subject-resolver/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-subject-resolver/README.md#must-not-own"
+path = "crates/search-query/search-subject-resolver/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-subject-resolution-and-retrieval-planning"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1322
+level = 2
+heading = "S21. Subject resolution and retrieval planning"
+kind = "architecture_section"
+modules = ["search-subject-resolver:ladder"]
+route_kind = "architecture_section_registry"
+rationale = "S21"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-1-subject-resolver"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1324
+level = 3
+heading = "S21.1 Subject resolver"
+kind = "architecture_node"
+modules = ["search-subject-resolver:ladder"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-2-retrieval-ladder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1336
+level = 3
+heading = "S21.2 Retrieval ladder"
+kind = "architecture_node"
+modules = ["search-subject-resolver:ladder"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-3-deterministic-fusion"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1349
+level = 3
+heading = "S21.3 Deterministic fusion"
+kind = "architecture_node"
+modules = ["search-subject-resolver:ladder"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s22-cross-repository-comparison"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1381
+level = 2
+heading = "S22. Cross-repository comparison"
+kind = "architecture_section"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "architecture_section_registry"
+rationale = "S22"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p11-inspect-and-compare-implementations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2900
+level = 3
+heading = "P11 — Inspect and compare implementations"
+kind = "delivery_contract"
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:candidates", "search-subject-resolver:ladder"]
+route_kind = "delivery_registry"
+rationale = "P11"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#w6-subject-resolution-comparison-and-exact-proof-implementation-packet"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W6 subject-resolution, comparison and exact-proof implementation packet"
+kind = "implementation_handoff"
+modules = ["search-subject-resolver:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#packages"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Packages"
+kind = "implementation_handoff"
+modules = ["search-subject-resolver:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 17
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-subject-resolver:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 36
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-subject-resolver:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-subject-resolver:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 75
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-subject-resolver:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/proof/README.md#w6-comparison-and-exact-proof-qualification"
+path = "qualification/proof/README.md"
+line = 1
+level = 1
+heading = "W6 comparison and exact-proof qualification"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#w6-subject-resolution-comparison-and-exact-proof-qualification-contract"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W6 subject resolution, comparison and exact-proof qualification contract"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#owners"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#frozen-inputs"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 30
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#execution-order"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 47
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#mandatory-properties"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 66
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#subject-resolution"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 68
+level = 3
+heading = "Subject resolution"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#cross-repository-comparison"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Cross-repository comparison"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#exact-proof"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 95
+level = 3
+heading = "Exact proof"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#stop-conditions"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 111
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#evidence-products"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 130
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#current-disposition"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 136
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-subject-resolver:ambiguity"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#search-subject-resolver-implementation-packet"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 1
+level = 1
+heading = "search-subject-resolver implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#mission"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#owns"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#must-not-own"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#logical-primitives"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#logical-operations"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#required-invariants"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 42
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-subject-resolver:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#typed-failure-surface"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 50
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#exit-tests-evidence"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 58
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#suggested-internal-modules"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 67
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-subject-resolver.md#size-split"
+path = "swarm/assignments/search-subject-resolver.md"
+line = 82
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-subject-resolver:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

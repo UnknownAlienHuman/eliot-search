@@ -1,0 +1,116 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-comparator"
+outbound_dependency_count = 3
+inbound_dependency_count = 1
+architecture_relation_count = 3
+configuration_relation_count = 0
+recipe_relation_count = 1
+port_relation_count = 0
+schema_relation_count = 2
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-comparator->search-contracts"
+consumer = "search-comparator"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-query/search-comparator/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-comparator->search-domain"
+consumer = "search-comparator"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-comparator/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-comparator->search-subject-resolver"
+consumer = "search-comparator"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-subject-resolver"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-comparator/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-comparator"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-comparator"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W6"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S22"
+modules = ["search-comparator:alignment", "search-comparator:behavior", "search-comparator:result"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C25"
+modules = ["search-comparator:alignment", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:lineage"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P11"
+modules = ["search-comparator:alignment", "search-comparator:behavior", "search-comparator:lineage", "search-comparator:result"]
+required_outputs = ["subject_resolution", "ambiguity_sets", "analogue_ladder", "lineage_collapse", "descriptive_behavior_matrix"]
+exit_evidence = ["renamed_true_analogue", "false_same_name", "fork_mirror", "decisive_test"]
+
+[[recipe]]
+id = "compare_implementations@1"
+module = "behavior"
+request_schema = "SearchRecipeRequest"
+result_schema = "CompareImplementationsResult"
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "comparison_support"
+owner_roles = ["state_owner"]
+modules = ["behavior"]
+schemas = ["ConfigurationObservation", "BehaviorObservation", "BehaviorConflict"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "comparison_results"
+owner_roles = ["state_owner"]
+modules = ["result"]
+schemas = ["CompareImplementationsResult", "CrossRepositoryBehaviorSet", "ComparableImplementation", "BehaviorComparison"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]

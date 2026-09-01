@@ -1,0 +1,218 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-publication"
+operation_count = 21
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-publication::abandon"
+name = "abandon"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Recovery and doctor operations"]
+route_kind = "semantic"
+score = 18
+
+[[operation]]
+id = "search-publication::apply_ordered_catch_up"
+name = "apply_ordered_catch_up"
+module = "stage"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-publication::close_old_points"
+name = "close_old_points"
+module = "reclaim"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 5
+
+[[operation]]
+id = "search-publication::commit_invalidation_only"
+name = "commit_invalidation_only"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/W7_HARDENING.md"]
+source_contexts = ["Invalidation-only publication"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-publication::commit_route_switch"
+name = "commit_route_switch"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-publication::commit_visible_epoch"
+name = "commit_visible_epoch"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 96
+
+[[operation]]
+id = "search-publication::compensate_exact"
+name = "compensate_exact"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Recovery and doctor operations"]
+route_kind = "semantic"
+score = 18
+
+[[operation]]
+id = "search-publication::emit_old_route_manifest"
+name = "emit_old_route_manifest"
+module = "reclaim"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-publication::emit_retired_manifest"
+name = "emit_retired_manifest"
+module = "reclaim"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 19
+
+[[operation]]
+id = "search-publication::enter_final_barrier"
+name = "enter_final_barrier"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-publication::persist_intent"
+name = "persist_intent"
+module = "intent"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 105
+
+[[operation]]
+id = "search-publication::persist_scale_intent"
+name = "persist_scale_intent"
+module = "intent"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 105
+
+[[operation]]
+id = "search-publication::publish_control_snapshot"
+name = "publish_control_snapshot"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 21
+
+[[operation]]
+id = "search-publication::record_base_at_r0"
+name = "record_base_at_r0"
+module = "stage"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-publication::recover"
+name = "recover"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Recovery and doctor operations"]
+route_kind = "semantic"
+score = 60
+
+[[operation]]
+id = "search-publication::recover_scale_intent"
+name = "recover_scale_intent"
+module = "intent"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 91
+
+[[operation]]
+id = "search-publication::rollback_scale_intent"
+name = "rollback_scale_intent"
+module = "intent"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 91
+
+[[operation]]
+id = "search-publication::stage_new_points"
+name = "stage_new_points"
+module = "stage"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-publication::submit"
+name = "submit"
+module = "command"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 12
+
+[[operation]]
+id = "search-publication::validate_candidate_at_r1"
+name = "validate_candidate_at_r1"
+module = "commit"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-publication::verify_readback"
+name = "verify_readback"
+module = "readback"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-publication/FUNCTIONS.md"]
+source_contexts = ["Core operations"]
+route_kind = "semantic"
+score = 97

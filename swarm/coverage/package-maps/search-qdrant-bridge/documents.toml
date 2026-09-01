@@ -1,0 +1,1647 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-qdrant-bridge"
+node_count = 149
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/qdrant_data.md#qdrantdata-configuration-contract"
+path = "config/sections/qdrant_data.md"
+line = 1
+level = 1
+heading = "[qdrantdata] configuration contract"
+kind = "configuration_contract"
+modules = ["search-qdrant-bridge:config"]
+route_kind = "config_owner"
+rationale = "qdrant_data"
+
+[[node]]
+id = "config/sections/qdrant_data.md#fields"
+path = "config/sections/qdrant_data.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-qdrant-bridge:config"]
+route_kind = "config_owner"
+rationale = "qdrant_data"
+
+[[node]]
+id = "config/sections/qdrant_data.md#required-section-api"
+path = "config/sections/qdrant_data.md"
+line = 24
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-qdrant-bridge:config"]
+route_kind = "config_owner"
+rationale = "qdrant_data"
+
+[[node]]
+id = "config/sections/qdrant_data.md#invariants"
+path = "config/sections/qdrant_data.md"
+line = 38
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-qdrant-bridge:config"]
+route_kind = "config_owner"
+rationale = "qdrant_data"
+
+[[node]]
+id = "config/sections/qdrant_data.md#required-tests"
+path = "config/sections/qdrant_data.md"
+line = 44
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-qdrant-bridge:config"]
+route_kind = "config_owner"
+rationale = "qdrant_data"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md#agent-contract-search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-qdrant-bridge"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md#ownership"
+path = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md#forbidden-ownership"
+path = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md"
+line = 14
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md#dependencies"
+path = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md"
+line = 21
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md#size"
+path = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md"
+line = 25
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#function-contract-search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-qdrant-bridge"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#connection-and-admission"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Connection and admission"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#connect-endpoint-authlease-supervisorreceipt-result-qdrantbridge-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "connect(endpoint, authlease, supervisorreceipt) -> Result<QdrantBridge, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::connect"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#probecapabilities-disposableroute-probemanifest-context-result-qdrantcapabilityreceipt-bridgeerr"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 15
+level = 3
+heading = "probecapabilities(disposableroute, probemanifest, context) -> Result<QdrantCapabilityReceipt, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::probe_capabilities"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#createcandidatecollection-schema-context-result-collectioncreatereceipt-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "createcandidatecollection(schema, context) -> Result<CollectionCreateReceipt, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::create_candidate_collection"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#verifycollectionschema-route-expected-result-schemareceipt-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 27
+level = 3
+heading = "verifycollectionschema(route, expected) -> Result<SchemaReceipt, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::verify_collection_schema"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#exact-mutation-operations"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 32
+level = 2
+heading = "Exact mutation operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#upsertexact-batch-mutation-context-result-mutationreceipt-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 34
+level = 3
+heading = "upsertexact(batch, mutation, context) -> Result<MutationReceipt, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::upsert_exact"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#closeexact-ids-validuntilepoch-mutation-context-result-mutationreceipt-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 39
+level = 3
+heading = "closeexact(ids, validuntilepoch, mutation, context) -> Result<MutationReceipt, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::close_exact"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#deleteexact-ids-mutation-context-result-mutationreceipt-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 43
+level = 3
+heading = "deleteexact(ids, mutation, context) -> Result<MutationReceipt, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::delete_exact"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#readbackexact-ids-context-result-boundedpointreadback-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 47
+level = 3
+heading = "readbackexact(ids, context) -> Result<BoundedPointReadback, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:readback"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::readback_exact"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#countexact-filter-context-result-exactcount-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 51
+level = 3
+heading = "countexact(filter, context) -> Result<ExactCount, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::count_exact"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#query-operations"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 55
+level = 2
+heading = "Query operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:query"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#queryfiltered-request-context-result-boundedcandidatestream-bridgeerror"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 57
+level = 3
+heading = "queryfiltered(request, context) -> Result<BoundedCandidateStream, BridgeError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-bridge:query"]
+route_kind = "operation_route"
+rationale = "search-qdrant-bridge::query_filtered"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#timeout-cancellation-and-recovery"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 63
+level = 2
+heading = "Timeout, cancellation and recovery"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#configuration-operations"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 69
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#required-fixtures"
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+line = 75
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md#p18-advanced-scale-supplement-search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+line = 1
+level = 1
+heading = "P18 advanced-scale supplement — search-qdrant-bridge"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md#owns"
+path = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+line = 6
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md#required-operations"
+path = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+line = 13
+level = 2
+heading = "Required operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md#invariants"
+path = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+line = 24
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md#required-evidence"
+path = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+line = 34
+level = 2
+heading = "Required evidence"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/README.md#search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge/README.md"
+line = 1
+level = 1
+heading = "search-qdrant-bridge"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/README.md#owns"
+path = "crates/search-index-qdrant/search-qdrant-bridge/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-bridge/README.md#must-not-own"
+path = "crates/search-index-qdrant/search-qdrant-bridge/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-storage-topology"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 236
+level = 2
+heading = "S6. Storage topology"
+kind = "architecture_section"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S6"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-1-qdrant-the-only-search-index-database"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 238
+level = 3
+heading = "S6.1 Qdrant: the only search/index database"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-2-redb-bounded-control-journal"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 244
+level = 3
+heading = "S6.2 redb: bounded control journal"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-3-filesystem-cas"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 275
+level = 3
+heading = "S6.3 Filesystem CAS"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-4-source-truth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 308
+level = 3
+heading = "S6.4 Source truth"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-projection-membership-isolation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 577
+level = 2
+heading = "S8. Projection membership isolation"
+kind = "architecture_section"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S8"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-1-baseline-physical-rule"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 579
+level = 3
+heading = "S8.1 Baseline physical rule"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-2-payload-non-disclosure"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 589
+level = 3
+heading = "S8.2 Payload non-disclosure"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-3-query-time-duplicate-membership-routing"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 602
+level = 3
+heading = "S8.3 Query-time duplicate-membership routing"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s8-4-future-physical-deduplication"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 608
+level = 3
+heading = "S8.4 Future physical deduplication"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-qdrant-collection-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 614
+level = 2
+heading = "S9. Qdrant collection contract"
+kind = "architecture_section"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "architecture_section_registry"
+rationale = "S9"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-1-baseline-topology"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 616
+level = 3
+heading = "S9.1 Baseline topology"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-2-exact-build-pin"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 632
+level = 3
+heading = "S9.2 Exact build pin"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-3-required-capability-probes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 641
+level = 3
+heading = "S9.3 Required capability probes"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-4-named-vectors"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 661
+level = 3
+heading = "S9.4 Named vectors"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-5-minimal-opaque-point-payload"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 674
+level = 3
+heading = "S9.5 Minimal opaque point payload"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-epoch-domain-and-validity-filter"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 704
+level = 2
+heading = "S10. Epoch domain and validity filter"
+kind = "architecture_section"
+modules = ["search-qdrant-bridge:query"]
+route_kind = "architecture_section_registry"
+rationale = "S10"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-1-epoch-type"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 706
+level = 3
+heading = "S10.1 Epoch type"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:query"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-2-open-ended-validity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 719
+level = 3
+heading = "S10.2 Open-ended validity"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:query"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-3-full-pre-candidate-eligibility-filter"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 732
+level = 3
+heading = "S10.3 Full pre-candidate eligibility filter"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:query"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-lexical-retrieval-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 787
+level = 2
+heading = "S12. Lexical retrieval contract"
+kind = "architecture_section"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "architecture_section_registry"
+rationale = "S12"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-1-qdrant-is-not-assumed-to-be-the-text-encoder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 789
+level = 3
+heading = "S12.1 Qdrant is not assumed to be the text encoder"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-2-immutable-lexical-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 806
+level = 3
+heading = "S12.2 Immutable lexical profiles"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-3-exact-identifiers-do-not-depend-on-bm25"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 867
+level = 3
+heading = "S12.3 Exact identifiers do not depend on BM25"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-4-idf-population"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 871
+level = 3
+heading = "S12.4 IDF population"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-publication-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 879
+level = 2
+heading = "S13. Publication model"
+kind = "architecture_section"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "architecture_section_registry"
+rationale = "S13"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-1-one-active-commit-transaction"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 881
+level = 3
+heading = "S13.1 One active commit transaction"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-2-immediate-invalidation-before-preparation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 887
+level = 3
+heading = "S13.2 Immediate invalidation before preparation"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-3-publication-state-machine"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 891
+level = 3
+heading = "S13.3 Publication state machine"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-4-commit-algorithm"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 911
+level = 3
+heading = "S13.4 Commit algorithm"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-5-crash-and-unresolved-intent"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 933
+level = 3
+heading = "S13.5 Crash and unresolved intent"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-6-startup-verification"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 944
+level = 3
+heading = "S13.6 Startup verification"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-7-collection-generation-migration"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 956
+level = 3
+heading = "S13.7 Collection-generation migration"
+kind = "architecture_node"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s38-superseded-or-rejected-decisions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2149
+level = 2
+heading = "S38. Superseded or rejected decisions"
+kind = "architecture_section"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S38"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p05-managed-qdrant-process-and-capability-gate"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2864
+level = 3
+heading = "P05 — Managed Qdrant process and capability gate"
+kind = "delivery_contract"
+modules = ["search-qdrant-bridge:capability"]
+route_kind = "delivery_registry"
+rationale = "P05"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p06-lexical-encoder-and-collection-schema"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2870
+level = 3
+heading = "P06 — Lexical encoder and collection schema"
+kind = "delivery_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "delivery_registry"
+rationale = "P06"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p07-epoch-publication-and-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2876
+level = 3
+heading = "P07 — Epoch publication and recovery"
+kind = "delivery_contract"
+modules = ["search-qdrant-bridge:mutation"]
+route_kind = "delivery_registry"
+rationale = "P07"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p18-optional-advanced-scale-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2943
+level = 3
+heading = "P18 — Optional advanced scale profile"
+kind = "delivery_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "delivery_registry"
+rationale = "P18"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#w10-optional-depth-implementation-packet"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W10 optional-depth implementation packet"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-rule"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Candidate rule"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 21
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#read-set"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 38
+level = 2
+heading = "Read set"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#model-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 50
+level = 2
+heading = "Model order"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#document-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 67
+level = 2
+heading = "Document order"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#scale-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 83
+level = 2
+heading = "Scale order"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-evaluation-boundary"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Candidate evaluation boundary"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#required-g6-evidence"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 119
+level = 2
+heading = "Required G6 evidence"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-handoff-requirements"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 132
+level = 2
+heading = "Package handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 149
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#current-state"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 166
+level = 2
+heading = "Current state"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#w3-implementation-packet-index"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W3 implementation packet index"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 6
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#dependency-order"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 19
+level = 2
+heading = "Dependency order"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 39
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#w10-optional-depth-contracts-1-0"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W10 optional depth contracts 1.0"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#1-candidate-classes"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Candidate classes"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#2-gate-chain"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 29
+level = 2
+heading = "2. Gate chain"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#3-activation-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 46
+level = 2
+heading = "3. Activation state machine"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#4-model-profile-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 72
+level = 2
+heading = "4. Model profile identity"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-model-semantics"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 106
+level = 2
+heading = "5. Model semantics"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-1-candidate-nomination-only"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 108
+level = 3
+heading = "5.1 Candidate nomination only"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-2-rerank-is-a-closed-transform"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 114
+level = 3
+heading = "5.2 Rerank is a closed transform"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-3-access-and-scoring-noninterference"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 130
+level = 3
+heading = "5.3 Access and scoring noninterference"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-4-content-handling"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 140
+level = 3
+heading = "5.4 Content handling"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#6-model-worker-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 157
+level = 2
+heading = "6. Model worker boundary"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#7-persistent-model-vectors-and-collection-generations"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 179
+level = 2
+heading = "7. Persistent model vectors and collection generations"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#8-document-provider-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 201
+level = 2
+heading = "8. Document provider identity"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#9-document-worker-no-execute-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 228
+level = 2
+heading = "9. Document worker no-execute boundary"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#10-document-projection-migration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 254
+level = 2
+heading = "10. Document projection migration"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#11-measured-material-benefit"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 264
+level = 2
+heading = "11. Measured material benefit"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#12-removal-and-baseline-restoration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 284
+level = 2
+heading = "12. Removal and baseline restoration"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#13-advanced-scale-trigger"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 309
+level = 2
+heading = "13. Advanced scale trigger"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#14-p18-migration-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 333
+level = 2
+heading = "14. P18 migration state machine"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#15-p18-equivalence-and-fault-evidence"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 367
+level = 2
+heading = "15. P18 equivalence and fault evidence"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#16-capability-and-configuration-publication"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 385
+level = 2
+heading = "16. Capability and configuration publication"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#17-package-decomposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 409
+level = 2
+heading = "17. Package decomposition"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#18-hard-stop-conditions"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 424
+level = 2
+heading = "18. Hard stop conditions"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#19-current-disposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 441
+level = 2
+heading = "19. Current disposition"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "qualification/optional-depth/README.md#p16-p18-optional-depth-qualification"
+path = "qualification/optional-depth/README.md"
+line = 1
+level = 1
+heading = "P16-P18 optional-depth qualification"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#w10-optional-depth-qualification-contract"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W10 optional-depth qualification contract"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#1-candidate-specific-acceptance"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 8
+level = 2
+heading = "1. Candidate-specific acceptance"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#2-prerequisite-chain"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 22
+level = 2
+heading = "2. Prerequisite chain"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#3-common-qualification-sequence"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 38
+level = 2
+heading = "3. Common qualification sequence"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#4-model-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 56
+level = 2
+heading = "4. Model candidate"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#5-document-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 75
+level = 2
+heading = "5. Document candidate"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#6-scale-candidate"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 94
+level = 2
+heading = "6. Scale candidate"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#7-g6-evidence-interpretation"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 114
+level = 2
+heading = "7. G6 evidence interpretation"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#8-evidence-record"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 129
+level = 2
+heading = "8. Evidence record"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#9-activation-evidence"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 138
+level = 2
+heading = "9. Activation evidence"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#10-stop-conditions"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 152
+level = 2
+heading = "10. Stop conditions"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/optional-depth/W10_QUALIFICATION.md#11-current-disposition"
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+line = 169
+level = 2
+heading = "11. Current disposition"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:admin"]
+route_kind = "qualification_area_route"
+rationale = "qualification/optional-depth"
+
+[[node]]
+id = "qualification/qdrant/README.md#qdrant-qualification"
+path = "qualification/qdrant/README.md"
+line = 1
+level = 1
+heading = "Qdrant qualification"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#w3-qdrant-and-lexical-qualification-contract"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W3 Qdrant and lexical qualification contract"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#owners"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#frozen-inputs-required-before-execution"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 28
+level = 2
+heading = "Frozen inputs required before execution"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#qualification-order"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 43
+level = 2
+heading = "Qualification order"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mandatory-admission-properties"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 63
+level = 2
+heading = "Mandatory admission properties"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#process-and-secret-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 65
+level = 3
+heading = "Process and secret boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#collection-and-filter-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 75
+level = 3
+heading = "Collection and filter boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mutation-and-readback-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 88
+level = 3
+heading = "Mutation and readback boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#lexical-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 97
+level = 3
+heading = "Lexical boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#evidence-products"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 107
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#current-disposition"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 133
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-qdrant-bridge:schema"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#search-qdrant-bridge-implementation-packet"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 1
+level = 1
+heading = "search-qdrant-bridge implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#mission"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#owns"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#must-not-own"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#logical-primitives"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 32
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#logical-operations"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 36
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#required-invariants"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 48
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#typed-failure-surface"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 56
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#exit-tests-evidence"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 65
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#suggested-internal-modules"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 76
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-bridge.md#size-split"
+path = "swarm/assignments/search-qdrant-bridge.md"
+line = 91
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-qdrant-bridge:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

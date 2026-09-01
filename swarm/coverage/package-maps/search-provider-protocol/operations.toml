@@ -1,0 +1,208 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-provider-protocol"
+operation_count = 20
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-provider-protocol::admit_generic_request"
+name = "admit_generic_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "semantic"
+score = 95
+
+[[operation]]
+id = "search-provider-protocol::admit_request"
+name = "admit_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Connection and request lifecycle"]
+route_kind = "semantic"
+score = 121
+
+[[operation]]
+id = "search-provider-protocol::admit_sequence"
+name = "admit_sequence"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Connection and request lifecycle"]
+route_kind = "semantic"
+score = 32
+
+[[operation]]
+id = "search-provider-protocol::authenticate_binding"
+name = "authenticate_binding"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Framing and negotiation"]
+route_kind = "semantic"
+score = 97
+
+[[operation]]
+id = "search-provider-protocol::cancel_request"
+name = "cancel_request"
+module = "cancel"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Connection and request lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-provider-protocol::close_connection"
+name = "close_connection"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-provider-protocol::commit_binding"
+name = "commit_binding"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "semantic"
+score = 97
+
+[[operation]]
+id = "search-provider-protocol::decode_frame"
+name = "decode_frame"
+module = "frame"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Framing and negotiation"]
+route_kind = "semantic"
+score = 100
+
+[[operation]]
+id = "search-provider-protocol::disconnect"
+name = "disconnect"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Connection and request lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-provider-protocol::emit_binding_filtered_descriptor"
+name = "emit_binding_filtered_descriptor"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "semantic"
+score = 97
+
+[[operation]]
+id = "search-provider-protocol::emit_progress"
+name = "emit_progress"
+module = "progress"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Connection and request lifecycle"]
+route_kind = "semantic"
+score = 94
+
+[[operation]]
+id = "search-provider-protocol::emit_terminal"
+name = "emit_terminal"
+module = "terminal"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Connection and request lifecycle"]
+route_kind = "semantic"
+score = 93
+
+[[operation]]
+id = "search-provider-protocol::encode_frame"
+name = "encode_frame"
+module = "frame"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Framing and negotiation"]
+route_kind = "semantic"
+score = 100
+
+[[operation]]
+id = "search-provider-protocol::issue_pairing_challenge"
+name = "issue_pairing_challenge"
+module = "pairing"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-provider-protocol::negotiate_hello"
+name = "negotiate_hello"
+module = "negotiation"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/FUNCTIONS.md"]
+source_contexts = ["Framing and negotiation"]
+route_kind = "semantic"
+score = 50
+
+[[operation]]
+id = "search-provider-protocol::open_authenticated_connection"
+name = "open_authenticated_connection"
+module = "session"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "semantic"
+score = 7
+
+[[operation]]
+id = "search-provider-protocol::project_capability_descriptor"
+name = "project_capability_descriptor"
+module = "negotiation"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-provider-protocol::revoke_binding"
+name = "revoke_binding"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "semantic"
+score = 97
+
+[[operation]]
+id = "search-provider-protocol::route_expand_handle"
+name = "route_expand_handle"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-provider-protocol::verify_pairing_proof"
+name = "verify_pairing_proof"
+module = "pairing"
+public_entry_module = "api"
+sources = ["crates/search-provider-protocol/W8_HARDENING.md"]
+source_contexts = ["W8 hardening contract — search-provider-protocol"]
+route_kind = "semantic"
+score = 112

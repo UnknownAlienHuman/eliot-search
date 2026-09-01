@@ -242,6 +242,214 @@ PACKAGE_RULES: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+PACKAGE_RULES.update({
+    "eliot-search-doc-worker": [
+        (r"^emit_terminal$", "protocol"),
+        (r"^(cancel_request|cleanup_request_workspace)$", "lifecycle"),
+        (r"^verify_inherited_sandbox$", "sandbox"),
+    ],
+    "eliot-search-model-worker": [
+        (r"^emit_terminal$", "protocol"),
+        (r"^verify_inherited_containment$", "sandbox"),
+        (r"^(begin_drain|shutdown_and_remove|cancel_request)$", "lifecycle"),
+    ],
+    "search-access": [
+        (r"^(classify_active_request_contamination|recheck_live_access)$", "invalidation"),
+        (r"^(begin_security_mutation|classify_security_change|install_live_restriction|commit_and_publish_restriction)$", "barrier"),
+        (r"^compile_base_eligibility$", "snapshot"),
+    ],
+    "search-candidate-validator": [
+        (r"^(material_coverage_change|precheck|validate|validate_lifecycle_fence)$", "decision"),
+        (r"^build_readback_request$", "request"),
+    ],
+    "search-code-enricher": [
+        (r"^build_enrichment_manifest$", "facts"),
+        (r"^classify_evidence_role$", "assurance"),
+        (r"^validate_fact_anchor$", "anchors"),
+        (r"^extract_configuration_predicate$", "predicates"),
+        (r"^extract_structural_relations$", "references"),
+    ],
+    "search-continuation": [
+        (r"^apply_live_limits$", "config"),
+        (r"^resolve$", "resolve"),
+        (r"^(create_durable_replan_checkpoint|create_ephemeral)$", "issue"),
+        (r"^(expand_durable|expand_ephemeral)$", "resume"),
+        (r"^revalidate$", "reauthorize"),
+        (r"^(invalidate|invalidate_lifecycle_scope)$", "cleanup"),
+    ],
+    "search-epoch-pins": [
+        (r"^evaluate_old_route_reclaimability$", "watermark"),
+        (r"^fence_old_route_for_new_pins$", "acquire"),
+        (r"^invalidate_scale_owner_epoch$", "identity"),
+        (r"^snapshot_route_drain$", "release"),
+    ],
+    "search-eval": [
+        (r"^(decide_acceptance|compare_optional_candidate|validate_acceptance_policy)$", "adjudication"),
+        (r"^(evaluate_candidate_slos|score_case|score_incremental_cost)$", "metrics"),
+        (r"^(audit_optional_noninterference|validate_fault_matrix|validate_optional_fault_matrix|validate_protocol_stress)$", "safety"),
+        (r"^validate_removal_and_p15_regression$", "review"),
+        (r"^aggregate_product_pulse$", "campaign"),
+        (r"^(ingest_external_probe|plan_case_block)$", "evidence"),
+    ],
+    "search-exact": [
+        (r"^classify_completeness$", "report"),
+        (r"^compile_exact_scan$", "plan"),
+        (r"^resume_execution$", "recovery"),
+    ],
+    "search-handles": [
+        (r"^apply_live_limits$", "config"),
+        (r"^(mint_durable_source|mint_ephemeral)$", "issue"),
+        (r"^token_digest$", "identity"),
+    ],
+    "search-index-reclaimer": [
+        (r"^complete$", "delete"),
+        (r"^(complete_old_route_reclaim|execute_old_route_batch|resume_old_route_reclaim)$", "delete"),
+        (r"^(validate_retired_manifest|validate_retired_route_manifest)$", "candidate"),
+    ],
+    "search-lexical": [
+        (r"^normalize_input$", "tokenize"),
+    ],
+    "search-model-provider": [
+        (r"^instrumentation_summary$", "capability"),
+        (r"^(prepare_removal|validate_removal_receipt)$", "lifecycle"),
+    ],
+    "search-overlay": [
+        (r"^merge_overlay_and_base$", "direct"),
+        (r"^retrieve_overlay$", "direct"),
+    ],
+    "search-point-identity": [
+        (r"^encode_canonical_key$", "canonical"),
+        (r"^(derive_point_identity|derive_qdrant_uuid|full_digest|compare_existing_identity)$", "identity"),
+    ],
+    "search-projection-planner": [
+        (r"^diff_manifests$", "diff"),
+    ],
+    "search-provider-protocol": [
+        (r"^(disconnect|close_connection)$", "cleanup"),
+        (r"^project_capability_descriptor$", "negotiation"),
+        (r"^route_expand_handle$", "request"),
+    ],
+    "search-publication": [
+        (r"^(apply_ordered_catch_up|record_base_at_r0)$", "stage"),
+        (r"^(enter_final_barrier|validate_candidate_at_r1)$", "commit"),
+        (r"^emit_old_route_manifest$", "reclaim"),
+    ],
+    "search-qdrant-bridge": [
+        (r"^connect$", "capability"),
+        (r"^validate_scale_profile$", "schema"),
+    ],
+    "search-result-projector": [
+        (r"^bind_result$", "request"),
+        (r"^(project_candidate_set|select_handle_subjects)$", "card"),
+        (r"^(project_recipe_result|project_coverage)$", "coverage"),
+        (r"^enforce_result_budget$", "truncation"),
+    ],
+    "search-retention": [
+        (r"^(build_lifecycle_invalidation_set|verify_invalidation_completion)$", "purge"),
+    ],
+    "search-retrieval-executor": [
+        (r"^cancel$", "cleanup"),
+        (r"^admit$", "request"),
+    ],
+    "search-revision-store": [
+        (r"^(apply_exact_object_deletion|install_purge_tombstone)$", "deletion"),
+    ],
+    "search-runtime-owner": [
+        (r"^inspect_existing_owner$", "observation"),
+    ],
+    "search-source-reconcile": [
+        (r"^(ingest_watch_hint|observe_cursor_transition)$", "gap"),
+        (r"^handle_live_head_mismatch$", "currentness"),
+    ],
+    "search-subject-resolver": [
+        (r"^assemble_resolution$", "ladder"),
+        (r"^revalidate_resolution$", "drift"),
+    ],
+    "search-unitizer": [
+        (r"^derive_unit_id$", "identity"),
+        (r"^diff_unit_manifests$", "diff"),
+        (r"^unitize$", "api"),
+    ],
+})
+
+
+for _package, _rules in {
+    "eliot-search": [
+        (r"^resolve_local_endpoint$", "connection"),
+    ],
+    "eliot-searchd": [
+        (r"^build_candidate_generation$", "optional"),
+        (r"^commit_baseline_restore$", "optional"),
+        (r"^mint_standalone_grant$", "capability"),
+        (r"^drain_generic_edge$", "shutdown"),
+    ],
+    "search-candidate-validator": [
+        (r"^recheck_before_emission$", "security"),
+    ],
+    "search-comparator": [
+        (r"^order_recommended_reading$", "result"),
+        (r"^revalidate_comparison$", "lineage"),
+    ],
+    "search-continuation": [
+        (r"^resolve$", "resume"),
+    ],
+    "search-eliot-adapter": [
+        (r"^(map_capability_pulse|map_search_revocation_event)$", "result"),
+    ],
+    "search-epoch-pins": [
+        (r"^renew_continuation_pin$", "acquire"),
+        (r"^snapshot$", "registry"),
+    ],
+    "search-eval": [
+        (r"^compare_abc$", "metrics"),
+        (r"^(freeze_candidate_comparison|ingest_candidate_operation_receipt)$", "evidence"),
+    ],
+    "search-handles": [
+        (r"^revalidate$", "resolve"),
+    ],
+    "search-index-reclaimer": [
+        (r"^checkpoint$", "recovery"),
+    ],
+    "search-model-provider": [
+        (r"^prepare_model_input$", "validation"),
+    ],
+    "search-projection-planner": [
+        (r"^plan_projection$", "point_set"),
+    ],
+    "search-provider-protocol": [
+        (r"^cancel_request$", "cancel"),
+    ],
+    "search-query-planner": [
+        (r"^(capture_query_snapshot|fingerprint_snapshot)$", "request"),
+    ],
+    "search-result-projector": [
+        (r"^project_candidate_set$", "ordering"),
+    ],
+    "search-source-reconcile": [
+        (r"^verify_change_set$", "inventory"),
+    ],
+    "search-subject-resolver": [
+        (r"^issue_resolution_receipt$", "redaction"),
+    ],
+    "search-materializer": [
+        (r"^prepare_admission$", "request"),
+    ],
+}.items():
+    PACKAGE_RULES.setdefault(_package, []).extend(_rules)
+
+STRUCTURAL_MODULE_ROLES: dict[str, str] = {
+    "eliot-search:doctor": "bounded diagnostic command and rendering boundary",
+    "eliot-search-doc-worker:args": "private worker argument bootstrap boundary",
+    "eliot-search-model-worker:args": "private worker argument bootstrap boundary",
+    "search-candidate-validator:batch": "bounded validation batch coordination without new semantics",
+    "search-code-enricher:batch": "bounded enrichment batch coordination without new semantics",
+    "search-eliot-adapter:binding": "ELIOT binding translation support under adapter authority",
+    "search-point-identity:batch": "bounded pure identity batch coordination",
+    "search-ports:stream": "vendor-neutral bounded page and stream support types",
+    "search-projection-planner:profile": "projection profile identity and compatibility support",
+    "search-result-projector:ordering": "deterministic result ordering policy",
+}
+
 CONFIG_MODULES = {
     "instance": "config",
     "secrets": "config",
@@ -402,7 +610,7 @@ def operation_occurrences(text: str) -> dict[str, dict[str, Any]]:
                 if position > match.start():
                     break
                 candidate = re.match(r"`([a-z][a-z0-9_]*)\b", heading["raw"])
-                if candidate and candidate.group(1) == name:
+                if candidate:
                     continue
                 if heading["level"] <= 3:
                     context = heading["title"]
@@ -523,9 +731,9 @@ def choose_module(package: str, operation: str, context: str, modules: list[str]
 
     best = max(scores, key=scores.get) if scores else public_entry
     best_score = scores.get(best, 0)
-    if best_score >= 20:
-        return best, "semantic", best_score
     if best_score >= 5:
+        return best, "semantic", best_score
+    if best_score > 0:
         return best, "semantic_low", best_score
     return public_entry, "public_facade", 0
 
@@ -715,17 +923,27 @@ def build_graph() -> dict[str, Any]:
                 target = "adapters"
                 route_kind = "composition_adapter"
             relationship = "shared_contract" if producer == "search-contracts" else "domain_rules" if producer == "search-domain" else "vendor_neutral_port" if producer == "search-ports" else "accepted_public_handoff"
+            consumer_wave = int(package_rows[consumer].get("wave", 0))
+            producer_wave = int(package_rows[producer].get("wave", 0))
+            requires_stage_reentry = producer_wave > consumer_wave
+            reentry_stage = f"W{producer_wave}" if requires_stage_reentry else "NONE"
+            if requires_stage_reentry:
+                relationship = "progressive_reentry_handoff"
             dependency_rows.append(
                 {
                     "id": f"{consumer}->{producer}",
                     "consumer": consumer,
                     "consumer_module": target,
+                    "consumer_earliest_wave": consumer_wave,
                     "producer": producer,
                     "producer_module": public[producer],
+                    "producer_earliest_wave": producer_wave,
                     "relationship": relationship,
                     "contract_source": source_map[consumer][0],
                     "cargo_manifest": package_rows[consumer]["path"] + "/Cargo.toml",
                     "route_kind": route_kind,
+                    "requires_stage_reentry": requires_stage_reentry,
+                    "reentry_stage": reentry_stage,
                     "exact_accepted_handoff_required": producer not in {"search-contracts", "search-domain", "search-ports", "search-config"},
                 }
             )
@@ -748,7 +966,10 @@ def build_graph() -> dict[str, Any]:
             for ref in row.get("modules", []):
                 relation_counts[ref]["architecture_relations"] += 1
     for row in rows(load(manifest["port_registry"]), "port", "name").values():
-        relation_counts[f"{row['implementation_package']}:{row['implementation_module']}"]["port_relations"] += 1
+        package = row["implementation_package"]
+        relation_counts[f"{package}:{row['implementation_module']}"]["port_relations"] += 1
+        for method_module in row.get("method_modules", []):
+            relation_counts[f"{package}:{method_module}"]["port_method_relations"] += 1
     for packet in load(manifest["schema_registry"]).get("packet", []):
         for group in load(packet["path"]).get("group", []):
             for prefix in ("shape_owner", "meaning_owner", "state_owner"):
@@ -771,7 +992,17 @@ def build_graph() -> dict[str, Any]:
         for module in modules[package]:
             ref = f"{package}:{module}"
             counts = relation_counts[ref]
-            role = "public_entry" if module == public[package] else "error_boundary" if module == "error" else "implementation"
+            structural_rationale = STRUCTURAL_MODULE_ROLES.get(ref, "")
+            if module == public[package]:
+                role = "public_entry"
+                structural_rationale = structural_rationale or "single package public entry boundary"
+            elif module in STRUCTURAL_MODULES:
+                role = "structural_boundary"
+                structural_rationale = structural_rationale or "package structural boundary"
+            elif structural_rationale:
+                role = "structural_support"
+            else:
+                role = "implementation"
             specific = sum(value for key, value in counts.items() if key not in {"documentation_nodes"})
             weak = role == "implementation" and specific == 0
             if weak:
@@ -782,11 +1013,13 @@ def build_graph() -> dict[str, Any]:
                     "package": package,
                     "module": module,
                     "role": role,
+                    "structural_rationale": structural_rationale,
                     "operation_count": counts.get("operations", 0),
                     "documentation_node_count": counts.get("documentation_nodes", 0),
                     "specific_documentation_node_count": counts.get("specific_documentation_nodes", 0),
                     "architecture_relation_count": counts.get("architecture_relations", 0),
                     "port_relation_count": counts.get("port_relations", 0),
+                    "port_method_relation_count": counts.get("port_method_relations", 0),
                     "schema_relation_count": counts.get("schema_relations", 0),
                     "configuration_relation_count": counts.get("configuration_relations", 0),
                     "recipe_relation_count": counts.get("recipe_relations", 0),
@@ -893,6 +1126,7 @@ def render_dependency_registry(graph: dict[str, Any]) -> str:
         "one_edge_per_registry_dependency = true",
         "producer_public_entry_only = true",
         "consumer_module_must_exist = true",
+        "later_wave_dependency_requires_exact_stage_reentry = true",
         "implementation_authorized_by_this_registry = false",
         "",
     ]
@@ -903,12 +1137,16 @@ def render_dependency_registry(graph: dict[str, Any]) -> str:
                 f"id = {q(row['id'])}",
                 f"consumer = {q(row['consumer'])}",
                 f"consumer_module = {q(row['consumer_module'])}",
+                f"consumer_earliest_wave = {row['consumer_earliest_wave']}",
                 f"producer = {q(row['producer'])}",
                 f"producer_module = {q(row['producer_module'])}",
+                f"producer_earliest_wave = {row['producer_earliest_wave']}",
                 f"relationship = {q(row['relationship'])}",
                 f"contract_source = {q(row['contract_source'])}",
                 f"cargo_manifest = {q(row['cargo_manifest'])}",
                 f"route_kind = {q(row['route_kind'])}",
+                f"requires_stage_reentry = {'true' if row['requires_stage_reentry'] else 'false'}",
+                f"reentry_stage = {q(row['reentry_stage'])}",
                 f"exact_accepted_handoff_required = {'true' if row['exact_accepted_handoff_required'] else 'false'}",
                 "",
             ]
@@ -937,11 +1175,13 @@ def render_module_registry(graph: dict[str, Any]) -> str:
                 f"package = {q(row['package'])}",
                 f"module = {q(row['module'])}",
                 f"role = {q(row['role'])}",
+                f"structural_rationale = {q(row['structural_rationale'])}",
                 f"operation_count = {row['operation_count']}",
                 f"documentation_node_count = {row['documentation_node_count']}",
                 f"specific_documentation_node_count = {row['specific_documentation_node_count']}",
                 f"architecture_relation_count = {row['architecture_relation_count']}",
                 f"port_relation_count = {row['port_relation_count']}",
+                f"port_method_relation_count = {row['port_method_relation_count']}",
                 f"schema_relation_count = {row['schema_relation_count']}",
                 f"configuration_relation_count = {row['configuration_relation_count']}",
                 f"recipe_relation_count = {row['recipe_relation_count']}",

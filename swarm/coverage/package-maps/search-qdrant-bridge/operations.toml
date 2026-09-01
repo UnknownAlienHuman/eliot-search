@@ -1,0 +1,168 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-qdrant-bridge"
+operation_count = 16
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-qdrant-bridge::close_exact"
+name = "close_exact"
+module = "mutation"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Exact mutation operations"]
+route_kind = "semantic"
+score = 35
+
+[[operation]]
+id = "search-qdrant-bridge::connect"
+name = "connect"
+module = "capability"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Connection and admission"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-qdrant-bridge::count_exact"
+name = "count_exact"
+module = "mutation"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Exact mutation operations"]
+route_kind = "semantic"
+score = 21
+
+[[operation]]
+id = "search-qdrant-bridge::create_candidate_collection"
+name = "create_candidate_collection"
+module = "admin"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Connection and admission"]
+route_kind = "semantic"
+score = 20
+
+[[operation]]
+id = "search-qdrant-bridge::create_scale_candidate_collection"
+name = "create_scale_candidate_collection"
+module = "admin"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 20
+
+[[operation]]
+id = "search-qdrant-bridge::delete_exact"
+name = "delete_exact"
+module = "mutation"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Exact mutation operations"]
+route_kind = "semantic"
+score = 35
+
+[[operation]]
+id = "search-qdrant-bridge::probe_capabilities"
+name = "probe_capabilities"
+module = "capability"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Connection and admission"]
+route_kind = "semantic"
+score = 41
+
+[[operation]]
+id = "search-qdrant-bridge::probe_scale_capabilities"
+name = "probe_scale_capabilities"
+module = "capability"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 41
+
+[[operation]]
+id = "search-qdrant-bridge::query_filtered"
+name = "query_filtered"
+module = "query"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Query operations"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-qdrant-bridge::readback_exact"
+name = "readback_exact"
+module = "readback"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Exact mutation operations"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-qdrant-bridge::upsert_exact"
+name = "upsert_exact"
+module = "mutation"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Exact mutation operations"]
+route_kind = "semantic"
+score = 35
+
+[[operation]]
+id = "search-qdrant-bridge::validate_scale_mutation_readback"
+name = "validate_scale_mutation_readback"
+module = "mutation"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-qdrant-bridge::validate_scale_profile"
+name = "validate_scale_profile"
+module = "schema"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-qdrant-bridge::validate_scale_query_equivalence"
+name = "validate_scale_query_equivalence"
+module = "query"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-qdrant-bridge::verify_collection_schema"
+name = "verify_collection_schema"
+module = "schema"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"]
+source_contexts = ["Connection and admission"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-qdrant-bridge::verify_scale_candidate_schema"
+name = "verify_scale_candidate_schema"
+module = "schema"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 85

@@ -1,0 +1,1383 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-index-reclaimer"
+node_count = 125
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/index_reclaim.md#indexreclaim-configuration-contract"
+path = "config/sections/index_reclaim.md"
+line = 1
+level = 1
+heading = "[indexreclaim] configuration contract"
+kind = "configuration_contract"
+modules = ["search-index-reclaimer:config"]
+route_kind = "config_owner"
+rationale = "index_reclaim"
+
+[[node]]
+id = "config/sections/index_reclaim.md#fields"
+path = "config/sections/index_reclaim.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-index-reclaimer:config"]
+route_kind = "config_owner"
+rationale = "index_reclaim"
+
+[[node]]
+id = "config/sections/index_reclaim.md#required-section-api"
+path = "config/sections/index_reclaim.md"
+line = 20
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-index-reclaimer:config"]
+route_kind = "config_owner"
+rationale = "index_reclaim"
+
+[[node]]
+id = "config/sections/index_reclaim.md#invariants"
+path = "config/sections/index_reclaim.md"
+line = 34
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-index-reclaimer:config"]
+route_kind = "config_owner"
+rationale = "index_reclaim"
+
+[[node]]
+id = "config/sections/index_reclaim.md#required-tests"
+path = "config/sections/index_reclaim.md"
+line = 40
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-index-reclaimer:config"]
+route_kind = "config_owner"
+rationale = "index_reclaim"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md#agent-contract-search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-index-reclaimer"
+kind = "implementation_contract_root"
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md#ownership"
+path = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md#forbidden-ownership"
+path = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md"
+line = 15
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md#dependencies"
+path = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md"
+line = 23
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md#size"
+path = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md"
+line = 28
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#function-contract-search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-index-reclaimer"
+kind = "implementation_contract_root"
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#operations"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#validateretiredmanifest-manifest-publicationreceipt-result-committedretiredmanifest-reclaimerror"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "validateretiredmanifest(manifest, publicationreceipt) -> Result<CommittedRetiredManifest, ReclaimError>"
+kind = "implementation_operation"
+modules = ["search-index-reclaimer:candidate"]
+route_kind = "operation_route"
+rationale = "search-index-reclaimer::validate_retired_manifest"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#plan-manifest-watermark-settings-budget-result-reclaimplan-reclaimerror"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 15
+level = 3
+heading = "plan(manifest, watermark, settings, budget) -> Result<ReclaimPlan, ReclaimError>"
+kind = "implementation_operation"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "operation_route"
+rationale = "search-index-reclaimer::plan"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#executebatch-plan-batchindex-indexadmin-mutation-context-result-reclaimbatchreceipt-reclaimerror"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 20
+level = 3
+heading = "executebatch(plan, batchindex, indexadmin, mutation, context) -> Result<ReclaimBatchReceipt, ReclaimError>"
+kind = "implementation_operation"
+modules = ["search-index-reclaimer:delete"]
+route_kind = "operation_route"
+rationale = "search-index-reclaimer::execute_batch"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#checkpoint-plan-receipts-reclaimcheckpoint"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 25
+level = 3
+heading = "checkpoint(plan, receipts) -> ReclaimCheckpoint"
+kind = "implementation_operation"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "operation_route"
+rationale = "search-index-reclaimer::checkpoint"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#resume-checkpoint-manifest-watermark-indexadmin-context-result-reclaimreceipt-reclaimerror"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 30
+level = 3
+heading = "resume(checkpoint, manifest, watermark, indexadmin, context) -> Result<ReclaimReceipt, ReclaimError>"
+kind = "implementation_operation"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "operation_route"
+rationale = "search-index-reclaimer::resume"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#complete-plan-receipts-result-reclaimreceipt-reclaimerror"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 35
+level = 3
+heading = "complete(plan, receipts) -> Result<ReclaimReceipt, ReclaimError>"
+kind = "implementation_operation"
+modules = ["search-index-reclaimer:delete"]
+route_kind = "operation_route"
+rationale = "search-index-reclaimer::complete"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#configuration-operations"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 40
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#cancellation-retry-and-crash-semantics"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 45
+level = 2
+heading = "Cancellation, retry and crash semantics"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md#required-fixtures"
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+line = 51
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md#p18-advanced-scale-supplement-search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
+line = 1
+level = 1
+heading = "P18 advanced-scale supplement — search-index-reclaimer"
+kind = "implementation_contract_root"
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md#required-operations"
+path = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
+line = 5
+level = 2
+heading = "Required operations"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md#invariants"
+path = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
+line = 15
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-index-reclaimer:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md#required-evidence"
+path = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
+line = 24
+level = 2
+heading = "Required evidence"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/README.md#search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer/README.md"
+line = 1
+level = 1
+heading = "search-index-reclaimer"
+kind = "implementation_contract_root"
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/README.md#owns"
+path = "crates/search-index-qdrant/search-index-reclaimer/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/README.md#must-not-own"
+path = "crates/search-index-qdrant/search-index-reclaimer/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md#w7-hardening-search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"
+line = 1
+level = 1
+heading = "W7 hardening — search-index-reclaimer"
+kind = "implementation_contract_root"
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md#accepted-authority"
+path = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"
+line = 6
+level = 2
+heading = "Accepted authority"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md#purge-overlap"
+path = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"
+line = 20
+level = 2
+heading = "Purge overlap"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md#restore-interaction"
+path = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"
+line = 27
+level = 2
+heading = "Restore interaction"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md#required-tests"
+path = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"
+line = 33
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-query-snapshots-pins-and-reclamation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 975
+level = 2
+heading = "S14. Query snapshots, pins and reclamation"
+kind = "architecture_section"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "architecture_section_registry"
+rationale = "S14"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-1-read-only-hot-path"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 977
+level = 3
+heading = "S14.1 Read-only hot path"
+kind = "architecture_node"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-2-in-memory-epoch-and-route-pin"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1000
+level = 3
+heading = "S14.2 In-memory epoch and route pin"
+kind = "architecture_node"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-3-reclamation-watermark"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1006
+level = 3
+heading = "S14.3 Reclamation watermark"
+kind = "architecture_node"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-4-live-security-fences-override-snapshots"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1016
+level = 3
+heading = "S14.4 Live security fences override snapshots"
+kind = "architecture_node"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p07-epoch-publication-and-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2876
+level = 3
+heading = "P07 — Epoch publication and recovery"
+kind = "delivery_contract"
+modules = ["search-index-reclaimer:delete"]
+route_kind = "delivery_registry"
+rationale = "P07"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p13-access-handles-purge-and-restore-boundaries"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2912
+level = 3
+heading = "P13 — Access, handles, purge and restore boundaries"
+kind = "delivery_contract"
+modules = ["search-index-reclaimer:delete"]
+route_kind = "delivery_registry"
+rationale = "P13"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p18-optional-advanced-scale-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2943
+level = 3
+heading = "P18 — Optional advanced scale profile"
+kind = "delivery_contract"
+modules = ["search-index-reclaimer:delete"]
+route_kind = "delivery_registry"
+rationale = "P18"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#w10-optional-depth-implementation-packet"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W10 optional-depth implementation packet"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-rule"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Candidate rule"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 21
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#read-set"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 38
+level = 2
+heading = "Read set"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#model-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 50
+level = 2
+heading = "Model order"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#document-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 67
+level = 2
+heading = "Document order"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#scale-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 83
+level = 2
+heading = "Scale order"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-evaluation-boundary"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Candidate evaluation boundary"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#required-g6-evidence"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 119
+level = 2
+heading = "Required G6 evidence"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-handoff-requirements"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 132
+level = 2
+heading = "Package handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 149
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#current-state"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 166
+level = 2
+heading = "Current state"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#w3-implementation-packet-index"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W3 implementation packet index"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 6
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#dependency-order"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 19
+level = 2
+heading = "Dependency order"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 39
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#w7-lifecycle-purge-and-restore-implementation-packet"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore implementation packet"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 23
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 76
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 96
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-index-reclaimer:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#w10-optional-depth-contracts-1-0"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W10 optional depth contracts 1.0"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#1-candidate-classes"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Candidate classes"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#2-gate-chain"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 29
+level = 2
+heading = "2. Gate chain"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#3-activation-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 46
+level = 2
+heading = "3. Activation state machine"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#4-model-profile-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 72
+level = 2
+heading = "4. Model profile identity"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-model-semantics"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 106
+level = 2
+heading = "5. Model semantics"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-1-candidate-nomination-only"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 108
+level = 3
+heading = "5.1 Candidate nomination only"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-2-rerank-is-a-closed-transform"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 114
+level = 3
+heading = "5.2 Rerank is a closed transform"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-3-access-and-scoring-noninterference"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 130
+level = 3
+heading = "5.3 Access and scoring noninterference"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#5-4-content-handling"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 140
+level = 3
+heading = "5.4 Content handling"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#6-model-worker-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 157
+level = 2
+heading = "6. Model worker boundary"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#7-persistent-model-vectors-and-collection-generations"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 179
+level = 2
+heading = "7. Persistent model vectors and collection generations"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#8-document-provider-identity"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 201
+level = 2
+heading = "8. Document provider identity"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#9-document-worker-no-execute-boundary"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 228
+level = 2
+heading = "9. Document worker no-execute boundary"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#10-document-projection-migration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 254
+level = 2
+heading = "10. Document projection migration"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#11-measured-material-benefit"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 264
+level = 2
+heading = "11. Measured material benefit"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#12-removal-and-baseline-restoration"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 284
+level = 2
+heading = "12. Removal and baseline restoration"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#13-advanced-scale-trigger"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 309
+level = 2
+heading = "13. Advanced scale trigger"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#14-p18-migration-state-machine"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 333
+level = 2
+heading = "14. P18 migration state machine"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#15-p18-equivalence-and-fault-evidence"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 367
+level = 2
+heading = "15. P18 equivalence and fault evidence"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#16-capability-and-configuration-publication"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 385
+level = 2
+heading = "16. Capability and configuration publication"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#17-package-decomposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 409
+level = 2
+heading = "17. Package decomposition"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#18-hard-stop-conditions"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 424
+level = 2
+heading = "18. Hard stop conditions"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md#19-current-disposition"
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+line = 441
+level = 2
+heading = "19. Current disposition"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:plan"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "qualification/lifecycle/README.md#w7-lifecycle-purge-and-restore-qualification"
+path = "qualification/lifecycle/README.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore qualification"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#w7-security-lifecycle-retention-purge-and-restore-qualification-contract"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W7 security lifecycle, retention, purge and restore qualification contract"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#owners"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#frozen-inputs"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#execution-order"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 48
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#mandatory-properties"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 69
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#restrictive-security-and-active-requests"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 71
+level = 3
+heading = "Restrictive security and active requests"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#handles-continuations-and-candidate-emission"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 82
+level = 3
+heading = "Handles, continuations and candidate emission"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#retention-and-mark-sweep"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 94
+level = 3
+heading = "Retention and mark/sweep"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#purge"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 106
+level = 3
+heading = "Purge"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#backup-and-restore"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 119
+level = 3
+heading = "Backup and restore"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#boundary-and-receipt-truthfulness"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 133
+level = 3
+heading = "Boundary and receipt truthfulness"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#stop-conditions"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 142
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#evidence-products"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 164
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/lifecycle/W7_QUALIFICATION.md#current-disposition"
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+line = 170
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:recovery"]
+route_kind = "qualification_area_route"
+rationale = "qualification/lifecycle"
+
+[[node]]
+id = "qualification/qdrant/README.md#qdrant-qualification"
+path = "qualification/qdrant/README.md"
+line = 1
+level = 1
+heading = "Qdrant qualification"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#w3-qdrant-and-lexical-qualification-contract"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W3 Qdrant and lexical qualification contract"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#owners"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#frozen-inputs-required-before-execution"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 28
+level = 2
+heading = "Frozen inputs required before execution"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#qualification-order"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 43
+level = 2
+heading = "Qualification order"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mandatory-admission-properties"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 63
+level = 2
+heading = "Mandatory admission properties"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#process-and-secret-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 65
+level = 3
+heading = "Process and secret boundary"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#collection-and-filter-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 75
+level = 3
+heading = "Collection and filter boundary"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mutation-and-readback-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 88
+level = 3
+heading = "Mutation and readback boundary"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#lexical-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 97
+level = 3
+heading = "Lexical boundary"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#evidence-products"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 107
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#current-disposition"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 133
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-index-reclaimer:readback"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#search-index-reclaimer-implementation-packet"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 1
+level = 1
+heading = "search-index-reclaimer implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#mission"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#owns"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#must-not-own"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#logical-primitives"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 33
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#logical-operations"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 37
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#required-invariants"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 44
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-index-reclaimer:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#typed-failure-surface"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 52
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#exit-tests-evidence"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 60
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#suggested-internal-modules"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 69
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-index-reclaimer.md#size-split"
+path = "swarm/assignments/search-index-reclaimer.md"
+line = 82
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-index-reclaimer:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

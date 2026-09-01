@@ -1,0 +1,187 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-code-enricher"
+path = "crates/search-prep/search-code-enricher"
+kind = "lib"
+family = "preparation"
+cell = "C10"
+earliest_wave = 5
+optional = false
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-code-enricher.md"
+function_source = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+qualification = "qualification/current/W5_QUALIFICATION.md"
+config_sections = []
+declared_dependencies = ["search-contracts", "search-domain", "search-ports"]
+module_count = 11
+operation_count = 9
+documentation_node_count = 95
+principle_node_count = 1
+outbound_dependency_count = 3
+inbound_dependency_count = 1
+architecture_relation_count = 3
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+operations_map = "swarm/coverage/package-maps/search-code-enricher/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-code-enricher/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-code-enricher/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 37
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 4
+
+[[module]]
+name = "profile"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 19
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 1
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "parse"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 35
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "facts"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 30
+architecture_relation_count = 2
+port_relation_count = 1
+port_method_relation_count = 1
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "references"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 5
+architecture_relation_count = 2
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "predicates"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 29
+architecture_relation_count = 2
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "anchors"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "assurance"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 46
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "batch"
+role = "structural_support"
+structural_rationale = "bounded enrichment batch coordination without new semantics"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

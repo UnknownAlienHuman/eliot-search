@@ -1,0 +1,100 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-code-enricher"
+outbound_dependency_count = 3
+inbound_dependency_count = 1
+architecture_relation_count = 3
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-code-enricher->search-contracts"
+consumer = "search-code-enricher"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-code-enricher->search-domain"
+consumer = "search-code-enricher"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-code-enricher->search-ports"
+consumer = "search-code-enricher"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-code-enricher"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-code-enricher"
+producer_module = "api"
+producer_earliest_wave = 5
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W5"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S17"
+modules = ["search-code-enricher:assurance", "search-code-enricher:parse"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C10"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:references"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P10"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+required_outputs = ["qualified_Rust_parser_profile", "definitions_references_tests_docs", "configuration_predicates", "provider_assurance"]
+exit_evidence = ["malformed_Rust", "cfg_variants", "coordinate_behavior", "no_compiler_truth_overclaim"]
+
+[[port]]
+name = "CodeEnricherPort"
+module = "facts"
+methods = ["profile", "enrich"]
+method_modules = ["profile", "facts"]

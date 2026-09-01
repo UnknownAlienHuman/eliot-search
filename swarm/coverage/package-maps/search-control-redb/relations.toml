@@ -1,0 +1,190 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-control-redb"
+outbound_dependency_count = 4
+inbound_dependency_count = 1
+architecture_relation_count = 12
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 2
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-control-redb->search-contracts"
+consumer = "search-control-redb"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-control-redb/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-control-redb->search-domain"
+consumer = "search-control-redb"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-control-redb/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-control-redb->search-ports"
+consumer = "search-control-redb"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-control-redb/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-control-redb->search-config"
+consumer = "search-control-redb"
+consumer_module = "config"
+consumer_earliest_wave = 1
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-control-redb/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-control-redb"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-control-redb"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S6"
+modules = ["search-control-redb:transaction"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S13"
+modules = ["search-control-redb:transaction"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S14"
+modules = ["search-control-redb:snapshot"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S28"
+modules = ["search-control-redb:migration"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C02"
+modules = ["search-control-redb:migration", "search-control-redb:snapshot", "search-control-redb:transaction"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-01"
+modules = ["search-control-redb:transaction"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-02"
+modules = ["search-control-redb:snapshot", "search-control-redb:transaction"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-10"
+modules = ["search-control-redb:snapshot"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-11"
+modules = ["search-control-redb:snapshot"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-23"
+modules = ["search-control-redb:transaction"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P02"
+modules = ["search-control-redb:migration", "search-control-redb:open", "search-control-redb:snapshot", "search-control-redb:transaction"]
+required_outputs = ["bounded_control_tables", "verified_migrations", "immutable_control_snapshot", "corruption_quarantine"]
+exit_evidence = ["migration_fixtures", "power_loss_reopen", "hot_query_zero_redb_write"]
+
+[[architecture]]
+kind = "delivery"
+id = "P07"
+modules = ["search-control-redb:transaction"]
+required_outputs = ["serialized_publication", "exact_ack_and_readback", "visible_epoch_commit", "pins_and_reclaim", "doctor_recovery"]
+exit_evidence = ["all_publication_failpoints", "transactional_guard_race", "no_staged_visibility", "no_pinned_reclaim", "blocked_abandon_recovery"]
+
+[[configuration]]
+section = "control"
+module = "config"
+contract = "config/sections/control.md"
+reload = "RESTART_DEPENDENCY"
+
+[[port]]
+name = "ControlJournalPort"
+module = "transaction"
+methods = ["read_control_snapshot", "transact", "compare_and_swap_visible_epoch", "load_unresolved_publication", "quarantine", "write_counters"]
+method_modules = ["snapshot", "transaction", "transaction", "transaction", "quarantine", "transaction"]
+
+[[port]]
+name = "ControlSnapshotPort"
+module = "snapshot"
+methods = ["current_snapshot"]
+method_modules = ["snapshot"]

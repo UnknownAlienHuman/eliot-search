@@ -1,0 +1,591 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-result-projector"
+node_count = 53
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-query/search-result-projector/AGENTS.md#agent-contract-search-result-projector"
+path = "crates/search-query/search-result-projector/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-result-projector"
+kind = "implementation_contract_root"
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-result-projector/AGENTS.md#ownership"
+path = "crates/search-query/search-result-projector/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-result-projector/AGENTS.md"
+line = 13
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/AGENTS.md#dependencies"
+path = "crates/search-query/search-result-projector/AGENTS.md"
+line = 18
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/AGENTS.md#size"
+path = "crates/search-query/search-result-projector/AGENTS.md"
+line = 22
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#function-contract-search-result-projector"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-result-projector"
+kind = "implementation_contract_root"
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#operations"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#projectcandidateset-validated-gaps-execution-plan-budget-handleport-context-result-searchcandida"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "projectcandidateset(validated, gaps, execution, plan, budget, handleport, context) -> Result<SearchCandidateSet, ProjectError>"
+kind = "implementation_operation"
+modules = ["search-result-projector:card"]
+route_kind = "operation_route"
+rationale = "search-result-projector::project_candidate_set"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#projectreciperesult-recipe-product-context-result-reciperesultv1-projecterror"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "projectreciperesult(recipe, product, context) -> Result<RecipeResultV1, ProjectError>"
+kind = "implementation_operation"
+modules = ["search-result-projector:coverage"]
+route_kind = "operation_route"
+rationale = "search-result-projector::project_recipe_result"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#selecthandlesubjects-validated-quotas-boundedlist-handlesubject"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "selecthandlesubjects(validated, quotas) -> BoundedList<HandleSubject>"
+kind = "implementation_operation"
+modules = ["search-result-projector:card"]
+route_kind = "operation_route"
+rationale = "search-result-projector::select_handle_subjects"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#projectcoverage-execution-validation-plan-coverage"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 27
+level = 3
+heading = "projectcoverage(execution, validation, plan) -> Coverage"
+kind = "implementation_operation"
+modules = ["search-result-projector:coverage"]
+route_kind = "operation_route"
+rationale = "search-result-projector::project_coverage"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#enforceresultbudget-draft-budget-result-projectedresult-projecterror"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 33
+level = 3
+heading = "enforceresultbudget(draft, budget) -> Result<ProjectedResult, ProjectError>"
+kind = "implementation_operation"
+modules = ["search-result-projector:truncation"]
+route_kind = "operation_route"
+rationale = "search-result-projector::enforce_result_budget"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#bindresult-result-plan-emissionpermit-result-boundresult-projecterror"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 38
+level = 3
+heading = "bindresult(result, plan, emissionpermit) -> Result<BoundResult, ProjectError>"
+kind = "implementation_operation"
+modules = ["search-result-projector:request"]
+route_kind = "operation_route"
+rationale = "search-result-projector::bind_result"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#failure-and-cancellation"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 44
+level = 2
+heading = "Failure and cancellation"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/FUNCTIONS.md#required-fixtures"
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+line = 51
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/README.md#search-result-projector"
+path = "crates/search-query/search-result-projector/README.md"
+line = 1
+level = 1
+heading = "search-result-projector"
+kind = "implementation_contract_root"
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-result-projector/README.md#owns"
+path = "crates/search-query/search-result-projector/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-result-projector/README.md#must-not-own"
+path = "crates/search-query/search-result-projector/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-candidate-validation-and-result-projection"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1415
+level = 2
+heading = "S23. Candidate validation and result projection"
+kind = "architecture_section"
+modules = ["search-result-projector:evidence"]
+route_kind = "architecture_section_registry"
+rationale = "S23"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-1-validation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1417
+level = 3
+heading = "S23.1 Validation"
+kind = "architecture_node"
+modules = ["search-result-projector:evidence"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-2-searchcandidateset"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1433
+level = 3
+heading = "S23.2 SearchCandidateSet"
+kind = "architecture_node"
+modules = ["search-result-projector:evidence"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-3-compact-result-budget"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1462
+level = 3
+heading = "S23.3 Compact result budget"
+kind = "architecture_node"
+modules = ["search-result-projector:evidence"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s34-error-and-degradation-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2010
+level = 2
+heading = "S34. Error and degradation model"
+kind = "architecture_section"
+modules = ["search-result-projector:coverage"]
+route_kind = "architecture_section_registry"
+rationale = "S34"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["search-result-projector:card"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p11-inspect-and-compare-implementations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2900
+level = 3
+heading = "P11 — Inspect and compare implementations"
+kind = "delivery_contract"
+modules = ["search-result-projector:card"]
+route_kind = "delivery_registry"
+rationale = "P11"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-result-projector:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/query/README.md#w4-query-qualification"
+path = "qualification/query/README.md"
+line = 1
+level = 1
+heading = "W4 query qualification"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#w4-bounded-query-product-qualification-contract"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W4 bounded query product qualification contract"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#owners"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#frozen-inputs"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-order"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 45
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#mandatory-properties"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 60
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#admission-and-noninterference"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 62
+level = 3
+heading = "Admission and noninterference"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#snapshot-and-planning"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 72
+level = 3
+heading = "Snapshot and planning"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-and-validation"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Execution and validation"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#results-handles-and-continuations"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 91
+level = 3
+heading = "Results, handles and continuations"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#stop-conditions"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 105
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#evidence-products"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 121
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#current-disposition"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 127
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "swarm/assignments/search-result-projector.md#search-result-projector-implementation-packet"
+path = "swarm/assignments/search-result-projector.md"
+line = 1
+level = 1
+heading = "search-result-projector implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-result-projector.md#mission"
+path = "swarm/assignments/search-result-projector.md"
+line = 9
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-result-projector.md#owns"
+path = "swarm/assignments/search-result-projector.md"
+line = 14
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-result-projector.md#must-not-own"
+path = "swarm/assignments/search-result-projector.md"
+line = 22
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-result-projector.md#logical-operations"
+path = "swarm/assignments/search-result-projector.md"
+line = 29
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-result-projector:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-result-projector.md#invariants"
+path = "swarm/assignments/search-result-projector.md"
+line = 36
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-result-projector:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-result-projector.md#exit-evidence"
+path = "swarm/assignments/search-result-projector.md"
+line = 46
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["search-result-projector:evidence"]
+route_kind = "semantic"
+rationale = "package-local documentation"

@@ -1,0 +1,368 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-eval"
+operation_count = 36
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-eval::aggregate_block"
+name = "aggregate_block"
+module = "metrics"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Metric operations"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "search-eval::aggregate_product_pulse"
+name = "aggregate_product_pulse"
+module = "campaign"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Report and verdict operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::audit_content_minimization"
+name = "audit_content_minimization"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Security, leakage and recovery audits"]
+route_kind = "semantic"
+score = 13
+
+[[operation]]
+id = "search-eval::audit_optional_noninterference"
+name = "audit_optional_noninterference"
+module = "safety"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::audit_source_admission"
+name = "audit_source_admission"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Security, leakage and recovery audits"]
+route_kind = "semantic"
+score = 13
+
+[[operation]]
+id = "search-eval::build_g6_evidence_candidate"
+name = "build_g6_evidence_candidate"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 92
+
+[[operation]]
+id = "search-eval::build_optional_trial_schedule"
+name = "build_optional_trial_schedule"
+module = "trial"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-eval::compare_abc"
+name = "compare_abc"
+module = "metrics"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Metric operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::compare_optional_candidate"
+name = "compare_optional_candidate"
+module = "adjudication"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::compute_resource_report"
+name = "compute_resource_report"
+module = "metrics"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Metric operations"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "search-eval::decide_acceptance"
+name = "decide_acceptance"
+module = "adjudication"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Report and verdict operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::detect_hard_blockers"
+name = "detect_hard_blockers"
+module = "safety"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Report and verdict operations"]
+route_kind = "semantic"
+score = 18
+
+[[operation]]
+id = "search-eval::evaluate_candidate_slos"
+name = "evaluate_candidate_slos"
+module = "metrics"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Metric operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::freeze_candidate_comparison"
+name = "freeze_candidate_comparison"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::freeze_run_manifest"
+name = "freeze_run_manifest"
+module = "corpus"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Corpus and policy operations"]
+route_kind = "semantic"
+score = 28
+
+[[operation]]
+id = "search-eval::ingest_candidate_operation_receipt"
+name = "ingest_candidate_operation_receipt"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::ingest_external_probe"
+name = "ingest_external_probe"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Execution-plan and evidence ingestion"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::issue_product_pulse_receipt"
+name = "issue_product_pulse_receipt"
+module = "campaign"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Report and verdict operations"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "search-eval::plan_case_block"
+name = "plan_case_block"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Execution-plan and evidence ingestion"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::reproduce_evidence"
+name = "reproduce_evidence"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Execution-plan and evidence ingestion"]
+route_kind = "semantic"
+score = 104
+
+[[operation]]
+id = "search-eval::run_case"
+name = "run_case"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Execution-plan and evidence ingestion"]
+route_kind = "semantic"
+score = 15
+
+[[operation]]
+id = "search-eval::score_case"
+name = "score_case"
+module = "metrics"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Metric operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::score_incremental_cost"
+name = "score_incremental_cost"
+module = "metrics"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::score_incremental_quality"
+name = "score_incremental_quality"
+module = "adjudication"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 6
+
+[[operation]]
+id = "search-eval::validate_acceptance_policy"
+name = "validate_acceptance_policy"
+module = "adjudication"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Corpus and policy operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::validate_baseline_descriptor"
+name = "validate_baseline_descriptor"
+module = "corpus"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Corpus and policy operations"]
+route_kind = "semantic"
+score = 28
+
+[[operation]]
+id = "search-eval::validate_candidate_fixture_extension"
+name = "validate_candidate_fixture_extension"
+module = "corpus"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "search-eval::validate_case_evidence"
+name = "validate_case_evidence"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Execution-plan and evidence ingestion"]
+route_kind = "semantic"
+score = 104
+
+[[operation]]
+id = "search-eval::validate_control_corpus"
+name = "validate_control_corpus"
+module = "corpus"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Corpus and policy operations"]
+route_kind = "semantic"
+score = 131
+
+[[operation]]
+id = "search-eval::validate_fault_matrix"
+name = "validate_fault_matrix"
+module = "safety"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Security, leakage and recovery audits"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::validate_metric_registry"
+name = "validate_metric_registry"
+module = "corpus"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Corpus and policy operations"]
+route_kind = "semantic"
+score = 28
+
+[[operation]]
+id = "search-eval::validate_optional_campaign"
+name = "validate_optional_campaign"
+module = "campaign"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 86
+
+[[operation]]
+id = "search-eval::validate_optional_fault_matrix"
+name = "validate_optional_fault_matrix"
+module = "safety"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::validate_protocol_stress"
+name = "validate_protocol_stress"
+module = "safety"
+public_entry_module = "api"
+sources = ["crates/search-eval/FUNCTIONS.md"]
+source_contexts = ["Security, leakage and recovery audits"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::validate_removal_and_p15_regression"
+name = "validate_removal_and_p15_regression"
+module = "review"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eval::verify_g6_independent_review"
+name = "verify_g6_independent_review"
+module = "review"
+public_entry_module = "api"
+sources = ["crates/search-eval/W10_OPTIONAL_EVALUATION.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 77

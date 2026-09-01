@@ -1,0 +1,745 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-qdrant-supervisor"
+node_count = 67
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/qdrant_process.md#qdrantprocess-configuration-contract"
+path = "config/sections/qdrant_process.md"
+line = 1
+level = 1
+heading = "[qdrantprocess] configuration contract"
+kind = "configuration_contract"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "config_owner"
+rationale = "qdrant_process"
+
+[[node]]
+id = "config/sections/qdrant_process.md#fields"
+path = "config/sections/qdrant_process.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "config_owner"
+rationale = "qdrant_process"
+
+[[node]]
+id = "config/sections/qdrant_process.md#required-section-api"
+path = "config/sections/qdrant_process.md"
+line = 29
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "config_owner"
+rationale = "qdrant_process"
+
+[[node]]
+id = "config/sections/qdrant_process.md#invariants"
+path = "config/sections/qdrant_process.md"
+line = 43
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "config_owner"
+rationale = "qdrant_process"
+
+[[node]]
+id = "config/sections/qdrant_process.md#required-tests"
+path = "config/sections/qdrant_process.md"
+line = 49
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "config_owner"
+rationale = "qdrant_process"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md#agent-contract-search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-qdrant-supervisor"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md#ownership"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md#forbidden-ownership"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md"
+line = 15
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md#dependencies"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md"
+line = 23
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md#size"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md"
+line = 29
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#function-contract-search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-qdrant-supervisor"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#artifact-and-configuration-operations"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "Artifact and configuration operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#qualifyartifact-candidate-manifest-platform-result-qualifiedartifact-supervisorerror"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 11
+level = 3
+heading = "qualifyartifact(candidate, manifest, platform) -> Result<QualifiedArtifact, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:artifact"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::qualify_artifact"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#validateprocessconfig-config-owner-artifact-secretlease-result-qualifiedprocessconfig-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "validateprocessconfig(config, owner, artifact, secretlease) -> Result<QualifiedProcessConfig, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::validate_process_config"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#materializeprivatelaunchconfig-config-secretlease-result-privatelaunchconfigguard-supervisorerro"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 21
+level = 3
+heading = "materializeprivatelaunchconfig(config, secretlease) -> Result<PrivateLaunchConfigGuard, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::materialize_private_launch_config"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#lifecycle-operations"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 26
+level = 2
+heading = "Lifecycle operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#start-ownerguard-artifact-config-result-qdrantprocessguard-supervisorerror"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 28
+level = 3
+heading = "start(ownerguard, artifact, config) -> Result<QdrantProcessGuard, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:process"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::start"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#waitreadiness-guard-deadline-cancel-result-processreadiness-supervisorerror"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 33
+level = 3
+heading = "waitreadiness(guard, deadline, cancel) -> Result<ProcessReadiness, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:health"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::wait_readiness"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#verifyidentity-guard-result-processidentityreceipt-supervisorerror"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 38
+level = 3
+heading = "verifyidentity(guard) -> Result<ProcessIdentityReceipt, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:identity"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::verify_identity"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#classifyexit-observation-policy-restartdecision"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 43
+level = 3
+heading = "classifyexit(observation, policy) -> RestartDecision"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:process"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::classify_exit"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#restart-guard-decision-result-qdrantprocessguard-supervisorerror"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 47
+level = 3
+heading = "restart(guard, decision) -> Result<QdrantProcessGuard, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:process"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::restart"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#shutdown-guard-mode-deadline-result-shutdownreceipt-supervisorerror"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 52
+level = 3
+heading = "shutdown(guard, mode, deadline) -> Result<ShutdownReceipt, SupervisorError>"
+kind = "implementation_operation"
+modules = ["search-qdrant-supervisor:shutdown"]
+route_kind = "operation_route"
+rationale = "search-qdrant-supervisor::shutdown"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#configuration-operations"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 57
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#crash-and-unknown-outcome"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 63
+level = 2
+heading = "Crash and unknown outcome"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md#required-qualification-fixtures"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+line = 69
+level = 2
+heading = "Required qualification fixtures"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/README.md#search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/README.md"
+line = 1
+level = 1
+heading = "search-qdrant-supervisor"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/README.md#owns"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-index-qdrant/search-qdrant-supervisor/README.md#must-not-own"
+path = "crates/search-index-qdrant/search-qdrant-supervisor/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-qdrant-collection-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 614
+level = 2
+heading = "S9. Qdrant collection contract"
+kind = "architecture_section"
+modules = ["search-qdrant-supervisor:artifact"]
+route_kind = "architecture_section_registry"
+rationale = "S9"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-1-baseline-topology"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 616
+level = 3
+heading = "S9.1 Baseline topology"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:artifact"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-2-exact-build-pin"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 632
+level = 3
+heading = "S9.2 Exact build pin"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:artifact"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-3-required-capability-probes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 641
+level = 3
+heading = "S9.3 Required capability probes"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:artifact"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-4-named-vectors"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 661
+level = 3
+heading = "S9.4 Named vectors"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:artifact"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s9-5-minimal-opaque-point-payload"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 674
+level = 3
+heading = "S9.5 Minimal opaque point payload"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:artifact"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-qdrant-process-ownership-and-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1611
+level = 2
+heading = "S27. Qdrant process ownership and security"
+kind = "architecture_section"
+modules = ["search-qdrant-supervisor:identity", "search-qdrant-supervisor:process"]
+route_kind = "architecture_section_registry"
+rationale = "S27"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-1-sole-supervisor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1613
+level = 3
+heading = "S27.1 Sole supervisor"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:identity", "search-qdrant-supervisor:process"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-2-secret-storage"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1630
+level = 3
+heading = "S27.2 Secret storage"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:identity", "search-qdrant-supervisor:process"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-3-strict-mode-and-indexes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1634
+level = 3
+heading = "S27.3 Strict mode and indexes"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:identity", "search-qdrant-supervisor:process"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-4-orphan-handling"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1638
+level = 3
+heading = "S27.4 Orphan handling"
+kind = "architecture_node"
+modules = ["search-qdrant-supervisor:identity", "search-qdrant-supervisor:process"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p05-managed-qdrant-process-and-capability-gate"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2864
+level = 3
+heading = "P05 — Managed Qdrant process and capability gate"
+kind = "delivery_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:health", "search-qdrant-supervisor:process"]
+route_kind = "delivery_registry"
+rationale = "P05"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#w3-implementation-packet-index"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W3 implementation packet index"
+kind = "implementation_handoff"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 6
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#dependency-order"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 19
+level = 2
+heading = "Dependency order"
+kind = "implementation_handoff"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 39
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/qdrant/README.md#qdrant-qualification"
+path = "qualification/qdrant/README.md"
+line = 1
+level = 1
+heading = "Qdrant qualification"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#w3-qdrant-and-lexical-qualification-contract"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W3 Qdrant and lexical qualification contract"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#owners"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#frozen-inputs-required-before-execution"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 28
+level = 2
+heading = "Frozen inputs required before execution"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#qualification-order"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 43
+level = 2
+heading = "Qualification order"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mandatory-admission-properties"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 63
+level = 2
+heading = "Mandatory admission properties"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#process-and-secret-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 65
+level = 3
+heading = "Process and secret boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#collection-and-filter-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 75
+level = 3
+heading = "Collection and filter boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mutation-and-readback-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 88
+level = 3
+heading = "Mutation and readback boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#lexical-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 97
+level = 3
+heading = "Lexical boundary"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#evidence-products"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 107
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#current-disposition"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 133
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#search-qdrant-supervisor-implementation-packet"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 1
+level = 1
+heading = "search-qdrant-supervisor implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#mission"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#owns"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#must-not-own"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#logical-primitives"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 33
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#logical-operations"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 37
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#required-invariants"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 46
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#typed-failure-surface"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 56
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#exit-tests-evidence"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 65
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:process"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#suggested-internal-modules"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 76
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-qdrant-supervisor.md#size-split"
+path = "swarm/assignments/search-qdrant-supervisor.md"
+line = 92
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-qdrant-supervisor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

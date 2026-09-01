@@ -1,0 +1,135 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-subject-resolver"
+outbound_dependency_count = 2
+inbound_dependency_count = 2
+architecture_relation_count = 4
+configuration_relation_count = 0
+recipe_relation_count = 3
+port_relation_count = 0
+schema_relation_count = 2
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-subject-resolver->search-contracts"
+consumer = "search-subject-resolver"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-subject-resolver->search-domain"
+consumer = "search-subject-resolver"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-subject-resolver"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-subject-resolver"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W6"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-comparator->search-subject-resolver"
+consumer = "search-comparator"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-subject-resolver"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-comparator/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S21"
+modules = ["search-subject-resolver:ladder"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S22"
+modules = ["search-subject-resolver:ambiguity"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C21"
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:ladder"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P11"
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:candidates", "search-subject-resolver:ladder"]
+required_outputs = ["subject_resolution", "ambiguity_sets", "analogue_ladder", "lineage_collapse", "descriptive_behavior_matrix"]
+exit_evidence = ["renamed_true_analogue", "false_same_name", "fork_mirror", "decisive_test"]
+
+[[recipe]]
+id = "inspect_entity@1"
+module = "ladder"
+request_schema = "SearchRecipeRequest"
+result_schema = "EntityInspectionResult"
+
+[[recipe]]
+id = "compare_implementations@1"
+module = "ladder"
+request_schema = "SearchRecipeRequest"
+result_schema = "CompareImplementationsResult"
+
+[[recipe]]
+id = "explore_entity@1"
+module = "ladder"
+request_schema = "SearchRecipeRequest"
+result_schema = "EntityExplorationResult"
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "subject_resolution_results"
+owner_roles = ["state_owner"]
+modules = ["ambiguity"]
+schemas = ["ResolvedSubject", "SubjectAmbiguitySet", "AmbiguousSubjectCandidate", "SubjectAmbiguityResult"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "inspection_exploration_results"
+owner_roles = ["state_owner"]
+modules = ["ladder"]
+schemas = ["EntityInspectionResult", "EvidenceObservation", "EntityExplorationResult", "EntityGraphNode", "EntityGraphEdge"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]

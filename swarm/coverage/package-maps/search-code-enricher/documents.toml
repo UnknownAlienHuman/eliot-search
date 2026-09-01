@@ -1,0 +1,1053 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-code-enricher"
+node_count = 95
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#agent-contract-search-code-enricher"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-code-enricher"
+kind = "implementation_contract_root"
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#mission"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#ownership"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#forbidden-ownership"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#allowed-dependencies"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 30
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#required-logical-surface"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 35
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#failure-surface"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 45
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 50
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#size-and-split-guard"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 61
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/AGENTS.md#definition-of-done"
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+line = 69
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#function-contract-search-code-enricher"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-code-enricher"
+kind = "implementation_contract_root"
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#state-and-profile-ownership"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "State and profile ownership"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#validateparserprofile"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 21
+level = 2
+heading = "validateparserprofile"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#parserustnoexecute"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 36
+level = 2
+heading = "parserustnoexecute"
+kind = "implementation_contract"
+modules = ["search-code-enricher:parse"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#extractstructuralfacts"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 61
+level = 2
+heading = "extractstructuralfacts"
+kind = "implementation_contract"
+modules = ["search-code-enricher:facts"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#extractstructuralrelations"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 86
+level = 2
+heading = "extractstructuralrelations"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#classifyevidencerole"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 99
+level = 2
+heading = "classifyevidencerole"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#extractconfigurationpredicate"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 108
+level = 2
+heading = "extractconfigurationpredicate"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#validatefactanchor"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 122
+level = 2
+heading = "validatefactanchor"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#buildenrichmentmanifest"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 132
+level = 2
+heading = "buildenrichmentmanifest"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#compareprofilechange"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 145
+level = 2
+heading = "compareprofilechange"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#cancellation-deadlines-and-crash-semantics"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 156
+level = 2
+heading = "Cancellation, deadlines and crash semantics"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#typed-failures"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 166
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-code-enricher:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+line = 183
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/README.md#search-code-enricher"
+path = "crates/search-prep/search-code-enricher/README.md"
+line = 1
+level = 1
+heading = "search-code-enricher"
+kind = "implementation_contract_root"
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/README.md#owns"
+path = "crates/search-prep/search-code-enricher/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-prep/search-code-enricher/README.md#must-not-own"
+path = "crates/search-prep/search-code-enricher/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-materialization-and-enrichment"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1137
+level = 2
+heading = "S17. Materialization and enrichment"
+kind = "architecture_section"
+modules = ["search-code-enricher:assurance", "search-code-enricher:parse"]
+route_kind = "architecture_section_registry"
+rationale = "S17"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-1-baseline-formats"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1139
+level = 3
+heading = "S17.1 Baseline formats"
+kind = "architecture_node"
+modules = ["search-code-enricher:assurance", "search-code-enricher:parse"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-2-provider-neutrality"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1149
+level = 3
+heading = "S17.2 Provider neutrality"
+kind = "architecture_node"
+modules = ["search-code-enricher:assurance", "search-code-enricher:parse"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s17-3-parser-assurance"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1165
+level = 3
+heading = "S17.3 Parser assurance"
+kind = "architecture_node"
+modules = ["search-code-enricher:assurance", "search-code-enricher:parse"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p10-rust-structural-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2894
+level = 3
+heading = "P10 — Rust structural profile"
+kind = "delivery_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+route_kind = "delivery_registry"
+rationale = "P10"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#w5-current-workspace-settings-1-0"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W5 current-workspace settings 1.0"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#design-rule"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 5
+level = 2
+heading = "Design rule"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#reconciliation"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 29
+level = 2
+heading = "Reconciliation"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#currentness"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 46
+level = 2
+heading = "Currentness"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#overlay"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 54
+level = 2
+heading = "Overlay"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#rust-enrichment"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 77
+level = 2
+heading = "Rust enrichment"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#layering-and-publication"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 97
+level = 2
+heading = "Layering and publication"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#redaction"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 107
+level = 2
+heading = "Redaction"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W5_CURRENT_SETTINGS_1.0.md#required-settings-tests"
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+line = 113
+level = 2
+heading = "Required settings tests"
+kind = "implementation_contract"
+modules = ["search-code-enricher:profile"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#w5-current-workspace-and-rust-structure-contracts-1-0"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W5 current workspace and Rust structure contracts 1.0"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#1-four-planes-must-remain-distinct"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Four planes must remain distinct"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#2-watcher-events-are-hints"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 32
+level = 2
+heading = "2. Watcher events are hints"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#3-observation-gap-state"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 44
+level = 2
+heading = "3. Observation gap state"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#4-authoritative-inventory-reconciliation"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 77
+level = 2
+heading = "4. Authoritative inventory reconciliation"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#5-inventory-outcomes-and-atomic-reconciliation"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 107
+level = 2
+heading = "5. Inventory outcomes and atomic reconciliation"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#6-currentness-model"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 143
+level = 2
+heading = "6. Currentness model"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#7-saved-revision-overlays"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 176
+level = 2
+heading = "7. Saved-revision overlays"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#8-explicit-unsaved-buffer-snapshots"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 207
+level = 2
+heading = "8. Explicit unsaved buffer snapshots"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#9-shadow-fence-before-retrieval-and-idf"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 252
+level = 2
+heading = "9. Shadow fence before retrieval and IDF"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#10-overlay-preparation"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 279
+level = 2
+heading = "10. Overlay preparation"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#11-overlay-query-leg"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 300
+level = 2
+heading = "11. Overlay query leg"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#12-overlay-lifecycle-and-invalidation"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 320
+level = 2
+heading = "12. Overlay lifecycle and invalidation"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#13-rust-syntax-enrichment-profile"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 345
+level = 2
+heading = "13. Rust syntax enrichment profile"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#14-no-execute-rust-parsing"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 371
+level = 2
+heading = "14. No-execute Rust parsing"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#15-assurance-and-malformed-input"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 400
+level = 2
+heading = "15. Assurance and malformed input"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#16-structure-integration"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 434
+level = 2
+heading = "16. Structure integration"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#17-configuration-interaction"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 447
+level = 2
+heading = "17. Configuration interaction"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#18-cancellation-crash-and-recovery"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 468
+level = 2
+heading = "18. Cancellation, crash and recovery"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#reconciliation"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 470
+level = 3
+heading = "Reconciliation"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#overlay"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 476
+level = 3
+heading = "Overlay"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#code-enrichment"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 483
+level = 3
+heading = "Code enrichment"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#19-cross-package-failure-ownership"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 489
+level = 2
+heading = "19. Cross-package failure ownership"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md#20-w5-exit-evidence"
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+line = 505
+level = 2
+heading = "20. W5 exit evidence"
+kind = "implementation_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W5_IMPLEMENTATION_PACKET.md#w5-current-workspace-implementation-packet"
+path = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W5 current-workspace implementation packet"
+kind = "implementation_handoff"
+modules = ["search-code-enricher:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W5_IMPLEMENTATION_PACKET.md#packages"
+path = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Packages"
+kind = "implementation_handoff"
+modules = ["search-code-enricher:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W5_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+line = 15
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-code-enricher:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W5_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+line = 38
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-code-enricher:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W5_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+line = 61
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-code-enricher:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W5_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+line = 80
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-code-enricher:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/current/README.md#w5-current-workspace-and-rust-structure-qualification"
+path = "qualification/current/README.md"
+line = 1
+level = 1
+heading = "W5 current-workspace and Rust-structure qualification"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#w5-current-workspace-overlay-and-rust-structure-qualification-contract"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W5 current workspace, overlay and Rust structure qualification contract"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#owners"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#frozen-inputs"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 30
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#execution-order"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 47
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#mandatory-properties"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 64
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#observation-and-currentness"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 66
+level = 3
+heading = "Observation and currentness"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#overlay"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 79
+level = 3
+heading = "Overlay"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#rust-structural-enrichment"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 94
+level = 3
+heading = "Rust structural enrichment"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#stop-conditions"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 111
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#evidence-products"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 130
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/current/W5_QUALIFICATION.md#current-disposition"
+path = "qualification/current/W5_QUALIFICATION.md"
+line = 136
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance"]
+route_kind = "qualification_area_route"
+rationale = "qualification/current"
+
+[[node]]
+id = "qualification/rust-syntax/README.md#rust-syntax-enrichment-qualification"
+path = "qualification/rust-syntax/README.md"
+line = 1
+level = 1
+heading = "Rust syntax enrichment qualification"
+kind = "qualification_contract"
+modules = ["search-code-enricher:assurance", "search-code-enricher:parse", "search-code-enricher:profile"]
+route_kind = "qualification_area_route"
+rationale = "qualification/rust-syntax"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#search-code-enricher-implementation-packet"
+path = "swarm/assignments/search-code-enricher.md"
+line = 1
+level = 1
+heading = "search-code-enricher implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#mission"
+path = "swarm/assignments/search-code-enricher.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#owns"
+path = "swarm/assignments/search-code-enricher.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#must-not-own"
+path = "swarm/assignments/search-code-enricher.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#logical-primitives"
+path = "swarm/assignments/search-code-enricher.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#logical-operations"
+path = "swarm/assignments/search-code-enricher.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#required-invariants"
+path = "swarm/assignments/search-code-enricher.md"
+line = 42
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-code-enricher:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#typed-failure-surface"
+path = "swarm/assignments/search-code-enricher.md"
+line = 50
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#exit-tests-evidence"
+path = "swarm/assignments/search-code-enricher.md"
+line = 58
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#suggested-internal-modules"
+path = "swarm/assignments/search-code-enricher.md"
+line = 67
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-code-enricher.md#size-split"
+path = "swarm/assignments/search-code-enricher.md"
+line = 83
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-code-enricher:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

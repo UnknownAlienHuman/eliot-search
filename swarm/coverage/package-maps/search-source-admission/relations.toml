@@ -1,0 +1,137 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-source-admission"
+outbound_dependency_count = 4
+inbound_dependency_count = 2
+architecture_relation_count = 2
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 1
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-admission->search-contracts"
+consumer = "search-source-admission"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-source/search-source-admission/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-admission->search-domain"
+consumer = "search-source-admission"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-source-admission/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-admission->search-ports"
+consumer = "search-source-admission"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-source-admission/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-admission->search-config"
+consumer = "search-source-admission"
+consumer_module = "config"
+consumer_earliest_wave = 2
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-admission/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-source-admission"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-source-admission"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-registry->search-source-admission"
+consumer = "search-source-registry"
+consumer_module = "source"
+consumer_earliest_wave = 2
+producer = "search-source-admission"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S16"
+modules = ["search-source-admission:policy"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P03"
+modules = ["search-source-admission:policy", "search-source-admission:receipt"]
+required_outputs = ["admitted_roots_and_sources", "source_and_path_identity", "memberships_and_portfolios", "coherent_source_views", "stable_no_execute_reads", "source_owner_cutover"]
+exit_evidence = ["rename_hardlink_case_reparse", "unstable_read", "no_execute", "dual_writer_denial", "cutover_wire_and_state_machine"]
+
+[[configuration]]
+section = "source_admission"
+module = "config"
+contract = "config/sections/source_admission.md"
+reload = "SECURITY_BARRIER"
+
+[[port]]
+name = "SourceAdmissionPort"
+module = "decision"
+methods = ["normalize_policy", "evaluate", "verify_receipt"]
+method_modules = ["policy", "decision", "receipt"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "source_admission_policy"
+owner_roles = ["state_owner"]
+modules = ["policy"]
+schemas = ["SourceAdmissionPolicy"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]

@@ -1,0 +1,855 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-safe-reader"
+node_count = 77
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/source_reader.md#sourcereader-configuration-contract"
+path = "config/sections/source_reader.md"
+line = 1
+level = 1
+heading = "[sourcereader] configuration contract"
+kind = "configuration_contract"
+modules = ["search-safe-reader:config"]
+route_kind = "config_owner"
+rationale = "source_reader"
+
+[[node]]
+id = "config/sections/source_reader.md#fields"
+path = "config/sections/source_reader.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-safe-reader:config"]
+route_kind = "config_owner"
+rationale = "source_reader"
+
+[[node]]
+id = "config/sections/source_reader.md#required-section-api"
+path = "config/sections/source_reader.md"
+line = 23
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-safe-reader:config"]
+route_kind = "config_owner"
+rationale = "source_reader"
+
+[[node]]
+id = "config/sections/source_reader.md#invariants"
+path = "config/sections/source_reader.md"
+line = 37
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-safe-reader:config"]
+route_kind = "config_owner"
+rationale = "source_reader"
+
+[[node]]
+id = "config/sections/source_reader.md#required-tests"
+path = "config/sections/source_reader.md"
+line = 43
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-safe-reader:config"]
+route_kind = "config_owner"
+rationale = "source_reader"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/AGENTS.md#agent-contract-search-safe-reader"
+path = "crates/search-source/search-safe-reader/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-safe-reader"
+kind = "implementation_contract_root"
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/AGENTS.md#ownership"
+path = "crates/search-source/search-safe-reader/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/AGENTS.md#forbidden-ownership"
+path = "crates/search-source/search-safe-reader/AGENTS.md"
+line = 15
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/AGENTS.md#dependencies"
+path = "crates/search-source/search-safe-reader/AGENTS.md"
+line = 22
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/AGENTS.md#size"
+path = "crates/search-source/search-safe-reader/AGENTS.md"
+line = 26
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#function-contract-search-safe-reader"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-safe-reader"
+kind = "implementation_contract_root"
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#global-rules"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-safe-reader:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#configuration-operations"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 20
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-safe-reader:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#sectiondescriptor-configsectiondescriptor"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "sectiondescriptor() -> ConfigSectionDescriptor"
+kind = "implementation_operation"
+modules = ["search-safe-reader:config"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::section_descriptor"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#compileddefaults-configsectioninput"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 24
+level = 3
+heading = "compileddefaults() -> ConfigSectionInput"
+kind = "implementation_operation"
+modules = ["search-safe-reader:config"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::compiled_defaults"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#validatesection-input-platform-acceptedcapabilities-result-validatedreaderconfig-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 26
+level = 3
+heading = "validatesection(input, platform, acceptedcapabilities) -> Result<ValidatedReaderConfig, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:config"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::validate_section"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#sectiondigest-validated-blake3digest32"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 32
+level = 3
+heading = "sectiondigest(validated) -> Blake3Digest32"
+kind = "implementation_operation"
+modules = ["search-safe-reader:config"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::section_digest"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#plansectionchange-old-new-result-sectionreloaddecision-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 34
+level = 3
+heading = "plansectionchange(old, new) -> Result<SectionReloadDecision, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:config"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::plan_section_change"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#request-and-root-validation"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 39
+level = 2
+heading = "Request and root validation"
+kind = "implementation_contract"
+modules = ["search-safe-reader:request"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#validatereadrequest-request-registryview-admissionreceipt-ownerfence-limits-result-validatedread"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 41
+level = 3
+heading = "validatereadrequest(request, registryview, admissionreceipt, ownerfence, limits) -> Result<ValidatedReadRequest, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:request"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::validate_read_request"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#resolvefinalhandle-locator-admittedroot-platformport-deadline-cancel-result-resolvedsourcehandle"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 49
+level = 3
+heading = "resolvefinalhandle(locator, admittedroot, platformport, deadline, cancel) -> Result<ResolvedSourceHandle, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:request"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::resolve_final_handle"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#verifyfinalcontainment-handle-admittedroot-platformport-result-containmentreceipt-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 57
+level = 3
+heading = "verifyfinalcontainment(handle, admittedroot, platformport) -> Result<ContainmentReceipt, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:request"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::verify_final_containment"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#stable-file-acquisition"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 65
+level = 2
+heading = "Stable file acquisition"
+kind = "implementation_contract"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#observebeforeread-handle-platformport-result-fileobservation-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 67
+level = 3
+heading = "observebeforeread(handle, platformport) -> Result<FileObservation, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::observe_before_read"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#readbounded-handle-bytelimit-bufferpolicy-deadline-cancel-result-readbuffer-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 72
+level = 3
+heading = "readbounded(handle, bytelimit, bufferpolicy, deadline, cancel) -> Result<ReadBuffer, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::read_bounded"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#observeafterread-handle-platformport-result-fileobservation-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 77
+level = 3
+heading = "observeafterread(handle, platformport) -> Result<FileObservation, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::observe_after_read"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#verifyprereadpost-before-bytes-after-request-result-stablebytes-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 81
+level = 3
+heading = "verifyprereadpost(before, bytes, after, request) -> Result<StableBytes, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::verify_pre_read_post"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#readstably-request-platformport-clock-cancel-result-stablereadreceipt-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 88
+level = 3
+heading = "readstably(request, platformport, clock, cancel) -> Result<StableReadReceipt, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::read_stably"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#git-object-acquisition"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 97
+level = 2
+heading = "Git object acquisition"
+kind = "implementation_contract"
+modules = ["search-safe-reader:git_object"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#validategitobjectrequest-request-repositoryidentity-workspaceview-limits-result-validatedgitobje"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 99
+level = 3
+heading = "validategitobjectrequest(request, repositoryidentity, workspaceview, limits) -> Result<ValidatedGitObjectRequest, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:git_object"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::validate_git_object_request"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#readgitobjectnoexecute-request-gitobjectport-deadline-cancel-result-stablereadreceipt-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 104
+level = 3
+heading = "readgitobjectnoexecute(request, gitobjectport, deadline, cancel) -> Result<StableReadReceipt, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:git_object"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::read_git_object_no_execute"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#encoding-observation"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 113
+level = 2
+heading = "Encoding observation"
+kind = "implementation_contract"
+modules = ["search-safe-reader:encoding"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#observeencoding-bytes-profile-encodingobservation"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 115
+level = 3
+heading = "observeencoding(bytes, profile) -> EncodingObservation"
+kind = "implementation_operation"
+modules = ["search-safe-reader:encoding"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::observe_encoding"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#batch-acquisition"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 120
+level = 2
+heading = "Batch acquisition"
+kind = "implementation_contract"
+modules = ["search-safe-reader:batch"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#readbatch-requests-ports-limits-deadline-cancel-result-stablereadbatch-readerror"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 122
+level = 3
+heading = "readbatch(requests, ports, limits, deadline, cancel) -> Result<StableReadBatch, ReadError>"
+kind = "implementation_operation"
+modules = ["search-safe-reader:batch"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::read_batch"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#redaction-and-cleanup"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 128
+level = 2
+heading = "Redaction and cleanup"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#redactedreadview-receipt-disclosure-redactedreadview"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 130
+level = 3
+heading = "redactedreadview(receipt, disclosure) -> RedactedReadView"
+kind = "implementation_operation"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::redacted_read_view"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#releasereadproduct-product-readreleasereceipt"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 135
+level = 3
+heading = "releasereadproduct(product) -> ReadReleaseReceipt"
+kind = "implementation_operation"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "operation_route"
+rationale = "search-safe-reader::release_read_product"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#cancellation-deadline-and-crash-semantics"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 140
+level = 2
+heading = "Cancellation, deadline and crash semantics"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#typed-failures"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 147
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-safe-reader:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+line = 167
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/README.md#search-safe-reader"
+path = "crates/search-source/search-safe-reader/README.md"
+line = 1
+level = 1
+heading = "search-safe-reader"
+kind = "implementation_contract_root"
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/README.md#owns"
+path = "crates/search-source/search-safe-reader/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-safe-reader/README.md#must-not-own"
+path = "crates/search-source/search-safe-reader/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-source-acquisition-and-change-reconciliation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1075
+level = 2
+heading = "S16. Source acquisition and change reconciliation"
+kind = "architecture_section"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "architecture_section_registry"
+rationale = "S16"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-1-watchers-are-hints"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1077
+level = 3
+heading = "S16.1 Watchers are hints"
+kind = "architecture_node"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-2-query-freshness-preflight"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1087
+level = 3
+heading = "S16.2 Query freshness preflight"
+kind = "architecture_node"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-3-stable-no-execute-read"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1093
+level = 3
+heading = "S16.3 Stable no-execute read"
+kind = "architecture_node"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-4-reparse-points-links-and-path-escape"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1106
+level = 3
+heading = "S16.4 Reparse points, links and path escape"
+kind = "architecture_node"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-5-default-exclusions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1110
+level = 3
+heading = "S16.5 Default exclusions"
+kind = "architecture_node"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-6-sourceadmissionpolicy-and-sensitivity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1114
+level = 3
+heading = "S16.6 SourceAdmissionPolicy and sensitivity"
+kind = "architecture_node"
+modules = ["search-safe-reader:stable_read"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p03-source-registry-and-direct-exact-spine"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2852
+level = 3
+heading = "P03 — Source registry and direct exact spine"
+kind = "delivery_contract"
+modules = ["search-safe-reader:git_object", "search-safe-reader:stable_read"]
+route_kind = "delivery_registry"
+rationale = "P03"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#w2-direct-source-spine-implementation-packet"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W2 direct source-spine implementation packet"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#source-pipeline"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Source pipeline"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 61
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 71
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#mutation-and-recovery"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 91
+level = 2
+heading = "Mutation and recovery"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#required-w2-tests-and-evidence"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 112
+level = 2
+heading = "Required W2 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#admission"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 3
+heading = "Admission"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#identity-and-registry"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 122
+level = 3
+heading = "Identity and registry"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#safe-read-and-revision"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 130
+level = 3
+heading = "Safe read and revision"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#preparation"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 139
+level = 3
+heading = "Preparation"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 148
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 161
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-safe-reader:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#search-safe-reader-implementation-packet"
+path = "swarm/assignments/search-safe-reader.md"
+line = 1
+level = 1
+heading = "search-safe-reader implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#mission"
+path = "swarm/assignments/search-safe-reader.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#owns"
+path = "swarm/assignments/search-safe-reader.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#must-not-own"
+path = "swarm/assignments/search-safe-reader.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#logical-primitives"
+path = "swarm/assignments/search-safe-reader.md"
+line = 32
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#logical-operations"
+path = "swarm/assignments/search-safe-reader.md"
+line = 36
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#required-invariants"
+path = "swarm/assignments/search-safe-reader.md"
+line = 44
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-safe-reader:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#typed-failure-surface"
+path = "swarm/assignments/search-safe-reader.md"
+line = 53
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#exit-tests-evidence"
+path = "swarm/assignments/search-safe-reader.md"
+line = 62
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#suggested-internal-modules"
+path = "swarm/assignments/search-safe-reader.md"
+line = 72
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-safe-reader.md#size-split"
+path = "swarm/assignments/search-safe-reader.md"
+line = 86
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-safe-reader:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

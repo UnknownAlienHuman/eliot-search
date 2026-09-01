@@ -114,10 +114,8 @@ def main() -> int:
             fail(errors, module == public_entries.get(package), f"{identity}: facade route does not use public entry")
         if row.get("route_kind") == "semantic_low":
             semantic_low += 1
-    if public_facades:
-        warnings.append(f"{public_facades} operations are explicit public-entry facade operations")
-    if semantic_low:
-        warnings.append(f"{semantic_low} operations use low-score but exact semantic routes")
+    fail(errors, public_facades == 0, f"unreviewed public-entry operation routes remain: {public_facades}")
+    fail(errors, semantic_low == 0, f"low-confidence operation routes remain: {semantic_low}")
 
     documentation_fields = [
         "path", "line", "level", "heading", "kind", "packages", "modules", "route_kind", "rationale"
@@ -155,26 +153,48 @@ def main() -> int:
     fail(errors, principle_count > 0, "no principles or invariants were classified")
 
     dependency_fields = [
-        "consumer", "consumer_module", "producer", "producer_module", "relationship", "contract_source",
-        "cargo_manifest", "route_kind", "exact_accepted_handoff_required",
+        "consumer", "consumer_module", "consumer_earliest_wave", "producer", "producer_module",
+        "producer_earliest_wave", "relationship", "contract_source", "cargo_manifest", "route_kind",
+        "requires_stage_reentry", "reentry_stage", "exact_accepted_handoff_required",
     ]
     expected_dependencies = {row["id"]: {field: row.get(field) for field in dependency_fields} for row in graph["dependency_rows"]}
     actual_dependencies = canonical_rows(dependency_doc, "edge", "id", dependency_fields)
     fail(errors, actual_dependencies == expected_dependencies, f"dependency-edge registry stale or divergent: expected {len(expected_dependencies)}, actual {len(actual_dependencies)}")
     fail(errors, dependency_doc.get("edge_count") == len(expected_dependencies), "dependency edge count mismatch")
+    stage_readsets = load("swarm/stage-readsets.toml", errors)
+    reentry_overrides = {
+        row.get("id"): row
+        for row in stage_readsets.get("override", [])
+        if isinstance(row, dict) and isinstance(row.get("id"), str)
+    }
     for identity, row in actual_dependencies.items():
         consumer_ref = f"{row.get('consumer')}:{row.get('consumer_module')}"
         producer_ref = f"{row.get('producer')}:{row.get('producer_module')}"
         fail(errors, consumer_ref in valid_refs, f"{identity}: invalid consumer module")
         fail(errors, producer_ref in valid_refs, f"{identity}: invalid producer module")
         fail(errors, row.get("producer_module") == public_entries.get(row.get("producer")), f"{identity}: dependency must enter producer public boundary")
+        requires_reentry = row.get("requires_stage_reentry") is True
+        if requires_reentry:
+            expected_stage = f"W{row.get('producer_earliest_wave')}"
+            expected_override = f"{expected_stage}.{row.get('consumer')}"
+            override = reentry_overrides.get(expected_override, {})
+            fail(errors, row.get("reentry_stage") == expected_stage, f"{identity}: reentry stage mismatch")
+            fail(errors, row.get("relationship") == "progressive_reentry_handoff", f"{identity}: later-wave edge must be progressive reentry")
+            fail(errors, override.get("package") == row.get("consumer"), f"{identity}: exact reentry override missing")
+            fail(errors, override.get("wave") == row.get("producer_earliest_wave"), f"{identity}: reentry override wave mismatch")
+            fail(errors, override.get("replace_previous_stage_context") is True, f"{identity}: reentry must replace prior context")
+            fail(errors, override.get("accepted_prior_stage_handoff_only") is True, f"{identity}: reentry must use accepted prior handoff")
+            fail(errors, override.get("dependency_implementation_reads_allowed") is False, f"{identity}: reentry may not read dependency implementation")
+        else:
+            fail(errors, row.get("reentry_stage") == "NONE", f"{identity}: same/earlier-wave edge has spurious reentry")
+            fail(errors, int(row.get("producer_earliest_wave", -1)) <= int(row.get("consumer_earliest_wave", -1)), f"{identity}: unmodelled later-wave dependency")
         fail(errors, (ROOT / str(row.get("contract_source"))).is_file(), f"{identity}: missing contract source")
         fail(errors, (ROOT / str(row.get("cargo_manifest"))).is_file(), f"{identity}: missing Cargo manifest")
 
     module_fields = [
-        "package", "module", "role", "operation_count", "documentation_node_count",
+        "package", "module", "role", "structural_rationale", "operation_count", "documentation_node_count",
         "specific_documentation_node_count", "architecture_relation_count", "port_relation_count",
-        "schema_relation_count", "configuration_relation_count", "recipe_relation_count",
+        "port_method_relation_count", "schema_relation_count", "configuration_relation_count", "recipe_relation_count",
         "dependency_relation_count", "weakly_covered",
     ]
     expected_modules = {row["id"]: {field: row.get(field) for field in module_fields} for row in graph["module_rows"]}
@@ -182,6 +202,11 @@ def main() -> int:
     fail(errors, actual_modules == expected_modules, f"module-coverage registry stale or divergent: expected {len(expected_modules)}, actual {len(actual_modules)}")
     fail(errors, module_doc.get("module_count") == len(expected_modules), "module coverage count mismatch")
     fail(errors, module_doc.get("weak_module_count") == len(graph["weak_modules"]), "module weak count mismatch")
+    for identity, row in actual_modules.items():
+        role = row.get("role")
+        rationale = row.get("structural_rationale")
+        if role in {"public_entry", "structural_boundary", "structural_support"}:
+            fail(errors, isinstance(rationale, str) and bool(rationale.strip()), f"{identity}: structural module rationale missing")
     fail(errors, not graph["weak_modules"], f"implementation modules without specific operation/document/architecture relation: {graph['weak_modules']}")
 
     config_rows = rows(config_doc, "section", "name") if config_doc else {}

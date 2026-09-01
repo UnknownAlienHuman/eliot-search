@@ -1,0 +1,209 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-source-registry"
+outbound_dependency_count = 5
+inbound_dependency_count = 2
+architecture_relation_count = 7
+configuration_relation_count = 0
+recipe_relation_count = 1
+port_relation_count = 2
+schema_relation_count = 3
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-registry->search-contracts"
+consumer = "search-source-registry"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-registry->search-domain"
+consumer = "search-source-registry"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-registry->search-ports"
+consumer = "search-source-registry"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-registry->search-source-identity"
+consumer = "search-source-registry"
+consumer_module = "source"
+consumer_earliest_wave = 2
+producer = "search-source-identity"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-registry->search-source-admission"
+consumer = "search-source-registry"
+consumer_module = "source"
+consumer_earliest_wave = 2
+producer = "search-source-admission"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-source-registry"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-source-registry"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-reconcile->search-source-registry"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-source-registry"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S7"
+modules = ["search-source-registry:cutover"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S25"
+modules = ["search-source-registry:view"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C03"
+modules = ["search-source-registry:cutover", "search-source-registry:membership", "search-source-registry:root", "search-source-registry:view"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-26"
+modules = ["search-source-registry:cutover"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-30"
+modules = ["search-source-registry:cutover"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P03"
+modules = ["search-source-registry:cutover", "search-source-registry:membership", "search-source-registry:root", "search-source-registry:view"]
+required_outputs = ["admitted_roots_and_sources", "source_and_path_identity", "memberships_and_portfolios", "coherent_source_views", "stable_no_execute_reads", "source_owner_cutover"]
+exit_evidence = ["rename_hardlink_case_reparse", "unstable_read", "no_execute", "dual_writer_denial", "cutover_wire_and_state_machine"]
+
+[[architecture]]
+kind = "delivery"
+id = "P12"
+modules = ["search-source-registry:view"]
+required_outputs = ["compile_execute_split", "frozen_denominator", "exact_predicate_profiles", "revision_drift_handling", "truthful_execution_report"]
+exit_evidence = ["complete_literal_negative", "non_backtracking_regex", "raw_vs_decoded_semantics", "unreadable_changed_cancelled_scope"]
+
+[[recipe]]
+id = "corpus_delta@1"
+module = "view"
+request_schema = "SearchRecipeRequest"
+result_schema = "CorpusDeltaResult"
+
+[[port]]
+name = "SourceInventoryPort"
+module = "view"
+methods = ["resolve_source_view", "resolve_workspace_view", "list_exact_denominator", "lookup_source_head", "read_inventory_revision"]
+method_modules = ["view", "view", "view", "source", "snapshot"]
+
+[[port]]
+name = "SourceOwnershipPort"
+module = "cutover"
+methods = ["read_namespace_owner", "transition_namespace_owner", "verify_cutover_receipt"]
+method_modules = ["cutover", "cutover", "cutover"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "namespace_ownership"
+owner_roles = ["state_owner"]
+modules = ["cutover"]
+schemas = ["SourceNamespaceOwnership", "SourceOwnerCutoverReceipt"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "membership_portfolio"
+owner_roles = ["state_owner"]
+modules = ["membership"]
+schemas = ["SourceMembership", "ReferencePortfolioRevision"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "source_workspace_view"
+owner_roles = ["state_owner"]
+modules = ["view"]
+schemas = ["SourceView", "WorkspaceViewRevision"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]

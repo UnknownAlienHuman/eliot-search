@@ -1,0 +1,118 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-index-reclaimer"
+operation_count = 11
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-index-reclaimer::checkpoint"
+name = "checkpoint"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-index-reclaimer::complete"
+name = "complete"
+module = "delete"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-index-reclaimer::complete_old_route_reclaim"
+name = "complete_old_route_reclaim"
+module = "delete"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-index-reclaimer::execute_batch"
+name = "execute_batch"
+module = "delete"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-index-reclaimer::execute_old_route_batch"
+name = "execute_old_route_batch"
+module = "delete"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-index-reclaimer::plan"
+name = "plan"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-index-reclaimer::plan_old_route_reclaim"
+name = "plan_old_route_reclaim"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-index-reclaimer::resume"
+name = "resume"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 7
+
+[[operation]]
+id = "search-index-reclaimer::resume_old_route_reclaim"
+name = "resume_old_route_reclaim"
+module = "delete"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-index-reclaimer::validate_retired_manifest"
+name = "validate_retired_manifest"
+module = "candidate"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-index-reclaimer::validate_retired_route_manifest"
+name = "validate_retired_route_manifest"
+module = "candidate"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100

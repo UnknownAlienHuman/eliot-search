@@ -1,0 +1,778 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-lexical"
+node_count = 70
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/lexical.md#lexical-configuration-contract"
+path = "config/sections/lexical.md"
+line = 1
+level = 1
+heading = "[lexical] configuration contract"
+kind = "configuration_contract"
+modules = ["search-lexical:config"]
+route_kind = "config_owner"
+rationale = "lexical"
+
+[[node]]
+id = "config/sections/lexical.md#fields"
+path = "config/sections/lexical.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-lexical:config"]
+route_kind = "config_owner"
+rationale = "lexical"
+
+[[node]]
+id = "config/sections/lexical.md#required-section-api"
+path = "config/sections/lexical.md"
+line = 21
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-lexical:config"]
+route_kind = "config_owner"
+rationale = "lexical"
+
+[[node]]
+id = "config/sections/lexical.md#invariants"
+path = "config/sections/lexical.md"
+line = 35
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-lexical:config"]
+route_kind = "config_owner"
+rationale = "lexical"
+
+[[node]]
+id = "config/sections/lexical.md#required-tests"
+path = "config/sections/lexical.md"
+line = 41
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-lexical:config"]
+route_kind = "config_owner"
+rationale = "lexical"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#agent-contract-search-lexical"
+path = "crates/search-lexical/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-lexical"
+kind = "implementation_contract_root"
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#mission"
+path = "crates/search-lexical/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#ownership"
+path = "crates/search-lexical/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#forbidden-ownership"
+path = "crates/search-lexical/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#allowed-dependencies"
+path = "crates/search-lexical/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#required-logical-surface"
+path = "crates/search-lexical/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#failure-surface"
+path = "crates/search-lexical/AGENTS.md"
+line = 45
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-lexical/AGENTS.md"
+line = 50
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#size-and-split-guard"
+path = "crates/search-lexical/AGENTS.md"
+line = 61
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/AGENTS.md#definition-of-done"
+path = "crates/search-lexical/AGENTS.md"
+line = 69
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#function-contract-search-lexical"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-lexical"
+kind = "implementation_contract_root"
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#profile-operations"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Profile operations"
+kind = "implementation_contract"
+modules = ["search-lexical:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#describeprofile-lexicalprofiledescriptor"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "describeprofile() -> LexicalProfileDescriptor"
+kind = "implementation_operation"
+modules = ["search-lexical:profile"]
+route_kind = "operation_route"
+rationale = "search-lexical::describe_profile"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#validateprofile-profile-qualification-result-acceptedlexicalprofile-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "validateprofile(profile, qualification) -> Result<AcceptedLexicalProfile, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:profile"]
+route_kind = "operation_route"
+rationale = "search-lexical::validate_profile"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#profiledigest-profile-lexicalprofileid"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 21
+level = 3
+heading = "profiledigest(profile) -> LexicalProfileId"
+kind = "implementation_operation"
+modules = ["search-lexical:profile"]
+route_kind = "operation_route"
+rationale = "search-lexical::profile_digest"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#encoding-operations"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 26
+level = 2
+heading = "Encoding operations"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#normalizeinput-input-profile-budget-result-normalizedlexicalinput-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 28
+level = 3
+heading = "normalizeinput(input, profile, budget) -> Result<NormalizedLexicalInput, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:tokenize"]
+route_kind = "operation_route"
+rationale = "search-lexical::normalize_input"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#expandidentifier-token-profile-boundedtokenset"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 33
+level = 3
+heading = "expandidentifier(token, profile) -> BoundedTokenSet"
+kind = "implementation_operation"
+modules = ["search-lexical:tokenize"]
+route_kind = "operation_route"
+rationale = "search-lexical::expand_identifier"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#tokenizedocument-input-profile-budget-result-tokensequence-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 38
+level = 3
+heading = "tokenizedocument(input, profile, budget) -> Result<TokenSequence, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:tokenize"]
+route_kind = "operation_route"
+rationale = "search-lexical::tokenize_document"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#tokenizequery-input-profile-budget-result-tokensequence-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 40
+level = 3
+heading = "tokenizequery(input, profile, budget) -> Result<TokenSequence, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:tokenize"]
+route_kind = "operation_route"
+rationale = "search-lexical::tokenize_query"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#mapterms-tokens-profile-result-sparsefeatureset-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 45
+level = 3
+heading = "mapterms(tokens, profile) -> Result<SparseFeatureSet, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:tokenize"]
+route_kind = "operation_route"
+rationale = "search-lexical::map_terms"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#weightdocument-features-statistics-profile-result-sparsevector-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 50
+level = 3
+heading = "weightdocument(features, statistics, profile) -> Result<SparseVector, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:sparse"]
+route_kind = "operation_route"
+rationale = "search-lexical::weight_document"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#weightquery-features-profile-result-sparsevector-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 52
+level = 3
+heading = "weightquery(features, profile) -> Result<SparseVector, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:sparse"]
+route_kind = "operation_route"
+rationale = "search-lexical::weight_query"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#encodedocument-input-profile-budget-result-lexicalencoding-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 57
+level = 3
+heading = "encodedocument(input, profile, budget) -> Result<LexicalEncoding, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:sparse"]
+route_kind = "operation_route"
+rationale = "search-lexical::encode_document"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#encodequery-input-profile-budget-result-lexicalencoding-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 59
+level = 3
+heading = "encodequery(input, profile, budget) -> Result<LexicalEncoding, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:sparse"]
+route_kind = "operation_route"
+rationale = "search-lexical::encode_query"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#measurecollisioncorpus-corpus-profile-budget-result-collisionreport-lexicalerror"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 64
+level = 3
+heading = "measurecollisioncorpus(corpus, profile, budget) -> Result<CollisionReport, LexicalError>"
+kind = "implementation_operation"
+modules = ["search-lexical:statistics"]
+route_kind = "operation_route"
+rationale = "search-lexical::measure_collision_corpus"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#configuration-operations"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 69
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-lexical:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#cancellation-retry-and-failure"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 75
+level = 2
+heading = "Cancellation, retry and failure"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/FUNCTIONS.md#required-fixtures"
+path = "crates/search-lexical/FUNCTIONS.md"
+line = 81
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/README.md#search-lexical"
+path = "crates/search-lexical/README.md"
+line = 1
+level = 1
+heading = "search-lexical"
+kind = "implementation_contract_root"
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-lexical/README.md#owns"
+path = "crates/search-lexical/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-lexical/README.md#must-not-own"
+path = "crates/search-lexical/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-lexical-retrieval-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 787
+level = 2
+heading = "S12. Lexical retrieval contract"
+kind = "architecture_section"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics"]
+route_kind = "architecture_section_registry"
+rationale = "S12"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-1-qdrant-is-not-assumed-to-be-the-text-encoder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 789
+level = 3
+heading = "S12.1 Qdrant is not assumed to be the text encoder"
+kind = "architecture_node"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-2-immutable-lexical-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 806
+level = 3
+heading = "S12.2 Immutable lexical profiles"
+kind = "architecture_node"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-3-exact-identifiers-do-not-depend-on-bm25"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 867
+level = 3
+heading = "S12.3 Exact identifiers do not depend on BM25"
+kind = "architecture_node"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s12-4-idf-population"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 871
+level = 3
+heading = "S12.4 IDF population"
+kind = "architecture_node"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p06-lexical-encoder-and-collection-schema"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2870
+level = 3
+heading = "P06 — Lexical encoder and collection schema"
+kind = "delivery_contract"
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:tokenize"]
+route_kind = "delivery_registry"
+rationale = "P06"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#w3-implementation-packet-index"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W3 implementation packet index"
+kind = "implementation_handoff"
+modules = ["search-lexical:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 6
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-lexical:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#dependency-order"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 19
+level = 2
+heading = "Dependency order"
+kind = "implementation_handoff"
+modules = ["search-lexical:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W3_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+line = 39
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-lexical:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/qdrant/README.md#qdrant-qualification"
+path = "qualification/qdrant/README.md"
+line = 1
+level = 1
+heading = "Qdrant qualification"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#w3-qdrant-and-lexical-qualification-contract"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W3 Qdrant and lexical qualification contract"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#owners"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 12
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#frozen-inputs-required-before-execution"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 28
+level = 2
+heading = "Frozen inputs required before execution"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#qualification-order"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 43
+level = 2
+heading = "Qualification order"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mandatory-admission-properties"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 63
+level = 2
+heading = "Mandatory admission properties"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#process-and-secret-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 65
+level = 3
+heading = "Process and secret boundary"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#collection-and-filter-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 75
+level = 3
+heading = "Collection and filter boundary"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#mutation-and-readback-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 88
+level = 3
+heading = "Mutation and readback boundary"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#lexical-boundary"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 97
+level = 3
+heading = "Lexical boundary"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#evidence-products"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 107
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "qualification/qdrant/W3_QUALIFICATION.md#current-disposition"
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+line = 133
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "qualification_area_route"
+rationale = "qualification/qdrant"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#search-lexical-implementation-packet"
+path = "swarm/assignments/search-lexical.md"
+line = 1
+level = 1
+heading = "search-lexical implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#mission"
+path = "swarm/assignments/search-lexical.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#owns"
+path = "swarm/assignments/search-lexical.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#must-not-own"
+path = "swarm/assignments/search-lexical.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#logical-primitives"
+path = "swarm/assignments/search-lexical.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#logical-operations"
+path = "swarm/assignments/search-lexical.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#required-invariants"
+path = "swarm/assignments/search-lexical.md"
+line = 43
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-lexical:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#typed-failure-surface"
+path = "swarm/assignments/search-lexical.md"
+line = 51
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#exit-tests-evidence"
+path = "swarm/assignments/search-lexical.md"
+line = 59
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-lexical:fixture"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#suggested-internal-modules"
+path = "swarm/assignments/search-lexical.md"
+line = 68
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-lexical.md#size-split"
+path = "swarm/assignments/search-lexical.md"
+line = 84
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-lexical:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

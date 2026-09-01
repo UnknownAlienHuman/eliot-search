@@ -1,0 +1,3183 @@
+schema_version = 1
+project = "eliot-search"
+status = "DOCUMENTATION_FILE_REVERSE_INDEX_NOT_IMPLEMENTED"
+file_count = 397
+node_count = 3499
+every_tracked_markdown_file_indexed = true
+implementation_authorized_by_this_index = false
+
+[[file]]
+path = "AGENTS.md"
+node_count = 15
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "README.md"
+node_count = 11
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "bins/eliot-search-doc-worker/AGENTS.md"
+node_count = 6
+principle_count = 1
+packages = ["eliot-search-doc-worker"]
+modules = ["eliot-search-doc-worker:args", "eliot-search-doc-worker:config", "eliot-search-doc-worker:error", "eliot-search-doc-worker:input", "eliot-search-doc-worker:lifecycle", "eliot-search-doc-worker:main", "eliot-search-doc-worker:maps", "eliot-search-doc-worker:materialize", "eliot-search-doc-worker:protocol", "eliot-search-doc-worker:provider", "eliot-search-doc-worker:resource", "eliot-search-doc-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search-doc-worker/FUNCTIONS.md"
+node_count = 23
+principle_count = 0
+packages = ["eliot-search-doc-worker"]
+modules = ["eliot-search-doc-worker:args", "eliot-search-doc-worker:config", "eliot-search-doc-worker:error", "eliot-search-doc-worker:input", "eliot-search-doc-worker:lifecycle", "eliot-search-doc-worker:main", "eliot-search-doc-worker:maps", "eliot-search-doc-worker:materialize", "eliot-search-doc-worker:protocol", "eliot-search-doc-worker:provider", "eliot-search-doc-worker:resource", "eliot-search-doc-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search-doc-worker/README.md"
+node_count = 1
+principle_count = 0
+packages = ["eliot-search-doc-worker"]
+modules = ["eliot-search-doc-worker:args", "eliot-search-doc-worker:config", "eliot-search-doc-worker:error", "eliot-search-doc-worker:input", "eliot-search-doc-worker:lifecycle", "eliot-search-doc-worker:main", "eliot-search-doc-worker:maps", "eliot-search-doc-worker:materialize", "eliot-search-doc-worker:protocol", "eliot-search-doc-worker:provider", "eliot-search-doc-worker:resource", "eliot-search-doc-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search-model-worker/AGENTS.md"
+node_count = 6
+principle_count = 1
+packages = ["eliot-search-model-worker"]
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search-model-worker/FUNCTIONS.md"
+node_count = 20
+principle_count = 0
+packages = ["eliot-search-model-worker"]
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search-model-worker/README.md"
+node_count = 1
+principle_count = 0
+packages = ["eliot-search-model-worker"]
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search/AGENTS.md"
+node_count = 9
+principle_count = 0
+packages = ["eliot-search"]
+modules = ["eliot-search:args", "eliot-search:cancel", "eliot-search:config", "eliot-search:connection", "eliot-search:doctor", "eliot-search:error", "eliot-search:exit", "eliot-search:main", "eliot-search:pairing", "eliot-search:render", "eliot-search:request"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search/FUNCTIONS.md"
+node_count = 15
+principle_count = 0
+packages = ["eliot-search"]
+modules = ["eliot-search:args", "eliot-search:cancel", "eliot-search:config", "eliot-search:connection", "eliot-search:doctor", "eliot-search:error", "eliot-search:exit", "eliot-search:main", "eliot-search:pairing", "eliot-search:render", "eliot-search:request"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search/README.md"
+node_count = 3
+principle_count = 0
+packages = ["eliot-search"]
+modules = ["eliot-search:args", "eliot-search:cancel", "eliot-search:config", "eliot-search:connection", "eliot-search:doctor", "eliot-search:error", "eliot-search:exit", "eliot-search:main", "eliot-search:pairing", "eliot-search:render", "eliot-search:request"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-search/W8_CLIENT.md"
+node_count = 19
+principle_count = 0
+packages = ["eliot-search"]
+modules = ["eliot-search:args", "eliot-search:cancel", "eliot-search:config", "eliot-search:connection", "eliot-search:doctor", "eliot-search:error", "eliot-search:exit", "eliot-search:main", "eliot-search:pairing", "eliot-search:render", "eliot-search:request"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-searchd/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["eliot-searchd"]
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-searchd/FUNCTIONS.md"
+node_count = 51
+principle_count = 1
+packages = ["eliot-searchd"]
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-searchd/README.md"
+node_count = 3
+principle_count = 0
+packages = ["eliot-searchd"]
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-searchd/W10_INTEGRATION.md"
+node_count = 31
+principle_count = 0
+packages = ["eliot-searchd"]
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+non_crate_only = false
+
+[[file]]
+path = "bins/eliot-searchd/W8_INTEGRATION.md"
+node_count = 11
+principle_count = 0
+packages = ["eliot-searchd"]
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+non_crate_only = false
+
+[[file]]
+path = "config/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "config/sections/continuations.md"
+node_count = 5
+principle_count = 0
+packages = ["search-continuation"]
+modules = ["search-continuation:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/control.md"
+node_count = 5
+principle_count = 0
+packages = ["search-control-redb"]
+modules = ["search-control-redb:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/handles.md"
+node_count = 5
+principle_count = 0
+packages = ["search-handles"]
+modules = ["search-handles:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/index_reclaim.md"
+node_count = 5
+principle_count = 0
+packages = ["search-index-reclaimer"]
+modules = ["search-index-reclaimer:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/instance.md"
+node_count = 5
+principle_count = 0
+packages = ["search-runtime-owner"]
+modules = ["search-runtime-owner:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/lexical.md"
+node_count = 5
+principle_count = 0
+packages = ["search-lexical"]
+modules = ["search-lexical:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/observability.md"
+node_count = 5
+principle_count = 0
+packages = ["search-eval"]
+modules = ["search-eval:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/optional_profiles.md"
+node_count = 7
+principle_count = 0
+packages = ["eliot-searchd"]
+modules = ["eliot-searchd:optional"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/overlay.md"
+node_count = 5
+principle_count = 0
+packages = ["search-overlay"]
+modules = ["search-overlay:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/protocol.md"
+node_count = 5
+principle_count = 0
+packages = ["search-provider-protocol"]
+modules = ["search-provider-protocol:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/qdrant_data.md"
+node_count = 5
+principle_count = 0
+packages = ["search-qdrant-bridge"]
+modules = ["search-qdrant-bridge:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/qdrant_process.md"
+node_count = 5
+principle_count = 0
+packages = ["search-qdrant-supervisor"]
+modules = ["search-qdrant-supervisor:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/query.md"
+node_count = 5
+principle_count = 0
+packages = ["search-query-planner"]
+modules = ["search-query-planner:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/reconcile.md"
+node_count = 5
+principle_count = 0
+packages = ["search-source-reconcile"]
+modules = ["search-source-reconcile:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/retention.md"
+node_count = 5
+principle_count = 0
+packages = ["search-retention"]
+modules = ["search-retention:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/revision_store.md"
+node_count = 5
+principle_count = 0
+packages = ["search-revision-store"]
+modules = ["search-revision-store:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/scheduler.md"
+node_count = 5
+principle_count = 0
+packages = ["search-retrieval-executor"]
+modules = ["search-retrieval-executor:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/secrets.md"
+node_count = 5
+principle_count = 0
+packages = ["search-os-secrets"]
+modules = ["search-os-secrets:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/source_admission.md"
+node_count = 5
+principle_count = 0
+packages = ["search-source-admission"]
+modules = ["search-source-admission:config"]
+non_crate_only = false
+
+[[file]]
+path = "config/sections/source_reader.md"
+node_count = 5
+principle_count = 0
+packages = ["search-safe-reader"]
+modules = ["search-safe-reader:config"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-config/AGENTS.md"
+node_count = 6
+principle_count = 0
+packages = ["search-config"]
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-config/FUNCTIONS.md"
+node_count = 15
+principle_count = 0
+packages = ["search-config"]
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-config/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-config"]
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-contracts/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-contracts"]
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:error", "search-contracts:ids", "search-contracts:lib", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-contracts/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-contracts"]
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:error", "search-contracts:ids", "search-contracts:lib", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-control-redb/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-control-redb"]
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-control-redb/FUNCTIONS.md"
+node_count = 32
+principle_count = 1
+packages = ["search-control-redb"]
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-control-redb/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-control-redb"]
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-domain/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-domain"]
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions", "search-domain:eligibility", "search-domain:error", "search-domain:lib", "search-domain:ordering", "search-domain:outcomes", "search-domain:transitions", "search-domain:visibility"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-domain/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-domain"]
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions", "search-domain:eligibility", "search-domain:error", "search-domain:lib", "search-domain:ordering", "search-domain:outcomes", "search-domain:transitions", "search-domain:visibility"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-eliot-adapter/AGENTS.md"
+node_count = 11
+principle_count = 0
+packages = ["search-eliot-adapter"]
+modules = ["search-eliot-adapter:api", "search-eliot-adapter:binding", "search-eliot-adapter:cutover", "search-eliot-adapter:error", "search-eliot-adapter:evidence", "search-eliot-adapter:lib", "search-eliot-adapter:profile", "search-eliot-adapter:request", "search-eliot-adapter:result", "search-eliot-adapter:scope"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-eliot-adapter/FUNCTIONS.md"
+node_count = 13
+principle_count = 0
+packages = ["search-eliot-adapter"]
+modules = ["search-eliot-adapter:api", "search-eliot-adapter:binding", "search-eliot-adapter:cutover", "search-eliot-adapter:error", "search-eliot-adapter:evidence", "search-eliot-adapter:lib", "search-eliot-adapter:profile", "search-eliot-adapter:request", "search-eliot-adapter:result", "search-eliot-adapter:scope"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-eliot-adapter/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-eliot-adapter"]
+modules = ["search-eliot-adapter:api", "search-eliot-adapter:binding", "search-eliot-adapter:cutover", "search-eliot-adapter:error", "search-eliot-adapter:evidence", "search-eliot-adapter:lib", "search-eliot-adapter:profile", "search-eliot-adapter:request", "search-eliot-adapter:result", "search-eliot-adapter:scope"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-eval/AGENTS.md"
+node_count = 10
+principle_count = 1
+packages = ["search-eval"]
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-eval/FUNCTIONS.md"
+node_count = 34
+principle_count = 1
+packages = ["search-eval"]
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-eval/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-eval"]
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+node_count = 20
+principle_count = 0
+packages = ["search-eval"]
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/AGENTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-index-qdrant/README.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-index-qdrant/search-epoch-pins/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-epoch-pins"]
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+node_count = 11
+principle_count = 0
+packages = ["search-epoch-pins"]
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"
+node_count = 4
+principle_count = 1
+packages = ["search-epoch-pins"]
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-epoch-pins/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-epoch-pins"]
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-index-reclaimer/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-index-reclaimer"]
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+node_count = 11
+principle_count = 0
+packages = ["search-index-reclaimer"]
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-index-reclaimer/P18_SCALE.md"
+node_count = 4
+principle_count = 1
+packages = ["search-index-reclaimer"]
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-index-reclaimer/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-index-reclaimer"]
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-index-reclaimer/W7_HARDENING.md"
+node_count = 5
+principle_count = 0
+packages = ["search-index-reclaimer"]
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-point-identity/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-point-identity"]
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-point-identity"]
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-point-identity/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-point-identity"]
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-projection-planner/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-projection-planner"]
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+node_count = 11
+principle_count = 0
+packages = ["search-projection-planner"]
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-projection-planner/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-projection-planner"]
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-publication/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-publication"]
+modules = ["search-publication:actor", "search-publication:api", "search-publication:command", "search-publication:commit", "search-publication:doctor", "search-publication:error", "search-publication:intent", "search-publication:lib", "search-publication:readback", "search-publication:reclaim", "search-publication:recovery", "search-publication:stage"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+node_count = 17
+principle_count = 0
+packages = ["search-publication"]
+modules = ["search-publication:actor", "search-publication:api", "search-publication:command", "search-publication:commit", "search-publication:doctor", "search-publication:error", "search-publication:intent", "search-publication:lib", "search-publication:readback", "search-publication:reclaim", "search-publication:recovery", "search-publication:stage"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-publication/P18_SCALE.md"
+node_count = 5
+principle_count = 1
+packages = ["search-publication"]
+modules = ["search-publication:actor", "search-publication:api", "search-publication:command", "search-publication:commit", "search-publication:doctor", "search-publication:error", "search-publication:intent", "search-publication:lib", "search-publication:readback", "search-publication:reclaim", "search-publication:recovery", "search-publication:stage"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-publication/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-publication"]
+modules = ["search-publication:actor", "search-publication:api", "search-publication:command", "search-publication:commit", "search-publication:doctor", "search-publication:error", "search-publication:intent", "search-publication:lib", "search-publication:readback", "search-publication:reclaim", "search-publication:recovery", "search-publication:stage"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-publication/W7_HARDENING.md"
+node_count = 5
+principle_count = 0
+packages = ["search-publication"]
+modules = ["search-publication:actor", "search-publication:api", "search-publication:command", "search-publication:commit", "search-publication:doctor", "search-publication:error", "search-publication:intent", "search-publication:lib", "search-publication:readback", "search-publication:reclaim", "search-publication:recovery", "search-publication:stage"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-qdrant-bridge/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-qdrant-bridge"]
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+node_count = 17
+principle_count = 0
+packages = ["search-qdrant-bridge"]
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-qdrant-bridge/P18_SCALE.md"
+node_count = 5
+principle_count = 1
+packages = ["search-qdrant-bridge"]
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-qdrant-bridge/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-qdrant-bridge"]
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-qdrant-supervisor/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-qdrant-supervisor"]
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+node_count = 15
+principle_count = 0
+packages = ["search-qdrant-supervisor"]
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-index-qdrant/search-qdrant-supervisor/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-qdrant-supervisor"]
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-lexical/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-lexical"]
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-lexical/FUNCTIONS.md"
+node_count = 19
+principle_count = 0
+packages = ["search-lexical"]
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-lexical/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-lexical"]
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-model-provider/AGENTS.md"
+node_count = 6
+principle_count = 1
+packages = ["search-model-provider"]
+modules = ["search-model-provider:api", "search-model-provider:capability", "search-model-provider:encode", "search-model-provider:error", "search-model-provider:lib", "search-model-provider:lifecycle", "search-model-provider:profile", "search-model-provider:rerank", "search-model-provider:validation"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-model-provider/FUNCTIONS.md"
+node_count = 32
+principle_count = 1
+packages = ["search-model-provider"]
+modules = ["search-model-provider:api", "search-model-provider:capability", "search-model-provider:encode", "search-model-provider:error", "search-model-provider:lib", "search-model-provider:lifecycle", "search-model-provider:profile", "search-model-provider:rerank", "search-model-provider:validation"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-model-provider/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-model-provider"]
+modules = ["search-model-provider:api", "search-model-provider:capability", "search-model-provider:encode", "search-model-provider:error", "search-model-provider:lib", "search-model-provider:lifecycle", "search-model-provider:profile", "search-model-provider:rerank", "search-model-provider:validation"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-ports/AGENTS.md"
+node_count = 8
+principle_count = 0
+packages = ["search-ports"]
+modules = ["search-ports:access", "search-ports:conformance", "search-ports:context", "search-ports:control", "search-ports:error", "search-ports:handles", "search-ports:index", "search-ports:lib", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source", "search-ports:stream"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-ports/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-ports"]
+modules = ["search-ports:access", "search-ports:conformance", "search-ports:context", "search-ports:control", "search-ports:error", "search-ports:handles", "search-ports:index", "search-ports:lib", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source", "search-ports:stream"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/AGENTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-prep/README.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-prep/search-code-enricher/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-code-enricher"]
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+node_count = 14
+principle_count = 0
+packages = ["search-code-enricher"]
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-code-enricher/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-code-enricher"]
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-materializer/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-materializer"]
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-materializer/FUNCTIONS.md"
+node_count = 29
+principle_count = 1
+packages = ["search-materializer"]
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-materializer/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-materializer"]
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-unitizer/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-unitizer"]
+modules = ["search-unitizer:api", "search-unitizer:batch", "search-unitizer:boundaries", "search-unitizer:diff", "search-unitizer:error", "search-unitizer:identity", "search-unitizer:lib", "search-unitizer:manifest", "search-unitizer:occurrence", "search-unitizer:profile", "search-unitizer:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+node_count = 29
+principle_count = 1
+packages = ["search-unitizer"]
+modules = ["search-unitizer:api", "search-unitizer:batch", "search-unitizer:boundaries", "search-unitizer:diff", "search-unitizer:error", "search-unitizer:identity", "search-unitizer:lib", "search-unitizer:manifest", "search-unitizer:occurrence", "search-unitizer:profile", "search-unitizer:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-prep/search-unitizer/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-unitizer"]
+modules = ["search-unitizer:api", "search-unitizer:batch", "search-unitizer:boundaries", "search-unitizer:diff", "search-unitizer:error", "search-unitizer:identity", "search-unitizer:lib", "search-unitizer:manifest", "search-unitizer:occurrence", "search-unitizer:profile", "search-unitizer:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-provider-protocol/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-provider-protocol"]
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+node_count = 15
+principle_count = 0
+packages = ["search-provider-protocol"]
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-provider-protocol/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-provider-protocol"]
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+node_count = 13
+principle_count = 0
+packages = ["search-provider-protocol"]
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/AGENTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-query/README.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-query/search-access/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-access"]
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-access/FUNCTIONS.md"
+node_count = 13
+principle_count = 0
+packages = ["search-access"]
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-access/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-access"]
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-access/W7_HARDENING.md"
+node_count = 9
+principle_count = 0
+packages = ["search-access"]
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-candidate-validator/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-candidate-validator"]
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-candidate-validator"]
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-candidate-validator/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-candidate-validator"]
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-candidate-validator/W7_HARDENING.md"
+node_count = 5
+principle_count = 0
+packages = ["search-candidate-validator"]
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-comparator/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-comparator"]
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+node_count = 17
+principle_count = 0
+packages = ["search-comparator"]
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-comparator/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-comparator"]
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-continuation/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-continuation"]
+modules = ["search-continuation:api", "search-continuation:cleanup", "search-continuation:config", "search-continuation:error", "search-continuation:identity", "search-continuation:issue", "search-continuation:lib", "search-continuation:reauthorize", "search-continuation:resume", "search-continuation:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-continuation/FUNCTIONS.md"
+node_count = 16
+principle_count = 0
+packages = ["search-continuation"]
+modules = ["search-continuation:api", "search-continuation:cleanup", "search-continuation:config", "search-continuation:error", "search-continuation:identity", "search-continuation:issue", "search-continuation:lib", "search-continuation:reauthorize", "search-continuation:resume", "search-continuation:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-continuation/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-continuation"]
+modules = ["search-continuation:api", "search-continuation:cleanup", "search-continuation:config", "search-continuation:error", "search-continuation:identity", "search-continuation:issue", "search-continuation:lib", "search-continuation:reauthorize", "search-continuation:resume", "search-continuation:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-continuation/W7_HARDENING.md"
+node_count = 6
+principle_count = 0
+packages = ["search-continuation"]
+modules = ["search-continuation:api", "search-continuation:cleanup", "search-continuation:config", "search-continuation:error", "search-continuation:identity", "search-continuation:issue", "search-continuation:lib", "search-continuation:reauthorize", "search-continuation:resume", "search-continuation:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-exact/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-exact"]
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-exact/FUNCTIONS.md"
+node_count = 18
+principle_count = 0
+packages = ["search-exact"]
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-exact/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-exact"]
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-handles/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-handles"]
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-handles/FUNCTIONS.md"
+node_count = 15
+principle_count = 0
+packages = ["search-handles"]
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-handles/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-handles"]
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-handles/W7_HARDENING.md"
+node_count = 8
+principle_count = 0
+packages = ["search-handles"]
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-overlay/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-overlay"]
+modules = ["search-overlay:api", "search-overlay:cleanup", "search-overlay:config", "search-overlay:direct", "search-overlay:error", "search-overlay:identity", "search-overlay:lib", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-overlay/FUNCTIONS.md"
+node_count = 16
+principle_count = 0
+packages = ["search-overlay"]
+modules = ["search-overlay:api", "search-overlay:cleanup", "search-overlay:config", "search-overlay:direct", "search-overlay:error", "search-overlay:identity", "search-overlay:lib", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-overlay/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-overlay"]
+modules = ["search-overlay:api", "search-overlay:cleanup", "search-overlay:config", "search-overlay:direct", "search-overlay:error", "search-overlay:identity", "search-overlay:lib", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-query-planner/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-query-planner"]
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-query-planner/FUNCTIONS.md"
+node_count = 11
+principle_count = 0
+packages = ["search-query-planner"]
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-query-planner/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-query-planner"]
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-result-projector/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-result-projector"]
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-result-projector/FUNCTIONS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-result-projector"]
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-result-projector/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-result-projector"]
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-retrieval-executor/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-retrieval-executor"]
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+node_count = 14
+principle_count = 0
+packages = ["search-retrieval-executor"]
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-retrieval-executor/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-retrieval-executor"]
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-subject-resolver/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-subject-resolver"]
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-subject-resolver/FUNCTIONS.md"
+node_count = 18
+principle_count = 0
+packages = ["search-subject-resolver"]
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-query/search-subject-resolver/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-subject-resolver"]
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-research-export-adapter/AGENTS.md"
+node_count = 11
+principle_count = 0
+packages = ["search-research-export-adapter"]
+modules = ["search-research-export-adapter:admission", "search-research-export-adapter:api", "search-research-export-adapter:content", "search-research-export-adapter:cutover", "search-research-export-adapter:digest", "search-research-export-adapter:error", "search-research-export-adapter:export", "search-research-export-adapter:lib", "search-research-export-adapter:manifest", "search-research-export-adapter:profile"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-research-export-adapter/FUNCTIONS.md"
+node_count = 13
+principle_count = 0
+packages = ["search-research-export-adapter"]
+modules = ["search-research-export-adapter:admission", "search-research-export-adapter:api", "search-research-export-adapter:content", "search-research-export-adapter:cutover", "search-research-export-adapter:digest", "search-research-export-adapter:error", "search-research-export-adapter:export", "search-research-export-adapter:lib", "search-research-export-adapter:manifest", "search-research-export-adapter:profile"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-research-export-adapter/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-research-export-adapter"]
+modules = ["search-research-export-adapter:admission", "search-research-export-adapter:api", "search-research-export-adapter:content", "search-research-export-adapter:cutover", "search-research-export-adapter:digest", "search-research-export-adapter:error", "search-research-export-adapter:export", "search-research-export-adapter:lib", "search-research-export-adapter:manifest", "search-research-export-adapter:profile"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/AGENTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-runtime/README.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-runtime/search-os-secrets/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-os-secrets"]
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+node_count = 25
+principle_count = 1
+packages = ["search-os-secrets"]
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-os-secrets/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-os-secrets"]
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-retention/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-retention"]
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-retention/FUNCTIONS.md"
+node_count = 35
+principle_count = 0
+packages = ["search-retention"]
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-retention/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-retention"]
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-runtime-owner/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-runtime-owner"]
+modules = ["search-runtime-owner:acquire", "search-runtime-owner:api", "search-runtime-owner:config", "search-runtime-owner:error", "search-runtime-owner:health", "search-runtime-owner:identity", "search-runtime-owner:lib", "search-runtime-owner:observation", "search-runtime-owner:recovery", "search-runtime-owner:release"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-runtime-owner/FUNCTIONS.md"
+node_count = 28
+principle_count = 1
+packages = ["search-runtime-owner"]
+modules = ["search-runtime-owner:acquire", "search-runtime-owner:api", "search-runtime-owner:config", "search-runtime-owner:error", "search-runtime-owner:health", "search-runtime-owner:identity", "search-runtime-owner:lib", "search-runtime-owner:observation", "search-runtime-owner:recovery", "search-runtime-owner:release"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-runtime/search-runtime-owner/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-runtime-owner"]
+modules = ["search-runtime-owner:acquire", "search-runtime-owner:api", "search-runtime-owner:config", "search-runtime-owner:error", "search-runtime-owner:health", "search-runtime-owner:identity", "search-runtime-owner:lib", "search-runtime-owner:observation", "search-runtime-owner:recovery", "search-runtime-owner:release"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/AGENTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-source/README.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "crates/search-source/search-revision-store/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-revision-store"]
+modules = ["search-revision-store:address", "search-revision-store:anchor", "search-revision-store:api", "search-revision-store:config", "search-revision-store:deletion", "search-revision-store:error", "search-revision-store:lease", "search-revision-store:lib", "search-revision-store:lifecycle", "search-revision-store:object", "search-revision-store:residency", "search-revision-store:restore", "search-revision-store:revision"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-revision-store/FUNCTIONS.md"
+node_count = 23
+principle_count = 0
+packages = ["search-revision-store"]
+modules = ["search-revision-store:address", "search-revision-store:anchor", "search-revision-store:api", "search-revision-store:config", "search-revision-store:deletion", "search-revision-store:error", "search-revision-store:lease", "search-revision-store:lib", "search-revision-store:lifecycle", "search-revision-store:object", "search-revision-store:residency", "search-revision-store:restore", "search-revision-store:revision"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-revision-store/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-revision-store"]
+modules = ["search-revision-store:address", "search-revision-store:anchor", "search-revision-store:api", "search-revision-store:config", "search-revision-store:deletion", "search-revision-store:error", "search-revision-store:lease", "search-revision-store:lib", "search-revision-store:lifecycle", "search-revision-store:object", "search-revision-store:residency", "search-revision-store:restore", "search-revision-store:revision"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-safe-reader/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-safe-reader"]
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+node_count = 31
+principle_count = 1
+packages = ["search-safe-reader"]
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-safe-reader/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-safe-reader"]
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-admission/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-source-admission"]
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-admission/FUNCTIONS.md"
+node_count = 26
+principle_count = 1
+packages = ["search-source-admission"]
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-admission/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-source-admission"]
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-identity/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-source-identity"]
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+node_count = 25
+principle_count = 1
+packages = ["search-source-identity"]
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-identity/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-source-identity"]
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-reconcile/AGENTS.md"
+node_count = 10
+principle_count = 0
+packages = ["search-source-reconcile"]
+modules = ["search-source-reconcile:api", "search-source-reconcile:commit", "search-source-reconcile:config", "search-source-reconcile:currentness", "search-source-reconcile:error", "search-source-reconcile:gap", "search-source-reconcile:inventory", "search-source-reconcile:lib", "search-source-reconcile:plan", "search-source-reconcile:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+node_count = 18
+principle_count = 0
+packages = ["search-source-reconcile"]
+modules = ["search-source-reconcile:api", "search-source-reconcile:commit", "search-source-reconcile:config", "search-source-reconcile:currentness", "search-source-reconcile:error", "search-source-reconcile:gap", "search-source-reconcile:inventory", "search-source-reconcile:lib", "search-source-reconcile:plan", "search-source-reconcile:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-reconcile/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-source-reconcile"]
+modules = ["search-source-reconcile:api", "search-source-reconcile:commit", "search-source-reconcile:config", "search-source-reconcile:currentness", "search-source-reconcile:error", "search-source-reconcile:gap", "search-source-reconcile:inventory", "search-source-reconcile:lib", "search-source-reconcile:plan", "search-source-reconcile:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-registry/AGENTS.md"
+node_count = 5
+principle_count = 0
+packages = ["search-source-registry"]
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+node_count = 32
+principle_count = 1
+packages = ["search-source-registry"]
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+non_crate_only = false
+
+[[file]]
+path = "crates/search-source/search-source-registry/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-source-registry"]
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+non_crate_only = false
+
+[[file]]
+path = "docs/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/adr/0001-capability-cell-crate-decomposition.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/adr/0002-runtime-security-boundary-refinement.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/adr/0003-executable-swarm-orchestration-contract.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/adr/0003-p00-contract-projection-and-port-ownership.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/adr/0004-configuration-boundary.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+node_count = 266
+principle_count = 0
+packages = ["eliot-search", "eliot-search-doc-worker", "eliot-search-model-worker", "eliot-searchd", "search-access", "search-candidate-validator", "search-code-enricher", "search-comparator", "search-config", "search-continuation", "search-contracts", "search-control-redb", "search-domain", "search-eliot-adapter", "search-epoch-pins", "search-eval", "search-exact", "search-handles", "search-index-reclaimer", "search-lexical", "search-materializer", "search-model-provider", "search-os-secrets", "search-overlay", "search-point-identity", "search-ports", "search-projection-planner", "search-provider-protocol", "search-publication", "search-qdrant-bridge", "search-qdrant-supervisor", "search-query-planner", "search-research-export-adapter", "search-result-projector", "search-retention", "search-retrieval-executor", "search-revision-store", "search-runtime-owner", "search-safe-reader", "search-source-admission", "search-source-identity", "search-source-reconcile", "search-source-registry", "search-subject-resolver", "search-unitizer"]
+modules = ["eliot-search-doc-worker:maps", "eliot-search-doc-worker:materialize", "eliot-search-doc-worker:provider", "eliot-search-doc-worker:resource", "eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank", "eliot-search:connection", "eliot-search:request", "eliot-searchd:adapters", "eliot-searchd:connection", "eliot-searchd:evaluation", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:startup", "search-access:barrier", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-candidate-validator:anchor", "search-candidate-validator:decision", "search-candidate-validator:readback", "search-candidate-validator:security", "search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references", "search-comparator:alignment", "search-comparator:behavior", "search-comparator:lineage", "search-comparator:result", "search-config:layering", "search-continuation:reauthorize", "search-continuation:resume", "search-continuation:token", "search-contracts:canonical", "search-contracts:ids", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:snapshot", "search-control-redb:transaction", "search-domain:coverage", "search-domain:decisions", "search-domain:eligibility", "search-domain:outcomes", "search-domain:transitions", "search-eliot-adapter:evidence", "search-eliot-adapter:request", "search-eliot-adapter:scope", "search-epoch-pins:registry", "search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial", "search-exact:denominator", "search-exact:execute", "search-exact:plan", "search-exact:predicate", "search-exact:recovery", "search-exact:report", "search-handles:invalidate", "search-handles:issue", "search-handles:resolve", "search-handles:token", "search-index-reclaimer:delete", "search-index-reclaimer:plan", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize", "search-materializer:assurance", "search-materializer:decode", "search-materializer:maps", "search-materializer:product", "search-materializer:provider", "search-model-provider:encode", "search-model-provider:profile", "search-model-provider:rerank", "search-os-secrets:store", "search-overlay:cleanup", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot", "search-point-identity:collision", "search-point-identity:key", "search-ports:conformance", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:schema", "search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:terminal", "search-publication:actor", "search-publication:commit", "search-publication:intent", "search-publication:readback", "search-publication:recovery", "search-qdrant-bridge:admin", "search-qdrant-bridge:capability", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:schema", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:process", "search-query-planner:legs", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:scope", "search-research-export-adapter:admission", "search-research-export-adapter:export", "search-research-export-adapter:manifest", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:evidence", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone", "search-retrieval-executor:contamination", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:scheduler", "search-revision-store:anchor", "search-revision-store:lifecycle", "search-revision-store:object", "search-revision-store:residency", "search-revision-store:restore", "search-revision-store:revision", "search-runtime-owner:acquire", "search-runtime-owner:release", "search-safe-reader:git_object", "search-safe-reader:stable_read", "search-source-admission:policy", "search-source-admission:receipt", "search-source-identity:binding", "search-source-identity:source", "search-source-reconcile:commit", "search-source-reconcile:currentness", "search-source-reconcile:gap", "search-source-reconcile:inventory", "search-source-registry:cutover", "search-source-registry:membership", "search-source-registry:root", "search-source-registry:view", "search-subject-resolver:ambiguity", "search-subject-resolver:candidates", "search-subject-resolver:ladder", "search-unitizer:boundaries", "search-unitizer:manifest"]
+non_crate_only = false
+
+[[file]]
+path = "docs/client/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+node_count = 25
+principle_count = 0
+packages = ["eliot-search", "eliot-searchd", "search-eliot-adapter", "search-provider-protocol", "search-research-export-adapter"]
+modules = ["eliot-search:connection", "eliot-search:request", "eliot-searchd:capability", "eliot-searchd:connection", "search-eliot-adapter:request", "search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session", "search-research-export-adapter:export"]
+non_crate_only = false
+
+[[file]]
+path = "docs/config/CONFIGURATION_1.0.md"
+node_count = 41
+principle_count = 0
+packages = ["search-config"]
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "docs/config/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/config/RECONFIGURATION_1.1.md"
+node_count = 5
+principle_count = 0
+packages = ["eliot-searchd", "search-config"]
+modules = ["eliot-searchd:config", "search-config:diff", "search-config:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "docs/config/W10_OPTIONAL_DEPTH_SETTINGS_1.0.md"
+node_count = 9
+principle_count = 0
+packages = ["eliot-search-doc-worker", "eliot-search-model-worker", "eliot-searchd", "search-model-provider"]
+modules = ["eliot-search-doc-worker:config", "eliot-search-model-worker:config", "eliot-searchd:optional", "search-model-provider:profile"]
+non_crate_only = false
+
+[[file]]
+path = "docs/config/W5_CURRENT_SETTINGS_1.0.md"
+node_count = 9
+principle_count = 0
+packages = ["search-code-enricher", "search-overlay", "search-source-reconcile"]
+modules = ["search-code-enricher:profile", "search-overlay:config", "search-source-reconcile:config"]
+non_crate_only = false
+
+[[file]]
+path = "docs/config/W7_LIFECYCLE_SETTINGS_1.0.md"
+node_count = 11
+principle_count = 1
+packages = ["search-access", "search-continuation", "search-handles", "search-retention"]
+modules = ["search-access:barrier", "search-continuation:cleanup", "search-handles:invalidate", "search-retention:config"]
+non_crate_only = false
+
+[[file]]
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+node_count = 10
+principle_count = 0
+packages = ["eliot-search", "eliot-searchd", "search-provider-protocol"]
+modules = ["eliot-search:config", "eliot-searchd:config", "search-provider-protocol:config"]
+non_crate_only = false
+
+[[file]]
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+node_count = 8
+principle_count = 0
+packages = ["eliot-searchd", "search-eval"]
+modules = ["eliot-searchd:evaluation", "search-eval:config"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+node_count = 7
+principle_count = 0
+packages = ["search-contracts"]
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/CONTRACT_CHALLENGES.md"
+node_count = 2
+principle_count = 0
+packages = ["search-contracts", "search-domain"]
+modules = ["search-contracts:schema", "search-domain:decisions"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/PORT_OPERATIONS.md"
+node_count = 30
+principle_count = 0
+packages = ["search-ports"]
+modules = ["search-ports:access", "search-ports:control", "search-ports:handles", "search-ports:index", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+node_count = 9
+principle_count = 0
+packages = ["search-continuation", "search-contracts", "search-handles", "search-provider-protocol"]
+modules = ["search-continuation:token", "search-contracts:lifecycle", "search-contracts:protocol", "search-handles:token", "search-provider-protocol:frame"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+node_count = 9
+principle_count = 0
+packages = ["search-contracts", "search-domain"]
+modules = ["search-contracts:query", "search-contracts:results", "search-domain:coverage", "search-domain:outcomes"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/README.md"
+node_count = 3
+principle_count = 0
+packages = ["search-contracts", "search-domain", "search-ports"]
+modules = ["search-contracts:schema", "search-domain:decisions", "search-ports:conformance"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/REASON_CODES.md"
+node_count = 6
+principle_count = 0
+packages = ["search-contracts", "search-domain"]
+modules = ["search-contracts:reasons", "search-domain:outcomes"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/RECIPES.md"
+node_count = 6
+principle_count = 0
+packages = ["search-contracts", "search-query-planner"]
+modules = ["search-contracts:recipes", "search-query-planner:recipe"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+node_count = 11
+principle_count = 0
+packages = ["search-contracts", "search-domain"]
+modules = ["search-contracts:results", "search-domain:decisions"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+node_count = 9
+principle_count = 0
+packages = ["search-contracts", "search-domain"]
+modules = ["search-contracts:source", "search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+node_count = 8
+principle_count = 0
+packages = ["search-contracts", "search-domain"]
+modules = ["search-contracts:schema", "search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+node_count = 8
+principle_count = 0
+packages = ["search-contracts"]
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+non_crate_only = false
+
+[[file]]
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+node_count = 9
+principle_count = 0
+packages = ["search-contracts", "search-domain", "search-ports"]
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema", "search-domain:decisions", "search-ports:context"]
+non_crate_only = false
+
+[[file]]
+path = "docs/current/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/current/W5_CURRENT_WORKSPACE_CONTRACTS_1.0.md"
+node_count = 24
+principle_count = 0
+packages = ["search-code-enricher", "search-overlay", "search-source-reconcile"]
+modules = ["search-code-enricher:assurance", "search-code-enricher:facts", "search-code-enricher:parse", "search-code-enricher:predicates", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot", "search-source-reconcile:commit", "search-source-reconcile:currentness", "search-source-reconcile:gap", "search-source-reconcile:inventory"]
+non_crate_only = false
+
+[[file]]
+path = "docs/evaluation/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+node_count = 30
+principle_count = 0
+packages = ["eliot-searchd", "search-eval"]
+modules = ["eliot-searchd:evaluation", "search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/ACCEPTED_EVIDENCE_DIGEST_V1.md"
+node_count = 4
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/ARCHITECTURE_COVERAGE_AUDIT.md"
+node_count = 11
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/AUTHORITY_MAP.md"
+node_count = 8
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/CONTEXT_ARTIFACT_CANDIDATE_DIGEST_V1.md"
+node_count = 4
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/CONTEXT_ARTIFACT_CANDIDATE_INDEX.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/CONTEXT_ARTIFACT_CANDIDATE_V1.md"
+node_count = 11
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/CONTEXT_MATERIALIZATION_PLAN_INDEX.md"
+node_count = 4
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/CONTEXT_MATERIALIZATION_PLAN_V1.md"
+node_count = 7
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/CRATE_MATRIX.md"
+node_count = 11
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/DEPENDENCY_GRAPH.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/GATE_EVIDENCE_CATALOG.md"
+node_count = 12
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/IMPLEMENTATION_WAVES.md"
+node_count = 13
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/OWNERSHIP_BOUNDARY_AUDIT.md"
+node_count = 4
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/P00_BOOTSTRAP.md"
+node_count = 7
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/P00_DRAFT_CONTROL_PLANE.md"
+node_count = 13
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/P00_FOUNDATION_ACCEPTANCE_MATRIX.md"
+node_count = 17
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/PORT_CATALOG.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/PRIMITIVE_OWNERSHIP.md"
+node_count = 7
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/README.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/STAGE_READSET_AUDIT.md"
+node_count = 12
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/STRUCTURAL_CI.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/SWARM_LAUNCH_INDEX.md"
+node_count = 12
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/SWARM_ORCHESTRATION_PROTOCOL.md"
+node_count = 14
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/SWARM_PROTOCOL.md"
+node_count = 9
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/SWARM_READINESS_AUDIT.md"
+node_count = 8
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/SWARM_STAGE_READSETS.md"
+node_count = 15
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
+node_count = 17
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/TICKET_ISSUANCE_PLANNER_DIGEST_V2.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/TICKET_ISSUANCE_PLANNER_INDEX.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/TICKET_ISSUANCE_PLANNER_V2.md"
+node_count = 12
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+node_count = 12
+principle_count = 0
+packages = ["eliot-search-doc-worker", "eliot-search-model-worker", "eliot-searchd", "search-epoch-pins", "search-eval", "search-index-reclaimer", "search-model-provider", "search-publication", "search-qdrant-bridge"]
+modules = ["eliot-search-doc-worker:main", "eliot-search-model-worker:main", "eliot-searchd:main", "search-epoch-pins:api", "search-eval:api", "search-index-reclaimer:api", "search-model-provider:api", "search-publication:api", "search-qdrant-bridge:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W1_AGENT_DRAFTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+node_count = 9
+principle_count = 0
+packages = ["eliot-search", "eliot-searchd", "search-config", "search-contracts", "search-control-redb", "search-domain", "search-os-secrets", "search-ports", "search-provider-protocol", "search-runtime-owner"]
+modules = ["eliot-search:main", "eliot-searchd:main", "search-config:api", "search-contracts:lib", "search-control-redb:api", "search-domain:lib", "search-os-secrets:api", "search-ports:lib", "search-provider-protocol:api", "search-runtime-owner:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W1_MILESTONE_PACKETS.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W2_AGENT_DRAFTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W2_DAEMON_REENTRY.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+node_count = 14
+principle_count = 0
+packages = ["search-materializer", "search-revision-store", "search-safe-reader", "search-source-admission", "search-source-identity", "search-source-registry", "search-unitizer"]
+modules = ["search-materializer:api", "search-revision-store:api", "search-safe-reader:api", "search-source-admission:api", "search-source-identity:api", "search-source-registry:api", "search-unitizer:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W2_MILESTONE_PACKETS.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W3_AGENT_DRAFTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W3_DAEMON_REENTRY.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W3_IMPLEMENTATION_PACKET.md"
+node_count = 4
+principle_count = 0
+packages = ["search-epoch-pins", "search-index-reclaimer", "search-lexical", "search-point-identity", "search-projection-planner", "search-publication", "search-qdrant-bridge", "search-qdrant-supervisor"]
+modules = ["search-epoch-pins:api", "search-index-reclaimer:api", "search-lexical:api", "search-point-identity:api", "search-projection-planner:api", "search-publication:api", "search-qdrant-bridge:api", "search-qdrant-supervisor:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W3_MILESTONE_PACKETS.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W4_AGENT_DRAFTS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W4_DAEMON_REENTRY.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+node_count = 8
+principle_count = 0
+packages = ["search-access", "search-candidate-validator", "search-continuation", "search-eval", "search-handles", "search-provider-protocol", "search-query-planner", "search-result-projector", "search-retrieval-executor"]
+modules = ["search-access:api", "search-candidate-validator:api", "search-continuation:api", "search-eval:api", "search-handles:api", "search-provider-protocol:api", "search-query-planner:api", "search-result-projector:api", "search-retrieval-executor:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W5_IMPLEMENTATION_PACKET.md"
+node_count = 6
+principle_count = 0
+packages = ["search-code-enricher", "search-overlay", "search-source-reconcile"]
+modules = ["search-code-enricher:api", "search-overlay:api", "search-source-reconcile:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+node_count = 6
+principle_count = 0
+packages = ["search-comparator", "search-exact", "search-subject-resolver"]
+modules = ["search-comparator:api", "search-exact:api", "search-subject-resolver:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+node_count = 6
+principle_count = 0
+packages = ["search-access", "search-candidate-validator", "search-continuation", "search-handles", "search-index-reclaimer", "search-publication", "search-retention", "search-revision-store"]
+modules = ["search-access:api", "search-candidate-validator:api", "search-continuation:api", "search-handles:api", "search-index-reclaimer:api", "search-publication:api", "search-retention:api", "search-revision-store:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+node_count = 11
+principle_count = 0
+packages = ["eliot-search", "eliot-searchd", "search-eliot-adapter", "search-provider-protocol", "search-research-export-adapter"]
+modules = ["eliot-search:main", "eliot-searchd:main", "search-eliot-adapter:api", "search-provider-protocol:api", "search-research-export-adapter:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+node_count = 10
+principle_count = 0
+packages = ["search-eval"]
+modules = ["search-eval:api"]
+non_crate_only = false
+
+[[file]]
+path = "docs/handoff/w1-packages/eliot-search.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w1-packages/eliot-searchd.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w1-packages/search-config.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w1-packages/search-control-redb.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w1-packages/search-os-secrets.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w1-packages/search-provider-protocol.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w1-packages/search-runtime-owner.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/eliot-searchd.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/search-materializer.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/search-revision-store.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/search-safe-reader.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/search-source-admission.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/search-source-identity.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/search-source-registry.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w2-packages/search-unitizer.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/eliot-searchd.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-epoch-pins.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-index-reclaimer.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-lexical.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-point-identity.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-projection-planner.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-publication.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-qdrant-bridge.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/handoff/w3-packages/search-qdrant-supervisor.md"
+node_count = 6
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/optional/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md"
+node_count = 24
+principle_count = 0
+packages = ["eliot-search-doc-worker", "eliot-search-model-worker", "eliot-searchd", "search-epoch-pins", "search-index-reclaimer", "search-model-provider", "search-publication", "search-qdrant-bridge"]
+modules = ["eliot-search-doc-worker:materialize", "eliot-search-doc-worker:provider", "eliot-search-model-worker:encode", "eliot-search-model-worker:model", "eliot-search-model-worker:rerank", "eliot-searchd:optional", "search-epoch-pins:registry", "search-index-reclaimer:plan", "search-model-provider:encode", "search-model-provider:profile", "search-model-provider:rerank", "search-publication:commit", "search-qdrant-bridge:admin"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/accepted-evidence/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/architecture-coverage/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/client-edge/README.md"
+node_count = 1
+principle_count = 0
+packages = ["eliot-search", "eliot-searchd", "search-eliot-adapter", "search-provider-protocol", "search-research-export-adapter"]
+modules = ["eliot-search:request", "eliot-searchd:connection", "search-eliot-adapter:request", "search-provider-protocol:binding", "search-provider-protocol:request", "search-research-export-adapter:export"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+node_count = 12
+principle_count = 0
+packages = ["eliot-search", "eliot-searchd", "search-eliot-adapter", "search-provider-protocol", "search-research-export-adapter"]
+modules = ["eliot-search:request", "eliot-searchd:connection", "search-eliot-adapter:request", "search-provider-protocol:binding", "search-provider-protocol:request", "search-research-export-adapter:export"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/context-artifact/README.md"
+node_count = 4
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/context-materialization/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/current/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-code-enricher", "search-overlay", "search-source-reconcile"]
+modules = ["search-code-enricher:assurance", "search-overlay:shadow", "search-source-reconcile:currentness"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/current/W5_QUALIFICATION.md"
+node_count = 11
+principle_count = 0
+packages = ["search-code-enricher", "search-overlay", "search-source-reconcile"]
+modules = ["search-code-enricher:assurance", "search-overlay:shadow", "search-source-reconcile:currentness"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/lifecycle/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-access", "search-continuation", "search-handles", "search-index-reclaimer", "search-retention"]
+modules = ["search-access:invalidation", "search-continuation:cleanup", "search-handles:invalidate", "search-index-reclaimer:recovery", "search-retention:purge", "search-retention:restore"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/lifecycle/W7_QUALIFICATION.md"
+node_count = 14
+principle_count = 0
+packages = ["search-access", "search-continuation", "search-handles", "search-index-reclaimer", "search-retention"]
+modules = ["search-access:invalidation", "search-continuation:cleanup", "search-handles:invalidate", "search-index-reclaimer:recovery", "search-retention:purge", "search-retention:restore"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/optional-depth/README.md"
+node_count = 1
+principle_count = 0
+packages = ["eliot-search-doc-worker", "eliot-search-model-worker", "eliot-searchd", "search-model-provider", "search-publication", "search-qdrant-bridge"]
+modules = ["eliot-search-doc-worker:provider", "eliot-search-model-worker:model", "eliot-searchd:optional", "search-model-provider:profile", "search-publication:commit", "search-qdrant-bridge:admin"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/optional-depth/W10_QUALIFICATION.md"
+node_count = 12
+principle_count = 0
+packages = ["eliot-search-doc-worker", "eliot-search-model-worker", "eliot-searchd", "search-model-provider", "search-publication", "search-qdrant-bridge"]
+modules = ["eliot-search-doc-worker:provider", "eliot-search-model-worker:model", "eliot-searchd:optional", "search-model-provider:profile", "search-publication:commit", "search-qdrant-bridge:admin"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/package-map-coverage-v2/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/product-pulse/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-eval"]
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+node_count = 15
+principle_count = 0
+packages = ["search-eval"]
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/proof/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-comparator", "search-exact", "search-subject-resolver"]
+modules = ["search-comparator:coverage", "search-exact:denominator", "search-exact:report", "search-subject-resolver:ambiguity"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/proof/W6_QUALIFICATION.md"
+node_count = 11
+principle_count = 0
+packages = ["search-comparator", "search-exact", "search-subject-resolver"]
+modules = ["search-comparator:coverage", "search-exact:denominator", "search-exact:report", "search-subject-resolver:ambiguity"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/qdrant/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-epoch-pins", "search-index-reclaimer", "search-lexical", "search-publication", "search-qdrant-bridge", "search-qdrant-supervisor"]
+modules = ["search-epoch-pins:registry", "search-index-reclaimer:readback", "search-lexical:fixture", "search-publication:readback", "search-qdrant-bridge:schema", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/qdrant/W3_QUALIFICATION.md"
+node_count = 11
+principle_count = 0
+packages = ["search-epoch-pins", "search-index-reclaimer", "search-lexical", "search-publication", "search-qdrant-bridge", "search-qdrant-supervisor"]
+modules = ["search-epoch-pins:registry", "search-index-reclaimer:readback", "search-lexical:fixture", "search-publication:readback", "search-qdrant-bridge:schema", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/query/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-access", "search-candidate-validator", "search-continuation", "search-handles", "search-query-planner", "search-result-projector", "search-retrieval-executor"]
+modules = ["search-access:legs", "search-candidate-validator:decision", "search-continuation:resume", "search-handles:expand", "search-query-planner:plan", "search-result-projector:evidence", "search-retrieval-executor:legs"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/query/W4_QUALIFICATION.md"
+node_count = 12
+principle_count = 0
+packages = ["search-access", "search-candidate-validator", "search-continuation", "search-handles", "search-query-planner", "search-result-projector", "search-retrieval-executor"]
+modules = ["search-access:legs", "search-candidate-validator:decision", "search-continuation:resume", "search-handles:expand", "search-query-planner:plan", "search-result-projector:evidence", "search-retrieval-executor:legs"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/rust-syntax/README.md"
+node_count = 1
+principle_count = 0
+packages = ["search-code-enricher"]
+modules = ["search-code-enricher:assurance", "search-code-enricher:parse", "search-code-enricher:profile"]
+non_crate_only = false
+
+[[file]]
+path = "qualification/ticket-issuance/README.md"
+node_count = 5
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/ticket-issuance/TICKET_ISSUANCE_QUALIFICATION.md"
+node_count = 11
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/w1-agent-drafts/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/w1-milestones/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/w2-agent-drafts/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/w2-milestones/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/w3-agent-drafts/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/w3-milestones/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "qualification/w4-agent-drafts/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/API_HANDOFF_TEMPLATE.md"
+node_count = 12
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/ASSIGNMENT_PROTOCOL.md"
+node_count = 12
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/ASSIGNMENT_SCHEMA.md"
+node_count = 2
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/ASSIGNMENT_TICKET_TEMPLATE.md"
+node_count = 11
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/CONTEXT_MANIFEST_TEMPLATE.md"
+node_count = 8
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/CONTRACT_CHANGE_TEMPLATE.md"
+node_count = 8
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/GITHUB_CONNECTOR_ACCESS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/INTEGRATION_OWNER.md"
+node_count = 7
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/PACKAGE_HANDOFF_TEMPLATE.md"
+node_count = 9
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/README.md"
+node_count = 7
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/RECEIPT_CANONICALIZATION.md"
+node_count = 8
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/REVIEW_CHECKLIST.md"
+node_count = 3
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/REVIEW_RECEIPT_TEMPLATE.md"
+node_count = 9
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/SUBMISSION_TEMPLATE.md"
+node_count = 7
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/WAVE_RECEIPT_TEMPLATE.md"
+node_count = 9
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/WRITER_LEASE_TEMPLATE.md"
+node_count = 8
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/assignments/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/assignments/eliot-search-doc-worker.md"
+node_count = 7
+principle_count = 0
+packages = ["eliot-search-doc-worker"]
+modules = ["eliot-search-doc-worker:args", "eliot-search-doc-worker:config", "eliot-search-doc-worker:error", "eliot-search-doc-worker:input", "eliot-search-doc-worker:lifecycle", "eliot-search-doc-worker:main", "eliot-search-doc-worker:maps", "eliot-search-doc-worker:materialize", "eliot-search-doc-worker:protocol", "eliot-search-doc-worker:provider", "eliot-search-doc-worker:resource", "eliot-search-doc-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/eliot-search-model-worker.md"
+node_count = 7
+principle_count = 0
+packages = ["eliot-search-model-worker"]
+modules = ["eliot-search-model-worker:args", "eliot-search-model-worker:config", "eliot-search-model-worker:encode", "eliot-search-model-worker:error", "eliot-search-model-worker:lifecycle", "eliot-search-model-worker:main", "eliot-search-model-worker:model", "eliot-search-model-worker:protocol", "eliot-search-model-worker:rerank", "eliot-search-model-worker:resource", "eliot-search-model-worker:sandbox"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/eliot-search.md"
+node_count = 11
+principle_count = 1
+packages = ["eliot-search"]
+modules = ["eliot-search:args", "eliot-search:cancel", "eliot-search:config", "eliot-search:connection", "eliot-search:doctor", "eliot-search:error", "eliot-search:exit", "eliot-search:main", "eliot-search:pairing", "eliot-search:render", "eliot-search:request"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/eliot-searchd.md"
+node_count = 11
+principle_count = 1
+packages = ["eliot-searchd"]
+modules = ["eliot-searchd:adapters", "eliot-searchd:capability", "eliot-searchd:config", "eliot-searchd:connection", "eliot-searchd:error", "eliot-searchd:evaluation", "eliot-searchd:main", "eliot-searchd:optional", "eliot-searchd:profile", "eliot-searchd:readiness", "eliot-searchd:recovery", "eliot-searchd:request", "eliot-searchd:shutdown", "eliot-searchd:startup"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-access.md"
+node_count = 11
+principle_count = 1
+packages = ["search-access"]
+modules = ["search-access:api", "search-access:barrier", "search-access:checkpoint", "search-access:error", "search-access:grant", "search-access:invalidation", "search-access:legs", "search-access:lib", "search-access:scope", "search-access:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-candidate-validator.md"
+node_count = 7
+principle_count = 1
+packages = ["search-candidate-validator"]
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-code-enricher.md"
+node_count = 11
+principle_count = 1
+packages = ["search-code-enricher"]
+modules = ["search-code-enricher:anchors", "search-code-enricher:api", "search-code-enricher:assurance", "search-code-enricher:batch", "search-code-enricher:error", "search-code-enricher:facts", "search-code-enricher:lib", "search-code-enricher:parse", "search-code-enricher:predicates", "search-code-enricher:profile", "search-code-enricher:references"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-comparator.md"
+node_count = 11
+principle_count = 1
+packages = ["search-comparator"]
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-config.md"
+node_count = 10
+principle_count = 1
+packages = ["search-config"]
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-continuation.md"
+node_count = 7
+principle_count = 1
+packages = ["search-continuation"]
+modules = ["search-continuation:api", "search-continuation:cleanup", "search-continuation:config", "search-continuation:error", "search-continuation:identity", "search-continuation:issue", "search-continuation:lib", "search-continuation:reauthorize", "search-continuation:resume", "search-continuation:token"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-contracts.md"
+node_count = 6
+principle_count = 0
+packages = ["search-contracts"]
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:error", "search-contracts:ids", "search-contracts:lib", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-control-redb.md"
+node_count = 11
+principle_count = 1
+packages = ["search-control-redb"]
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-domain.md"
+node_count = 6
+principle_count = 1
+packages = ["search-domain"]
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions", "search-domain:eligibility", "search-domain:error", "search-domain:lib", "search-domain:ordering", "search-domain:outcomes", "search-domain:transitions", "search-domain:visibility"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-eliot-adapter.md"
+node_count = 11
+principle_count = 1
+packages = ["search-eliot-adapter"]
+modules = ["search-eliot-adapter:api", "search-eliot-adapter:binding", "search-eliot-adapter:cutover", "search-eliot-adapter:error", "search-eliot-adapter:evidence", "search-eliot-adapter:lib", "search-eliot-adapter:profile", "search-eliot-adapter:request", "search-eliot-adapter:result", "search-eliot-adapter:scope"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-epoch-pins.md"
+node_count = 11
+principle_count = 1
+packages = ["search-epoch-pins"]
+modules = ["search-epoch-pins:acquire", "search-epoch-pins:api", "search-epoch-pins:cleanup", "search-epoch-pins:error", "search-epoch-pins:identity", "search-epoch-pins:lib", "search-epoch-pins:registry", "search-epoch-pins:release", "search-epoch-pins:watermark"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-eval.md"
+node_count = 9
+principle_count = 1
+packages = ["search-eval"]
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-exact.md"
+node_count = 11
+principle_count = 1
+packages = ["search-exact"]
+modules = ["search-exact:api", "search-exact:denominator", "search-exact:error", "search-exact:execute", "search-exact:lib", "search-exact:plan", "search-exact:predicate", "search-exact:profile", "search-exact:recovery", "search-exact:report"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-handles.md"
+node_count = 7
+principle_count = 1
+packages = ["search-handles"]
+modules = ["search-handles:api", "search-handles:cleanup", "search-handles:config", "search-handles:error", "search-handles:expand", "search-handles:identity", "search-handles:invalidate", "search-handles:issue", "search-handles:lib", "search-handles:resolve", "search-handles:token"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-index-reclaimer.md"
+node_count = 11
+principle_count = 1
+packages = ["search-index-reclaimer"]
+modules = ["search-index-reclaimer:api", "search-index-reclaimer:candidate", "search-index-reclaimer:config", "search-index-reclaimer:delete", "search-index-reclaimer:error", "search-index-reclaimer:lib", "search-index-reclaimer:plan", "search-index-reclaimer:readback", "search-index-reclaimer:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-lexical.md"
+node_count = 11
+principle_count = 1
+packages = ["search-lexical"]
+modules = ["search-lexical:api", "search-lexical:config", "search-lexical:error", "search-lexical:fixture", "search-lexical:lib", "search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-lexical:tokenize"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-materializer.md"
+node_count = 11
+principle_count = 1
+packages = ["search-materializer"]
+modules = ["search-materializer:api", "search-materializer:assurance", "search-materializer:decode", "search-materializer:error", "search-materializer:lib", "search-materializer:maps", "search-materializer:normalize", "search-materializer:product", "search-materializer:profile", "search-materializer:provider", "search-materializer:request"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-model-provider.md"
+node_count = 8
+principle_count = 1
+packages = ["search-model-provider"]
+modules = ["search-model-provider:api", "search-model-provider:capability", "search-model-provider:encode", "search-model-provider:error", "search-model-provider:lib", "search-model-provider:lifecycle", "search-model-provider:profile", "search-model-provider:rerank", "search-model-provider:validation"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-os-secrets.md"
+node_count = 11
+principle_count = 1
+packages = ["search-os-secrets"]
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-overlay.md"
+node_count = 11
+principle_count = 1
+packages = ["search-overlay"]
+modules = ["search-overlay:api", "search-overlay:cleanup", "search-overlay:config", "search-overlay:direct", "search-overlay:error", "search-overlay:identity", "search-overlay:lib", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-point-identity.md"
+node_count = 11
+principle_count = 1
+packages = ["search-point-identity"]
+modules = ["search-point-identity:api", "search-point-identity:batch", "search-point-identity:canonical", "search-point-identity:collision", "search-point-identity:digest", "search-point-identity:error", "search-point-identity:key", "search-point-identity:lib", "search-point-identity:uuid"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-ports.md"
+node_count = 7
+principle_count = 1
+packages = ["search-ports"]
+modules = ["search-ports:access", "search-ports:conformance", "search-ports:context", "search-ports:control", "search-ports:error", "search-ports:handles", "search-ports:index", "search-ports:lib", "search-ports:optional", "search-ports:preparation", "search-ports:query", "search-ports:runtime", "search-ports:source", "search-ports:stream"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-projection-planner.md"
+node_count = 11
+principle_count = 1
+packages = ["search-projection-planner"]
+modules = ["search-projection-planner:api", "search-projection-planner:diff", "search-projection-planner:error", "search-projection-planner:input", "search-projection-planner:lib", "search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:profile", "search-projection-planner:schema"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-provider-protocol.md"
+node_count = 7
+principle_count = 1
+packages = ["search-provider-protocol"]
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-publication.md"
+node_count = 11
+principle_count = 1
+packages = ["search-publication"]
+modules = ["search-publication:actor", "search-publication:api", "search-publication:command", "search-publication:commit", "search-publication:doctor", "search-publication:error", "search-publication:intent", "search-publication:lib", "search-publication:readback", "search-publication:reclaim", "search-publication:recovery", "search-publication:stage"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-qdrant-bridge.md"
+node_count = 11
+principle_count = 1
+packages = ["search-qdrant-bridge"]
+modules = ["search-qdrant-bridge:admin", "search-qdrant-bridge:api", "search-qdrant-bridge:capability", "search-qdrant-bridge:config", "search-qdrant-bridge:error", "search-qdrant-bridge:lib", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:readback", "search-qdrant-bridge:schema"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-qdrant-supervisor.md"
+node_count = 11
+principle_count = 1
+packages = ["search-qdrant-supervisor"]
+modules = ["search-qdrant-supervisor:api", "search-qdrant-supervisor:artifact", "search-qdrant-supervisor:config", "search-qdrant-supervisor:error", "search-qdrant-supervisor:health", "search-qdrant-supervisor:identity", "search-qdrant-supervisor:lib", "search-qdrant-supervisor:process", "search-qdrant-supervisor:recovery", "search-qdrant-supervisor:shutdown"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-query-planner.md"
+node_count = 7
+principle_count = 1
+packages = ["search-query-planner"]
+modules = ["search-query-planner:api", "search-query-planner:budget", "search-query-planner:config", "search-query-planner:error", "search-query-planner:legs", "search-query-planner:lib", "search-query-planner:plan", "search-query-planner:recipe", "search-query-planner:replan", "search-query-planner:request", "search-query-planner:scope"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-research-export-adapter.md"
+node_count = 11
+principle_count = 1
+packages = ["search-research-export-adapter"]
+modules = ["search-research-export-adapter:admission", "search-research-export-adapter:api", "search-research-export-adapter:content", "search-research-export-adapter:cutover", "search-research-export-adapter:digest", "search-research-export-adapter:error", "search-research-export-adapter:export", "search-research-export-adapter:lib", "search-research-export-adapter:manifest", "search-research-export-adapter:profile"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-result-projector.md"
+node_count = 7
+principle_count = 1
+packages = ["search-result-projector"]
+modules = ["search-result-projector:api", "search-result-projector:card", "search-result-projector:coverage", "search-result-projector:error", "search-result-projector:evidence", "search-result-projector:lib", "search-result-projector:ordering", "search-result-projector:request", "search-result-projector:truncation"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-retention.md"
+node_count = 11
+principle_count = 1
+packages = ["search-retention"]
+modules = ["search-retention:api", "search-retention:config", "search-retention:error", "search-retention:lib", "search-retention:mark", "search-retention:purge", "search-retention:recovery", "search-retention:restore", "search-retention:roots", "search-retention:sweep", "search-retention:tombstone"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-retrieval-executor.md"
+node_count = 11
+principle_count = 1
+packages = ["search-retrieval-executor"]
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-revision-store.md"
+node_count = 11
+principle_count = 1
+packages = ["search-revision-store"]
+modules = ["search-revision-store:address", "search-revision-store:anchor", "search-revision-store:api", "search-revision-store:config", "search-revision-store:deletion", "search-revision-store:error", "search-revision-store:lease", "search-revision-store:lib", "search-revision-store:lifecycle", "search-revision-store:object", "search-revision-store:residency", "search-revision-store:restore", "search-revision-store:revision"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-runtime-owner.md"
+node_count = 11
+principle_count = 1
+packages = ["search-runtime-owner"]
+modules = ["search-runtime-owner:acquire", "search-runtime-owner:api", "search-runtime-owner:config", "search-runtime-owner:error", "search-runtime-owner:health", "search-runtime-owner:identity", "search-runtime-owner:lib", "search-runtime-owner:observation", "search-runtime-owner:recovery", "search-runtime-owner:release"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-safe-reader.md"
+node_count = 11
+principle_count = 1
+packages = ["search-safe-reader"]
+modules = ["search-safe-reader:api", "search-safe-reader:batch", "search-safe-reader:config", "search-safe-reader:encoding", "search-safe-reader:error", "search-safe-reader:git_object", "search-safe-reader:lib", "search-safe-reader:platform", "search-safe-reader:request", "search-safe-reader:stable_read"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-source-admission.md"
+node_count = 11
+principle_count = 1
+packages = ["search-source-admission"]
+modules = ["search-source-admission:api", "search-source-admission:batch", "search-source-admission:config", "search-source-admission:decision", "search-source-admission:error", "search-source-admission:lib", "search-source-admission:observation", "search-source-admission:policy", "search-source-admission:receipt"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-source-identity.md"
+node_count = 11
+principle_count = 1
+packages = ["search-source-identity"]
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-source-reconcile.md"
+node_count = 11
+principle_count = 1
+packages = ["search-source-reconcile"]
+modules = ["search-source-reconcile:api", "search-source-reconcile:commit", "search-source-reconcile:config", "search-source-reconcile:currentness", "search-source-reconcile:error", "search-source-reconcile:gap", "search-source-reconcile:inventory", "search-source-reconcile:lib", "search-source-reconcile:plan", "search-source-reconcile:recovery"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-source-registry.md"
+node_count = 11
+principle_count = 1
+packages = ["search-source-registry"]
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-subject-resolver.md"
+node_count = 11
+principle_count = 1
+packages = ["search-subject-resolver"]
+modules = ["search-subject-resolver:ambiguity", "search-subject-resolver:api", "search-subject-resolver:candidates", "search-subject-resolver:drift", "search-subject-resolver:error", "search-subject-resolver:ladder", "search-subject-resolver:lib", "search-subject-resolver:redaction", "search-subject-resolver:request"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/assignments/search-unitizer.md"
+node_count = 11
+principle_count = 1
+packages = ["search-unitizer"]
+modules = ["search-unitizer:api", "search-unitizer:batch", "search-unitizer:boundaries", "search-unitizer:diff", "search-unitizer:error", "search-unitizer:identity", "search-unitizer:lib", "search-unitizer:manifest", "search-unitizer:occurrence", "search-unitizer:profile", "search-unitizer:request"]
+non_crate_only = false
+
+[[file]]
+path = "swarm/context-drafts/README.md"
+node_count = 2
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/context-manifests/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/handoffs/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/leases/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/reviews/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/schemas/README.md"
+node_count = 9
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/submissions/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/supersessions/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/ticket-drafts/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/tickets/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "swarm/wave-receipts/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "tests/CRATE_FIXTURE_OWNERS.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "tests/README.md"
+node_count = 1
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
+
+[[file]]
+path = "tools/README.md"
+node_count = 20
+principle_count = 0
+packages = []
+modules = []
+non_crate_only = true
