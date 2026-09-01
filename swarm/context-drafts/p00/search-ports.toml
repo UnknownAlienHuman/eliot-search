@@ -14,7 +14,7 @@ materialized_context_artifact_ref = "UNAVAILABLE"
 materialized_context_artifact_sha256 = "UNAVAILABLE"
 materialization_mode = "canonical_concatenated_bundle"
 writer_visible_artifact_count = 1
-source_file_count = 14
+source_file_count = 15
 registry_fragment_count = 5
 accepted_handoff_slot_count = 1
 
@@ -38,6 +38,7 @@ source_files = [
   "docs/contracts/p00/manifest.toml",
   "docs/contracts/p00/CANONICAL_TYPES.md",
   "docs/contracts/p00/TYPE_REGISTRY.md",
+  "docs/contracts/p00/TYPE_COMPLETIONS.md",
   "docs/contracts/p00/SUPPORT_SCHEMAS.md",
   "docs/contracts/p00/CONTRACT_CHALLENGES.md",
   "docs/contracts/p00/PORT_OPERATIONS.md",
