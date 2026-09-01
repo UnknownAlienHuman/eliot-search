@@ -1,9 +1,6 @@
 name: P00 integration bootstrap
 
 on:
-  push:
-    branches:
-      - chore/45-p00-integration-bootstrap
   workflow_dispatch:
     inputs:
       mode:
@@ -48,12 +45,12 @@ jobs:
           python qualification/integration-bootstrap/test_integration_bootstrap_v1.py
 
       - name: Validate bootstrap structure
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
+        if: inputs.mode == 'verify'
         shell: pwsh
         run: ./tools/validate-integration-bootstrap.ps1 -Json
 
       - name: Generate lockfile preview
-        if: github.event_name == 'push' || inputs.mode == 'print-lock'
+        if: inputs.mode == 'print-lock'
         shell: pwsh
         run: |
           ./tools/validate-integration-bootstrap.ps1 -AllowMissingLock -Json
@@ -62,24 +59,15 @@ jobs:
           Get-Content Cargo.lock
           Write-Output '--- CARGO_LOCK_END ---'
 
-      - name: Upload Cargo lockfile preview
-        if: github.event_name == 'push' || inputs.mode == 'print-lock'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cargo-lock-preview
-          path: Cargo.lock
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Verify Cargo lockfile is reproducible
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
+        if: inputs.mode == 'verify'
         shell: pwsh
         run: |
           cargo generate-lockfile
           git diff --exit-code -- Cargo.lock
 
       - name: Verify Rust workspace
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
+        if: inputs.mode == 'verify'
         shell: pwsh
         run: |
           cargo fmt --all --check
@@ -89,6 +77,6 @@ jobs:
           cargo doc --workspace --no-deps --locked
 
       - name: Verify clean checkout
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
+        if: inputs.mode == 'verify'
         shell: pwsh
         run: git diff --exit-code
