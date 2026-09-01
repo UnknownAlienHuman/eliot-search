@@ -1,0 +1,60 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+audited_base_commit = "73ab0c415960ec1322f4b367a2325ce7916301b0"
+architecture_master = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+architecture_section_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+status = "STATIC_OWNERSHIP_COVERAGE_CLOSED_NOT_IMPLEMENTED"
+
+package_registry = "swarm/crates.toml"
+function_registry = "swarm/function-packets.toml"
+module_registry = "swarm/module-packets.toml"
+stage_registry = "swarm/stages.toml"
+configuration_registry = "config/sections.toml"
+capability_registry = "swarm/coverage/capabilities.toml"
+invariant_registry = "swarm/coverage/invariants.toml"
+port_registry = "swarm/coverage/ports.toml"
+schema_registry = "swarm/coverage/schemas.toml"
+delivery_registry = "swarm/coverage/delivery-slices.toml"
+reason_registry = "swarm/coverage/reasons.toml"
+
+package_count = 45
+foundation_package_count = 3
+package_function_packet_count = 42
+module_packet_count = 45
+architecture_section_count = 40
+architecture_invariant_count = 30
+capability_cell_count = 31
+shared_port_count = 23
+configuration_section_count = 20
+p00_schema_or_registry_count = 116
+recipe_count = 11
+delivery_slice_count = 19
+
+one_shape_owner_per_schema = true
+one_state_owner_per_mutable_schema = true
+one_trait_owner_per_shared_port = true
+one_concrete_implementation_owner_per_shared_port = true
+one_primary_owner_set_per_capability_cell = true
+one_package_module_packet_per_package = true
+all_packages_covered_by_delivery_slice = true
+architecture_master_access = "integration_audit_only"
+
+implementation_authorized_by_this_manifest = false
+package_acceptance_claimed = false
+gate_or_wave_acceptance_claimed = false
+runtime_evidence_available = false
+product_acceptance_claimed = false
+
+[known_corrections]
+source_owner_generation = "BLAKE3_DIGEST_PART_I_WINS"
+residency_policy_port_implementation = "search-revision-store"
+clock_port_implementation = "eliot-searchd_private_platform_adapter"
+
+[current_state]
+implemented_packages = 0
+accepted_package_handoffs = 0
+accepted_gates = 0
+accepted_wave_receipts = 0
+active_stage = "P00"
+active_wave = 0
