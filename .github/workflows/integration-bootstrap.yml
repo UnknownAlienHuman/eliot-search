@@ -1,6 +1,9 @@
 name: P00 integration bootstrap
 
 on:
+  push:
+    branches:
+      - chore/45-p00-integration-bootstrap
   workflow_dispatch:
     inputs:
       mode:
@@ -45,12 +48,12 @@ jobs:
           python qualification/integration-bootstrap/test_integration_bootstrap_v1.py
 
       - name: Validate bootstrap structure
-        if: inputs.mode == 'verify'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
         shell: pwsh
         run: ./tools/validate-integration-bootstrap.ps1 -Json
 
       - name: Generate lockfile preview
-        if: inputs.mode == 'print-lock'
+        if: github.event_name == 'push' || inputs.mode == 'print-lock'
         shell: pwsh
         run: |
           ./tools/validate-integration-bootstrap.ps1 -AllowMissingLock -Json
@@ -60,14 +63,14 @@ jobs:
           Write-Output '--- CARGO_LOCK_END ---'
 
       - name: Verify Cargo lockfile is reproducible
-        if: inputs.mode == 'verify'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
         shell: pwsh
         run: |
           cargo generate-lockfile
           git diff --exit-code -- Cargo.lock
 
       - name: Verify Rust workspace
-        if: inputs.mode == 'verify'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
         shell: pwsh
         run: |
           cargo fmt --all --check
@@ -77,6 +80,6 @@ jobs:
           cargo doc --workspace --no-deps --locked
 
       - name: Verify clean checkout
-        if: inputs.mode == 'verify'
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify'
         shell: pwsh
         run: git diff --exit-code
