@@ -1,0 +1,105 @@
+schema_version = 1
+packet = "protocol_lifecycle"
+schema_count = 16
+status = "STATIC_SCHEMA_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+
+[[group]]
+id = "provider_protocol"
+schemas = ["ProtocolVersion", "ProviderEnvelope", "ProviderBodyV1"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "protocol"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "outcomes"
+state_owner_package = "search-provider-protocol"
+state_owner_module = "frame"
+
+[[group]]
+id = "capability_descriptor"
+schemas = ["SearchProviderCapabilityDescriptor"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "protocol"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "visibility"
+state_owner_package = "eliot-searchd"
+state_owner_module = "capability"
+
+[[group]]
+id = "wire_source_handle"
+schemas = ["SearchSourceHandle"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "protocol"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-handles"
+state_owner_module = "token"
+
+[[group]]
+id = "wire_continuation_handle"
+schemas = ["ContinuationHandle"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "protocol"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-continuation"
+state_owner_module = "token"
+
+[[group]]
+id = "source_handle_record"
+schemas = ["SearchSourceHandleRecord"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "lifecycle"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "transitions"
+state_owner_package = "search-handles"
+state_owner_module = "resolve"
+
+[[group]]
+id = "continuation_record"
+schemas = ["ContinuationRecord"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "lifecycle"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "transitions"
+state_owner_package = "search-continuation"
+state_owner_module = "resume"
+
+[[group]]
+id = "security_mutation"
+schemas = ["SecurityMutationBarrierState", "LiveDenySnapshotRef"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "lifecycle"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "transitions"
+state_owner_package = "search-access"
+state_owner_module = "barrier"
+secondary_state_owner_packages = ["search-retention"]
+
+[[group]]
+id = "publication_records"
+schemas = ["PublicationIntent", "PublicationReceipt", "AbandonedPublicationFence"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "lifecycle"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "transitions"
+state_owner_package = "search-publication"
+state_owner_module = "intent"
+
+[[group]]
+id = "purge_restore_records"
+schemas = ["PurgeReceipt", "PairedRecoveryManifest", "RestoreDecision"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "lifecycle"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "outcomes"
+state_owner_package = "search-retention"
+state_owner_module = "restore"
+secondary_state_owner_packages = ["search-revision-store", "eliot-searchd"]
