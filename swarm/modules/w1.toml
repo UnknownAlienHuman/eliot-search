@@ -1,0 +1,84 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 1
+package_count = 7
+module_count = 79
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-config"
+path = "crates/search-config"
+operation_source = "crates/search-config/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "document", "registry", "layering", "snapshot", "diff", "redaction", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-runtime-owner"
+path = "crates/search-runtime/search-runtime-owner"
+operation_source = "crates/search-runtime/search-runtime-owner/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "identity", "observation", "acquire", "recovery", "release", "health", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-os-secrets"
+path = "crates/search-runtime/search-os-secrets"
+operation_source = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "binding", "store", "lease", "rotation", "recovery", "audit", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-control-redb"
+path = "crates/search-control-redb"
+operation_source = "crates/search-control-redb/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "config", "identity", "open", "migration", "transaction", "snapshot", "idempotency", "quarantine", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-provider-protocol"
+path = "crates/search-provider-protocol"
+operation_source = "crates/search-provider-protocol/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 14
+modules = ["lib", "api", "config", "frame", "negotiation", "pairing", "binding", "session", "request", "progress", "terminal", "cancel", "cleanup", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+operation_source = "bins/eliot-searchd/FUNCTIONS.md"
+public_entry_module = "main"
+module_count = 14
+modules = ["main", "profile", "config", "adapters", "startup", "readiness", "capability", "connection", "request", "recovery", "shutdown", "optional", "evaluation", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "eliot-search"
+path = "bins/eliot-search"
+operation_source = "bins/eliot-search/FUNCTIONS.md"
+public_entry_module = "main"
+module_count = 11
+modules = ["main", "args", "config", "connection", "pairing", "request", "render", "cancel", "doctor", "exit", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
