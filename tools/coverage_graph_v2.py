@@ -20,6 +20,10 @@ SUPPLEMENT_NAMES = {
     "W8_CLIENT.md",
     "W10_OPTIONAL_EVALUATION.md",
 }
+GENERATED_MARKDOWN = {
+    "docs/handoff/COVERAGE_GRAPH_V2.md",
+    "docs/handoff/PACKAGE_MAP_INDEX_V2.md",
+}
 
 MODULE_ALIASES: dict[str, set[str]] = {
     "canonical": {"canonical", "canon", "encode", "encoding", "normalize", "serialization", "codec"},
@@ -850,7 +854,14 @@ def build_graph() -> dict[str, Any]:
     delivery_rows = rows(load(manifest["delivery_registry"]), "slice", "id")
 
     doc_rows: list[dict[str, Any]] = []
-    selected_markdown = [path for path in git_files() if path.endswith(".md") and not path.startswith("artifacts/") and not path.startswith("docs/generated/")]
+    selected_markdown = [
+        path
+        for path in git_files()
+        if path.endswith(".md")
+        and not path.startswith("artifacts/")
+        and not path.startswith("docs/generated/")
+        and path not in GENERATED_MARKDOWN
+    ]
     for path in selected_markdown:
         text = read(path)
         headings = heading_rows(text)
