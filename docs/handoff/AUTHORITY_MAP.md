@@ -16,28 +16,38 @@ instructions.
    configuration/qualification packets, optionality, earliest-wave metadata and line targets.
 6. **`swarm/function-packets.toml`** — exact primary function/contract packet and package-local write
    scope for every package; foundation packages point to their P00 contract files.
-7. **`swarm/stages.toml`** — exact W0–W10 package membership, shared current-stage context and
+7. **`swarm/module-packets.toml` plus `swarm/modules/*.toml`** — exact package-local logical modules and
+   public entry module for all 45 packages.
+8. **`swarm/coverage/manifest.toml` plus `swarm/coverage/*.toml`** — integration-owned derivative
+   crosswalk proving every architecture section, capability, invariant, port, type/schema, recipe,
+   reason, assignment and delivery slice has concrete package/module owners. It cannot override items
+   1–7.
+9. **`swarm/stages.toml`** — exact W0–W10 package membership, shared current-stage context and
    gate/completion-receipt ordering.
-8. **`swarm/stage-readsets.toml`** — exact replacement context for every package reused after its
-   earliest wave.
-9. **`config/sections.toml`** — exact configuration section owner, earliest wave, minimum action, secret
-   policy and bounded section packet.
-10. **Qualification registry/packet** — exact artifact/probe/schema requirements; never a success
+10. **`swarm/stage-readsets.toml`** — exact replacement context for every package reused after its
+    earliest wave.
+11. **`config/sections.toml`** — exact configuration section owner, earliest wave, minimum action, secret
+    policy and bounded section packet.
+12. **Qualification registry/packet** — exact artifact/probe/schema requirements; never a success
     receipt.
-11. **`swarm/launch-state.toml`** — current package authorization/conditional status only.
-12. **Issued immutable assignment ticket, materialized context manifest and active writer lease** — exact
+13. **`swarm/launch-state.toml`** — current package authorization/conditional status only.
+14. **Issued immutable assignment ticket, materialized context manifest and active writer lease** — exact
     writer/base/read/write/dependency/evidence fence for one package implementation.
-13. **Package assignment and function-registry primary packet** — owned behavior, operation semantics,
+15. **Package assignment and function-registry primary packet** — owned behavior, operation semantics,
     failures, recovery, bounds and tests.
-14. **Current stage shared packet plus applicable later-stage supplement** — narrow additive obligations;
+16. **Current stage shared packet plus applicable later-stage supplement** — narrow additive obligations;
     cannot weaken the accepted base API.
-15. **Root/family/package `AGENTS.md`** — operational read/write rules within the machine registries and
+17. **Root/family/package `AGENTS.md`** — operational read/write rules within the machine registries and
     issued ticket.
-16. **README/human matrix and non-claimable ticket/context drafts** — preparation/navigation only.
+18. **README/human matrix and non-claimable ticket/context drafts** — preparation/navigation only.
 
 `swarm/ticket-drafts/**` and `swarm/context-drafts/**` have **no implementation authority**. They do not
 enter the orchestration state machine, create a lease or identify a base commit. Issuance always creates
 new immutable records under `swarm/tickets/`, `swarm/context-manifests/` and `swarm/leases/`.
+
+The coverage crosswalk is an integration audit and merge guard. A row does not authorize its package,
+create implementation state or accept evidence. A conflict with Architecture Part I, an accepted ADR or
+an accepted public digest invalidates the coverage row and stops work.
 
 ## Domain-specific authority
 
@@ -50,6 +60,8 @@ new immutable records under `swarm/tickets/`, `swarm/context-manifests/` and `sw
 | Generic configuration layering/redaction/planning | accepted `search-config` digest |
 | Exact package path/dependencies/earliest wave/assignment | `swarm/crates.toml` |
 | Exact package function behavior packet and write scope | `swarm/function-packets.toml` |
+| Exact package-local logical modules and public entry | `swarm/module-packets.toml` plus the referenced wave packet |
+| Does every normative section/cell/invariant/port/schema/recipe/task have an owner | `swarm/coverage/manifest.toml` and referenced coverage packets, validated against source |
 | Which packages belong to a stage and what it contributes/closes | `swarm/stages.toml` |
 | What a reused package reads at W7/W8/W9/W10 | `swarm/stage-readsets.toml` |
 | Which package owns a configuration section | `config/sections.toml` |
@@ -59,8 +71,8 @@ new immutable records under `swarm/tickets/`, `swarm/context-manifests/` and `sw
 | May a ticket be considered for issuance | `swarm/launch-state.toml` plus accepted prerequisites |
 | What exact context and writer may act | issued ticket + materialized context + active lease |
 | Does a committed ticket/context draft authorize work | never; draft status is non-claimable |
-| Which package owns mutable state | function packet + assignment + `PRIMITIVE_OWNERSHIP.md` |
-| Which adapter implements a port | `PORT_CATALOG.md` and accepted adapter handoff |
+| Which package owns mutable state | function packet + module packet + assignment + `PRIMITIVE_OWNERSHIP.md` |
+| Which adapter implements a shared port | `swarm/coverage/ports.toml`, `PORT_CATALOG.md` and accepted adapter handoff |
 | Is a Qdrant/provider/profile accepted | immutable qualification/evidence receipt |
 | Which package owns a shared fixture | `tests/CRATE_FIXTURE_OWNERS.md` or stage fixture-owner registry |
 
@@ -71,6 +83,15 @@ new immutable records under `swarm/tickets/`, `swarm/context-manifests/` and `sw
 - Package name/path/wave/assignment mismatch between `swarm/crates.toml` and
   `swarm/function-packets.toml` blocks merge.
 - Missing, duplicate, cross-package or structurally incomplete primary function packet blocks merge.
+- Missing, duplicate, invalid or cross-package module packet blocks merge.
+- An operation without one registered package owner and package public-entry module blocks merge.
+- An S0–S39 section, C00–C30 capability, INV-01–INV-30 invariant, shared port, named P00 type/schema,
+  recipe, reason namespace, package assignment or P00–P18 delivery slice without valid package/module
+  ownership blocks merge.
+- A shared port with a floating implementation owner such as “selected implementation” or “runtime
+  adapter” blocks merge; one exact package/module is required.
+- A schema with no shape owner, or mutable state with no state owner, blocks merge.
+- A package absent from every architecture delivery slice blocks merge.
 - Stage package/phase/gate/receipt mismatch blocks merge.
 - A package reused after its earliest wave without exactly one stage override blocks merge.
 - An unnecessary override for an earliest-wave package blocks merge.
@@ -87,20 +108,24 @@ new immutable records under `swarm/tickets/`, `swarm/context-manifests/` and `sw
   lease identities cannot enter review.
 - A review prepared by the writer or represented as a gate/wave receipt is invalid.
 - Package `AGENTS.md` and assignment dependency prose are explanatory. Exact dependency closure is
-  `swarm/crates.toml`; exact function/write closure is `swarm/function-packets.toml`; exact stage context
-  closure is `swarm/stages.toml` plus `swarm/stage-readsets.toml`.
-- An assignment, function packet, stage entry, context override or draft cannot authorize a future wave.
+  `swarm/crates.toml`; exact function/write closure is `swarm/function-packets.toml`; exact module
+  closure is `swarm/module-packets.toml`; exact stage context closure is `swarm/stages.toml` plus
+  `swarm/stage-readsets.toml`.
+- An assignment, function packet, module packet, coverage row, stage entry, context override or draft
+  cannot authorize a future wave.
 - A README cannot add a field, port, reason code, dependency, capability or authority.
 
 ## Bounded-context rule
 
-An earliest-wave writer receives only root/package instructions, exact package/function/stage registry
-entries, one assignment, one primary function/contract packet, current-stage shared files, accepted
-direct handoffs and named fixtures.
+An earliest-wave writer receives only root/package instructions, exact package/function/module/stage
+registry entries, one assignment, one primary function/contract packet, current-stage shared files,
+accepted direct handoffs and named fixtures.
 
 Before the writer receives anything, the integration owner materializes the exact source files and
 registry fragments declared by the context draft at one base commit, records every source/fragment
-SHA-256 and publishes one immutable context artifact. The issued ticket and lease bind that artifact.
+SHA-256 and publishes one immutable context artifact. The exact package entry from the applicable
+`swarm/modules/*.toml` packet is mandatory; the writer must not infer its module layout from another
+package's source.
 
 A later-stage writer additionally receives its one exact override. An **accepted prior-stage handoff**
 replaces the earlier stage packet and implementation history. The integration owner must not mount both
@@ -121,9 +146,9 @@ non-claimable draft
 → append-only accepted package/API handoff
 ```
 
-Changing the base commit, context source, assignment, registry, dependency handoff or writer creates a
-superseding ticket/context/lease. A writer cannot amend its context, edit control-plane records,
-self-review, self-accept or advance launch state.
+Changing the base commit, context source, assignment, registry, dependency handoff, module packet or
+writer creates a superseding ticket/context/lease. A writer cannot amend its context, edit control-plane
+records, self-review, self-accept or advance launch state.
 
 A package review permits the integration owner to construct a package handoff only. It is not a gate or
 wave receipt.
