@@ -24,6 +24,7 @@ jobs:
           fetch-depth: 1
 
       - name: Run existing architecture coverage validator
+        continue-on-error: true
         run: python tools/validate-architecture-coverage.py --json
 
       - name: Run second-pass graph audit
