@@ -1,0 +1,50 @@
+name: Implementation-to-production program
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: implementation-program-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate implementation program against live registries
+        shell: pwsh
+        run: python tools/validate-implementation-program.py --json
+
+      - name: Revalidate architecture and bounded package maps
+        shell: pwsh
+        run: |
+          python tools/generate-coverage-graph-v2.py --check --json
+          python tools/generate-package-maps-v2.py --check --json
+          python tools/validate-coverage-graph-v2.py --json
+          python tools/validate-package-maps-v2.py --json
+          python tools/validate-architecture-coverage.py --json
+
+      - name: Revalidate swarm and function packet topology
+        shell: pwsh
+        run: |
+          ./tools/validate-swarm.ps1 -Json
+          ./tools/validate-function-packets.ps1 -Json
+          ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Compile implementation program validator
+        shell: pwsh
+        run: python -m py_compile tools/validate-implementation-program.py
+
+      - name: Verify clean checkout
+        shell: pwsh
+        run: git diff --exit-code
