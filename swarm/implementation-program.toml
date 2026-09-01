@@ -1,0 +1,325 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "PLANNED_NOT_AUTHORIZED"
+source_main_commit = "e5ab8d0be8522bc3e0883795aa905c3194153e32"
+launch_authority = "swarm/launch-state.toml"
+package_registry = "swarm/crates.toml"
+function_registry = "swarm/function-packets.toml"
+module_registry = "swarm/module-packets.toml"
+package_map_index = "swarm/coverage/package-map-index.toml"
+stage_registry = "swarm/stages.toml"
+stage_readset_registry = "swarm/stage-readsets.toml"
+gate_registry = "swarm/gates.toml"
+configuration_registry = "config/sections.toml"
+implementation_authorized_by_this_program = false
+launch_state_changed = false
+package_acceptance_claimed = false
+gate_or_wave_acceptance_claimed = false
+runtime_evidence_available = false
+product_acceptance_claimed = false
+
+[discipline]
+one_writer_one_package = true
+one_worktree_one_task = true
+package_write_scope_only = true
+accepted_public_handoffs_only = true
+dependency_implementation_reads_allowed = false
+ordinary_architecture_master_access = "exception-only"
+maximum_static_context_files = 16
+normal_handwritten_src_target = 7500
+mandatory_split_review_lines = 8500
+hard_handwritten_line_limit = 10000
+package_writer_may_edit_shared_registries = false
+package_writer_may_self_review = false
+package_writer_may_advance_launch_state = false
+
+[current_state]
+active_stage = "P00"
+active_wave = 0
+authorized_packages = ["search-contracts"]
+conditional_packages = ["search-domain", "search-ports"]
+implemented_packages = 0
+materialized_writer_contexts = 0
+issued_implementation_tickets = 0
+active_writer_leases = 0
+accepted_package_handoffs = 0
+accepted_gate_receipts = 0
+accepted_wave_receipts = 0
+cargo_lock_present = false
+windows_toolchain_selected = false
+qdrant_profile_selected = false
+rust_parser_profile_selected = false
+product_pulse_accepted = false
+optional_depth_selected = false
+
+[release_boundary]
+first_bootable_stage = "W1"
+first_direct_source_stage = "W2"
+first_useful_search_stage = "W4"
+release_candidate_stage = "W9"
+optional_depth_stage = "W10"
+baseline_release_requires = ["G0", "G1", "G2", "G3", "W7_LIFECYCLE", "G4", "G5"]
+baseline_release_requires_g6 = false
+baseline_release_requires_w10 = false
+
+[release_hard_blockers]
+false_complete_negative_claim_count = 0
+stale_leakage_count = 0
+access_leakage_count = 0
+secret_or_content_leakage_count = 0
+protocol_resource_leak_count = 0
+required_fault_cell_recovery_rate = 1.0
+all_mandatory_package_handoffs_required = true
+all_active_leases_closed = true
+all_unreviewed_submissions_closed = true
+windows_install_upgrade_recovery_rollback_uninstall_required = true
+independent_g5_review_required = true
+
+[architecture_targets]
+warm_exact_keyword_navigation_p95_ms = 100
+warm_single_scope_lexical_p95_ms = 200
+warm_cross_repository_comparison_p95_ms = 700
+first_useful_progressive_card_ms = 300
+minimum_percentile_samples = 30
+status = "TARGET_NOT_MEASURED"
+
+[[target]]
+id = "buildable_workspace"
+required_stage = "W0"
+requires_integration_bootstrap = true
+claim = "exact toolchain, locked dependencies, foundation contracts and fake-port surfaces compile reproducibly"
+
+[[target]]
+id = "bootable_service_shell"
+required_stage = "W1"
+requires_accepted_gate = "G0"
+claim = "daemon owns one data root, validates configuration, opens control state, binds the local protocol, reports truthful readiness and shuts down cleanly"
+forbidden_claims = ["source_search", "indexed_search", "product_acceptance"]
+
+[[target]]
+id = "direct_source_product"
+required_stage = "W2"
+requires_accepted_gate = "G1"
+claim = "admitted local sources are safely read, retained, materialized and unitized without Qdrant"
+forbidden_claims = ["qualified_index", "baseline_query_product", "product_acceptance"]
+
+[[target]]
+id = "useful_baseline_search"
+required_stage = "W4"
+requires_accepted_gate = "G2"
+claim = "qualified lexical retrieval, access filtering, exact source validation, compact results, handles and continuations work end to end"
+forbidden_claims = ["current_workspace_complete", "exact_proof_complete", "production_release"]
+
+[[target]]
+id = "release_candidate"
+required_stage = "W9"
+requires_accepted_gate = "G5"
+requires_receipts = ["W7_LIFECYCLE", "W8_G4", "W9_G5"]
+claim = "the W4-W8 baseline passed Windows Product Pulse, fault recovery, protocol stress, leakage and independent acceptance review"
+
+[[target]]
+id = "optional_depth"
+required_stage = "W10"
+requires_accepted_gate = "G6"
+claim = "one separately selected model, document or scale candidate adds measured material benefit and has complete removal and rollback evidence"
+baseline_release_dependency = false
+
+[[integration_step]]
+order = 1
+id = "pin_windows_toolchain"
+owner = "integration"
+required_outputs = ["exact stable x86_64-pc-windows-msvc toolchain", "pinned Cargo tools", "toolchain verification output"]
+
+[[integration_step]]
+order = 2
+id = "lock_dependency_graph"
+owner = "integration"
+required_outputs = ["exact non-floating dependency versions", "Cargo.lock", "license report", "advisory report", "source policy report"]
+
+[[integration_step]]
+order = 3
+id = "freeze_build_profiles"
+owner = "integration"
+required_outputs = ["DIRECT feature profile", "LEXICAL profile", "CODE/current-workspace profile", "separate non-default optional candidate profiles"]
+
+[[integration_step]]
+order = 4
+id = "establish_test_harness"
+owner = "integration"
+required_outputs = ["fmt check", "workspace check", "clippy deny warnings", "doc tests", "nextest", "cargo deny", "structural validators", "Windows fault harness"]
+
+[[integration_step]]
+order = 5
+id = "freeze_artifact_and_data_layout"
+owner = "integration"
+required_outputs = ["version fields", "data-root layout", "ACL contract", "redb/CAS/Qdrant locations", "temporary workspace policy", "migration and rollback markers", "artifact manifests"]
+
+[[next_step]]
+order = 1
+id = "integration_bootstrap_pr"
+owner = "integration"
+pr_scope = ["toolchain", "exact dependencies", "Cargo.lock", "build profiles", "test harness", "artifact and data layout"]
+
+[[next_step]]
+order = 2
+id = "search_contracts_implementation"
+owner_package = "search-contracts"
+requires = ["issued ticket", "materialized context", "active lease"]
+
+[[next_step]]
+order = 3
+id = "search_contracts_review_and_handoff"
+owner = "independent_reviewer_and_integration"
+requires = ["package submission", "raw test output", "API/schema digest"]
+
+[[next_step]]
+order = 4
+id = "search_domain_implementation"
+owner_package = "search-domain"
+requires = ["accepted search-contracts handoff"]
+may_run_in_parallel_with = ["search_ports_implementation"]
+
+[[next_step]]
+order = 5
+id = "search_ports_implementation"
+owner_package = "search-ports"
+requires = ["accepted search-contracts handoff"]
+may_run_in_parallel_with = ["search_domain_implementation"]
+
+[[next_step]]
+order = 6
+id = "w0_g0_evidence_and_acceptance"
+owner = "integration_and_independent_reviewer"
+requires = ["accepted foundation package handoffs", "all G0 raw evidence", "no active leases", "no unresolved submissions"]
+
+[[next_step]]
+order = 7
+id = "advance_launch_to_w1"
+owner = "integration"
+requires = ["accepted W0 receipt", "accepted G0 receipt"]
+
+[[stage]]
+id = "W0"
+name = "contract_freeze"
+required_gates = []
+required_receipts = []
+closes = ["W0", "G0"]
+packages = ["search-contracts", "search-domain", "search-ports"]
+required_product_result = "reproducible executable foundation contracts, domain kernels and 23 vendor-neutral ports"
+
+[[stage]]
+id = "W1"
+name = "process_control_shell"
+required_gates = ["G0"]
+required_receipts = ["W0"]
+closes = ["W1"]
+packages = ["search-config", "search-runtime-owner", "search-os-secrets", "search-control-redb", "search-provider-protocol", "eliot-searchd", "eliot-search"]
+required_product_result = "bootable shell with one-root ownership, secure secrets, versioned control state, bounded authenticated protocol and clean shutdown"
+
+[[stage]]
+id = "W2"
+name = "direct_source_spine"
+required_gates = ["G0"]
+required_receipts = ["W1"]
+closes = ["W2_G1", "G1"]
+packages = ["search-source-admission", "search-source-registry", "search-source-identity", "search-safe-reader", "search-revision-store", "search-materializer", "search-unitizer", "eliot-searchd"]
+required_product_result = "deny-default DIRECT source path with final-handle containment, immutable exact revisions, deterministic materialization/unitization and restart recovery"
+
+[[stage]]
+id = "W3"
+name = "qualified_lexical_index"
+required_gates = ["G1"]
+required_receipts = ["W2_G1"]
+closes = ["W3"]
+packages = ["search-lexical", "search-projection-planner", "search-point-identity", "search-qdrant-supervisor", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer", "eliot-searchd"]
+required_product_result = "qualified Windows Qdrant and deterministic lexical publication with atomic visible epochs, pins and exact reclaim"
+
+[[stage]]
+id = "W4"
+name = "baseline_query_product"
+required_gates = ["G1"]
+required_receipts = ["W3"]
+closes = ["W4_G2", "G2"]
+packages = ["search-access", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-handles", "search-result-projector", "search-continuation", "search-eval", "eliot-searchd"]
+required_product_result = "authenticated access-plan-execute-validate-project pipeline with source-backed results, handles and continuations"
+
+[[stage]]
+id = "W5"
+name = "current_workspace_and_code_structure"
+required_gates = ["G2"]
+required_receipts = ["W4_G2"]
+closes = ["W5"]
+packages = ["search-source-reconcile", "search-overlay", "search-code-enricher", "eliot-searchd"]
+required_product_result = "observation-gap-aware current workspace, memory-only unsaved overlays and qualified no-execute Rust structure"
+
+[[stage]]
+id = "W6"
+name = "comparison_and_exact_proof"
+required_gates = ["G2"]
+required_receipts = ["W5"]
+closes = ["W6_G3", "G3"]
+packages = ["search-exact", "search-subject-resolver", "search-comparator", "eliot-searchd"]
+required_product_result = "ambiguity-preserving resolution, descriptive comparison and frozen-denominator exact reports"
+
+[[stage]]
+id = "W7"
+name = "security_and_lifecycle_hardening"
+required_gates = ["G3"]
+required_receipts = ["W6_G3"]
+closes = ["W7_LIFECYCLE"]
+packages = ["search-retention", "search-revision-store", "search-access", "search-handles", "search-continuation", "search-candidate-validator", "search-publication", "search-index-reclaimer", "eliot-searchd"]
+required_product_result = "immediate restrictive fences, durable invalidation, mark/sweep, separate purge/reclaim, tombstones, restore quarantine and non-resurrection"
+
+[[stage]]
+id = "W8"
+name = "generic_client_edge"
+required_gates = ["G3"]
+required_receipts = ["W7_LIFECYCLE"]
+closes = ["W8_G4", "G4"]
+packages = ["search-provider-protocol", "eliot-searchd", "eliot-search", "search-eliot-adapter", "search-research-export-adapter"]
+required_product_result = "mutually authenticated generic local edge, replay defense, filtered capabilities, bounded request lifecycle and standalone CLI"
+
+[[stage]]
+id = "W9"
+name = "product_pulse_and_windows_qualification"
+required_gates = ["G4"]
+required_receipts = ["W7_LIFECYCLE", "W8_G4"]
+closes = ["W9_G5", "G5"]
+packages = ["search-eval"]
+required_product_result = "pre-registered paired Windows Product Pulse with quality, latency, resource, recovery, protocol and leakage evidence plus independent verdict"
+
+[[stage]]
+id = "W10"
+name = "optional_model_document_and_scale"
+required_gates = ["G5"]
+required_receipts = ["W9_G5"]
+closes = ["W10_G6", "G6"]
+packages = ["search-model-provider", "eliot-search-model-worker", "eliot-search-doc-worker", "eliot-searchd", "search-qdrant-bridge", "search-publication", "search-epoch-pins", "search-index-reclaimer", "search-eval"]
+required_product_result = "one explicitly selected optional candidate with exact artifact qualification, measured benefit, baseline non-regression and complete removal/rollback"
+baseline_release_dependency = false
+
+[cross_cutting.error_model]
+required = ["typed reasons", "retryability", "OUTCOME_UNKNOWN after possible external mutation", "distinct partial/degraded/unavailable/quarantined/cancelled states", "bounded redacted public errors"]
+forbidden = ["panic-driven recovery", "silent fallback", "placeholder success", "fake receipt"]
+
+[cross_cutting.resources]
+required = ["finite queues", "finite batches/pages/streams", "finite source reads and candidate sets", "finite handles/continuations/pins", "cancellation propagation", "foreground priority", "resumable rate-limited background work"]
+
+[cross_cutting.security]
+required = ["authenticated local binding", "deny-default admission", "final-handle containment", "restrictive ACLs", "opaque secret references", "pre-influence access/currentness/purge checks", "memory-only unsaved bytes", "bounded redacted diagnostics"]
+forbidden = ["source content in logs", "secret values in diagnostics", "raw token disclosure", "foreign membership disclosure", "optional provider evidence authority", "unproved secure-erase claim"]
+
+[cross_cutting.persistence]
+required = ["operation identity", "durable intent", "external mutation", "exact readback", "guarded control commit", "crash-point matrix", "idempotent replay", "quarantine decision", "rollback or forward completion", "versioned migrations", "non-resurrecting restore"]
+
+[cross_cutting.observability]
+required = ["startup and readiness reason", "request-plan-leg correlation", "queue and resource pressure", "currentness gaps", "publication generation and epoch", "handle-continuation-pin lifecycle", "purge-reclaim-restore state", "process identity", "configuration snapshot and pending actions"]
+
+[cross_cutting.packaging]
+required = ["versioned Windows binaries", "checksums", "SBOM and licenses", "safe DIRECT configuration", "exact Qdrant artifact contract", "service install/start/stop", "upgrade and rollback", "uninstall", "ACL setup", "backup/restore/rebuild", "redacted diagnostics", "interrupted-upgrade recovery"]
+forbidden = ["installer network download", "silent runtime upgrade", "optional feature self-activation"]
+
+[cross_cutting.testing]
+required = ["unit tests", "golden fixtures", "property tests", "negative malformed and oversized tests", "fake-port conformance", "fault injection", "cancellation and deadline tests", "restart and recovery tests", "disclosure tests", "Windows path ACL and process tests", "stage qualification fixtures"]
+compile_or_unit_tests_alone_pass_gate = false
