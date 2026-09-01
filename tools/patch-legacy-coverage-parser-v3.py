@@ -28,7 +28,7 @@ def patch_legacy_validator() -> None:
     replace_once(
         LEGACY,
         'heading_matches = list(re.finditer(r"^### `([A-Za-z][A-Za-z0-9]+Port)`\\s*$", port_source, flags=re.MULTILINE))',
-        'heading_matches = list(re.finditer(r"^### `([A-Za-z][A-Za-z0-9]+Port)`(?:\\s+[—-].*)?\\s*$", port_source, flags=re.MULTILINE))',
+        'heading_matches = list(re.finditer(r"^### `([A-Za-z][A-Za-z0-9]+Port)`(?:[ \\t]+[—-].*)?[ \\t]*$", port_source, flags=re.MULTILINE))',
         "port heading suffix parser",
     )
     old_port = '''    for port_name, row in port_rows.items():
