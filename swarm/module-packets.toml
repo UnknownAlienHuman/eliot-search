@@ -1,0 +1,74 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+package_count = 45
+module_count = 479
+max_modules_per_package = 15
+one_entry_per_package = true
+one_public_entry_module_per_package = true
+function_operations_enter_through_public_entry = true
+module_names_are_package_local = true
+module_files_are_not_required_before_implementation = true
+architecture_access = "exception-only"
+implementation_authorized_by_this_registry = false
+
+[[packet]]
+earliest_wave = 0
+path = "swarm/modules/w0.toml"
+package_count = 3
+module_count = 38
+
+[[packet]]
+earliest_wave = 1
+path = "swarm/modules/w1.toml"
+package_count = 7
+module_count = 79
+
+[[packet]]
+earliest_wave = 2
+path = "swarm/modules/w2.toml"
+package_count = 7
+module_count = 75
+
+[[packet]]
+earliest_wave = 3
+path = "swarm/modules/w3.toml"
+package_count = 8
+module_count = 78
+
+[[packet]]
+earliest_wave = 4
+path = "swarm/modules/w4.toml"
+package_count = 8
+module_count = 86
+
+[[packet]]
+earliest_wave = 5
+path = "swarm/modules/w5.toml"
+package_count = 3
+module_count = 31
+
+[[packet]]
+earliest_wave = 6
+path = "swarm/modules/w6.toml"
+package_count = 3
+module_count = 29
+
+[[packet]]
+earliest_wave = 7
+path = "swarm/modules/w7.toml"
+package_count = 1
+module_count = 11
+
+[[packet]]
+earliest_wave = 8
+path = "swarm/modules/w8.toml"
+package_count = 2
+module_count = 20
+
+[[packet]]
+earliest_wave = 10
+path = "swarm/modules/w10.toml"
+package_count = 3
+module_count = 32
