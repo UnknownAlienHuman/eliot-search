@@ -1,0 +1,29 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 8
+package_count = 2
+module_count = 20
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-eliot-adapter"
+path = "crates/search-eliot-adapter"
+operation_source = "crates/search-eliot-adapter/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "profile", "binding", "scope", "request", "result", "evidence", "cutover", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-research-export-adapter"
+path = "crates/search-research-export-adapter"
+operation_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "profile", "admission", "manifest", "content", "digest", "export", "cutover", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
