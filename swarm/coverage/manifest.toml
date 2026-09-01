@@ -33,7 +33,10 @@ architecture_invariant_count = 30
 capability_cell_count = 31
 shared_port_count = 23
 configuration_section_count = 20
-p00_schema_or_registry_count = 116
+canonical_id_counter_count = 50
+p00_record_or_registry_count = 116
+p00_schema_or_registry_count = 166
+canonical_primitive_family_count = 12
 recipe_count = 11
 delivery_slice_count = 19
 
