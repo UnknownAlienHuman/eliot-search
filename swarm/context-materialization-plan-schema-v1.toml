@@ -1,0 +1,52 @@
+schema_version = 1
+record_kind = "context_materialization_plan_v1"
+status = "ADVISORY_NON_AUTHORITATIVE"
+canonicalization = "canonical_json_utf8_lf_sorted_keys_compact"
+domain_separator_ascii = "eliot-search/context-materialization-plan/v1\\0"
+output_root = "artifacts/context-materialization-plans"
+output_is_control_record = false
+output_is_evidence_receipt = false
+output_is_claimable = false
+working_tree_candidate_input_allowed = false
+
+closed_decisions = [
+  "BLOCKED_MISSING_EXTERNAL_INPUT",
+  "READY_FOR_DUAL_SIGNATURE_COLLECTION",
+  "BLOCKED_PARTIAL_SIGNATURE_SET",
+  "READY_FOR_INTEGRATION_OWNER_READBACK_AND_COMMIT",
+]
+
+closed_reason_codes = [
+  "MATERIALIZATION_SELECTION_MISSING",
+  "MATERIALIZATION_SIGNATURE_SET_PARTIAL",
+]
+
+required_top_level_fields = [
+  "schema_version",
+  "record_kind",
+  "status",
+  "repository",
+  "candidate",
+  "selection",
+  "accepted_handoff_projections",
+  "operation",
+  "prospective_manifest",
+  "decision",
+  "reason_codes",
+  "ordinary_artifact_writes",
+  "control_record_mutations",
+  "authority",
+  "plan_sha256",
+]
+
+[invariants]
+control_record_mutations_must_be_empty = true
+all_authority_fields_must_be_false = true
+prospective_manifest_is_not_committed_record = true
+complete_file_digest_never_embedded_in_manifest = true
+signature_refs_excluded_from_operation_id = true
+operation_id_bound_by_signed_payload = true
+candidate_bundle_must_roundtrip = true
+artifact_ref_must_match_bundle = true
+artifact_readback_declaration_must_match_ref = true
+materializer_and_reviewer_must_differ = true

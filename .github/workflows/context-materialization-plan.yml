@@ -1,0 +1,56 @@
+name: Context materialization plan v1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Stabilize fixture Git line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Compile planner and corpus
+        shell: pwsh
+        run: |
+          python -m py_compile `
+            tools/plan-context-materialization.py `
+            tools/context_materialization_planner_v1/__init__.py `
+            tools/context_materialization_planner_v1/core.py `
+            tools/context_materialization_planner_v1/manifest.py `
+            tools/context_materialization_planner_v1/plan.py `
+            tools/validate-context-materialization-plan.py `
+            qualification/context-materialization/test_context_materialization_plan_v1.py
+
+      - name: Run twelve-case materialization-plan corpus
+        shell: pwsh
+        run: python qualification/context-materialization/test_context_materialization_plan_v1.py
+
+      - name: Validate planner registry and authority ceiling
+        shell: pwsh
+        run: ./tools/validate-context-materialization-plan.ps1 -Json
+
+      - name: Revalidate context artifact candidate
+        shell: pwsh
+        run: ./tools/validate-context-artifact-candidate.ps1 -Json
+
+      - name: Revalidate accepted evidence digest
+        shell: pwsh
+        run: ./tools/validate-accepted-evidence-digest.ps1 -Json
+
+      - name: Revalidate ticket issuance contracts
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json

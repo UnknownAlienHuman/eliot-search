@@ -1,0 +1,17 @@
+schema_version = 1
+profile = "context_manifest_instance_v1"
+record_kind = "context_manifest_v1"
+instance_status = "MATERIALIZED"
+renderer_profile = "context_manifest_renderer_v1"
+renderer_profile_path = "swarm/context-manifest-renderer-v1.toml"
+status_values = ["MATERIALIZED"]
+unknown_instance_status = "reject"
+schema_template_status_is_instance_status = false
+
+[invariants]
+record_is_append_only = true
+complete_file_digest_is_external = true
+signed_payload_digest_is_embedded = true
+artifact_readback_required = true
+materializer_and_reviewer_distinct = true
+one_writer_visible_artifact = true

@@ -1,0 +1,40 @@
+schema_version = 1
+profile = "context_manifest_renderer_v1"
+record_kind = "context_manifest_v1"
+status = "CANONICAL_RENDERER_PROFILE"
+encoding = "UTF-8"
+bom_allowed = false
+line_endings = "LF"
+terminal_lf_required = true
+comments_allowed = false
+trailing_spaces_allowed = false
+blank_lines_between_groups = 1
+signed_payload_ends_with_blank_separator_line = true
+signature_table_excluded_from_signed_payload = true
+
+ordered_groups = [
+  "schema_version",
+  "record_kind",
+  "status",
+  "identity",
+  "draft",
+  "artifact",
+  "sources",
+  "registry_fragments",
+  "accepted_handoffs",
+  "verification",
+  "signature",
+]
+
+[inline_table_order]
+immutable_artifact_ref = ["store_profile_ref", "artifact_id", "bytes", "sha256"]
+immutable_record_ref = ["repository", "commit", "path", "git_blob_id", "exact_record_file_sha256", "record_kind"]
+optional_v1 = ["state", "value"]
+immutable_signature_ref = ["approval_profile_ref", "approval_artifact_ref", "signed_payload_sha256", "actor_identity"]
+
+[invariants]
+source_array_preserves_candidate_order = true
+registry_fragment_array_preserves_candidate_order = true
+accepted_handoffs_sorted_by_package = true
+unknown_fields = "reject"
+self_referential_complete_file_digest_allowed = false

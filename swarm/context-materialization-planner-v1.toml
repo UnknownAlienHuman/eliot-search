@@ -1,0 +1,53 @@
+schema_version = 1
+component = "context_materialization_planner_v1"
+status = "ADVISORY_NON_AUTHORITATIVE"
+owner = "integration-owner-tooling"
+operation_kind = "materialize_context_v1"
+operation_domain_separator_ascii = "eliot-search/materialize-context/v1\\0"
+plan_schema = "swarm/context-materialization-plan-schema-v1.toml"
+plan_digest_profile = "swarm/context-materialization-plan-digest-v1.toml"
+instance_profile = "swarm/context-manifest-instance-v1.toml"
+renderer_profile = "swarm/context-manifest-renderer-v1.toml"
+evidence_digest_profile = "swarm/accepted-evidence-digest-v1.toml"
+candidate_schema = "swarm/context-artifact-candidate-schema-v1.toml"
+output_root = "artifacts/context-materialization-plans"
+selection_input_root = "artifacts/context-materialization-inputs"
+control_record_root = "swarm/context-manifests"
+
+operation_id_fields = [
+  "schema_version",
+  "operation_kind",
+  "repository",
+  "base_commit",
+  "candidate_id",
+  "candidate_sha256",
+  "bundle_sha256",
+  "context_id",
+  "created_at",
+  "materializer_identity",
+  "reviewer_identity",
+  "artifact_ref",
+  "artifact_readback",
+]
+
+signature_refs_are_operation_id_inputs = false
+signature_refs_bind_post_operation_signed_payload = true
+
+[authority]
+materializes_authoritative_context = false
+creates_context_manifest_record = false
+creates_assignment_ticket = false
+creates_writer_lease = false
+authorizes_implementation = false
+publishes_package_handoff = false
+accepts_gate_or_wave = false
+advances_launch_state = false
+
+[limits]
+max_plan_bytes = 1048576
+max_payload_bytes = 4194304
+max_manifest_bytes = 4194304
+max_sources = 32
+max_registry_fragments = 16
+max_accepted_handoffs = 16
+zero_means_unlimited = false
