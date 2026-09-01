@@ -47,8 +47,31 @@ jobs:
               if not values:
                   continue
               print(f'\n## {name} ({len(values)})')
-              for value in values[:80]:
+              for value in values[:40]:
                   print(json.dumps(value, sort_keys=True) if isinstance(value, dict) else value)
-              if len(values) > 80:
-                  print(f'... {len(values) - 80} more')
+              if len(values) > 40:
+                  print(f'... {len(values) - 40} more')
+          PY
+
+      - name: Print package modules and operation sections
+        run: |
+          python - <<'PY'
+          import json
+          import tomllib
+          from pathlib import Path
+
+          report = json.loads(Path('audit-report.json').read_text(encoding='utf-8'))
+          root = Path('.')
+          registry = tomllib.loads((root / 'swarm/module-packets.toml').read_text(encoding='utf-8'))
+          modules = {}
+          for packet in registry['packet']:
+              doc = tomllib.loads((root / packet['path']).read_text(encoding='utf-8'))
+              for row in doc['package']:
+                  modules[row['name']] = row['modules']
+          for package in sorted(report['operation_sections']):
+              print(f'\n## {package}')
+              print('modules = ' + ', '.join(modules[package]))
+              for heading, operations in report['operation_sections'][package].items():
+                  print(f'[{heading}]')
+                  print(', '.join(operations))
           PY
