@@ -1,0 +1,318 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-retention"
+operation_count = 31
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-retention::apply_live_change"
+name = "apply_live_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 52
+
+[[operation]]
+id = "search-retention::augment_with_active_pins"
+name = "augment_with_active_pins"
+module = "roots"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 35
+
+[[operation]]
+id = "search-retention::begin_sweep_generation"
+name = "begin_sweep_generation"
+module = "sweep"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-retention::build_lifecycle_invalidation_set"
+name = "build_lifecycle_invalidation_set"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Invalidation operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-retention::build_paired_recovery_manifest"
+name = "build_paired_recovery_manifest"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Recovery and restore operations"]
+route_kind = "semantic"
+score = 134
+
+[[operation]]
+id = "search-retention::build_purge_plan"
+name = "build_purge_plan"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Purge operations"]
+route_kind = "semantic"
+score = 109
+
+[[operation]]
+id = "search-retention::checkpoint_mark"
+name = "checkpoint_mark"
+module = "mark"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 91
+
+[[operation]]
+id = "search-retention::collect_durable_roots"
+name = "collect_durable_roots"
+module = "roots"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 138
+
+[[operation]]
+id = "search-retention::commit_restore_admission"
+name = "commit_restore_admission"
+module = "restore"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Recovery and restore operations"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-retention::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-retention::complete_sweep"
+name = "complete_sweep"
+module = "sweep"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-retention::emit_client_revocation_event"
+name = "emit_client_revocation_event"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Purge operations"]
+route_kind = "semantic"
+score = 20
+
+[[operation]]
+id = "search-retention::enter_restore_quarantine"
+name = "enter_restore_quarantine"
+module = "restore"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Recovery and restore operations"]
+route_kind = "semantic"
+score = 121
+
+[[operation]]
+id = "search-retention::execute_purge_layer"
+name = "execute_purge_layer"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Purge operations"]
+route_kind = "semantic"
+score = 109
+
+[[operation]]
+id = "search-retention::execute_sweep_batch"
+name = "execute_sweep_batch"
+module = "sweep"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-retention::finalize_mark_manifest"
+name = "finalize_mark_manifest"
+module = "mark"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 105
+
+[[operation]]
+id = "search-retention::finalize_purge_receipt"
+name = "finalize_purge_receipt"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Purge operations"]
+route_kind = "semantic"
+score = 109
+
+[[operation]]
+id = "search-retention::install_purge_fence"
+name = "install_purge_fence"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Purge operations"]
+route_kind = "semantic"
+score = 123
+
+[[operation]]
+id = "search-retention::mark_reachable"
+name = "mark_reachable"
+module = "mark"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 91
+
+[[operation]]
+id = "search-retention::plan_restore_admission"
+name = "plan_restore_admission"
+module = "restore"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Recovery and restore operations"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-retention::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-retention::plan_sweep"
+name = "plan_sweep"
+module = "sweep"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-retention::resume_sweep"
+name = "resume_sweep"
+module = "sweep"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-retention::revalidate_restore_sources"
+name = "revalidate_restore_sources"
+module = "restore"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Recovery and restore operations"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-retention::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-retention::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-retention::validate_purge_request"
+name = "validate_purge_request"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Purge operations"]
+route_kind = "semantic"
+score = 109
+
+[[operation]]
+id = "search-retention::validate_restore_manifest"
+name = "validate_restore_manifest"
+module = "restore"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Recovery and restore operations"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-retention::validate_retention_policy"
+name = "validate_retention_policy"
+module = "roots"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Retention roots"]
+route_kind = "semantic"
+score = 49
+
+[[operation]]
+id = "search-retention::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-retention::verify_invalidation_completion"
+name = "verify_invalidation_completion"
+module = "purge"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-retention/FUNCTIONS.md"]
+source_contexts = ["Invalidation operations"]
+route_kind = "package_rule"
+score = 100

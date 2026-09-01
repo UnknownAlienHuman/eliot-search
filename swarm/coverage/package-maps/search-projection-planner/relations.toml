@@ -1,0 +1,167 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-projection-planner"
+outbound_dependency_count = 4
+inbound_dependency_count = 2
+architecture_relation_count = 8
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 1
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-projection-planner->search-contracts"
+consumer = "search-projection-planner"
+consumer_module = "schema"
+consumer_earliest_wave = 3
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-projection-planner->search-domain"
+consumer = "search-projection-planner"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-projection-planner->search-ports"
+consumer = "search-projection-planner"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-projection-planner->search-point-identity"
+consumer = "search-projection-planner"
+consumer_module = "point_set"
+consumer_earliest_wave = 3
+producer = "search-point-identity"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-projection-planner"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-projection-planner"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-publication->search-projection-planner"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-projection-planner"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S8"
+modules = ["search-projection-planner:point_set"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S9"
+modules = ["search-projection-planner:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C13"
+modules = ["search-projection-planner:manifest", "search-projection-planner:migration", "search-projection-planner:point_set", "search-projection-planner:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-05"
+modules = ["search-projection-planner:point_set"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-06"
+modules = ["search-projection-planner:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-25"
+modules = ["search-projection-planner:migration"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P06"
+modules = ["search-projection-planner:manifest", "search-projection-planner:schema"]
+required_outputs = ["one_selected_lexical_path", "golden_sparse_profiles", "payload_indexes", "collision_safe_point_identity", "exact_projection_manifests"]
+exit_evidence = ["reference_vectors", "collision_injection", "no_implicit_language_defaults", "no_membership_arrays"]
+
+[[architecture]]
+kind = "delivery"
+id = "P18"
+modules = ["search-projection-planner:migration"]
+required_outputs = ["measured_scale_change", "candidate_collection_build", "ordered_catchup", "final_barrier", "redb_route_cutover", "rollback"]
+exit_evidence = ["migration_state_kill_tests", "old_route_pin_drainage", "failed_candidate_discard", "scoring_currentness_noninterference", "rollback_plan"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "projection_membership"
+owner_roles = ["state_owner"]
+modules = ["point_set"]
+schemas = ["ProjectionMembership"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]

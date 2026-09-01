@@ -1,0 +1,261 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-result-projector"
+outbound_dependency_count = 5
+inbound_dependency_count = 1
+architecture_relation_count = 8
+configuration_relation_count = 0
+recipe_relation_count = 9
+port_relation_count = 0
+schema_relation_count = 6
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-result-projector->search-contracts"
+consumer = "search-result-projector"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-result-projector->search-domain"
+consumer = "search-result-projector"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-result-projector->search-ports"
+consumer = "search-result-projector"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-result-projector->search-candidate-validator"
+consumer = "search-result-projector"
+consumer_module = "evidence"
+consumer_earliest_wave = 4
+producer = "search-candidate-validator"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-result-projector->search-handles"
+consumer = "search-result-projector"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-handles"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-result-projector"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-result-projector"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S23"
+modules = ["search-result-projector:evidence"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S34"
+modules = ["search-result-projector:coverage"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C26"
+modules = ["search-result-projector:card", "search-result-projector:coverage", "search-result-projector:evidence", "search-result-projector:truncation"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-04"
+modules = ["search-result-projector:evidence"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-20"
+modules = ["search-result-projector:evidence"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-24"
+modules = ["search-result-projector:coverage"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P08"
+modules = ["search-result-projector:card"]
+required_outputs = ["server_owned_plans", "bounded_safe_legs", "deterministic_fusion", "source_backed_candidates", "compact_cards", "handles_and_continuations", "baseline_eval_harness"]
+exit_evidence = ["access_noninterference", "deterministic_cards", "raw_grep_read_baseline"]
+
+[[architecture]]
+kind = "delivery"
+id = "P11"
+modules = ["search-result-projector:card"]
+required_outputs = ["subject_resolution", "ambiguity_sets", "analogue_ladder", "lineage_collapse", "descriptive_behavior_matrix"]
+exit_evidence = ["renamed_true_analogue", "false_same_name", "fork_mirror", "decisive_test"]
+
+[[recipe]]
+id = "locate@1"
+module = "card"
+request_schema = "SearchRecipeRequest"
+result_schema = "SearchCandidateSet"
+
+[[recipe]]
+id = "find_text@1"
+module = "card"
+request_schema = "SearchRecipeRequest"
+result_schema = "SearchCandidateSet"
+
+[[recipe]]
+id = "inspect_entity@1"
+module = "evidence"
+request_schema = "SearchRecipeRequest"
+result_schema = "EntityInspectionResult"
+
+[[recipe]]
+id = "compare_implementations@1"
+module = "evidence"
+request_schema = "SearchRecipeRequest"
+result_schema = "CompareImplementationsResult"
+
+[[recipe]]
+id = "explore_entity@1"
+module = "evidence"
+request_schema = "SearchRecipeRequest"
+result_schema = "EntityExplorationResult"
+
+[[recipe]]
+id = "corpus_profile@1"
+module = "coverage"
+request_schema = "SearchRecipeRequest"
+result_schema = "CorpusProfileResult"
+
+[[recipe]]
+id = "corpus_delta@1"
+module = "coverage"
+request_schema = "SearchRecipeRequest"
+result_schema = "CorpusDeltaResult"
+
+[[recipe]]
+id = "provenance@1"
+module = "evidence"
+request_schema = "SearchRecipeRequest"
+result_schema = "ProvenanceResult"
+
+[[recipe]]
+id = "expand_handle@1"
+module = "evidence"
+request_schema = "SearchRecipeRequest"
+result_schema = "HandleExpansionResult"
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "coverage_records"
+owner_roles = ["state_owner"]
+modules = ["coverage"]
+schemas = ["LegDescriptor", "CoverageGap", "CoverageUnknown", "ObservationFreshness"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-query.toml"
+group = "candidate_result"
+owner_roles = ["state_owner"]
+modules = ["evidence"]
+schemas = ["SearchCandidateSet", "ValidatedSearchCandidate", "Coverage"]
+source_files = ["docs/contracts/p00/QUERY_AND_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "recipe_result_header"
+owner_roles = ["state_owner"]
+modules = ["card"]
+schemas = ["RecipeResultHeader"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "corpus_results"
+owner_roles = ["state_owner"]
+modules = ["coverage"]
+schemas = ["CorpusProfileResult", "CorpusFacet", "CorpusDeltaResult", "CorpusChange"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "provenance_results"
+owner_roles = ["state_owner"]
+modules = ["evidence"]
+schemas = ["ProvenanceResult", "ProvenanceStep"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-results.toml"
+group = "recipe_result_union"
+owner_roles = ["state_owner"]
+modules = ["card"]
+schemas = ["RecipeResultV1"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]

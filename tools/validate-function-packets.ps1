@@ -53,7 +53,7 @@ function Validate-Path([string]$Owner, [string]$RelativePath, [string]$Kind) {
         Add-Error "$Owner declares forbidden ordinary architecture read: $RelativePath"
     }
     if (-not (Test-Path (Join-Path $Root $RelativePath) -PathType Leaf)) {
-        Add-Error "$Owner references missing $Kind: $RelativePath"
+        Add-Error "$Owner references missing ${Kind}: $RelativePath"
     }
 }
 

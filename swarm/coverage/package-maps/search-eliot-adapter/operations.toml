@@ -1,0 +1,88 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-eliot-adapter"
+operation_count = 8
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-eliot-adapter::map_capability_pulse"
+name = "map_capability_pulse"
+module = "result"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eliot-adapter::map_provider_request"
+name = "map_provider_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-eliot-adapter::map_search_result"
+name = "map_search_result"
+module = "result"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-eliot-adapter::map_search_revocation_event"
+name = "map_search_revocation_event"
+module = "result"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-eliot-adapter::map_source_view_and_fence"
+name = "map_source_view_and_fence"
+module = "evidence"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "semantic"
+score = 7
+
+[[operation]]
+id = "search-eliot-adapter::map_work_scope"
+name = "map_work_scope"
+module = "scope"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-eliot-adapter::validate_no_reverse_authority"
+name = "validate_no_reverse_authority"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-eliot-adapter::validate_profile_activation"
+name = "validate_profile_activation"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-eliot-adapter/FUNCTIONS.md"]
+source_contexts = ["Function contract — search-eliot-adapter"]
+route_kind = "semantic"
+score = 115

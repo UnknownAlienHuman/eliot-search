@@ -1,0 +1,998 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-config"
+node_count = 90
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-config/AGENTS.md#agent-contract-search-config"
+path = "crates/search-config/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-config"
+kind = "implementation_contract_root"
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-config/AGENTS.md#mission"
+path = "crates/search-config/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/AGENTS.md#ownership"
+path = "crates/search-config/AGENTS.md"
+line = 15
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/AGENTS.md#forbidden-ownership"
+path = "crates/search-config/AGENTS.md"
+line = 24
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/AGENTS.md#dependencies"
+path = "crates/search-config/AGENTS.md"
+line = 32
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/AGENTS.md#size"
+path = "crates/search-config/AGENTS.md"
+line = 36
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#function-contract-search-config"
+path = "crates/search-config/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-config"
+kind = "implementation_contract_root"
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#shared-rules"
+path = "crates/search-config/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Shared rules"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#operations"
+path = "crates/search-config/FUNCTIONS.md"
+line = 18
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#parsedocument-bytes-source-limits-result-configdocument-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 20
+level = 3
+heading = "parsedocument(bytes, source, limits) -> Result<ConfigDocument, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:document"]
+route_kind = "operation_route"
+rationale = "search-config::parse_document"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#registersections-descriptors-result-configregistry-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 25
+level = 3
+heading = "registersections(descriptors) -> Result<ConfigRegistry, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:registry"]
+route_kind = "operation_route"
+rationale = "search-config::register_sections"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#mergelayers-defaults-file-environment-cli-registry-result-mergedconfig-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 30
+level = 3
+heading = "mergelayers(defaults, file, environment, cli, registry) -> Result<MergedConfig, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:layering"]
+route_kind = "operation_route"
+rationale = "search-config::merge_layers"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#projectsection-merged-descriptor-result-configsectioninput-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 35
+level = 3
+heading = "projectsection(merged, descriptor) -> Result<ConfigSectionInput, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:registry"]
+route_kind = "operation_route"
+rationale = "search-config::project_section"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#assembleeffective-validatedsections-selectedprofile-result-effectiveconfigsnapshot-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 40
+level = 3
+heading = "assembleeffective(validatedsections, selectedprofile) -> Result<EffectiveConfigSnapshot, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:snapshot"]
+route_kind = "operation_route"
+rationale = "search-config::assemble_effective"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#fingerprint-snapshot-configfingerprint"
+path = "crates/search-config/FUNCTIONS.md"
+line = 45
+level = 3
+heading = "fingerprint(snapshot) -> ConfigFingerprint"
+kind = "implementation_operation"
+modules = ["search-config:snapshot"]
+route_kind = "operation_route"
+rationale = "search-config::fingerprint"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#diff-old-new-result-configdelta-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 50
+level = 3
+heading = "diff(old, new) -> Result<ConfigDelta, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:diff"]
+route_kind = "operation_route"
+rationale = "search-config::diff"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#planreconfiguration-delta-descriptors-result-reconfigurationplan-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 55
+level = 3
+heading = "planreconfiguration(delta, descriptors) -> Result<ReconfigurationPlan, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:diff"]
+route_kind = "operation_route"
+rationale = "search-config::plan_reconfiguration"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#redactedview-snapshot-disclosure-redactedconfigview"
+path = "crates/search-config/FUNCTIONS.md"
+line = 60
+level = 3
+heading = "redactedview(snapshot, disclosure) -> RedactedConfigView"
+kind = "implementation_operation"
+modules = ["search-config:redaction"]
+route_kind = "operation_route"
+rationale = "search-config::redacted_view"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#validateenvironmentkey-name-registry-result-configkeypath-configerror"
+path = "crates/search-config/FUNCTIONS.md"
+line = 66
+level = 3
+heading = "validateenvironmentkey(name, registry) -> Result<ConfigKeyPath, ConfigError>"
+kind = "implementation_operation"
+modules = ["search-config:layering"]
+route_kind = "operation_route"
+rationale = "search-config::validate_environment_key"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#failure-and-retry-semantics"
+path = "crates/search-config/FUNCTIONS.md"
+line = 71
+level = 2
+heading = "Failure and retry semantics"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/FUNCTIONS.md#required-conformance-fixtures"
+path = "crates/search-config/FUNCTIONS.md"
+line = 78
+level = 2
+heading = "Required conformance fixtures"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/README.md#search-config"
+path = "crates/search-config/README.md"
+line = 1
+level = 1
+heading = "search-config"
+kind = "implementation_contract_root"
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-config/README.md#owns"
+path = "crates/search-config/README.md"
+line = 11
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-config/README.md#must-not-own"
+path = "crates/search-config/README.md"
+line = 19
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p01-runtime-owner-shell"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2840
+level = 3
+heading = "P01 — Runtime owner shell"
+kind = "delivery_contract"
+modules = ["search-config:layering"]
+route_kind = "delivery_registry"
+rationale = "P01"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#eliot-search-local-configuration-1-0"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 1
+level = 1
+heading = "ELIOT Search local configuration 1.0"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#1-boundary"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 8
+level = 2
+heading = "1. Boundary"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#2-document-format-and-limits"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 29
+level = 2
+heading = "2. Document format and limits"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#3-layers-and-precedence"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 55
+level = 2
+heading = "3. Layers and precedence"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#3-1-environment-mapping"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 74
+level = 3
+heading = "3.1 Environment mapping"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#3-2-cli-overrides"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 97
+level = 3
+heading = "3.2 CLI overrides"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#4-generic-configuration-records"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 102
+level = 2
+heading = "4. Generic configuration records"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#5-reload-classes"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 146
+level = 2
+heading = "5. Reload classes"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#applylive"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 164
+level = 3
+heading = "APPLYLIVE"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#securitybarrier"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 170
+level = 3
+heading = "SECURITYBARRIER"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#restartdependency"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 176
+level = 3
+heading = "RESTARTDEPENDENCY"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#drainandrestart"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 182
+level = 3
+heading = "DRAINANDRESTART"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#newcollectiongeneration"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 188
+level = 3
+heading = "NEWCOLLECTIONGENERATION"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#rebuildprojection"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 194
+level = 3
+heading = "REBUILDPROJECTION"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#gaterequired"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 199
+level = 3
+heading = "GATEREQUIRED"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#reject"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 204
+level = 3
+heading = "REJECT"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-section-contracts"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 209
+level = 2
+heading = "6. Section contracts"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-1-instance-search-runtime-owner"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 214
+level = 3
+heading = "6.1 [instance] — search-runtime-owner"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-2-secrets-search-os-secrets"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 227
+level = 3
+heading = "6.2 [secrets] — search-os-secrets"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-3-control-search-control-redb"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 238
+level = 3
+heading = "6.3 [control] — search-control-redb"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-4-protocol-search-provider-protocol"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 252
+level = 3
+heading = "6.4 [protocol] — search-provider-protocol"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-5-sourceadmission-search-source-admission"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 267
+level = 3
+heading = "6.5 [sourceadmission] — search-source-admission"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-6-sourcereader-search-safe-reader"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 280
+level = 3
+heading = "6.6 [sourcereader] — search-safe-reader"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-7-reconcile-search-source-reconcile"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 291
+level = 3
+heading = "6.7 [reconcile] — search-source-reconcile"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-8-revisionstore-search-revision-store"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 302
+level = 3
+heading = "6.8 [revisionstore] — search-revision-store"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-9-lexical-search-lexical"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 314
+level = 3
+heading = "6.9 [lexical] — search-lexical"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-10-qdrantprocess-search-qdrant-supervisor"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 326
+level = 3
+heading = "6.10 [qdrantprocess] — search-qdrant-supervisor"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-11-qdrantdata-search-qdrant-bridge"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 345
+level = 3
+heading = "6.11 [qdrantdata] — search-qdrant-bridge"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-12-indexreclaim-search-index-reclaimer"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 360
+level = 3
+heading = "6.12 [indexreclaim] — search-index-reclaimer"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-13-query-search-query-planner"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 370
+level = 3
+heading = "6.13 [query] — search-query-planner"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-14-scheduler-search-retrieval-executor"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 383
+level = 3
+heading = "6.14 [scheduler] — search-retrieval-executor"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-15-overlay-search-overlay"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 398
+level = 3
+heading = "6.15 [overlay] — search-overlay"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-16-handles-search-handles"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 409
+level = 3
+heading = "6.16 [handles] — search-handles"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-17-continuations-search-continuation"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 421
+level = 3
+heading = "6.17 [continuations] — search-continuation"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-18-retention-search-retention"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 431
+level = 3
+heading = "6.18 [retention] — search-retention"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-19-observability-search-eval"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 443
+level = 3
+heading = "6.19 [observability] — search-eval"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#6-20-optionalprofiles-eliot-searchd"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 459
+level = 3
+heading = "6.20 [optionalprofiles] — eliot-searchd"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#7-package-section-api"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 471
+level = 2
+heading = "7. Package section API"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#8-reconfiguration-execution-order"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 488
+level = 2
+heading = "8. Reconfiguration execution order"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#9-redaction"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 506
+level = 2
+heading = "9. Redaction"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/CONFIGURATION_1.0.md#10-required-cross-package-fixtures"
+path = "docs/config/CONFIGURATION_1.0.md"
+line = 525
+level = 2
+heading = "10. Required cross-package fixtures"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:document", "search-config:layering", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#reconfiguration-contract-1-1-composite-obligations"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 1
+level = 1
+heading = "Reconfiguration contract 1.1 — Composite obligations"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#problem"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 8
+level = 2
+heading = "Problem"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#correct-model"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 26
+level = 2
+heading = "Correct model"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#composition-rules"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 62
+level = 2
+heading = "Composition rules"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/RECONFIGURATION_1.1.md#required-fixtures"
+path = "docs/config/RECONFIGURATION_1.1.md"
+line = 77
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-config:diff", "search-config:snapshot"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-config:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-config.md#search-config-implementation-packet"
+path = "swarm/assignments/search-config.md"
+line = 1
+level = 1
+heading = "search-config implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-config:api", "search-config:diff", "search-config:document", "search-config:error", "search-config:layering", "search-config:lib", "search-config:redaction", "search-config:registry", "search-config:snapshot"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-config.md#mission"
+path = "swarm/assignments/search-config.md"
+line = 15
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-config.md#owns"
+path = "swarm/assignments/search-config.md"
+line = 21
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-config.md#must-not-own"
+path = "swarm/assignments/search-config.md"
+line = 31
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-config.md#required-operations"
+path = "swarm/assignments/search-config.md"
+line = 40
+level = 2
+heading = "Required operations"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-config.md#composite-action-semantics"
+path = "swarm/assignments/search-config.md"
+line = 55
+level = 2
+heading = "Composite action semantics"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-config.md#required-invariants"
+path = "swarm/assignments/search-config.md"
+line = 75
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-config:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-config.md#typed-failures"
+path = "swarm/assignments/search-config.md"
+line = 87
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-config:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "swarm/assignments/search-config.md#exit-evidence"
+path = "swarm/assignments/search-config.md"
+line = 94
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-config.md#suggested-modules"
+path = "swarm/assignments/search-config.md"
+line = 106
+level = 2
+heading = "Suggested modules"
+kind = "implementation_contract"
+modules = ["search-config:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

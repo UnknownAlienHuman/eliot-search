@@ -1,0 +1,196 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-continuation"
+outbound_dependency_count = 7
+inbound_dependency_count = 1
+architecture_relation_count = 5
+configuration_relation_count = 1
+recipe_relation_count = 1
+port_relation_count = 0
+schema_relation_count = 2
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-continuation->search-contracts"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-continuation->search-domain"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-continuation->search-ports"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-continuation->search-config"
+consumer = "search-continuation"
+consumer_module = "config"
+consumer_earliest_wave = 4
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-continuation->search-query-planner"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-query-planner"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-continuation->search-access"
+consumer = "search-continuation"
+consumer_module = "reauthorize"
+consumer_earliest_wave = 4
+producer = "search-access"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-continuation->search-epoch-pins"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-continuation"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-continuation"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S26"
+modules = ["search-continuation:resume", "search-continuation:token"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C27"
+modules = ["search-continuation:cleanup", "search-continuation:identity", "search-continuation:issue", "search-continuation:reauthorize", "search-continuation:resume"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-09"
+modules = ["search-continuation:reauthorize"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P08"
+modules = ["search-continuation:resume"]
+required_outputs = ["server_owned_plans", "bounded_safe_legs", "deterministic_fusion", "source_backed_candidates", "compact_cards", "handles_and_continuations", "baseline_eval_harness"]
+exit_evidence = ["access_noninterference", "deterministic_cards", "raw_grep_read_baseline"]
+
+[[architecture]]
+kind = "delivery"
+id = "P13"
+modules = ["search-continuation:reauthorize"]
+required_outputs = ["security_mutation_linearization", "durable_source_handles", "CAS_mark_and_sweep", "purge_receipts_and_tombstones", "restore_revalidation"]
+exit_evidence = ["revocation_during_query", "handle_denial", "purge_non_resurrection", "mismatched_restore_quarantine"]
+
+[[configuration]]
+section = "continuations"
+module = "config"
+contract = "config/sections/continuations.md"
+reload = "APPLY_LIVE"
+
+[[recipe]]
+id = "expand_handle@1"
+module = "resume"
+request_schema = "SearchRecipeRequest"
+result_schema = "HandleExpansionResult"
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "wire_continuation_handle"
+owner_roles = ["state_owner"]
+modules = ["token"]
+schemas = ["ContinuationHandle"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "continuation_record"
+owner_roles = ["state_owner"]
+modules = ["resume"]
+schemas = ["ContinuationRecord"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]

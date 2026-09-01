@@ -1,0 +1,128 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-epoch-pins"
+operation_count = 12
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-epoch-pins::acquire_epoch_pin"
+name = "acquire_epoch_pin"
+module = "acquire"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-epoch-pins::acquire_migration_route_pin"
+name = "acquire_migration_route_pin"
+module = "acquire"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-epoch-pins::acquire_route_pin"
+name = "acquire_route_pin"
+module = "acquire"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-epoch-pins::compute_reclamation_watermark"
+name = "compute_reclamation_watermark"
+module = "watermark"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-epoch-pins::evaluate_old_route_reclaimability"
+name = "evaluate_old_route_reclaimability"
+module = "watermark"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-epoch-pins::expire_continuation_pins"
+name = "expire_continuation_pins"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 35
+
+[[operation]]
+id = "search-epoch-pins::fence_old_route_for_new_pins"
+name = "fence_old_route_for_new_pins"
+module = "acquire"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-epoch-pins::invalidate_scale_owner_epoch"
+name = "invalidate_scale_owner_epoch"
+module = "identity"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-epoch-pins::release_owner_pins"
+name = "release_owner_pins"
+module = "release"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-epoch-pins::renew_continuation_pin"
+name = "renew_continuation_pin"
+module = "acquire"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-epoch-pins::snapshot"
+name = "snapshot"
+module = "registry"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-epoch-pins::snapshot_route_drain"
+name = "snapshot_route_drain"
+module = "release"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-epoch-pins/P18_SCALE.md"]
+source_contexts = ["Required operations"]
+route_kind = "package_rule"
+score = 100

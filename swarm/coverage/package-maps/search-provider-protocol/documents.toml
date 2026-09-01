@@ -1,0 +1,1702 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-provider-protocol"
+node_count = 154
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/protocol.md#protocol-configuration-contract"
+path = "config/sections/protocol.md"
+line = 1
+level = 1
+heading = "[protocol] configuration contract"
+kind = "configuration_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "config_owner"
+rationale = "protocol"
+
+[[node]]
+id = "config/sections/protocol.md#fields"
+path = "config/sections/protocol.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "config_owner"
+rationale = "protocol"
+
+[[node]]
+id = "config/sections/protocol.md#required-section-api"
+path = "config/sections/protocol.md"
+line = 24
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "config_owner"
+rationale = "protocol"
+
+[[node]]
+id = "config/sections/protocol.md#invariants"
+path = "config/sections/protocol.md"
+line = 38
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "config_owner"
+rationale = "protocol"
+
+[[node]]
+id = "config/sections/protocol.md#required-tests"
+path = "config/sections/protocol.md"
+line = 44
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "config_owner"
+rationale = "protocol"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#agent-contract-search-provider-protocol"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-provider-protocol"
+kind = "implementation_contract_root"
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#mission"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#ownership"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#forbidden-ownership"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#allowed-dependencies"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#required-logical-surface"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#failure-surface"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 46
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 51
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#size-and-split-guard"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 64
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/AGENTS.md#definition-of-done"
+path = "crates/search-provider-protocol/AGENTS.md"
+line = 72
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#function-contract-search-provider-protocol"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-provider-protocol"
+kind = "implementation_contract_root"
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#framing-and-negotiation"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Framing and negotiation"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:negotiation"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#encodeframe-envelope-limits-result-boundedbytes-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "encodeframe(envelope, limits) -> Result<BoundedBytes, ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:frame"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::encode_frame"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#decodeframe-prefixandbody-limits-result-providerenvelope-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 15
+level = 3
+heading = "decodeframe(prefixandbody, limits) -> Result<ProviderEnvelope, ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:frame"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::decode_frame"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#negotiatehello-local-remote-result-negotiatedprotocol-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 20
+level = 3
+heading = "negotiatehello(local, remote) -> Result<NegotiatedProtocol, ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:negotiation"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::negotiate_hello"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#authenticatebinding-hello-pairing-installation-transportpeer-result-bindingcontext-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 25
+level = 3
+heading = "authenticatebinding(hello, pairing, installation, transportpeer) -> Result<BindingContext, ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:binding"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::authenticate_binding"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#connection-and-request-lifecycle"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 30
+level = 2
+heading = "Connection and request lifecycle"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:request"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#admitsequence-connection-sequence-result-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 32
+level = 3
+heading = "admitsequence(connection, sequence) -> Result<(), ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:request"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::admit_sequence"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#admitrequest-connection-envelope-limits-result-requestguard-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 36
+level = 3
+heading = "admitrequest(connection, envelope, limits) -> Result<RequestGuard, ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:request"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::admit_request"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#emitprogress-guard-event-result-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 41
+level = 3
+heading = "emitprogress(guard, event) -> Result<(), ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:progress"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::emit_progress"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#emitterminal-guard-resultorerror-result-protocolerror"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 46
+level = 3
+heading = "emitterminal(guard, resultorerror) -> Result<(), ProtocolError>"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:terminal"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::emit_terminal"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#cancelrequest-connection-targetrequestid-canceloutcome"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 51
+level = 3
+heading = "cancelrequest(connection, targetrequestid) -> CancelOutcome"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:cancel"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::cancel_request"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#disconnect-connection-disconnectreceipt"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 56
+level = 3
+heading = "disconnect(connection) -> DisconnectReceipt"
+kind = "implementation_operation"
+modules = ["search-provider-protocol:cleanup"]
+route_kind = "operation_route"
+rationale = "search-provider-protocol::disconnect"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#configuration-and-failures"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 61
+level = 2
+heading = "Configuration and failures"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/FUNCTIONS.md#required-fixtures"
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+line = 68
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/README.md#search-provider-protocol"
+path = "crates/search-provider-protocol/README.md"
+line = 1
+level = 1
+heading = "search-provider-protocol"
+kind = "implementation_contract_root"
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-provider-protocol/README.md#owns"
+path = "crates/search-provider-protocol/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/README.md#must-not-own"
+path = "crates/search-provider-protocol/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#w8-hardening-contract-search-provider-protocol"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 1
+level = 1
+heading = "W8 hardening contract — search-provider-protocol"
+kind = "implementation_contract_root"
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#issuepairingchallenge"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 7
+level = 2
+heading = "issuepairingchallenge"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:pairing"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#verifypairingproof"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 21
+level = 2
+heading = "verifypairingproof"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:pairing"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#commitbinding"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 33
+level = 2
+heading = "commitbinding"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#revokebinding"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 49
+level = 2
+heading = "revokebinding"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#openauthenticatedconnection"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 70
+level = 2
+heading = "openauthenticatedconnection"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#projectcapabilitydescriptor"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 83
+level = 2
+heading = "projectcapabilitydescriptor"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#admitgenericrequest"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 99
+level = 2
+heading = "admitgenericrequest"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:request"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#emitbindingfiltereddescriptor"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 117
+level = 2
+heading = "emitbindingfiltereddescriptor"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#routeexpandhandle"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 128
+level = 2
+heading = "routeexpandhandle"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#closeconnection"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 139
+level = 2
+heading = "closeconnection"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#required-w8-failures"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 150
+level = 2
+heading = "Required W8 failures"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-provider-protocol/W8_HARDENING.md#required-w8-fixtures"
+path = "crates/search-provider-protocol/W8_HARDENING.md"
+line = 165
+level = 2
+heading = "Required W8 fixtures"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-product-boundary-and-client-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 79
+level = 2
+heading = "S1. Product boundary and client profiles"
+kind = "architecture_section"
+modules = ["search-provider-protocol:binding"]
+route_kind = "architecture_section_registry"
+rationale = "S1"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-1-eliot-search-core"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 81
+level = 3
+heading = "S1.1 ELIOT Search core"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-2-standalone-clients"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 93
+level = 3
+heading = "S1.2 Standalone clients"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-3-optional-eliot-adapter"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 97
+level = 3
+heading = "S1.3 Optional ELIOT adapter"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s1-4-research-systems"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 108
+level = 3
+heading = "S1.4 Research systems"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s20-query-recipes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1270
+level = 2
+heading = "S20. Query recipes"
+kind = "architecture_section"
+modules = ["search-provider-protocol:request"]
+route_kind = "architecture_section_registry"
+rationale = "S20"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s20-1-example-natural-language-path"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1291
+level = 3
+heading = "S20.1 Example natural-language path"
+kind = "architecture_node"
+modules = ["search-provider-protocol:request"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-client-integration-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1831
+level = 2
+heading = "S32. Client integration contract"
+kind = "architecture_section"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request"]
+route_kind = "architecture_section_registry"
+rationale = "S32"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-0-local-provider-transport"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1833
+level = 3
+heading = "S32.0 Local provider transport"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-1-generic-client-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1864
+level = 3
+heading = "S32.1 Generic client boundary"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-2-searchprovidercapabilitydescriptor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1878
+level = 3
+heading = "S32.2 SearchProviderCapabilityDescriptor"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-3-optional-eliot-compatibility-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1904
+level = 3
+heading = "S32.3 Optional ELIOT compatibility profile"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s32-4-optional-eliot-research-normalized-bundle-export"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1930
+level = 3
+heading = "S32.4 Optional Eliot Research normalized-bundle export"
+kind = "architecture_node"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s34-error-and-degradation-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2010
+level = 2
+heading = "S34. Error and degradation model"
+kind = "architecture_section"
+modules = ["search-provider-protocol:terminal"]
+route_kind = "architecture_section_registry"
+rationale = "S34"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p01-runtime-owner-shell"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2840
+level = 3
+heading = "P01 — Runtime owner shell"
+kind = "delivery_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame"]
+route_kind = "delivery_registry"
+rationale = "P01"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p14-generic-client-adapter-edge-and-optional-compatibility-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2918
+level = 3
+heading = "P14 — Generic Client Adapter Edge and Optional Compatibility Profiles"
+kind = "delivery_contract"
+modules = ["search-provider-protocol:frame", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:request"]
+route_kind = "delivery_registry"
+rationale = "P14"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#w8-generic-client-edge-contracts-1-0"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W8 generic client edge contracts 1.0"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#1-actors-and-authority"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Actors and authority"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#2-protocol-and-recipe-closure"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 34
+level = 2
+heading = "2. Protocol and recipe closure"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#3-pairing-and-binding-lifecycle"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 59
+level = 2
+heading = "3. Pairing and binding lifecycle"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#3-1-pairing-state-machine"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 84
+level = 3
+heading = "3.1 Pairing state machine"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#3-2-reconnect"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 100
+level = 3
+heading = "3.2 Reconnect"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#4-connection-and-request-state"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 107
+level = 2
+heading = "4. Connection and request state"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#5-binding-filtered-capability-descriptor"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 144
+level = 2
+heading = "5. Binding-filtered capability descriptor"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#6-grants-and-requested-scope"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 163
+level = 2
+heading = "6. Grants and requested scope"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#7-generic-request-response-round-trip"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 183
+level = 2
+heading = "7. Generic request/response round trip"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#8-handle-and-continuation-expansion"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 210
+level = 2
+heading = "8. Handle and continuation expansion"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#9-client-owned-evidence-snapshot-pin-and-import"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 233
+level = 2
+heading = "9. Client-owned evidence snapshot, pin and import"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#10-standalone-cli-profile"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 251
+level = 2
+heading = "10. Standalone CLI profile"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#11-optional-eliot-compatibility-profile"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 273
+level = 2
+heading = "11. Optional ELIOT compatibility profile"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-optional-research-normalized-bundle-export"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 306
+level = 2
+heading = "12. Optional Research normalized-bundle export"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-1-eligibility"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 311
+level = 3
+heading = "12.1 Eligibility"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-2-wire-identity"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 323
+level = 3
+heading = "12.2 Wire identity"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-3-ownership-modes"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 337
+level = 3
+heading = "12.3 Ownership modes"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#12-4-bundle-assembly"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 350
+level = 3
+heading = "12.4 Bundle assembly"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#13-reconnect-retry-and-idempotency"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 360
+level = 2
+heading = "13. Reconnect, retry and idempotency"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#14-leakage-and-noninterference"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 373
+level = 2
+heading = "14. Leakage and noninterference"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#15-configuration-interaction"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 389
+level = 2
+heading = "15. Configuration interaction"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#16-failure-ownership"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 406
+level = 2
+heading = "16. Failure ownership"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#17-g4-exit-evidence"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 421
+level = 2
+heading = "17. G4 exit evidence"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md#18-stop-conditions"
+path = "docs/client/W8_GENERIC_CLIENT_EDGE_CONTRACTS_1.0.md"
+line = 444
+level = 2
+heading = "18. Stop conditions"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:pairing", "search-provider-protocol:request", "search-provider-protocol:session"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#w8-client-edge-settings-1-0"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W8 client-edge settings 1.0"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#1-scope"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 5
+level = 2
+heading = "1. Scope"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#2-field-modes"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 11
+level = 2
+heading = "2. Field modes"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#3-generic-edge"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 21
+level = 2
+heading = "3. Generic edge"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#4-standalone-cli"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 33
+level = 2
+heading = "4. Standalone CLI"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#5-optional-eliot-profile"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 42
+level = 2
+heading = "5. Optional ELIOT profile"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#6-optional-research-export-profile"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 57
+level = 2
+heading = "6. Optional Research export profile"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#7-composite-activation-and-rollback"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 74
+level = 2
+heading = "7. Composite activation and rollback"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#8-redaction"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 84
+level = 2
+heading = "8. Redaction"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md#9-required-settings-tests"
+path = "docs/config/W8_CLIENT_EDGE_SETTINGS_1.0.md"
+line = 91
+level = 2
+heading = "9. Required settings tests"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#provider-protocol-handles-security-and-lifecycle-schemas"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 1
+level = 1
+heading = "Provider protocol, handles, security and lifecycle schemas"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#protocol-version-and-envelope"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 3
+level = 2
+heading = "Protocol version and envelope"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#capability-descriptor"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 57
+level = 2
+heading = "Capability descriptor"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#public-handle-tokens"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 81
+level = 2
+heading = "Public handle tokens"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#server-side-source-handle-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 106
+level = 2
+heading = "Server-side source-handle records"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#server-side-continuation-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 170
+level = 2
+heading = "Server-side continuation records"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#security-mutation-state"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 204
+level = 2
+heading = "Security mutation state"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#publication-support-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 223
+level = 2
+heading = "Publication support records"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#purge-and-restore"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 255
+level = 2
+heading = "Purge and restore"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:frame"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#w8-generic-client-edge-implementation-packet"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W8 generic client edge implementation packet"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#package-boundaries"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 11
+level = 2
+heading = "Package boundaries"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#implementation-order"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "Implementation order"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#standalone-cli-boundary"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 44
+level = 2
+heading = "Standalone CLI boundary"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#generic-edge-acceptance"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 62
+level = 2
+heading = "Generic-edge acceptance"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#optional-eliot-leaf"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 80
+level = 2
+heading = "Optional ELIOT leaf"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#optional-research-export-leaf"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Optional Research export leaf"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#configuration"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Configuration"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#qualification"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 117
+level = 2
+heading = "Qualification"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 123
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W8_IMPLEMENTATION_PACKET.md#honest-status"
+path = "docs/handoff/W8_IMPLEMENTATION_PACKET.md"
+line = 143
+level = 2
+heading = "Honest status"
+kind = "implementation_handoff"
+modules = ["search-provider-protocol:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/client-edge/README.md#w8-client-edge-qualification"
+path = "qualification/client-edge/README.md"
+line = 1
+level = 1
+heading = "W8 client-edge qualification"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#w8-generic-client-edge-qualification-contract"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W8 generic client edge qualification contract"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#1-entry-prerequisites"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 8
+level = 2
+heading = "1. Entry prerequisites"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#2-generic-qualification-sequence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 23
+level = 2
+heading = "2. Generic qualification sequence"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#3-pairing-and-binding-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 40
+level = 2
+heading = "3. Pairing and binding evidence"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#4-capability-descriptor-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 53
+level = 2
+heading = "4. Capability descriptor evidence"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#5-generic-request-and-handle-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 64
+level = 2
+heading = "5. Generic request and handle evidence"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#6-client-owned-evidence-fixture"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 80
+level = 2
+heading = "6. Client-owned evidence fixture"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#7-standalone-cli-evidence"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 94
+level = 2
+heading = "7. Standalone CLI evidence"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#8-optional-eliot-profile"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 102
+level = 2
+heading = "8. Optional ELIOT profile"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#9-optional-research-export-profile"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 119
+level = 2
+heading = "9. Optional Research export profile"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#10-evidence-record"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 137
+level = 2
+heading = "10. Evidence record"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "qualification/client-edge/W8_QUALIFICATION.md#11-stop-conditions"
+path = "qualification/client-edge/W8_QUALIFICATION.md"
+line = 160
+level = 2
+heading = "11. Stop conditions"
+kind = "qualification_contract"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:request"]
+route_kind = "qualification_area_route"
+rationale = "qualification/client-edge"
+
+[[node]]
+id = "swarm/assignments/search-provider-protocol.md#search-provider-protocol-implementation-packet"
+path = "swarm/assignments/search-provider-protocol.md"
+line = 1
+level = 1
+heading = "search-provider-protocol implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-provider-protocol:api", "search-provider-protocol:binding", "search-provider-protocol:cancel", "search-provider-protocol:cleanup", "search-provider-protocol:config", "search-provider-protocol:error", "search-provider-protocol:frame", "search-provider-protocol:lib", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:progress", "search-provider-protocol:request", "search-provider-protocol:session", "search-provider-protocol:terminal"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-provider-protocol.md#mission"
+path = "swarm/assignments/search-provider-protocol.md"
+line = 9
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-provider-protocol.md#owns"
+path = "swarm/assignments/search-provider-protocol.md"
+line = 14
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-provider-protocol.md#must-not-own"
+path = "swarm/assignments/search-provider-protocol.md"
+line = 19
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-provider-protocol.md#logical-operations"
+path = "swarm/assignments/search-provider-protocol.md"
+line = 25
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-provider-protocol.md#invariants"
+path = "swarm/assignments/search-provider-protocol.md"
+line = 35
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-provider-protocol:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-provider-protocol.md#exit-evidence"
+path = "swarm/assignments/search-provider-protocol.md"
+line = 46
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["search-provider-protocol:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

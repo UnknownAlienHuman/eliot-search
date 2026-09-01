@@ -1,0 +1,3143 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-eval"
+node_count = 285
+principle_count = 3
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/observability.md#observability-configuration-contract"
+path = "config/sections/observability.md"
+line = 1
+level = 1
+heading = "[observability] configuration contract"
+kind = "configuration_contract"
+modules = ["search-eval:config"]
+route_kind = "config_owner"
+rationale = "observability"
+
+[[node]]
+id = "config/sections/observability.md#fields"
+path = "config/sections/observability.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-eval:config"]
+route_kind = "config_owner"
+rationale = "observability"
+
+[[node]]
+id = "config/sections/observability.md#required-section-api"
+path = "config/sections/observability.md"
+line = 25
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-eval:config"]
+route_kind = "config_owner"
+rationale = "observability"
+
+[[node]]
+id = "config/sections/observability.md#invariants"
+path = "config/sections/observability.md"
+line = 39
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-eval:config"]
+route_kind = "config_owner"
+rationale = "observability"
+
+[[node]]
+id = "config/sections/observability.md#required-tests"
+path = "config/sections/observability.md"
+line = 45
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-eval:config"]
+route_kind = "config_owner"
+rationale = "observability"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#agent-contract-search-eval"
+path = "crates/search-eval/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-eval"
+kind = "implementation_contract_root"
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#bounded-read-set"
+path = "crates/search-eval/AGENTS.md"
+line = 7
+level = 2
+heading = "Bounded read set"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#mission"
+path = "crates/search-eval/AGENTS.md"
+line = 21
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#ownership"
+path = "crates/search-eval/AGENTS.md"
+line = 26
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#forbidden-ownership"
+path = "crates/search-eval/AGENTS.md"
+line = 34
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#allowed-dependencies"
+path = "crates/search-eval/AGENTS.md"
+line = 45
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#required-operation-surface"
+path = "crates/search-eval/AGENTS.md"
+line = 51
+level = 2
+heading = "Required operation surface"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#invariants"
+path = "crates/search-eval/AGENTS.md"
+line = 58
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-eval:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#size-and-split-guard"
+path = "crates/search-eval/AGENTS.md"
+line = 69
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/AGENTS.md#handoff"
+path = "crates/search-eval/AGENTS.md"
+line = 78
+level = 2
+heading = "Handoff"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#function-contract-search-eval"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-eval"
+kind = "implementation_contract_root"
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#global-rules"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 10
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-eval:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#corpus-and-policy-operations"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 21
+level = 2
+heading = "Corpus and policy operations"
+kind = "implementation_contract"
+modules = ["search-eval:corpus"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#validatecontrolcorpus-manifest-fixtureindex-result-validatedcontrolcorpus-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 23
+level = 3
+heading = "validatecontrolcorpus(manifest, fixtureindex) -> Result<ValidatedControlCorpus, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:corpus"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_control_corpus"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#validatemetricregistry-registry-result-validatedmetricregistry-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 32
+level = 3
+heading = "validatemetricregistry(registry) -> Result<ValidatedMetricRegistry, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:corpus"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_metric_registry"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#validateacceptancepolicy-policy-metricregistry-gate-result-validatedacceptancepolicy-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 38
+level = 3
+heading = "validateacceptancepolicy(policy, metricregistry, gate) -> Result<ValidatedAcceptancePolicy, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:adjudication"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_acceptance_policy"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#freezerunmanifest-input-corpus-metrics-policy-result-frozenrunmanifest-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 45
+level = 3
+heading = "freezerunmanifest(input, corpus, metrics, policy) -> Result<FrozenRunManifest, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:corpus"]
+route_kind = "operation_route"
+rationale = "search-eval::freeze_run_manifest"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#validatebaselinedescriptor-descriptor-run-result-validatedbaseline-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 51
+level = 3
+heading = "validatebaselinedescriptor(descriptor, run) -> Result<ValidatedBaseline, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:corpus"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_baseline_descriptor"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#execution-plan-and-evidence-ingestion"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 57
+level = 2
+heading = "Execution-plan and evidence ingestion"
+kind = "implementation_contract"
+modules = ["search-eval:evidence"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#plancaseblock-run-cases-blockindex-result-caseexecutionblock-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 59
+level = 3
+heading = "plancaseblock(run, cases, blockindex) -> Result<CaseExecutionBlock, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::plan_case_block"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#runcase-driver-baseline-case-attempt-context-result-caseexecutionevidence-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 65
+level = 3
+heading = "runcase(driver, baseline, case, attempt, context) -> Result<CaseExecutionEvidence, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::run_case"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#validatecaseevidence-evidence-run-case-baseline-result-validatedcaseevidence-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 75
+level = 3
+heading = "validatecaseevidence(evidence, run, case, baseline) -> Result<ValidatedCaseEvidence, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_case_evidence"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#ingestexternalprobe-probe-evidenceref-run-result-validatedprobeevidence-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 81
+level = 3
+heading = "ingestexternalprobe(probe, evidenceref, run) -> Result<ValidatedProbeEvidence, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::ingest_external_probe"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#reproduceevidence-evidence-environment-driver-result-reproductionreceipt-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 87
+level = 3
+heading = "reproduceevidence(evidence, environment, driver) -> Result<ReproductionReceipt, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::reproduce_evidence"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#metric-operations"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 92
+level = 2
+heading = "Metric operations"
+kind = "implementation_contract"
+modules = ["search-eval:metrics"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#scorecase-evidence-oracle-registry-result-casemetricset-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 94
+level = 3
+heading = "scorecase(evidence, oracle, registry) -> Result<CaseMetricSet, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:metrics"]
+route_kind = "operation_route"
+rationale = "search-eval::score_case"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#aggregateblock-cases-registry-run-result-blockmetrics-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 100
+level = 3
+heading = "aggregateblock(cases, registry, run) -> Result<BlockMetrics, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:metrics"]
+route_kind = "operation_route"
+rationale = "search-eval::aggregate_block"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#compareabc-a-b-c-policy-result-baselinecomparison-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 106
+level = 3
+heading = "compareabc(a, b, c, policy) -> Result<BaselineComparison, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:metrics"]
+route_kind = "operation_route"
+rationale = "search-eval::compare_abc"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#evaluatecandidateslos-metrics-sloregistry-result-sloreport-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 112
+level = 3
+heading = "evaluatecandidateslos(metrics, sloregistry) -> Result<SloReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:metrics"]
+route_kind = "operation_route"
+rationale = "search-eval::evaluate_candidate_slos"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#computeresourcereport-samples-run-result-resourcereport-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 118
+level = 3
+heading = "computeresourcereport(samples, run) -> Result<ResourceReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:metrics"]
+route_kind = "operation_route"
+rationale = "search-eval::compute_resource_report"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#security-leakage-and-recovery-audits"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 124
+level = 2
+heading = "Security, leakage and recovery audits"
+kind = "implementation_contract"
+modules = ["search-eval:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#auditcontentminimization-events-canaries-policy-result-leakageaudit-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 126
+level = 3
+heading = "auditcontentminimization(events, canaries, policy) -> Result<LeakageAudit, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:recovery"]
+route_kind = "operation_route"
+rationale = "search-eval::audit_content_minimization"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#auditsourceadmission-observations-expected-result-admissionaudit-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 133
+level = 3
+heading = "auditsourceadmission(observations, expected) -> Result<AdmissionAudit, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:recovery"]
+route_kind = "operation_route"
+rationale = "search-eval::audit_source_admission"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#validatefaultmatrix-matrix-requiredcells-result-faultrecoveryreport-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 138
+level = 3
+heading = "validatefaultmatrix(matrix, requiredcells) -> Result<FaultRecoveryReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:safety"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_fault_matrix"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#validateprotocolstress-report-policy-result-protocolstressreport-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 144
+level = 3
+heading = "validateprotocolstress(report, policy) -> Result<ProtocolStressReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:safety"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_protocol_stress"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#report-and-verdict-operations"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 150
+level = 2
+heading = "Report and verdict operations"
+kind = "implementation_contract"
+modules = ["search-eval:review"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#aggregateproductpulse-run-cases-probes-metrics-audits-result-productpulsereport-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 152
+level = 3
+heading = "aggregateproductpulse(run, cases, probes, metrics, audits) -> Result<ProductPulseReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:campaign"]
+route_kind = "operation_route"
+rationale = "search-eval::aggregate_product_pulse"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#detecthardblockers-report-hardblockerset"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 161
+level = 3
+heading = "detecthardblockers(report) -> HardBlockerSet"
+kind = "implementation_operation"
+modules = ["search-eval:safety"]
+route_kind = "operation_route"
+rationale = "search-eval::detect_hard_blockers"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#decideacceptance-report-policy-review-result-acceptanceverdict-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 168
+level = 3
+heading = "decideacceptance(report, policy, review) -> Result<AcceptanceVerdict, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:adjudication"]
+route_kind = "operation_route"
+rationale = "search-eval::decide_acceptance"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#issueproductpulsereceipt-verdict-report-review-result-productpulsereceipt-evalerror"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 187
+level = 3
+heading = "issueproductpulsereceipt(verdict, report, review) -> Result<ProductPulseReceipt, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:campaign"]
+route_kind = "operation_route"
+rationale = "search-eval::issue_product_pulse_receipt"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#observability-configuration"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 194
+level = 2
+heading = "Observability configuration"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#cancellation-retry-and-crash-semantics"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 201
+level = 2
+heading = "Cancellation, retry and crash semantics"
+kind = "implementation_contract"
+modules = ["search-eval:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#typed-failures"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 211
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-eval:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-eval/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-eval/FUNCTIONS.md"
+line = 232
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-eval:evidence"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/README.md#search-eval"
+path = "crates/search-eval/README.md"
+line = 1
+level = 1
+heading = "search-eval"
+kind = "implementation_contract_root"
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-eval/README.md#owns"
+path = "crates/search-eval/README.md"
+line = 8
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/README.md#does-not-own"
+path = "crates/search-eval/README.md"
+line = 16
+level = 2
+heading = "Does not own"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#w10-reentry-optional-candidate-evaluation-in-search-eval"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 1
+level = 1
+heading = "W10 reentry — optional candidate evaluation in search-eval"
+kind = "implementation_contract_root"
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#reentry-and-candidate-identity"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 12
+level = 2
+heading = "Reentry and candidate identity"
+kind = "implementation_contract"
+modules = ["search-eval:evidence"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#operations"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 31
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#validateoptionalcampaign-spec-acceptedp15-candidatereceipts-policy-result-validatedoptionalcampa"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 33
+level = 3
+heading = "validateoptionalcampaign(spec, acceptedp15, candidatereceipts, policy) -> Result<ValidatedOptionalCampaign, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:campaign"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_optional_campaign"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#freezecandidatecomparison-candidate-baseline-extensioncases-metricregistry-policy-artifactport-o"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 43
+level = 3
+heading = "freezecandidatecomparison(candidate, baseline, extensioncases, metricregistry, policy, artifactport, operation) -> Result<FrozenOptionalComparison, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::freeze_candidate_comparison"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#validatecandidatefixtureextension-extension-candidateclass-acceptedp15-result-validatedcandidate"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 59
+level = 3
+heading = "validatecandidatefixtureextension(extension, candidateclass, acceptedp15) -> Result<ValidatedCandidateFixtureExtension, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:corpus"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_candidate_fixture_extension"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#buildoptionaltrialschedule-campaign-baselinelane-candidatelane-cases-repetitions-seed-result-opt"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 73
+level = 3
+heading = "buildoptionaltrialschedule(campaign, baselinelane, candidatelane, cases, repetitions, seed) -> Result<OptionalTrialSchedule, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:trial"]
+route_kind = "operation_route"
+rationale = "search-eval::build_optional_trial_schedule"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#ingestcandidateoperationreceipt-receipt-campaign-candidate-result-validatedcandidateoperationevi"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 82
+level = 3
+heading = "ingestcandidateoperationreceipt(receipt, campaign, candidate) -> Result<ValidatedCandidateOperationEvidence, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::ingest_candidate_operation_receipt"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#scoreincrementalquality-baselinetrials-candidatetrials-oracle-policy-result-optionalqualityrepor"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 90
+level = 3
+heading = "scoreincrementalquality(baselinetrials, candidatetrials, oracle, policy) -> Result<OptionalQualityReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:adjudication"]
+route_kind = "operation_route"
+rationale = "search-eval::score_incremental_quality"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#scoreincrementalcost-baselineresources-candidateresources-policy-result-optionalcostreport-evale"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 99
+level = 3
+heading = "scoreincrementalcost(baselineresources, candidateresources, policy) -> Result<OptionalCostReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:metrics"]
+route_kind = "operation_route"
+rationale = "search-eval::score_incremental_cost"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#auditoptionalnoninterference-observations-canaries-policy-result-optionalnoninterferenceaudit-ev"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 108
+level = 3
+heading = "auditoptionalnoninterference(observations, canaries, policy) -> Result<OptionalNoninterferenceAudit, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:safety"]
+route_kind = "operation_route"
+rationale = "search-eval::audit_optional_noninterference"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#validateoptionalfaultmatrix-matrix-candidateclass-requiredcells-result-optionalfaultreport-evale"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 125
+level = 3
+heading = "validateoptionalfaultmatrix(matrix, candidateclass, requiredcells) -> Result<OptionalFaultReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:safety"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_optional_fault_matrix"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#validateremovalandp15regression-removal-restoredbaseline-acceptedp15-policy-result-removalregres"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 134
+level = 3
+heading = "validateremovalandp15regression(removal, restoredbaseline, acceptedp15, policy) -> Result<RemovalRegressionReport, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:review"]
+route_kind = "operation_route"
+rationale = "search-eval::validate_removal_and_p15_regression"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#compareoptionalcandidate-quality-cost-noninterference-faults-removal-policy-result-optionalcandi"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 149
+level = 3
+heading = "compareoptionalcandidate(quality, cost, noninterference, faults, removal, policy) -> Result<OptionalCandidateComparison, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:adjudication"]
+route_kind = "operation_route"
+rationale = "search-eval::compare_optional_candidate"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#buildg6evidencecandidate-campaign-comparison-evidenceindex-result-g6evidencecandidate-evalerror"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 167
+level = 3
+heading = "buildg6evidencecandidate(campaign, comparison, evidenceindex) -> Result<G6EvidenceCandidate, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:evidence"]
+route_kind = "operation_route"
+rationale = "search-eval::build_g6_evidence_candidate"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#verifyg6independentreview-bundle-review-result-optionalindependentreviewreceipt-evalerror"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 184
+level = 3
+heading = "verifyg6independentreview(bundle, review) -> Result<OptionalIndependentReviewReceipt, EvalError>"
+kind = "implementation_operation"
+modules = ["search-eval:review"]
+route_kind = "operation_route"
+rationale = "search-eval::verify_g6_independent_review"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#configuration-interaction"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 190
+level = 2
+heading = "Configuration interaction"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#cancellation-retry-and-recovery"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 198
+level = 2
+heading = "Cancellation, retry and recovery"
+kind = "implementation_contract"
+modules = ["search-eval:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#typed-failures"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 208
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-eval:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-eval/W10_OPTIONAL_EVALUATION.md#required-tests-qualification-evidence"
+path = "crates/search-eval/W10_OPTIONAL_EVALUATION.md"
+line = 230
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-eval:evidence"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s2-design-targets-and-non-goals"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 112
+level = 2
+heading = "S2. Design targets and non-goals"
+kind = "architecture_section"
+modules = ["search-eval:campaign"]
+route_kind = "architecture_section_registry"
+rationale = "S2"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s2-1-required-balance"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 114
+level = 3
+heading = "S2.1 Required balance"
+kind = "architecture_node"
+modules = ["search-eval:campaign"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s2-2-explicit-non-goals"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 125
+level = 3
+heading = "S2.2 Explicit non-goals"
+kind = "architecture_node"
+modules = ["search-eval:campaign"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-resource-governance-and-candidate-slos"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1738
+level = 2
+heading = "S30. Resource governance and candidate SLOs"
+kind = "architecture_section"
+modules = ["search-eval:metrics"]
+route_kind = "architecture_section_registry"
+rationale = "S30"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-1-resource-priorities"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1740
+level = 3
+heading = "S30.1 Resource priorities"
+kind = "architecture_node"
+modules = ["search-eval:metrics"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-2-candidate-slos-not-claims"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1744
+level = 3
+heading = "S30.2 Candidate SLOs, not claims"
+kind = "architecture_node"
+modules = ["search-eval:metrics"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-3-queryexecutionbudget-and-scheduler"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1757
+level = 3
+heading = "S30.3 QueryExecutionBudget and scheduler"
+kind = "architecture_node"
+modules = ["search-eval:metrics"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s35-evaluation-and-product-pulse"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2047
+level = 2
+heading = "S35. Evaluation and Product Pulse"
+kind = "architecture_section"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:safety"]
+route_kind = "architecture_section_registry"
+rationale = "S35"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s35-1-required-control-corpus"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2049
+level = 3
+heading = "S35.1 Required control corpus"
+kind = "architecture_node"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:safety"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s35-2-baselines"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2069
+level = 3
+heading = "S35.2 Baselines"
+kind = "architecture_node"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:safety"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s36-property-and-fault-proofs"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2093
+level = 2
+heading = "S36. Property and fault proofs"
+kind = "architecture_section"
+modules = ["search-eval:recovery", "search-eval:safety"]
+route_kind = "architecture_section_registry"
+rationale = "S36"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s37-delivery-gates"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2117
+level = 2
+heading = "S37. Delivery gates"
+kind = "architecture_section"
+modules = ["search-eval:review"]
+route_kind = "architecture_section_registry"
+rationale = "S37"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g0-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2119
+level = 3
+heading = "Gate G0 — Contract"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g1-direct"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2123
+level = 3
+heading = "Gate G1 — Direct"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g2-lexical"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2127
+level = 3
+heading = "Gate G2 — Lexical"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g3-code"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2131
+level = 3
+heading = "Gate G3 — Code"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g4-generic-client-edge-and-optional-compatibility-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2135
+level = 3
+heading = "Gate G4 — Generic Client Edge and Optional Compatibility Profiles"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g5-product-acceptance"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2139
+level = 3
+heading = "Gate G5 — Product acceptance"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#gate-g6-optional-depth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2143
+level = 3
+heading = "Gate G6 — Optional depth"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s39-implementation-readiness-verdict"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2171
+level = 2
+heading = "S39. Implementation readiness verdict"
+kind = "architecture_section"
+modules = ["search-eval:review"]
+route_kind = "architecture_section_registry"
+rationale = "S39"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-ii-codex-handoff"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2194
+level = 1
+heading = "Part II — Codex Handoff"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#eliot-search-codex-handoff-2-7"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2196
+level = 1
+heading = "ELIOT Search Codex Handoff 2.7"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#implementation-plan-for-the-embedded-architecture-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2197
+level = 2
+heading = "Implementation plan for the embedded Architecture 8.4"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h0-contract-challenge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2206
+level = 2
+heading = "H0. Contract challenge"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-repository-outcome"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2220
+level = 2
+heading = "H1. Repository outcome"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-1-workspace"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2222
+level = 3
+heading = "H1.1 Workspace"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-2-dependency-direction"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2255
+level = 3
+heading = "H1.2 Dependency direction"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-toolchain-licenses-and-unsafe-code"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2273
+level = 2
+heading = "H2. Toolchain, licenses and unsafe code"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-1-toolchain"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2275
+level = 3
+heading = "H2.1 Toolchain"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-2-dependency-policy"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2279
+level = 3
+heading = "H2.2 Dependency policy"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#deny-toml-intent"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2282
+level = 1
+heading = "deny.toml intent"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-3-unsafe-policy"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2298
+level = 3
+heading = "H2.3 Unsafe policy"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-4-production-runtime-exclusions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2302
+level = 3
+heading = "H2.4 Production runtime exclusions"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-public-contracts-to-implement-first"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2308
+level = 2
+heading = "H3. Public contracts to implement first"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-1-newtypes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2310
+level = 3
+heading = "H3.1 Newtypes"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-2-epoch-validation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2346
+level = 3
+heading = "H3.2 Epoch validation"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-3-membership-contracts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2368
+level = 3
+heading = "H3.3 Membership contracts"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-4-recipe-set"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2385
+level = 3
+heading = "H3.4 Recipe set"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-5-additional-load-bearing-contracts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2403
+level = 3
+heading = "H3.5 Additional load-bearing contracts"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h4-ports"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2427
+level = 2
+heading = "H4. Ports"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-redb-schema-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2452
+level = 2
+heading = "H5. redb schema boundary"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-1-required-tables"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2454
+level = 3
+heading = "H5.1 Required tables"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-2-snapshot-cache"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2482
+level = 3
+heading = "H5.2 Snapshot cache"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-3-restore-rule"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2488
+level = 3
+heading = "H5.3 Restore rule"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-cas-and-source-revisions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2494
+level = 2
+heading = "H6. CAS and source revisions"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-1-layout"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2496
+level = 3
+heading = "H6.1 Layout"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-2-retention"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2508
+level = 3
+heading = "H6.2 Retention"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-3-no-execute-test-corpus"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2512
+level = 3
+heading = "H6.3 No-execute test corpus"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-point-identity-implementation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2518
+level = 2
+heading = "H7. Point identity implementation"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-1-canonical-encoding"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2520
+level = 3
+heading = "H7.1 Canonical encoding"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-2-uuid-derivation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2524
+level = 3
+heading = "H7.2 UUID derivation"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-3-pre-upsert-collision-check"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2528
+level = 3
+heading = "H7.3 Pre-upsert collision check"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-qdrant-supervisor-and-bridge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2541
+level = 2
+heading = "H8. Qdrant supervisor and bridge"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-1-ownership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2543
+level = 3
+heading = "H8.1 Ownership"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-2-qualified-artifact"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2547
+level = 3
+heading = "H8.2 Qualified artifact"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-3-startup-fixture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2564
+level = 3
+heading = "H8.3 Startup fixture"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-4-process-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2578
+level = 3
+heading = "H8.4 Process security"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-lexical-encoder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2591
+level = 2
+heading = "H9. Lexical encoder"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-1-select-exactly-one-baseline-provider"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2593
+level = 3
+heading = "H9.1 Select exactly one baseline provider"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-2-golden-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2604
+level = 3
+heading = "H9.2 Golden profiles"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-3-exact-branches"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2618
+level = 3
+heading = "H9.3 Exact branches"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-qdrant-point-schema"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2624
+level = 2
+heading = "H10. Qdrant point schema"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-1-payload"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2626
+level = 3
+heading = "H10.1 Payload"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-2-payload-indexes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2630
+level = 3
+heading = "H10.2 Payload indexes"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-3-active-filter-builder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2634
+level = 3
+heading = "H10.3 Active filter builder"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-publication-coordinator"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2649
+level = 2
+heading = "H11. Publication coordinator"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-1-concurrency"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2651
+level = 3
+heading = "H11.1 Concurrency"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-2-exact-manifests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2655
+level = 3
+heading = "H11.2 Exact manifests"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-3-required-calls"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2659
+level = 3
+heading = "H11.3 Required calls"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-4-commit-point"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2663
+level = 3
+heading = "H11.4 Commit point"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-5-failpoints"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2667
+level = 3
+heading = "H11.5 Failpoints"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-6-operator-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2685
+level = 3
+heading = "H11.6 Operator recovery"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-query-pinning-and-continuations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2700
+level = 2
+heading = "H12. Query pinning and continuations"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-1-epochpinregistry"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2702
+level = 3
+heading = "H12.1 EpochPinRegistry"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-2-no-ordinary-durable-lease"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2706
+level = 3
+heading = "H12.2 No ordinary durable lease"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-3-continuation-classes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2710
+level = 3
+heading = "H12.3 Continuation classes"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-anchors-and-readback"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2723
+level = 2
+heading = "H13. Anchors and readback"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-1-coordinate-tests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2725
+level = 3
+heading = "H13.1 Coordinate tests"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-2-source-readback"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2737
+level = 3
+heading = "H13.2 Source readback"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-access-revocation-and-leakage-tests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2743
+level = 2
+heading = "H14. Access, revocation and leakage tests"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-1-one-membership-per-point"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2745
+level = 3
+heading = "H14.1 One membership per point"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-2-live-revocation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2756
+level = 3
+heading = "H14.2 Live revocation"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-3-facets-and-traces"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2760
+level = 3
+heading = "H14.3 Facets and traces"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-query-service-and-result-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2766
+level = 2
+heading = "H15. Query service and result cards"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-1-planner-budgets"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2770
+level = 3
+heading = "H15.1 Planner budgets"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-2-recipes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2774
+level = 3
+heading = "H15.2 Recipes"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-3-determinism"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2784
+level = 3
+heading = "H15.3 Determinism"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-4-compactness"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2788
+level = 3
+heading = "H15.4 Compactness"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-client-provider-edge-and-optional-compatibility-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2794
+level = 2
+heading = "H16. Client provider edge and optional compatibility profiles"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-1-protocol"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2796
+level = 3
+heading = "H16.1 Protocol"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-2-binding"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2800
+level = 3
+heading = "H16.2 Binding"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-3-no-authority-leak"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2804
+level = 3
+heading = "H16.3 No authority leak"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-4-durable-evidence-edge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2808
+level = 3
+heading = "H16.4 Durable evidence edge"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-5-capability-descriptor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2812
+level = 3
+heading = "H16.5 Capability descriptor"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-6-optional-normalized-bundle-export"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2816
+level = 3
+heading = "H16.6 Optional normalized-bundle export"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h17-pr-delivery-graph"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2822
+level = 2
+heading = "H17. PR delivery graph"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["search-eval:corpus"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p15-product-pulse-and-windows-qualification"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2924
+level = 3
+heading = "P15 — Product Pulse and Windows qualification"
+kind = "delivery_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+route_kind = "delivery_registry"
+rationale = "P15"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p16-optional-semantic-depth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2931
+level = 3
+heading = "P16 — Optional semantic depth"
+kind = "delivery_contract"
+modules = ["search-eval:metrics"]
+route_kind = "delivery_registry"
+rationale = "P16"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p17-optional-document-materializer"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2937
+level = 3
+heading = "P17 — Optional document materializer"
+kind = "delivery_contract"
+modules = ["search-eval:metrics"]
+route_kind = "delivery_registry"
+rationale = "P17"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p18-optional-advanced-scale-profile"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2943
+level = 3
+heading = "P18 — Optional advanced scale profile"
+kind = "delivery_contract"
+modules = ["search-eval:metrics"]
+route_kind = "delivery_registry"
+rationale = "P18"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h18-forbidden-shortcuts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2951
+level = 2
+heading = "H18. Forbidden shortcuts"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h19-definition-of-done-for-baseline"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2999
+level = 2
+heading = "H19. Definition of Done for baseline"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h20-first-codex-assignment"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3033
+level = 2
+heading = "H20. First Codex assignment"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-iii-consolidated-audit"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3059
+level = 1
+heading = "Part III — Consolidated Audit"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#consolidated-audit-of-eliot-search-8-2-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3061
+level = 1
+heading = "Consolidated audit of ELIOT Search 8.2 → 8.4"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#verdict"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3063
+level = 2
+heading = "Verdict"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#confirmed-defects-and-fixes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3073
+level = 2
+heading = "Confirmed defects and fixes"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#deliberate-simplifications"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3118
+level = 2
+heading = "Deliberate simplifications"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#still-unproved"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3127
+level = 2
+heading = "Still unproved"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#additional-defects-a-41-a-50-closed-in-8-4-2-5"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3140
+level = 2
+heading = "Additional defects A-41–A-50 closed in 8.4/2.5"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#claude-review-d-1-d-7-status-in-the-unified-document"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3155
+level = 2
+heading = "Claude review D-1–D-7 — status in the unified document"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#external-repository-alignment-fixes-a-51-a-63"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3167
+level = 2
+heading = "External-repository alignment fixes A-51–A-63"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#final-status"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3185
+level = 2
+heading = "Final status"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-iv-mechanical-validation-and-release-notes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3201
+level = 1
+heading = "Part IV — Mechanical Validation and Release Notes"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v1-single-file-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3203
+level = 2
+heading = "V1. Single-file contract"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v2-mechanical-checks-required-for-this-master"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3216
+level = 2
+heading = "V2. Mechanical checks required for this master"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v3-honest-execution-status"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3233
+level = 2
+heading = "V3. Honest execution status"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v4-implementation-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3248
+level = 2
+heading = "V4. Implementation boundary"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v5-external-repository-alignment-receipt"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3253
+level = 2
+heading = "V5. External-repository alignment receipt"
+kind = "architecture_node"
+modules = ["search-eval:review"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#w9-product-pulse-settings-1-0"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 1
+level = 1
+heading = "W9 Product Pulse settings 1.0"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#modes"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 8
+level = 2
+heading = "Modes"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#tunable-values"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 16
+level = 2
+heading = "Tunable values"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#locked-fairness-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 25
+level = 2
+heading = "Locked fairness rules"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#locked-evidence-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 34
+level = 2
+heading = "Locked evidence rules"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#locked-safety-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 42
+level = 2
+heading = "Locked safety rules"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#verdict-rules"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 48
+level = 2
+heading = "Verdict rules"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md#required-settings-tests"
+path = "docs/config/W9_PRODUCT_PULSE_SETTINGS_1.0.md"
+line = 58
+level = 2
+heading = "Required settings tests"
+kind = "implementation_contract"
+modules = ["search-eval:config"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#w9-product-pulse-and-windows-qualification-contracts-1-0"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 1
+level = 1
+heading = "W9 Product Pulse and Windows qualification contracts 1.0"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#1-purpose-and-authority"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 8
+level = 2
+heading = "1. Purpose and authority"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-roles"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 31
+level = 2
+heading = "2. Roles"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-1-search-eval"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 33
+level = 3
+heading = "2.1 search-eval"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-2-integration-owner"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 47
+level = 3
+heading = "2.2 Integration owner"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#2-3-independent-reviewer"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 59
+level = 3
+heading = "2.3 Independent reviewer"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#3-frozen-control-corpus"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 65
+level = 2
+heading = "3. Frozen control corpus"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#3-1-oracle-independence"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 88
+level = 3
+heading = "3.1 Oracle independence"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#3-2-scope-parity"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 95
+level = 3
+heading = "3.2 Scope parity"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#4-baselines"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 102
+level = 2
+heading = "4. Baselines"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#4-1-preparation-cost"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 127
+level = 3
+heading = "4.1 Preparation cost"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#5-windows-qualification-environment"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 133
+level = 2
+heading = "5. Windows qualification environment"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-experiment-design"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 164
+level = 2
+heading = "6. Experiment design"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-1-blocked-paired-execution"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 166
+level = 3
+heading = "6.1 Blocked paired execution"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-2-cold-and-warm-lanes"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 175
+level = 3
+heading = "6.2 Cold and warm lanes"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#6-3-comparable-budgets"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 190
+level = 3
+heading = "6.3 Comparable budgets"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#7-metric-registry"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 197
+level = 2
+heading = "7. Metric registry"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#8-hard-safety-and-correctness-blockers"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 228
+level = 2
+heading = "8. Hard safety and correctness blockers"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#9-candidate-slo-checks"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 247
+level = 2
+heading = "9. Candidate SLO checks"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#10-material-product-benefit"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 263
+level = 2
+heading = "10. Material product benefit"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#11-fault-and-recovery-matrix"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 282
+level = 2
+heading = "11. Fault and recovery matrix"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#12-protocol-flow-control-stress"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 301
+level = 2
+heading = "12. Protocol-flow-control stress"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#13-source-admission-and-leakage-audit"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 317
+level = 2
+heading = "13. Source-admission and leakage audit"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#14-evidence-records"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 339
+level = 2
+heading = "14. Evidence records"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#15-product-pulse-report"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 364
+level = 2
+heading = "15. Product Pulse report"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#16-verdict-state-machine"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 383
+level = 2
+heading = "16. Verdict state machine"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#17-optional-depth-gate"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 410
+level = 2
+heading = "17. Optional-depth gate"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#18-bounded-agent-decomposition"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 417
+level = 2
+heading = "18. Bounded agent decomposition"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#19-hard-stop-conditions"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 431
+level = 2
+heading = "19. Hard stop conditions"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md#20-current-disposition"
+path = "docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md"
+line = 444
+level = 2
+heading = "20. Current disposition"
+kind = "implementation_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:evidence", "search-eval:metrics", "search-eval:oracle", "search-eval:review", "search-eval:runner", "search-eval:safety"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#w10-optional-depth-implementation-packet"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W10 optional-depth implementation packet"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-rule"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Candidate rule"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 21
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#read-set"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 38
+level = 2
+heading = "Read set"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#model-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 50
+level = 2
+heading = "Model order"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#document-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 67
+level = 2
+heading = "Document order"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#scale-order"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 83
+level = 2
+heading = "Scale order"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#candidate-evaluation-boundary"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Candidate evaluation boundary"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#required-g6-evidence"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 119
+level = 2
+heading = "Required G6 evidence"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#package-handoff-requirements"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 132
+level = 2
+heading = "Package handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 149
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W10_IMPLEMENTATION_PACKET.md#current-state"
+path = "docs/handoff/W10_IMPLEMENTATION_PACKET.md"
+line = 166
+level = 2
+heading = "Current state"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#w9-product-pulse-implementation-packet"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W9 Product Pulse implementation packet"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#purpose"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 9
+level = 2
+heading = "Purpose"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#package-packet"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 15
+level = 2
+heading = "Package packet"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#dependency-and-execution-order"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 26
+level = 2
+heading = "Dependency and execution order"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#required-inputs"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 54
+level = 2
+heading = "Required inputs"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#hard-invariants"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 65
+level = 2
+heading = "Hard invariants"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#required-implementation-seams"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required implementation seams"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#evidence-handoff"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Evidence handoff"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 102
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W9_IMPLEMENTATION_PACKET.md#current-state"
+path = "docs/handoff/W9_IMPLEMENTATION_PACKET.md"
+line = 115
+level = 2
+heading = "Current state"
+kind = "implementation_handoff"
+modules = ["search-eval:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/product-pulse/README.md#p15-product-pulse-qualification"
+path = "qualification/product-pulse/README.md"
+line = 1
+level = 1
+heading = "P15 Product Pulse qualification"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#w9-product-pulse-and-windows-qualification"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W9 Product Pulse and Windows qualification"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#1-qualification-subject"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 9
+level = 2
+heading = "1. Qualification subject"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#2-prerequisites"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 25
+level = 2
+heading = "2. Prerequisites"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#3-freeze-order"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 39
+level = 2
+heading = "3. Freeze order"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#4-execution-sequence"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 55
+level = 2
+heading = "4. Execution sequence"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#5-a-b-c-fairness"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 71
+level = 2
+heading = "5. A/B/C fairness"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#6-hard-blockers"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 81
+level = 2
+heading = "6. Hard blockers"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#7-performance-and-resource-evidence"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 99
+level = 2
+heading = "7. Performance and resource evidence"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#8-fault-and-recovery-evidence"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 114
+level = 2
+heading = "8. Fault and recovery evidence"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#9-protocol-stress-evidence"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 121
+level = 2
+heading = "9. Protocol stress evidence"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#10-leakage-evidence"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 128
+level = 2
+heading = "10. Leakage evidence"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#11-evidence-record"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 139
+level = 2
+heading = "11. Evidence record"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#12-verdict"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 146
+level = 2
+heading = "12. Verdict"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#13-stop-conditions"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 155
+level = 2
+heading = "13. Stop conditions"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "qualification/product-pulse/W9_QUALIFICATION.md#14-current-disposition"
+path = "qualification/product-pulse/W9_QUALIFICATION.md"
+line = 169
+level = 2
+heading = "14. Current disposition"
+kind = "qualification_contract"
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:review", "search-eval:safety"]
+route_kind = "qualification_area_route"
+rationale = "qualification/product-pulse"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#search-eval-implementation-packet"
+path = "swarm/assignments/search-eval.md"
+line = 1
+level = 1
+heading = "search-eval implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-eval:adjudication", "search-eval:api", "search-eval:campaign", "search-eval:config", "search-eval:corpus", "search-eval:error", "search-eval:evidence", "search-eval:lib", "search-eval:metrics", "search-eval:oracle", "search-eval:recovery", "search-eval:review", "search-eval:runner", "search-eval:safety", "search-eval:trial"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#mission"
+path = "swarm/assignments/search-eval.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#owns"
+path = "swarm/assignments/search-eval.md"
+line = 18
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#must-not-own"
+path = "swarm/assignments/search-eval.md"
+line = 27
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#required-operations"
+path = "swarm/assignments/search-eval.md"
+line = 38
+level = 2
+heading = "Required operations"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#invariants"
+path = "swarm/assignments/search-eval.md"
+line = 50
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-eval:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#integration-boundary"
+path = "swarm/assignments/search-eval.md"
+line = 61
+level = 2
+heading = "Integration boundary"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#exit-tests-evidence"
+path = "swarm/assignments/search-eval.md"
+line = 68
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-eval:evidence"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-eval.md#size-split"
+path = "swarm/assignments/search-eval.md"
+line = 83
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-eval:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

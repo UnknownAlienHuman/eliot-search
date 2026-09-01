@@ -1,4 +1,4 @@
-schema_version = 2
+schema_version = 3
 config_schema_version = 1
 project = "eliot-search"
 unknown_section = "reject"
@@ -13,6 +13,7 @@ contract_path_template = "config/sections/{section}.md"
 [[section]]
 name = "instance"
 owner = "search-runtime-owner"
+owner_module = "config"
 first_wave = 1
 reload = "DRAIN_AND_RESTART"
 secret_policy = "forbid_plaintext"
@@ -21,6 +22,7 @@ contract = "config/sections/instance.md"
 [[section]]
 name = "secrets"
 owner = "search-os-secrets"
+owner_module = "config"
 first_wave = 1
 reload = "RESTART_DEPENDENCY"
 secret_policy = "opaque_refs_only"
@@ -29,6 +31,7 @@ contract = "config/sections/secrets.md"
 [[section]]
 name = "control"
 owner = "search-control-redb"
+owner_module = "config"
 first_wave = 1
 reload = "RESTART_DEPENDENCY"
 secret_policy = "forbid_plaintext"
@@ -37,6 +40,7 @@ contract = "config/sections/control.md"
 [[section]]
 name = "protocol"
 owner = "search-provider-protocol"
+owner_module = "config"
 first_wave = 1
 reload = "RESTART_DEPENDENCY"
 secret_policy = "forbid_plaintext"
@@ -45,6 +49,7 @@ contract = "config/sections/protocol.md"
 [[section]]
 name = "source_admission"
 owner = "search-source-admission"
+owner_module = "config"
 first_wave = 2
 reload = "SECURITY_BARRIER"
 secret_policy = "forbid_plaintext"
@@ -53,6 +58,7 @@ contract = "config/sections/source_admission.md"
 [[section]]
 name = "source_reader"
 owner = "search-safe-reader"
+owner_module = "config"
 first_wave = 2
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -61,6 +67,7 @@ contract = "config/sections/source_reader.md"
 [[section]]
 name = "reconcile"
 owner = "search-source-reconcile"
+owner_module = "config"
 first_wave = 5
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -69,6 +76,7 @@ contract = "config/sections/reconcile.md"
 [[section]]
 name = "revision_store"
 owner = "search-revision-store"
+owner_module = "config"
 first_wave = 2
 reload = "RESTART_DEPENDENCY"
 secret_policy = "forbid_plaintext"
@@ -77,6 +85,7 @@ contract = "config/sections/revision_store.md"
 [[section]]
 name = "lexical"
 owner = "search-lexical"
+owner_module = "config"
 first_wave = 3
 reload = "NEW_COLLECTION_GENERATION"
 secret_policy = "forbid_plaintext"
@@ -85,6 +94,7 @@ contract = "config/sections/lexical.md"
 [[section]]
 name = "qdrant_process"
 owner = "search-qdrant-supervisor"
+owner_module = "config"
 first_wave = 3
 reload = "RESTART_DEPENDENCY"
 secret_policy = "opaque_refs_only"
@@ -93,6 +103,7 @@ contract = "config/sections/qdrant_process.md"
 [[section]]
 name = "qdrant_data"
 owner = "search-qdrant-bridge"
+owner_module = "config"
 first_wave = 3
 reload = "RESTART_DEPENDENCY"
 secret_policy = "forbid_plaintext"
@@ -101,6 +112,7 @@ contract = "config/sections/qdrant_data.md"
 [[section]]
 name = "index_reclaim"
 owner = "search-index-reclaimer"
+owner_module = "config"
 first_wave = 3
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -109,6 +121,7 @@ contract = "config/sections/index_reclaim.md"
 [[section]]
 name = "query"
 owner = "search-query-planner"
+owner_module = "config"
 first_wave = 4
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -117,6 +130,7 @@ contract = "config/sections/query.md"
 [[section]]
 name = "scheduler"
 owner = "search-retrieval-executor"
+owner_module = "config"
 first_wave = 4
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -125,6 +139,7 @@ contract = "config/sections/scheduler.md"
 [[section]]
 name = "overlay"
 owner = "search-overlay"
+owner_module = "config"
 first_wave = 5
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -133,6 +148,7 @@ contract = "config/sections/overlay.md"
 [[section]]
 name = "handles"
 owner = "search-handles"
+owner_module = "config"
 first_wave = 4
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -141,6 +157,7 @@ contract = "config/sections/handles.md"
 [[section]]
 name = "continuations"
 owner = "search-continuation"
+owner_module = "config"
 first_wave = 4
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -149,6 +166,7 @@ contract = "config/sections/continuations.md"
 [[section]]
 name = "retention"
 owner = "search-retention"
+owner_module = "config"
 first_wave = 7
 reload = "SECURITY_BARRIER"
 secret_policy = "forbid_plaintext"
@@ -157,6 +175,7 @@ contract = "config/sections/retention.md"
 [[section]]
 name = "observability"
 owner = "search-eval"
+owner_module = "config"
 first_wave = 4
 reload = "APPLY_LIVE"
 secret_policy = "forbid_plaintext"
@@ -165,6 +184,7 @@ contract = "config/sections/observability.md"
 [[section]]
 name = "optional_profiles"
 owner = "eliot-searchd"
+owner_module = "optional"
 first_wave = 10
 reload = "GATE_REQUIRED"
 secret_policy = "opaque_refs_only"

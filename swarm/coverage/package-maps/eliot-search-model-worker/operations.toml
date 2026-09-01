@@ -1,0 +1,138 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "eliot-search-model-worker"
+operation_count = 13
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "eliot-search-model-worker::admit_request"
+name = "admit_request"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Request lifecycle"]
+route_kind = "semantic"
+score = 18
+
+[[operation]]
+id = "eliot-search-model-worker::apply_resource_pressure"
+name = "apply_resource_pressure"
+module = "resource"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Health, pressure and lifecycle"]
+route_kind = "semantic"
+score = 100
+
+[[operation]]
+id = "eliot-search-model-worker::begin_drain"
+name = "begin_drain"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Health, pressure and lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search-model-worker::cancel_request"
+name = "cancel_request"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Request lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search-model-worker::emit_terminal"
+name = "emit_terminal"
+module = "protocol"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Request lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search-model-worker::health_snapshot"
+name = "health_snapshot"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Health, pressure and lifecycle"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "eliot-search-model-worker::load_qualified_provider"
+name = "load_qualified_provider"
+module = "model"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Startup"]
+route_kind = "semantic"
+score = 23
+
+[[operation]]
+id = "eliot-search-model-worker::open_private_session"
+name = "open_private_session"
+module = "protocol"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Startup"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "eliot-search-model-worker::serve_encode"
+name = "serve_encode"
+module = "encode"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Request lifecycle"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "eliot-search-model-worker::serve_rerank"
+name = "serve_rerank"
+module = "rerank"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Request lifecycle"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "eliot-search-model-worker::shutdown_and_remove"
+name = "shutdown_and_remove"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Health, pressure and lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-search-model-worker::validate_startup"
+name = "validate_startup"
+module = "lifecycle"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Startup"]
+route_kind = "semantic"
+score = 20
+
+[[operation]]
+id = "eliot-search-model-worker::verify_inherited_containment"
+name = "verify_inherited_containment"
+module = "sandbox"
+public_entry_module = "main"
+sources = ["bins/eliot-search-model-worker/FUNCTIONS.md"]
+source_contexts = ["Startup"]
+route_kind = "package_rule"
+score = 100

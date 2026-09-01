@@ -1,0 +1,78 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-candidate-validator"
+operation_count = 7
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-candidate-validator::build_readback_request"
+name = "build_readback_request"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-candidate-validator/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-candidate-validator::material_coverage_change"
+name = "material_coverage_change"
+module = "decision"
+public_entry_module = "api"
+sources = ["crates/search-query/search-candidate-validator/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-candidate-validator::precheck"
+name = "precheck"
+module = "decision"
+public_entry_module = "api"
+sources = ["crates/search-query/search-candidate-validator/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-candidate-validator::recheck_before_emission"
+name = "recheck_before_emission"
+module = "security"
+public_entry_module = "api"
+sources = ["crates/search-query/search-candidate-validator/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-candidate-validator::reopen_and_verify"
+name = "reopen_and_verify"
+module = "readback"
+public_entry_module = "api"
+sources = ["crates/search-query/search-candidate-validator/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 11
+
+[[operation]]
+id = "search-candidate-validator::validate"
+name = "validate"
+module = "decision"
+public_entry_module = "api"
+sources = ["crates/search-query/search-candidate-validator/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-candidate-validator::validate_lifecycle_fence"
+name = "validate_lifecycle_fence"
+module = "decision"
+public_entry_module = "api"
+sources = ["crates/search-query/search-candidate-validator/W7_HARDENING.md"]
+source_contexts = ["Checkpoint sequence"]
+route_kind = "package_rule"
+score = 100

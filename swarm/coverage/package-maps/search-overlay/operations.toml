@@ -1,0 +1,168 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-overlay"
+operation_count = 16
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-overlay::admit_saved_overlay"
+name = "admit_saved_overlay"
+module = "save"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-overlay::apply_live_change"
+name = "apply_live_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 52
+
+[[operation]]
+id = "search-overlay::attach_unsaved_snapshot"
+name = "attach_unsaved_snapshot"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-overlay::close_or_invalidate_unsaved"
+name = "close_or_invalidate_unsaved"
+module = "save"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-overlay::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-overlay::compute_shadow_set"
+name = "compute_shadow_set"
+module = "shadow"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-overlay::merge_overlay_and_base"
+name = "merge_overlay_and_base"
+module = "direct"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-overlay::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-overlay::prepare_save_admission"
+name = "prepare_save_admission"
+module = "save"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-overlay::recover_saved_overlay"
+name = "recover_saved_overlay"
+module = "save"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-overlay::replace_unsaved_snapshot"
+name = "replace_unsaved_snapshot"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-overlay::retrieve_overlay"
+name = "retrieve_overlay"
+module = "direct"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-overlay::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-overlay::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-overlay::snapshot_overlay_view"
+name = "snapshot_overlay_view"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 99
+
+[[operation]]
+id = "search-overlay::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-query/search-overlay/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 38

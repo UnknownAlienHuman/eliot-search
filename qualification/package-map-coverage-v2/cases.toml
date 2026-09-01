@@ -1,0 +1,164 @@
+schema_version = 1
+suite = "package_map_coverage_v2"
+status = "STRUCTURAL_NOT_EXECUTED"
+case_count = 32
+
+[[case]]
+id = "exact_workspace_member_closure"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_package_registry_closure"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "cargo_package_name_parity"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "cargo_dependency_registry_parity"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "workspace_dependency_library_parity"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "dependency_graph_acyclic"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "later_wave_dependency_requires_exact_reentry"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "dependency_enters_producer_public_entry"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_operation_source_closure"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "one_internal_module_per_operation"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "operation_package_module_parity"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_public_facade_operation_guess"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_low_confidence_operation_route"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "every_logical_module_indexed_once"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "implementation_module_has_specific_relation"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "structural_module_has_rationale"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "every_markdown_file_reverse_indexed"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "every_product_document_node_has_module"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "every_principle_has_enforcement_module"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "integration_node_has_no_product_module"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "configuration_section_owner_module_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "recipe_execution_module_per_owner"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "port_method_module_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "schema_owner_module_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "architecture_section_reverse_links"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "capability_reverse_links"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "invariant_reverse_links"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "delivery_reverse_links"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "one_bounded_map_bundle_per_package"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "package_map_under_ten_thousand_lines"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "generated_map_digest_and_orphan_closure"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "manual_readonly_workflow"
+mandatory = true
+result = "UNAVAILABLE"

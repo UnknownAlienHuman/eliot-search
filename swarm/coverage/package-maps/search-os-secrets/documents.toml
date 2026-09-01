@@ -1,0 +1,723 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-os-secrets"
+node_count = 65
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/secrets.md#secrets-configuration-contract"
+path = "config/sections/secrets.md"
+line = 1
+level = 1
+heading = "[secrets] configuration contract"
+kind = "configuration_contract"
+modules = ["search-os-secrets:config"]
+route_kind = "config_owner"
+rationale = "secrets"
+
+[[node]]
+id = "config/sections/secrets.md#fields"
+path = "config/sections/secrets.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-os-secrets:config"]
+route_kind = "config_owner"
+rationale = "secrets"
+
+[[node]]
+id = "config/sections/secrets.md#required-section-api"
+path = "config/sections/secrets.md"
+line = 21
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-os-secrets:config"]
+route_kind = "config_owner"
+rationale = "secrets"
+
+[[node]]
+id = "config/sections/secrets.md#invariants"
+path = "config/sections/secrets.md"
+line = 35
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-os-secrets:config"]
+route_kind = "config_owner"
+rationale = "secrets"
+
+[[node]]
+id = "config/sections/secrets.md#required-tests"
+path = "config/sections/secrets.md"
+line = 41
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-os-secrets:config"]
+route_kind = "config_owner"
+rationale = "secrets"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/AGENTS.md#agent-contract-search-os-secrets"
+path = "crates/search-runtime/search-os-secrets/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-os-secrets"
+kind = "implementation_contract_root"
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/AGENTS.md#ownership"
+path = "crates/search-runtime/search-os-secrets/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/AGENTS.md#forbidden-ownership"
+path = "crates/search-runtime/search-os-secrets/AGENTS.md"
+line = 15
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/AGENTS.md#dependencies"
+path = "crates/search-runtime/search-os-secrets/AGENTS.md"
+line = 23
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/AGENTS.md#size"
+path = "crates/search-runtime/search-os-secrets/AGENTS.md"
+line = 28
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#function-contract-search-os-secrets"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-os-secrets"
+kind = "implementation_contract_root"
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#global-rules"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-os-secrets:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#configuration-operations"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 18
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-os-secrets:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#sectiondescriptor-configsectiondescriptor"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 20
+level = 3
+heading = "sectiondescriptor() -> ConfigSectionDescriptor"
+kind = "implementation_operation"
+modules = ["search-os-secrets:config"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::section_descriptor"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#compileddefaults-configsectioninput"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "compileddefaults() -> ConfigSectionInput"
+kind = "implementation_operation"
+modules = ["search-os-secrets:config"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::compiled_defaults"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#validatesection-input-platform-acceptedcapabilities-result-validatedsecretsconfig-secreterror"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 24
+level = 3
+heading = "validatesection(input, platform, acceptedcapabilities) -> Result<ValidatedSecretsConfig, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:config"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::validate_section"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#sectiondigest-validated-blake3digest32"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 29
+level = 3
+heading = "sectiondigest(validated) -> Blake3Digest32"
+kind = "implementation_operation"
+modules = ["search-os-secrets:config"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::section_digest"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#plansectionchange-old-new-result-sectionreloaddecision-secreterror"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 31
+level = 3
+heading = "plansectionchange(old, new) -> Result<SectionReloadDecision, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:config"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::plan_section_change"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#reference-and-binding-operations"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 36
+level = 2
+heading = "Reference and binding operations"
+kind = "implementation_contract"
+modules = ["search-os-secrets:binding"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#validatebinding-binding-currentplatformidentity-result-validatedsecretbinding-secreterror"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 38
+level = 3
+heading = "validatebinding(binding, currentplatformidentity) -> Result<ValidatedSecretBinding, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:binding"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::validate_binding"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#validatereference-reference-expectedbinding-expectedpurpose-result-validatedsecretref-secreterro"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 43
+level = 3
+heading = "validatereference(reference, expectedbinding, expectedpurpose) -> Result<ValidatedSecretRef, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:binding"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::validate_reference"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#referencemetadata-reference-redactedsecretmetadata"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 48
+level = 3
+heading = "referencemetadata(reference) -> RedactedSecretMetadata"
+kind = "implementation_operation"
+modules = ["search-os-secrets:binding"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::reference_metadata"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#secret-lifecycle"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 52
+level = 2
+heading = "Secret lifecycle"
+kind = "implementation_contract"
+modules = ["search-os-secrets:store"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#create-binding-purpose-entropyport-storeport-operation-deadline-cancel-result-secretcreatereceip"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 54
+level = 3
+heading = "create(binding, purpose, entropyport, storeport, operation, deadline, cancel) -> Result<SecretCreateReceipt, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:store"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::create"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#withsecret-reference-expectedbinding-purpose-consumer-deadline-cancel-result-secretusereceipt-se"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 63
+level = 3
+heading = "withsecret(reference, expectedbinding, purpose, consumer, deadline, cancel) -> Result<SecretUseReceipt, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:store"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::with_secret"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#issuelease-reference-expectedbinding-purpose-ttl-consumeridentity-result-secretlease-secreterror"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 75
+level = 3
+heading = "issuelease(reference, expectedbinding, purpose, ttl, consumeridentity) -> Result<SecretLease, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:lease"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::issue_lease"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#rotate-reference-expectedbinding-operation-deadline-cancel-result-secretrotationreceipt-secreter"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 81
+level = 3
+heading = "rotate(reference, expectedbinding, operation, deadline, cancel) -> Result<SecretRotationReceipt, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:rotation"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::rotate"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#delete-reference-expectedbinding-operation-deadline-result-secretdeletionreceipt-secreterror"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 96
+level = 3
+heading = "delete(reference, expectedbinding, operation, deadline) -> Result<SecretDeletionReceipt, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:store"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::delete"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#recoveroperation-operation-expectedbinding-storeport-result-secretrecoverydecision-secreterror"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 102
+level = 3
+heading = "recoveroperation(operation, expectedbinding, storeport) -> Result<SecretRecoveryDecision, SecretError>"
+kind = "implementation_operation"
+modules = ["search-os-secrets:recovery"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::recover_operation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#health-and-audit"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 107
+level = 2
+heading = "Health and audit"
+kind = "implementation_contract"
+modules = ["search-os-secrets:audit"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#health-referenceorbackend-expectedbinding-secretstorehealth"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 109
+level = 3
+heading = "health(referenceorbackend, expectedbinding) -> SecretStoreHealth"
+kind = "implementation_operation"
+modules = ["search-os-secrets:audit"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::health"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#auditpublicsurfaces-fixtures-secretsidechannelaudit"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 114
+level = 3
+heading = "auditpublicsurfaces(fixtures) -> SecretSideChannelAudit"
+kind = "implementation_operation"
+modules = ["search-os-secrets:audit"]
+route_kind = "operation_route"
+rationale = "search-os-secrets::audit_public_surfaces"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#cancellation-deadline-and-crash-semantics"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 119
+level = 2
+heading = "Cancellation, deadline and crash semantics"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#typed-failures"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 125
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-os-secrets:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+line = 144
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/README.md#search-os-secrets"
+path = "crates/search-runtime/search-os-secrets/README.md"
+line = 1
+level = 1
+heading = "search-os-secrets"
+kind = "implementation_contract_root"
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/README.md#owns"
+path = "crates/search-runtime/search-os-secrets/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-runtime/search-os-secrets/README.md#must-not-own"
+path = "crates/search-runtime/search-os-secrets/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-qdrant-process-ownership-and-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1611
+level = 2
+heading = "S27. Qdrant process ownership and security"
+kind = "architecture_section"
+modules = ["search-os-secrets:store"]
+route_kind = "architecture_section_registry"
+rationale = "S27"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-1-sole-supervisor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1613
+level = 3
+heading = "S27.1 Sole supervisor"
+kind = "architecture_node"
+modules = ["search-os-secrets:store"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-2-secret-storage"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1630
+level = 3
+heading = "S27.2 Secret storage"
+kind = "architecture_node"
+modules = ["search-os-secrets:store"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-3-strict-mode-and-indexes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1634
+level = 3
+heading = "S27.3 Strict mode and indexes"
+kind = "architecture_node"
+modules = ["search-os-secrets:store"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s27-4-orphan-handling"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1638
+level = 3
+heading = "S27.4 Orphan handling"
+kind = "architecture_node"
+modules = ["search-os-secrets:store"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p01-runtime-owner-shell"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2840
+level = 3
+heading = "P01 — Runtime owner shell"
+kind = "delivery_contract"
+modules = ["search-os-secrets:store"]
+route_kind = "delivery_registry"
+rationale = "P01"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p05-managed-qdrant-process-and-capability-gate"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2864
+level = 3
+heading = "P05 — Managed Qdrant process and capability gate"
+kind = "delivery_contract"
+modules = ["search-os-secrets:store"]
+route_kind = "delivery_registry"
+rationale = "P05"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-os-secrets:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#search-os-secrets-implementation-packet"
+path = "swarm/assignments/search-os-secrets.md"
+line = 1
+level = 1
+heading = "search-os-secrets implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-os-secrets:api", "search-os-secrets:audit", "search-os-secrets:binding", "search-os-secrets:config", "search-os-secrets:error", "search-os-secrets:lease", "search-os-secrets:lib", "search-os-secrets:recovery", "search-os-secrets:rotation", "search-os-secrets:store"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#mission"
+path = "swarm/assignments/search-os-secrets.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#owns"
+path = "swarm/assignments/search-os-secrets.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#must-not-own"
+path = "swarm/assignments/search-os-secrets.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#logical-primitives"
+path = "swarm/assignments/search-os-secrets.md"
+line = 32
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#logical-operations"
+path = "swarm/assignments/search-os-secrets.md"
+line = 36
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#required-invariants"
+path = "swarm/assignments/search-os-secrets.md"
+line = 46
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-os-secrets:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#typed-failure-surface"
+path = "swarm/assignments/search-os-secrets.md"
+line = 54
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-os-secrets:audit"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#exit-tests-evidence"
+path = "swarm/assignments/search-os-secrets.md"
+line = 62
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#suggested-internal-modules"
+path = "swarm/assignments/search-os-secrets.md"
+line = 71
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-os-secrets.md#size-split"
+path = "swarm/assignments/search-os-secrets.md"
+line = 85
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-os-secrets:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

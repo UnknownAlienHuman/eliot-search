@@ -1,0 +1,2681 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-contracts"
+node_count = 243
+principle_count = 0
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#agent-contract-search-contracts"
+path = "crates/search-contracts/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-contracts"
+kind = "implementation_contract_root"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:error", "search-contracts:ids", "search-contracts:lib", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#mission"
+path = "crates/search-contracts/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#ownership"
+path = "crates/search-contracts/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#forbidden-ownership"
+path = "crates/search-contracts/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#allowed-dependencies"
+path = "crates/search-contracts/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#required-logical-surface"
+path = "crates/search-contracts/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#failure-surface"
+path = "crates/search-contracts/AGENTS.md"
+line = 47
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-contracts:reasons"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-contracts/AGENTS.md"
+line = 52
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#size-and-split-guard"
+path = "crates/search-contracts/AGENTS.md"
+line = 64
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/AGENTS.md#definition-of-done"
+path = "crates/search-contracts/AGENTS.md"
+line = 72
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/README.md#search-contracts"
+path = "crates/search-contracts/README.md"
+line = 1
+level = 1
+heading = "search-contracts"
+kind = "implementation_contract_root"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:error", "search-contracts:ids", "search-contracts:lib", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-contracts/README.md#owns"
+path = "crates/search-contracts/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-contracts/README.md#must-not-own"
+path = "crates/search-contracts/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#eliot-search-8-4-standalone-architecture-implementation-handoff-and-audit"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1
+level = 1
+heading = "ELIOT Search 8.4 — Standalone Architecture, Implementation Handoff, and Audit"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#single-authoritative-implementation-master-for-the-search-repository"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2
+level = 2
+heading = "Single authoritative implementation master for the Search repository"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#contents"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 16
+level = 2
+heading = "Contents"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-i-architecture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 25
+level = 1
+heading = "Part I — Architecture"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#eliot-search-architecture-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 28
+level = 1
+heading = "ELIOT Search Architecture 8.4"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#qdrant-only-retrieval-epoch-safe-micromodular-implementation-ready"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 29
+level = 2
+heading = "Qdrant-Only Retrieval, Epoch-Safe, Micromodular, Implementation-Ready"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s0-executive-decision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 38
+level = 2
+heading = "S0. Executive decision"
+kind = "architecture_section"
+modules = ["search-contracts:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S0"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s3-non-negotiable-invariants"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 140
+level = 2
+heading = "S3. Non-negotiable invariants"
+kind = "architecture_section"
+modules = ["search-contracts:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S3"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s5-micromodular-capability-map"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 196
+level = 2
+heading = "S5. Micromodular capability map"
+kind = "architecture_section"
+modules = ["search-contracts:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S5"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-identity-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 321
+level = 2
+heading = "S7. Identity model"
+kind = "architecture_section"
+modules = ["search-contracts:source"]
+route_kind = "architecture_section_registry"
+rationale = "S7"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-1-installation-and-collection-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 323
+level = 3
+heading = "S7.1 Installation and collection identity"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-2-repository-and-workspace-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 343
+level = 3
+heading = "S7.2 Repository and workspace identity"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-2-1-source-namespace-ownership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 361
+level = 3
+heading = "S7.2.1 Source namespace ownership"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-3-sourceidentity-pathbinding-and-sourcerevision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 420
+level = 3
+heading = "S7.3 SourceIdentity, PathBinding and SourceRevision"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-4-corpus-membership-is-separate-from-source-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 452
+level = 3
+heading = "S7.4 Corpus membership is separate from source identity"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-5-materialization-representation-and-projection-membership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 470
+level = 3
+heading = "S7.5 Materialization, representation and projection membership"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-6-unit-occurrence"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 501
+level = 3
+heading = "S7.6 Unit occurrence"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-7-reference-portfolios"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 518
+level = 3
+heading = "S7.7 Reference portfolios"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-8-sourceview-and-workspaceviewrevision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 536
+level = 3
+heading = "S7.8 SourceView and WorkspaceViewRevision"
+kind = "architecture_node"
+modules = ["search-contracts:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-epoch-domain-and-validity-filter"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 704
+level = 2
+heading = "S10. Epoch domain and validity filter"
+kind = "architecture_section"
+modules = ["search-contracts:ids"]
+route_kind = "architecture_section_registry"
+rationale = "S10"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-1-epoch-type"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 706
+level = 3
+heading = "S10.1 Epoch type"
+kind = "architecture_node"
+modules = ["search-contracts:ids"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-2-open-ended-validity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 719
+level = 3
+heading = "S10.2 Open-ended validity"
+kind = "architecture_node"
+modules = ["search-contracts:ids"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s10-3-full-pre-candidate-eligibility-filter"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 732
+level = 3
+heading = "S10.3 Full pre-candidate eligibility filter"
+kind = "architecture_node"
+modules = ["search-contracts:ids"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s20-query-recipes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1270
+level = 2
+heading = "S20. Query recipes"
+kind = "architecture_section"
+modules = ["search-contracts:recipes"]
+route_kind = "architecture_section_registry"
+rationale = "S20"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s20-1-example-natural-language-path"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1291
+level = 3
+heading = "S20.1 Example natural-language path"
+kind = "architecture_node"
+modules = ["search-contracts:recipes"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-native-coordinates-and-anchors"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1476
+level = 2
+heading = "S24. Native coordinates and anchors"
+kind = "architecture_section"
+modules = ["search-contracts:query"]
+route_kind = "architecture_section_registry"
+rationale = "S24"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-1-canonical-anchor-variants"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1478
+level = 3
+heading = "S24.1 Canonical anchor variants"
+kind = "architecture_node"
+modules = ["search-contracts:query"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-2-derived-line-column-display"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1514
+level = 3
+heading = "S24.2 Derived line/column display"
+kind = "architecture_node"
+modules = ["search-contracts:query"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s31-crate-and-dependency-architecture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1782
+level = 2
+heading = "S31. Crate and dependency architecture"
+kind = "architecture_section"
+modules = ["search-contracts:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S31"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s34-error-and-degradation-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2010
+level = 2
+heading = "S34. Error and degradation model"
+kind = "architecture_section"
+modules = ["search-contracts:reasons"]
+route_kind = "architecture_section_registry"
+rationale = "S34"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s38-superseded-or-rejected-decisions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2149
+level = 2
+heading = "S38. Superseded or rejected decisions"
+kind = "architecture_section"
+modules = ["search-contracts:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S38"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s39-implementation-readiness-verdict"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2171
+level = 2
+heading = "S39. Implementation readiness verdict"
+kind = "architecture_section"
+modules = ["search-contracts:schema"]
+route_kind = "architecture_section_registry"
+rationale = "S39"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-ii-codex-handoff"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2194
+level = 1
+heading = "Part II — Codex Handoff"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#eliot-search-codex-handoff-2-7"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2196
+level = 1
+heading = "ELIOT Search Codex Handoff 2.7"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#implementation-plan-for-the-embedded-architecture-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2197
+level = 2
+heading = "Implementation plan for the embedded Architecture 8.4"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h0-contract-challenge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2206
+level = 2
+heading = "H0. Contract challenge"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-repository-outcome"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2220
+level = 2
+heading = "H1. Repository outcome"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-1-workspace"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2222
+level = 3
+heading = "H1.1 Workspace"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h1-2-dependency-direction"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2255
+level = 3
+heading = "H1.2 Dependency direction"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-toolchain-licenses-and-unsafe-code"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2273
+level = 2
+heading = "H2. Toolchain, licenses and unsafe code"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-1-toolchain"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2275
+level = 3
+heading = "H2.1 Toolchain"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-2-dependency-policy"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2279
+level = 3
+heading = "H2.2 Dependency policy"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#deny-toml-intent"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2282
+level = 1
+heading = "deny.toml intent"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-3-unsafe-policy"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2298
+level = 3
+heading = "H2.3 Unsafe policy"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h2-4-production-runtime-exclusions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2302
+level = 3
+heading = "H2.4 Production runtime exclusions"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-public-contracts-to-implement-first"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2308
+level = 2
+heading = "H3. Public contracts to implement first"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-1-newtypes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2310
+level = 3
+heading = "H3.1 Newtypes"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-2-epoch-validation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2346
+level = 3
+heading = "H3.2 Epoch validation"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-3-membership-contracts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2368
+level = 3
+heading = "H3.3 Membership contracts"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-4-recipe-set"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2385
+level = 3
+heading = "H3.4 Recipe set"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h3-5-additional-load-bearing-contracts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2403
+level = 3
+heading = "H3.5 Additional load-bearing contracts"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h4-ports"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2427
+level = 2
+heading = "H4. Ports"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-redb-schema-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2452
+level = 2
+heading = "H5. redb schema boundary"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-1-required-tables"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2454
+level = 3
+heading = "H5.1 Required tables"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-2-snapshot-cache"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2482
+level = 3
+heading = "H5.2 Snapshot cache"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h5-3-restore-rule"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2488
+level = 3
+heading = "H5.3 Restore rule"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-cas-and-source-revisions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2494
+level = 2
+heading = "H6. CAS and source revisions"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-1-layout"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2496
+level = 3
+heading = "H6.1 Layout"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-2-retention"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2508
+level = 3
+heading = "H6.2 Retention"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h6-3-no-execute-test-corpus"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2512
+level = 3
+heading = "H6.3 No-execute test corpus"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-point-identity-implementation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2518
+level = 2
+heading = "H7. Point identity implementation"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-1-canonical-encoding"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2520
+level = 3
+heading = "H7.1 Canonical encoding"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-2-uuid-derivation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2524
+level = 3
+heading = "H7.2 UUID derivation"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h7-3-pre-upsert-collision-check"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2528
+level = 3
+heading = "H7.3 Pre-upsert collision check"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-qdrant-supervisor-and-bridge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2541
+level = 2
+heading = "H8. Qdrant supervisor and bridge"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-1-ownership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2543
+level = 3
+heading = "H8.1 Ownership"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-2-qualified-artifact"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2547
+level = 3
+heading = "H8.2 Qualified artifact"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-3-startup-fixture"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2564
+level = 3
+heading = "H8.3 Startup fixture"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h8-4-process-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2578
+level = 3
+heading = "H8.4 Process security"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-lexical-encoder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2591
+level = 2
+heading = "H9. Lexical encoder"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-1-select-exactly-one-baseline-provider"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2593
+level = 3
+heading = "H9.1 Select exactly one baseline provider"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-2-golden-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2604
+level = 3
+heading = "H9.2 Golden profiles"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h9-3-exact-branches"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2618
+level = 3
+heading = "H9.3 Exact branches"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-qdrant-point-schema"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2624
+level = 2
+heading = "H10. Qdrant point schema"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-1-payload"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2626
+level = 3
+heading = "H10.1 Payload"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-2-payload-indexes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2630
+level = 3
+heading = "H10.2 Payload indexes"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h10-3-active-filter-builder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2634
+level = 3
+heading = "H10.3 Active filter builder"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-publication-coordinator"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2649
+level = 2
+heading = "H11. Publication coordinator"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-1-concurrency"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2651
+level = 3
+heading = "H11.1 Concurrency"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-2-exact-manifests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2655
+level = 3
+heading = "H11.2 Exact manifests"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-3-required-calls"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2659
+level = 3
+heading = "H11.3 Required calls"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-4-commit-point"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2663
+level = 3
+heading = "H11.4 Commit point"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-5-failpoints"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2667
+level = 3
+heading = "H11.5 Failpoints"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h11-6-operator-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2685
+level = 3
+heading = "H11.6 Operator recovery"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-query-pinning-and-continuations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2700
+level = 2
+heading = "H12. Query pinning and continuations"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-1-epochpinregistry"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2702
+level = 3
+heading = "H12.1 EpochPinRegistry"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-2-no-ordinary-durable-lease"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2706
+level = 3
+heading = "H12.2 No ordinary durable lease"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h12-3-continuation-classes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2710
+level = 3
+heading = "H12.3 Continuation classes"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-anchors-and-readback"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2723
+level = 2
+heading = "H13. Anchors and readback"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-1-coordinate-tests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2725
+level = 3
+heading = "H13.1 Coordinate tests"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h13-2-source-readback"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2737
+level = 3
+heading = "H13.2 Source readback"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-access-revocation-and-leakage-tests"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2743
+level = 2
+heading = "H14. Access, revocation and leakage tests"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-1-one-membership-per-point"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2745
+level = 3
+heading = "H14.1 One membership per point"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-2-live-revocation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2756
+level = 3
+heading = "H14.2 Live revocation"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h14-3-facets-and-traces"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2760
+level = 3
+heading = "H14.3 Facets and traces"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-query-service-and-result-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2766
+level = 2
+heading = "H15. Query service and result cards"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-1-planner-budgets"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2770
+level = 3
+heading = "H15.1 Planner budgets"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-2-recipes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2774
+level = 3
+heading = "H15.2 Recipes"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-3-determinism"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2784
+level = 3
+heading = "H15.3 Determinism"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h15-4-compactness"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2788
+level = 3
+heading = "H15.4 Compactness"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-client-provider-edge-and-optional-compatibility-profiles"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2794
+level = 2
+heading = "H16. Client provider edge and optional compatibility profiles"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-1-protocol"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2796
+level = 3
+heading = "H16.1 Protocol"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-2-binding"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2800
+level = 3
+heading = "H16.2 Binding"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-3-no-authority-leak"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2804
+level = 3
+heading = "H16.3 No authority leak"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-4-durable-evidence-edge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2808
+level = 3
+heading = "H16.4 Durable evidence edge"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-5-capability-descriptor"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2812
+level = 3
+heading = "H16.5 Capability descriptor"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h16-6-optional-normalized-bundle-export"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2816
+level = 3
+heading = "H16.6 Optional normalized-bundle export"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h17-pr-delivery-graph"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2822
+level = 2
+heading = "H17. PR delivery graph"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p00-contract-freeze"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2824
+level = 3
+heading = "P00 — Contract freeze"
+kind = "delivery_contract"
+modules = ["search-contracts:canonical", "search-contracts:ids", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source"]
+route_kind = "delivery_registry"
+rationale = "P00"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h18-forbidden-shortcuts"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2951
+level = 2
+heading = "H18. Forbidden shortcuts"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h19-definition-of-done-for-baseline"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2999
+level = 2
+heading = "H19. Definition of Done for baseline"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#h20-first-codex-assignment"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3033
+level = 2
+heading = "H20. First Codex assignment"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-iii-consolidated-audit"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3059
+level = 1
+heading = "Part III — Consolidated Audit"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#consolidated-audit-of-eliot-search-8-2-8-4"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3061
+level = 1
+heading = "Consolidated audit of ELIOT Search 8.2 → 8.4"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#verdict"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3063
+level = 2
+heading = "Verdict"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#confirmed-defects-and-fixes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3073
+level = 2
+heading = "Confirmed defects and fixes"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#deliberate-simplifications"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3118
+level = 2
+heading = "Deliberate simplifications"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#still-unproved"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3127
+level = 2
+heading = "Still unproved"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#additional-defects-a-41-a-50-closed-in-8-4-2-5"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3140
+level = 2
+heading = "Additional defects A-41–A-50 closed in 8.4/2.5"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#claude-review-d-1-d-7-status-in-the-unified-document"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3155
+level = 2
+heading = "Claude review D-1–D-7 — status in the unified document"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#external-repository-alignment-fixes-a-51-a-63"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3167
+level = 2
+heading = "External-repository alignment fixes A-51–A-63"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#final-status"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3185
+level = 2
+heading = "Final status"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#part-iv-mechanical-validation-and-release-notes"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3201
+level = 1
+heading = "Part IV — Mechanical Validation and Release Notes"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v1-single-file-contract"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3203
+level = 2
+heading = "V1. Single-file contract"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v2-mechanical-checks-required-for-this-master"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3216
+level = 2
+heading = "V2. Mechanical checks required for this master"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v3-honest-execution-status"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3233
+level = 2
+heading = "V3. Honest execution status"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v4-implementation-boundary"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3248
+level = 2
+heading = "V4. Implementation boundary"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#v5-external-repository-alignment-receipt"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 3253
+level = 2
+heading = "V5. External-repository alignment receipt"
+kind = "architecture_node"
+modules = ["search-contracts:schema"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/contracts/p00/CANONICAL_TYPES.md#canonical-primitive-and-encoding-rules"
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+line = 1
+level = 1
+heading = "Canonical primitive and encoding rules"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CANONICAL_TYPES.md#precedence-correction"
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+line = 3
+level = 2
+heading = "Precedence correction"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CANONICAL_TYPES.md#primitive-wrappers"
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+line = 8
+level = 2
+heading = "Primitive wrappers"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CANONICAL_TYPES.md#versioned-content-digest"
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+line = 32
+level = 2
+heading = "Versioned content digest"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CANONICAL_TYPES.md#canonical-serialization"
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+line = 42
+level = 2
+heading = "Canonical serialization"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CANONICAL_TYPES.md#domain-separation"
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+line = 52
+level = 2
+heading = "Domain separation"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CANONICAL_TYPES.md#unknown-fields"
+path = "docs/contracts/p00/CANONICAL_TYPES.md"
+line = 68
+level = 2
+heading = "Unknown fields"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:ids"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CONTRACT_CHALLENGES.md#p00-contract-challenge-decisions"
+path = "docs/contracts/p00/CONTRACT_CHALLENGES.md"
+line = 1
+level = 1
+heading = "P00 contract challenge decisions"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CONTRACT_CHALLENGES.md#stop-conditions"
+path = "docs/contracts/p00/CONTRACT_CHALLENGES.md"
+line = 26
+level = 2
+heading = "Stop conditions"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#provider-protocol-handles-security-and-lifecycle-schemas"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 1
+level = 1
+heading = "Provider protocol, handles, security and lifecycle schemas"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#protocol-version-and-envelope"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 3
+level = 2
+heading = "Protocol version and envelope"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#capability-descriptor"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 57
+level = 2
+heading = "Capability descriptor"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#public-handle-tokens"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 81
+level = 2
+heading = "Public handle tokens"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#server-side-source-handle-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 106
+level = 2
+heading = "Server-side source-handle records"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#server-side-continuation-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 170
+level = 2
+heading = "Server-side continuation records"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#security-mutation-state"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 204
+level = 2
+heading = "Security mutation state"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#publication-support-records"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 223
+level = 2
+heading = "Publication support records"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md#purge-and-restore"
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+line = 255
+level = 2
+heading = "Purge and restore"
+kind = "implementation_contract"
+modules = ["search-contracts:lifecycle", "search-contracts:protocol"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#grant-snapshot-plan-candidate-and-exact-proof-schemas"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 1
+level = 1
+heading = "Grant, snapshot, plan, candidate and exact-proof schemas"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#read-grant"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 5
+level = 2
+heading = "Read grant"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#execution-budget"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 37
+level = 2
+heading = "Execution budget"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#query-snapshot-fence"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 57
+level = 2
+heading = "Query snapshot fence"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#task-plan"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 90
+level = 2
+heading = "Task plan"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#emission-fence"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 145
+level = 2
+heading = "Emission fence"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#candidate-result"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 170
+level = 2
+heading = "Candidate result"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#native-anchors"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 227
+level = 2
+heading = "Native anchors"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#exact-plan-and-report"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 268
+level = 2
+heading = "Exact plan and report"
+kind = "implementation_contract"
+modules = ["search-contracts:query", "search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#p00-contract-implementation-pack"
+path = "docs/contracts/p00/README.md"
+line = 1
+level = 1
+heading = "P00 contract implementation pack"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#read-sets"
+path = "docs/contracts/p00/README.md"
+line = 7
+level = 2
+heading = "Read sets"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#files"
+path = "docs/contracts/p00/README.md"
+line = 20
+level = 2
+heading = "Files"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#error-and-reason-code-namespaces"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 1
+level = 1
+heading = "Error and reason-code namespaces"
+kind = "implementation_contract"
+modules = ["search-contracts:reasons"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#1-public-provider-reasons-searchreasoncodev1"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 6
+level = 2
+heading = "1. Public provider reasons — SearchReasonCodeV1"
+kind = "implementation_contract"
+modules = ["search-contracts:reasons"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#2-protocol-errors-protocolerrorcode"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 49
+level = 2
+heading = "2. Protocol errors — ProtocolErrorCode"
+kind = "implementation_contract"
+modules = ["search-contracts:reasons"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#3-contract-validation-errors-contracterrorcode"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 66
+level = 2
+heading = "3. Contract-validation errors — ContractErrorCode"
+kind = "implementation_contract"
+modules = ["search-contracts:reasons"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#4-package-local-errors"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 84
+level = 2
+heading = "4. Package-local errors"
+kind = "implementation_contract"
+modules = ["search-contracts:reasons"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#mapping-rules"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 96
+level = 2
+heading = "Mapping rules"
+kind = "implementation_contract"
+modules = ["search-contracts:reasons"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#recipe-registry-and-typed-request-families"
+path = "docs/contracts/p00/RECIPES.md"
+line = 1
+level = 1
+heading = "Recipe registry and typed request families"
+kind = "implementation_contract"
+modules = ["search-contracts:recipes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#exact-registry"
+path = "docs/contracts/p00/RECIPES.md"
+line = 5
+level = 2
+heading = "Exact registry"
+kind = "implementation_contract"
+modules = ["search-contracts:recipes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#common-request-envelope"
+path = "docs/contracts/p00/RECIPES.md"
+line = 25
+level = 2
+heading = "Common request envelope"
+kind = "implementation_contract"
+modules = ["search-contracts:recipes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#common-selectors"
+path = "docs/contracts/p00/RECIPES.md"
+line = 48
+level = 2
+heading = "Common selectors"
+kind = "implementation_contract"
+modules = ["search-contracts:recipes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#recipe-bodies"
+path = "docs/contracts/p00/RECIPES.md"
+line = 73
+level = 2
+heading = "Recipe bodies"
+kind = "implementation_contract"
+modules = ["search-contracts:recipes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPES.md#output-minimums"
+path = "docs/contracts/p00/RECIPES.md"
+line = 130
+level = 2
+heading = "Output minimums"
+kind = "implementation_contract"
+modules = ["search-contracts:recipes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#recipe-specific-result-schemas"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 1
+level = 1
+heading = "Recipe-specific result schemas"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#common-header"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 7
+level = 2
+heading = "Common header"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#subject-resolution"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 19
+level = 2
+heading = "Subject resolution"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#inspection"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 49
+level = 2
+heading = "Inspection"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#entity-exploration"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 77
+level = 2
+heading = "Entity exploration"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#cross-repository-comparison"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 107
+level = 2
+heading = "Cross-repository comparison"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#corpus-profile"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 149
+level = 2
+heading = "Corpus profile"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#corpus-delta"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 167
+level = 2
+heading = "Corpus delta"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#provenance"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 188
+level = 2
+heading = "Provenance"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#handle-expansion"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 208
+level = 2
+heading = "Handle expansion"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#tagged-recipe-result"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 241
+level = 2
+heading = "Tagged recipe result"
+kind = "implementation_contract"
+modules = ["search-contracts:results"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-ownership-residency-and-view-schemas"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 1
+level = 1
+heading = "Source, ownership, residency and view schemas"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#installation-and-route"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 5
+level = 2
+heading = "Installation and route"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#repository-and-workspace"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 27
+level = 2
+heading = "Repository and workspace"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#namespace-ownership"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 45
+level = 2
+heading = "Namespace ownership"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-identity-and-revision-occurrence"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 100
+level = 2
+heading = "Source identity and revision occurrence"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#membership-and-portfolio"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 140
+level = 2
+heading = "Membership and portfolio"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#residency-and-preparation"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 168
+level = 2
+heading = "Residency and preparation"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-view"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 220
+level = 2
+heading = "Source view"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-admission-policy"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 256
+level = 2
+heading = "Source admission policy"
+kind = "implementation_contract"
+modules = ["search-contracts:source"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#p00-subordinate-support-schemas"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 1
+level = 1
+heading = "P00 subordinate support schemas"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#ranking-and-execution-summaries"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 6
+level = 2
+heading = "Ranking and execution summaries"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#subject-and-comparison-observations"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 46
+level = 2
+heading = "Subject and comparison observations"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#exact-proof-support"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 74
+level = 2
+heading = "Exact proof support"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#readiness-and-provider-support"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 105
+level = 2
+heading = "Readiness and provider support"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#progress-and-non-content-metadata"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 128
+level = 2
+heading = "Progress and non-content metadata"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#handle-expansion-support"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 154
+level = 2
+heading = "Handle expansion support"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#port-receipt-support-ownership"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 175
+level = 2
+heading = "Port receipt support ownership"
+kind = "implementation_contract"
+modules = ["search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#p00-named-type-completions"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 1
+level = 1
+heading = "P00 named-type completions"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#recipeidv1"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 10
+level = 2
+heading = "RecipeIdV1"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#recipebodyv1"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 32
+level = 2
+heading = "RecipeBodyV1"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#comparisonaxis"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 40
+level = 2
+heading = "ComparisonAxis"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#protocolrange"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 57
+level = 2
+heading = "ProtocolRange"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#packageopaque"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 77
+level = 2
+heading = "PackageOpaque"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#registry-accounting"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 97
+level = 2
+heading = "Registry accounting"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_COMPLETIONS.md#required-tests"
+path = "docs/contracts/p00/TYPE_COMPLETIONS.md"
+line = 103
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-contracts:protocol", "search-contracts:recipes", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#p00-supporting-type-registry"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 1
+level = 1
+heading = "P00 supporting type registry"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#visibility-and-owner-classes"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 6
+level = 2
+heading = "Visibility and owner classes"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#bounds-and-collections"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 18
+level = 2
+heading = "Bounds and collections"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#opaque-and-display-wrappers"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 48
+level = 2
+heading = "Opaque and display wrappers"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#identity-and-reference-registry"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 67
+level = 2
+heading = "Identity and reference registry"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#baseline-semantic-registries"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 130
+level = 2
+heading = "Baseline semantic registries"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#coverage-records"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 150
+level = 2
+heading = "Coverage records"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#port-support-records-owned-by-search-ports"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 180
+level = 2
+heading = "Port support records — owned by search-ports"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#new-type-rule"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 215
+level = 2
+heading = "New-type rule"
+kind = "implementation_contract"
+modules = ["search-contracts:bounds", "search-contracts:ids", "search-contracts:schema"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-contracts:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-contracts.md#search-contracts-implementation-packet"
+path = "swarm/assignments/search-contracts.md"
+line = 1
+level = 1
+heading = "search-contracts implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-contracts:bounds", "search-contracts:canonical", "search-contracts:error", "search-contracts:ids", "search-contracts:lib", "search-contracts:lifecycle", "search-contracts:protocol", "search-contracts:query", "search-contracts:reasons", "search-contracts:recipes", "search-contracts:results", "search-contracts:schema", "search-contracts:source"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-contracts.md#mission"
+path = "swarm/assignments/search-contracts.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-contracts.md#owns"
+path = "swarm/assignments/search-contracts.md"
+line = 15
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-contracts.md#does-not-own"
+path = "swarm/assignments/search-contracts.md"
+line = 22
+level = 2
+heading = "Does not own"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-contracts.md#required-decisions"
+path = "swarm/assignments/search-contracts.md"
+line = 27
+level = 2
+heading = "Required decisions"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-contracts.md#exit-evidence"
+path = "swarm/assignments/search-contracts.md"
+line = 34
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["search-contracts:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

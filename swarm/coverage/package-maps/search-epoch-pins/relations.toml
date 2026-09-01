@@ -1,0 +1,174 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-epoch-pins"
+outbound_dependency_count = 3
+inbound_dependency_count = 5
+architecture_relation_count = 5
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-epoch-pins->search-contracts"
+consumer = "search-epoch-pins"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-epoch-pins->search-domain"
+consumer = "search-epoch-pins"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-epoch-pins->search-ports"
+consumer = "search-epoch-pins"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-epoch-pins"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-continuation->search-epoch-pins"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-index-reclaimer->search-epoch-pins"
+consumer = "search-index-reclaimer"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-retention->search-epoch-pins"
+consumer = "search-retention"
+consumer_module = "api"
+consumer_earliest_wave = 7
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-runtime/search-retention/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-retrieval-executor->search-epoch-pins"
+consumer = "search-retrieval-executor"
+consumer_module = "pins"
+consumer_earliest_wave = 4
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S14"
+modules = ["search-epoch-pins:registry"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S26"
+modules = ["search-epoch-pins:registry"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C17"
+modules = ["search-epoch-pins:registry", "search-epoch-pins:watermark"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P07"
+modules = ["search-epoch-pins:registry"]
+required_outputs = ["serialized_publication", "exact_ack_and_readback", "visible_epoch_commit", "pins_and_reclaim", "doctor_recovery"]
+exit_evidence = ["all_publication_failpoints", "transactional_guard_race", "no_staged_visibility", "no_pinned_reclaim", "blocked_abandon_recovery"]
+
+[[architecture]]
+kind = "delivery"
+id = "P18"
+modules = ["search-epoch-pins:registry"]
+required_outputs = ["measured_scale_change", "candidate_collection_build", "ordered_catchup", "final_barrier", "redb_route_cutover", "rollback"]
+exit_evidence = ["migration_state_kill_tests", "old_route_pin_drainage", "failed_candidate_discard", "scoring_currentness_noninterference", "rollback_plan"]
+
+[[port]]
+name = "EpochPinPort"
+module = "registry"
+methods = ["acquire_epoch_pin", "acquire_route_pin", "reclamation_watermark", "release_owner"]
+method_modules = ["acquire", "acquire", "watermark", "release"]

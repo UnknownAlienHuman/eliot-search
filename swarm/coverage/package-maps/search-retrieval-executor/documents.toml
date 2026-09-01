@@ -1,0 +1,822 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-retrieval-executor"
+node_count = 74
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/scheduler.md#scheduler-configuration-contract"
+path = "config/sections/scheduler.md"
+line = 1
+level = 1
+heading = "[scheduler] configuration contract"
+kind = "configuration_contract"
+modules = ["search-retrieval-executor:config"]
+route_kind = "config_owner"
+rationale = "scheduler"
+
+[[node]]
+id = "config/sections/scheduler.md#fields"
+path = "config/sections/scheduler.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-retrieval-executor:config"]
+route_kind = "config_owner"
+rationale = "scheduler"
+
+[[node]]
+id = "config/sections/scheduler.md#required-section-api"
+path = "config/sections/scheduler.md"
+line = 25
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-retrieval-executor:config"]
+route_kind = "config_owner"
+rationale = "scheduler"
+
+[[node]]
+id = "config/sections/scheduler.md#invariants"
+path = "config/sections/scheduler.md"
+line = 39
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-retrieval-executor:config"]
+route_kind = "config_owner"
+rationale = "scheduler"
+
+[[node]]
+id = "config/sections/scheduler.md#required-tests"
+path = "config/sections/scheduler.md"
+line = 45
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-retrieval-executor:config"]
+route_kind = "config_owner"
+rationale = "scheduler"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/AGENTS.md#agent-contract-search-retrieval-executor"
+path = "crates/search-query/search-retrieval-executor/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-retrieval-executor"
+kind = "implementation_contract_root"
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/AGENTS.md#ownership"
+path = "crates/search-query/search-retrieval-executor/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-retrieval-executor/AGENTS.md"
+line = 13
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/AGENTS.md#dependencies"
+path = "crates/search-query/search-retrieval-executor/AGENTS.md"
+line = 19
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/AGENTS.md#size"
+path = "crates/search-query/search-retrieval-executor/AGENTS.md"
+line = 23
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#function-contract-search-retrieval-executor"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-retrieval-executor"
+kind = "implementation_contract_root"
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#admission-and-scheduling"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Admission and scheduling"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#admit-plan-bindingquota-schedulersnapshot-result-executionguard-executeerror"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "admit(plan, bindingquota, schedulersnapshot) -> Result<ExecutionGuard, ExecuteError>"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:request"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::admit"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#scheduleleg-guard-leg-dependencystate-result-legticket-executeerror"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "scheduleleg(guard, leg, dependencystate) -> Result<LegTicket, ExecuteError>"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:scheduler"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::schedule_leg"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#acquirelegpins-ticket-pinport-result-legpinset-executeerror"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "acquirelegpins(ticket, pinport) -> Result<LegPinSet, ExecuteError>"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:pins"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::acquire_leg_pins"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#dispatchleg-ticket-ports-cancellation-result-legoutput-executeerror"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 27
+level = 3
+heading = "dispatchleg(ticket, ports, cancellation) -> Result<LegOutput, ExecuteError>"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:request"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::dispatch_leg"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#fusion-and-contamination"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 33
+level = 2
+heading = "Fusion and contamination"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#normalizewithinpopulation-output-profile-result-rankedlegoutput-executeerror"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 35
+level = 3
+heading = "normalizewithinpopulation(output, profile) -> Result<RankedLegOutput, ExecuteError>"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:fusion"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::normalize_within_population"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#fusesafelegs-outputs-fusionprofile-result-fusednominations-executeerror"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 39
+level = 3
+heading = "fusesafelegs(outputs, fusionprofile) -> Result<FusedNominations, ExecuteError>"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::fuse_safe_legs"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#discardcontaminated-decision-execution-contaminationreceipt"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 44
+level = 3
+heading = "discardcontaminated(decision, execution) -> ContaminationReceipt"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::discard_contaminated"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#classifycompletion-execution-plan-budget-executioncoverage"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 49
+level = 3
+heading = "classifycompletion(execution, plan, budget) -> ExecutionCoverage"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::classify_completion"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#cancel-requestid-reason-canceloutcome"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 54
+level = 3
+heading = "cancel(requestid, reason) -> CancelOutcome"
+kind = "implementation_operation"
+modules = ["search-retrieval-executor:cleanup"]
+route_kind = "operation_route"
+rationale = "search-retrieval-executor::cancel"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#configuration-and-failure-semantics"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 59
+level = 2
+heading = "Configuration and failure semantics"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/FUNCTIONS.md#required-fixtures"
+path = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+line = 67
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/README.md#search-retrieval-executor"
+path = "crates/search-query/search-retrieval-executor/README.md"
+line = 1
+level = 1
+heading = "search-retrieval-executor"
+kind = "implementation_contract_root"
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/README.md#owns"
+path = "crates/search-query/search-retrieval-executor/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-retrieval-executor/README.md#must-not-own"
+path = "crates/search-query/search-retrieval-executor/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-access-compilation-and-noninterference"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1193
+level = 2
+heading = "S19. Access compilation and noninterference"
+kind = "architecture_section"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "architecture_section_registry"
+rationale = "S19"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-1-searchreadgrant"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1195
+level = 3
+heading = "S19.1 SearchReadGrant"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-2-searchtaskplan"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1228
+level = 3
+heading = "S19.2 SearchTaskPlan"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-3-retrieval-legs"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1258
+level = 3
+heading = "S19.3 Retrieval legs"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s19-4-no-post-filter-only-security"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1264
+level = 3
+heading = "S19.4 No post-filter-only security"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:contamination"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-subject-resolution-and-retrieval-planning"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1322
+level = 2
+heading = "S21. Subject resolution and retrieval planning"
+kind = "architecture_section"
+modules = ["search-retrieval-executor:fusion"]
+route_kind = "architecture_section_registry"
+rationale = "S21"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-1-subject-resolver"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1324
+level = 3
+heading = "S21.1 Subject resolver"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:fusion"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-2-retrieval-ladder"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1336
+level = 3
+heading = "S21.2 Retrieval ladder"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:fusion"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s21-3-deterministic-fusion"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1349
+level = 3
+heading = "S21.3 Deterministic fusion"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:fusion"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-resource-governance-and-candidate-slos"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1738
+level = 2
+heading = "S30. Resource governance and candidate SLOs"
+kind = "architecture_section"
+modules = ["search-retrieval-executor:scheduler"]
+route_kind = "architecture_section_registry"
+rationale = "S30"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-1-resource-priorities"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1740
+level = 3
+heading = "S30.1 Resource priorities"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:scheduler"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-2-candidate-slos-not-claims"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1744
+level = 3
+heading = "S30.2 Candidate SLOs, not claims"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:scheduler"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s30-3-queryexecutionbudget-and-scheduler"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1757
+level = 3
+heading = "S30.3 QueryExecutionBudget and scheduler"
+kind = "architecture_node"
+modules = ["search-retrieval-executor:scheduler"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["search-retrieval-executor:fusion", "search-retrieval-executor:scheduler"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p16-optional-semantic-depth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2931
+level = 3
+heading = "P16 — Optional semantic depth"
+kind = "delivery_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "delivery_registry"
+rationale = "P16"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-retrieval-executor:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/query/README.md#w4-query-qualification"
+path = "qualification/query/README.md"
+line = 1
+level = 1
+heading = "W4 query qualification"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#w4-bounded-query-product-qualification-contract"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W4 bounded query product qualification contract"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#owners"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#frozen-inputs"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-order"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 45
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#mandatory-properties"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 60
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#admission-and-noninterference"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 62
+level = 3
+heading = "Admission and noninterference"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#snapshot-and-planning"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 72
+level = 3
+heading = "Snapshot and planning"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-and-validation"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Execution and validation"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#results-handles-and-continuations"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 91
+level = 3
+heading = "Results, handles and continuations"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#stop-conditions"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 105
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#evidence-products"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 121
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#current-disposition"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 127
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-retrieval-executor:legs"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#search-retrieval-executor-implementation-packet"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 1
+level = 1
+heading = "search-retrieval-executor implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-retrieval-executor:api", "search-retrieval-executor:cleanup", "search-retrieval-executor:config", "search-retrieval-executor:contamination", "search-retrieval-executor:error", "search-retrieval-executor:fusion", "search-retrieval-executor:legs", "search-retrieval-executor:lib", "search-retrieval-executor:pins", "search-retrieval-executor:request", "search-retrieval-executor:scheduler"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#mission"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#owns"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#must-not-own"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#logical-primitives"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 32
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#logical-operations"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 36
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#required-invariants"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 45
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-retrieval-executor:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#typed-failure-surface"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 54
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#exit-tests-evidence"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 62
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#suggested-internal-modules"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 72
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-retrieval-executor.md#size-split"
+path = "swarm/assignments/search-retrieval-executor.md"
+line = 86
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-retrieval-executor:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

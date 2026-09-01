@@ -1,0 +1,976 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-domain"
+node_count = 88
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#agent-contract-search-domain"
+path = "crates/search-domain/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-domain"
+kind = "implementation_contract_root"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions", "search-domain:eligibility", "search-domain:error", "search-domain:lib", "search-domain:ordering", "search-domain:outcomes", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#mission"
+path = "crates/search-domain/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#ownership"
+path = "crates/search-domain/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#forbidden-ownership"
+path = "crates/search-domain/AGENTS.md"
+line = 21
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#allowed-dependencies"
+path = "crates/search-domain/AGENTS.md"
+line = 27
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#required-logical-surface"
+path = "crates/search-domain/AGENTS.md"
+line = 32
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#failure-surface"
+path = "crates/search-domain/AGENTS.md"
+line = 45
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-domain:outcomes"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-domain/AGENTS.md"
+line = 50
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#size-and-split-guard"
+path = "crates/search-domain/AGENTS.md"
+line = 61
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/AGENTS.md#definition-of-done"
+path = "crates/search-domain/AGENTS.md"
+line = 69
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/README.md#search-domain"
+path = "crates/search-domain/README.md"
+line = 1
+level = 1
+heading = "search-domain"
+kind = "implementation_contract_root"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions", "search-domain:eligibility", "search-domain:error", "search-domain:lib", "search-domain:ordering", "search-domain:outcomes", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-domain/README.md#owns"
+path = "crates/search-domain/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-domain/README.md#must-not-own"
+path = "crates/search-domain/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s3-non-negotiable-invariants"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 140
+level = 2
+heading = "S3. Non-negotiable invariants"
+kind = "architecture_section"
+modules = ["search-domain:decisions"]
+route_kind = "architecture_section_registry"
+rationale = "S3"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s34-error-and-degradation-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2010
+level = 2
+heading = "S34. Error and degradation model"
+kind = "architecture_section"
+modules = ["search-domain:outcomes"]
+route_kind = "architecture_section_registry"
+rationale = "S34"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p00-contract-freeze"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2824
+level = 3
+heading = "P00 — Contract freeze"
+kind = "delivery_contract"
+modules = ["search-domain:coverage", "search-domain:decisions", "search-domain:eligibility", "search-domain:transitions"]
+route_kind = "delivery_registry"
+rationale = "P00"
+
+[[node]]
+id = "docs/contracts/p00/CONTRACT_CHALLENGES.md#p00-contract-challenge-decisions"
+path = "docs/contracts/p00/CONTRACT_CHALLENGES.md"
+line = 1
+level = 1
+heading = "P00 contract challenge decisions"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/CONTRACT_CHALLENGES.md#stop-conditions"
+path = "docs/contracts/p00/CONTRACT_CHALLENGES.md"
+line = 26
+level = 2
+heading = "Stop conditions"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#grant-snapshot-plan-candidate-and-exact-proof-schemas"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 1
+level = 1
+heading = "Grant, snapshot, plan, candidate and exact-proof schemas"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#read-grant"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 5
+level = 2
+heading = "Read grant"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#execution-budget"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 37
+level = 2
+heading = "Execution budget"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#query-snapshot-fence"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 57
+level = 2
+heading = "Query snapshot fence"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#task-plan"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 90
+level = 2
+heading = "Task plan"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#emission-fence"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 145
+level = 2
+heading = "Emission fence"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#candidate-result"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 170
+level = 2
+heading = "Candidate result"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#native-anchors"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 227
+level = 2
+heading = "Native anchors"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/QUERY_AND_RESULTS.md#exact-plan-and-report"
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+line = 268
+level = 2
+heading = "Exact plan and report"
+kind = "implementation_contract"
+modules = ["search-domain:coverage", "search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#p00-contract-implementation-pack"
+path = "docs/contracts/p00/README.md"
+line = 1
+level = 1
+heading = "P00 contract implementation pack"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#read-sets"
+path = "docs/contracts/p00/README.md"
+line = 7
+level = 2
+heading = "Read sets"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/README.md#files"
+path = "docs/contracts/p00/README.md"
+line = 20
+level = 2
+heading = "Files"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#error-and-reason-code-namespaces"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 1
+level = 1
+heading = "Error and reason-code namespaces"
+kind = "implementation_contract"
+modules = ["search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#1-public-provider-reasons-searchreasoncodev1"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 6
+level = 2
+heading = "1. Public provider reasons — SearchReasonCodeV1"
+kind = "implementation_contract"
+modules = ["search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#2-protocol-errors-protocolerrorcode"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 49
+level = 2
+heading = "2. Protocol errors — ProtocolErrorCode"
+kind = "implementation_contract"
+modules = ["search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#3-contract-validation-errors-contracterrorcode"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 66
+level = 2
+heading = "3. Contract-validation errors — ContractErrorCode"
+kind = "implementation_contract"
+modules = ["search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#4-package-local-errors"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 84
+level = 2
+heading = "4. Package-local errors"
+kind = "implementation_contract"
+modules = ["search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/REASON_CODES.md#mapping-rules"
+path = "docs/contracts/p00/REASON_CODES.md"
+line = 96
+level = 2
+heading = "Mapping rules"
+kind = "implementation_contract"
+modules = ["search-domain:outcomes"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#recipe-specific-result-schemas"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 1
+level = 1
+heading = "Recipe-specific result schemas"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#common-header"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 7
+level = 2
+heading = "Common header"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#subject-resolution"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 19
+level = 2
+heading = "Subject resolution"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#inspection"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 49
+level = 2
+heading = "Inspection"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#entity-exploration"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 77
+level = 2
+heading = "Entity exploration"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#cross-repository-comparison"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 107
+level = 2
+heading = "Cross-repository comparison"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#corpus-profile"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 149
+level = 2
+heading = "Corpus profile"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#corpus-delta"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 167
+level = 2
+heading = "Corpus delta"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#provenance"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 188
+level = 2
+heading = "Provenance"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#handle-expansion"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 208
+level = 2
+heading = "Handle expansion"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/RECIPE_RESULTS.md#tagged-recipe-result"
+path = "docs/contracts/p00/RECIPE_RESULTS.md"
+line = 241
+level = 2
+heading = "Tagged recipe result"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-ownership-residency-and-view-schemas"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 1
+level = 1
+heading = "Source, ownership, residency and view schemas"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#installation-and-route"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 5
+level = 2
+heading = "Installation and route"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#repository-and-workspace"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 27
+level = 2
+heading = "Repository and workspace"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#namespace-ownership"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 45
+level = 2
+heading = "Namespace ownership"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-identity-and-revision-occurrence"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 100
+level = 2
+heading = "Source identity and revision occurrence"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#membership-and-portfolio"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 140
+level = 2
+heading = "Membership and portfolio"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#residency-and-preparation"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 168
+level = 2
+heading = "Residency and preparation"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-view"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 220
+level = 2
+heading = "Source view"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SOURCE_GRAPH.md#source-admission-policy"
+path = "docs/contracts/p00/SOURCE_GRAPH.md"
+line = 256
+level = 2
+heading = "Source admission policy"
+kind = "implementation_contract"
+modules = ["search-domain:currentness", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#p00-subordinate-support-schemas"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 1
+level = 1
+heading = "P00 subordinate support schemas"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#ranking-and-execution-summaries"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 6
+level = 2
+heading = "Ranking and execution summaries"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#subject-and-comparison-observations"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 46
+level = 2
+heading = "Subject and comparison observations"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#exact-proof-support"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 74
+level = 2
+heading = "Exact proof support"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#readiness-and-provider-support"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 105
+level = 2
+heading = "Readiness and provider support"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#progress-and-non-content-metadata"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 128
+level = 2
+heading = "Progress and non-content metadata"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#handle-expansion-support"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 154
+level = 2
+heading = "Handle expansion support"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/SUPPORT_SCHEMAS.md#port-receipt-support-ownership"
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+line = 175
+level = 2
+heading = "Port receipt support ownership"
+kind = "implementation_contract"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#p00-supporting-type-registry"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 1
+level = 1
+heading = "P00 supporting type registry"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#visibility-and-owner-classes"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 6
+level = 2
+heading = "Visibility and owner classes"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#bounds-and-collections"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 18
+level = 2
+heading = "Bounds and collections"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#opaque-and-display-wrappers"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 48
+level = 2
+heading = "Opaque and display wrappers"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#identity-and-reference-registry"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 67
+level = 2
+heading = "Identity and reference registry"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#baseline-semantic-registries"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 130
+level = 2
+heading = "Baseline semantic registries"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#coverage-records"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 150
+level = 2
+heading = "Coverage records"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#port-support-records-owned-by-search-ports"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 180
+level = 2
+heading = "Port support records — owned by search-ports"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/contracts/p00/TYPE_REGISTRY.md#new-type-rule"
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+line = 215
+level = 2
+heading = "New-type rule"
+kind = "implementation_contract"
+modules = ["search-domain:decisions"]
+route_kind = "explicit_file_route"
+rationale = "bounded cross-package contract"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-domain:lib"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-domain.md#search-domain-implementation-packet"
+path = "swarm/assignments/search-domain.md"
+line = 1
+level = 1
+heading = "search-domain implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-domain:assurance", "search-domain:coverage", "search-domain:currentness", "search-domain:decisions", "search-domain:eligibility", "search-domain:error", "search-domain:lib", "search-domain:ordering", "search-domain:outcomes", "search-domain:transitions", "search-domain:visibility"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-domain.md#mission"
+path = "swarm/assignments/search-domain.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-domain.md#owns"
+path = "swarm/assignments/search-domain.md"
+line = 14
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-domain.md#does-not-own"
+path = "swarm/assignments/search-domain.md"
+line = 23
+level = 2
+heading = "Does not own"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-domain.md#required-operations"
+path = "swarm/assignments/search-domain.md"
+line = 28
+level = 2
+heading = "Required operations"
+kind = "implementation_contract"
+modules = ["search-domain:lib"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-domain.md#invariants-tests"
+path = "swarm/assignments/search-domain.md"
+line = 40
+level = 2
+heading = "Invariants/tests"
+kind = "principle_or_invariant"
+modules = ["search-domain:lib"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"

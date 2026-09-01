@@ -1,0 +1,158 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-source-identity"
+operation_count = 15
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-source-identity::classify_repository_lineage"
+name = "classify_repository_lineage"
+module = "lineage"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Repository and workspace lineage"]
+route_kind = "semantic"
+score = 109
+
+[[operation]]
+id = "search-source-identity::compare_identity"
+name = "compare_identity"
+module = "source"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Source identity resolution"]
+route_kind = "semantic"
+score = 22
+
+[[operation]]
+id = "search-source-identity::derive_canonical_path_key"
+name = "derive_canonical_path_key"
+module = "observation"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Observation validation"]
+route_kind = "semantic"
+score = 23
+
+[[operation]]
+id = "search-source-identity::derive_source_identity"
+name = "derive_source_identity"
+module = "source"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Source identity resolution"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-source-identity::derive_workspace_identity"
+name = "derive_workspace_identity"
+module = "source"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Repository and workspace lineage"]
+route_kind = "semantic"
+score = 22
+
+[[operation]]
+id = "search-source-identity::open_path_binding"
+name = "open_path_binding"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Path binding state"]
+route_kind = "semantic"
+score = 130
+
+[[operation]]
+id = "search-source-identity::redacted_identity_view"
+name = "redacted_identity_view"
+module = "redaction"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Batch and redaction operations"]
+route_kind = "semantic"
+score = 32
+
+[[operation]]
+id = "search-source-identity::relate_hardlink_bindings"
+name = "relate_hardlink_bindings"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Path binding state"]
+route_kind = "semantic"
+score = 86
+
+[[operation]]
+id = "search-source-identity::resolve_batch"
+name = "resolve_batch"
+module = "batch"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Batch and redaction operations"]
+route_kind = "semantic"
+score = 108
+
+[[operation]]
+id = "search-source-identity::resolve_identity"
+name = "resolve_identity"
+module = "source"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Source identity resolution"]
+route_kind = "semantic"
+score = 22
+
+[[operation]]
+id = "search-source-identity::transition_path_binding"
+name = "transition_path_binding"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Path binding state"]
+route_kind = "semantic"
+score = 130
+
+[[operation]]
+id = "search-source-identity::validate_binding_history"
+name = "validate_binding_history"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Path binding state"]
+route_kind = "semantic"
+score = 130
+
+[[operation]]
+id = "search-source-identity::validate_filesystem_profile"
+name = "validate_filesystem_profile"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Observation validation"]
+route_kind = "semantic"
+score = 115
+
+[[operation]]
+id = "search-source-identity::validate_identity_observation"
+name = "validate_identity_observation"
+module = "observation"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Observation validation"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-source-identity::validate_repository_observation"
+name = "validate_repository_observation"
+module = "observation"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-identity/FUNCTIONS.md"]
+source_contexts = ["Repository and workspace lineage"]
+route_kind = "semantic"
+score = 86

@@ -1,0 +1,648 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "eliot-searchd"
+operation_count = 64
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "eliot-searchd::acquire_root"
+name = "acquire_root"
+module = "startup"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["W1 startup shell"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::activate_optional_profile"
+name = "activate_optional_profile"
+module = "profile"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+source_contexts = ["W8 integration contract — eliot-searchd"]
+route_kind = "semantic"
+score = 116
+
+[[operation]]
+id = "eliot-searchd::admit_connection"
+name = "admit_connection"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Request admission and lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::admit_request"
+name = "admit_request"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Request admission and lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::authorize_optional_request"
+name = "authorize_optional_request"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Activation and capability publication"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "eliot-searchd::begin_drain"
+name = "begin_drain"
+module = "shutdown"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Drain and shutdown"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::bind_ports"
+name = "bind_ports"
+module = "adapters"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Concrete adapter construction"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::build_authoritative_capability_snapshot"
+name = "build_authoritative_capability_snapshot"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+source_contexts = ["W8 integration contract — eliot-searchd"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "eliot-searchd::build_candidate_config"
+name = "build_candidate_config"
+module = "config"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Configuration acquisition and activation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::build_candidate_generation"
+name = "build_candidate_generation"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Candidate preparation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::build_wave1_shell"
+name = "build_wave1_shell"
+module = "startup"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["W1 startup shell"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::cancel_request"
+name = "cancel_request"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Request admission and lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::capture_config_inputs"
+name = "capture_config_inputs"
+module = "config"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Configuration acquisition and activation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::classify_optional_failure"
+name = "classify_optional_failure"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Failure and degradation"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::classify_profile_change"
+name = "classify_profile_change"
+module = "profile"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Composition profile operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::collect_dependency_health"
+name = "collect_dependency_health"
+module = "readiness"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Readiness and capability publication"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::commit_baseline_restore"
+name = "commit_baseline_restore"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Deactivation and removal"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::commit_optional_activation"
+name = "commit_optional_activation"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Activation and capability publication"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::commit_scale_route_switch"
+name = "commit_scale_route_switch"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["P18 advanced-scale integration"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "eliot-searchd::compose_client_edge"
+name = "compose_client_edge"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Progressive capability composition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::compose_currentness_and_proof"
+name = "compose_currentness_and_proof"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Progressive capability composition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::compose_evaluation_mode"
+name = "compose_evaluation_mode"
+module = "evaluation"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Progressive capability composition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::compose_generic_client_edge"
+name = "compose_generic_client_edge"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+source_contexts = ["W8 integration contract — eliot-searchd"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::compose_index_profile"
+name = "compose_index_profile"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Progressive capability composition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::compose_optional_candidate"
+name = "compose_optional_candidate"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Progressive capability composition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::compose_query_profile"
+name = "compose_query_profile"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Progressive capability composition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::compose_source_spine"
+name = "compose_source_spine"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Progressive capability composition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::composition_digest"
+name = "composition_digest"
+module = "profile"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Composition profile operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::construct_platform_adapters"
+name = "construct_platform_adapters"
+module = "adapters"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Concrete adapter construction"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::deactivate_optional_profile"
+name = "deactivate_optional_profile"
+module = "profile"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+source_contexts = ["W8 integration contract — eliot-searchd"]
+route_kind = "semantic"
+score = 116
+
+[[operation]]
+id = "eliot-searchd::derive_readiness"
+name = "derive_readiness"
+module = "readiness"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Readiness and capability publication"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::dispatch_request"
+name = "dispatch_request"
+module = "request"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Request admission and lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::drain_and_remove_optional"
+name = "drain_and_remove_optional"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Deactivation and removal"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::drain_generic_edge"
+name = "drain_generic_edge"
+module = "shutdown"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+source_contexts = ["W8 integration contract — eliot-searchd"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::drain_requests"
+name = "drain_requests"
+module = "shutdown"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Drain and shutdown"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::evaluate_optional_candidate"
+name = "evaluate_optional_candidate"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Gate evaluation"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::execute_config_activation"
+name = "execute_config_activation"
+module = "config"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Configuration acquisition and activation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::handle_disconnect"
+name = "handle_disconnect"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Request admission and lifecycle"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::initialize_secrets_and_control"
+name = "initialize_secrets_and_control"
+module = "startup"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["W1 startup shell"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::mint_standalone_grant"
+name = "mint_standalone_grant"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+source_contexts = ["W8 integration contract — eliot-searchd"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::monitor_optional_worker"
+name = "monitor_optional_worker"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Worker composition"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::plan_config_activation"
+name = "plan_config_activation"
+module = "config"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Configuration acquisition and activation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::plan_optional_activation"
+name = "plan_optional_activation"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Candidate preparation"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::plan_optional_removal"
+name = "plan_optional_removal"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Deactivation and removal"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::plan_scale_candidate"
+name = "plan_scale_candidate"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["P18 advanced-scale integration"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "eliot-searchd::publish_capability_snapshot"
+name = "publish_capability_snapshot"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Readiness and capability publication"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::publish_control_snapshot"
+name = "publish_control_snapshot"
+module = "startup"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["W1 startup shell"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::publish_optional_capability_snapshot"
+name = "publish_optional_capability_snapshot"
+module = "capability"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Activation and capability publication"]
+route_kind = "semantic"
+score = 123
+
+[[operation]]
+id = "eliot-searchd::recover_config_activation"
+name = "recover_config_activation"
+module = "config"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Configuration acquisition and activation"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::recover_operations"
+name = "recover_operations"
+module = "recovery"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Recovery"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::recover_optional_activation"
+name = "recover_optional_activation"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Failure and degradation"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::recover_startup"
+name = "recover_startup"
+module = "recovery"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Recovery"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::release_owner"
+name = "release_owner"
+module = "shutdown"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Drain and shutdown"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::rollback_scale_route"
+name = "rollback_scale_route"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["P18 advanced-scale integration"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "eliot-searchd::serve_provider_connection"
+name = "serve_provider_connection"
+module = "connection"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W8_INTEGRATION.md"]
+source_contexts = ["W8 integration contract — eliot-searchd"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "eliot-searchd::shutdown_services"
+name = "shutdown_services"
+module = "shutdown"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Drain and shutdown"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::stage_optional_candidate"
+name = "stage_optional_candidate"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Candidate preparation"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::start_document_worker"
+name = "start_document_worker"
+module = "startup"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Worker composition"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "eliot-searchd::start_model_worker"
+name = "start_model_worker"
+module = "startup"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Worker composition"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "eliot-searchd::start_provider_endpoint"
+name = "start_provider_endpoint"
+module = "startup"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["W1 startup shell"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::validate_composition_profile"
+name = "validate_composition_profile"
+module = "profile"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Composition profile operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "eliot-searchd::validate_optional_candidate"
+name = "validate_optional_candidate"
+module = "optional"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Candidate preparation"]
+route_kind = "semantic"
+score = 78
+
+[[operation]]
+id = "eliot-searchd::verify_candidate_receipt_chain"
+name = "verify_candidate_receipt_chain"
+module = "evaluation"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/W10_INTEGRATION.md"]
+source_contexts = ["Gate evaluation"]
+route_kind = "semantic"
+score = 14
+
+[[operation]]
+id = "eliot-searchd::verify_dependency_graph"
+name = "verify_dependency_graph"
+module = "adapters"
+public_entry_module = "main"
+sources = ["bins/eliot-searchd/FUNCTIONS.md"]
+source_contexts = ["Concrete adapter construction"]
+route_kind = "package_rule"
+score = 100

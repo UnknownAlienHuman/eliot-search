@@ -1,0 +1,218 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-model-provider"
+operation_count = 21
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-model-provider::apply_rerank_failure_policy"
+name = "apply_rerank_failure_policy"
+module = "rerank"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Rerank operations"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-model-provider::classify_profile_capability"
+name = "classify_profile_capability"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Planning and migration classification"]
+route_kind = "semantic"
+score = 115
+
+[[operation]]
+id = "search-model-provider::classify_profile_change"
+name = "classify_profile_change"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Planning and migration classification"]
+route_kind = "semantic"
+score = 115
+
+[[operation]]
+id = "search-model-provider::describe_capability"
+name = "describe_capability"
+module = "capability"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 86
+
+[[operation]]
+id = "search-model-provider::encode_documents"
+name = "encode_documents"
+module = "encode"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Encode operations"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-model-provider::encode_query"
+name = "encode_query"
+module = "encode"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Encode operations"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-model-provider::instrumentation_summary"
+name = "instrumentation_summary"
+module = "capability"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Measurement and removal support"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-model-provider::prepare_model_input"
+name = "prepare_model_input"
+module = "validation"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Encoding inputs"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-model-provider::prepare_removal"
+name = "prepare_removal"
+module = "lifecycle"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Measurement and removal support"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-model-provider::profile_digest"
+name = "profile_digest"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-model-provider::rerank"
+name = "rerank"
+module = "rerank"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Rerank operations"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-model-provider::validate_document_batch"
+name = "validate_document_batch"
+module = "validation"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Encoding inputs"]
+route_kind = "semantic"
+score = 8
+
+[[operation]]
+id = "search-model-provider::validate_incremental_benefit_receipt"
+name = "validate_incremental_benefit_receipt"
+module = "validation"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Measurement and removal support"]
+route_kind = "semantic"
+score = 8
+
+[[operation]]
+id = "search-model-provider::validate_profile_descriptor"
+name = "validate_profile_descriptor"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 155
+
+[[operation]]
+id = "search-model-provider::validate_qualification_receipt"
+name = "validate_qualification_receipt"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Profile operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-model-provider::validate_query_input"
+name = "validate_query_input"
+module = "validation"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Encoding inputs"]
+route_kind = "semantic"
+score = 8
+
+[[operation]]
+id = "search-model-provider::validate_removal_receipt"
+name = "validate_removal_receipt"
+module = "lifecycle"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Measurement and removal support"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-model-provider::validate_rerank_output"
+name = "validate_rerank_output"
+module = "rerank"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Rerank operations"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-model-provider::validate_rerank_request"
+name = "validate_rerank_request"
+module = "rerank"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Rerank operations"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-model-provider::validate_vector_output"
+name = "validate_vector_output"
+module = "encode"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Encode operations"]
+route_kind = "semantic"
+score = 36
+
+[[operation]]
+id = "search-model-provider::vector_projection_receipt"
+name = "vector_projection_receipt"
+module = "encode"
+public_entry_module = "api"
+sources = ["crates/search-model-provider/FUNCTIONS.md"]
+source_contexts = ["Encode operations"]
+route_kind = "semantic"
+score = 36

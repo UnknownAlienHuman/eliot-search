@@ -1,0 +1,216 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-publication"
+outbound_dependency_count = 5
+inbound_dependency_count = 1
+architecture_relation_count = 15
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 1
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-publication->search-contracts"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-publication->search-domain"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-publication->search-ports"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-publication->search-projection-planner"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-projection-planner"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-publication->search-point-identity"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-point-identity"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-publication"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-publication"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S10"
+modules = ["search-publication:intent"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S11"
+modules = ["search-publication:readback"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S13"
+modules = ["search-publication:actor", "search-publication:commit", "search-publication:recovery"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S28"
+modules = ["search-publication:recovery"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S36"
+modules = ["search-publication:recovery"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C16"
+modules = ["search-publication:commit", "search-publication:intent", "search-publication:readback", "search-publication:recovery", "search-publication:stage"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-11"
+modules = ["search-publication:commit"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-12"
+modules = ["search-publication:intent"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-13"
+modules = ["search-publication:actor"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-14"
+modules = ["search-publication:commit", "search-publication:readback"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-23"
+modules = ["search-publication:commit"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-25"
+modules = ["search-publication:commit"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P07"
+modules = ["search-publication:actor", "search-publication:commit", "search-publication:intent", "search-publication:readback", "search-publication:recovery"]
+required_outputs = ["serialized_publication", "exact_ack_and_readback", "visible_epoch_commit", "pins_and_reclaim", "doctor_recovery"]
+exit_evidence = ["all_publication_failpoints", "transactional_guard_race", "no_staged_visibility", "no_pinned_reclaim", "blocked_abandon_recovery"]
+
+[[architecture]]
+kind = "delivery"
+id = "P13"
+modules = ["search-publication:recovery"]
+required_outputs = ["security_mutation_linearization", "durable_source_handles", "CAS_mark_and_sweep", "purge_receipts_and_tombstones", "restore_revalidation"]
+exit_evidence = ["revocation_during_query", "handle_denial", "purge_non_resurrection", "mismatched_restore_quarantine"]
+
+[[architecture]]
+kind = "delivery"
+id = "P18"
+modules = ["search-publication:commit", "search-publication:recovery"]
+required_outputs = ["measured_scale_change", "candidate_collection_build", "ordered_catchup", "final_barrier", "redb_route_cutover", "rollback"]
+exit_evidence = ["migration_state_kill_tests", "old_route_pin_drainage", "failed_candidate_discard", "scoring_currentness_noninterference", "rollback_plan"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "publication_records"
+owner_roles = ["state_owner"]
+modules = ["intent"]
+schemas = ["PublicationIntent", "PublicationReceipt", "AbandonedPublicationFence"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]

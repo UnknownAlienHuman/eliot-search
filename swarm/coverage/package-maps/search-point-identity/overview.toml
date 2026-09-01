@@ -1,0 +1,159 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity"
+kind = "lib"
+family = "index"
+cell = "C14"
+earliest_wave = 3
+optional = false
+soft_src_line_target = 4500
+assignment = "swarm/assignments/search-point-identity.md"
+function_source = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+qualification = "NONE"
+config_sections = []
+declared_dependencies = ["search-contracts", "search-domain"]
+module_count = 9
+operation_count = 6
+documentation_node_count = 43
+principle_node_count = 1
+outbound_dependency_count = 2
+inbound_dependency_count = 3
+architecture_relation_count = 4
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 0
+operations_map = "swarm/coverage/package-maps/search-point-identity/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-point-identity/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-point-identity/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 32
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 5
+
+[[module]]
+name = "key"
+role = "implementation"
+structural_rationale = ""
+operation_count = 3
+documentation_node_count = 12
+architecture_relation_count = 4
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "canonical"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "digest"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 5
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "uuid"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 5
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "collision"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 9
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "batch"
+role = "structural_support"
+structural_rationale = "bounded pure identity batch coordination"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

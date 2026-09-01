@@ -1,14 +1,19 @@
-schema_version = 1
+schema_version = 2
 source = "docs/contracts/p00/PORT_OPERATIONS.md"
 trait_owner_package = "search-ports"
 port_count = 23
-status = "STATIC_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+method_count = 80
+status = "STATIC_PORT_AND_METHOD_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+methods_are_source_exact = true
+one_concrete_implementation_package_per_port = true
+one_package_local_module_per_method = true
 implementation_authorized_by_this_registry = false
 
 [[port]]
 name = "ClockPort"
 trait_module = "runtime"
 methods = ["utc_now", "monotonic_now"]
+method_modules = ["adapters", "adapters"]
 implementation_package = "eliot-searchd"
 implementation_module = "adapters"
 implementation_kind = "private_platform_adapter"
@@ -16,7 +21,8 @@ implementation_kind = "private_platform_adapter"
 [[port]]
 name = "SecretStorePort"
 trait_module = "runtime"
-methods = ["create_secret", "with_secret", "rotate_secret", "delete_secret"]
+methods = ["create_secret", "lease_secret", "rotate_secret", "delete_secret"]
+method_modules = ["store", "lease", "rotation", "store"]
 implementation_package = "search-os-secrets"
 implementation_module = "store"
 implementation_kind = "capability_package"
@@ -24,7 +30,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "ProcessSupervisorPort"
 trait_module = "runtime"
-methods = ["start", "observe", "request_shutdown", "terminate_owned", "health"]
+methods = ["qualify_artifact", "start_process", "verify_process_identity", "readiness", "shutdown_process"]
+method_modules = ["artifact", "process", "identity", "health", "shutdown"]
 implementation_package = "search-qdrant-supervisor"
 implementation_module = "process"
 implementation_kind = "capability_package"
@@ -32,7 +39,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "ControlJournalPort"
 trait_module = "control"
-methods = ["read_snapshot", "transact", "recover_operation", "migrate", "health", "quarantine"]
+methods = ["read_control_snapshot", "transact", "compare_and_swap_visible_epoch", "load_unresolved_publication", "quarantine", "write_counters"]
+method_modules = ["snapshot", "transaction", "transaction", "transaction", "quarantine", "transaction"]
 implementation_package = "search-control-redb"
 implementation_module = "transaction"
 implementation_kind = "capability_package"
@@ -40,7 +48,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "ControlSnapshotPort"
 trait_module = "control"
-methods = ["current"]
+methods = ["current_snapshot"]
+method_modules = ["snapshot"]
 implementation_package = "search-control-redb"
 implementation_module = "snapshot"
 implementation_kind = "capability_package"
@@ -48,7 +57,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "SourceAdmissionPort"
 trait_module = "source"
-methods = ["evaluate", "verify_receipt", "classify_policy_change"]
+methods = ["normalize_policy", "evaluate", "verify_receipt"]
+method_modules = ["policy", "decision", "receipt"]
 implementation_package = "search-source-admission"
 implementation_module = "decision"
 implementation_kind = "capability_package"
@@ -56,7 +66,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "SourceInventoryPort"
 trait_module = "source"
-methods = ["list_roots", "list_sources", "list_memberships", "resolve_source_view", "resolve_workspace_view"]
+methods = ["resolve_source_view", "resolve_workspace_view", "list_exact_denominator", "lookup_source_head", "read_inventory_revision"]
+method_modules = ["view", "view", "view", "source", "snapshot"]
 implementation_package = "search-source-registry"
 implementation_module = "view"
 implementation_kind = "capability_package"
@@ -64,7 +75,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "SourceOwnershipPort"
 trait_module = "source"
-methods = ["prepare_cutover", "fence_old_owner", "activate_new_owner"]
+methods = ["read_namespace_owner", "transition_namespace_owner", "verify_cutover_receipt"]
+method_modules = ["cutover", "cutover", "cutover"]
 implementation_package = "search-source-registry"
 implementation_module = "cutover"
 implementation_kind = "capability_package"
@@ -72,7 +84,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "SafeReaderPort"
 trait_module = "source"
-methods = ["read_stably", "read_git_object", "read_batch"]
+methods = ["resolve_final_source", "stable_read", "read_git_object_no_execute"]
+method_modules = ["platform", "stable_read", "git_object"]
 implementation_package = "search-safe-reader"
 implementation_module = "stable_read"
 implementation_kind = "capability_package"
@@ -80,7 +93,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "SourceRevisionStorePort"
 trait_module = "source"
-methods = ["admit_revision", "open_revision", "acquire_lease", "release_lease", "recover_operation"]
+methods = ["admit_revision", "reopen_exact", "retain", "release_retention", "enumerate_mark_roots"]
+method_modules = ["revision", "revision", "lease", "lease", "lifecycle"]
 implementation_package = "search-revision-store"
 implementation_module = "revision"
 implementation_kind = "capability_package"
@@ -88,7 +102,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "ResidencyPolicyPort"
 trait_module = "source"
-methods = ["derive_closure", "plan_transition", "verify_transition"]
+methods = ["resolve_residency", "authorize_copy_or_reencrypt", "record_transition"]
+method_modules = ["residency", "residency", "residency"]
 implementation_package = "search-revision-store"
 implementation_module = "residency"
 implementation_kind = "capability_package"
@@ -96,7 +111,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "MaterializerPort"
 trait_module = "preparation"
-methods = ["materialize", "verify"]
+methods = ["profile", "materialize"]
+method_modules = ["profile", "product"]
 implementation_package = "search-materializer"
 implementation_module = "product"
 implementation_kind = "capability_package"
@@ -104,7 +120,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "UnitizerPort"
 trait_module = "preparation"
-methods = ["unitize", "verify"]
+methods = ["profile", "unitize"]
+method_modules = ["profile", "manifest"]
 implementation_package = "search-unitizer"
 implementation_module = "manifest"
 implementation_kind = "capability_package"
@@ -112,7 +129,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "CodeEnricherPort"
 trait_module = "preparation"
-methods = ["enrich", "verify"]
+methods = ["profile", "enrich"]
+method_modules = ["profile", "facts"]
 implementation_package = "search-code-enricher"
 implementation_module = "facts"
 implementation_kind = "capability_package"
@@ -121,6 +139,7 @@ implementation_kind = "capability_package"
 name = "LexicalEncoderPort"
 trait_module = "preparation"
 methods = ["profile", "encode_document", "encode_query", "fixture_digest"]
+method_modules = ["profile", "sparse", "sparse", "fixture"]
 implementation_package = "search-lexical"
 implementation_module = "sparse"
 implementation_kind = "capability_package"
@@ -129,6 +148,7 @@ implementation_kind = "capability_package"
 name = "ModelProviderPort"
 trait_module = "optional"
 methods = ["profile", "encode", "rerank"]
+method_modules = ["profile", "encode", "rerank"]
 implementation_package = "search-model-provider"
 implementation_module = "encode"
 implementation_kind = "optional_capability_package"
@@ -136,7 +156,8 @@ implementation_kind = "optional_capability_package"
 [[port]]
 name = "SearchIndexPort"
 trait_module = "index"
-methods = ["schema", "upsert_points", "close_points", "read_points", "query", "count_exact", "delete_exact"]
+methods = ["probe_capabilities", "ensure_schema", "upsert_exact", "close_exact", "readback_exact", "query", "exact_count"]
+method_modules = ["capability", "schema", "mutation", "mutation", "readback", "query", "readback"]
 implementation_package = "search-qdrant-bridge"
 implementation_module = "mutation"
 implementation_kind = "vendor_adapter_package"
@@ -144,7 +165,8 @@ implementation_kind = "vendor_adapter_package"
 [[port]]
 name = "SearchIndexAdminPort"
 trait_module = "index"
-methods = ["create_collection", "inspect_collection"]
+methods = ["delete_exact", "validate_route"]
+method_modules = ["admin", "admin"]
 implementation_package = "search-qdrant-bridge"
 implementation_module = "admin"
 implementation_kind = "vendor_adapter_package"
@@ -152,7 +174,8 @@ implementation_kind = "vendor_adapter_package"
 [[port]]
 name = "EpochPinPort"
 trait_module = "index"
-methods = ["acquire", "release", "watermark", "active_pins"]
+methods = ["acquire_epoch_pin", "acquire_route_pin", "reclamation_watermark", "release_owner"]
+method_modules = ["acquire", "acquire", "watermark", "release"]
 implementation_package = "search-epoch-pins"
 implementation_module = "registry"
 implementation_kind = "capability_package"
@@ -160,7 +183,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "AccessCompilerPort"
 trait_module = "query"
-methods = ["compile_eligibility", "compile_safe_legs", "verify_checkpoint", "current_live_deny"]
+methods = ["validate_grant", "intersect_scope", "compile_safe_legs", "revalidate_checkpoint"]
+method_modules = ["grant", "scope", "legs", "checkpoint"]
 implementation_package = "search-access"
 implementation_module = "legs"
 implementation_kind = "capability_package"
@@ -168,7 +192,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "OverlayPort"
 trait_module = "query"
-methods = ["snapshot", "retrieve", "invalidate"]
+methods = ["snapshot_overlay", "shadowed_memberships", "direct_candidates"]
+method_modules = ["snapshot", "shadow", "direct"]
 implementation_package = "search-overlay"
 implementation_module = "snapshot"
 implementation_kind = "capability_package"
@@ -176,7 +201,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "ExactScannerPort"
 trait_module = "query"
-methods = ["compile", "execute"]
+methods = ["compile_exact_scan", "execute_exact_scan"]
+method_modules = ["plan", "execute"]
 implementation_package = "search-exact"
 implementation_module = "execute"
 implementation_kind = "capability_package"
@@ -184,7 +210,8 @@ implementation_kind = "capability_package"
 [[port]]
 name = "HandleStorePort"
 trait_module = "query"
-methods = ["issue", "resolve", "expand", "invalidate", "sweep_expired"]
+methods = ["mint_ephemeral", "mint_durable", "expand", "invalidate", "expire"]
+method_modules = ["issue", "issue", "expand", "invalidate", "cleanup"]
 implementation_package = "search-handles"
 implementation_module = "resolve"
 implementation_kind = "capability_package"

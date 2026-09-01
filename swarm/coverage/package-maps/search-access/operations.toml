@@ -1,0 +1,138 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-access"
+operation_count = 13
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-access::accept_invalidation_receipts"
+name = "accept_invalidation_receipts"
+module = "invalidation"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/W7_HARDENING.md"]
+source_contexts = ["Restrictive mutation state machine"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "search-access::begin_security_mutation"
+name = "begin_security_mutation"
+module = "barrier"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Live security operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-access::build_invalidation_request"
+name = "build_invalidation_request"
+module = "invalidation"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/W7_HARDENING.md"]
+source_contexts = ["Restrictive mutation state machine"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "search-access::classify_active_request_contamination"
+name = "classify_active_request_contamination"
+module = "invalidation"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/W7_HARDENING.md"]
+source_contexts = ["Active request contamination"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-access::classify_contaminated_legs"
+name = "classify_contaminated_legs"
+module = "legs"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Live security operations"]
+route_kind = "semantic"
+score = 99
+
+[[operation]]
+id = "search-access::classify_security_change"
+name = "classify_security_change"
+module = "barrier"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/W7_HARDENING.md"]
+source_contexts = ["Restrictive mutation state machine"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-access::commit_and_publish_restriction"
+name = "commit_and_publish_restriction"
+module = "barrier"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Live security operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-access::compile_base_eligibility"
+name = "compile_base_eligibility"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Grant and scope operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-access::compile_safe_legs"
+name = "compile_safe_legs"
+module = "legs"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Grant and scope operations"]
+route_kind = "semantic"
+score = 113
+
+[[operation]]
+id = "search-access::install_live_restriction"
+name = "install_live_restriction"
+module = "barrier"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/W7_HARDENING.md"]
+source_contexts = ["Restrictive mutation state machine"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-access::intersect_scope"
+name = "intersect_scope"
+module = "scope"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Grant and scope operations"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-access::recheck_live_access"
+name = "recheck_live_access"
+module = "invalidation"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Live security operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-access::validate_grant"
+name = "validate_grant"
+module = "grant"
+public_entry_module = "api"
+sources = ["crates/search-query/search-access/FUNCTIONS.md"]
+source_contexts = ["Grant and scope operations"]
+route_kind = "semantic"
+score = 127

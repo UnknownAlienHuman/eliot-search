@@ -1,0 +1,187 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-query-planner"
+path = "crates/search-query/search-query-planner"
+kind = "lib"
+family = "query"
+cell = "C22"
+earliest_wave = 4
+optional = false
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-query-planner.md"
+function_source = "crates/search-query/search-query-planner/FUNCTIONS.md"
+qualification = "qualification/query/W4_QUALIFICATION.md"
+config_sections = ["query"]
+declared_dependencies = ["search-contracts", "search-domain", "search-ports", "search-config", "search-access"]
+module_count = 11
+operation_count = 7
+documentation_node_count = 75
+principle_node_count = 1
+outbound_dependency_count = 5
+inbound_dependency_count = 3
+architecture_relation_count = 9
+configuration_relation_count = 1
+recipe_relation_count = 8
+port_relation_count = 0
+schema_relation_count = 4
+operations_map = "swarm/coverage/package-maps/search-query-planner/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-query-planner/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-query-planner/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 32
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 7
+
+[[module]]
+name = "config"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 9
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 1
+recipe_relation_count = 0
+dependency_relation_count = 1
+
+[[module]]
+name = "request"
+role = "implementation"
+structural_rationale = ""
+operation_count = 3
+documentation_node_count = 7
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "recipe"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 14
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 8
+dependency_relation_count = 0
+
+[[module]]
+name = "scope"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 9
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "budget"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 5
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "legs"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 8
+architecture_relation_count = 4
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "plan"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 20
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 1
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "replan"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

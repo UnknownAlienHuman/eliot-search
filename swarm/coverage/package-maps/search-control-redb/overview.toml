@@ -1,0 +1,187 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-control-redb"
+path = "crates/search-control-redb"
+kind = "lib"
+family = "control"
+cell = "C02"
+earliest_wave = 1
+optional = false
+soft_src_line_target = 7500
+assignment = "swarm/assignments/search-control-redb.md"
+function_source = "FOUNDATION_CONTRACT"
+qualification = "NONE"
+config_sections = ["control"]
+declared_dependencies = ["search-contracts", "search-domain", "search-ports", "search-config"]
+module_count = 11
+operation_count = 20
+documentation_node_count = 95
+principle_node_count = 2
+outbound_dependency_count = 4
+inbound_dependency_count = 1
+architecture_relation_count = 12
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 2
+schema_relation_count = 0
+operations_map = "swarm/coverage/package-maps/search-control-redb/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-control-redb/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-control-redb/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 4
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 36
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 4
+
+[[module]]
+name = "config"
+role = "implementation"
+structural_rationale = ""
+operation_count = 5
+documentation_node_count = 15
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 1
+recipe_relation_count = 0
+dependency_relation_count = 1
+
+[[module]]
+name = "identity"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 6
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "open"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 7
+architecture_relation_count = 1
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "migration"
+role = "implementation"
+structural_rationale = ""
+operation_count = 3
+documentation_node_count = 14
+architecture_relation_count = 3
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "transaction"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 22
+architecture_relation_count = 8
+port_relation_count = 1
+port_method_relation_count = 4
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "snapshot"
+role = "implementation"
+structural_rationale = ""
+operation_count = 4
+documentation_node_count = 15
+architecture_relation_count = 6
+port_relation_count = 1
+port_method_relation_count = 2
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "idempotency"
+role = "implementation"
+structural_rationale = ""
+operation_count = 1
+documentation_node_count = 7
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "quarantine"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 7
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 1
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 5
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

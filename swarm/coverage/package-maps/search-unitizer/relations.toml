@@ -1,0 +1,124 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-unitizer"
+outbound_dependency_count = 3
+inbound_dependency_count = 2
+architecture_relation_count = 2
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 2
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-unitizer->search-contracts"
+consumer = "search-unitizer"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-unitizer->search-domain"
+consumer = "search-unitizer"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-unitizer->search-ports"
+consumer = "search-unitizer"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-unitizer"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-unitizer"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-overlay->search-unitizer"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-unitizer"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "capability"
+id = "C09"
+modules = ["search-unitizer:boundaries", "search-unitizer:manifest", "search-unitizer:occurrence"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P04"
+modules = ["search-unitizer:boundaries", "search-unitizer:manifest"]
+required_outputs = ["residency_aware_immutable_CAS", "exact_revision_readback", "coordinate_and_loss_maps", "canonical_materialization", "deterministic_units"]
+exit_evidence = ["UTF8_CRLF_LSP_Git_anchor", "stale_path_readback", "cross_domain_dedup_denial", "copy_reencrypt_receipt"]
+
+[[port]]
+name = "UnitizerPort"
+module = "manifest"
+methods = ["profile", "unitize"]
+method_modules = ["profile", "manifest"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "representation"
+owner_roles = ["state_owner"]
+modules = ["manifest"]
+schemas = ["Representation"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-source.toml"
+group = "unit_occurrence"
+owner_roles = ["state_owner"]
+modules = ["occurrence"]
+schemas = ["UnitOccurrence"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]

@@ -1,0 +1,98 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-retrieval-executor"
+operation_count = 9
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-retrieval-executor::acquire_leg_pins"
+name = "acquire_leg_pins"
+module = "pins"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Admission and scheduling"]
+route_kind = "semantic"
+score = 112
+
+[[operation]]
+id = "search-retrieval-executor::admit"
+name = "admit"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Admission and scheduling"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-retrieval-executor::cancel"
+name = "cancel"
+module = "cleanup"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Fusion and contamination"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-retrieval-executor::classify_completion"
+name = "classify_completion"
+module = "contamination"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Fusion and contamination"]
+route_kind = "semantic"
+score = 32
+
+[[operation]]
+id = "search-retrieval-executor::discard_contaminated"
+name = "discard_contaminated"
+module = "contamination"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Fusion and contamination"]
+route_kind = "semantic"
+score = 32
+
+[[operation]]
+id = "search-retrieval-executor::dispatch_leg"
+name = "dispatch_leg"
+module = "request"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Admission and scheduling"]
+route_kind = "semantic"
+score = 10
+
+[[operation]]
+id = "search-retrieval-executor::fuse_safe_legs"
+name = "fuse_safe_legs"
+module = "legs"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Fusion and contamination"]
+route_kind = "semantic"
+score = 97
+
+[[operation]]
+id = "search-retrieval-executor::normalize_within_population"
+name = "normalize_within_population"
+module = "fusion"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Fusion and contamination"]
+route_kind = "semantic"
+score = 33
+
+[[operation]]
+id = "search-retrieval-executor::schedule_leg"
+name = "schedule_leg"
+module = "scheduler"
+public_entry_module = "api"
+sources = ["crates/search-query/search-retrieval-executor/FUNCTIONS.md"]
+source_contexts = ["Admission and scheduling"]
+route_kind = "semantic"
+score = 11

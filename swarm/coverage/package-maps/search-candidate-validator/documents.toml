@@ -1,0 +1,778 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-candidate-validator"
+node_count = 70
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/AGENTS.md#agent-contract-search-candidate-validator"
+path = "crates/search-query/search-candidate-validator/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-candidate-validator"
+kind = "implementation_contract_root"
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/AGENTS.md#ownership"
+path = "crates/search-query/search-candidate-validator/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-candidate-validator/AGENTS.md"
+line = 14
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/AGENTS.md#dependencies"
+path = "crates/search-query/search-candidate-validator/AGENTS.md"
+line = 19
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/AGENTS.md#size"
+path = "crates/search-query/search-candidate-validator/AGENTS.md"
+line = 23
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#function-contract-search-candidate-validator"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-candidate-validator"
+kind = "implementation_contract_root"
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#operations"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 8
+level = 2
+heading = "Operations"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#precheck-nomination-plan-livestate-overlaystate-validationprecheck"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 10
+level = 3
+heading = "precheck(nomination, plan, livestate, overlaystate) -> ValidationPrecheck"
+kind = "implementation_operation"
+modules = ["search-candidate-validator:decision"]
+route_kind = "operation_route"
+rationale = "search-candidate-validator::precheck"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#buildreadbackrequest-nomination-plan-result-exactrevisionreadbackrequest-validationerror"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 16
+level = 3
+heading = "buildreadbackrequest(nomination, plan) -> Result<ExactRevisionReadbackRequest, ValidationError>"
+kind = "implementation_operation"
+modules = ["search-candidate-validator:request"]
+route_kind = "operation_route"
+rationale = "search-candidate-validator::build_readback_request"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#reopenandverify-request-readbackport-context-result-verifiedsourceslice-validationerror"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 21
+level = 3
+heading = "reopenandverify(request, readbackport, context) -> Result<VerifiedSourceSlice, ValidationError>"
+kind = "implementation_operation"
+modules = ["search-candidate-validator:readback"]
+route_kind = "operation_route"
+rationale = "search-candidate-validator::reopen_and_verify"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#recheckbeforeemission-verified-plan-livestate-result-emissionpermit-validationerror"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 26
+level = 3
+heading = "recheckbeforeemission(verified, plan, livestate) -> Result<EmissionPermit, ValidationError>"
+kind = "implementation_operation"
+modules = ["search-candidate-validator:security"]
+route_kind = "operation_route"
+rationale = "search-candidate-validator::recheck_before_emission"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#validate-nomination-context-ports-validationoutcome"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 31
+level = 3
+heading = "validate(nomination, context, ports) -> ValidationOutcome"
+kind = "implementation_operation"
+modules = ["search-candidate-validator:decision"]
+route_kind = "operation_route"
+rationale = "search-candidate-validator::validate"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#materialcoveragechange-before-after-plan-coveragechange"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 44
+level = 3
+heading = "materialcoveragechange(before, after, plan) -> CoverageChange"
+kind = "implementation_operation"
+modules = ["search-candidate-validator:decision"]
+route_kind = "operation_route"
+rationale = "search-candidate-validator::material_coverage_change"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#cancellation-retry-and-failure"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 49
+level = 2
+heading = "Cancellation, retry and failure"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/FUNCTIONS.md#required-fixtures"
+path = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+line = 55
+level = 2
+heading = "Required fixtures"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/README.md#search-candidate-validator"
+path = "crates/search-query/search-candidate-validator/README.md"
+line = 1
+level = 1
+heading = "search-candidate-validator"
+kind = "implementation_contract_root"
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/README.md#owns"
+path = "crates/search-query/search-candidate-validator/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/README.md#must-not-own"
+path = "crates/search-query/search-candidate-validator/README.md"
+line = 16
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/W7_HARDENING.md#w7-hardening-search-candidate-validator"
+path = "crates/search-query/search-candidate-validator/W7_HARDENING.md"
+line = 1
+level = 1
+heading = "W7 hardening — search-candidate-validator"
+kind = "implementation_contract_root"
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/W7_HARDENING.md#checkpoint-sequence"
+path = "crates/search-query/search-candidate-validator/W7_HARDENING.md"
+line = 5
+level = 2
+heading = "Checkpoint sequence"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/W7_HARDENING.md#validatelifecyclefence"
+path = "crates/search-query/search-candidate-validator/W7_HARDENING.md"
+line = 22
+level = 2
+heading = "validatelifecyclefence"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/W7_HARDENING.md#purge-and-restore"
+path = "crates/search-query/search-candidate-validator/W7_HARDENING.md"
+line = 35
+level = 2
+heading = "Purge and restore"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-candidate-validator/W7_HARDENING.md#required-tests"
+path = "crates/search-query/search-candidate-validator/W7_HARDENING.md"
+line = 44
+level = 2
+heading = "Required tests"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s15-coherent-source-readback"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1044
+level = 2
+heading = "S15. Coherent source readback"
+kind = "architecture_section"
+modules = ["search-candidate-validator:readback"]
+route_kind = "architecture_section_registry"
+rationale = "S15"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s15-1-why-current-filesystem-bytes-are-insufficient"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1046
+level = 3
+heading = "S15.1 Why current filesystem bytes are insufficient"
+kind = "architecture_node"
+modules = ["search-candidate-validator:readback"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s15-2-revision-retention-strategy"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1050
+level = 3
+heading = "S15.2 Revision retention strategy"
+kind = "architecture_node"
+modules = ["search-candidate-validator:readback"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s15-3-readback-rule"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1061
+level = 3
+heading = "S15.3 Readback rule"
+kind = "architecture_node"
+modules = ["search-candidate-validator:readback"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-candidate-validation-and-result-projection"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1415
+level = 2
+heading = "S23. Candidate validation and result projection"
+kind = "architecture_section"
+modules = ["search-candidate-validator:decision", "search-candidate-validator:security"]
+route_kind = "architecture_section_registry"
+rationale = "S23"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-1-validation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1417
+level = 3
+heading = "S23.1 Validation"
+kind = "architecture_node"
+modules = ["search-candidate-validator:decision", "search-candidate-validator:security"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-2-searchcandidateset"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1433
+level = 3
+heading = "S23.2 SearchCandidateSet"
+kind = "architecture_node"
+modules = ["search-candidate-validator:decision", "search-candidate-validator:security"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s23-3-compact-result-budget"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1462
+level = 3
+heading = "S23.3 Compact result budget"
+kind = "architecture_node"
+modules = ["search-candidate-validator:decision", "search-candidate-validator:security"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-native-coordinates-and-anchors"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1476
+level = 2
+heading = "S24. Native coordinates and anchors"
+kind = "architecture_section"
+modules = ["search-candidate-validator:anchor"]
+route_kind = "architecture_section_registry"
+rationale = "S24"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-1-canonical-anchor-variants"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1478
+level = 3
+heading = "S24.1 Canonical anchor variants"
+kind = "architecture_node"
+modules = ["search-candidate-validator:anchor"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s24-2-derived-line-column-display"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1514
+level = 3
+heading = "S24.2 Derived line/column display"
+kind = "architecture_node"
+modules = ["search-candidate-validator:anchor"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p08-lexical-query-recipes-and-compact-cards"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2882
+level = 3
+heading = "P08 — Lexical query recipes and compact cards"
+kind = "delivery_contract"
+modules = ["search-candidate-validator:readback"]
+route_kind = "delivery_registry"
+rationale = "P08"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p13-access-handles-purge-and-restore-boundaries"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2912
+level = 3
+heading = "P13 — Access, handles, purge and restore boundaries"
+kind = "delivery_contract"
+modules = ["search-candidate-validator:security"]
+route_kind = "delivery_registry"
+rationale = "P13"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#w4-baseline-query-product-implementation-packet"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W4 baseline query-product implementation packet"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#request-pipeline"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Request pipeline"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#required-w4-evidence"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 78
+level = 2
+heading = "Required W4 evidence"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 94
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W4_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W4_IMPLEMENTATION_PACKET.md"
+line = 108
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#w7-lifecycle-purge-and-restore-implementation-packet"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W7 lifecycle, purge and restore implementation packet"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#package-packets"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Package packets"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 23
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 76
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W7_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W7_IMPLEMENTATION_PACKET.md"
+line = 96
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-candidate-validator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/query/README.md#w4-query-qualification"
+path = "qualification/query/README.md"
+line = 1
+level = 1
+heading = "W4 query qualification"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#w4-bounded-query-product-qualification-contract"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W4 bounded query product qualification contract"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#owners"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#frozen-inputs"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 31
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-order"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 45
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#mandatory-properties"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 60
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#admission-and-noninterference"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 62
+level = 3
+heading = "Admission and noninterference"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#snapshot-and-planning"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 72
+level = 3
+heading = "Snapshot and planning"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#execution-and-validation"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Execution and validation"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#results-handles-and-continuations"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 91
+level = 3
+heading = "Results, handles and continuations"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#stop-conditions"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 105
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#evidence-products"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 121
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "qualification/query/W4_QUALIFICATION.md#current-disposition"
+path = "qualification/query/W4_QUALIFICATION.md"
+line = 127
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-candidate-validator:decision"]
+route_kind = "qualification_area_route"
+rationale = "qualification/query"
+
+[[node]]
+id = "swarm/assignments/search-candidate-validator.md#search-candidate-validator-implementation-packet"
+path = "swarm/assignments/search-candidate-validator.md"
+line = 1
+level = 1
+heading = "search-candidate-validator implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-candidate-validator:anchor", "search-candidate-validator:api", "search-candidate-validator:batch", "search-candidate-validator:decision", "search-candidate-validator:error", "search-candidate-validator:lib", "search-candidate-validator:readback", "search-candidate-validator:request", "search-candidate-validator:security"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-candidate-validator.md#mission"
+path = "swarm/assignments/search-candidate-validator.md"
+line = 9
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-candidate-validator.md#owns"
+path = "swarm/assignments/search-candidate-validator.md"
+line = 14
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-candidate-validator.md#must-not-own"
+path = "swarm/assignments/search-candidate-validator.md"
+line = 21
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-candidate-validator.md#logical-operations"
+path = "swarm/assignments/search-candidate-validator.md"
+line = 29
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-candidate-validator.md#invariants"
+path = "swarm/assignments/search-candidate-validator.md"
+line = 43
+level = 2
+heading = "Invariants"
+kind = "principle_or_invariant"
+modules = ["search-candidate-validator:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-candidate-validator.md#exit-evidence"
+path = "swarm/assignments/search-candidate-validator.md"
+line = 51
+level = 2
+heading = "Exit evidence"
+kind = "implementation_contract"
+modules = ["search-candidate-validator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

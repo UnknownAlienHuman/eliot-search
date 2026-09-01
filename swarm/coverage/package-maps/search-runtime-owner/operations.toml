@@ -1,0 +1,178 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-runtime-owner"
+operation_count = 17
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-runtime-owner::acquire_data_root"
+name = "acquire_data_root"
+module = "acquire"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Owner acquisition"]
+route_kind = "semantic"
+score = 96
+
+[[operation]]
+id = "search-runtime-owner::begin_drain"
+name = "begin_drain"
+module = "release"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Drain and release"]
+route_kind = "semantic"
+score = 39
+
+[[operation]]
+id = "search-runtime-owner::build_owner_identity"
+name = "build_owner_identity"
+module = "identity"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Identity and path preparation"]
+route_kind = "semantic"
+score = 140
+
+[[operation]]
+id = "search-runtime-owner::classify_abandoned_owner"
+name = "classify_abandoned_owner"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Recovery"]
+route_kind = "semantic"
+score = 20
+
+[[operation]]
+id = "search-runtime-owner::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-runtime-owner::inspect_existing_owner"
+name = "inspect_existing_owner"
+module = "observation"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Owner acquisition"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-runtime-owner::owner_health"
+name = "owner_health"
+module = "health"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Health and diagnostics"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-runtime-owner::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-runtime-owner::recover_acquisition"
+name = "recover_acquisition"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Recovery"]
+route_kind = "semantic"
+score = 62
+
+[[operation]]
+id = "search-runtime-owner::recover_release"
+name = "recover_release"
+module = "release"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Recovery"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-runtime-owner::release_cleanly"
+name = "release_cleanly"
+module = "release"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Drain and release"]
+route_kind = "semantic"
+score = 114
+
+[[operation]]
+id = "search-runtime-owner::resolve_data_root"
+name = "resolve_data_root"
+module = "identity"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Identity and path preparation"]
+route_kind = "semantic"
+score = 23
+
+[[operation]]
+id = "search-runtime-owner::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-runtime-owner::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-runtime-owner::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-runtime-owner::verify_owner_guard"
+name = "verify_owner_guard"
+module = "acquire"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Owner acquisition"]
+route_kind = "semantic"
+score = 21
+
+[[operation]]
+id = "search-runtime-owner::verify_release_preconditions"
+name = "verify_release_preconditions"
+module = "release"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-runtime-owner/FUNCTIONS.md"]
+source_contexts = ["Drain and release"]
+route_kind = "semantic"
+score = 114

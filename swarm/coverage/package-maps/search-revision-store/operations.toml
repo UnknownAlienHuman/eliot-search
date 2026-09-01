@@ -1,0 +1,228 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-revision-store"
+operation_count = 22
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-revision-store::acquire_retention_lease"
+name = "acquire_retention_lease"
+module = "lease"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "search-revision-store::admit_restored_objects"
+name = "admit_restored_objects"
+module = "object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-revision-store::apply_exact_object_deletion"
+name = "apply_exact_object_deletion"
+module = "deletion"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-revision-store::commit_source_revision"
+name = "commit_source_revision"
+module = "revision"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-revision-store::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-revision-store::derive_object_address"
+name = "derive_object_address"
+module = "address"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 113
+
+[[operation]]
+id = "search-revision-store::derive_residency_closure"
+name = "derive_residency_closure"
+module = "residency"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 86
+
+[[operation]]
+id = "search-revision-store::enter_restore_quarantine"
+name = "enter_restore_quarantine"
+module = "restore"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 92
+
+[[operation]]
+id = "search-revision-store::enumerate_lifecycle_roots"
+name = "enumerate_lifecycle_roots"
+module = "lifecycle"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 80
+
+[[operation]]
+id = "search-revision-store::enumerate_object_inventory"
+name = "enumerate_object_inventory"
+module = "object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-revision-store::install_purge_tombstone"
+name = "install_purge_tombstone"
+module = "deletion"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-revision-store::open_verified_object"
+name = "open_verified_object"
+module = "object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-revision-store::open_verified_revision"
+name = "open_verified_revision"
+module = "revision"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-revision-store::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-revision-store::read_object_graph_edges"
+name = "read_object_graph_edges"
+module = "object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-revision-store::release_retention_lease"
+name = "release_retention_lease"
+module = "lease"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 81
+
+[[operation]]
+id = "search-revision-store::resolve_native_anchor"
+name = "resolve_native_anchor"
+module = "anchor"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 82
+
+[[operation]]
+id = "search-revision-store::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-revision-store::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-revision-store::validate_restored_objects"
+name = "validate_restored_objects"
+module = "object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-revision-store::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["Configuration functions"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-revision-store::write_immutable_object"
+name = "write_immutable_object"
+module = "object"
+public_entry_module = "api"
+sources = ["crates/search-source/search-revision-store/FUNCTIONS.md"]
+source_contexts = ["State ownership"]
+route_kind = "semantic"
+score = 84

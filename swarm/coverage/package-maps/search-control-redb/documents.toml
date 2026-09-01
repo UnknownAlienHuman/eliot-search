@@ -1,0 +1,1053 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-control-redb"
+node_count = 95
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "config/sections/control.md#control-configuration-contract"
+path = "config/sections/control.md"
+line = 1
+level = 1
+heading = "[control] configuration contract"
+kind = "configuration_contract"
+modules = ["search-control-redb:config"]
+route_kind = "config_owner"
+rationale = "control"
+
+[[node]]
+id = "config/sections/control.md#fields"
+path = "config/sections/control.md"
+line = 12
+level = 2
+heading = "Fields"
+kind = "configuration_contract"
+modules = ["search-control-redb:config"]
+route_kind = "config_owner"
+rationale = "control"
+
+[[node]]
+id = "config/sections/control.md#required-section-api"
+path = "config/sections/control.md"
+line = 23
+level = 2
+heading = "Required section API"
+kind = "configuration_contract"
+modules = ["search-control-redb:config"]
+route_kind = "config_owner"
+rationale = "control"
+
+[[node]]
+id = "config/sections/control.md#invariants"
+path = "config/sections/control.md"
+line = 37
+level = 2
+heading = "Invariants"
+kind = "configuration_contract"
+modules = ["search-control-redb:config"]
+route_kind = "config_owner"
+rationale = "control"
+
+[[node]]
+id = "config/sections/control.md#required-tests"
+path = "config/sections/control.md"
+line = 43
+level = 2
+heading = "Required tests"
+kind = "configuration_contract"
+modules = ["search-control-redb:config"]
+route_kind = "config_owner"
+rationale = "control"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#agent-contract-search-control-redb"
+path = "crates/search-control-redb/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-control-redb"
+kind = "implementation_contract_root"
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#mission"
+path = "crates/search-control-redb/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#ownership"
+path = "crates/search-control-redb/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#forbidden-ownership"
+path = "crates/search-control-redb/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#allowed-dependencies"
+path = "crates/search-control-redb/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#required-logical-surface"
+path = "crates/search-control-redb/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#failure-surface"
+path = "crates/search-control-redb/AGENTS.md"
+line = 46
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-control-redb/AGENTS.md"
+line = 51
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#size-and-split-guard"
+path = "crates/search-control-redb/AGENTS.md"
+line = 63
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/AGENTS.md#definition-of-done"
+path = "crates/search-control-redb/AGENTS.md"
+line = 71
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#function-contract-search-control-redb"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-control-redb"
+kind = "implementation_contract_root"
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#global-rules"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-control-redb:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#configuration-operations"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 20
+level = 2
+heading = "Configuration operations"
+kind = "implementation_contract"
+modules = ["search-control-redb:config"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#sectiondescriptor-configsectiondescriptor"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 22
+level = 3
+heading = "sectiondescriptor() -> ConfigSectionDescriptor"
+kind = "implementation_operation"
+modules = ["search-control-redb:config"]
+route_kind = "operation_route"
+rationale = "search-control-redb::section_descriptor"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#compileddefaults-configsectioninput"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 24
+level = 3
+heading = "compileddefaults() -> ConfigSectionInput"
+kind = "implementation_operation"
+modules = ["search-control-redb:config"]
+route_kind = "operation_route"
+rationale = "search-control-redb::compiled_defaults"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#validatesection-input-platform-acceptedcapabilities-result-validatedcontrolconfig-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 26
+level = 3
+heading = "validatesection(input, platform, acceptedcapabilities) -> Result<ValidatedControlConfig, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:config"]
+route_kind = "operation_route"
+rationale = "search-control-redb::validate_section"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#sectiondigest-validated-blake3digest32"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 31
+level = 3
+heading = "sectiondigest(validated) -> Blake3Digest32"
+kind = "implementation_operation"
+modules = ["search-control-redb:config"]
+route_kind = "operation_route"
+rationale = "search-control-redb::section_digest"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#plansectionchange-old-new-result-sectionreloaddecision-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 33
+level = 3
+heading = "plansectionchange(old, new) -> Result<SectionReloadDecision, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:config"]
+route_kind = "operation_route"
+rationale = "search-control-redb::plan_section_change"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#journal-identity-and-open"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 38
+level = 2
+heading = "Journal identity and open"
+kind = "implementation_contract"
+modules = ["search-control-redb:identity"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#derivejournalidentity-rootowner-path-schema-result-journalidentity-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 40
+level = 3
+heading = "derivejournalidentity(rootowner, path, schema) -> Result<JournalIdentity, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:identity"]
+route_kind = "operation_route"
+rationale = "search-control-redb::derive_journal_identity"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#inspectjournal-path-platformport-deadline-cancel-result-journalobservation-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 44
+level = 3
+heading = "inspectjournal(path, platformport, deadline, cancel) -> Result<JournalObservation, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:open"]
+route_kind = "operation_route"
+rationale = "search-control-redb::inspect_journal"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#openorcreate-config-ownerguard-expectedidentity-operation-deadline-cancel-result-journalguard-jo"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 49
+level = 3
+heading = "openorcreate(config, ownerguard, expectedidentity, operation, deadline, cancel) -> Result<JournalGuard, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:open"]
+route_kind = "operation_route"
+rationale = "search-control-redb::open_or_create"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#migration"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 68
+level = 2
+heading = "Migration"
+kind = "implementation_contract"
+modules = ["search-control-redb:migration"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#planmigration-observed-target-registry-result-migrationplan-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 70
+level = 3
+heading = "planmigration(observed, target, registry) -> Result<MigrationPlan, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:migration"]
+route_kind = "operation_route"
+rationale = "search-control-redb::plan_migration"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#executemigration-guard-plan-operation-deadline-cancel-result-migrationreceipt-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 75
+level = 3
+heading = "executemigration(guard, plan, operation, deadline, cancel) -> Result<MigrationReceipt, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:migration"]
+route_kind = "operation_route"
+rationale = "search-control-redb::execute_migration"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#verifymigration-guard-plan-fixtures-result-migrationverificationreceipt-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 81
+level = 3
+heading = "verifymigration(guard, plan, fixtures) -> Result<MigrationVerificationReceipt, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:migration"]
+route_kind = "operation_route"
+rationale = "search-control-redb::verify_migration"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#read-and-mutation-transactions"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 86
+level = 2
+heading = "Read and mutation transactions"
+kind = "implementation_contract"
+modules = ["search-control-redb:transaction"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#readsnapshot-guard-request-deadline-cancel-result-journalreadsnapshot-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 88
+level = 3
+heading = "readsnapshot(guard, request, deadline, cancel) -> Result<JournalReadSnapshot, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:snapshot"]
+route_kind = "operation_route"
+rationale = "search-control-redb::read_snapshot"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#transact-guard-command-expectedgenerations-operation-deadline-cancel-result-controlcommitreceipt"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 93
+level = 3
+heading = "transact(guard, command, expectedgenerations, operation, deadline, cancel) -> Result<ControlCommitReceipt, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:transaction"]
+route_kind = "operation_route"
+rationale = "search-control-redb::transact"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#recovertransaction-guard-operation-expectedcommanddigest-result-commitrecoverydecision-journaler"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 105
+level = 3
+heading = "recovertransaction(guard, operation, expectedcommanddigest) -> Result<CommitRecoveryDecision, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:transaction"]
+route_kind = "operation_route"
+rationale = "search-control-redb::recover_transaction"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#control-snapshot"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 116
+level = 2
+heading = "Control snapshot"
+kind = "implementation_contract"
+modules = ["search-control-redb:snapshot"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#rebuildcontrolsnapshot-readsnapshot-schema-result-controlsnapshot-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 118
+level = 3
+heading = "rebuildcontrolsnapshot(readsnapshot, schema) -> Result<ControlSnapshot, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:snapshot"]
+route_kind = "operation_route"
+rationale = "search-control-redb::rebuild_control_snapshot"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#publishsnapshotaftercommit-commit-snapshot-publisher-deadline-result-snapshotpublishreceipt-jour"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 124
+level = 3
+heading = "publishsnapshotaftercommit(commit, snapshot, publisher, deadline) -> Result<SnapshotPublishReceipt, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:snapshot"]
+route_kind = "operation_route"
+rationale = "search-control-redb::publish_snapshot_after_commit"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#recoversnapshotpublication-guard-publisher-result-snapshotpublishreceipt-journalerror"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 132
+level = 3
+heading = "recoversnapshotpublication(guard, publisher) -> Result<SnapshotPublishReceipt, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:snapshot"]
+route_kind = "operation_route"
+rationale = "search-control-redb::recover_snapshot_publication"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#idempotency-maintenance"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 137
+level = 2
+heading = "Idempotency maintenance"
+kind = "implementation_contract"
+modules = ["search-control-redb:idempotency"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#pruneidempotency-guard-policy-protectedoperations-deadline-cancel-result-prunereceipt-journalerr"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 139
+level = 3
+heading = "pruneidempotency(guard, policy, protectedoperations, deadline, cancel) -> Result<PruneReceipt, JournalError>"
+kind = "implementation_operation"
+modules = ["search-control-redb:idempotency"]
+route_kind = "operation_route"
+rationale = "search-control-redb::prune_idempotency"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#quarantine-and-diagnostics"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 144
+level = 2
+heading = "Quarantine and diagnostics"
+kind = "implementation_contract"
+modules = ["search-control-redb:quarantine"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#quarantine-reason-observation-ownerguard-quarantinereceipt"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 146
+level = 3
+heading = "quarantine(reason, observation, ownerguard) -> QuarantineReceipt"
+kind = "implementation_operation"
+modules = ["search-control-redb:quarantine"]
+route_kind = "operation_route"
+rationale = "search-control-redb::quarantine"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#journalhealth-guardorobservation-controlstorehealth"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 151
+level = 3
+heading = "journalhealth(guardorobservation) -> ControlStoreHealth"
+kind = "implementation_operation"
+modules = ["search-control-redb:quarantine"]
+route_kind = "operation_route"
+rationale = "search-control-redb::journal_health"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#cancellation-deadline-and-crash-semantics"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 156
+level = 2
+heading = "Cancellation, deadline and crash semantics"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#typed-failures"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 163
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-control-redb:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-control-redb/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-control-redb/FUNCTIONS.md"
+line = 182
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/README.md#search-control-redb"
+path = "crates/search-control-redb/README.md"
+line = 1
+level = 1
+heading = "search-control-redb"
+kind = "implementation_contract_root"
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-control-redb/README.md#owns"
+path = "crates/search-control-redb/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-control-redb/README.md#must-not-own"
+path = "crates/search-control-redb/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-storage-topology"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 236
+level = 2
+heading = "S6. Storage topology"
+kind = "architecture_section"
+modules = ["search-control-redb:transaction"]
+route_kind = "architecture_section_registry"
+rationale = "S6"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-1-qdrant-the-only-search-index-database"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 238
+level = 3
+heading = "S6.1 Qdrant: the only search/index database"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-2-redb-bounded-control-journal"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 244
+level = 3
+heading = "S6.2 redb: bounded control journal"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-3-filesystem-cas"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 275
+level = 3
+heading = "S6.3 Filesystem CAS"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s6-4-source-truth"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 308
+level = 3
+heading = "S6.4 Source truth"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-publication-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 879
+level = 2
+heading = "S13. Publication model"
+kind = "architecture_section"
+modules = ["search-control-redb:transaction"]
+route_kind = "architecture_section_registry"
+rationale = "S13"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-1-one-active-commit-transaction"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 881
+level = 3
+heading = "S13.1 One active commit transaction"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-2-immediate-invalidation-before-preparation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 887
+level = 3
+heading = "S13.2 Immediate invalidation before preparation"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-3-publication-state-machine"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 891
+level = 3
+heading = "S13.3 Publication state machine"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-4-commit-algorithm"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 911
+level = 3
+heading = "S13.4 Commit algorithm"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-5-crash-and-unresolved-intent"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 933
+level = 3
+heading = "S13.5 Crash and unresolved intent"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-6-startup-verification"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 944
+level = 3
+heading = "S13.6 Startup verification"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s13-7-collection-generation-migration"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 956
+level = 3
+heading = "S13.7 Collection-generation migration"
+kind = "architecture_node"
+modules = ["search-control-redb:transaction"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-query-snapshots-pins-and-reclamation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 975
+level = 2
+heading = "S14. Query snapshots, pins and reclamation"
+kind = "architecture_section"
+modules = ["search-control-redb:snapshot"]
+route_kind = "architecture_section_registry"
+rationale = "S14"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-1-read-only-hot-path"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 977
+level = 3
+heading = "S14.1 Read-only hot path"
+kind = "architecture_node"
+modules = ["search-control-redb:snapshot"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-2-in-memory-epoch-and-route-pin"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1000
+level = 3
+heading = "S14.2 In-memory epoch and route pin"
+kind = "architecture_node"
+modules = ["search-control-redb:snapshot"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-3-reclamation-watermark"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1006
+level = 3
+heading = "S14.3 Reclamation watermark"
+kind = "architecture_node"
+modules = ["search-control-redb:snapshot"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s14-4-live-security-fences-override-snapshots"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1016
+level = 3
+heading = "S14.4 Live security fences override snapshots"
+kind = "architecture_node"
+modules = ["search-control-redb:snapshot"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-recovery-rebuild-and-backup"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1644
+level = 2
+heading = "S28. Recovery, rebuild and backup"
+kind = "architecture_section"
+modules = ["search-control-redb:migration"]
+route_kind = "architecture_section_registry"
+rationale = "S28"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-1-rebuildability-first"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1646
+level = 3
+heading = "S28.1 Rebuildability first"
+kind = "architecture_node"
+modules = ["search-control-redb:migration"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-2-paired-recovery-manifest"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1659
+level = 3
+heading = "S28.2 Paired recovery manifest"
+kind = "architecture_node"
+modules = ["search-control-redb:migration"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-3-purge"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1673
+level = 3
+heading = "S28.3 Purge"
+kind = "architecture_node"
+modules = ["search-control-redb:migration"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s28-4-cas-retention-and-mark-and-sweep"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1685
+level = 3
+heading = "S28.4 CAS retention and mark-and-sweep"
+kind = "architecture_node"
+modules = ["search-control-redb:migration"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p02-bounded-redb-journal"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2846
+level = 3
+heading = "P02 — Bounded redb journal"
+kind = "delivery_contract"
+modules = ["search-control-redb:migration", "search-control-redb:open", "search-control-redb:snapshot", "search-control-redb:transaction"]
+route_kind = "delivery_registry"
+rationale = "P02"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p07-epoch-publication-and-recovery"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2876
+level = 3
+heading = "P07 — Epoch publication and recovery"
+kind = "delivery_contract"
+modules = ["search-control-redb:transaction"]
+route_kind = "delivery_registry"
+rationale = "P07"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-process-and-control-implementation-packet"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W1 process and control implementation packet"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 25
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#w1-lifecycle"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 40
+level = 2
+heading = "W1 lifecycle"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 57
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 72
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#required-w1-tests-and-evidence"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 88
+level = 2
+heading = "Required W1 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 101
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W1_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-control-redb:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#search-control-redb-implementation-packet"
+path = "swarm/assignments/search-control-redb.md"
+line = 1
+level = 1
+heading = "search-control-redb implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-control-redb:api", "search-control-redb:config", "search-control-redb:error", "search-control-redb:idempotency", "search-control-redb:identity", "search-control-redb:lib", "search-control-redb:migration", "search-control-redb:open", "search-control-redb:quarantine", "search-control-redb:snapshot", "search-control-redb:transaction"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#mission"
+path = "swarm/assignments/search-control-redb.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#owns"
+path = "swarm/assignments/search-control-redb.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#must-not-own"
+path = "swarm/assignments/search-control-redb.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#logical-primitives"
+path = "swarm/assignments/search-control-redb.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#logical-operations"
+path = "swarm/assignments/search-control-redb.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-control-redb:idempotency"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#required-invariants"
+path = "swarm/assignments/search-control-redb.md"
+line = 44
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-control-redb:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#typed-failure-surface"
+path = "swarm/assignments/search-control-redb.md"
+line = 52
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#exit-tests-evidence"
+path = "swarm/assignments/search-control-redb.md"
+line = 60
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#suggested-internal-modules"
+path = "swarm/assignments/search-control-redb.md"
+line = 69
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-control-redb.md#size-split"
+path = "swarm/assignments/search-control-redb.md"
+line = 84
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-control-redb:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

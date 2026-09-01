@@ -1,0 +1,41 @@
+name: Package map and relationship coverage v2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-map-coverage-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate generated graph and bounded package maps
+        shell: pwsh
+        run: |
+          python tools/generate-coverage-graph-v2.py --check --json
+          python tools/generate-package-maps-v2.py --check --json
+          python tools/validate-coverage-graph-v2.py --json
+          python tools/validate-package-maps-v2.py --json
+
+      - name: Revalidate architecture, swarm and function registries
+        shell: pwsh
+        run: |
+          python tools/validate-architecture-coverage.py --json
+          ./tools/validate-swarm.ps1 -Json
+          ./tools/validate-function-packets.ps1 -Json
+
+      - name: Verify no generated drift
+        shell: pwsh
+        run: git diff --exit-code

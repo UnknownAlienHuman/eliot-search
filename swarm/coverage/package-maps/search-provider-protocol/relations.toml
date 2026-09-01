@@ -1,0 +1,256 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-provider-protocol"
+outbound_dependency_count = 4
+inbound_dependency_count = 6
+architecture_relation_count = 9
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 3
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-provider-protocol->search-contracts"
+consumer = "search-provider-protocol"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-provider-protocol/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-provider-protocol->search-domain"
+consumer = "search-provider-protocol"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-provider-protocol/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-provider-protocol->search-ports"
+consumer = "search-provider-protocol"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-provider-protocol/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-provider-protocol->search-config"
+consumer = "search-provider-protocol"
+consumer_module = "config"
+consumer_earliest_wave = 1
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-provider-protocol/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-search->search-provider-protocol"
+consumer = "eliot-search"
+consumer_module = "main"
+consumer_earliest_wave = 1
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-search/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-search-doc-worker->search-provider-protocol"
+consumer = "eliot-search-doc-worker"
+consumer_module = "protocol"
+consumer_earliest_wave = 10
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-search-doc-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-search-model-worker->search-provider-protocol"
+consumer = "eliot-search-model-worker"
+consumer_module = "protocol"
+consumer_earliest_wave = 10
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-search-model-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-provider-protocol"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-eliot-adapter->search-provider-protocol"
+consumer = "search-eliot-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-eliot-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "search-research-export-adapter->search-provider-protocol"
+consumer = "search-research-export-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S1"
+modules = ["search-provider-protocol:binding"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S20"
+modules = ["search-provider-protocol:request"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S32"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S34"
+modules = ["search-provider-protocol:terminal"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C30"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame", "search-provider-protocol:request", "search-provider-protocol:session"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-04"
+modules = ["search-provider-protocol:terminal"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-29"
+modules = ["search-provider-protocol:binding"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P01"
+modules = ["search-provider-protocol:binding", "search-provider-protocol:frame"]
+required_outputs = ["configuration_core", "single_data_root_owner", "opaque_secret_store", "provider_framing", "standalone_daemon_and_cli_shell"]
+exit_evidence = ["second_owner_denial", "crash_reopen_owner", "secret_non_disclosure", "cli_no_direct_store"]
+
+[[architecture]]
+kind = "delivery"
+id = "P14"
+modules = ["search-provider-protocol:frame", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:request"]
+required_outputs = ["provider_envelope_flow_control", "pairing_and_grants", "capability_descriptor", "generic_evidence_edge", "optional_ELIOT_mapping", "optional_Research_export"]
+exit_evidence = ["no_reverse_authority", "generic_round_trip", "optional_ELIOT_fixture", "normalized_bundle_round_trip", "cutover_receipt_validation"]
+
+[[configuration]]
+section = "protocol"
+module = "config"
+contract = "config/sections/protocol.md"
+reload = "RESTART_DEPENDENCY"
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "protocol_range_completion"
+owner_roles = ["state_owner"]
+modules = ["negotiation"]
+schemas = ["ProtocolRange"]
+source_files = ["docs/contracts/p00/TYPE_COMPLETIONS.md", "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "progress_counts"
+owner_roles = ["state_owner"]
+modules = ["progress"]
+schemas = ["BoundedProgressCounts"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "provider_protocol"
+owner_roles = ["state_owner"]
+modules = ["frame"]
+schemas = ["ProtocolVersion", "ProviderEnvelope", "ProviderBodyV1"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]

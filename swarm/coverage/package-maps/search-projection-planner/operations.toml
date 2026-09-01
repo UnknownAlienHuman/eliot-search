@@ -1,0 +1,78 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-projection-planner"
+operation_count = 7
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-projection-planner::build_minimal_payload"
+name = "build_minimal_payload"
+module = "point_set"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-projection-planner::build_point_spec"
+name = "build_point_spec"
+module = "point_set"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 23
+
+[[operation]]
+id = "search-projection-planner::canonicalize_manifest"
+name = "canonicalize_manifest"
+module = "manifest"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-projection-planner::diff_manifests"
+name = "diff_manifests"
+module = "diff"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-projection-planner::plan_projection"
+name = "plan_projection"
+module = "point_set"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-projection-planner::validate_projection_input"
+name = "validate_projection_input"
+module = "input"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 99
+
+[[operation]]
+id = "search-projection-planner::validate_schema_requirements"
+name = "validate_schema_requirements"
+module = "schema"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"]
+source_contexts = ["Operations"]
+route_kind = "semantic"
+score = 86

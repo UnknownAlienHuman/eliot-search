@@ -1,0 +1,239 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-qdrant-bridge"
+outbound_dependency_count = 4
+inbound_dependency_count = 1
+architecture_relation_count = 19
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 2
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-bridge->search-contracts"
+consumer = "search-qdrant-bridge"
+consumer_module = "schema"
+consumer_earliest_wave = 3
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-bridge->search-domain"
+consumer = "search-qdrant-bridge"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-bridge->search-ports"
+consumer = "search-qdrant-bridge"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-qdrant-bridge->search-config"
+consumer = "search-qdrant-bridge"
+consumer_module = "config"
+consumer_earliest_wave = 3
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-qdrant-bridge"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-qdrant-bridge"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S6"
+modules = ["search-qdrant-bridge:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S8"
+modules = ["search-qdrant-bridge:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S9"
+modules = ["search-qdrant-bridge:capability"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S10"
+modules = ["search-qdrant-bridge:query"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S12"
+modules = ["search-qdrant-bridge:capability"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S13"
+modules = ["search-qdrant-bridge:mutation"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S38"
+modules = ["search-qdrant-bridge:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C15"
+modules = ["search-qdrant-bridge:capability", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-bridge:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-01"
+modules = ["search-qdrant-bridge:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-05"
+modules = ["search-qdrant-bridge:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-06"
+modules = ["search-qdrant-bridge:schema"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-07"
+modules = ["search-qdrant-bridge:query"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-14"
+modules = ["search-qdrant-bridge:readback"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-19"
+modules = ["search-qdrant-bridge:capability"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-25"
+modules = ["search-qdrant-bridge:admin"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P05"
+modules = ["search-qdrant-bridge:capability"]
+required_outputs = ["exact_qualified_server_artifact", "supervised_loopback_process", "API_secret", "disposable_capability_suite"]
+exit_evidence = ["process_identity", "loopback_auth", "schema_mismatch", "range_missing_field_IDF_probes"]
+
+[[architecture]]
+kind = "delivery"
+id = "P06"
+modules = ["search-qdrant-bridge:schema"]
+required_outputs = ["one_selected_lexical_path", "golden_sparse_profiles", "payload_indexes", "collision_safe_point_identity", "exact_projection_manifests"]
+exit_evidence = ["reference_vectors", "collision_injection", "no_implicit_language_defaults", "no_membership_arrays"]
+
+[[architecture]]
+kind = "delivery"
+id = "P07"
+modules = ["search-qdrant-bridge:mutation"]
+required_outputs = ["serialized_publication", "exact_ack_and_readback", "visible_epoch_commit", "pins_and_reclaim", "doctor_recovery"]
+exit_evidence = ["all_publication_failpoints", "transactional_guard_race", "no_staged_visibility", "no_pinned_reclaim", "blocked_abandon_recovery"]
+
+[[architecture]]
+kind = "delivery"
+id = "P18"
+modules = ["search-qdrant-bridge:admin"]
+required_outputs = ["measured_scale_change", "candidate_collection_build", "ordered_catchup", "final_barrier", "redb_route_cutover", "rollback"]
+exit_evidence = ["migration_state_kill_tests", "old_route_pin_drainage", "failed_candidate_discard", "scoring_currentness_noninterference", "rollback_plan"]
+
+[[configuration]]
+section = "qdrant_data"
+module = "config"
+contract = "config/sections/qdrant_data.md"
+reload = "RESTART_DEPENDENCY"
+
+[[port]]
+name = "SearchIndexPort"
+module = "mutation"
+methods = ["probe_capabilities", "ensure_schema", "upsert_exact", "close_exact", "readback_exact", "query", "exact_count"]
+method_modules = ["capability", "schema", "mutation", "mutation", "readback", "query", "readback"]
+
+[[port]]
+name = "SearchIndexAdminPort"
+module = "admin"
+methods = ["delete_exact", "validate_route"]
+method_modules = ["admin", "admin"]

@@ -1,0 +1,174 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-source-reconcile"
+outbound_dependency_count = 7
+inbound_dependency_count = 1
+architecture_relation_count = 5
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-reconcile->search-contracts"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-reconcile->search-domain"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-reconcile->search-ports"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-reconcile->search-config"
+consumer = "search-source-reconcile"
+consumer_module = "config"
+consumer_earliest_wave = 5
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-reconcile->search-source-registry"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-source-registry"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-reconcile->search-source-identity"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-source-identity"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-source-reconcile->search-safe-reader"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-safe-reader"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-source-reconcile"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-source-reconcile"
+producer_module = "api"
+producer_earliest_wave = 5
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W5"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S16"
+modules = ["search-source-reconcile:inventory"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C05"
+modules = ["search-source-reconcile:commit", "search-source-reconcile:currentness", "search-source-reconcile:gap", "search-source-reconcile:inventory"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-16"
+modules = ["search-source-reconcile:gap"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-24"
+modules = ["search-source-reconcile:currentness"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P09"
+modules = ["search-source-reconcile:commit", "search-source-reconcile:currentness", "search-source-reconcile:gap", "search-source-reconcile:inventory"]
+required_outputs = ["watcher_hint_and_gap_model", "authoritative_reconciliation", "saved_overlay", "authenticated_unsaved_overlay", "strict_current_workspace_preflight"]
+exit_evidence = ["overflow_resume", "observation_gap_denial", "live_head_mismatch", "deletion_shadow", "unsaved_sink_audit"]
+
+[[configuration]]
+section = "reconcile"
+module = "config"
+contract = "config/sections/reconcile.md"
+reload = "APPLY_LIVE"

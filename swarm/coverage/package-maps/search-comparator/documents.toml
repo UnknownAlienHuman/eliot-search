@@ -1,0 +1,679 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-comparator"
+node_count = 61
+principle_count = 1
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#agent-contract-search-comparator"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-comparator"
+kind = "implementation_contract_root"
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#mission"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#ownership"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#forbidden-ownership"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#allowed-dependencies"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 29
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#required-logical-surface"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 34
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#failure-surface"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 44
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 49
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#size-and-split-guard"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 60
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/AGENTS.md#definition-of-done"
+path = "crates/search-query/search-comparator/AGENTS.md"
+line = 68
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#function-contract-search-comparator"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-comparator"
+kind = "implementation_contract_root"
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#state-and-authority"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "State and authority"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#validatecomparisonrequest"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 22
+level = 2
+heading = "validatecomparisonrequest"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#validatecomparableimplementation"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 35
+level = 2
+heading = "validatecomparableimplementation"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#normalizebehaviorsignature"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 50
+level = 2
+heading = "normalizebehaviorsignature"
+kind = "implementation_contract"
+modules = ["search-comparator:behavior"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#collapserepositorylineages"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 74
+level = 2
+heading = "collapserepositorylineages"
+kind = "implementation_contract"
+modules = ["search-comparator:lineage"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#alignevidenceroles"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 88
+level = 2
+heading = "alignevidenceroles"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#partitionconfigurationvariants"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 106
+level = 2
+heading = "partitionconfigurationvariants"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#compareaxes"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 119
+level = 2
+heading = "compareaxes"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#classifyconflict"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 144
+level = 2
+heading = "classifyconflict"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#computecomparisoncoverage"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 164
+level = 2
+heading = "computecomparisoncoverage"
+kind = "implementation_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#orderrecommendedreading"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 178
+level = 2
+heading = "orderrecommendedreading"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#assemblebehaviorset"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 199
+level = 2
+heading = "assemblebehaviorset"
+kind = "implementation_contract"
+modules = ["search-comparator:behavior"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#revalidatecomparison"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 212
+level = 2
+heading = "revalidatecomparison"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#cancellation-deadlines-and-retry"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 222
+level = 2
+heading = "Cancellation, deadlines and retry"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#typed-failures-and-reasons"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 229
+level = 2
+heading = "Typed failures and reasons"
+kind = "implementation_error_contract"
+modules = ["search-comparator:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-query/search-comparator/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-query/search-comparator/FUNCTIONS.md"
+line = 247
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/README.md#search-comparator"
+path = "crates/search-query/search-comparator/README.md"
+line = 1
+level = 1
+heading = "search-comparator"
+kind = "implementation_contract_root"
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-query/search-comparator/README.md#owns"
+path = "crates/search-query/search-comparator/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-query/search-comparator/README.md#must-not-own"
+path = "crates/search-query/search-comparator/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s22-cross-repository-comparison"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1381
+level = 2
+heading = "S22. Cross-repository comparison"
+kind = "architecture_section"
+modules = ["search-comparator:alignment", "search-comparator:behavior", "search-comparator:result"]
+route_kind = "architecture_section_registry"
+rationale = "S22"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p11-inspect-and-compare-implementations"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2900
+level = 3
+heading = "P11 — Inspect and compare implementations"
+kind = "delivery_contract"
+modules = ["search-comparator:alignment", "search-comparator:behavior", "search-comparator:lineage", "search-comparator:result"]
+route_kind = "delivery_registry"
+rationale = "P11"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#w6-subject-resolution-comparison-and-exact-proof-implementation-packet"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W6 subject-resolution, comparison and exact-proof implementation packet"
+kind = "implementation_handoff"
+modules = ["search-comparator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#packages"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 7
+level = 2
+heading = "Packages"
+kind = "implementation_handoff"
+modules = ["search-comparator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#dependency-safe-launch-order"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 17
+level = 2
+heading = "Dependency-safe launch order"
+kind = "implementation_handoff"
+modules = ["search-comparator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#cross-package-invariants"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 36
+level = 2
+heading = "Cross-package invariants"
+kind = "implementation_handoff"
+modules = ["search-comparator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#hard-stop-conditions"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 59
+level = 2
+heading = "Hard stop conditions"
+kind = "implementation_handoff"
+modules = ["search-comparator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W6_IMPLEMENTATION_PACKET.md#handoff-requirements"
+path = "docs/handoff/W6_IMPLEMENTATION_PACKET.md"
+line = 75
+level = 2
+heading = "Handoff requirements"
+kind = "implementation_handoff"
+modules = ["search-comparator:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "qualification/proof/README.md#w6-comparison-and-exact-proof-qualification"
+path = "qualification/proof/README.md"
+line = 1
+level = 1
+heading = "W6 comparison and exact-proof qualification"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#w6-subject-resolution-comparison-and-exact-proof-qualification-contract"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 1
+level = 1
+heading = "W6 subject resolution, comparison and exact-proof qualification contract"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#owners"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 13
+level = 2
+heading = "Owners"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#frozen-inputs"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 30
+level = 2
+heading = "Frozen inputs"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#execution-order"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 47
+level = 2
+heading = "Execution order"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#mandatory-properties"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 66
+level = 2
+heading = "Mandatory properties"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#subject-resolution"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 68
+level = 3
+heading = "Subject resolution"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#cross-repository-comparison"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 81
+level = 3
+heading = "Cross-repository comparison"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#exact-proof"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 95
+level = 3
+heading = "Exact proof"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#stop-conditions"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 111
+level = 2
+heading = "Stop conditions"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#evidence-products"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 130
+level = 2
+heading = "Evidence products"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "qualification/proof/W6_QUALIFICATION.md#current-disposition"
+path = "qualification/proof/W6_QUALIFICATION.md"
+line = 136
+level = 2
+heading = "Current disposition"
+kind = "qualification_contract"
+modules = ["search-comparator:coverage"]
+route_kind = "qualification_area_route"
+rationale = "qualification/proof"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#search-comparator-implementation-packet"
+path = "swarm/assignments/search-comparator.md"
+line = 1
+level = 1
+heading = "search-comparator implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-comparator:alignment", "search-comparator:api", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage", "search-comparator:error", "search-comparator:input", "search-comparator:lib", "search-comparator:lineage", "search-comparator:result"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#mission"
+path = "swarm/assignments/search-comparator.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#owns"
+path = "swarm/assignments/search-comparator.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#must-not-own"
+path = "swarm/assignments/search-comparator.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#logical-primitives"
+path = "swarm/assignments/search-comparator.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#logical-operations"
+path = "swarm/assignments/search-comparator.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#required-invariants"
+path = "swarm/assignments/search-comparator.md"
+line = 43
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-comparator:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#typed-failure-surface"
+path = "swarm/assignments/search-comparator.md"
+line = 51
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#exit-tests-evidence"
+path = "swarm/assignments/search-comparator.md"
+line = 59
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#suggested-internal-modules"
+path = "swarm/assignments/search-comparator.md"
+line = 68
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-comparator.md#size-split"
+path = "swarm/assignments/search-comparator.md"
+line = 85
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-comparator:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

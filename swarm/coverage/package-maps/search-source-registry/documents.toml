@@ -1,0 +1,899 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-source-registry"
+node_count = 81
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-source/search-source-registry/AGENTS.md#agent-contract-search-source-registry"
+path = "crates/search-source/search-source-registry/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-source-registry"
+kind = "implementation_contract_root"
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-registry/AGENTS.md#ownership"
+path = "crates/search-source/search-source-registry/AGENTS.md"
+line = 8
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/AGENTS.md#forbidden-ownership"
+path = "crates/search-source/search-source-registry/AGENTS.md"
+line = 14
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/AGENTS.md#dependencies"
+path = "crates/search-source/search-source-registry/AGENTS.md"
+line = 21
+level = 2
+heading = "Dependencies"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/AGENTS.md#size"
+path = "crates/search-source/search-source-registry/AGENTS.md"
+line = 25
+level = 2
+heading = "Size"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#function-contract-search-source-registry"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-source-registry"
+kind = "implementation_contract_root"
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#global-rules"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-source-registry:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#snapshot-operations"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 21
+level = 2
+heading = "Snapshot operations"
+kind = "implementation_contract"
+modules = ["search-source-registry:snapshot"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#validateregistrysnapshot-snapshot-result-validatedregistrysnapshot-registryerror"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 23
+level = 3
+heading = "validateregistrysnapshot(snapshot) -> Result<ValidatedRegistrySnapshot, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:snapshot"]
+route_kind = "operation_route"
+rationale = "search-source-registry::validate_registry_snapshot"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#snapshotdigest-snapshot-registrysnapshotdigest"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 28
+level = 3
+heading = "snapshotdigest(snapshot) -> RegistrySnapshotDigest"
+kind = "implementation_operation"
+modules = ["search-source-registry:snapshot"]
+route_kind = "operation_route"
+rationale = "search-source-registry::snapshot_digest"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#redactedregistryview-snapshot-binding-disclosure-registryview"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 33
+level = 3
+heading = "redactedregistryview(snapshot, binding, disclosure) -> RegistryView"
+kind = "implementation_operation"
+modules = ["search-source-registry:view"]
+route_kind = "operation_route"
+rationale = "search-source-registry::redacted_registry_view"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#root-registration"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 38
+level = 2
+heading = "Root registration"
+kind = "implementation_contract"
+modules = ["search-source-registry:root"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#registerroot-request-identity-admissionpolicy-controlport-operation-deadline-cancel-result-rootr"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 40
+level = 3
+heading = "registerroot(request, identity, admissionpolicy, controlport, operation, deadline, cancel) -> Result<RootRegistrationReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:root"]
+route_kind = "operation_route"
+rationale = "search-source-registry::register_root"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#updaterootpolicy-root-expectedrevision-newpolicy-controlport-operation-result-rootpolicychangere"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 48
+level = 3
+heading = "updaterootpolicy(root, expectedrevision, newpolicy, controlport, operation) -> Result<RootPolicyChangeReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:root"]
+route_kind = "operation_route"
+rationale = "search-source-registry::update_root_policy"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#unbindroot-root-expectedrevision-policy-controlport-operation-result-rootunbindreceipt-registrye"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 53
+level = 3
+heading = "unbindroot(root, expectedrevision, policy, controlport, operation) -> Result<RootUnbindReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:root"]
+route_kind = "operation_route"
+rationale = "search-source-registry::unbind_root"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#source-admission-and-membership"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 58
+level = 2
+heading = "Source admission and membership"
+kind = "implementation_contract"
+modules = ["search-source-registry:membership"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#admitsource-identity-root-admissionreceipt-expectedsnapshot-controlport-operation-result-admitte"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 60
+level = 3
+heading = "admitsource(identity, root, admissionreceipt, expectedsnapshot, controlport, operation) -> Result<AdmittedSourceReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:source"]
+route_kind = "operation_route"
+rationale = "search-source-registry::admit_source"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#revalidateadmittedsource-source-admissionreceipt-expectedrevision-controlport-operation-result-s"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 67
+level = 3
+heading = "revalidateadmittedsource(source, admissionreceipt, expectedrevision, controlport, operation) -> Result<SourceAdmissionUpdateReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:source"]
+route_kind = "operation_route"
+rationale = "search-source-registry::revalidate_admitted_source"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#bindmembership-request-source-admissionreceipt-expectedsnapshot-controlport-operation-result-sou"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 73
+level = 3
+heading = "bindmembership(request, source, admissionreceipt, expectedsnapshot, controlport, operation) -> Result<SourceMembershipReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:membership"]
+route_kind = "operation_route"
+rationale = "search-source-registry::bind_membership"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#transitionmembership-membership-command-expectedrevision-controlport-operation-result-membership"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 79
+level = 3
+heading = "transitionmembership(membership, command, expectedrevision, controlport, operation) -> Result<MembershipTransitionReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:membership"]
+route_kind = "operation_route"
+rationale = "search-source-registry::transition_membership"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#reference-portfolios-and-views"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 84
+level = 2
+heading = "Reference portfolios and views"
+kind = "implementation_contract"
+modules = ["search-source-registry:portfolio"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#publishreferenceportfolio-portfolio-expectedrevision-controlport-operation-result-portfoliorecei"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 86
+level = 3
+heading = "publishreferenceportfolio(portfolio, expectedrevision, controlport, operation) -> Result<PortfolioReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:portfolio"]
+route_kind = "operation_route"
+rationale = "search-source-registry::publish_reference_portfolio"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#resolvesourceview-request-snapshot-accesssnapshot-currentnesssnapshot-limits-result-resolvedsour"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 91
+level = 3
+heading = "resolvesourceview(request, snapshot, accesssnapshot, currentnesssnapshot, limits) -> Result<ResolvedSourceView, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:view"]
+route_kind = "operation_route"
+rationale = "search-source-registry::resolve_source_view"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#resolveworkspaceview-request-snapshot-workspaceobservations-limits-result-workspaceviewresolutio"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 104
+level = 3
+heading = "resolveworkspaceview(request, snapshot, workspaceobservations, limits) -> Result<WorkspaceViewResolution, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:view"]
+route_kind = "operation_route"
+rationale = "search-source-registry::resolve_workspace_view"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#verifyview-view-currentsnapshot-currentowner-result-verifiedregistryview-registryerror"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 110
+level = 3
+heading = "verifyview(view, currentsnapshot, currentowner) -> Result<VerifiedRegistryView, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:view"]
+route_kind = "operation_route"
+rationale = "search-source-registry::verify_view"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#namespace-ownership-and-cutover"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 115
+level = 2
+heading = "Namespace ownership and cutover"
+kind = "implementation_contract"
+modules = ["search-source-registry:cutover"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#preparenamespacecutover-namespace-currentowner-proposedowner-policy-controlport-operation-result"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 117
+level = 3
+heading = "preparenamespacecutover(namespace, currentowner, proposedowner, policy, controlport, operation) -> Result<CutoverPreparation, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:cutover"]
+route_kind = "operation_route"
+rationale = "search-source-registry::prepare_namespace_cutover"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#fenceoldowner-preparation-controlport-operation-result-ownerfencereceipt-registryerror"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 122
+level = 3
+heading = "fenceoldowner(preparation, controlport, operation) -> Result<OwnerFenceReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:cutover"]
+route_kind = "operation_route"
+rationale = "search-source-registry::fence_old_owner"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#activatenewowner-preparation-fence-importortransferreceipt-controlport-operation-result-sourceow"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 127
+level = 3
+heading = "activatenewowner(preparation, fence, importortransferreceipt, controlport, operation) -> Result<SourceOwnerActivationReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:cutover"]
+route_kind = "operation_route"
+rationale = "search-source-registry::activate_new_owner"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#verifycutoverreceipt-receipt-oldstate-newstate-snapshot-result-verifiedcutoverreceipt-registryer"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 132
+level = 3
+heading = "verifycutoverreceipt(receipt, oldstate, newstate, snapshot) -> Result<VerifiedCutoverReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:cutover"]
+route_kind = "operation_route"
+rationale = "search-source-registry::verify_cutover_receipt"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#recovercutover-operation-controlport-result-cutoverrecoverydecision-registryerror"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 137
+level = 3
+heading = "recovercutover(operation, controlport) -> Result<CutoverRecoveryDecision, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:cutover"]
+route_kind = "operation_route"
+rationale = "search-source-registry::recover_cutover"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#mutation-recovery-and-batch-operations"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 142
+level = 2
+heading = "Mutation recovery and batch operations"
+kind = "implementation_contract"
+modules = ["search-source-registry:recovery"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#recoverregistrymutation-operation-expecteddigest-controlport-result-registrymutationrecovery-reg"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 144
+level = 3
+heading = "recoverregistrymutation(operation, expecteddigest, controlport) -> Result<RegistryMutationRecovery, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:recovery"]
+route_kind = "operation_route"
+rationale = "search-source-registry::recover_registry_mutation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#applyadmissionbatch-batch-expectedsnapshot-controlport-limits-deadline-cancel-result-registrybat"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 149
+level = 3
+heading = "applyadmissionbatch(batch, expectedsnapshot, controlport, limits, deadline, cancel) -> Result<RegistryBatchReceipt, RegistryError>"
+kind = "implementation_operation"
+modules = ["search-source-registry:recovery"]
+route_kind = "operation_route"
+rationale = "search-source-registry::apply_admission_batch"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#cancellation-deadline-and-crash-semantics"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 155
+level = 2
+heading = "Cancellation, deadline and crash semantics"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#typed-failures"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 162
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-source-registry:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-source/search-source-registry/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-source/search-source-registry/FUNCTIONS.md"
+line = 187
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/README.md#search-source-registry"
+path = "crates/search-source/search-source-registry/README.md"
+line = 1
+level = 1
+heading = "search-source-registry"
+kind = "implementation_contract_root"
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-registry/README.md#owns"
+path = "crates/search-source/search-source-registry/README.md"
+line = 10
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-registry/README.md#must-not-own"
+path = "crates/search-source/search-source-registry/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-identity-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 321
+level = 2
+heading = "S7. Identity model"
+kind = "architecture_section"
+modules = ["search-source-registry:cutover"]
+route_kind = "architecture_section_registry"
+rationale = "S7"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-1-installation-and-collection-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 323
+level = 3
+heading = "S7.1 Installation and collection identity"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-2-repository-and-workspace-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 343
+level = 3
+heading = "S7.2 Repository and workspace identity"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-2-1-source-namespace-ownership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 361
+level = 3
+heading = "S7.2.1 Source namespace ownership"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-3-sourceidentity-pathbinding-and-sourcerevision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 420
+level = 3
+heading = "S7.3 SourceIdentity, PathBinding and SourceRevision"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-4-corpus-membership-is-separate-from-source-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 452
+level = 3
+heading = "S7.4 Corpus membership is separate from source identity"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-5-materialization-representation-and-projection-membership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 470
+level = 3
+heading = "S7.5 Materialization, representation and projection membership"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-6-unit-occurrence"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 501
+level = 3
+heading = "S7.6 Unit occurrence"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-7-reference-portfolios"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 518
+level = 3
+heading = "S7.7 Reference portfolios"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-8-sourceview-and-workspaceviewrevision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 536
+level = 3
+heading = "S7.8 SourceView and WorkspaceViewRevision"
+kind = "architecture_node"
+modules = ["search-source-registry:cutover"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-exact-verification-plane"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1522
+level = 2
+heading = "S25. Exact verification plane"
+kind = "architecture_section"
+modules = ["search-source-registry:view"]
+route_kind = "architecture_section_registry"
+rationale = "S25"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-1-compile-then-execute"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1524
+level = 3
+heading = "S25.1 Compile then execute"
+kind = "architecture_node"
+modules = ["search-source-registry:view"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-2-complete-negative-claim"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1547
+level = 3
+heading = "S25.2 Complete negative claim"
+kind = "architecture_node"
+modules = ["search-source-registry:view"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s25-3-live-scope-drift"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1561
+level = 3
+heading = "S25.3 Live-scope drift"
+kind = "architecture_node"
+modules = ["search-source-registry:view"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p03-source-registry-and-direct-exact-spine"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2852
+level = 3
+heading = "P03 — Source registry and direct exact spine"
+kind = "delivery_contract"
+modules = ["search-source-registry:cutover", "search-source-registry:membership", "search-source-registry:root", "search-source-registry:view"]
+route_kind = "delivery_registry"
+rationale = "P03"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p12-exact-scan-and-proof-reports"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2906
+level = 3
+heading = "P12 — Exact scan and proof reports"
+kind = "delivery_contract"
+modules = ["search-source-registry:view"]
+route_kind = "delivery_registry"
+rationale = "P12"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#w2-direct-source-spine-implementation-packet"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W2 direct source-spine implementation packet"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#source-pipeline"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Source pipeline"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 61
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 71
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#mutation-and-recovery"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 91
+level = 2
+heading = "Mutation and recovery"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#required-w2-tests-and-evidence"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 112
+level = 2
+heading = "Required W2 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#admission"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 3
+heading = "Admission"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#identity-and-registry"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 122
+level = 3
+heading = "Identity and registry"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#safe-read-and-revision"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 130
+level = 3
+heading = "Safe read and revision"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#preparation"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 139
+level = 3
+heading = "Preparation"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 148
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 161
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-source-registry:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#search-source-registry-implementation-packet"
+path = "swarm/assignments/search-source-registry.md"
+line = 1
+level = 1
+heading = "search-source-registry implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-source-registry:api", "search-source-registry:cutover", "search-source-registry:error", "search-source-registry:lib", "search-source-registry:membership", "search-source-registry:portfolio", "search-source-registry:recovery", "search-source-registry:root", "search-source-registry:snapshot", "search-source-registry:source", "search-source-registry:view"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#mission"
+path = "swarm/assignments/search-source-registry.md"
+line = 12
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#owns"
+path = "swarm/assignments/search-source-registry.md"
+line = 16
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#must-not-own"
+path = "swarm/assignments/search-source-registry.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#logical-primitives"
+path = "swarm/assignments/search-source-registry.md"
+line = 33
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#logical-operations"
+path = "swarm/assignments/search-source-registry.md"
+line = 37
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#required-invariants"
+path = "swarm/assignments/search-source-registry.md"
+line = 46
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-source-registry:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#typed-failure-surface"
+path = "swarm/assignments/search-source-registry.md"
+line = 55
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#exit-tests-evidence"
+path = "swarm/assignments/search-source-registry.md"
+line = 65
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#suggested-internal-modules"
+path = "swarm/assignments/search-source-registry.md"
+line = 75
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-registry.md#size-split"
+path = "swarm/assignments/search-source-registry.md"
+line = 90
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-source-registry:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

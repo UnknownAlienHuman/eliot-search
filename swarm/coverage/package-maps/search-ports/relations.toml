@@ -1,0 +1,604 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-ports"
+outbound_dependency_count = 1
+inbound_dependency_count = 35
+architecture_relation_count = 5
+configuration_relation_count = 0
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 2
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-ports->search-contracts"
+consumer = "search-ports"
+consumer_module = "conformance"
+consumer_earliest_wave = 0
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "docs/contracts/p00/PORT_OPERATIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-search->search-ports"
+consumer = "eliot-search"
+consumer_module = "main"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "bins/eliot-search/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-search-doc-worker->search-ports"
+consumer = "eliot-search-doc-worker"
+consumer_module = "main"
+consumer_earliest_wave = 10
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "bins/eliot-search-doc-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-search-model-worker->search-ports"
+consumer = "eliot-search-model-worker"
+consumer_module = "main"
+consumer_earliest_wave = 10
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "bins/eliot-search-model-worker/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-ports"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-access->search-ports"
+consumer = "search-access"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-access/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-candidate-validator->search-ports"
+consumer = "search-candidate-validator"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-code-enricher->search-ports"
+consumer = "search-code-enricher"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-continuation->search-ports"
+consumer = "search-continuation"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-control-redb->search-ports"
+consumer = "search-control-redb"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-control-redb/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-epoch-pins->search-ports"
+consumer = "search-epoch-pins"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-exact->search-ports"
+consumer = "search-exact"
+consumer_module = "api"
+consumer_earliest_wave = 6
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-exact/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-handles->search-ports"
+consumer = "search-handles"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-handles/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-index-reclaimer->search-ports"
+consumer = "search-index-reclaimer"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-lexical->search-ports"
+consumer = "search-lexical"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-lexical/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-materializer->search-ports"
+consumer = "search-materializer"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-prep/search-materializer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-model-provider->search-ports"
+consumer = "search-model-provider"
+consumer_module = "api"
+consumer_earliest_wave = 10
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-model-provider/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-os-secrets->search-ports"
+consumer = "search-os-secrets"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-runtime/search-os-secrets/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-overlay->search-ports"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-projection-planner->search-ports"
+consumer = "search-projection-planner"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-provider-protocol->search-ports"
+consumer = "search-provider-protocol"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-provider-protocol/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-publication->search-ports"
+consumer = "search-publication"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-qdrant-bridge->search-ports"
+consumer = "search-qdrant-bridge"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-qdrant-supervisor->search-ports"
+consumer = "search-qdrant-supervisor"
+consumer_module = "api"
+consumer_earliest_wave = 3
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-query-planner->search-ports"
+consumer = "search-query-planner"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-query-planner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-research-export-adapter->search-ports"
+consumer = "search-research-export-adapter"
+consumer_module = "api"
+consumer_earliest_wave = 8
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-research-export-adapter/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-result-projector->search-ports"
+consumer = "search-result-projector"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-retention->search-ports"
+consumer = "search-retention"
+consumer_module = "api"
+consumer_earliest_wave = 7
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-runtime/search-retention/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-retrieval-executor->search-ports"
+consumer = "search-retrieval-executor"
+consumer_module = "api"
+consumer_earliest_wave = 4
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-revision-store->search-ports"
+consumer = "search-revision-store"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-revision-store/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-runtime-owner->search-ports"
+consumer = "search-runtime-owner"
+consumer_module = "api"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-runtime/search-runtime-owner/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-safe-reader->search-ports"
+consumer = "search-safe-reader"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-admission->search-ports"
+consumer = "search-source-admission"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-source-admission/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-reconcile->search-ports"
+consumer = "search-source-reconcile"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-source-registry->search-ports"
+consumer = "search-source-registry"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "inbound"
+id = "search-unitizer->search-ports"
+consumer = "search-unitizer"
+consumer_module = "api"
+consumer_earliest_wave = 2
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[architecture]]
+kind = "architecture_section"
+id = "S3"
+modules = ["search-ports:conformance"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S4"
+modules = ["search-ports:conformance"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S31"
+modules = ["search-ports:conformance"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C00"
+modules = ["search-ports:conformance"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P00"
+modules = ["search-ports:conformance"]
+required_outputs = ["shared_contract_shapes", "pure_rules", "shared_vendor_neutral_ports", "recipe_and_reason_registries", "dependency_and_license_policy"]
+exit_evidence = ["contract_hash", "exact_recipe_set", "epoch_sentinel_rejection", "pure_property_tests", "dependency_direction"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "port_support_records"
+owner_roles = ["shape_owner"]
+modules = ["context"]
+schemas = ["OperationContext", "MutationIdentity", "PortReceipt", "BoundedPage<T>", "BoundedStream<T>"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-primitives.toml"
+group = "package_opaque_completion"
+owner_roles = ["shape_owner"]
+modules = ["context"]
+schemas = ["PackageOpaque"]
+source_files = ["docs/contracts/p00/TYPE_COMPLETIONS.md", "docs/contracts/p00/TYPE_REGISTRY.md"]

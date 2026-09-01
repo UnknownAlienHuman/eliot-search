@@ -1,0 +1,843 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "eliot-searchd"
+outbound_dependency_count = 38
+inbound_dependency_count = 0
+architecture_relation_count = 32
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 3
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-contracts"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-domain"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-ports"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-config"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-runtime-owner"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-runtime-owner"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-os-secrets"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-os-secrets"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-control-redb"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-control-redb"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-source-admission"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-source-admission"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-source-registry"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-source-registry"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-source-identity"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-source-identity"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-source-reconcile"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-source-reconcile"
+producer_module = "api"
+producer_earliest_wave = 5
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W5"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-safe-reader"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-safe-reader"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-revision-store"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-revision-store"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-materializer"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-materializer"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-unitizer"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-unitizer"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W2"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-code-enricher"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-code-enricher"
+producer_module = "api"
+producer_earliest_wave = 5
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W5"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-lexical"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-lexical"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-projection-planner"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-projection-planner"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-point-identity"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-point-identity"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-qdrant-supervisor"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-qdrant-supervisor"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-qdrant-bridge"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-qdrant-bridge"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-publication"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-publication"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-epoch-pins"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-epoch-pins"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-index-reclaimer"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-index-reclaimer"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W3"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-access"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-access"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-overlay"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-overlay"
+producer_module = "api"
+producer_earliest_wave = 5
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W5"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-exact"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-exact"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W6"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-subject-resolver"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-subject-resolver"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W6"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-query-planner"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-query-planner"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-retrieval-executor"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-retrieval-executor"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-candidate-validator"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-candidate-validator"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-comparator"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-comparator"
+producer_module = "api"
+producer_earliest_wave = 6
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W6"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-handles"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-handles"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-result-projector"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-result-projector"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-continuation"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-continuation"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-retention"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-retention"
+producer_module = "api"
+producer_earliest_wave = 7
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W7"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-eval"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-eval"
+producer_module = "api"
+producer_earliest_wave = 4
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W4"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "eliot-searchd->search-provider-protocol"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-provider-protocol"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S0"
+modules = ["eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S1"
+modules = ["eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S2"
+modules = ["eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S4"
+modules = ["eliot-searchd:adapters"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S5"
+modules = ["eliot-searchd:adapters"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S27"
+modules = ["eliot-searchd:startup"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S28"
+modules = ["eliot-searchd:recovery"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S29"
+modules = ["eliot-searchd:optional", "eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S30"
+modules = ["eliot-searchd:readiness"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S31"
+modules = ["eliot-searchd:adapters"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S32"
+modules = ["eliot-searchd:connection"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S33"
+modules = ["eliot-searchd:connection"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S35"
+modules = ["eliot-searchd:evaluation"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S37"
+modules = ["eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S38"
+modules = ["eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S39"
+modules = ["eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-01"
+modules = ["eliot-searchd:profile"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-10"
+modules = ["eliot-searchd:request"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-25"
+modules = ["eliot-searchd:recovery"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-28"
+modules = ["eliot-searchd:evaluation"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P01"
+modules = ["eliot-searchd:startup"]
+required_outputs = ["configuration_core", "single_data_root_owner", "opaque_secret_store", "provider_framing", "standalone_daemon_and_cli_shell"]
+exit_evidence = ["second_owner_denial", "crash_reopen_owner", "secret_non_disclosure", "cli_no_direct_store"]
+
+[[architecture]]
+kind = "delivery"
+id = "P02"
+modules = ["eliot-searchd:startup"]
+required_outputs = ["bounded_control_tables", "verified_migrations", "immutable_control_snapshot", "corruption_quarantine"]
+exit_evidence = ["migration_fixtures", "power_loss_reopen", "hot_query_zero_redb_write"]
+
+[[architecture]]
+kind = "delivery"
+id = "P05"
+modules = ["eliot-searchd:startup"]
+required_outputs = ["exact_qualified_server_artifact", "supervised_loopback_process", "API_secret", "disposable_capability_suite"]
+exit_evidence = ["process_identity", "loopback_auth", "schema_mismatch", "range_missing_field_IDF_probes"]
+
+[[architecture]]
+kind = "delivery"
+id = "P07"
+modules = ["eliot-searchd:recovery"]
+required_outputs = ["serialized_publication", "exact_ack_and_readback", "visible_epoch_commit", "pins_and_reclaim", "doctor_recovery"]
+exit_evidence = ["all_publication_failpoints", "transactional_guard_race", "no_staged_visibility", "no_pinned_reclaim", "blocked_abandon_recovery"]
+
+[[architecture]]
+kind = "delivery"
+id = "P08"
+modules = ["eliot-searchd:request"]
+required_outputs = ["server_owned_plans", "bounded_safe_legs", "deterministic_fusion", "source_backed_candidates", "compact_cards", "handles_and_continuations", "baseline_eval_harness"]
+exit_evidence = ["access_noninterference", "deterministic_cards", "raw_grep_read_baseline"]
+
+[[architecture]]
+kind = "delivery"
+id = "P09"
+modules = ["eliot-searchd:request"]
+required_outputs = ["watcher_hint_and_gap_model", "authoritative_reconciliation", "saved_overlay", "authenticated_unsaved_overlay", "strict_current_workspace_preflight"]
+exit_evidence = ["overflow_resume", "observation_gap_denial", "live_head_mismatch", "deletion_shadow", "unsaved_sink_audit"]
+
+[[architecture]]
+kind = "delivery"
+id = "P13"
+modules = ["eliot-searchd:recovery"]
+required_outputs = ["security_mutation_linearization", "durable_source_handles", "CAS_mark_and_sweep", "purge_receipts_and_tombstones", "restore_revalidation"]
+exit_evidence = ["revocation_during_query", "handle_denial", "purge_non_resurrection", "mismatched_restore_quarantine"]
+
+[[architecture]]
+kind = "delivery"
+id = "P14"
+modules = ["eliot-searchd:connection"]
+required_outputs = ["provider_envelope_flow_control", "pairing_and_grants", "capability_descriptor", "generic_evidence_edge", "optional_ELIOT_mapping", "optional_Research_export"]
+exit_evidence = ["no_reverse_authority", "generic_round_trip", "optional_ELIOT_fixture", "normalized_bundle_round_trip", "cutover_receipt_validation"]
+
+[[architecture]]
+kind = "delivery"
+id = "P15"
+modules = ["eliot-searchd:evaluation"]
+required_outputs = ["control_corpus", "ABC_evaluation", "latency_resource_fault_security_report", "protocol_stress", "content_minimized_telemetry_audit"]
+exit_evidence = ["all_S35_fixtures", "raw_acceptance_evidence", "independent_recalculation"]
+
+[[architecture]]
+kind = "delivery"
+id = "P16"
+modules = ["eliot-searchd:optional"]
+required_outputs = ["isolated_model_worker", "versioned_dense_profile", "measured_fusion_or_rerank", "baseline_fallback"]
+exit_evidence = ["measured_incremental_benefit", "resource_and_safety_receipts", "worker_removal_returns_to_P15"]
+
+[[architecture]]
+kind = "delivery"
+id = "P17"
+modules = ["eliot-searchd:optional"]
+required_outputs = ["isolated_document_worker", "qualified_provider", "coordinate_and_loss_maps", "baseline_fallback"]
+exit_evidence = ["Windows_packaging", "no_execute_resource_fuzz", "provider_removal"]
+
+[[architecture]]
+kind = "delivery"
+id = "P18"
+modules = ["eliot-searchd:optional"]
+required_outputs = ["measured_scale_change", "candidate_collection_build", "ordered_catchup", "final_barrier", "redb_route_cutover", "rollback"]
+exit_evidence = ["migration_state_kill_tests", "old_route_pin_drainage", "failed_candidate_discard", "scoring_currentness_noninterference", "rollback_plan"]
+
+[[configuration]]
+section = "optional_profiles"
+module = "optional"
+contract = "config/sections/optional_profiles.md"
+reload = "GATE_REQUIRED"
+
+[[port]]
+name = "ClockPort"
+module = "adapters"
+methods = ["utc_now", "monotonic_now"]
+method_modules = ["adapters", "adapters"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "optional_provider_state"
+owner_roles = ["state_owner"]
+modules = ["optional"]
+schemas = ["OptionalProviderState"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-core.toml"
+group = "membership_readiness"
+owner_roles = ["state_owner"]
+modules = ["readiness"]
+schemas = ["MembershipReadiness"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+
+[[schema_group]]
+packet = "swarm/coverage/schemas-protocol-lifecycle.toml"
+group = "capability_descriptor"
+owner_roles = ["state_owner"]
+modules = ["capability"]
+schemas = ["SearchProviderCapabilityDescriptor"]
+source_files = ["docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]

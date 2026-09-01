@@ -1,0 +1,179 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_RELATION_MAP_NOT_IMPLEMENTED"
+package = "search-overlay"
+outbound_dependency_count = 6
+inbound_dependency_count = 1
+architecture_relation_count = 7
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 1
+schema_relation_count = 0
+dependency_targets_enter_through_public_entry = true
+implementation_authorized_by_this_map = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-overlay->search-contracts"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-contracts"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "shared_contract"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-overlay->search-domain"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-domain"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "domain_rules"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-overlay->search-ports"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-ports"
+producer_module = "lib"
+producer_earliest_wave = 0
+relationship = "vendor_neutral_port"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-overlay->search-config"
+consumer = "search-overlay"
+consumer_module = "config"
+consumer_earliest_wave = 5
+producer = "search-config"
+producer_module = "api"
+producer_earliest_wave = 1
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = false
+
+[[dependency]]
+direction = "outbound"
+id = "search-overlay->search-unitizer"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-unitizer"
+producer_module = "api"
+producer_earliest_wave = 2
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "outbound"
+id = "search-overlay->search-lexical"
+consumer = "search-overlay"
+consumer_module = "api"
+consumer_earliest_wave = 5
+producer = "search-lexical"
+producer_module = "api"
+producer_earliest_wave = 3
+relationship = "accepted_public_handoff"
+contract_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+requires_stage_reentry = false
+reentry_stage = "NONE"
+exact_accepted_handoff_required = true
+
+[[dependency]]
+direction = "inbound"
+id = "eliot-searchd->search-overlay"
+consumer = "eliot-searchd"
+consumer_module = "adapters"
+consumer_earliest_wave = 1
+producer = "search-overlay"
+producer_module = "api"
+producer_earliest_wave = 5
+relationship = "progressive_reentry_handoff"
+contract_source = "bins/eliot-searchd/FUNCTIONS.md"
+requires_stage_reentry = true
+reentry_stage = "W5"
+exact_accepted_handoff_required = true
+
+[[architecture]]
+kind = "architecture_section"
+id = "S18"
+modules = ["search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "architecture_section"
+id = "S36"
+modules = ["search-overlay:cleanup"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "capability"
+id = "C19"
+modules = ["search-overlay:cleanup", "search-overlay:direct", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-16"
+modules = ["search-overlay:identity"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "invariant"
+id = "INV-28"
+modules = ["search-overlay:cleanup", "search-overlay:snapshot"]
+required_outputs = []
+exit_evidence = []
+
+[[architecture]]
+kind = "delivery"
+id = "P09"
+modules = ["search-overlay:cleanup", "search-overlay:save", "search-overlay:shadow", "search-overlay:snapshot"]
+required_outputs = ["watcher_hint_and_gap_model", "authoritative_reconciliation", "saved_overlay", "authenticated_unsaved_overlay", "strict_current_workspace_preflight"]
+exit_evidence = ["overflow_resume", "observation_gap_denial", "live_head_mismatch", "deletion_shadow", "unsaved_sink_audit"]
+
+[[architecture]]
+kind = "delivery"
+id = "P12"
+modules = ["search-overlay:snapshot"]
+required_outputs = ["compile_execute_split", "frozen_denominator", "exact_predicate_profiles", "revision_drift_handling", "truthful_execution_report"]
+exit_evidence = ["complete_literal_negative", "non_backtracking_regex", "raw_vs_decoded_semantics", "unreadable_changed_cancelled_scope"]
+
+[[configuration]]
+section = "overlay"
+module = "config"
+contract = "config/sections/overlay.md"
+reload = "APPLY_LIVE"
+
+[[port]]
+name = "OverlayPort"
+module = "snapshot"
+methods = ["snapshot_overlay", "shadowed_memberships", "direct_candidates"]
+method_modules = ["snapshot", "shadow", "direct"]

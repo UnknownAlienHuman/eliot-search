@@ -1,0 +1,168 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-os-secrets"
+operation_count = 16
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-os-secrets::audit_public_surfaces"
+name = "audit_public_surfaces"
+module = "audit"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Health and audit"]
+route_kind = "semantic"
+score = 121
+
+[[operation]]
+id = "search-os-secrets::compiled_defaults"
+name = "compiled_defaults"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-os-secrets::create"
+name = "create"
+module = "store"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Secret lifecycle"]
+route_kind = "semantic"
+score = 16
+
+[[operation]]
+id = "search-os-secrets::delete"
+name = "delete"
+module = "store"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Secret lifecycle"]
+route_kind = "semantic"
+score = 16
+
+[[operation]]
+id = "search-os-secrets::health"
+name = "health"
+module = "audit"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Health and audit"]
+route_kind = "semantic"
+score = 18
+
+[[operation]]
+id = "search-os-secrets::issue_lease"
+name = "issue_lease"
+module = "lease"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Secret lifecycle"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-os-secrets::plan_section_change"
+name = "plan_section_change"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-os-secrets::recover_operation"
+name = "recover_operation"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Secret lifecycle"]
+route_kind = "semantic"
+score = 35
+
+[[operation]]
+id = "search-os-secrets::reference_metadata"
+name = "reference_metadata"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Reference and binding operations"]
+route_kind = "semantic"
+score = 29
+
+[[operation]]
+id = "search-os-secrets::rotate"
+name = "rotate"
+module = "rotation"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Secret lifecycle"]
+route_kind = "semantic"
+score = 8
+
+[[operation]]
+id = "search-os-secrets::section_descriptor"
+name = "section_descriptor"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-os-secrets::section_digest"
+name = "section_digest"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 66
+
+[[operation]]
+id = "search-os-secrets::validate_binding"
+name = "validate_binding"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Reference and binding operations"]
+route_kind = "semantic"
+score = 132
+
+[[operation]]
+id = "search-os-secrets::validate_reference"
+name = "validate_reference"
+module = "binding"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Reference and binding operations"]
+route_kind = "semantic"
+score = 29
+
+[[operation]]
+id = "search-os-secrets::validate_section"
+name = "validate_section"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Configuration operations"]
+route_kind = "semantic"
+score = 38
+
+[[operation]]
+id = "search-os-secrets::with_secret"
+name = "with_secret"
+module = "store"
+public_entry_module = "api"
+sources = ["crates/search-runtime/search-os-secrets/FUNCTIONS.md"]
+source_contexts = ["Secret lifecycle"]
+route_kind = "semantic"
+score = 16

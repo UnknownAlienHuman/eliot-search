@@ -1,0 +1,98 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-code-enricher"
+operation_count = 9
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-code-enricher::build_enrichment_manifest"
+name = "build_enrichment_manifest"
+module = "facts"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-code-enricher::classify_evidence_role"
+name = "classify_evidence_role"
+module = "assurance"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-code-enricher::compare_profile_change"
+name = "compare_profile_change"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-code-enricher::extract_configuration_predicate"
+name = "extract_configuration_predicate"
+module = "predicates"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-code-enricher::extract_structural_facts"
+name = "extract_structural_facts"
+module = "facts"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "semantic"
+score = 99
+
+[[operation]]
+id = "search-code-enricher::extract_structural_relations"
+name = "extract_structural_relations"
+module = "references"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-code-enricher::parse_rust_no_execute"
+name = "parse_rust_no_execute"
+module = "parse"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "semantic"
+score = 86
+
+[[operation]]
+id = "search-code-enricher::validate_fact_anchor"
+name = "validate_fact_anchor"
+module = "anchors"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-code-enricher::validate_parser_profile"
+name = "validate_parser_profile"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-prep/search-code-enricher/FUNCTIONS.md"]
+source_contexts = ["State and profile ownership"]
+route_kind = "semantic"
+score = 141

@@ -1,0 +1,218 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-source-registry"
+operation_count = 21
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-source-registry::activate_new_owner"
+name = "activate_new_owner"
+module = "cutover"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Namespace ownership and cutover"]
+route_kind = "semantic"
+score = 46
+
+[[operation]]
+id = "search-source-registry::admit_source"
+name = "admit_source"
+module = "source"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Source admission and membership"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-source-registry::apply_admission_batch"
+name = "apply_admission_batch"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Mutation recovery and batch operations"]
+route_kind = "semantic"
+score = 17
+
+[[operation]]
+id = "search-source-registry::bind_membership"
+name = "bind_membership"
+module = "membership"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Source admission and membership"]
+route_kind = "semantic"
+score = 124
+
+[[operation]]
+id = "search-source-registry::fence_old_owner"
+name = "fence_old_owner"
+module = "cutover"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Namespace ownership and cutover"]
+route_kind = "semantic"
+score = 46
+
+[[operation]]
+id = "search-source-registry::prepare_namespace_cutover"
+name = "prepare_namespace_cutover"
+module = "cutover"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Namespace ownership and cutover"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-source-registry::publish_reference_portfolio"
+name = "publish_reference_portfolio"
+module = "portfolio"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Reference portfolios and views"]
+route_kind = "semantic"
+score = 109
+
+[[operation]]
+id = "search-source-registry::recover_cutover"
+name = "recover_cutover"
+module = "cutover"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Namespace ownership and cutover"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-source-registry::recover_registry_mutation"
+name = "recover_registry_mutation"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Mutation recovery and batch operations"]
+route_kind = "semantic"
+score = 59
+
+[[operation]]
+id = "search-source-registry::redacted_registry_view"
+name = "redacted_registry_view"
+module = "view"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Snapshot operations"]
+route_kind = "semantic"
+score = 88
+
+[[operation]]
+id = "search-source-registry::register_root"
+name = "register_root"
+module = "root"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Root registration"]
+route_kind = "semantic"
+score = 118
+
+[[operation]]
+id = "search-source-registry::resolve_source_view"
+name = "resolve_source_view"
+module = "view"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Reference portfolios and views"]
+route_kind = "semantic"
+score = 122
+
+[[operation]]
+id = "search-source-registry::resolve_workspace_view"
+name = "resolve_workspace_view"
+module = "view"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Reference portfolios and views"]
+route_kind = "semantic"
+score = 122
+
+[[operation]]
+id = "search-source-registry::revalidate_admitted_source"
+name = "revalidate_admitted_source"
+module = "source"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Source admission and membership"]
+route_kind = "semantic"
+score = 111
+
+[[operation]]
+id = "search-source-registry::snapshot_digest"
+name = "snapshot_digest"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Snapshot operations"]
+route_kind = "semantic"
+score = 113
+
+[[operation]]
+id = "search-source-registry::transition_membership"
+name = "transition_membership"
+module = "membership"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Source admission and membership"]
+route_kind = "semantic"
+score = 110
+
+[[operation]]
+id = "search-source-registry::unbind_root"
+name = "unbind_root"
+module = "root"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Root registration"]
+route_kind = "semantic"
+score = 118
+
+[[operation]]
+id = "search-source-registry::update_root_policy"
+name = "update_root_policy"
+module = "root"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Root registration"]
+route_kind = "semantic"
+score = 118
+
+[[operation]]
+id = "search-source-registry::validate_registry_snapshot"
+name = "validate_registry_snapshot"
+module = "snapshot"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Snapshot operations"]
+route_kind = "semantic"
+score = 113
+
+[[operation]]
+id = "search-source-registry::verify_cutover_receipt"
+name = "verify_cutover_receipt"
+module = "cutover"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Namespace ownership and cutover"]
+route_kind = "semantic"
+score = 107
+
+[[operation]]
+id = "search-source-registry::verify_view"
+name = "verify_view"
+module = "view"
+public_entry_module = "api"
+sources = ["crates/search-source/search-source-registry/FUNCTIONS.md"]
+source_contexts = ["Reference portfolios and views"]
+route_kind = "semantic"
+score = 108

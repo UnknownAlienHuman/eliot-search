@@ -1,0 +1,159 @@
+schema_version = 1
+project = "eliot-search"
+status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+package = "search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer"
+kind = "lib"
+family = "index"
+cell = "C17 reclaim executor"
+earliest_wave = 3
+optional = false
+soft_src_line_target = 4500
+assignment = "swarm/assignments/search-index-reclaimer.md"
+function_source = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+qualification = "NONE"
+config_sections = ["index_reclaim"]
+declared_dependencies = ["search-contracts", "search-domain", "search-ports", "search-config", "search-epoch-pins"]
+module_count = 9
+operation_count = 11
+documentation_node_count = 125
+principle_node_count = 2
+outbound_dependency_count = 5
+inbound_dependency_count = 2
+architecture_relation_count = 5
+configuration_relation_count = 1
+recipe_relation_count = 0
+port_relation_count = 0
+schema_relation_count = 0
+operations_map = "swarm/coverage/package-maps/search-index-reclaimer/operations.toml"
+documents_map = "swarm/coverage/package-maps/search-index-reclaimer/documents.toml"
+relations_map = "swarm/coverage/package-maps/search-index-reclaimer/relations.toml"
+one_agent_one_package = true
+cross_package_reads_require_public_handoff = true
+implementation_authorized_by_this_map = false
+
+[[module]]
+name = "lib"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 6
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "api"
+role = "public_entry"
+structural_rationale = "single package public entry boundary"
+operation_count = 0
+documentation_node_count = 53
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 6
+
+[[module]]
+name = "config"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 12
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 1
+recipe_relation_count = 0
+dependency_relation_count = 1
+
+[[module]]
+name = "candidate"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 7
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "plan"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 36
+architecture_relation_count = 2
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "delete"
+role = "implementation"
+structural_rationale = ""
+operation_count = 5
+documentation_node_count = 11
+architecture_relation_count = 4
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "readback"
+role = "implementation"
+structural_rationale = ""
+operation_count = 0
+documentation_node_count = 18
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "recovery"
+role = "implementation"
+structural_rationale = ""
+operation_count = 2
+documentation_node_count = 24
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0
+
+[[module]]
+name = "error"
+role = "structural_boundary"
+structural_rationale = "package structural boundary"
+operation_count = 0
+documentation_node_count = 6
+architecture_relation_count = 0
+port_relation_count = 0
+port_method_relation_count = 0
+schema_relation_count = 0
+configuration_relation_count = 0
+recipe_relation_count = 0
+dependency_relation_count = 0

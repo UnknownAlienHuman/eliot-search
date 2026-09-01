@@ -1,0 +1,899 @@
+schema_version = 1
+project = "eliot-search"
+status = "PACKAGE_DOCUMENT_NODE_MAP_NOT_IMPLEMENTED"
+package = "search-source-identity"
+node_count = 81
+principle_count = 2
+every_node_has_package_local_module_route = true
+implementation_authorized_by_this_map = false
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#agent-contract-search-source-identity"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 1
+level = 1
+heading = "Agent contract — search-source-identity"
+kind = "implementation_contract_root"
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#mission"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 10
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#ownership"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 14
+level = 2
+heading = "Ownership"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#forbidden-ownership"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 22
+level = 2
+heading = "Forbidden ownership"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#allowed-dependencies"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 28
+level = 2
+heading = "Allowed dependencies"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#required-logical-surface"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 33
+level = 2
+heading = "Required logical surface"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#failure-surface"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 45
+level = 2
+heading = "Failure surface"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#test-seams-and-exit-evidence"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 50
+level = 2
+heading = "Test seams and exit evidence"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#size-and-split-guard"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 62
+level = 2
+heading = "Size and split guard"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/AGENTS.md#definition-of-done"
+path = "crates/search-source/search-source-identity/AGENTS.md"
+line = 70
+level = 2
+heading = "Definition of done"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#function-contract-search-source-identity"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 1
+level = 1
+heading = "Function contract — search-source-identity"
+kind = "implementation_contract_root"
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#global-rules"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 9
+level = 2
+heading = "Global rules"
+kind = "principle_or_invariant"
+modules = ["search-source-identity:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#observation-validation"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 21
+level = 2
+heading = "Observation validation"
+kind = "implementation_contract"
+modules = ["search-source-identity:observation"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#validatefilesystemprofile-profile-result-filesystemidentityprofile-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 23
+level = 3
+heading = "validatefilesystemprofile(profile) -> Result<FilesystemIdentityProfile, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:profile"]
+route_kind = "operation_route"
+rationale = "search-source-identity::validate_filesystem_profile"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#validateidentityobservation-input-profile-limits-result-identityobservation-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 28
+level = 3
+heading = "validateidentityobservation(input, profile, limits) -> Result<IdentityObservation, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:observation"]
+route_kind = "operation_route"
+rationale = "search-source-identity::validate_identity_observation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#derivecanonicalpathkey-pathobservation-profile-result-canonicalpathkey-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 34
+level = 3
+heading = "derivecanonicalpathkey(pathobservation, profile) -> Result<CanonicalPathKey, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:observation"]
+route_kind = "operation_route"
+rationale = "search-source-identity::derive_canonical_path_key"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#source-identity-resolution"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 39
+level = 2
+heading = "Source identity resolution"
+kind = "implementation_contract"
+modules = ["search-source-identity:source"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#resolveidentity-observation-priorcandidates-policy-result-identityresolution-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 41
+level = 3
+heading = "resolveidentity(observation, priorcandidates, policy) -> Result<IdentityResolution, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:source"]
+route_kind = "operation_route"
+rationale = "search-source-identity::resolve_identity"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#derivesourceidentity-validatedresolution-namespace-result-sourceidentity-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 57
+level = 3
+heading = "derivesourceidentity(validatedresolution, namespace) -> Result<SourceIdentity, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:source"]
+route_kind = "operation_route"
+rationale = "search-source-identity::derive_source_identity"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#compareidentity-expected-observed-identitymatchdecision"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 62
+level = 3
+heading = "compareidentity(expected, observed) -> IdentityMatchDecision"
+kind = "implementation_operation"
+modules = ["search-source-identity:source"]
+route_kind = "operation_route"
+rationale = "search-source-identity::compare_identity"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#path-binding-state"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 67
+level = 2
+heading = "Path binding state"
+kind = "implementation_contract"
+modules = ["search-source-identity:binding"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#openpathbinding-source-locator-root-observation-ownergeneration-operation-result-pathbinding-ide"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 69
+level = 3
+heading = "openpathbinding(source, locator, root, observation, ownergeneration, operation) -> Result<PathBinding, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:binding"]
+route_kind = "operation_route"
+rationale = "search-source-identity::open_path_binding"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#transitionpathbinding-current-event-observations-result-pathbindingtransition-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 75
+level = 3
+heading = "transitionpathbinding(current, event, observations) -> Result<PathBindingTransition, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:binding"]
+route_kind = "operation_route"
+rationale = "search-source-identity::transition_path_binding"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#relatehardlinkbindings-observations-profile-result-identitygrouping-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 93
+level = 3
+heading = "relatehardlinkbindings(observations, profile) -> Result<IdentityGrouping, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:binding"]
+route_kind = "operation_route"
+rationale = "search-source-identity::relate_hardlink_bindings"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#validatebindinghistory-history-result-pathhistoryreceipt-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 98
+level = 3
+heading = "validatebindinghistory(history) -> Result<PathHistoryReceipt, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:binding"]
+route_kind = "operation_route"
+rationale = "search-source-identity::validate_binding_history"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#repository-and-workspace-lineage"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 103
+level = 2
+heading = "Repository and workspace lineage"
+kind = "implementation_contract"
+modules = ["search-source-identity:lineage"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#validaterepositoryobservation-input-limits-result-repositorylineageobservation-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 105
+level = 3
+heading = "validaterepositoryobservation(input, limits) -> Result<RepositoryLineageObservation, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:observation"]
+route_kind = "operation_route"
+rationale = "search-source-identity::validate_repository_observation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#classifyrepositorylineage-observation-prior-result-repositorylineagedecision-identityerror"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 110
+level = 3
+heading = "classifyrepositorylineage(observation, prior) -> Result<RepositoryLineageDecision, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:lineage"]
+route_kind = "operation_route"
+rationale = "search-source-identity::classify_repository_lineage"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#deriveworkspaceidentity-repository-worktree-branchorindexstate-result-workspaceidentity-identity"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 115
+level = 3
+heading = "deriveworkspaceidentity(repository, worktree, branchorindexstate) -> Result<WorkspaceIdentity, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:source"]
+route_kind = "operation_route"
+rationale = "search-source-identity::derive_workspace_identity"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#batch-and-redaction-operations"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 121
+level = 2
+heading = "Batch and redaction operations"
+kind = "implementation_contract"
+modules = ["search-source-identity:redaction"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#resolvebatch-observations-priorindex-limits-budget-cancel-result-identitybatchdecision-identitye"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 123
+level = 3
+heading = "resolvebatch(observations, priorindex, limits, budget, cancel) -> Result<IdentityBatchDecision, IdentityError>"
+kind = "implementation_operation"
+modules = ["search-source-identity:batch"]
+route_kind = "operation_route"
+rationale = "search-source-identity::resolve_batch"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#redactedidentityview-identityorbinding-disclosure-redactedidentityview"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 128
+level = 3
+heading = "redactedidentityview(identityorbinding, disclosure) -> RedactedIdentityView"
+kind = "implementation_operation"
+modules = ["search-source-identity:redaction"]
+route_kind = "operation_route"
+rationale = "search-source-identity::redacted_identity_view"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#cancellation-deadline-and-retry"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 133
+level = 2
+heading = "Cancellation, deadline and retry"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#typed-failures"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 139
+level = 2
+heading = "Typed failures"
+kind = "implementation_error_contract"
+modules = ["search-source-identity:error"]
+route_kind = "heading_semantic"
+rationale = "typed failure surface"
+
+[[node]]
+id = "crates/search-source/search-source-identity/FUNCTIONS.md#required-tests-qualification-evidence"
+path = "crates/search-source/search-source-identity/FUNCTIONS.md"
+line = 157
+level = 2
+heading = "Required tests / qualification evidence"
+kind = "implementation_contract"
+modules = ["search-source-identity:profile"]
+route_kind = "semantic"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/README.md#search-source-identity"
+path = "crates/search-source/search-source-identity/README.md"
+line = 1
+level = 1
+heading = "search-source-identity"
+kind = "implementation_contract_root"
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "crates/search-source/search-source-identity/README.md#owns"
+path = "crates/search-source/search-source-identity/README.md"
+line = 9
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "crates/search-source/search-source-identity/README.md#must-not-own"
+path = "crates/search-source/search-source-identity/README.md"
+line = 17
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-identity-model"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 321
+level = 2
+heading = "S7. Identity model"
+kind = "architecture_section"
+modules = ["search-source-identity:source"]
+route_kind = "architecture_section_registry"
+rationale = "S7"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-1-installation-and-collection-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 323
+level = 3
+heading = "S7.1 Installation and collection identity"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-2-repository-and-workspace-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 343
+level = 3
+heading = "S7.2 Repository and workspace identity"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-2-1-source-namespace-ownership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 361
+level = 3
+heading = "S7.2.1 Source namespace ownership"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-3-sourceidentity-pathbinding-and-sourcerevision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 420
+level = 3
+heading = "S7.3 SourceIdentity, PathBinding and SourceRevision"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-4-corpus-membership-is-separate-from-source-identity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 452
+level = 3
+heading = "S7.4 Corpus membership is separate from source identity"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-5-materialization-representation-and-projection-membership"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 470
+level = 3
+heading = "S7.5 Materialization, representation and projection membership"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-6-unit-occurrence"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 501
+level = 3
+heading = "S7.6 Unit occurrence"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-7-reference-portfolios"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 518
+level = 3
+heading = "S7.7 Reference portfolios"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s7-8-sourceview-and-workspaceviewrevision"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 536
+level = 3
+heading = "S7.8 SourceView and WorkspaceViewRevision"
+kind = "architecture_node"
+modules = ["search-source-identity:source"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-source-acquisition-and-change-reconciliation"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1075
+level = 2
+heading = "S16. Source acquisition and change reconciliation"
+kind = "architecture_section"
+modules = ["search-source-identity:binding"]
+route_kind = "architecture_section_registry"
+rationale = "S16"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-1-watchers-are-hints"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1077
+level = 3
+heading = "S16.1 Watchers are hints"
+kind = "architecture_node"
+modules = ["search-source-identity:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-2-query-freshness-preflight"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1087
+level = 3
+heading = "S16.2 Query freshness preflight"
+kind = "architecture_node"
+modules = ["search-source-identity:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-3-stable-no-execute-read"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1093
+level = 3
+heading = "S16.3 Stable no-execute read"
+kind = "architecture_node"
+modules = ["search-source-identity:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-4-reparse-points-links-and-path-escape"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1106
+level = 3
+heading = "S16.4 Reparse points, links and path escape"
+kind = "architecture_node"
+modules = ["search-source-identity:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-5-default-exclusions"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1110
+level = 3
+heading = "S16.5 Default exclusions"
+kind = "architecture_node"
+modules = ["search-source-identity:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s16-6-sourceadmissionpolicy-and-sensitivity"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 1114
+level = 3
+heading = "S16.6 SourceAdmissionPolicy and sensitivity"
+kind = "architecture_node"
+modules = ["search-source-identity:binding"]
+route_kind = "inherit_architecture_section"
+rationale = "nearest S-section ownership"
+
+[[node]]
+id = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#p03-source-registry-and-direct-exact-spine"
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+line = 2852
+level = 3
+heading = "P03 — Source registry and direct exact spine"
+kind = "delivery_contract"
+modules = ["search-source-identity:binding", "search-source-identity:source"]
+route_kind = "delivery_registry"
+rationale = "P03"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#w2-direct-source-spine-implementation-packet"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 1
+level = 1
+heading = "W2 direct source-spine implementation packet"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#package-order"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 8
+level = 2
+heading = "Package order"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#one-agent-package-packets"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 30
+level = 2
+heading = "One-agent package packets"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#source-pipeline"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 45
+level = 2
+heading = "Source pipeline"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#ownership-boundaries"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 61
+level = 2
+heading = "Ownership boundaries"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#core-invariants"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 71
+level = 2
+heading = "Core invariants"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#mutation-and-recovery"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 91
+level = 2
+heading = "Mutation and recovery"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#required-w2-tests-and-evidence"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 112
+level = 2
+heading = "Required W2 tests and evidence"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#admission"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 114
+level = 3
+heading = "Admission"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#identity-and-registry"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 122
+level = 3
+heading = "Identity and registry"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#safe-read-and-revision"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 130
+level = 3
+heading = "Safe read and revision"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#preparation"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 139
+level = 3
+heading = "Preparation"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#hard-stops"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 148
+level = 2
+heading = "Hard stops"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "docs/handoff/W2_IMPLEMENTATION_PACKET.md#handoff"
+path = "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+line = 161
+level = 2
+heading = "Handoff"
+kind = "implementation_handoff"
+modules = ["search-source-identity:api"]
+route_kind = "mentioned_package_entries"
+rationale = "stage implementation packet"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#search-source-identity-implementation-packet"
+path = "swarm/assignments/search-source-identity.md"
+line = 1
+level = 1
+heading = "search-source-identity implementation packet"
+kind = "implementation_contract_root"
+modules = ["search-source-identity:api", "search-source-identity:batch", "search-source-identity:binding", "search-source-identity:error", "search-source-identity:lib", "search-source-identity:lineage", "search-source-identity:observation", "search-source-identity:profile", "search-source-identity:redaction", "search-source-identity:source"]
+route_kind = "package_contract_root"
+rationale = "all declared package modules"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#mission"
+path = "swarm/assignments/search-source-identity.md"
+line = 13
+level = 2
+heading = "Mission"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#owns"
+path = "swarm/assignments/search-source-identity.md"
+line = 17
+level = 2
+heading = "Owns"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#must-not-own"
+path = "swarm/assignments/search-source-identity.md"
+line = 24
+level = 2
+heading = "Must not own"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#logical-primitives"
+path = "swarm/assignments/search-source-identity.md"
+line = 31
+level = 2
+heading = "Logical primitives"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#logical-operations"
+path = "swarm/assignments/search-source-identity.md"
+line = 35
+level = 2
+heading = "Logical operations"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#required-invariants"
+path = "swarm/assignments/search-source-identity.md"
+line = 43
+level = 2
+heading = "Required invariants"
+kind = "principle_or_invariant"
+modules = ["search-source-identity:api"]
+route_kind = "package_principle"
+rationale = "package-wide rule entering through public boundary"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#typed-failure-surface"
+path = "swarm/assignments/search-source-identity.md"
+line = 51
+level = 2
+heading = "Typed failure surface"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#exit-tests-evidence"
+path = "swarm/assignments/search-source-identity.md"
+line = 59
+level = 2
+heading = "Exit tests / evidence"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#suggested-internal-modules"
+path = "swarm/assignments/search-source-identity.md"
+line = 67
+level = 2
+heading = "Suggested internal modules"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"
+
+[[node]]
+id = "swarm/assignments/search-source-identity.md#size-split"
+path = "swarm/assignments/search-source-identity.md"
+line = 81
+level = 2
+heading = "Size / split"
+kind = "implementation_contract"
+modules = ["search-source-identity:api"]
+route_kind = "public_facade"
+rationale = "package-local documentation"

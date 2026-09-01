@@ -1,0 +1,128 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-exact"
+operation_count = 12
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-exact::checkpoint_execution"
+name = "checkpoint_execution"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 24
+
+[[operation]]
+id = "search-exact::classify_completeness"
+name = "classify_completeness"
+module = "report"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-exact::compile_exact_scan"
+name = "compile_exact_scan"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-exact::compile_predicate"
+name = "compile_predicate"
+module = "predicate"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-exact::execute_exact_scan"
+name = "execute_exact_scan"
+module = "execute"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 97
+
+[[operation]]
+id = "search-exact::execute_item"
+name = "execute_item"
+module = "execute"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 83
+
+[[operation]]
+id = "search-exact::freeze_denominator"
+name = "freeze_denominator"
+module = "denominator"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 84
+
+[[operation]]
+id = "search-exact::resume_execution"
+name = "resume_execution"
+module = "recovery"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "package_rule"
+score = 100
+
+[[operation]]
+id = "search-exact::revalidate_complete_negative"
+name = "revalidate_complete_negative"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 24
+
+[[operation]]
+id = "search-exact::validate_plan_before_execution"
+name = "validate_plan_before_execution"
+module = "plan"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 85
+
+[[operation]]
+id = "search-exact::validate_predicate_profile"
+name = "validate_predicate_profile"
+module = "profile"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-exact::verify_execution_report"
+name = "verify_execution_report"
+module = "report"
+public_entry_module = "api"
+sources = ["crates/search-query/search-exact/FUNCTIONS.md"]
+source_contexts = ["Predicate profiles"]
+route_kind = "semantic"
+score = 82

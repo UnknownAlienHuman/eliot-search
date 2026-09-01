@@ -1,0 +1,98 @@
+schema_version = 1
+project = "eliot-search"
+status = "EXACT_PACKAGE_OPERATION_MAP_NOT_IMPLEMENTED"
+package = "search-qdrant-supervisor"
+operation_count = 9
+one_internal_module_per_operation = true
+public_facade_or_low_confidence_routes_allowed = false
+implementation_authorized_by_this_map = false
+
+[[operation]]
+id = "search-qdrant-supervisor::classify_exit"
+name = "classify_exit"
+module = "process"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Lifecycle operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-qdrant-supervisor::materialize_private_launch_config"
+name = "materialize_private_launch_config"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Artifact and configuration operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-qdrant-supervisor::qualify_artifact"
+name = "qualify_artifact"
+module = "artifact"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Artifact and configuration operations"]
+route_kind = "semantic"
+score = 126
+
+[[operation]]
+id = "search-qdrant-supervisor::restart"
+name = "restart"
+module = "process"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Lifecycle operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-qdrant-supervisor::shutdown"
+name = "shutdown"
+module = "shutdown"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Lifecycle operations"]
+route_kind = "semantic"
+score = 109
+
+[[operation]]
+id = "search-qdrant-supervisor::start"
+name = "start"
+module = "process"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Lifecycle operations"]
+route_kind = "semantic"
+score = 9
+
+[[operation]]
+id = "search-qdrant-supervisor::validate_process_config"
+name = "validate_process_config"
+module = "config"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Artifact and configuration operations"]
+route_kind = "semantic"
+score = 141
+
+[[operation]]
+id = "search-qdrant-supervisor::verify_identity"
+name = "verify_identity"
+module = "identity"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Lifecycle operations"]
+route_kind = "semantic"
+score = 113
+
+[[operation]]
+id = "search-qdrant-supervisor::wait_readiness"
+name = "wait_readiness"
+module = "health"
+public_entry_module = "api"
+sources = ["crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"]
+source_contexts = ["Lifecycle operations"]
+route_kind = "semantic"
+score = 8
