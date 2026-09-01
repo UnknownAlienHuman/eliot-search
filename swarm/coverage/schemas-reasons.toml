@@ -1,0 +1,17 @@
+schema_version = 1
+packet = "reasons"
+schema_count = 3
+status = "STATIC_SCHEMA_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+
+[[group]]
+id = "reason_registries"
+schemas = ["SearchReasonCodeV1", "ProtocolErrorCode", "ContractErrorCode"]
+source_files = ["docs/contracts/p00/REASON_CODES.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "reasons"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "outcomes"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+package_local_errors_require_explicit_mapping = true
+vendor_errors_must_remain_private = true
