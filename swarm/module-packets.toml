@@ -3,7 +3,7 @@ project = "eliot-search"
 architecture_version = "8.4"
 status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
 package_count = 45
-module_count = 479
+module_count = 476
 max_modules_per_package = 15
 one_entry_per_package = true
 one_public_entry_module_per_package = true
@@ -17,7 +17,7 @@ implementation_authorized_by_this_registry = false
 earliest_wave = 0
 path = "swarm/modules/w0.toml"
 package_count = 3
-module_count = 38
+module_count = 35
 
 [[packet]]
 earliest_wave = 1
