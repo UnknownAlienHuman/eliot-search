@@ -1,0 +1,238 @@
+schema_version = 1
+architecture_source = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#S5"
+cell_count = 31
+status = "STATIC_COVERAGE_ONLY"
+
+[[cell]]
+id = "C00"
+name = "Contracts"
+primary_packages = ["search-contracts", "search-domain", "search-ports"]
+state_owner_packages = []
+modules = ["search-contracts:schema", "search-domain:decisions", "search-ports:conformance"]
+
+[[cell]]
+id = "C01"
+name = "Runtime Owner"
+primary_packages = ["search-runtime-owner"]
+supporting_packages = ["search-os-secrets", "eliot-searchd"]
+state_owner_packages = ["search-runtime-owner"]
+modules = ["search-runtime-owner:acquire", "search-runtime-owner:recovery", "search-runtime-owner:release"]
+
+[[cell]]
+id = "C02"
+name = "Control Journal"
+primary_packages = ["search-control-redb"]
+supporting_packages = ["eliot-searchd"]
+state_owner_packages = ["search-control-redb"]
+modules = ["search-control-redb:transaction", "search-control-redb:snapshot", "search-control-redb:migration"]
+
+[[cell]]
+id = "C03"
+name = "Source Registry"
+primary_packages = ["search-source-registry"]
+supporting_packages = ["search-source-admission"]
+state_owner_packages = ["search-source-registry"]
+modules = ["search-source-registry:root", "search-source-registry:membership", "search-source-registry:view", "search-source-registry:cutover"]
+
+[[cell]]
+id = "C04"
+name = "Source Identity"
+primary_packages = ["search-source-identity"]
+state_owner_packages = ["search-source-identity"]
+modules = ["search-source-identity:source", "search-source-identity:binding", "search-source-identity:lineage"]
+
+[[cell]]
+id = "C05"
+name = "Change Reconciler"
+primary_packages = ["search-source-reconcile"]
+state_owner_packages = ["search-source-reconcile"]
+modules = ["search-source-reconcile:gap", "search-source-reconcile:inventory", "search-source-reconcile:commit", "search-source-reconcile:currentness"]
+
+[[cell]]
+id = "C06"
+name = "Safe Reader"
+primary_packages = ["search-safe-reader"]
+supporting_packages = ["search-source-admission", "search-source-identity"]
+state_owner_packages = ["search-safe-reader"]
+modules = ["search-safe-reader:stable_read", "search-safe-reader:git_object", "search-safe-reader:platform"]
+
+[[cell]]
+id = "C07"
+name = "Revision Store"
+primary_packages = ["search-revision-store"]
+state_owner_packages = ["search-revision-store"]
+modules = ["search-revision-store:residency", "search-revision-store:object", "search-revision-store:revision", "search-revision-store:restore"]
+
+[[cell]]
+id = "C08"
+name = "Materializer"
+primary_packages = ["search-materializer"]
+state_owner_packages = ["search-materializer"]
+modules = ["search-materializer:decode", "search-materializer:maps", "search-materializer:assurance", "search-materializer:product"]
+
+[[cell]]
+id = "C09"
+name = "Unitizer"
+primary_packages = ["search-unitizer"]
+state_owner_packages = ["search-unitizer"]
+modules = ["search-unitizer:boundaries", "search-unitizer:occurrence", "search-unitizer:manifest"]
+
+[[cell]]
+id = "C10"
+name = "Code Enricher"
+primary_packages = ["search-code-enricher"]
+state_owner_packages = ["search-code-enricher"]
+modules = ["search-code-enricher:parse", "search-code-enricher:facts", "search-code-enricher:references", "search-code-enricher:predicates", "search-code-enricher:assurance"]
+
+[[cell]]
+id = "C11"
+name = "Lexical Encoder"
+primary_packages = ["search-lexical"]
+state_owner_packages = ["search-lexical"]
+modules = ["search-lexical:profile", "search-lexical:tokenize", "search-lexical:sparse", "search-lexical:statistics"]
+
+[[cell]]
+id = "C12"
+name = "Model Provider"
+primary_packages = ["search-model-provider"]
+supporting_packages = ["eliot-search-model-worker"]
+state_owner_packages = ["search-model-provider"]
+modules = ["search-model-provider:profile", "search-model-provider:encode", "search-model-provider:rerank"]
+
+[[cell]]
+id = "C13"
+name = "Projection Planner"
+primary_packages = ["search-projection-planner"]
+supporting_packages = ["search-point-identity"]
+state_owner_packages = ["search-projection-planner"]
+modules = ["search-projection-planner:schema", "search-projection-planner:point_set", "search-projection-planner:manifest", "search-projection-planner:migration"]
+
+[[cell]]
+id = "C14"
+name = "Point Identity"
+primary_packages = ["search-point-identity"]
+state_owner_packages = ["search-point-identity"]
+modules = ["search-point-identity:key", "search-point-identity:digest", "search-point-identity:uuid", "search-point-identity:collision"]
+
+[[cell]]
+id = "C15"
+name = "Qdrant Bridge"
+primary_packages = ["search-qdrant-bridge"]
+supporting_packages = ["search-qdrant-supervisor"]
+state_owner_packages = ["search-qdrant-bridge"]
+modules = ["search-qdrant-bridge:capability", "search-qdrant-bridge:schema", "search-qdrant-bridge:mutation", "search-qdrant-bridge:query", "search-qdrant-supervisor:process"]
+
+[[cell]]
+id = "C16"
+name = "Publication Coordinator"
+primary_packages = ["search-publication"]
+supporting_packages = ["search-control-redb", "search-qdrant-bridge", "search-point-identity"]
+state_owner_packages = ["search-publication"]
+modules = ["search-publication:intent", "search-publication:stage", "search-publication:readback", "search-publication:commit", "search-publication:recovery"]
+
+[[cell]]
+id = "C17"
+name = "Pin/Reclaimer"
+primary_packages = ["search-epoch-pins", "search-index-reclaimer"]
+state_owner_packages = ["search-epoch-pins", "search-index-reclaimer"]
+modules = ["search-epoch-pins:registry", "search-epoch-pins:watermark", "search-index-reclaimer:plan", "search-index-reclaimer:delete"]
+
+[[cell]]
+id = "C18"
+name = "Access Compiler"
+primary_packages = ["search-access"]
+state_owner_packages = ["search-access"]
+modules = ["search-access:grant", "search-access:scope", "search-access:legs", "search-access:checkpoint", "search-access:barrier"]
+
+[[cell]]
+id = "C19"
+name = "Overlay"
+primary_packages = ["search-overlay"]
+state_owner_packages = ["search-overlay"]
+modules = ["search-overlay:snapshot", "search-overlay:shadow", "search-overlay:direct", "search-overlay:save", "search-overlay:cleanup"]
+
+[[cell]]
+id = "C20"
+name = "Exact Plane"
+primary_packages = ["search-exact"]
+state_owner_packages = ["search-exact"]
+modules = ["search-exact:predicate", "search-exact:plan", "search-exact:denominator", "search-exact:execute", "search-exact:report"]
+
+[[cell]]
+id = "C21"
+name = "Subject Resolver"
+primary_packages = ["search-subject-resolver"]
+state_owner_packages = ["search-subject-resolver"]
+modules = ["search-subject-resolver:candidates", "search-subject-resolver:ladder", "search-subject-resolver:ambiguity", "search-subject-resolver:drift"]
+
+[[cell]]
+id = "C22"
+name = "Query Planner"
+primary_packages = ["search-query-planner"]
+supporting_packages = ["search-access"]
+state_owner_packages = ["search-query-planner"]
+modules = ["search-query-planner:recipe", "search-query-planner:scope", "search-query-planner:budget", "search-query-planner:legs", "search-query-planner:plan", "search-query-planner:replan"]
+
+[[cell]]
+id = "C23"
+name = "Retrieval Executor"
+primary_packages = ["search-retrieval-executor"]
+supporting_packages = ["search-epoch-pins", "search-lexical", "search-model-provider"]
+state_owner_packages = ["search-retrieval-executor"]
+modules = ["search-retrieval-executor:scheduler", "search-retrieval-executor:legs", "search-retrieval-executor:fusion", "search-retrieval-executor:contamination", "search-retrieval-executor:cleanup"]
+
+[[cell]]
+id = "C24"
+name = "Candidate Validator"
+primary_packages = ["search-candidate-validator"]
+supporting_packages = ["search-revision-store", "search-access"]
+state_owner_packages = ["search-candidate-validator"]
+modules = ["search-candidate-validator:readback", "search-candidate-validator:anchor", "search-candidate-validator:security", "search-candidate-validator:decision"]
+
+[[cell]]
+id = "C25"
+name = "Comparator"
+primary_packages = ["search-comparator"]
+supporting_packages = ["search-subject-resolver"]
+state_owner_packages = ["search-comparator"]
+modules = ["search-comparator:lineage", "search-comparator:alignment", "search-comparator:behavior", "search-comparator:conflicts", "search-comparator:coverage"]
+
+[[cell]]
+id = "C26"
+name = "Result Projector"
+primary_packages = ["search-result-projector"]
+supporting_packages = ["search-handles"]
+state_owner_packages = ["search-result-projector"]
+modules = ["search-result-projector:card", "search-result-projector:evidence", "search-result-projector:coverage", "search-result-projector:truncation"]
+
+[[cell]]
+id = "C27"
+name = "Continuation Owner"
+primary_packages = ["search-continuation"]
+supporting_packages = ["search-epoch-pins", "search-access"]
+state_owner_packages = ["search-continuation"]
+modules = ["search-continuation:identity", "search-continuation:issue", "search-continuation:resume", "search-continuation:reauthorize", "search-continuation:cleanup"]
+
+[[cell]]
+id = "C28"
+name = "Retention/Purge"
+primary_packages = ["search-retention"]
+supporting_packages = ["search-revision-store", "search-handles", "search-continuation", "search-index-reclaimer"]
+state_owner_packages = ["search-retention"]
+modules = ["search-retention:roots", "search-retention:mark", "search-retention:sweep", "search-retention:purge", "search-retention:tombstone", "search-retention:restore"]
+
+[[cell]]
+id = "C29"
+name = "Telemetry/Eval"
+primary_packages = ["search-eval"]
+supporting_packages = ["eliot-searchd"]
+state_owner_packages = ["search-eval"]
+modules = ["search-eval:campaign", "search-eval:trial", "search-eval:metrics", "search-eval:safety", "search-eval:evidence", "search-eval:review"]
+
+[[cell]]
+id = "C30"
+name = "Client Adapter Edge"
+primary_packages = ["search-provider-protocol"]
+supporting_packages = ["search-eliot-adapter", "search-research-export-adapter", "eliot-search", "eliot-searchd"]
+state_owner_packages = ["search-provider-protocol"]
+modules = ["search-provider-protocol:frame", "search-provider-protocol:binding", "search-provider-protocol:session", "search-provider-protocol:request", "search-eliot-adapter:request", "search-research-export-adapter:export"]

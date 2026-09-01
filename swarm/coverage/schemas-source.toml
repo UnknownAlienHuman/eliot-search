@@ -1,0 +1,149 @@
+schema_version = 1
+packet = "source"
+schema_count = 21
+status = "STATIC_SCHEMA_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+
+[[group]]
+id = "runtime_and_route"
+schemas = ["SearchInstallation", "CollectionRoute"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "transitions"
+state_owner_package = "search-runtime-owner"
+state_owner_module = "identity"
+secondary_state_owner_packages = ["search-publication", "search-control-redb"]
+
+[[group]]
+id = "repository_workspace_identity"
+schemas = ["RepositoryLineage", "WorkspaceInstance"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "search-source-identity"
+state_owner_module = "lineage"
+
+[[group]]
+id = "namespace_ownership"
+schemas = ["SourceNamespaceOwnership", "SourceOwnerCutoverReceipt"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "transitions"
+state_owner_package = "search-source-registry"
+state_owner_module = "cutover"
+
+[[group]]
+id = "source_identity_binding"
+schemas = ["SourceIdentity", "PathBinding"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "search-source-identity"
+state_owner_module = "binding"
+
+[[group]]
+id = "source_revision"
+schemas = ["SourceRevision", "SourceRevisionRef"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "currentness"
+state_owner_package = "search-revision-store"
+state_owner_module = "revision"
+
+[[group]]
+id = "membership_portfolio"
+schemas = ["SourceMembership", "ReferencePortfolioRevision"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-source-registry"
+state_owner_module = "membership"
+
+[[group]]
+id = "residency"
+schemas = ["SearchObjectResidencyKey", "SourceResidencyProfileRef"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-revision-store"
+state_owner_module = "residency"
+
+[[group]]
+id = "materialization"
+schemas = ["Materialization"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "assurance"
+state_owner_package = "search-materializer"
+state_owner_module = "product"
+
+[[group]]
+id = "representation"
+schemas = ["Representation"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "assurance"
+state_owner_package = "search-unitizer"
+state_owner_module = "manifest"
+
+[[group]]
+id = "projection_membership"
+schemas = ["ProjectionMembership"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-projection-planner"
+state_owner_module = "point_set"
+
+[[group]]
+id = "unit_occurrence"
+schemas = ["UnitOccurrence"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "assurance"
+state_owner_package = "search-unitizer"
+state_owner_module = "occurrence"
+
+[[group]]
+id = "source_workspace_view"
+schemas = ["SourceView", "WorkspaceViewRevision"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "currentness"
+state_owner_package = "search-source-registry"
+state_owner_module = "view"
+secondary_state_owner_packages = ["search-source-reconcile", "search-overlay"]
+
+[[group]]
+id = "source_admission_policy"
+schemas = ["SourceAdmissionPolicy"]
+source_files = ["docs/contracts/p00/SOURCE_GRAPH.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "source"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-source-admission"
+state_owner_module = "policy"

@@ -1,0 +1,86 @@
+schema_version = 1
+source = "docs/contracts/p00/REASON_CODES.md"
+namespace_count = 3
+public_reason_count = 31
+protocol_error_count = 10
+contract_error_count = 10
+status = "STATIC_REGISTRY_CLOSED_NOT_IMPLEMENTED"
+shape_owner_package = "search-contracts"
+shape_owner_module = "reasons"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "outcomes"
+implementation_authorized_by_this_registry = false
+
+[search_reason_codes]
+name = "SearchReasonCodeV1"
+values = [
+  "QDRANT_UNAVAILABLE",
+  "QDRANT_CAPABILITY_MISMATCH",
+  "COLLECTION_SCHEMA_MISMATCH",
+  "PUBLICATION_BLOCKED",
+  "PUBLICATION_READBACK_MISMATCH",
+  "POINT_ID_COLLISION",
+  "SOURCE_UNSTABLE",
+  "OBSERVATION_GAP",
+  "SOURCE_REVISION_UNAVAILABLE",
+  "SCOPE_CHANGED_OR_REVISION_UNAVAILABLE",
+  "REFERENCE_SCOPE_EMPTY",
+  "AMBIGUOUS_SUBJECT",
+  "UNSAVED_BUFFER_UNOBSERVED",
+  "UNSAVED_SNAPSHOT_NOT_ADMITTED",
+  "SOURCE_NAMESPACE_OWNERSHIP_CONFLICT",
+  "SOURCE_OWNER_CUTOVER_REQUIRED",
+  "RESIDENCY_DOMAIN_MISMATCH",
+  "CLIENT_ADAPTER_AUTHORITY_VIOLATION",
+  "ACCESS_REVOKED",
+  "PURGED",
+  "SNAPSHOT_EXPIRED",
+  "INDEX_GAP",
+  "INCOMPLETE_COVERAGE",
+  "MATERIALIZATION_LOSS",
+  "CONTROL_STORE_CORRUPT",
+  "RESTORE_PENDING_REVALIDATION",
+  "RESOURCE_EXHAUSTED",
+  "CANCELLED",
+  "SECURITY_FAIL_CLOSED",
+  "STALE",
+  "UNREADABLE",
+]
+
+[protocol_error_codes]
+name = "ProtocolErrorCode"
+values = [
+  "PROTOCOL_VERSION_MISMATCH",
+  "FRAME_TOO_LARGE",
+  "INVALID_ENVELOPE",
+  "REPLAY_DETECTED",
+  "AUTH_FAILED",
+  "BINDING_MISMATCH",
+  "SEQUENCE_GAP",
+  "IN_FLIGHT_LIMIT_EXCEEDED",
+  "DEADLINE_EXPIRED",
+  "UNSUPPORTED_MESSAGE_KIND",
+]
+
+[contract_error_codes]
+name = "ContractErrorCode"
+values = [
+  "EPOCH_OUT_OF_RANGE",
+  "EPOCH_EXHAUSTED",
+  "UNKNOWN_LOAD_BEARING_FIELD",
+  "CONTRACT_VERSION_MISMATCH",
+  "INVALID_CONTRACT_SHAPE",
+  "CANONICALIZATION_FAILED",
+  "DIGEST_MISMATCH",
+  "BOUND_EXCEEDED",
+  "INVALID_TAGGED_VARIANT",
+  "RECIPE_RESULT_MISMATCH",
+]
+
+[mapping]
+package_local_errors_require_explicit_mapping = true
+access_or_purge_failure_may_map_to_success = false
+resource_limit_requires_resource_exhausted_or_truthful_incomplete_coverage = true
+candidate_validation_failures_must_be_non_evidence_gaps = true
+unknown_new_major_codes_fail_closed = true
+vendor_strings_and_numeric_codes_are_private = true

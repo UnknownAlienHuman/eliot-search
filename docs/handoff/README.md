@@ -3,6 +3,8 @@
 ## Machine authorities and launch procedure
 
 - [AUTHORITY_MAP.md](AUTHORITY_MAP.md) — conflict precedence and source-of-truth ownership.
+- [ARCHITECTURE_COVERAGE_AUDIT.md](ARCHITECTURE_COVERAGE_AUDIT.md) — exhaustive S0–S39,
+  C00–C30, INV-01–INV-30, port, schema, recipe, task, module and P00–P18 ownership audit.
 - [SWARM_LAUNCH_INDEX.md](SWARM_LAUNCH_INDEX.md) — deterministic context/ticket/lease construction,
   authorization preflight, write enforcement and review.
 - [P00_DRAFT_CONTROL_PLANE.md](P00_DRAFT_CONTROL_PLANE.md) — non-claimable P00 ticket/context drafts,
@@ -21,6 +23,10 @@
   assignment, configuration and qualification registry.
 - [`../../swarm/function-packets.toml`](../../swarm/function-packets.toml) — exact primary function/
   contract packet and package-local write scope for all 45 packages.
+- [`../../swarm/module-packets.toml`](../../swarm/module-packets.toml) — exact one-per-package logical
+  module packet registry; wave packets live under `swarm/modules/`.
+- [`../../swarm/coverage/manifest.toml`](../../swarm/coverage/manifest.toml) — integration-owned,
+  machine-checked crosswalk from Architecture Part I to package/function/module/schema/port/task owners.
 - [`../../swarm/stages.toml`](../../swarm/stages.toml) — exact W0–W10 package composition, shared read
   sets and gate/completion-receipt order.
 - [`../../swarm/stage-readsets.toml`](../../swarm/stage-readsets.toml) — replacement contexts for all 23
@@ -33,6 +39,10 @@
   failure, lease-event, supersession and consumer-action type registries.
 - [`../../swarm/launch-state.toml`](../../swarm/launch-state.toml) — sole current implementation
   authorization.
+
+The coverage registry is derivative audit data. It cannot override Architecture Part I, an accepted ADR,
+the accepted public API digest or launch state. Its purpose is to make an unowned section, capability,
+invariant, port, type, schema, recipe, task, module or delivery slice mechanically visible.
 
 ## P00 draft and issued-record layouts
 
@@ -104,19 +114,22 @@ accepted reviews, supersessions or package handoffs. A draft never authorizes an
 
 ## Audits and maps
 
+- [ARCHITECTURE_COVERAGE_AUDIT.md](ARCHITECTURE_COVERAGE_AUDIT.md) — exhaustive architecture-to-crate
+  ownership closure, named-type corrections and honest remaining implementation state.
 - [STRUCTURAL_CI.md](STRUCTURAL_CI.md) — structural validators and non-claims.
 - [SWARM_READINESS_AUDIT.md](SWARM_READINESS_AUDIT.md) — current readiness and honest status.
 - [OWNERSHIP_BOUNDARY_AUDIT.md](OWNERSHIP_BOUNDARY_AUDIT.md) — missing-owner/dependency audit.
 - [CRATE_MATRIX.md](CRATE_MATRIX.md) — one-agent/one-package human ownership index.
 - [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) — semantic topology and daemon composition.
-- [PORT_CATALOG.md](PORT_CATALOG.md) — shared port to concrete adapter mapping.
+- [PORT_CATALOG.md](PORT_CATALOG.md) — shared port to exact implementation owner mapping.
 - [PRIMITIVE_OWNERSHIP.md](PRIMITIVE_OWNERSHIP.md) — schema, meaning, trait and mutable-state ownership.
 - [IMPLEMENTATION_WAVES.md](IMPLEMENTATION_WAVES.md) — future dependency-safe sequence.
 
-Part I Architecture 8.4 remains normative. Human docs, drafts, function/stage/read-set packets and
-qualification designs never override exact machine registries, issued immutable tickets, accepted
-API/evidence digests or launch state. `DRAFT_ONLY_NOT_ISSUED`, `UNMATERIALIZED_DRAFT`, `UNSELECTED`,
-`UNQUALIFIED`, `UNAVAILABLE`, `DISABLED`, `BLOCKED` and `NOT_ACCEPTED` are explicit non-success states.
+Part I Architecture 8.4 remains normative. Human docs, drafts, coverage crosswalks,
+function/module/stage/read-set packets and qualification designs never override exact machine
+registries, issued immutable tickets, accepted API/evidence digests or launch state.
+`DRAFT_ONLY_NOT_ISSUED`, `UNMATERIALIZED_DRAFT`, `UNSELECTED`, `UNQUALIFIED`, `UNAVAILABLE`,
+`DISABLED`, `BLOCKED` and `NOT_ACCEPTED` are explicit non-success states.
 
 Every repository workflow is `workflow_dispatch`-only, uses read-only contents permission and disables
 checkout credential persistence. A workflow run is structural evidence only; it never issues a ticket,

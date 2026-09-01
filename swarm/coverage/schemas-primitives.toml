@@ -1,0 +1,199 @@
+schema_version = 1
+packet = "primitives"
+schema_count = 120
+type_registry_named_symbol_count = 115
+completion_symbol_count = 5
+canonical_primitive_family_count = 12
+status = "STATIC_PRIMITIVE_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[group]]
+id = "bounded_collections"
+schemas = ["BoundedList<T,L>", "BoundedSet<T,L>", "BoundedMap<K,V,L>", "BoundedText<L>", "BoundedBytes<L>", "BoundedCanonicalBytes<L>", "BoundedOpaqueBytes<L>", "BoundedTextOrBytes"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "bounds"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "opaque_and_display_wrappers"
+schemas = ["OpaqueId", "OpaqueRef", "OpaqueCanonicalBytes", "OpaqueHandleToken", "BoundedDisplayName", "BoundedDisplayPath", "BoundedName", "BoundedSymbolKey", "BoundedExpression", "BoundedObservation", "BoundedBehaviorSignature", "BoundedNonContentMetadata", "BoundedNonContentRankingTrace", "OpaqueAuthorizedFacetValue"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md", "docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "canonical"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "identity_and_reference_wrappers"
+schemas = ["InstallationId", "InstallationIncarnationId", "DataRootId", "BindingId", "WorkspaceId", "WorkspaceViewRevisionId", "RootBindingId", "PathBindingId", "RepositoryLineageId", "CollectionGenerationId", "CorpusId", "ReferencePortfolioId", "SourceNamespaceId", "SourceId", "SourceMembershipId", "ProjectionMembershipId", "SourceRevisionId", "MaterializationId", "RepresentationId", "UnitId", "AccessPartitionId", "ScoringPartitionId", "ScoringDocumentId", "AccessPolicyBindingId", "ResidencyPolicyBindingId", "ScopeDomainId", "AccessDomainId", "ConfidentialityDomainId", "EncryptionKeyDomainId", "RetentionDomainId", "ErasureDomainId", "GrantId", "RequestId", "PlanId", "CandidateId", "CutoverId", "BufferSnapshotId", "ImportedSnapshotId", "HandleId", "ContinuationId", "PublicationIntentId", "PublicationReceiptId"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "ids"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "counter_and_version_wrappers"
+schemas = ["OwnerEpoch", "Epoch", "NonZeroRevision", "PortfolioRevision", "CollectionRouteRevision", "CatalogRevision", "MembershipRevision", "AccessPolicyRevision", "ShadowFenceRevision", "PurgeFenceRevision", "ObservationCursorRevision", "OverlayRevision", "PolicyRevision"]
+source_files = ["docs/contracts/p00/CANONICAL_TYPES.md", "docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "ids"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "ordering"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "digest_and_profile_wrappers"
+schemas = ["Blake3Digest32", "Sha256Digest32", "VersionedContentDigest", "SourceOwnerGeneration", "ObjectResidencyKeyDigest", "PlanFingerprint", "QuerySnapshotFingerprint", "ArtifactDigest", "DigestRef", "HandleTokenDigest", "ProfileId", "ProjectionProfileSetId", "FusionProfileId", "RuleId", "RecipeFamilyId", "ReceiptRef", "GitObjectId"]
+source_files = ["docs/contracts/p00/CANONICAL_TYPES.md", "docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "ids"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "semantic_registries"
+schemas = ["AssuranceClass", "ObservationFreshnessState", "EvidenceRole", "Modality", "EntityKind"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "schema"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "tagged_reference_unions"
+schemas = ["CorpusOrPortfolioId", "WorkspaceOrCorpusRef", "SourceViewRef", "AuthorizedScopeRef", "ExactScanPlanRef"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "ids"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "contract_bounds"
+schemas = ["ContractBoundsV1", "LimitClass"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "bounds"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "coverage_records"
+schemas = ["LegDescriptor", "CoverageGap", "CoverageUnknown", "ObservationFreshness"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "query"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "coverage"
+state_owner_package = "search-result-projector"
+state_owner_module = "coverage"
+
+[[group]]
+id = "port_support_records"
+schemas = ["OperationContext", "MutationIdentity", "PortReceipt", "BoundedPage<T>", "BoundedStream<T>"]
+source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-ports"
+shape_owner_module = "context"
+meaning_owner_package = "NONE"
+meaning_owner_module = "NONE"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "recipe_type_completions"
+schemas = ["RecipeIdV1", "RecipeBodyV1", "ComparisonAxis"]
+source_files = ["docs/contracts/p00/TYPE_COMPLETIONS.md", "docs/contracts/p00/RECIPES.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "recipes"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "search-query-planner"
+state_owner_module = "recipe"
+
+[[group]]
+id = "protocol_range_completion"
+schemas = ["ProtocolRange"]
+source_files = ["docs/contracts/p00/TYPE_COMPLETIONS.md", "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "protocol"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "ordering"
+state_owner_package = "search-provider-protocol"
+state_owner_module = "negotiation"
+
+[[group]]
+id = "package_opaque_completion"
+schemas = ["PackageOpaque"]
+source_files = ["docs/contracts/p00/TYPE_COMPLETIONS.md", "docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-ports"
+shape_owner_module = "context"
+meaning_owner_package = "NONE"
+meaning_owner_module = "NONE"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[primitive_family]]
+id = "uuid_backed_ids"
+canonical_rule = "distinct_newtype_json_lowercase_hyphenated_uuid_deterministic_cbor_16_bytes"
+
+[[primitive_family]]
+id = "owner_epoch"
+canonical_rule = "nonzero_unsigned_64_bit_integer"
+
+[[primitive_family]]
+id = "epoch"
+canonical_rule = "signed_64_bit_integer_zero_through_i64_max_exclusive"
+
+[[primitive_family]]
+id = "revision_and_generation_counters"
+canonical_rule = "dedicated_unsigned_newtype_zero_only_when_schema_defines_initial_state"
+
+[[primitive_family]]
+id = "fixed_digests"
+canonical_rule = "Blake3Digest32_and_Sha256Digest32_fixed_32_bytes_JSON_lowercase_hex"
+
+[[primitive_family]]
+id = "source_owner_generation"
+canonical_rule = "dedicated_BLAKE3_digest_wrapper_never_integer"
+
+[[primitive_family]]
+id = "opaque_identity_and_reference"
+canonical_rule = "nonempty_bounded_UTF8_or_canonical_bytes_no_consumer_parsing"
+
+[[primitive_family]]
+id = "raw_bytes_in_JSON"
+canonical_rule = "base64url_without_padding_never_implicit_UTF8"
+
+[[primitive_family]]
+id = "opaque_handle_token"
+canonical_rule = "32_to_64_CSPRNG_bytes_base64url_never_deterministically_derived"
+
+[[primitive_family]]
+id = "handle_token_digest"
+canonical_rule = "domain_separated_BLAKE3_256_server_side_only"
+
+[[primitive_family]]
+id = "timestamp"
+canonical_rule = "RFC3339_UTC_Z_exactly_six_fractional_digits_at_load_bearing_boundaries"
+
+[[primitive_family]]
+id = "duration_and_deadline"
+canonical_rule = "unsigned_milliseconds_never_floating_point"

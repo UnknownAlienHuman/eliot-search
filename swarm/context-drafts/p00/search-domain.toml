@@ -14,8 +14,8 @@ materialized_context_artifact_ref = "UNAVAILABLE"
 materialized_context_artifact_sha256 = "UNAVAILABLE"
 materialization_mode = "canonical_concatenated_bundle"
 writer_visible_artifact_count = 1
-source_file_count = 15
-registry_fragment_count = 5
+source_file_count = 16
+registry_fragment_count = 6
 accepted_handoff_slot_count = 1
 
 [canonicalization]
@@ -37,6 +37,7 @@ source_files = [
   "docs/handoff/P00_BOOTSTRAP.md",
   "docs/contracts/p00/manifest.toml",
   "docs/contracts/p00/CANONICAL_TYPES.md",
+  "docs/contracts/p00/TYPE_COMPLETIONS.md",
   "docs/contracts/p00/SUPPORT_SCHEMAS.md",
   "docs/contracts/p00/CONTRACT_CHALLENGES.md",
   "docs/contracts/p00/SOURCE_GRAPH.md",
@@ -48,6 +49,7 @@ source_files = [
 registry_fragments = [
   "swarm/crates.toml::package[name=search-domain]",
   "swarm/function-packets.toml::foundation[package=search-domain]",
+  "swarm/modules/w0.toml::package[name=search-domain]",
   "swarm/stages.toml::stage[id=W0]",
   "swarm/launch-state.toml::conditional_packages[search-domain]",
   "swarm/launch-state.toml::conditional_activation.search-domain",

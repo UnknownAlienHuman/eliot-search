@@ -1,0 +1,57 @@
+schema_version = 1
+project = "eliot-search"
+status = "SOURCE_DERIVED_OPERATION_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+function_registry = "swarm/function-packets.toml"
+module_registry = "swarm/module-packets.toml"
+package_count = 45
+foundation_package_count = 3
+package_function_source_count = 42
+operation_count = "DERIVED_BY_VALIDATOR"
+implementation_authorized_by_this_registry = false
+
+[identity]
+format = "<package>::<operation>"
+package_qualified_identity_required = true
+duplicate_unqualified_operation_names_allowed = true
+duplicate_package_qualified_operation_names_allowed = false
+
+[extraction]
+markdown_code_heading_patterns = ["^## `", "^### `"]
+fenced_signature_pattern = "^[a-z][a-z0-9_]*\\("
+ignore_test_fixture_and_example_blocks = true
+ignore_Rust_trait_methods_in_package_FUNCTIONS = false
+minimum_operations_per_nonfoundation_package = 1
+
+[ownership]
+operation_owner_source = "function_registry_package"
+public_entry_module_source = "module_registry_package"
+every_operation_enters_through_public_entry_module = true
+internal_delegation_must_remain_within_declared_package_modules = true
+operation_source_must_be_package_local = true
+cross_package_operation_implementation_allowed = false
+
+[foundation.search_contracts]
+package = "search-contracts"
+source = "docs/contracts/p00/README.md"
+coverage_kind = "schema_and_registry_operations"
+public_entry_module = "lib"
+
+[foundation.search_domain]
+package = "search-domain"
+source = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+coverage_kind = "pure_rule_operations"
+public_entry_module = "lib"
+
+[foundation.search_ports]
+package = "search-ports"
+source = "docs/contracts/p00/PORT_OPERATIONS.md"
+coverage_kind = "shared_port_trait_methods"
+public_entry_module = "lib"
+
+[invariants]
+missing_function_source_blocks_merge = true
+function_source_without_registered_package_blocks_merge = true
+registered_package_without_discovered_operation_blocks_merge = true
+operation_without_declared_public_entry_blocks_merge = true
+operation_implementation_outside_package_write_scope_blocks_merge = true
+placeholder_success_allowed = false

@@ -1,0 +1,103 @@
+schema_version = 1
+packet = "core"
+schema_count = 14
+status = "STATIC_SCHEMA_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+
+[[group]]
+id = "safe_leg"
+schemas = ["SafeLeg"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "query"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-access"
+state_owner_module = "legs"
+
+[[group]]
+id = "leg_execution"
+schemas = ["LegExecutionSummary"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "query"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "outcomes"
+state_owner_package = "search-retrieval-executor"
+state_owner_module = "legs"
+
+[[group]]
+id = "comparison_support"
+schemas = ["ConfigurationObservation", "BehaviorObservation", "BehaviorConflict"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "search-comparator"
+state_owner_module = "behavior"
+
+[[group]]
+id = "exact_support"
+schemas = ["ExactCompletenessRequirements", "ExactMatch", "ExactItemFailure"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "query"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "coverage"
+state_owner_package = "search-exact"
+state_owner_module = "report"
+
+[[group]]
+id = "optional_provider_state"
+schemas = ["OptionalProviderState"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "lifecycle"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "visibility"
+state_owner_package = "eliot-searchd"
+state_owner_module = "optional"
+
+[[group]]
+id = "membership_readiness"
+schemas = ["MembershipReadiness"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "lifecycle"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "visibility"
+state_owner_package = "eliot-searchd"
+state_owner_module = "readiness"
+
+[[group]]
+id = "progress_counts"
+schemas = ["BoundedProgressCounts"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "protocol"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "outcomes"
+state_owner_package = "search-provider-protocol"
+state_owner_module = "progress"
+
+[[group]]
+id = "metadata_scalar"
+schemas = ["MetadataScalar"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "canonical"
+meaning_owner_package = "NONE"
+meaning_owner_module = "NONE"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+[[group]]
+id = "handle_support"
+schemas = ["HandleExpansionRequest", "HandlePermit"]
+source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "protocol"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-handles"
+state_owner_module = "expand"

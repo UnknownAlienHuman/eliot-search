@@ -1,0 +1,95 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 4
+package_count = 8
+module_count = 86
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-access"
+path = "crates/search-query/search-access"
+operation_source = "crates/search-query/search-access/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "grant", "scope", "legs", "checkpoint", "barrier", "snapshot", "invalidation", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-query-planner"
+path = "crates/search-query/search-query-planner"
+operation_source = "crates/search-query/search-query-planner/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "config", "request", "recipe", "scope", "budget", "legs", "plan", "replan", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-retrieval-executor"
+path = "crates/search-query/search-retrieval-executor"
+operation_source = "crates/search-query/search-retrieval-executor/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "config", "scheduler", "request", "pins", "legs", "fusion", "contamination", "cleanup", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-candidate-validator"
+path = "crates/search-query/search-candidate-validator"
+operation_source = "crates/search-query/search-candidate-validator/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "request", "readback", "anchor", "security", "decision", "batch", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-handles"
+path = "crates/search-query/search-handles"
+operation_source = "crates/search-query/search-handles/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "config", "identity", "token", "issue", "resolve", "expand", "invalidate", "cleanup", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-result-projector"
+path = "crates/search-query/search-result-projector"
+operation_source = "crates/search-query/search-result-projector/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "request", "card", "evidence", "ordering", "coverage", "truncation", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-continuation"
+path = "crates/search-query/search-continuation"
+operation_source = "crates/search-query/search-continuation/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "identity", "token", "issue", "resume", "reauthorize", "cleanup", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-eval"
+path = "crates/search-eval"
+operation_source = "crates/search-eval/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 15
+modules = ["lib", "api", "config", "campaign", "corpus", "oracle", "runner", "trial", "adjudication", "metrics", "safety", "evidence", "review", "recovery", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true

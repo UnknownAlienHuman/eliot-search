@@ -1,0 +1,190 @@
+schema_version = 1
+source = "docs/contracts/p00/PORT_OPERATIONS.md"
+trait_owner_package = "search-ports"
+port_count = 23
+status = "STATIC_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+implementation_authorized_by_this_registry = false
+
+[[port]]
+name = "ClockPort"
+trait_module = "runtime"
+methods = ["utc_now", "monotonic_now"]
+implementation_package = "eliot-searchd"
+implementation_module = "adapters"
+implementation_kind = "private_platform_adapter"
+
+[[port]]
+name = "SecretStorePort"
+trait_module = "runtime"
+methods = ["create_secret", "with_secret", "rotate_secret", "delete_secret"]
+implementation_package = "search-os-secrets"
+implementation_module = "store"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "ProcessSupervisorPort"
+trait_module = "runtime"
+methods = ["start", "observe", "request_shutdown", "terminate_owned", "health"]
+implementation_package = "search-qdrant-supervisor"
+implementation_module = "process"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "ControlJournalPort"
+trait_module = "control"
+methods = ["read_snapshot", "transact", "recover_operation", "migrate", "health", "quarantine"]
+implementation_package = "search-control-redb"
+implementation_module = "transaction"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "ControlSnapshotPort"
+trait_module = "control"
+methods = ["current"]
+implementation_package = "search-control-redb"
+implementation_module = "snapshot"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "SourceAdmissionPort"
+trait_module = "source"
+methods = ["evaluate", "verify_receipt", "classify_policy_change"]
+implementation_package = "search-source-admission"
+implementation_module = "decision"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "SourceInventoryPort"
+trait_module = "source"
+methods = ["list_roots", "list_sources", "list_memberships", "resolve_source_view", "resolve_workspace_view"]
+implementation_package = "search-source-registry"
+implementation_module = "view"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "SourceOwnershipPort"
+trait_module = "source"
+methods = ["prepare_cutover", "fence_old_owner", "activate_new_owner"]
+implementation_package = "search-source-registry"
+implementation_module = "cutover"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "SafeReaderPort"
+trait_module = "source"
+methods = ["read_stably", "read_git_object", "read_batch"]
+implementation_package = "search-safe-reader"
+implementation_module = "stable_read"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "SourceRevisionStorePort"
+trait_module = "source"
+methods = ["admit_revision", "open_revision", "acquire_lease", "release_lease", "recover_operation"]
+implementation_package = "search-revision-store"
+implementation_module = "revision"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "ResidencyPolicyPort"
+trait_module = "source"
+methods = ["derive_closure", "plan_transition", "verify_transition"]
+implementation_package = "search-revision-store"
+implementation_module = "residency"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "MaterializerPort"
+trait_module = "preparation"
+methods = ["materialize", "verify"]
+implementation_package = "search-materializer"
+implementation_module = "product"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "UnitizerPort"
+trait_module = "preparation"
+methods = ["unitize", "verify"]
+implementation_package = "search-unitizer"
+implementation_module = "manifest"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "CodeEnricherPort"
+trait_module = "preparation"
+methods = ["enrich", "verify"]
+implementation_package = "search-code-enricher"
+implementation_module = "facts"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "LexicalEncoderPort"
+trait_module = "preparation"
+methods = ["profile", "encode_document", "encode_query", "fixture_digest"]
+implementation_package = "search-lexical"
+implementation_module = "sparse"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "ModelProviderPort"
+trait_module = "optional"
+methods = ["profile", "encode", "rerank"]
+implementation_package = "search-model-provider"
+implementation_module = "encode"
+implementation_kind = "optional_capability_package"
+
+[[port]]
+name = "SearchIndexPort"
+trait_module = "index"
+methods = ["schema", "upsert_points", "close_points", "read_points", "query", "count_exact", "delete_exact"]
+implementation_package = "search-qdrant-bridge"
+implementation_module = "mutation"
+implementation_kind = "vendor_adapter_package"
+
+[[port]]
+name = "SearchIndexAdminPort"
+trait_module = "index"
+methods = ["create_collection", "inspect_collection"]
+implementation_package = "search-qdrant-bridge"
+implementation_module = "admin"
+implementation_kind = "vendor_adapter_package"
+
+[[port]]
+name = "EpochPinPort"
+trait_module = "index"
+methods = ["acquire", "release", "watermark", "active_pins"]
+implementation_package = "search-epoch-pins"
+implementation_module = "registry"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "AccessCompilerPort"
+trait_module = "query"
+methods = ["compile_eligibility", "compile_safe_legs", "verify_checkpoint", "current_live_deny"]
+implementation_package = "search-access"
+implementation_module = "legs"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "OverlayPort"
+trait_module = "query"
+methods = ["snapshot", "retrieve", "invalidate"]
+implementation_package = "search-overlay"
+implementation_module = "snapshot"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "ExactScannerPort"
+trait_module = "query"
+methods = ["compile", "execute"]
+implementation_package = "search-exact"
+implementation_module = "execute"
+implementation_kind = "capability_package"
+
+[[port]]
+name = "HandleStorePort"
+trait_module = "query"
+methods = ["issue", "resolve", "expand", "invalidate", "sweep_expired"]
+implementation_package = "search-handles"
+implementation_module = "resolve"
+implementation_kind = "capability_package"

@@ -21,10 +21,11 @@ These decisions resolve implementation ambiguity without changing Architecture 8
 | PC-015 | Continuation token exposed binding/plan. | Public token opaque; server record owns binding/plan/fence/window/checkpoint. |
 | PC-016 | Task plan hid S14 snapshot revisions in generic dependency digests. | Add exact `QuerySnapshotFence`; generic dependencies cannot replace any S14 field. |
 | PC-017 | Snapshot isolation and live restrictive revalidation could be conflated. | `ResultFence` preserves planned snapshot and separately records latest emission owner/security fences. |
+| PC-018 | P00 schemas use `RecipeIdV1`, `RecipeBodyV1`, `ComparisonAxis`, `ProtocolRange` and `PackageOpaque` without explicit registry definitions. | `TYPE_COMPLETIONS.md` defines their closed shapes, owners, canonical/compatibility rules and no-vendor/no-serialization boundaries. Local aliases are forbidden. |
 
 ## Stop conditions
 
 Stop when Part I conflicts; recipe needs implicit authority; reason mapping is absent; port needs vendor
 types; canonical bytes cannot reproduce; mutually exclusive states coexist; invalid evidence would be
-required; public handle would expose server record; or a generic digest would hide a load-bearing
-snapshot/security field.
+required; public handle would expose server record; a named helper type lacks a closed definition; or a
+generic digest would hide a load-bearing snapshot/security field.

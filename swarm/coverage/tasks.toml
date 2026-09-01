@@ -1,0 +1,41 @@
+schema_version = 1
+project = "eliot-search"
+status = "STATIC_TASK_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+package_registry = "swarm/crates.toml"
+delivery_registry = "swarm/coverage/delivery-slices.toml"
+package_assignment_task_count = 45
+delivery_slice_task_count = 19
+implementation_authorized_by_this_registry = false
+
+[package_assignment_tasks]
+source = "swarm/crates.toml::package.assignment"
+identity_format = "package::<package>"
+one_assignment_per_package = true
+assignment_file_required = true
+assignment_must_name_owned_state_or_behavior = true
+assignment_must_name_forbidden_or_non_owned_behavior = true
+assignment_must_name_exact_package_write_scope = true
+assignment_must_not_override_dependency_or_function_registry = true
+
+[delivery_tasks]
+source = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#H17"
+identity_format = "delivery::<P00-P18>"
+one_registry_entry_per_delivery_slice = true
+primary_package_set_required = true
+module_set_required = true
+required_outputs_required = true
+exit_evidence_required = true
+
+[qualification_tasks]
+source_roots = ["qualification", "tests"]
+qualification_is_evidence_requirement_not_success = true
+unavailable_or_unexecuted_state_must_not_authorize = true
+package_writer_may_not_accept_own_evidence = true
+
+[invariants]
+package_without_assignment_blocks_merge = true
+orphan_assignment_file_blocks_merge = true
+delivery_slice_without_owner_blocks_merge = true
+delivery_slice_without_exit_evidence_blocks_merge = true
+package_absent_from_all_delivery_slices_blocks_merge = true
+assignment_or_delivery_presence_authorizes_implementation = false

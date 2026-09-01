@@ -1,0 +1,40 @@
+name: Architecture ownership coverage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: architecture-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate architecture section capability invariant port schema recipe task and module closure
+        shell: pwsh
+        run: ./tools/validate-architecture-coverage.ps1 -Json
+
+      - name: Revalidate manifest-closed P00 contexts and named type completions
+        shell: pwsh
+        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Revalidate package topology and function packet coverage
+        shell: pwsh
+        run: |
+          ./tools/validate-swarm.ps1 -Json
+          ./tools/validate-function-packets.ps1 -Json
+
+      - name: Revalidate ticket issuance contracts
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json

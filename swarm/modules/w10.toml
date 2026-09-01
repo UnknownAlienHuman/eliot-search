@@ -1,0 +1,40 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 10
+package_count = 3
+module_count = 32
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-model-provider"
+path = "crates/search-model-provider"
+operation_source = "crates/search-model-provider/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "profile", "capability", "encode", "rerank", "validation", "lifecycle", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "eliot-search-model-worker"
+path = "bins/eliot-search-model-worker"
+operation_source = "bins/eliot-search-model-worker/FUNCTIONS.md"
+public_entry_module = "main"
+module_count = 11
+modules = ["main", "args", "config", "protocol", "sandbox", "model", "encode", "rerank", "lifecycle", "resource", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "eliot-search-doc-worker"
+path = "bins/eliot-search-doc-worker"
+operation_source = "bins/eliot-search-doc-worker/FUNCTIONS.md"
+public_entry_module = "main"
+module_count = 12
+modules = ["main", "args", "config", "protocol", "sandbox", "provider", "input", "materialize", "maps", "resource", "lifecycle", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true

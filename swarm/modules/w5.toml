@@ -1,0 +1,40 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 5
+package_count = 3
+module_count = 31
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-source-reconcile"
+path = "crates/search-source/search-source-reconcile"
+operation_source = "crates/search-source/search-source-reconcile/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "gap", "inventory", "plan", "commit", "currentness", "recovery", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-code-enricher"
+path = "crates/search-prep/search-code-enricher"
+operation_source = "crates/search-prep/search-code-enricher/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "profile", "parse", "facts", "references", "predicates", "anchors", "assurance", "batch", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-overlay"
+path = "crates/search-query/search-overlay"
+operation_source = "crates/search-query/search-overlay/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "identity", "snapshot", "shadow", "direct", "save", "cleanup", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
