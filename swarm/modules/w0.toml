@@ -1,0 +1,40 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 0
+package_count = 3
+module_count = 38
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-contracts"
+path = "crates/search-contracts"
+operation_source = "docs/contracts/p00/README.md"
+public_entry_module = "lib"
+module_count = 13
+modules = ["lib", "canonical", "bounds", "ids", "source", "query", "recipes", "results", "protocol", "lifecycle", "reasons", "schema", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-domain"
+path = "crates/search-domain"
+operation_source = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+public_entry_module = "lib"
+module_count = 11
+modules = ["lib", "ordering", "coverage", "assurance", "currentness", "eligibility", "visibility", "transitions", "outcomes", "decisions", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-ports"
+path = "crates/search-ports"
+operation_source = "docs/contracts/p00/PORT_OPERATIONS.md"
+public_entry_module = "lib"
+module_count = 14
+modules = ["lib", "context", "runtime", "control", "source", "preparation", "index", "query", "lifecycle", "protocol", "evaluation", "optional", "conformance", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
