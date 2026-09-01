@@ -1,0 +1,84 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 2
+package_count = 7
+module_count = 75
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-source-admission"
+path = "crates/search-source/search-source-admission"
+operation_source = "crates/search-source/search-source-admission/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "config", "policy", "observation", "decision", "receipt", "batch", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-source-registry"
+path = "crates/search-source/search-source-registry"
+operation_source = "crates/search-source/search-source-registry/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "snapshot", "root", "source", "membership", "portfolio", "view", "cutover", "recovery", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-source-identity"
+path = "crates/search-source/search-source-identity"
+operation_source = "crates/search-source/search-source-identity/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "profile", "observation", "source", "binding", "lineage", "batch", "redaction", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-safe-reader"
+path = "crates/search-source/search-safe-reader"
+operation_source = "crates/search-source/search-safe-reader/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "request", "platform", "stable_read", "git_object", "encoding", "batch", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-revision-store"
+path = "crates/search-source/search-revision-store"
+operation_source = "crates/search-source/search-revision-store/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 13
+modules = ["lib", "api", "config", "residency", "address", "object", "revision", "anchor", "lease", "lifecycle", "deletion", "restore", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-materializer"
+path = "crates/search-prep/search-materializer"
+operation_source = "crates/search-prep/search-materializer/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "profile", "request", "decode", "normalize", "maps", "assurance", "product", "provider", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-unitizer"
+path = "crates/search-prep/search-unitizer"
+operation_source = "crates/search-prep/search-unitizer/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "profile", "request", "boundaries", "occurrence", "identity", "manifest", "diff", "batch", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
