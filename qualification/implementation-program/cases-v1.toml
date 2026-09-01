@@ -1,0 +1,124 @@
+schema_version = 1
+suite = "implementation_program_v1"
+status = "STRUCTURAL_NOT_EXECUTED"
+case_count = 24
+
+[[case]]
+id = "program_is_non_authoritative"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "launch_authority_path_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "current_launch_state_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "zero_issued_runtime_state"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "line_limits_match_repository_policy"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "one_writer_one_package_preserved"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "all_eleven_stages_registered"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "stage_package_sets_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "stage_gate_prerequisites_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "stage_receipt_prerequisites_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "all_packages_covered_by_program"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "build_boot_use_release_states_distinct"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "baseline_release_gate_set_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "w7_lifecycle_receipt_separate"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "w10_not_baseline_requirement"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "architecture_slo_targets_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "product_pulse_sample_floor_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "hard_safety_blockers_zero"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "recovery_correctness_requires_one"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "integration_bootstrap_order_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "first_foundation_sequence_exact"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "coverage_manifest_links_program"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "cargo_lock_absence_reported_honestly"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "manual_readonly_workflow"
+mandatory = true
+result = "UNAVAILABLE"
