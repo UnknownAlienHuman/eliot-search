@@ -1,0 +1,245 @@
+schema_version = 1
+source = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+section_count = 40
+status = "STATIC_SECTION_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+implementation_authorized_by_this_registry = false
+
+[[section]]
+id = "S0"
+heading = "Executive decision"
+primary_packages = ["eliot-searchd", "search-contracts"]
+modules = ["eliot-searchd:profile", "search-contracts:schema"]
+
+[[section]]
+id = "S1"
+heading = "Product boundary and client profiles"
+primary_packages = ["eliot-searchd", "search-provider-protocol", "search-eliot-adapter", "search-research-export-adapter"]
+modules = ["eliot-searchd:profile", "search-provider-protocol:binding", "search-eliot-adapter:scope", "search-research-export-adapter:admission"]
+
+[[section]]
+id = "S2"
+heading = "Design targets and non-goals"
+primary_packages = ["search-eval", "eliot-searchd"]
+modules = ["search-eval:campaign", "eliot-searchd:profile"]
+
+[[section]]
+id = "S3"
+heading = "Non-negotiable invariants"
+primary_packages = ["search-contracts", "search-domain", "search-ports"]
+modules = ["search-contracts:schema", "search-domain:decisions", "search-ports:conformance"]
+
+[[section]]
+id = "S4"
+heading = "Abstraction layers"
+primary_packages = ["search-ports", "eliot-searchd"]
+modules = ["search-ports:conformance", "eliot-searchd:adapters"]
+
+[[section]]
+id = "S5"
+heading = "Micromodular capability map"
+primary_packages = ["search-contracts", "eliot-searchd"]
+modules = ["search-contracts:schema", "eliot-searchd:adapters"]
+
+[[section]]
+id = "S6"
+heading = "Storage topology"
+primary_packages = ["search-qdrant-bridge", "search-control-redb", "search-revision-store"]
+modules = ["search-qdrant-bridge:schema", "search-control-redb:transaction", "search-revision-store:object"]
+
+[[section]]
+id = "S7"
+heading = "Identity model"
+primary_packages = ["search-contracts", "search-source-identity", "search-source-registry", "search-revision-store"]
+modules = ["search-contracts:source", "search-source-identity:source", "search-source-registry:cutover", "search-revision-store:revision"]
+
+[[section]]
+id = "S8"
+heading = "Projection membership isolation"
+primary_packages = ["search-projection-planner", "search-access", "search-qdrant-bridge"]
+modules = ["search-projection-planner:point_set", "search-access:legs", "search-qdrant-bridge:schema"]
+
+[[section]]
+id = "S9"
+heading = "Qdrant collection contract"
+primary_packages = ["search-qdrant-supervisor", "search-qdrant-bridge", "search-projection-planner"]
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-bridge:capability", "search-projection-planner:schema"]
+
+[[section]]
+id = "S10"
+heading = "Epoch domain and validity filter"
+primary_packages = ["search-contracts", "search-publication", "search-qdrant-bridge"]
+modules = ["search-contracts:ids", "search-publication:intent", "search-qdrant-bridge:query"]
+
+[[section]]
+id = "S11"
+heading = "Collision-safe point identity"
+primary_packages = ["search-point-identity", "search-publication"]
+modules = ["search-point-identity:key", "search-point-identity:collision", "search-publication:readback"]
+
+[[section]]
+id = "S12"
+heading = "Lexical retrieval contract"
+primary_packages = ["search-lexical", "search-qdrant-bridge"]
+modules = ["search-lexical:profile", "search-lexical:sparse", "search-lexical:statistics", "search-qdrant-bridge:capability"]
+
+[[section]]
+id = "S13"
+heading = "Publication model"
+primary_packages = ["search-publication", "search-control-redb", "search-qdrant-bridge"]
+modules = ["search-publication:actor", "search-publication:commit", "search-publication:recovery", "search-control-redb:transaction", "search-qdrant-bridge:mutation"]
+
+[[section]]
+id = "S14"
+heading = "Query snapshots, pins and reclamation"
+primary_packages = ["search-epoch-pins", "search-index-reclaimer", "search-access", "search-control-redb"]
+modules = ["search-epoch-pins:registry", "search-index-reclaimer:plan", "search-access:barrier", "search-control-redb:snapshot"]
+
+[[section]]
+id = "S15"
+heading = "Coherent source readback"
+primary_packages = ["search-revision-store", "search-candidate-validator"]
+modules = ["search-revision-store:revision", "search-revision-store:anchor", "search-candidate-validator:readback"]
+
+[[section]]
+id = "S16"
+heading = "Source acquisition and change reconciliation"
+primary_packages = ["search-source-reconcile", "search-safe-reader", "search-source-admission", "search-source-identity"]
+modules = ["search-source-reconcile:inventory", "search-safe-reader:stable_read", "search-source-admission:policy", "search-source-identity:binding"]
+
+[[section]]
+id = "S17"
+heading = "Materialization and enrichment"
+primary_packages = ["search-materializer", "search-code-enricher", "eliot-search-doc-worker"]
+modules = ["search-materializer:product", "search-materializer:maps", "search-code-enricher:parse", "search-code-enricher:assurance", "eliot-search-doc-worker:provider"]
+
+[[section]]
+id = "S18"
+heading = "Saved and unsaved overlay"
+primary_packages = ["search-overlay", "search-revision-store"]
+modules = ["search-overlay:snapshot", "search-overlay:shadow", "search-overlay:save", "search-revision-store:revision"]
+
+[[section]]
+id = "S19"
+heading = "Access compilation and noninterference"
+primary_packages = ["search-access", "search-query-planner", "search-retrieval-executor"]
+modules = ["search-access:grant", "search-access:legs", "search-query-planner:scope", "search-retrieval-executor:contamination"]
+
+[[section]]
+id = "S20"
+heading = "Query recipes"
+primary_packages = ["search-contracts", "search-query-planner", "search-provider-protocol"]
+modules = ["search-contracts:recipes", "search-query-planner:recipe", "search-provider-protocol:request"]
+
+[[section]]
+id = "S21"
+heading = "Subject resolution and retrieval planning"
+primary_packages = ["search-subject-resolver", "search-query-planner", "search-retrieval-executor"]
+modules = ["search-subject-resolver:ladder", "search-query-planner:legs", "search-retrieval-executor:fusion"]
+
+[[section]]
+id = "S22"
+heading = "Cross-repository comparison"
+primary_packages = ["search-comparator", "search-subject-resolver"]
+modules = ["search-comparator:alignment", "search-comparator:behavior", "search-comparator:result", "search-subject-resolver:ambiguity"]
+
+[[section]]
+id = "S23"
+heading = "Candidate validation and result projection"
+primary_packages = ["search-candidate-validator", "search-result-projector", "search-handles"]
+modules = ["search-candidate-validator:decision", "search-candidate-validator:security", "search-result-projector:evidence", "search-handles:issue"]
+
+[[section]]
+id = "S24"
+heading = "Native coordinates and anchors"
+primary_packages = ["search-contracts", "search-materializer", "search-revision-store", "search-candidate-validator"]
+modules = ["search-contracts:query", "search-materializer:maps", "search-revision-store:anchor", "search-candidate-validator:anchor"]
+
+[[section]]
+id = "S25"
+heading = "Exact verification plane"
+primary_packages = ["search-exact", "search-revision-store", "search-source-registry"]
+modules = ["search-exact:predicate", "search-exact:plan", "search-exact:denominator", "search-exact:execute", "search-exact:report", "search-revision-store:revision", "search-source-registry:view"]
+
+[[section]]
+id = "S26"
+heading = "Handles and continuations"
+primary_packages = ["search-handles", "search-continuation", "search-epoch-pins"]
+modules = ["search-handles:token", "search-handles:resolve", "search-continuation:token", "search-continuation:resume", "search-epoch-pins:registry"]
+
+[[section]]
+id = "S27"
+heading = "Qdrant process ownership and security"
+primary_packages = ["search-qdrant-supervisor", "search-os-secrets", "eliot-searchd"]
+modules = ["search-qdrant-supervisor:process", "search-qdrant-supervisor:identity", "search-os-secrets:store", "eliot-searchd:startup"]
+
+[[section]]
+id = "S28"
+heading = "Recovery, rebuild and backup"
+primary_packages = ["search-retention", "search-revision-store", "search-control-redb", "search-publication", "eliot-searchd"]
+modules = ["search-retention:restore", "search-retention:purge", "search-revision-store:restore", "search-control-redb:migration", "search-publication:recovery", "eliot-searchd:recovery"]
+
+[[section]]
+id = "S29"
+heading = "Runtime profiles"
+primary_packages = ["eliot-searchd", "search-model-provider", "eliot-search-model-worker", "eliot-search-doc-worker"]
+modules = ["eliot-searchd:profile", "eliot-searchd:optional", "search-model-provider:profile", "eliot-search-model-worker:model", "eliot-search-doc-worker:provider"]
+
+[[section]]
+id = "S30"
+heading = "Resource governance and candidate SLOs"
+primary_packages = ["search-retrieval-executor", "search-eval", "eliot-searchd"]
+modules = ["search-retrieval-executor:scheduler", "search-eval:metrics", "eliot-searchd:readiness"]
+
+[[section]]
+id = "S31"
+heading = "Crate and dependency architecture"
+primary_packages = ["search-contracts", "search-ports", "eliot-searchd"]
+modules = ["search-contracts:schema", "search-ports:conformance", "eliot-searchd:adapters"]
+
+[[section]]
+id = "S32"
+heading = "Client integration contract"
+primary_packages = ["search-provider-protocol", "search-eliot-adapter", "search-research-export-adapter", "eliot-searchd"]
+modules = ["search-provider-protocol:frame", "search-provider-protocol:binding", "search-provider-protocol:request", "search-eliot-adapter:request", "search-research-export-adapter:export", "eliot-searchd:connection"]
+
+[[section]]
+id = "S33"
+heading = "Standalone contract"
+primary_packages = ["eliot-search", "eliot-searchd", "search-runtime-owner"]
+modules = ["eliot-search:connection", "eliot-search:request", "eliot-searchd:connection", "search-runtime-owner:acquire"]
+
+[[section]]
+id = "S34"
+heading = "Error and degradation model"
+primary_packages = ["search-contracts", "search-domain", "search-provider-protocol", "search-result-projector"]
+modules = ["search-contracts:reasons", "search-domain:outcomes", "search-provider-protocol:terminal", "search-result-projector:coverage"]
+
+[[section]]
+id = "S35"
+heading = "Evaluation and Product Pulse"
+primary_packages = ["search-eval", "eliot-searchd"]
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:metrics", "search-eval:safety", "eliot-searchd:evaluation"]
+
+[[section]]
+id = "S36"
+heading = "Property and fault proofs"
+primary_packages = ["search-eval", "search-publication", "search-exact", "search-overlay", "search-retention", "search-access"]
+modules = ["search-eval:safety", "search-eval:recovery", "search-publication:recovery", "search-exact:recovery", "search-overlay:cleanup", "search-retention:recovery", "search-access:invalidation"]
+
+[[section]]
+id = "S37"
+heading = "Delivery gates"
+primary_packages = ["search-eval", "eliot-searchd"]
+modules = ["search-eval:review", "eliot-searchd:profile"]
+
+[[section]]
+id = "S38"
+heading = "Superseded or rejected decisions"
+primary_packages = ["search-contracts", "search-qdrant-bridge", "eliot-searchd"]
+modules = ["search-contracts:schema", "search-qdrant-bridge:schema", "eliot-searchd:profile"]
+
+[[section]]
+id = "S39"
+heading = "Implementation readiness verdict"
+primary_packages = ["search-contracts", "search-eval", "eliot-searchd"]
+modules = ["search-contracts:schema", "search-eval:review", "eliot-searchd:profile"]
