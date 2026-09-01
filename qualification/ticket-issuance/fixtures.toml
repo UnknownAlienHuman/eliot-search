@@ -1,0 +1,384 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "SYNTHETIC_DESCRIPTORS_NOT_MATERIALIZED"
+owner = "integration-owner"
+qualification_manifest = "qualification/ticket-issuance/manifest.toml"
+fixture_count = 52
+fixture_kinds = ["VALID_BASELINE", "INVALID_INPUT", "FAULT_POINT", "RECOVERY_VIEW", "POLICY_VIEW"]
+real_control_record_instances = false
+real_actor_assignments = false
+source_or_secret_content = false
+absolute_local_paths = false
+mutable_git_refs = false
+
+[[fixture]]
+id = "F001_valid_ticket_draft_v2"
+kind = "VALID_BASELINE"
+operation = "validate_ticket_draft"
+base = "search-contracts schema-v2 draft with unresolved actors/base/digests and no lease identity"
+mutation = "none"
+
+[[fixture]]
+id = "F002_claimable_ticket_draft"
+kind = "INVALID_INPUT"
+operation = "validate_ticket_draft"
+base = "F001_valid_ticket_draft_v2"
+mutation = "set claimable=true"
+
+[[fixture]]
+id = "F003_ticket_draft_with_lease_identity"
+kind = "INVALID_INPUT"
+operation = "validate_ticket_draft"
+base = "F001_valid_ticket_draft_v2"
+mutation = "add unresolved_identity.lease_id"
+
+[[fixture]]
+id = "F004_ticket_draft_preassigned_actor"
+kind = "INVALID_INPUT"
+operation = "validate_ticket_draft"
+base = "F001_valid_ticket_draft_v2"
+mutation = "replace writer=UNASSIGNED with actor:user:writer-a"
+
+[[fixture]]
+id = "F005_ticket_draft_collapsed_digests"
+kind = "INVALID_INPUT"
+operation = "validate_ticket_draft"
+base = "F001_valid_ticket_draft_v2"
+mutation = "replace distinct signed-payload and complete-file slots with ticket_canonical_digest"
+
+[[fixture]]
+id = "F006_valid_search_contracts_context_draft"
+kind = "VALID_BASELINE"
+operation = "validate_context_draft"
+base = "nineteen-source exact P00 manifest closure plus fixed integration instructions"
+mutation = "none"
+
+[[fixture]]
+id = "F007_ordinary_context_source_overflow"
+kind = "INVALID_INPUT"
+operation = "validate_context_draft"
+base = "valid search-domain context draft"
+mutation = "append a seventeenth source"
+
+[[fixture]]
+id = "F008_search_contracts_ad_hoc_source"
+kind = "INVALID_INPUT"
+operation = "validate_context_draft"
+base = "F006_valid_search_contracts_context_draft"
+mutation = "append docs/handoff/W1_IMPLEMENTATION_PACKET.md"
+
+[[fixture]]
+id = "F009_context_duplicate_source_or_order"
+kind = "INVALID_INPUT"
+operation = "validate_context_draft"
+base = "F006_valid_search_contracts_context_draft"
+mutation = "duplicate one source path and declared position"
+
+[[fixture]]
+id = "F010_context_missing_source_blob"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated context draft at immutable base commit"
+mutation = "one declared repository path has no blob at base commit"
+
+[[fixture]]
+id = "F011_context_invalid_utf8_source"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated context draft at immutable base commit"
+mutation = "one declared text source is not valid UTF-8"
+
+[[fixture]]
+id = "F012_context_unsupported_selector"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated context draft"
+mutation = "selector uses regex or line-number grammar"
+
+[[fixture]]
+id = "F013_context_selector_zero_matches"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated context draft"
+mutation = "closed selector resolves zero semantic records"
+
+[[fixture]]
+id = "F014_context_selector_multiple_matches"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated context draft"
+mutation = "closed selector resolves two semantic records"
+
+[[fixture]]
+id = "F015_context_forbidden_architecture_source"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated context draft"
+mutation = "source path resolves under docs/architecture"
+
+[[fixture]]
+id = "F016_context_missing_required_handoff"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated conditional search-domain context"
+mutation = "accepted search-contracts handoff slot remains empty"
+
+[[fixture]]
+id = "F017_context_mismatched_handoff"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated conditional search-domain context"
+mutation = "handoff package/API digest differs from declared slot"
+
+[[fixture]]
+id = "F018_context_artifact_budget_exceeded"
+kind = "INVALID_INPUT"
+operation = "materialize_context"
+base = "validated context draft"
+mutation = "normalized aggregate bytes exceed finite context budget"
+
+[[fixture]]
+id = "F019_context_cancel_before_publish"
+kind = "FAULT_POINT"
+operation = "materialize_context"
+base = "validated context draft before any durable publish"
+mutation = "cancellation observed"
+
+[[fixture]]
+id = "F020_context_transport_loss_after_possible_publish"
+kind = "FAULT_POINT"
+operation = "materialize_context"
+base = "manifest/artifact commit may have succeeded"
+mutation = "transport response lost before receipt"
+
+[[fixture]]
+id = "F021_valid_ticket_issue_inputs"
+kind = "VALID_BASELINE"
+operation = "issue_assignment_ticket"
+base = "valid draft, exact context, authorized launch, distinct synthetic writer/reviewer"
+mutation = "none"
+
+[[fixture]]
+id = "F022_ticket_equal_writer_reviewer"
+kind = "INVALID_INPUT"
+operation = "issue_assignment_ticket"
+base = "F021_valid_ticket_issue_inputs"
+mutation = "writer and reviewer both actor:user:same"
+
+[[fixture]]
+id = "F023_ticket_missing_launch_or_dependency"
+kind = "INVALID_INPUT"
+operation = "issue_assignment_ticket"
+base = "conditional search-domain ticket inputs"
+mutation = "accepted search-contracts prerequisite absent"
+
+[[fixture]]
+id = "F024_ticket_operation_same_id_different_input"
+kind = "INVALID_INPUT"
+operation = "issue_assignment_ticket"
+base = "existing ticket operation identity"
+mutation = "change canonical context digest without changing operation ID"
+
+[[fixture]]
+id = "F025_ticket_transport_loss_after_possible_commit"
+kind = "FAULT_POINT"
+operation = "issue_assignment_ticket"
+base = "ticket commit may have succeeded"
+mutation = "transport response lost before receipt"
+
+[[fixture]]
+id = "F026_valid_lease_issue_inputs"
+kind = "VALID_BASELINE"
+operation = "issue_writer_lease"
+base = "exact current assignment ticket/context and no active lease"
+mutation = "none"
+
+[[fixture]]
+id = "F027_second_active_lease"
+kind = "INVALID_INPUT"
+operation = "issue_writer_lease"
+base = "F026_valid_lease_issue_inputs"
+mutation = "one active non-superseded package lease already exists"
+
+[[fixture]]
+id = "F028_valid_writer_acknowledgement"
+kind = "VALID_BASELINE"
+operation = "acknowledge_writer_lease"
+base = "exact assigned writer acknowledges byte-identical ticket/context/lease fence"
+mutation = "none"
+
+[[fixture]]
+id = "F029_writer_acknowledgement_mismatch"
+kind = "INVALID_INPUT"
+operation = "acknowledge_writer_lease"
+base = "F028_valid_writer_acknowledgement"
+mutation = "change context artifact digest or write scope"
+
+[[fixture]]
+id = "F030_revoked_or_superseded_lease_use"
+kind = "INVALID_INPUT"
+operation = "acknowledge_writer_lease"
+base = "exact lease with terminal event"
+mutation = "attempt acknowledgement or submission after REVOKED/SUPERSEDED"
+
+[[fixture]]
+id = "F031_valid_package_submission"
+kind = "VALID_BASELINE"
+operation = "record_package_submission"
+base = "acknowledged active lease, complete package-only diff, evidence and line report"
+mutation = "none"
+
+[[fixture]]
+id = "F032_submission_out_of_scope_path"
+kind = "INVALID_INPUT"
+operation = "record_package_submission"
+base = "F031_valid_package_submission"
+mutation = "changed_files includes root Cargo.toml"
+
+[[fixture]]
+id = "F033_submission_incomplete_diff"
+kind = "INVALID_INPUT"
+operation = "record_package_submission"
+base = "F031_valid_package_submission"
+mutation = "omit one changed path or duplicate a changed-file entry"
+
+[[fixture]]
+id = "F034_submission_missing_evidence"
+kind = "INVALID_INPUT"
+operation = "record_package_submission"
+base = "F031_valid_package_submission"
+mutation = "remove one ticket-required outcome and omit its UNAVAILABLE entry"
+
+[[fixture]]
+id = "F035_submission_line_budget_overflow"
+kind = "INVALID_INPUT"
+operation = "record_package_submission"
+base = "F031_valid_package_submission"
+mutation = "hand-written total exceeds hard package limit"
+
+[[fixture]]
+id = "F036_valid_independent_review"
+kind = "VALID_BASELINE"
+operation = "record_independent_review"
+base = "exact submission, different reviewer and independently recomputed claims"
+mutation = "none"
+
+[[fixture]]
+id = "F037_self_review"
+kind = "INVALID_INPUT"
+operation = "record_independent_review"
+base = "F036_valid_independent_review"
+mutation = "reviewer identity equals ticket writer"
+
+[[fixture]]
+id = "F038_review_recalculation_mismatch"
+kind = "INVALID_INPUT"
+operation = "record_independent_review"
+base = "F036_valid_independent_review"
+mutation = "recomputed API/diff/evidence digest differs from submission"
+
+[[fixture]]
+id = "F039_valid_package_handoff"
+kind = "VALID_BASELINE"
+operation = "publish_package_handoff"
+base = "accepted independent review and exact integration recalculation"
+mutation = "none"
+
+[[fixture]]
+id = "F040_handoff_nonaccepted_review"
+kind = "INVALID_INPUT"
+operation = "publish_package_handoff"
+base = "exact submission and review"
+mutation = "review verdict is REQUEST_CHANGES or REJECT"
+
+[[fixture]]
+id = "F041_record_unknown_field_or_wrong_kind"
+kind = "INVALID_INPUT"
+operation = "publish_package_handoff"
+base = "schema-shaped synthetic control record"
+mutation = "add unknown load-bearing field or change record_kind"
+
+[[fixture]]
+id = "F042_record_complete_file_digest_mismatch"
+kind = "INVALID_INPUT"
+operation = "publish_package_handoff"
+base = "immutable record ref and committed file"
+mutation = "external exact_record_file_sha256 differs from committed bytes"
+
+[[fixture]]
+id = "F043_same_operation_same_input"
+kind = "RECOVERY_VIEW"
+operation = "supersede_control_record"
+base = "previous successful operation and byte-identical canonical input"
+mutation = "retry same operation ID"
+
+[[fixture]]
+id = "F044_same_operation_different_input"
+kind = "RECOVERY_VIEW"
+operation = "supersede_control_record"
+base = "previous successful operation identity"
+mutation = "retry same operation ID with changed canonical input"
+
+[[fixture]]
+id = "F045_recovery_committed_exact"
+kind = "RECOVERY_VIEW"
+operation = "recover_control_operation"
+base = "target record exists with exact operation/input/blob/file digest"
+mutation = "none"
+
+[[fixture]]
+id = "F046_recovery_absence_proven"
+kind = "RECOVERY_VIEW"
+operation = "recover_control_operation"
+base = "target absent and repository/operation ledger proves no write"
+mutation = "none"
+
+[[fixture]]
+id = "F047_recovery_conflicting_target"
+kind = "RECOVERY_VIEW"
+operation = "recover_control_operation"
+base = "target path exists"
+mutation = "record input identity or digest differs from original operation"
+
+[[fixture]]
+id = "F048_recovery_evidence_ambiguous"
+kind = "RECOVERY_VIEW"
+operation = "recover_control_operation"
+base = "target not observable and ledger/transport evidence incomplete"
+mutation = "none"
+
+[[fixture]]
+id = "F049_partial_or_unreadable_record"
+kind = "RECOVERY_VIEW"
+operation = "recover_control_operation"
+base = "intended target exists"
+mutation = "record is partial, unreadable, schema-invalid or signature-invalid"
+
+[[fixture]]
+id = "F050_valid_supersession_pair"
+kind = "VALID_BASELINE"
+operation = "supersede_control_record"
+base = "old immutable record plus compatible replacement and closed reason"
+mutation = "none"
+
+[[fixture]]
+id = "F051_closed_lease_terminal_event"
+kind = "VALID_BASELINE"
+operation = "revoke_or_supersede_lease"
+base = "active lease and exact event chain"
+mutation = "append REVOKED/LEASE_REVOKED or SUPERSEDED/LEASE_SUPERSEDED"
+
+[[fixture]]
+id = "F052_package_handoff_no_gate_or_wave_authority"
+kind = "POLICY_VIEW"
+operation = "publish_package_handoff"
+base = "valid accepted package handoff"
+mutation = "attempt to infer G0, W0 or launch-state advancement from handoff presence"
+
+[invariants]
+all_fixtures_are_descriptors = true
+fixture_materialization_creates_authority = false
+fixture_actor_ids_are_synthetic = true
+fixture_paths_are_repository_relative = true
+fixture_mutations_are_single_load_bearing_changes = true

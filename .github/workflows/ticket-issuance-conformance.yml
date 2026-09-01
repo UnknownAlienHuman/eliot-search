@@ -1,0 +1,37 @@
+name: Ticket issuance conformance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ticket-issuance-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate ticket issuance operation and probe closure
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate repository topology and P00 zero state
+        shell: pwsh
+        run: |
+          & ./tools/validate-swarm.ps1 -Json
+          & ./tools/validate-p00-ticket-drafts.ps1 -Json
+
+      - name: Validate record schemas and operation ownership
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
+
+      - name: Validate synthetic conformance corpus
+        shell: pwsh
+        run: ./tools/validate-ticket-issuance-conformance.ps1 -Json
