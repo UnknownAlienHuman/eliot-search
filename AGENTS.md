@@ -11,33 +11,39 @@ A writer reads only:
 2. `docs/handoff/AUTHORITY_MAP.md`;
 3. its exact package entry in `swarm/crates.toml`;
 4. its exact foundation/function entry in `swarm/function-packets.toml`;
-5. its exact current stage entry in `swarm/stages.toml`;
-6. when the package is reused after its earliest wave, its one exact override in
+5. its exact package entry in the applicable `swarm/modules/*.toml` packet;
+6. its exact current stage entry in `swarm/stages.toml`;
+7. when the package is reused after its earliest wave, its one exact override in
    `swarm/stage-readsets.toml`;
-7. `swarm/ASSIGNMENT_PROTOCOL.md` and one package assignment;
-8. the exact primary contract or package-local `FUNCTIONS.md` declared by the function registry;
-9. the current stage `shared_read_set` and only the stage-override supplements/additional files;
-10. accepted public dependency and prior-stage handoff/API/configuration/evidence digests named by the
+8. `swarm/ASSIGNMENT_PROTOCOL.md` and one package assignment;
+9. the exact primary contract or package-local `FUNCTIONS.md` declared by the function registry;
+10. the current stage `shared_read_set` and only the stage-override supplements/additional files;
+11. accepted public dependency and prior-stage handoff/API/configuration/evidence digests named by the
     immutable ticket;
-11. named package-local/shared fixture references owned by the applicable qualification registry.
+12. named package-local/shared fixture references owned by the applicable qualification registry.
 
-At issuance, these sources are materialized at one exact base commit into the immutable writer-context
-artifact bound by the ticket and lease. The writer does not browse the repository to assemble additional
-context.
+At issuance, these sources and exact registry fragments are materialized at one exact base commit into
+the immutable writer-context artifact bound by the ticket and lease. The writer does not browse the
+repository to assemble additional context.
 
 W0 foundation writers consume their exact P00 contract-pack entry rather than a package-local
 `FUNCTIONS.md`. For a reused package, accepted public handoffs **replace previous-stage documents**;
 prior stage packets and dependency implementation internals are not accumulated into the new context.
 
 The architecture master is exception-only: a demonstrated contradiction or missing load-bearing field
-stops work and uses `CONTRACT_CHANGE_TEMPLATE.md`.
+stops work and uses `CONTRACT_CHANGE_TEMPLATE.md`. The integration-owned coverage crosswalk may be used
+to diagnose the missing owner, but it cannot override Part I or authorize implementation.
 
-## Exact dependencies, functions, stages and launch
+## Exact dependencies, functions, modules, stages and launch
 
 - `swarm/crates.toml` is the exact package/path/dependency/earliest-wave/assignment/configuration/
   qualification registry.
 - `swarm/function-packets.toml` is the exact primary function/contract packet and package write-scope
   registry for all 45 packages.
+- `swarm/module-packets.toml` plus `swarm/modules/*.toml` is the exact one-per-package logical module and
+  public-entry registry.
+- `swarm/coverage/manifest.toml` plus `swarm/coverage/*.toml` is the integration-owned exhaustive
+  section/capability/invariant/port/type/schema/recipe/reason/task/delivery ownership crosswalk.
 - `swarm/stages.toml` is the exact W0–W10 package set, shared stage context and gate/receipt ordering
   registry.
 - `swarm/stage-readsets.toml` is the exact replacement-context registry for every package reused after
@@ -47,7 +53,7 @@ stops work and uses `CONTRACT_CHANGE_TEMPLATE.md`.
 - Dependency prose in package instructions is explanatory and cannot override any machine registry.
 - Cargo manifest and `swarm/crates.toml` dependency sets must match before merge.
 - `swarm/launch-state.toml` alone decides whether an **issued ticket** may be considered for readiness.
-- Presence in Cargo, a future stage, README, function packet, stage/read-set entry, qualification packet,
+- Presence in Cargo, a future stage, README, function/module/coverage packet, qualification packet,
   assignment or ticket/context draft is not authorization.
 - A package agent never selects an external artifact version or marks a qualification probe `PASS`
   without an integration-owned ticket and immutable executed evidence.
@@ -85,7 +91,7 @@ The integration owner builds one static package context from:
 
 ```text
 root/package instructions
-+ package and function registry entries
++ package, function, module and stage registry entries
 + assignment and primary function/contract
 + current stage shared_read_set
 + one later-stage override when applicable
@@ -96,6 +102,7 @@ The sole P00 exception is `search-contracts`: its exact manifest-closed P00 cont
 to twenty-four declared source files because one writer owns the shared schema freeze. That exception:
 
 - must equal the exact P00 manifest plus the fixed integration instructions/registry fragments;
+- must include the exact package module entry;
 - must materialize to exactly one writer-visible artifact;
 - may not add ad-hoc architecture, dependency-source or unrelated stage files;
 - does not apply to `search-domain`, `search-ports` or any W1+ package.
@@ -119,14 +126,14 @@ Missing or contradictory context stops the ticket. The writer may not widen its 
 
 - one writer, one Cargo package, one isolated worktree;
 - writer edits only the exact `write_scope` from `swarm/function-packets.toml`;
-- stage overrides never widen write scope;
+- stage overrides and module packets never widen write scope;
 - root Cargo/lockfile/toolchain/CI, architecture, contract pack, generated schemas, `swarm/`,
   `config/sections.toml`, qualification registries, shared fixtures and cross-package changes belong to
   the integration owner;
 - a package that owns a configuration section implements the section validator/digest/change behavior
-  inside the package but does not edit the central registry or another owner's settings;
-- package agents do not repair/redefine dependencies or an accepted prior-stage API; they request a
-  contract/port/configuration change.
+  inside its package but does not edit the central registry or another owner's settings;
+- package agents do not repair/redefine dependencies, shared types, ports, module ownership or an
+  accepted prior-stage API; they request a contract/port/configuration/coverage change.
 
 ## Global invariants
 
@@ -161,6 +168,11 @@ Missing or contradictory context stops the ticket. The writer may not widen its 
     central gate.
 23. A package draft, structural validator or review candidate is not an issued assignment, accepted
     handoff, gate or wave receipt.
+24. Every normative architecture section, capability, invariant, shared port, named type/schema, recipe,
+    reason namespace, package task and delivery slice has explicit package/module ownership; an orphan
+    obligation blocks merge and ticket issuance.
+25. Every shared port has one exact implementation owner; floating “selected implementation” or generic
+    “runtime adapter” ownership is forbidden.
 
 ## Layer ownership
 
@@ -197,6 +209,18 @@ The function packet specifies behavior, not mandatory Rust spelling. A later-sta
 narrow obligations but cannot weaken or replace the accepted base operation contract. A writer may
 improve internal module layout but cannot add a second owner, widen context/write boundaries or infer
 unspecified behavior from another package's implementation.
+
+## Module and coverage rule
+
+Every package has exactly one logical module packet. Module names are package-local; the public entry
+module is the only cross-package entry. An implementation may split an internal file only inside the
+same declared responsibility and line budget. It may not create a second state owner, public bypass or
+cross-package internal dependency.
+
+The integration owner validates the coverage crosswalk directly against normative sources. Static
+coverage means an owner is named; it does not mean the module or operation exists in Rust or that its
+behavior is accepted. Package submission must prove that its implemented public operations and private
+state correspond to the exact function and module packets.
 
 ## Configuration rule
 
