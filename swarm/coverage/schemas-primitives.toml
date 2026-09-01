@@ -1,0 +1,113 @@
+schema_version = 1
+packet = "primitives"
+canonical_id_counter_count = 50
+canonical_primitive_family_count = 12
+status = "STATIC_PRIMITIVE_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+source_files = ["docs/contracts/p00/CANONICAL_TYPES.md", "docs/contracts/p00/TYPE_REGISTRY.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "ids"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "NONE"
+state_owner_module = "NONE"
+
+canonical_id_counters = [
+  "InstallationId",
+  "InstallationIncarnationId",
+  "DataRootId",
+  "OwnerEpoch",
+  "Epoch",
+  "CollectionGenerationId",
+  "CollectionRouteRevision",
+  "CatalogRevision",
+  "MembershipRevision",
+  "PortfolioRevision",
+  "AccessPolicyRevision",
+  "ShadowFenceRevision",
+  "PurgeFenceRevision",
+  "OverlayRevision",
+  "ObservationCursorRevision",
+  "CorpusId",
+  "ReferencePortfolioId",
+  "SourceNamespaceId",
+  "SourceOwnerGeneration",
+  "SourceId",
+  "PathBindingId",
+  "SourceMembershipId",
+  "SourceRevisionId",
+  "WorkspaceId",
+  "WorkspaceViewRevisionId",
+  "RootBindingId",
+  "RepositoryLineageId",
+  "MaterializationId",
+  "RepresentationId",
+  "UnitId",
+  "ProjectionMembershipId",
+  "AccessPartitionId",
+  "ScoringPartitionId",
+  "ScoringDocumentId",
+  "ProjectionProfileSetId",
+  "FusionProfileId",
+  "ScopeDomainId",
+  "AccessDomainId",
+  "ConfidentialityDomainId",
+  "EncryptionKeyDomainId",
+  "RetentionDomainId",
+  "ErasureDomainId",
+  "ResidencyPolicyBindingId",
+  "ObjectResidencyKeyDigest",
+  "PointIdentityDigest",
+  "QuerySnapshotFingerprint",
+  "PlanFingerprint",
+  "HandleTokenDigest",
+  "BufferSnapshotId",
+  "ImportedSnapshotId",
+]
+
+[[primitive_family]]
+id = "uuid_backed_ids"
+canonical_rule = "distinct_newtype_json_lowercase_hyphenated_uuid_deterministic_cbor_16_bytes"
+
+[[primitive_family]]
+id = "owner_epoch"
+canonical_rule = "nonzero_unsigned_64_bit_integer"
+
+[[primitive_family]]
+id = "epoch"
+canonical_rule = "signed_64_bit_integer_zero_through_i64_max_exclusive"
+
+[[primitive_family]]
+id = "revision_and_generation_counters"
+canonical_rule = "dedicated_unsigned_newtype_zero_only_when_schema_defines_initial_state"
+
+[[primitive_family]]
+id = "fixed_digests"
+canonical_rule = "Blake3Digest32_and_Sha256Digest32_fixed_32_bytes_JSON_lowercase_hex"
+
+[[primitive_family]]
+id = "source_owner_generation"
+canonical_rule = "dedicated_BLAKE3_digest_wrapper_never_integer"
+
+[[primitive_family]]
+id = "opaque_identity_and_reference"
+canonical_rule = "nonempty_bounded_UTF8_or_canonical_bytes_no_consumer_parsing"
+
+[[primitive_family]]
+id = "raw_bytes_in_JSON"
+canonical_rule = "base64url_without_padding_never_implicit_UTF8"
+
+[[primitive_family]]
+id = "opaque_handle_token"
+canonical_rule = "32_to_64_CSPRNG_bytes_base64url_never_deterministically_derived"
+
+[[primitive_family]]
+id = "handle_token_digest"
+canonical_rule = "domain_separated_BLAKE3_256_server_side_only"
+
+[[primitive_family]]
+id = "timestamp"
+canonical_rule = "RFC3339_UTC_Z_exactly_six_fractional_digits_at_load_bearing_boundaries"
+
+[[primitive_family]]
+id = "duration_and_deadline"
+canonical_rule = "unsigned_milliseconds_never_floating_point"
