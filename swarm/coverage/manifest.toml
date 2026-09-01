@@ -8,20 +8,26 @@ status = "STATIC_OWNERSHIP_COVERAGE_CLOSED_NOT_IMPLEMENTED"
 
 package_registry = "swarm/crates.toml"
 function_registry = "swarm/function-packets.toml"
+operation_registry = "swarm/coverage/operations.toml"
 module_registry = "swarm/module-packets.toml"
 stage_registry = "swarm/stages.toml"
 configuration_registry = "config/sections.toml"
+task_registry = "swarm/coverage/tasks.toml"
+architecture_section_registry = "swarm/coverage/architecture-sections.toml"
 capability_registry = "swarm/coverage/capabilities.toml"
 invariant_registry = "swarm/coverage/invariants.toml"
 port_registry = "swarm/coverage/ports.toml"
 schema_registry = "swarm/coverage/schemas.toml"
+recipe_registry = "swarm/coverage/recipes.toml"
 delivery_registry = "swarm/coverage/delivery-slices.toml"
 reason_registry = "swarm/coverage/reasons.toml"
 
 package_count = 45
 foundation_package_count = 3
 package_function_packet_count = 42
+operation_count = "DERIVED_BY_VALIDATOR"
 module_packet_count = 45
+package_assignment_task_count = 45
 architecture_section_count = 40
 architecture_invariant_count = 30
 capability_cell_count = 31
@@ -37,6 +43,7 @@ one_trait_owner_per_shared_port = true
 one_concrete_implementation_owner_per_shared_port = true
 one_primary_owner_set_per_capability_cell = true
 one_package_module_packet_per_package = true
+one_assignment_task_per_package = true
 all_packages_covered_by_delivery_slice = true
 architecture_master_access = "integration_audit_only"
 
