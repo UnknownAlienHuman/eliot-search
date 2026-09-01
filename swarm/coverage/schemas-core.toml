@@ -1,73 +1,7 @@
 schema_version = 1
 packet = "core"
-schema_count = 33
+schema_count = 14
 status = "STATIC_SCHEMA_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
-
-[[group]]
-id = "canonical_digest"
-schemas = ["VersionedContentDigest"]
-source_files = ["docs/contracts/p00/CANONICAL_TYPES.md"]
-shape_owner_package = "search-contracts"
-shape_owner_module = "canonical"
-meaning_owner_package = "search-domain"
-meaning_owner_module = "decisions"
-state_owner_package = "NONE"
-state_owner_module = "NONE"
-
-[[group]]
-id = "contract_bounds"
-schemas = ["ContractBoundsV1", "LimitClass"]
-source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
-shape_owner_package = "search-contracts"
-shape_owner_module = "bounds"
-meaning_owner_package = "search-domain"
-meaning_owner_module = "decisions"
-state_owner_package = "NONE"
-state_owner_module = "NONE"
-
-[[group]]
-id = "reference_wrappers"
-schemas = ["CorpusOrPortfolioId", "WorkspaceOrCorpusRef", "SourceViewRef", "AuthorizedScopeRef", "ExactScanPlanRef"]
-source_files = ["docs/contracts/p00/TYPE_REGISTRY.md", "docs/contracts/p00/QUERY_AND_RESULTS.md"]
-shape_owner_package = "search-contracts"
-shape_owner_module = "ids"
-meaning_owner_package = "search-domain"
-meaning_owner_module = "decisions"
-state_owner_package = "NONE"
-state_owner_module = "NONE"
-
-[[group]]
-id = "coverage_records"
-schemas = ["LegDescriptor", "CoverageGap", "CoverageUnknown", "ObservationFreshness"]
-source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
-shape_owner_package = "search-contracts"
-shape_owner_module = "query"
-meaning_owner_package = "search-domain"
-meaning_owner_module = "coverage"
-state_owner_package = "search-result-projector"
-state_owner_module = "coverage"
-
-[[group]]
-id = "port_support"
-schemas = ["OperationContext", "MutationIdentity", "PortReceipt", "BoundedPage<T>", "BoundedStream<T>"]
-source_files = ["docs/contracts/p00/TYPE_REGISTRY.md"]
-shape_owner_package = "search-ports"
-shape_owner_module = "context"
-meaning_owner_package = "NONE"
-meaning_owner_module = "NONE"
-state_owner_package = "NONE"
-state_owner_module = "NONE"
-
-[[group]]
-id = "ranking_trace"
-schemas = ["BoundedNonContentRankingTrace"]
-source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
-shape_owner_package = "search-contracts"
-shape_owner_module = "query"
-meaning_owner_package = "search-domain"
-meaning_owner_module = "ordering"
-state_owner_package = "search-retrieval-executor"
-state_owner_module = "fusion"
 
 [[group]]
 id = "safe_leg"
@@ -147,8 +81,8 @@ state_owner_package = "search-provider-protocol"
 state_owner_module = "progress"
 
 [[group]]
-id = "noncontent_metadata"
-schemas = ["BoundedNonContentMetadata", "MetadataScalar"]
+id = "metadata_scalar"
+schemas = ["MetadataScalar"]
 source_files = ["docs/contracts/p00/SUPPORT_SCHEMAS.md"]
 shape_owner_package = "search-contracts"
 shape_owner_module = "canonical"
