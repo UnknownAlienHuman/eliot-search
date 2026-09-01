@@ -16,7 +16,7 @@ jobs:
   generate-and-audit:
     if: ${{ !contains(github.event.head_commit.message, '[generated-coverage]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,51 +24,69 @@ jobs:
           persist-credentials: true
           fetch-depth: 1
 
-      - name: Apply reviewed semantic routing refinements
-        run: python tools/patch-coverage-router-v2.py
+      - name: Apply reviewed exact routing and structural-role refinements
+        run: |
+          python tools/patch-coverage-router-v2.py
+          python tools/patch-coverage-closure-v3.py
 
-      - name: Generate exact operation, documentation, dependency and module coverage registries
-        run: python tools/generate-coverage-graph-v2.py --json
+      - name: Generate exact relation graph and bounded package maps
+        run: |
+          python tools/generate-coverage-graph-v2.py --json
+          python tools/generate-package-maps-v2.py --json
 
-      - name: Print routes requiring review
+      - name: Validate graph, maps, Cargo topology and legacy architecture closure
+        run: |
+          python tools/generate-coverage-graph-v2.py --check --json
+          python tools/generate-package-maps-v2.py --check --json
+          python tools/validate-coverage-graph-v2.py --json
+          python tools/validate-package-maps-v2.py --json
+          python tools/validate-architecture-coverage.py --json
+
+      - name: Print final bounded summary
         run: |
           python - <<'PY'
           import sys
           sys.path.insert(0, 'tools')
           from coverage_graph_v2 import build_graph
+          from package_maps_v2 import build_outputs
           graph = build_graph()
-          for route_kind in ('public_facade', 'semantic_low'):
-              rows = [row for row in graph['operation_rows'] if row['route_kind'] == route_kind]
-              print(f'\n## {route_kind}: {len(rows)}')
-              for row in rows:
-                  print(f"{row['id']} -> {row['module']} | score={row['score']} | contexts={row['source_contexts']}")
-          print(f"\n## weak_modules: {len(graph['weak_modules'])}")
-          for module in graph['weak_modules']:
-              print(module)
+          _, stats = build_outputs()
+          print({
+              'packages': len(graph['package_rows']),
+              'modules': len(graph['module_rows']),
+              'operations': len(graph['operation_rows']),
+              'documentation_nodes': len(graph['documentation_rows']),
+              'dependency_edges': len(graph['dependency_rows']),
+              'weak_modules': graph['weak_modules'],
+              'public_facades': sum(row['route_kind'] == 'public_facade' for row in graph['operation_rows']),
+              'semantic_low': sum(row['route_kind'] == 'semantic_low' for row in graph['operation_rows']),
+              'package_map_files': stats['map_files'],
+              'dependency_cycle': stats['cycle'],
+          })
           PY
 
-      - name: Validate generated graph
-        run: |
-          python tools/generate-coverage-graph-v2.py --check --json
-          python tools/validate-coverage-graph-v2.py --json
-          python tools/validate-architecture-coverage.py --json
-
-      - name: Commit generated coverage graph
+      - name: Commit generated coverage graph and indexes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             tools/coverage_graph_v2.py \
+            tools/validate-coverage-graph-v2.py \
             tools/validate-architecture-coverage.py \
             swarm/coverage/manifest.toml \
             swarm/coverage/operation-modules.toml \
             swarm/coverage/documentation-nodes.toml \
             swarm/coverage/dependency-edges.toml \
             swarm/coverage/module-coverage.toml \
-            docs/handoff/COVERAGE_GRAPH_V2.md
+            swarm/coverage/package-map-index.toml \
+            swarm/coverage/documentation-file-index-v2.toml \
+            swarm/coverage/integration-map-v2.toml \
+            swarm/coverage/package-maps \
+            docs/handoff/COVERAGE_GRAPH_V2.md \
+            docs/handoff/PACKAGE_MAP_INDEX_V2.md
           if git diff --cached --quiet; then
             echo "No generated changes."
             exit 0
           fi
-          git commit -m "coverage: generate exact relation graph [generated-coverage]"
+          git commit -m "coverage: generate exact package relation maps [generated-coverage]"
           git push origin HEAD:audit/coverage-recheck-v2
