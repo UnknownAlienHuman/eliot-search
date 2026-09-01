@@ -1,0 +1,95 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 3
+package_count = 8
+module_count = 78
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-lexical"
+path = "crates/search-lexical"
+operation_source = "crates/search-lexical/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "config", "profile", "tokenize", "sparse", "statistics", "fixture", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner"
+operation_source = "crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "profile", "schema", "input", "point_set", "manifest", "diff", "migration", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity"
+operation_source = "crates/search-index-qdrant/search-point-identity/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "key", "canonical", "digest", "uuid", "collision", "batch", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor"
+operation_source = "crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "artifact", "identity", "process", "health", "recovery", "shutdown", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge"
+operation_source = "crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 10
+modules = ["lib", "api", "config", "capability", "schema", "mutation", "readback", "query", "admin", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-publication"
+path = "crates/search-index-qdrant/search-publication"
+operation_source = "crates/search-index-qdrant/search-publication/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 12
+modules = ["lib", "api", "command", "actor", "intent", "stage", "readback", "commit", "recovery", "reclaim", "doctor", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins"
+operation_source = "crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "identity", "registry", "acquire", "release", "watermark", "cleanup", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
+
+[[package]]
+name = "search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer"
+operation_source = "crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 9
+modules = ["lib", "api", "config", "candidate", "plan", "delete", "readback", "recovery", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
