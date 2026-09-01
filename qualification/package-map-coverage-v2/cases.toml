@@ -34,7 +34,7 @@ mandatory = true
 result = "UNAVAILABLE"
 
 [[case]]
-id = "dependency_wave_monotonic"
+id = "later_wave_dependency_requires_exact_reentry"
 mandatory = true
 result = "UNAVAILABLE"
 
@@ -114,7 +114,7 @@ mandatory = true
 result = "UNAVAILABLE"
 
 [[case]]
-id = "port_implementation_module_exact"
+id = "port_method_module_exact"
 mandatory = true
 result = "UNAVAILABLE"
 
