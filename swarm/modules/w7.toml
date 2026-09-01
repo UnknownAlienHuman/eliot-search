@@ -1,0 +1,18 @@
+schema_version = 1
+project = "eliot-search"
+earliest_wave = 7
+package_count = 1
+module_count = 11
+status = "LOGICAL_MODULE_BOUNDARIES_NOT_IMPLEMENTED"
+implementation_authorized_by_this_packet = false
+
+[[package]]
+name = "search-retention"
+path = "crates/search-runtime/search-retention"
+operation_source = "crates/search-runtime/search-retention/FUNCTIONS.md"
+public_entry_module = "api"
+module_count = 11
+modules = ["lib", "api", "config", "roots", "mark", "sweep", "purge", "tombstone", "restore", "recovery", "error"]
+all_public_operations_enter_through_public_entry = true
+package_state_must_remain_inside_declared_modules = true
+cross_package_module_imports_require_public_handoff = true
