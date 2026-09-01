@@ -1,0 +1,100 @@
+schema_version = 1
+source = "docs/contracts/p00/RECIPES.md"
+result_source = "docs/contracts/p00/RECIPE_RESULTS.md"
+recipe_count = 11
+status = "STATIC_RECIPE_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+registry_shape_owner_package = "search-contracts"
+registry_shape_owner_module = "recipes"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+request_compiler_package = "search-query-planner"
+request_compiler_module = "recipe"
+protocol_owner_package = "search-provider-protocol"
+protocol_owner_module = "request"
+implementation_authorized_by_this_registry = false
+
+[[recipe]]
+id = "locate@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "locate@1"
+result_schema = "SearchCandidateSet"
+primary_execution_packages = ["search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-result-projector"]
+
+[[recipe]]
+id = "find_text@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "find_text@1"
+result_schema = "SearchCandidateSet"
+primary_execution_packages = ["search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-result-projector"]
+
+[[recipe]]
+id = "inspect_entity@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "inspect_entity@1"
+result_schema = "EntityInspectionResult"
+primary_execution_packages = ["search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-result-projector"]
+
+[[recipe]]
+id = "compare_implementations@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "compare_implementations@1"
+result_schema = "CompareImplementationsResult"
+primary_execution_packages = ["search-subject-resolver", "search-comparator", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-result-projector"]
+
+[[recipe]]
+id = "explore_entity@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "explore_entity@1"
+result_schema = "EntityExplorationResult"
+primary_execution_packages = ["search-subject-resolver", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-result-projector"]
+
+[[recipe]]
+id = "corpus_profile@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "corpus_profile@1"
+result_schema = "CorpusProfileResult"
+primary_execution_packages = ["search-query-planner", "search-retrieval-executor", "search-result-projector"]
+
+[[recipe]]
+id = "corpus_delta@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "corpus_delta@1"
+result_schema = "CorpusDeltaResult"
+primary_execution_packages = ["search-source-registry", "search-query-planner", "search-result-projector"]
+
+[[recipe]]
+id = "provenance@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "provenance@1"
+result_schema = "ProvenanceResult"
+primary_execution_packages = ["search-revision-store", "search-query-planner", "search-result-projector"]
+
+[[recipe]]
+id = "compile_exact_scan@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "compile_exact_scan@1"
+result_schema = "ExactScanPlan"
+primary_execution_packages = ["search-exact"]
+
+[[recipe]]
+id = "execute_exact_scan@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "execute_exact_scan@1"
+result_schema = "ExactExecutionReport"
+primary_execution_packages = ["search-exact"]
+
+[[recipe]]
+id = "expand_handle@1"
+request_schema = "SearchRecipeRequest"
+body_schema = "expand_handle@1"
+result_schema = "HandleExpansionResult"
+primary_execution_packages = ["search-handles", "search-continuation", "search-candidate-validator", "search-result-projector"]
+
+[invariants]
+exact_registry_only = true
+body_tag_must_match_recipe = true
+result_tag_must_match_recipe = true
+client_authored_vendor_plan_allowed = false
+raw_vendor_state_in_result_allowed = false
+recipe_availability_grants_authority = false
+complete_scope_from_top_k_allowed = false
