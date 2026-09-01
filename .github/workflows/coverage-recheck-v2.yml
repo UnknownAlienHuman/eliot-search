@@ -1,0 +1,53 @@
+name: Coverage recheck v2
+
+on:
+  push:
+    branches:
+      - audit/coverage-recheck-v2
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-recheck-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Run existing architecture coverage validator
+        run: python tools/validate-architecture-coverage.py --json
+
+      - name: Run second-pass graph audit
+        run: python tools/audit-coverage-v2.py > audit-report.json
+
+      - name: Print audit summary and bounded findings
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('audit-report.json').read_text(encoding='utf-8'))
+          print(json.dumps({
+              'status': report['status'],
+              'base_commit': report['base_commit'],
+              'counts': report['counts'],
+              'gap_counts': report['gap_counts'],
+          }, indent=2, sort_keys=True))
+          for name, values in report['gaps'].items():
+              if not values:
+                  continue
+              print(f'\n## {name} ({len(values)})')
+              for value in values[:80]:
+                  print(json.dumps(value, sort_keys=True) if isinstance(value, dict) else value)
+              if len(values) > 80:
+                  print(f'... {len(values) - 80} more')
+          PY
