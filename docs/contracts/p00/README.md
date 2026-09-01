@@ -8,15 +8,17 @@ Part I wins; contradictions stop work and update this pack through the integrati
 
 - `search-contracts`: every file except port-support implementation ownership remains with
   `search-ports` as marked.
-- `search-domain`: canonical types, type registry, support schemas, source graph, query/results, recipe
-  results and reasons, then accepted contracts digest.
-- `search-ports`: canonical types, type registry port-support section, support schemas port note, port
-  operations, reasons and accepted contracts digest.
+- `search-domain`: canonical types, type registry/completions, support schemas, source graph,
+  query/results, recipe results and reasons, then accepted contracts digest.
+- `search-ports`: canonical types, type registry/completions port-support sections, support schemas port
+  note, port operations, reasons and accepted contracts digest.
 
 ## Files
 
 - `CANONICAL_TYPES.md` — primitive encodings and digest domains.
 - `TYPE_REGISTRY.md` — helper types, owners, visibility, bounds and enums.
+- `TYPE_COMPLETIONS.md` — named types used by P00 schemas but previously missing from the registry:
+  `RecipeIdV1`, `RecipeBodyV1`, `ComparisonAxis`, `ProtocolRange` and `PackageOpaque`.
 - `SUPPORT_SCHEMAS.md` — ranking, behavior, exact, readiness and subordinate records.
 - `CONTRACT_CHALLENGES.md` — precedence and ambiguity decisions.
 - `SOURCE_GRAPH.md` — source, ownership, residency, view and preparation schemas.
