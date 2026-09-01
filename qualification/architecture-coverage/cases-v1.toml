@@ -1,0 +1,204 @@
+schema_version = 1
+suite = "architecture_coverage_closure_v1"
+status = "STRUCTURAL_NOT_EXECUTED"
+case_count = 40
+
+[[case]]
+id = "exact_45_package_set"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_45_assignment_set"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_orphan_assignment"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "three_foundation_contract_sources"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_42_package_function_sources"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "no_orphan_FUNCTIONS_file"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "source_derived_operation_per_nonfoundation_package"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "package_qualified_operation_uniqueness"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_45_module_packets"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_479_logical_modules"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "public_entry_module_per_package"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "module_name_and_count_bounds"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_S0_through_S39_sections"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "section_package_and_module_owners"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_C00_through_C30_capabilities"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "capability_primary_and_state_owners"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_INV01_through_INV30"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "invariant_enforcement_module_owners"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_23_shared_ports"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_port_method_inventory"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "single_port_trait_owner"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "single_port_implementation_owner"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "clock_private_daemon_adapter"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "residency_policy_revision_store_owner"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_20_configuration_sections"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "configuration_owner_and_packet_exist"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_115_TYPE_REGISTRY_symbols"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_5_named_type_completions"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_217_unique_P00_type_schema_symbols"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "all_schema_shape_meaning_state_owners_valid"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "all_top_level_P00_schema_labels_registered"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_11_recipe_registry"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "recipe_request_result_execution_owners"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_51_reason_codes"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "exact_P00_through_P18_delivery_slices"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "every_package_in_delivery_slice"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "delivery_outputs_and_exit_evidence"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "P00_type_completion_manifest_and_context_closure"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "launch_authority_remains_P00_W0"
+mandatory = true
+result = "UNAVAILABLE"
+
+[[case]]
+id = "manual_readonly_coverage_workflow"
+mandatory = true
+result = "UNAVAILABLE"
