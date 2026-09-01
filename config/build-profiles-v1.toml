@@ -1,0 +1,75 @@
+schema_version = 1
+project = "eliot-search"
+status = "FROZEN_BOOTSTRAP_NOT_PRODUCT_ACCEPTED"
+default_profile = "P00_FOUNDATION"
+automatic_profile_upgrade = false
+automatic_optional_provider_enablement = false
+cargo_locked_required = true
+warnings_are_errors = true
+windows_primary_target = "x86_64-pc-windows-msvc"
+
+[[profile]]
+id = "P00_FOUNDATION"
+minimum_stage = "W0"
+packages = ["search-contracts", "search-domain", "search-ports"]
+capabilities = ["contracts", "pure_domain", "vendor_neutral_ports"]
+external_artifacts = []
+product_claim = "NONE"
+default = true
+
+[[profile]]
+id = "DIRECT_BASELINE"
+minimum_stage = "W2"
+packages = [
+  "search-contracts",
+  "search-domain",
+  "search-ports",
+  "search-config",
+  "search-runtime-owner",
+  "search-os-secrets",
+  "search-control-redb",
+  "search-source-admission",
+  "search-source-registry",
+  "search-source-identity",
+  "search-safe-reader",
+  "search-revision-store",
+  "search-materializer",
+  "search-unitizer",
+  "search-provider-protocol",
+  "eliot-searchd",
+  "eliot-search",
+]
+capabilities = ["direct_source_read", "retained_revision", "materialization", "unitization"]
+external_artifacts = []
+product_claim = "BLOCKED_UNTIL_W2_G1"
+default = false
+
+[[profile]]
+id = "LEXICAL_BASELINE"
+minimum_stage = "W4"
+packages = ["ALL_NON_OPTIONAL_THROUGH_W4"]
+capabilities = ["direct_source_read", "qualified_lexical_index", "validated_candidates", "handles", "continuations"]
+external_artifacts = ["PINNED_QDRANT_SERVER", "PINNED_QDRANT_CLIENT"]
+product_claim = "BLOCKED_UNTIL_W4_G2"
+default = false
+
+[[profile]]
+id = "CODE_CURRENT"
+minimum_stage = "W5"
+packages = ["ALL_NON_OPTIONAL_THROUGH_W5"]
+capabilities = ["current_workspace", "authenticated_overlay", "code_enrichment", "reconciliation"]
+external_artifacts = ["PINNED_QDRANT_SERVER", "PINNED_QDRANT_CLIENT", "PINNED_RUST_PARSER_SET"]
+product_claim = "BLOCKED_UNTIL_W5_RECEIPT"
+default = false
+
+[[profile]]
+id = "OPTIONAL_DEPTH"
+minimum_stage = "W10"
+packages = ["search-model-provider", "eliot-search-model-worker", "eliot-search-doc-worker"]
+capabilities = ["SELECTED_CANDIDATE_ONLY"]
+external_artifacts = ["SEPARATELY_QUALIFIED_CANDIDATE_ONLY"]
+product_claim = "BLOCKED_UNTIL_G6"
+default = false
+requires_dedicated_adr = true
+requires_removal_fallback = true
+requires_migration_rollback_when_applicable = true
