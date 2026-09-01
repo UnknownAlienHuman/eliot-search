@@ -1,0 +1,95 @@
+schema_version = 1
+packet = "results"
+schema_count = 23
+status = "STATIC_SCHEMA_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+
+[[group]]
+id = "recipe_result_header"
+schemas = ["RecipeResultHeader"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "coverage"
+state_owner_package = "search-result-projector"
+state_owner_module = "card"
+
+[[group]]
+id = "subject_resolution_results"
+schemas = ["ResolvedSubject", "SubjectAmbiguitySet", "AmbiguousSubjectCandidate", "SubjectAmbiguityResult"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "search-subject-resolver"
+state_owner_module = "ambiguity"
+
+[[group]]
+id = "inspection_exploration_results"
+schemas = ["EntityInspectionResult", "EvidenceObservation", "EntityExplorationResult", "EntityGraphNode", "EntityGraphEdge"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "assurance"
+state_owner_package = "search-subject-resolver"
+state_owner_module = "ladder"
+secondary_state_owner_packages = ["search-result-projector"]
+
+[[group]]
+id = "comparison_results"
+schemas = ["CompareImplementationsResult", "CrossRepositoryBehaviorSet", "ComparableImplementation", "BehaviorComparison"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "decisions"
+state_owner_package = "search-comparator"
+state_owner_module = "result"
+
+[[group]]
+id = "corpus_results"
+schemas = ["CorpusProfileResult", "CorpusFacet", "CorpusDeltaResult", "CorpusChange"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "coverage"
+state_owner_package = "search-result-projector"
+state_owner_module = "coverage"
+
+[[group]]
+id = "provenance_results"
+schemas = ["ProvenanceResult", "ProvenanceStep"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "assurance"
+state_owner_package = "search-result-projector"
+state_owner_module = "evidence"
+secondary_state_owner_packages = ["search-revision-store"]
+
+[[group]]
+id = "handle_expansion_results"
+schemas = ["HandleExpansionResult", "HandleExpansionBody"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "eligibility"
+state_owner_package = "search-handles"
+state_owner_module = "expand"
+secondary_state_owner_packages = ["search-continuation", "search-result-projector"]
+
+[[group]]
+id = "recipe_result_union"
+schemas = ["RecipeResultV1"]
+source_files = ["docs/contracts/p00/RECIPE_RESULTS.md"]
+shape_owner_package = "search-contracts"
+shape_owner_module = "results"
+meaning_owner_package = "search-domain"
+meaning_owner_module = "outcomes"
+state_owner_package = "search-result-projector"
+state_owner_module = "card"
