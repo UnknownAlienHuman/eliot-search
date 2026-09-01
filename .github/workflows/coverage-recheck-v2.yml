@@ -27,6 +27,23 @@ jobs:
       - name: Generate exact operation, documentation, dependency and module coverage registries
         run: python tools/generate-coverage-graph-v2.py --json
 
+      - name: Print routes requiring review
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'tools')
+          from coverage_graph_v2 import build_graph
+          graph = build_graph()
+          for route_kind in ('public_facade', 'semantic_low'):
+              rows = [row for row in graph['operation_rows'] if row['route_kind'] == route_kind]
+              print(f'\n## {route_kind}: {len(rows)}')
+              for row in rows:
+                  print(f"{row['id']} -> {row['module']} | score={row['score']} | contexts={row['source_contexts']}")
+          print(f"\n## weak_modules: {len(graph['weak_modules'])}")
+          for module in graph['weak_modules']:
+              print(module)
+          PY
+
       - name: Validate generated graph
         run: |
           python tools/generate-coverage-graph-v2.py --check --json
