@@ -24,11 +24,12 @@ jobs:
           persist-credentials: true
           fetch-depth: 1
 
-      - name: Apply reviewed exact routing, structural-role and re-entry refinements
+      - name: Apply reviewed exact routing, structural-role, re-entry and parser refinements
         run: |
           python tools/patch-coverage-router-v2.py
           python tools/patch-coverage-closure-v3.py
           python tools/patch-progressive-reentry-v3.py
+          python tools/patch-legacy-coverage-parser-v3.py
 
       - name: Generate exact relation graph and bounded package maps
         run: |
@@ -77,6 +78,7 @@ jobs:
             tools/validate-architecture-coverage.py \
             tools/package_maps_v2.py \
             tools/validate-package-maps-v2.py \
+            swarm/coverage/ports.toml \
             swarm/coverage/manifest.toml \
             swarm/coverage/operation-modules.toml \
             swarm/coverage/documentation-nodes.toml \
