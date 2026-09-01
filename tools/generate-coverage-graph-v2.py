@@ -30,72 +30,6 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def patch_legacy_validator() -> None:
-    path = ROOT / "tools/validate-architecture-coverage.py"
-    text = path.read_text(encoding="utf-8")
-    text = replace_once(
-        text,
-        'semantic = section_between(type_registry, "## Baseline semantic registries", "## Coverage and freshness records")',
-        'semantic = section_between(type_registry, "## Baseline semantic registries", "## Coverage records")',
-        "semantic heading",
-    )
-    text = replace_once(
-        text,
-        'coverage = section_between(type_registry, "## Coverage and freshness records", "## Port-support records")',
-        'coverage = section_between(type_registry, "## Coverage records", "## Port support records — owned by `search-ports`")',
-        "coverage heading",
-    )
-    text = replace_once(
-        text,
-        'port_support = section_between(type_registry, "## Port-support records", "## Ownership and visibility summary")',
-        'port_support = section_between(type_registry, "## Port support records — owned by `search-ports`", "## New-type rule")',
-        "port support heading",
-    )
-
-    old_config = '''        owner = row.get("owner")
-        packet = row.get("packet")
-        fail(errors, owner in packages, f"config {name}: unknown owner {owner}")
-        fail(errors, isinstance(packet, str) and (ROOT / packet).is_file(), f"config {name}: missing packet {packet}")
-        if isinstance(packet, str):
-            fail(errors, packet not in config_packets, f"config {name}: duplicate packet path {packet}")
-            config_packets.add(packet)
-'''
-    new_config = '''        owner = row.get("owner")
-        owner_module = row.get("owner_module")
-        packet = row.get("contract")
-        fail(errors, owner in packages, f"config {name}: unknown owner {owner}")
-        fail(errors, isinstance(owner_module, str), f"config {name}: owner module missing")
-        if isinstance(owner, str) and isinstance(owner_module, str):
-            validate_module_ref(errors, f"{owner}:{owner_module}", modules, f"config {name}")
-        fail(errors, isinstance(packet, str) and (ROOT / packet).is_file(), f"config {name}: missing contract {packet}")
-        if isinstance(packet, str):
-            fail(errors, packet not in config_packets, f"config {name}: duplicate contract path {packet}")
-            config_packets.add(packet)
-'''
-    text = replace_once(text, old_config, new_config, "configuration ownership block")
-
-    old_recipe = '''        owners = row.get("primary_execution_packages")
-        fail(errors, isinstance(owners, list) and len(owners) > 0, f"{recipe_id}: execution owners missing")
-        for package in owners if isinstance(owners, list) else []:
-            fail(errors, package in packages, f"{recipe_id}: unknown execution package {package}")
-'''
-    new_recipe = '''        owners = row.get("primary_execution_packages")
-        refs = row.get("execution_modules")
-        fail(errors, isinstance(owners, list) and len(owners) > 0, f"{recipe_id}: execution owners missing")
-        fail(errors, isinstance(refs, list) and len(refs) == len(owners if isinstance(owners, list) else []), f"{recipe_id}: one execution module per owner required")
-        ref_packages: set[str] = set()
-        for ref in refs if isinstance(refs, list) else []:
-            validate_module_ref(errors, ref, modules, recipe_id)
-            if isinstance(ref, str) and ":" in ref:
-                ref_packages.add(ref.split(":", 1)[0])
-        for package in owners if isinstance(owners, list) else []:
-            fail(errors, package in packages, f"{recipe_id}: unknown execution package {package}")
-        fail(errors, ref_packages == set(owners if isinstance(owners, list) else []), f"{recipe_id}: execution module/package mismatch")
-'''
-    text = replace_once(text, old_recipe, new_recipe, "recipe ownership block")
-    path.write_text(text, encoding="utf-8", newline="\n")
-
-
 def patch_manifest(graph: dict) -> None:
     path = ROOT / "swarm/coverage/manifest.toml"
     text = path.read_text(encoding="utf-8")
@@ -117,9 +51,9 @@ def patch_manifest(graph: dict) -> None:
     )
     if "operation_module_registry" not in text:
         text = replace_once(text, marker, addition, "manifest registry links")
-    count_marker = 'operation_count = "DERIVED_BY_VALIDATOR"\n'
+
     counts = (
-        count_marker
+        'operation_count = "DERIVED_BY_VALIDATOR"\n'
         + f"exact_operation_module_count = {len(graph['operation_rows'])}\n"
         + f"documentation_source_file_count = {len(graph['selected_markdown'])}\n"
         + f"documentation_node_count = {len(graph['documentation_rows'])}\n"
@@ -128,9 +62,17 @@ def patch_manifest(graph: dict) -> None:
         + f"weak_logical_module_count = {len(graph['weak_modules'])}\n"
     )
     existing_pattern = re.compile(
-        r'operation_count = "DERIVED_BY_VALIDATOR"\n(?:exact_operation_module_count = \d+\n)?(?:documentation_source_file_count = \d+\n)?(?:documentation_node_count = \d+\n)?(?:dependency_edge_count = \d+\n)?(?:logical_module_count = \d+\n)?(?:weak_logical_module_count = \d+\n)?'
+        r'operation_count = "DERIVED_BY_VALIDATOR"\n'
+        r'(?:exact_operation_module_count = \d+\n)?'
+        r'(?:documentation_source_file_count = \d+\n)?'
+        r'(?:documentation_node_count = \d+\n)?'
+        r'(?:dependency_edge_count = \d+\n)?'
+        r'(?:logical_module_count = \d+\n)?'
+        r'(?:weak_logical_module_count = \d+\n)?'
     )
-    text = existing_pattern.sub(counts, text, count=1)
+    text, replacements = existing_pattern.subn(counts, text, count=1)
+    if replacements != 1:
+        raise RuntimeError("manifest relation-count block missing")
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
@@ -138,8 +80,11 @@ def write_human_report(graph: dict) -> None:
     route_counts: dict[str, int] = {}
     for row in graph["operation_rows"]:
         route_counts[row["route_kind"]] = route_counts.get(row["route_kind"], 0) + 1
-    governance = sum(1 for row in graph["documentation_rows"] if row["kind"] in {"governance", "navigation"})
+    governance = sum(
+        1 for row in graph["documentation_rows"] if row["kind"] in {"governance", "navigation"}
+    )
     implementation = len(graph["documentation_rows"]) - governance
+    progressive = sum(row["requires_stage_reentry"] for row in graph["dependency_rows"])
     body = f'''# Coverage graph v2
 
 This is the exact machine-checked ownership graph from architecture and package contracts to Cargo
@@ -148,13 +93,15 @@ packages and package-local logical modules. It does not claim Rust implementatio
 ## Closed relations
 
 - **{len(graph['package_rows'])} Cargo packages** and **{len(graph['module_rows'])} declared logical modules**;
-- **{len(graph['operation_rows'])} package-qualified operations** mapped to exactly one module in the same package;
+- **{len(graph['operation_rows'])} package-qualified operations** mapped to exactly one reviewed module in the same package;
 - **{len(graph['documentation_rows'])} Markdown heading nodes** across **{len(graph['selected_markdown'])} tracked documentation files**;
 - **{implementation} implementation/principle/qualification nodes** mapped to package modules;
 - **{governance} governance/navigation nodes** explicitly classified as non-crate-owned rather than forced into a fake product crate;
 - **{len(graph['dependency_rows'])} Cargo dependency edges** mapped from a consumer module to the producer public entry;
+- **{progressive} later-wave dependency edges** bound to exact progressive stage re-entry records;
 - all 20 configuration sections bound to an owner module;
 - all 11 recipes bound to one execution module per primary execution package;
+- all 23 shared ports and 80 port methods bound to package-local modules;
 - **{len(graph['weak_modules'])} weak implementation modules** after relation aggregation.
 
 ## Operation routing quality
@@ -163,21 +110,22 @@ packages and package-local logical modules. It does not claim Rust implementatio
 {json.dumps(route_counts, indent=2, sort_keys=True)}
 ```
 
-`public_facade` is permitted only when the documented operation itself is the package entry/facade
-operation. The committed operation registry records the exact source file, source section, selected
-module, routing class and score for review.
+`public_facade` and `semantic_low` routes are merge-blocking. The committed operation registry records
+the exact source file, source section, selected module, routing class and score for review.
 
 ## Validation
 
 ```powershell
 python tools/generate-coverage-graph-v2.py --check
+python tools/generate-package-maps-v2.py --check
 python tools/validate-coverage-graph-v2.py --json
+python tools/validate-package-maps-v2.py --json
 python tools/validate-architecture-coverage.py --json
 ```
 
 The validators reject missing or orphan operations, stale documentation headings, cross-package module
-routes, configuration/recipe owner drift, missing dependency edges, weak implementation modules and any
-change that reintroduces an automatic permanent workflow trigger.
+routes, configuration/recipe/port owner drift, missing dependency or re-entry edges, weak implementation
+modules and any automatic trigger in the permanent validation workflow.
 
 ## Authority ceiling
 
@@ -194,7 +142,6 @@ def generate() -> dict:
     write("swarm/coverage/dependency-edges.toml", render_dependency_registry(graph))
     write("swarm/coverage/module-coverage.toml", render_module_registry(graph))
     patch_manifest(graph)
-    patch_legacy_validator()
     write_human_report(graph)
     return graph
 
@@ -207,7 +154,7 @@ def check() -> dict:
         "swarm/coverage/dependency-edges.toml": render_dependency_registry(graph).rstrip() + "\n",
         "swarm/coverage/module-coverage.toml": render_module_registry(graph).rstrip() + "\n",
     }
-    stale = []
+    stale: list[str] = []
     for path, content in expected.items():
         target = ROOT / path
         if not target.is_file() or target.read_text(encoding="utf-8") != content:
@@ -220,6 +167,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+
     if args.check:
         result = check()
         summary = {
@@ -233,6 +181,7 @@ def main() -> int:
         }
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0 if summary["status"] == "PASS" else 1
+
     graph = generate()
     summary = {
         "status": "GENERATED",
