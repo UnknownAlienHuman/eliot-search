@@ -1,0 +1,158 @@
+schema_version = 1
+source = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#H17"
+delivery_slice_count = 19
+status = "STATIC_DELIVERY_OWNERSHIP_CLOSED_NOT_IMPLEMENTED"
+all_packages_must_appear_in_at_least_one_slice = true
+implementation_authorized_by_this_registry = false
+
+[[slice]]
+id = "P00"
+name = "Contract freeze"
+primary_packages = ["search-contracts", "search-domain", "search-ports"]
+modules = ["search-contracts:canonical", "search-contracts:ids", "search-contracts:source", "search-contracts:query", "search-contracts:recipes", "search-contracts:results", "search-contracts:protocol", "search-contracts:lifecycle", "search-contracts:reasons", "search-contracts:schema", "search-domain:decisions", "search-domain:transitions", "search-domain:eligibility", "search-domain:coverage", "search-ports:conformance"]
+required_outputs = ["shared_contract_shapes", "pure_rules", "shared_vendor_neutral_ports", "recipe_and_reason_registries", "dependency_and_license_policy"]
+exit_evidence = ["contract_hash", "exact_recipe_set", "epoch_sentinel_rejection", "pure_property_tests", "dependency_direction"]
+
+[[slice]]
+id = "P01"
+name = "Runtime owner shell"
+primary_packages = ["search-config", "search-runtime-owner", "search-os-secrets", "search-provider-protocol", "eliot-searchd", "eliot-search"]
+modules = ["search-config:layering", "search-runtime-owner:acquire", "search-runtime-owner:release", "search-os-secrets:store", "search-provider-protocol:frame", "search-provider-protocol:binding", "eliot-searchd:startup", "eliot-search:connection"]
+required_outputs = ["configuration_core", "single_data_root_owner", "opaque_secret_store", "provider_framing", "standalone_daemon_and_cli_shell"]
+exit_evidence = ["second_owner_denial", "crash_reopen_owner", "secret_non_disclosure", "cli_no_direct_store"]
+
+[[slice]]
+id = "P02"
+name = "Bounded redb journal"
+primary_packages = ["search-control-redb", "eliot-searchd"]
+modules = ["search-control-redb:open", "search-control-redb:migration", "search-control-redb:transaction", "search-control-redb:snapshot", "eliot-searchd:startup"]
+required_outputs = ["bounded_control_tables", "verified_migrations", "immutable_control_snapshot", "corruption_quarantine"]
+exit_evidence = ["migration_fixtures", "power_loss_reopen", "hot_query_zero_redb_write"]
+
+[[slice]]
+id = "P03"
+name = "Source registry and direct exact spine"
+primary_packages = ["search-source-admission", "search-source-identity", "search-source-registry", "search-safe-reader"]
+modules = ["search-source-admission:policy", "search-source-admission:receipt", "search-source-identity:source", "search-source-identity:binding", "search-source-registry:root", "search-source-registry:membership", "search-source-registry:view", "search-source-registry:cutover", "search-safe-reader:stable_read", "search-safe-reader:git_object"]
+required_outputs = ["admitted_roots_and_sources", "source_and_path_identity", "memberships_and_portfolios", "coherent_source_views", "stable_no_execute_reads", "source_owner_cutover"]
+exit_evidence = ["rename_hardlink_case_reparse", "unstable_read", "no_execute", "dual_writer_denial", "cutover_wire_and_state_machine"]
+
+[[slice]]
+id = "P04"
+name = "Revision CAS and anchors"
+primary_packages = ["search-revision-store", "search-materializer", "search-unitizer"]
+modules = ["search-revision-store:residency", "search-revision-store:object", "search-revision-store:revision", "search-revision-store:anchor", "search-materializer:decode", "search-materializer:maps", "search-materializer:assurance", "search-unitizer:boundaries", "search-unitizer:manifest"]
+required_outputs = ["residency_aware_immutable_CAS", "exact_revision_readback", "coordinate_and_loss_maps", "canonical_materialization", "deterministic_units"]
+exit_evidence = ["UTF8_CRLF_LSP_Git_anchor", "stale_path_readback", "cross_domain_dedup_denial", "copy_reencrypt_receipt"]
+
+[[slice]]
+id = "P05"
+name = "Managed Qdrant process and capability gate"
+primary_packages = ["search-qdrant-supervisor", "search-qdrant-bridge", "search-os-secrets", "eliot-searchd"]
+modules = ["search-qdrant-supervisor:artifact", "search-qdrant-supervisor:process", "search-qdrant-supervisor:health", "search-qdrant-bridge:capability", "search-os-secrets:store", "eliot-searchd:startup"]
+required_outputs = ["exact_qualified_server_artifact", "supervised_loopback_process", "API_secret", "disposable_capability_suite"]
+exit_evidence = ["process_identity", "loopback_auth", "schema_mismatch", "range_missing_field_IDF_probes"]
+
+[[slice]]
+id = "P06"
+name = "Lexical encoder and collection schema"
+primary_packages = ["search-lexical", "search-point-identity", "search-projection-planner", "search-qdrant-bridge"]
+modules = ["search-lexical:profile", "search-lexical:tokenize", "search-lexical:sparse", "search-point-identity:key", "search-point-identity:collision", "search-projection-planner:schema", "search-projection-planner:manifest", "search-qdrant-bridge:schema"]
+required_outputs = ["one_selected_lexical_path", "golden_sparse_profiles", "payload_indexes", "collision_safe_point_identity", "exact_projection_manifests"]
+exit_evidence = ["reference_vectors", "collision_injection", "no_implicit_language_defaults", "no_membership_arrays"]
+
+[[slice]]
+id = "P07"
+name = "Epoch publication and recovery"
+primary_packages = ["search-publication", "search-epoch-pins", "search-index-reclaimer", "search-qdrant-bridge", "search-control-redb", "eliot-searchd"]
+modules = ["search-publication:actor", "search-publication:intent", "search-publication:readback", "search-publication:commit", "search-publication:recovery", "search-epoch-pins:registry", "search-index-reclaimer:delete", "search-qdrant-bridge:mutation", "search-control-redb:transaction", "eliot-searchd:recovery"]
+required_outputs = ["serialized_publication", "exact_ack_and_readback", "visible_epoch_commit", "pins_and_reclaim", "doctor_recovery"]
+exit_evidence = ["all_publication_failpoints", "transactional_guard_race", "no_staged_visibility", "no_pinned_reclaim", "blocked_abandon_recovery"]
+
+[[slice]]
+id = "P08"
+name = "Lexical query recipes and compact cards"
+primary_packages = ["search-access", "search-query-planner", "search-retrieval-executor", "search-candidate-validator", "search-handles", "search-result-projector", "search-continuation", "search-eval", "eliot-searchd"]
+modules = ["search-access:grant", "search-access:legs", "search-query-planner:recipe", "search-query-planner:plan", "search-retrieval-executor:scheduler", "search-retrieval-executor:fusion", "search-candidate-validator:readback", "search-handles:issue", "search-result-projector:card", "search-continuation:resume", "search-eval:corpus", "eliot-searchd:request"]
+required_outputs = ["server_owned_plans", "bounded_safe_legs", "deterministic_fusion", "source_backed_candidates", "compact_cards", "handles_and_continuations", "baseline_eval_harness"]
+exit_evidence = ["access_noninterference", "deterministic_cards", "raw_grep_read_baseline"]
+
+[[slice]]
+id = "P09"
+name = "Change feeds and overlays"
+primary_packages = ["search-source-reconcile", "search-overlay", "eliot-searchd"]
+modules = ["search-source-reconcile:gap", "search-source-reconcile:inventory", "search-source-reconcile:commit", "search-source-reconcile:currentness", "search-overlay:snapshot", "search-overlay:shadow", "search-overlay:save", "search-overlay:cleanup", "eliot-searchd:request"]
+required_outputs = ["watcher_hint_and_gap_model", "authoritative_reconciliation", "saved_overlay", "authenticated_unsaved_overlay", "strict_current_workspace_preflight"]
+exit_evidence = ["overflow_resume", "observation_gap_denial", "live_head_mismatch", "deletion_shadow", "unsaved_sink_audit"]
+
+[[slice]]
+id = "P10"
+name = "Rust structural profile"
+primary_packages = ["search-code-enricher"]
+modules = ["search-code-enricher:profile", "search-code-enricher:parse", "search-code-enricher:facts", "search-code-enricher:references", "search-code-enricher:predicates", "search-code-enricher:assurance"]
+required_outputs = ["qualified_Rust_parser_profile", "definitions_references_tests_docs", "configuration_predicates", "provider_assurance"]
+exit_evidence = ["malformed_Rust", "cfg_variants", "coordinate_behavior", "no_compiler_truth_overclaim"]
+
+[[slice]]
+id = "P11"
+name = "Inspect and compare implementations"
+primary_packages = ["search-subject-resolver", "search-comparator", "search-result-projector"]
+modules = ["search-subject-resolver:candidates", "search-subject-resolver:ladder", "search-subject-resolver:ambiguity", "search-comparator:lineage", "search-comparator:alignment", "search-comparator:behavior", "search-comparator:result", "search-result-projector:card"]
+required_outputs = ["subject_resolution", "ambiguity_sets", "analogue_ladder", "lineage_collapse", "descriptive_behavior_matrix"]
+exit_evidence = ["renamed_true_analogue", "false_same_name", "fork_mirror", "decisive_test"]
+
+[[slice]]
+id = "P12"
+name = "Exact scan and proof reports"
+primary_packages = ["search-exact", "search-source-registry", "search-revision-store", "search-overlay"]
+modules = ["search-exact:predicate", "search-exact:plan", "search-exact:denominator", "search-exact:execute", "search-exact:report", "search-source-registry:view", "search-revision-store:revision", "search-overlay:snapshot"]
+required_outputs = ["compile_execute_split", "frozen_denominator", "exact_predicate_profiles", "revision_drift_handling", "truthful_execution_report"]
+exit_evidence = ["complete_literal_negative", "non_backtracking_regex", "raw_vs_decoded_semantics", "unreadable_changed_cancelled_scope"]
+
+[[slice]]
+id = "P13"
+name = "Access handles purge and restore boundaries"
+primary_packages = ["search-retention", "search-access", "search-handles", "search-continuation", "search-candidate-validator", "search-revision-store", "search-publication", "search-index-reclaimer", "eliot-searchd"]
+modules = ["search-retention:roots", "search-retention:mark", "search-retention:sweep", "search-retention:purge", "search-retention:tombstone", "search-retention:restore", "search-access:barrier", "search-handles:invalidate", "search-continuation:reauthorize", "search-candidate-validator:security", "search-revision-store:lifecycle", "search-publication:recovery", "search-index-reclaimer:delete", "eliot-searchd:recovery"]
+required_outputs = ["security_mutation_linearization", "durable_source_handles", "CAS_mark_and_sweep", "purge_receipts_and_tombstones", "restore_revalidation"]
+exit_evidence = ["revocation_during_query", "handle_denial", "purge_non_resurrection", "mismatched_restore_quarantine"]
+
+[[slice]]
+id = "P14"
+name = "Generic client adapter edge and optional compatibility profiles"
+primary_packages = ["search-provider-protocol", "eliot-search", "search-eliot-adapter", "search-research-export-adapter", "eliot-searchd"]
+modules = ["search-provider-protocol:frame", "search-provider-protocol:negotiation", "search-provider-protocol:pairing", "search-provider-protocol:request", "eliot-search:request", "search-eliot-adapter:request", "search-eliot-adapter:evidence", "search-research-export-adapter:manifest", "search-research-export-adapter:export", "eliot-searchd:connection"]
+required_outputs = ["provider_envelope_flow_control", "pairing_and_grants", "capability_descriptor", "generic_evidence_edge", "optional_ELIOT_mapping", "optional_Research_export"]
+exit_evidence = ["no_reverse_authority", "generic_round_trip", "optional_ELIOT_fixture", "normalized_bundle_round_trip", "cutover_receipt_validation"]
+
+[[slice]]
+id = "P15"
+name = "Product Pulse and Windows qualification"
+primary_packages = ["search-eval", "eliot-searchd"]
+modules = ["search-eval:campaign", "search-eval:corpus", "search-eval:runner", "search-eval:trial", "search-eval:metrics", "search-eval:safety", "search-eval:evidence", "search-eval:review", "eliot-searchd:evaluation"]
+required_outputs = ["control_corpus", "ABC_evaluation", "latency_resource_fault_security_report", "protocol_stress", "content_minimized_telemetry_audit"]
+exit_evidence = ["all_S35_fixtures", "raw_acceptance_evidence", "independent_recalculation"]
+
+[[slice]]
+id = "P16"
+name = "Optional semantic depth"
+primary_packages = ["search-model-provider", "eliot-search-model-worker", "search-retrieval-executor", "search-eval", "eliot-searchd"]
+modules = ["search-model-provider:profile", "search-model-provider:encode", "search-model-provider:rerank", "eliot-search-model-worker:model", "eliot-search-model-worker:encode", "eliot-search-model-worker:rerank", "search-retrieval-executor:legs", "search-eval:metrics", "eliot-searchd:optional"]
+required_outputs = ["isolated_model_worker", "versioned_dense_profile", "measured_fusion_or_rerank", "baseline_fallback"]
+exit_evidence = ["measured_incremental_benefit", "resource_and_safety_receipts", "worker_removal_returns_to_P15"]
+
+[[slice]]
+id = "P17"
+name = "Optional document materializer"
+primary_packages = ["search-materializer", "eliot-search-doc-worker", "search-eval", "eliot-searchd"]
+modules = ["search-materializer:provider", "eliot-search-doc-worker:provider", "eliot-search-doc-worker:materialize", "eliot-search-doc-worker:maps", "eliot-search-doc-worker:resource", "search-eval:metrics", "eliot-searchd:optional"]
+required_outputs = ["isolated_document_worker", "qualified_provider", "coordinate_and_loss_maps", "baseline_fallback"]
+exit_evidence = ["Windows_packaging", "no_execute_resource_fuzz", "provider_removal"]
+
+[[slice]]
+id = "P18"
+name = "Optional advanced scale profile"
+primary_packages = ["search-qdrant-bridge", "search-projection-planner", "search-publication", "search-epoch-pins", "search-index-reclaimer", "search-eval", "eliot-searchd"]
+modules = ["search-qdrant-bridge:admin", "search-projection-planner:migration", "search-publication:commit", "search-publication:recovery", "search-epoch-pins:registry", "search-index-reclaimer:delete", "search-eval:metrics", "eliot-searchd:optional"]
+required_outputs = ["measured_scale_change", "candidate_collection_build", "ordered_catchup", "final_barrier", "redb_route_cutover", "rollback"]
+exit_evidence = ["migration_state_kill_tests", "old_route_pin_drainage", "failed_candidate_discard", "scoring_currentness_noninterference", "rollback_plan"]
