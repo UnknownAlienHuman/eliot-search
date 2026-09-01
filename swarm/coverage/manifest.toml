@@ -33,9 +33,10 @@ architecture_invariant_count = 30
 capability_cell_count = 31
 shared_port_count = 23
 configuration_section_count = 20
-canonical_id_counter_count = 50
-p00_record_or_registry_count = 116
-p00_schema_or_registry_count = 166
+type_registry_named_symbol_count = 115
+named_type_completion_count = 5
+support_and_record_schema_count = 97
+p00_schema_or_registry_count = 217
 canonical_primitive_family_count = 12
 recipe_count = 11
 delivery_slice_count = 19
@@ -60,6 +61,7 @@ product_acceptance_claimed = false
 source_owner_generation = "BLAKE3_DIGEST_PART_I_WINS"
 residency_policy_port_implementation = "search-revision-store"
 clock_port_implementation = "eliot-searchd_private_platform_adapter"
+missing_named_type_contracts = "CLOSED_BY_TYPE_COMPLETIONS_PC_018"
 
 [current_state]
 implemented_packages = 0
