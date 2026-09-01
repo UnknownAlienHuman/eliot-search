@@ -1,8 +1,9 @@
 # Vendor-neutral port catalog
 
-`search-ports` owns the shared trait surface. This document maps those traits to concrete
-implementations and capability consumers; exact operation semantics are frozen in
-[`../contracts/p00/PORT_OPERATIONS.md`](../contracts/p00/PORT_OPERATIONS.md).
+`search-ports` owns the shared trait surface. This document maps those traits to exact concrete
+implementation owners and capability consumers; exact operation semantics are frozen in
+[`../contracts/p00/PORT_OPERATIONS.md`](../contracts/p00/PORT_OPERATIONS.md). The machine-readable
+closure is [`../../swarm/coverage/ports.toml`](../../swarm/coverage/ports.toml).
 
 ## Rules
 
@@ -10,38 +11,41 @@ implementations and capability consumers; exact operation semantics are frozen i
 2. Shared vendor-neutral traits and operation contexts come from `search-ports`.
 3. Pure transition, ordering and coverage meaning comes from `search-domain`.
 4. A capability package owns its mutable state and implements or consumes accepted ports.
-5. Concrete adapters are constructed only by `eliot-searchd`.
+5. Concrete platform adapters are private modules of `eliot-searchd`; concrete capability adapters are
+   the exact packages named below.
 6. Vendor/native types, credentials, raw database handles, process handles and reusable authorization
    decisions never cross a public port.
-7. Port changes require an accepted contract-change receipt and a new public API digest.
+7. Every shared port has one exact implementation owner. “Selected implementation,” “runtime adapter”
+   or another floating owner description is invalid.
+8. Port changes require an accepted contract-change receipt and a new public API digest.
 
 ## Port ownership matrix
 
-| Port | Trait owner | Concrete implementation | Principal consumers |
+| Port | Trait owner | Exact implementation owner | Principal consumers |
 |---|---|---|---|
-| `ClockPort` | `search-ports` | daemon/platform adapter | contracts requiring controlled time, expiry and tests |
-| `SecretStorePort` | `search-ports` | `search-os-secrets` | daemon composition, provider binding |
-| `ProcessSupervisorPort` | `search-ports` | `search-qdrant-supervisor` | daemon composition |
-| `ControlJournalPort` | `search-ports` | `search-control-redb` | publication, registry, retention, daemon |
-| `ControlSnapshotPort` | `search-ports` | `search-control-redb` | access, planner, daemon |
-| `SourceAdmissionPort` | `search-ports` | `search-source-admission` | source registry |
-| `SourceInventoryPort` | `search-ports` | `search-source-registry` | exact, reconciler, planner |
-| `SourceOwnershipPort` | `search-ports` | `search-source-registry` | daemon and cutover/adapters |
-| `SafeReaderPort` | `search-ports` | `search-safe-reader` | source spine, reconciler |
-| `SourceRevisionStorePort` | `search-ports` | `search-revision-store` | validator, exact, retention, adapters |
-| `ResidencyPolicyPort` | `search-ports` | selected residency implementation in source/runtime composition | revision store, retention |
-| `MaterializerPort` | `search-ports` | `search-materializer` | preparation/runtime |
-| `UnitizerPort` | `search-ports` | `search-unitizer` | preparation/overlay |
-| `CodeEnricherPort` | `search-ports` | `search-code-enricher` | preparation/query |
-| `LexicalEncoderPort` | `search-ports` | `search-lexical` | projection/executor/overlay |
-| `ModelProviderPort` | `search-ports` | `search-model-provider` when admitted | optional model worker/executor |
-| `SearchIndexPort` | `search-ports` | `search-qdrant-bridge` | publication, retrieval executor |
-| `SearchIndexAdminPort` | `search-ports` | `search-qdrant-bridge` | index reclaimer, purge coordination |
-| `EpochPinPort` | `search-ports` | `search-epoch-pins` | executor, continuation, reclaimer, retention |
-| `AccessCompilerPort` | `search-ports` | `search-access` | planner, executor, validator, exact |
-| `OverlayPort` | `search-ports` | `search-overlay` | planner, executor, validator |
-| `ExactScannerPort` | `search-ports` | `search-exact` | provider protocol and adapters |
-| `HandleStorePort` | `search-ports` | `search-handles` | projector, protocol, retention |
+| `ClockPort` | `search-ports` | private `eliot-searchd::adapters` platform adapter | contracts requiring controlled time, expiry and tests |
+| `SecretStorePort` | `search-ports` | `search-os-secrets::store` | daemon composition, provider binding |
+| `ProcessSupervisorPort` | `search-ports` | `search-qdrant-supervisor::process` | daemon composition |
+| `ControlJournalPort` | `search-ports` | `search-control-redb::transaction` | publication, registry, retention, daemon |
+| `ControlSnapshotPort` | `search-ports` | `search-control-redb::snapshot` | access, planner, daemon |
+| `SourceAdmissionPort` | `search-ports` | `search-source-admission::decision` | source registry |
+| `SourceInventoryPort` | `search-ports` | `search-source-registry::view` | exact, reconciler, planner |
+| `SourceOwnershipPort` | `search-ports` | `search-source-registry::cutover` | daemon and cutover/adapters |
+| `SafeReaderPort` | `search-ports` | `search-safe-reader::stable_read` | source spine, reconciler |
+| `SourceRevisionStorePort` | `search-ports` | `search-revision-store::revision` | validator, exact, retention, adapters |
+| `ResidencyPolicyPort` | `search-ports` | `search-revision-store::residency` | revision store, retention |
+| `MaterializerPort` | `search-ports` | `search-materializer::product` | preparation/runtime |
+| `UnitizerPort` | `search-ports` | `search-unitizer::manifest` | preparation/overlay |
+| `CodeEnricherPort` | `search-ports` | `search-code-enricher::facts` | preparation/query |
+| `LexicalEncoderPort` | `search-ports` | `search-lexical::sparse` | projection/executor/overlay |
+| `ModelProviderPort` | `search-ports` | `search-model-provider::encode` when separately admitted | optional model worker/executor |
+| `SearchIndexPort` | `search-ports` | `search-qdrant-bridge::mutation` | publication, retrieval executor |
+| `SearchIndexAdminPort` | `search-ports` | `search-qdrant-bridge::admin` | index reclaimer, purge coordination |
+| `EpochPinPort` | `search-ports` | `search-epoch-pins::registry` | executor, continuation, reclaimer, retention |
+| `AccessCompilerPort` | `search-ports` | `search-access::legs` | planner, executor, validator, exact |
+| `OverlayPort` | `search-ports` | `search-overlay::snapshot` | planner, executor, validator |
+| `ExactScannerPort` | `search-ports` | `search-exact::execute` | provider protocol and adapters |
+| `HandleStorePort` | `search-ports` | `search-handles::resolve` | projector, protocol, retention |
 
 Package-specific orchestration APIs such as projection planning, publication coordination,
 continuation and lifecycle may be public capability APIs rather than shared infrastructure traits.
