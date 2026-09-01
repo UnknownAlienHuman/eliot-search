@@ -1,0 +1,185 @@
+schema_version = 1
+source = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#S3"
+invariant_count = 30
+status = "STATIC_ENFORCEMENT_OWNERSHIP_CLOSED_NOT_PROVEN"
+implementation_authorized_by_this_registry = false
+
+[[invariant]]
+id = "INV-01"
+summary = "Qdrant is the only search/index database"
+enforcement_packages = ["search-qdrant-bridge", "search-control-redb", "eliot-searchd"]
+modules = ["search-qdrant-bridge:schema", "search-control-redb:transaction", "eliot-searchd:profile"]
+
+[[invariant]]
+id = "INV-02"
+summary = "redb contains control state, never searchable corpus"
+enforcement_packages = ["search-control-redb"]
+modules = ["search-control-redb:transaction", "search-control-redb:snapshot"]
+
+[[invariant]]
+id = "INV-03"
+summary = "Original source or immutable admitted revision is source truth"
+enforcement_packages = ["search-safe-reader", "search-revision-store", "search-candidate-validator"]
+modules = ["search-safe-reader:stable_read", "search-revision-store:revision", "search-candidate-validator:readback"]
+
+[[invariant]]
+id = "INV-04"
+summary = "Retrieval proposes candidates; consuming client owns interpretation and admission"
+enforcement_packages = ["search-result-projector", "search-provider-protocol", "search-eliot-adapter", "search-research-export-adapter"]
+modules = ["search-result-projector:evidence", "search-provider-protocol:terminal", "search-eliot-adapter:result", "search-research-export-adapter:export"]
+
+[[invariant]]
+id = "INV-05"
+summary = "One Qdrant point belongs to exactly one ProjectionMembership"
+enforcement_packages = ["search-projection-planner", "search-point-identity", "search-qdrant-bridge"]
+modules = ["search-projection-planner:point_set", "search-point-identity:key", "search-qdrant-bridge:schema"]
+
+[[invariant]]
+id = "INV-06"
+summary = "Point payload contains no membership array or corpus names"
+enforcement_packages = ["search-projection-planner", "search-qdrant-bridge"]
+modules = ["search-projection-planner:schema", "search-qdrant-bridge:schema"]
+
+[[invariant]]
+id = "INV-07"
+summary = "Access and currentness filter before candidate generation and IDF"
+enforcement_packages = ["search-access", "search-query-planner", "search-retrieval-executor", "search-qdrant-bridge"]
+modules = ["search-access:legs", "search-query-planner:legs", "search-retrieval-executor:legs", "search-qdrant-bridge:query"]
+
+[[invariant]]
+id = "INV-08"
+summary = "Indexed top-K never narrows an exact negative-proof denominator"
+enforcement_packages = ["search-exact", "search-query-planner"]
+modules = ["search-exact:denominator", "search-query-planner:plan"]
+
+[[invariant]]
+id = "INV-09"
+summary = "Restrictive access and purge fences override snapshots immediately"
+enforcement_packages = ["search-access", "search-retention", "search-candidate-validator", "search-handles", "search-continuation"]
+modules = ["search-access:barrier", "search-retention:purge", "search-candidate-validator:security", "search-handles:invalidate", "search-continuation:reauthorize"]
+
+[[invariant]]
+id = "INV-10"
+summary = "Short query performs no durable control-store write"
+enforcement_packages = ["search-control-redb", "eliot-searchd"]
+modules = ["search-control-redb:snapshot", "eliot-searchd:request"]
+
+[[invariant]]
+id = "INV-11"
+summary = "Uncommitted epoch is never observable as current"
+enforcement_packages = ["search-publication", "search-control-redb"]
+modules = ["search-publication:commit", "search-control-redb:snapshot"]
+
+[[invariant]]
+id = "INV-12"
+summary = "Epoch number is never reused within a collection generation"
+enforcement_packages = ["search-contracts", "search-domain", "search-publication"]
+modules = ["search-contracts:ids", "search-domain:transitions", "search-publication:intent"]
+
+[[invariant]]
+id = "INV-13"
+summary = "At most one active Qdrant publication commit transaction globally"
+enforcement_packages = ["search-publication"]
+modules = ["search-publication:actor"]
+
+[[invariant]]
+id = "INV-14"
+summary = "Publication writes are acknowledged and read back before control commit"
+enforcement_packages = ["search-publication", "search-qdrant-bridge"]
+modules = ["search-publication:readback", "search-publication:commit", "search-qdrant-bridge:readback"]
+
+[[invariant]]
+id = "INV-15"
+summary = "Exact source ranges require coordinate basis and revision digest"
+enforcement_packages = ["search-contracts", "search-materializer", "search-revision-store", "search-candidate-validator"]
+modules = ["search-contracts:query", "search-materializer:maps", "search-revision-store:anchor", "search-candidate-validator:anchor"]
+
+[[invariant]]
+id = "INV-16"
+summary = "Unsaved editor buffer is never inferred from filesystem watcher"
+enforcement_packages = ["search-overlay", "search-source-reconcile"]
+modules = ["search-overlay:identity", "search-source-reconcile:gap"]
+
+[[invariant]]
+id = "INV-17"
+summary = "Index loss cannot destroy client-owned load-bearing evidence"
+enforcement_packages = ["search-revision-store", "search-handles", "search-research-export-adapter", "search-eliot-adapter"]
+modules = ["search-revision-store:lease", "search-handles:issue", "search-research-export-adapter:export", "search-eliot-adapter:evidence"]
+
+[[invariant]]
+id = "INV-18"
+summary = "Physical CAS reuse requires equivalent residency/security/lifecycle domains"
+enforcement_packages = ["search-revision-store", "search-retention"]
+modules = ["search-revision-store:residency", "search-retention:roots"]
+
+[[invariant]]
+id = "INV-19"
+summary = "Server-side text inference is capability-probed, never assumed"
+enforcement_packages = ["search-lexical", "search-qdrant-bridge"]
+modules = ["search-lexical:profile", "search-qdrant-bridge:capability"]
+
+[[invariant]]
+id = "INV-20"
+summary = "Stale or inaccessible candidates are removed before result projection"
+enforcement_packages = ["search-candidate-validator", "search-result-projector"]
+modules = ["search-candidate-validator:decision", "search-result-projector:evidence"]
+
+[[invariant]]
+id = "INV-21"
+summary = "One safe IDF leg includes at most one equivalent membership per ScoringDocumentId"
+enforcement_packages = ["search-access", "search-query-planner", "search-retrieval-executor"]
+modules = ["search-access:legs", "search-query-planner:legs", "search-retrieval-executor:fusion"]
+
+[[invariant]]
+id = "INV-22"
+summary = "Restrictive policy change invalidates every rank leg it influenced"
+enforcement_packages = ["search-access", "search-retrieval-executor"]
+modules = ["search-access:invalidation", "search-retrieval-executor:contamination"]
+
+[[invariant]]
+id = "INV-23"
+summary = "Publication guards are atomically revalidated at VisibleEpoch commit"
+enforcement_packages = ["search-publication", "search-control-redb"]
+modules = ["search-publication:commit", "search-control-redb:transaction"]
+
+[[invariant]]
+id = "INV-24"
+summary = "Current workspace is never claimed across unresolved observation gap"
+enforcement_packages = ["search-source-reconcile", "search-query-planner", "search-result-projector"]
+modules = ["search-source-reconcile:currentness", "search-query-planner:scope", "search-result-projector:coverage"]
+
+[[invariant]]
+id = "INV-25"
+summary = "Incompatible collection changes use new generation and redb route cutover"
+enforcement_packages = ["search-projection-planner", "search-publication", "search-qdrant-bridge", "eliot-searchd"]
+modules = ["search-projection-planner:migration", "search-publication:commit", "search-qdrant-bridge:admin", "eliot-searchd:recovery"]
+
+[[invariant]]
+id = "INV-26"
+summary = "One admitted source namespace has exactly one mutable source owner"
+enforcement_packages = ["search-source-registry", "search-runtime-owner"]
+modules = ["search-source-registry:cutover", "search-runtime-owner:acquire"]
+
+[[invariant]]
+id = "INV-27"
+summary = "Every durable CAS object uses complete residency domain identity"
+enforcement_packages = ["search-revision-store"]
+modules = ["search-revision-store:residency", "search-revision-store:address", "search-revision-store:object"]
+
+[[invariant]]
+id = "INV-28"
+summary = "Unsaved bytes never enter durable, backup, telemetry, provider or evaluation sinks without admission"
+enforcement_packages = ["search-overlay", "search-eval", "eliot-searchd"]
+modules = ["search-overlay:snapshot", "search-overlay:cleanup", "search-eval:evidence", "eliot-searchd:evaluation"]
+
+[[invariant]]
+id = "INV-29"
+summary = "Client adapter creates no reverse authority, canonical write or implicit research fallback"
+enforcement_packages = ["search-provider-protocol", "search-eliot-adapter", "search-research-export-adapter"]
+modules = ["search-provider-protocol:binding", "search-eliot-adapter:scope", "search-research-export-adapter:admission"]
+
+[[invariant]]
+id = "INV-30"
+summary = "Source-owner transfer requires explicit fenced cutover; export is not transfer"
+enforcement_packages = ["search-source-registry", "search-eliot-adapter", "search-research-export-adapter"]
+modules = ["search-source-registry:cutover", "search-eliot-adapter:cutover", "search-research-export-adapter:cutover"]
