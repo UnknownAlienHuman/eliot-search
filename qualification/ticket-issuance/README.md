@@ -1,8 +1,15 @@
-# Ticket-issuance planner v2 qualification
+# Ticket-issuance qualification
 
-This directory qualifies only the read-only schema-v2 advisory planner.
+This directory contains two separate non-authoritative verification layers:
 
-## Commands
+1. the read-only schema-v2 advisory planner;
+2. the synthetic operation-level conformance corpus for the integration-owned issuance control plane.
+
+Neither layer materializes context, issues a ticket or lease, authorizes implementation, publishes a package handoff, accepts a gate/wave, or advances launch state.
+
+## Advisory planner v2
+
+### Commands
 
 ```powershell
 python -m py_compile `
@@ -23,7 +30,7 @@ python tools/plan-ticket-issuance.py `
   --output artifacts/ticket-issuance-plans/search-contracts.json
 ```
 
-The current repository run must produce:
+The current zero-state repository run must produce:
 
 ```text
 decision = BLOCKED_MISSING_SELECTION
@@ -36,28 +43,41 @@ publishes_package_handoff = false
 advances_launch_state = false
 ```
 
-That result is expected because no immutable base/writer/reviewer selection exists.
+That result is expected while no immutable base/writer/reviewer selection exists.
 
-## Corpus
+`cases-v2.toml` inventories 30 planner cases covering immutable Git-tree reads, selection validation,
+schema-v2 fields, context ceilings, source and selector checks, prerequisite handoffs, control-record
+conflicts, manual-only workflow policy, artifact-root fencing, deterministic JSON and zero authority.
 
-`cases-v2.toml` inventories 30 cases covering:
+## Operation conformance corpus
 
-- immutable Git-tree reads and working-tree exclusion;
-- complete, partial and invalid selections;
-- schema-v2 ticket/context fields and rejection of schema-v1 aliases;
-- exact contracts-pack and ordinary context ceilings;
-- source blob, UTF-8, forbidden path and selector checks;
-- conditional accepted handoffs and signed-payload readback;
-- current-package records, nested metadata bypass and W0 conflicts;
-- manual-only workflow policy;
-- artifact-root output fencing;
-- deterministic canonical JSON, non-circular digest and zero authority.
+Files:
+
+- [`manifest.toml`](manifest.toml) — exact paths, counts, authority nonclaims and evidence policy;
+- [`baseline.toml`](baseline.toml) — locked operation, recovery, identity, context, lease and zero-state behavior;
+- [`fixtures.toml`](fixtures.toml) — 52 synthetic fixture descriptors, never real records or actor assignments;
+- [`probes.toml`](probes.toml) — 64 mandatory probes covering failures and recovery dispositions;
+- [`TICKET_ISSUANCE_QUALIFICATION.md`](TICKET_ISSUANCE_QUALIFICATION.md) — execution and acceptance contract.
+
+Machine operation ownership is defined by
+[`../../swarm/control-plane-operations.toml`](../../swarm/control-plane-operations.toml). Record fields and
+canonical layouts remain owned by the current schema-v2 control-plane schema/type registries.
+
+Run:
+
+```powershell
+pwsh -NoProfile -File tools/validate-ticket-issuance-conformance.ps1
+pwsh -NoProfile -File tools/validate-ticket-issuance-conformance.ps1 -Json
+```
+
+A structural PASS proves only corpus closure. Every probe remains `UNAVAILABLE` until immutable raw
+output and an independent reviewer receipt exist.
 
 ## Evidence boundary
 
-A green run is not:
+A green planner or conformance run is not:
 
-- materialized context;
+- a materialized context;
 - an issued assignment ticket;
 - a writer lease or acknowledgement;
 - a package submission, review or handoff;

@@ -1,0 +1,133 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "DESIGNED_NOT_EXECUTED"
+qualification_manifest = "qualification/ticket-issuance/manifest.toml"
+operation_registry = "swarm/control-plane-operations.toml"
+record_schema_registry = "swarm/control-plane-schema.toml"
+type_registry = "swarm/schemas/types-v1.toml"
+
+[operations]
+count = 12
+ids = [
+  "validate_ticket_draft",
+  "validate_context_draft",
+  "materialize_context",
+  "issue_assignment_ticket",
+  "issue_writer_lease",
+  "acknowledge_writer_lease",
+  "revoke_or_supersede_lease",
+  "record_package_submission",
+  "record_independent_review",
+  "publish_package_handoff",
+  "supersede_control_record",
+  "recover_control_operation",
+]
+pure = ["validate_ticket_draft", "validate_context_draft"]
+mutations = [
+  "materialize_context",
+  "issue_assignment_ticket",
+  "issue_writer_lease",
+  "acknowledge_writer_lease",
+  "revoke_or_supersede_lease",
+  "record_package_submission",
+  "record_independent_review",
+  "publish_package_handoff",
+  "supersede_control_record",
+]
+read_only_recovery = ["recover_control_operation"]
+unknown_operation = "reject"
+
+[recovery]
+dispositions = [
+  "RECOVERED_SUCCEEDED",
+  "SAFE_TO_RETRY",
+  "CONFLICT",
+  "PRESERVE_OUTCOME_UNKNOWN",
+]
+blind_retry_after_possible_write = false
+unknown_outcome_may_be_relabelled_success = false
+recovery_may_mutate = false
+
+[record_identity]
+signed_payload_digest_field = "signature.record_sha256"
+complete_record_digest_suffix = "exact_record_file_sha256"
+complete_record_digest_embedded_in_same_record = false
+fixed_point_self_hash_allowed = false
+parsed_reserialization_is_identity = false
+exact_git_blob_readback_required = true
+minimum_signature_refs_per_record = 1
+context_manifest_signature_refs = 2
+ambiguous_record_digest_fields_allowed = false
+
+[paths]
+repository_relative_safe_paths_only = true
+absolute_paths_allowed = false
+backslashes_allowed = false
+dot_segments_allowed = false
+repeated_separators_allowed = false
+mutable_git_refs_allowed = false
+abbreviated_git_object_ids_allowed = false
+
+[optional_values]
+TOML_null_allowed = false
+field_omission_means_ABSENT = false
+states = ["ABSENT", "PRESENT"]
+ABSENT_requires_empty_value = true
+PRESENT_requires_canonical_value = true
+
+[p00_context]
+ordinary_source_file_ceiling = 16
+search_contracts_exact_pack_source_file_ceiling = 24
+exception_packages = ["search-contracts"]
+max_registry_fragments = 6
+max_accepted_handoff_slots = 1
+writer_visible_artifacts = 1
+search_contracts_exception_must_equal_manifest_closed_pack = true
+ad_hoc_exception_sources_allowed = false
+
+[actors]
+writer_reviewer_must_differ = true
+display_name_is_identity = false
+integration_records_owned_by_package_writer = false
+self_review_allowed = false
+
+[lease]
+second_active_lease_allowed = false
+automatic_wall_clock_expiry = false
+implementation_before_ACKNOWLEDGED_event = false
+submission_and_SUBMITTED_event_same_commit = true
+terminal_events = ["REVOKED", "SUPERSEDED"]
+
+[submission_review_handoff]
+complete_sorted_unique_diff_required = true
+all_changed_paths_inside_write_scope = true
+unavailable_checks_visible = true
+placeholder_success_allowed = false
+review_recomputes_scope_contract_evidence_api_and_size = true
+accepted_review_required_for_handoff = true
+package_handoff_accepts_gate_or_wave = false
+api_digest_is_handoff_record_identity = false
+handoff_id_is_record_path_identity = true
+
+[zero_state]
+materialized_contexts = 0
+issued_tickets = 0
+active_writer_leases = 0
+lease_acknowledgements = 0
+submissions = 0
+accepted_reviews = 0
+accepted_package_handoffs = 0
+wave_receipts = 0
+active_stage = "P00"
+active_wave = 0
+authorized_packages = ["search-contracts"]
+conditional_packages = ["search-domain", "search-ports"]
+
+[evidence]
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+initial_result = "UNAVAILABLE"
+raw_output_required_for_PASS = true
+independent_reviewer_receipt_required_for_PASS = true
+all_mandatory_must_pass = true
+structural_validator_pass_is_acceptance = false

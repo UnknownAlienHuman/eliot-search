@@ -1,0 +1,918 @@
+schema_version = 1
+project = "eliot-search"
+architecture_version = "8.4"
+status = "NOT_EXECUTED"
+owner = "integration-owner"
+qualification_manifest = "qualification/ticket-issuance/manifest.toml"
+operation_registry = "swarm/control-plane-operations.toml"
+fixture_registry = "qualification/ticket-issuance/fixtures.toml"
+probe_count = 64
+result_values = ["PASS", "FAIL", "UNAVAILABLE"]
+expected_classes = ["SUCCESS", "FAILURE", "RECOVERY", "POLICY"]
+all_mandatory_must_pass = true
+prose_only_evidence = "reject"
+
+[[probe]]
+id = "TI-001-safe-path-valid"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F006_valid_search_contracts_context_draft"
+variant = "repository_relative_safe_paths"
+mandatory = true
+purpose = "Canonical forward-slash repository-relative source paths without dot segments are accepted."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-002-dot-segment-rejected"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F015_context_forbidden_architecture_source"
+variant = "replace_source_with_dot_or_dotdot_segment"
+mandatory = true
+purpose = "Dot segments fail before repository or filesystem access even though the character regex alone could match them."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_FORBIDDEN_PATH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-003-absolute-backslash-path-rejected"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F015_context_forbidden_architecture_source"
+variant = "absolute_path_backslash_repeated_separator_or_NUL"
+mandatory = true
+purpose = "Absolute, backslash, repeated-separator and NUL path spellings fail closed."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_FORBIDDEN_PATH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-004-full-git-object-id-valid"
+owner = "integration-owner"
+operation = "issue_assignment_ticket"
+fixture = "F021_valid_ticket_issue_inputs"
+variant = "full_algorithm_tagged_git_object_ids"
+mandatory = true
+purpose = "Full sha1:/sha256: immutable object identities bind base, blob and record references."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-005-moving-or-abbreviated-git-ref-rejected"
+owner = "integration-owner"
+operation = "issue_assignment_ticket"
+fixture = "F023_ticket_missing_launch_or_dependency"
+variant = "base_commit_HEAD_latest_branch_tag_or_abbreviated_hash"
+mandatory = true
+purpose = "Moving refs and abbreviated Git IDs cannot satisfy an immutable ticket fence."
+expected_class = "FAILURE"
+expected_value = "TICKET_PREREQUISITE_MISSING"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-006-optional-absent-valid"
+owner = "integration-owner"
+operation = "record_package_submission"
+fixture = "F031_valid_package_submission"
+variant = "configuration_digest_OptionalV1_ABSENT_empty_value"
+mandatory = true
+purpose = "An absent optional configuration digest uses explicit ABSENT with an empty value."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-007-null-omission-or-sentinel-rejected"
+owner = "integration-owner"
+operation = "record_package_submission"
+fixture = "F041_record_unknown_field_or_wrong_kind"
+variant = "optional_value_null_omitted_or_ad_hoc_sentinel"
+mandatory = true
+purpose = "TOML null, field omission and ad-hoc sentinel strings cannot substitute for OptionalV1."
+expected_class = "FAILURE"
+expected_value = "CONTROL_RECORD_SCHEMA_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-008-signed-and-complete-digests-distinct"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F039_valid_package_handoff"
+variant = "signed_payload_and_exact_record_file_sha256_independently_recomputed"
+mandatory = true
+purpose = "Embedded signed-payload and external complete-file digests are different typed identities."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-009-fixed-point-self-hash-rejected"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F042_record_complete_file_digest_mismatch"
+variant = "embed_complete_file_sha256_inside_same_record"
+mandatory = true
+purpose = "A record cannot embed a fixed-point SHA-256 of its own complete file bytes."
+expected_class = "FAILURE"
+expected_value = "CONTROL_RECORD_DIGEST_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-010-signature-actor-or-payload-mismatch"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F042_record_complete_file_digest_mismatch"
+variant = "signature_ref_actor_or_signed_payload_digest_mismatch"
+mandatory = true
+purpose = "Signature refs must bind the exact actor and embedded signed-payload digest."
+expected_class = "FAILURE"
+expected_value = "CONTROL_RECORD_DIGEST_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-011-valid-ticket-draft-v2"
+owner = "integration-owner"
+operation = "validate_ticket_draft"
+fixture = "F001_valid_ticket_draft_v2"
+variant = "none"
+mandatory = true
+purpose = "A bounded non-claimable ticket draft with separate digest slots and no lease identity validates."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-012-claimable-draft-rejected"
+owner = "integration-owner"
+operation = "validate_ticket_draft"
+fixture = "F002_claimable_ticket_draft"
+variant = "none"
+mandatory = true
+purpose = "A draft that claims implementation authority is rejected."
+expected_class = "FAILURE"
+expected_value = "DRAFT_NOT_NONCLAIMABLE"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-013-ticket-draft-lease-identity-rejected"
+owner = "integration-owner"
+operation = "validate_ticket_draft"
+fixture = "F003_ticket_draft_with_lease_identity"
+variant = "none"
+mandatory = true
+purpose = "Assignment-ticket drafts cannot pre-create or identify a writer lease."
+expected_class = "FAILURE"
+expected_value = "DRAFT_NOT_VALID"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-014-preassigned-draft-rejected"
+owner = "integration-owner"
+operation = "validate_ticket_draft"
+fixture = "F004_ticket_draft_preassigned_actor"
+variant = "none"
+mandatory = true
+purpose = "A pre-issuance draft cannot contain assigned writer/reviewer identity."
+expected_class = "FAILURE"
+expected_value = "DRAFT_NOT_VALID"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-015-collapsed-ticket-digest-rejected"
+owner = "integration-owner"
+operation = "validate_ticket_draft"
+fixture = "F005_ticket_draft_collapsed_digests"
+variant = "none"
+mandatory = true
+purpose = "A single ambiguous ticket canonical digest cannot replace signed-payload and complete-file slots."
+expected_class = "FAILURE"
+expected_value = "DRAFT_NOT_VALID"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-016-valid-search-contracts-context-draft"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F006_valid_search_contracts_context_draft"
+variant = "none"
+mandatory = true
+purpose = "The exact nineteen-source P00 contract closure satisfies the sole twenty-four-source exception."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-017-ordinary-context-overflow-rejected"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F007_ordinary_context_source_overflow"
+variant = "none"
+mandatory = true
+purpose = "An ordinary package cannot exceed the sixteen-source ceiling."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_BUDGET_EXCEEDED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-018-search-contracts-ad-hoc-source-rejected"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F008_search_contracts_ad_hoc_source"
+variant = "none"
+mandatory = true
+purpose = "The P00 source-count exception cannot add files outside the manifest-closed exact pack."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_DRAFT_INVALID"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-019-duplicate-context-source-rejected"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F009_context_duplicate_source_or_order"
+variant = "none"
+mandatory = true
+purpose = "Source paths and canonical positions are unique."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_DRAFT_INVALID"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-020-forbidden-path-declaration-rejected"
+owner = "integration-owner"
+operation = "validate_context_draft"
+fixture = "F015_context_forbidden_architecture_source"
+variant = "forbidden_source_detected_during_pure_validation"
+mandatory = true
+purpose = "Architecture and foreign implementation sources fail before materialization."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_FORBIDDEN_PATH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-021-context-materialization-golden"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F006_valid_search_contracts_context_draft"
+variant = "exact_base_commit_and_all_source_blobs_present"
+mandatory = true
+purpose = "Exact source/blob and normalized payload identities produce one manifest and one artifact."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-022-missing-source"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F010_context_missing_source_blob"
+variant = "none"
+mandatory = true
+purpose = "A declared source absent at the immutable base commit fails closed."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_SOURCE_MISSING"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-023-invalid-utf8-source"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F011_context_invalid_utf8_source"
+variant = "none"
+mandatory = true
+purpose = "Undecodable text source bytes cannot be silently replaced or lossy-decoded."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_SOURCE_NOT_UTF8"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-024-unsupported-selector"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F012_context_unsupported_selector"
+variant = "none"
+mandatory = true
+purpose = "Regex, line-number and other undeclared selector grammars are rejected."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_SELECTOR_UNSUPPORTED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-025-selector-zero-match"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F013_context_selector_zero_matches"
+variant = "none"
+mandatory = true
+purpose = "A selector must resolve exactly one semantic record."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_SELECTOR_NOT_UNIQUE"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-026-selector-multiple-match"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F014_context_selector_multiple_matches"
+variant = "none"
+mandatory = true
+purpose = "Multiple selector matches fail rather than using parser iteration order."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_SELECTOR_NOT_UNIQUE"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-027-architecture-source-at-readback"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F015_context_forbidden_architecture_source"
+variant = "forbidden_source_detected_at_exact_base_read"
+mandatory = true
+purpose = "Materialization rechecks forbidden paths against exact committed sources."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_FORBIDDEN_PATH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-028-required-handoff-missing"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F016_context_missing_required_handoff"
+variant = "none"
+mandatory = true
+purpose = "Conditional contexts cannot materialize without every declared accepted handoff."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_HANDOFF_MISSING"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-029-handoff-identity-mismatch"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F017_context_mismatched_handoff"
+variant = "none"
+mandatory = true
+purpose = "Handoff package, commit and public digests must match the declared slot exactly."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_HANDOFF_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-030-context-byte-budget"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F018_context_artifact_budget_exceeded"
+variant = "none"
+mandatory = true
+purpose = "Finite normalized context bytes are enforced before publishing an artifact."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_BUDGET_EXCEEDED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-031-context-clean-cancellation"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F019_context_cancel_before_publish"
+variant = "none"
+mandatory = true
+purpose = "Cancellation before any publish creates no manifest, artifact or authority."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_MATERIALIZATION_CANCELLED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-032-context-unknown-outcome"
+owner = "integration-owner"
+operation = "materialize_context"
+fixture = "F020_context_transport_loss_after_possible_publish"
+variant = "none"
+mandatory = true
+purpose = "Transport loss after a possible publish remains unknown until exact readback."
+expected_class = "FAILURE"
+expected_value = "CONTEXT_MATERIALIZATION_OUTCOME_UNKNOWN"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-033-ticket-issuance-golden"
+owner = "integration-owner"
+operation = "issue_assignment_ticket"
+fixture = "F021_valid_ticket_issue_inputs"
+variant = "none"
+mandatory = true
+purpose = "A valid exact context and distinct actors create one immutable ticket and no lease."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-034-writer-reviewer-conflict"
+owner = "integration-owner"
+operation = "issue_assignment_ticket"
+fixture = "F022_ticket_equal_writer_reviewer"
+variant = "none"
+mandatory = true
+purpose = "A writer cannot be the independent reviewer."
+expected_class = "FAILURE"
+expected_value = "TICKET_WRITER_REVIEWER_CONFLICT"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-035-ticket-prerequisite-missing"
+owner = "integration-owner"
+operation = "issue_assignment_ticket"
+fixture = "F023_ticket_missing_launch_or_dependency"
+variant = "none"
+mandatory = true
+purpose = "Launch and accepted dependency prerequisites are checked at issuance, not inferred from drafts."
+expected_class = "FAILURE"
+expected_value = "TICKET_PREREQUISITE_MISSING"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-036-ticket-operation-input-conflict"
+owner = "integration-owner"
+operation = "issue_assignment_ticket"
+fixture = "F024_ticket_operation_same_id_different_input"
+variant = "none"
+mandatory = true
+purpose = "Ticket-specific stable operation identity cannot be reused for changed canonical inputs."
+expected_class = "FAILURE"
+expected_value = "TICKET_OPERATION_CONFLICT"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-037-ticket-issue-unknown-outcome"
+owner = "integration-owner"
+operation = "issue_assignment_ticket"
+fixture = "F025_ticket_transport_loss_after_possible_commit"
+variant = "none"
+mandatory = true
+purpose = "A possibly committed ticket is not reissued under a new ID after receipt loss."
+expected_class = "FAILURE"
+expected_value = "TICKET_ISSUE_OUTCOME_UNKNOWN"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-038-lease-issuance-golden"
+owner = "integration-owner"
+operation = "issue_writer_lease"
+fixture = "F026_valid_lease_issue_inputs"
+variant = "none"
+mandatory = true
+purpose = "One exact current ticket/context with no competing lease creates one immutable lease."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-039-second-active-lease"
+owner = "integration-owner"
+operation = "issue_writer_lease"
+fixture = "F027_second_active_lease"
+variant = "none"
+mandatory = true
+purpose = "One package cannot have a second active non-superseded writer lease."
+expected_class = "FAILURE"
+expected_value = "PACKAGE_LEASE_CONFLICT"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-040-writer-acknowledgement-golden"
+owner = "integration-owner"
+operation = "acknowledge_writer_lease"
+fixture = "F028_valid_writer_acknowledgement"
+variant = "none"
+mandatory = true
+purpose = "The exact assigned writer appends one ACKNOWLEDGED/WRITER_ACKNOWLEDGED event."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-041-writer-acknowledgement-mismatch"
+owner = "integration-owner"
+operation = "acknowledge_writer_lease"
+fixture = "F029_writer_acknowledgement_mismatch"
+variant = "none"
+mandatory = true
+purpose = "Changed context, scope, dependencies or evidence obligations cannot partially acknowledge a lease."
+expected_class = "FAILURE"
+expected_value = "LEASE_ACKNOWLEDGEMENT_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-042-revoked-or-superseded-lease-use"
+owner = "integration-owner"
+operation = "acknowledge_writer_lease"
+fixture = "F030_revoked_or_superseded_lease_use"
+variant = "none"
+mandatory = true
+purpose = "A terminal lease event blocks later acknowledgement and submission authority."
+expected_class = "FAILURE"
+expected_value = "LEASE_REVOKED_OR_SUPERSEDED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-043-package-submission-golden"
+owner = "integration-owner"
+operation = "record_package_submission"
+fixture = "F031_valid_package_submission"
+variant = "none"
+mandatory = true
+purpose = "Submission and SUBMITTED lease event commit together from an acknowledged package-only branch."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-044-submission-scope-violation"
+owner = "integration-owner"
+operation = "record_package_submission"
+fixture = "F032_submission_out_of_scope_path"
+variant = "none"
+mandatory = true
+purpose = "Any changed path outside the exact leased package scope blocks submission."
+expected_class = "FAILURE"
+expected_value = "SUBMISSION_SCOPE_VIOLATION"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-045-submission-diff-incomplete"
+owner = "integration-owner"
+operation = "record_package_submission"
+fixture = "F033_submission_incomplete_diff"
+variant = "none"
+mandatory = true
+purpose = "The complete sorted unique changed-file manifest is independently recomputed."
+expected_class = "FAILURE"
+expected_value = "SUBMISSION_DIFF_INCOMPLETE"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-046-submission-evidence-incomplete"
+owner = "integration-owner"
+operation = "record_package_submission"
+fixture = "F034_submission_missing_evidence"
+variant = "none"
+mandatory = true
+purpose = "Every ticket evidence requirement is a result or explicit UNAVAILABLE entry."
+expected_class = "FAILURE"
+expected_value = "SUBMISSION_EVIDENCE_INCOMPLETE"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-047-submission-line-budget"
+owner = "integration-owner"
+operation = "record_package_submission"
+fixture = "F035_submission_line_budget_overflow"
+variant = "none"
+mandatory = true
+purpose = "A package over the hard total line limit cannot be submitted as acceptable work."
+expected_class = "FAILURE"
+expected_value = "SUBMISSION_LINE_BUDGET_VIOLATION"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-048-independent-review-golden"
+owner = "integration-owner"
+operation = "record_independent_review"
+fixture = "F036_valid_independent_review"
+variant = "none"
+mandatory = true
+purpose = "A distinct reviewer independently recomputes scope, contract, evidence, API and line claims."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-049-review-not-independent"
+owner = "integration-owner"
+operation = "record_independent_review"
+fixture = "F037_self_review"
+variant = "none"
+mandatory = true
+purpose = "The package writer cannot accept the writer's own submission."
+expected_class = "FAILURE"
+expected_value = "REVIEW_NOT_INDEPENDENT"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-050-review-recalculation-mismatch"
+owner = "integration-owner"
+operation = "record_independent_review"
+fixture = "F038_review_recalculation_mismatch"
+variant = "none"
+mandatory = true
+purpose = "A mismatched diff/API/configuration/evidence recalculation blocks acceptance."
+expected_class = "FAILURE"
+expected_value = "REVIEW_RECALCULATION_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-051-package-handoff-golden"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F039_valid_package_handoff"
+variant = "none"
+mandatory = true
+purpose = "An accepted exact review permits one append-only handoff named by handoff_id."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-052-handoff-review-not-accepted"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F040_handoff_nonaccepted_review"
+variant = "none"
+mandatory = true
+purpose = "REQUEST_CHANGES, REJECT and SUPERSEDED review verdicts cannot publish a package handoff."
+expected_class = "FAILURE"
+expected_value = "PACKAGE_HANDOFF_NOT_ACCEPTED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-053-control-record-schema-mismatch"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F041_record_unknown_field_or_wrong_kind"
+variant = "none"
+mandatory = true
+purpose = "Unknown fields, wrong record kind and canonical order drift fail closed."
+expected_class = "FAILURE"
+expected_value = "CONTROL_RECORD_SCHEMA_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-054-control-record-digest-mismatch"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F042_record_complete_file_digest_mismatch"
+variant = "none"
+mandatory = true
+purpose = "Git blob, complete-file digest, embedded signed payload and signature binding are independently verified."
+expected_class = "FAILURE"
+expected_value = "CONTROL_RECORD_DIGEST_MISMATCH"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-055-idempotent-same-input"
+owner = "integration-owner"
+operation = "supersede_control_record"
+fixture = "F043_same_operation_same_input"
+variant = "none"
+mandatory = true
+purpose = "Retrying the same operation ID with byte-identical input returns the original durable result."
+expected_class = "SUCCESS"
+expected_value = "IDEMPOTENT_ORIGINAL_RESULT"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-056-control-operation-conflict"
+owner = "integration-owner"
+operation = "supersede_control_record"
+fixture = "F044_same_operation_different_input"
+variant = "none"
+mandatory = true
+purpose = "A stable operation ID cannot be reused for different canonical input."
+expected_class = "FAILURE"
+expected_value = "CONTROL_OPERATION_CONFLICT"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-057-recovery-committed-exact"
+owner = "integration-owner"
+operation = "recover_control_operation"
+fixture = "F045_recovery_committed_exact"
+variant = "none"
+mandatory = true
+purpose = "Exact target/input/blob/digest readback recovers a successful operation."
+expected_class = "RECOVERY"
+expected_value = "RECOVERED_SUCCEEDED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-058-recovery-safe-retry"
+owner = "integration-owner"
+operation = "recover_control_operation"
+fixture = "F046_recovery_absence_proven"
+variant = "none"
+mandatory = true
+purpose = "Retry is allowed only when repository and operation evidence prove no mutation occurred."
+expected_class = "RECOVERY"
+expected_value = "SAFE_TO_RETRY"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-059-recovery-conflict"
+owner = "integration-owner"
+operation = "recover_control_operation"
+fixture = "F047_recovery_conflicting_target"
+variant = "none"
+mandatory = true
+purpose = "A target committed for another input remains an explicit conflict."
+expected_class = "RECOVERY"
+expected_value = "CONFLICT"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-060-recovery-preserve-unknown"
+owner = "integration-owner"
+operation = "recover_control_operation"
+fixture = "F048_recovery_evidence_ambiguous"
+variant = "none"
+mandatory = true
+purpose = "Insufficient evidence preserves unknown outcome instead of guessing success or absence."
+expected_class = "RECOVERY"
+expected_value = "PRESERVE_OUTCOME_UNKNOWN"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-061-partial-record-quarantine"
+owner = "integration-owner"
+operation = "recover_control_operation"
+fixture = "F049_partial_or_unreadable_record"
+variant = "none"
+mandatory = true
+purpose = "Partial, unreadable, schema-invalid or signature-invalid records are quarantined."
+expected_class = "FAILURE"
+expected_value = "CONTROL_RECORD_QUARANTINED"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-062-supersession-append-only"
+owner = "integration-owner"
+operation = "supersede_control_record"
+fixture = "F050_valid_supersession_pair"
+variant = "none"
+mandatory = true
+purpose = "Replacement and receipt commit together while historical record bytes remain unchanged."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-063-lease-terminal-event-closed"
+owner = "integration-owner"
+operation = "revoke_or_supersede_lease"
+fixture = "F051_closed_lease_terminal_event"
+variant = "none"
+mandatory = true
+purpose = "REVOKED and SUPERSEDED events use exact closed event/reason mappings and append to the chain."
+expected_class = "SUCCESS"
+expected_value = "SUCCESS"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[[probe]]
+id = "TI-064-package-handoff-no-authority-escalation"
+owner = "integration-owner"
+operation = "publish_package_handoff"
+fixture = "F052_package_handoff_no_gate_or_wave_authority"
+variant = "none"
+mandatory = true
+purpose = "A package handoff alone cannot accept G0/W0 or advance launch state."
+expected_class = "POLICY"
+expected_value = "NO_AUTHORITY_CHANGE"
+result = "UNAVAILABLE"
+raw_output_ref = ""
+reviewer_receipt_ref = ""
+
+[invariants]
+all_results_begin_UNAVAILABLE = true
+PASS_requires_raw_output = true
+PASS_requires_independent_reviewer_receipt = true
+failure_expected_values_must_cover_closed_failure_registry = true
+recovery_expected_values_must_cover_all_recovery_dispositions = true
+probe_presence_is_not_execution = true
+probe_success_may_not_create_control_records = true
