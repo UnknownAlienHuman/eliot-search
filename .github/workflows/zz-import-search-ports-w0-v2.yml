@@ -1,0 +1,223 @@
+name: import and merge exact search-ports W0
+
+on:
+  push:
+    branches:
+      - work/search-ports-import
+    paths:
+      - .github/workflows/zz-import-search-ports-w0-v2.yml
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: import-search-ports-w0-v2
+  cancel-in-progress: false
+
+jobs:
+  validate-and-merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REPO: UnknownAlienHuman/eliot-search
+      BRANCH: work/search-ports-import
+    steps:
+      - name: Checkout exact main-derived writer branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: work/search-ports-import
+          fetch-depth: 0
+
+      - name: Reconstruct and authenticate bounded package archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find .github/transport -maxdepth 1 -name 'search-ports.part*' -type f | wc -l)" -eq 7
+          cat .github/transport/search-ports.part* | base64 -d > /tmp/search-ports.tar.gz
+          echo '8ad3e29566ab39851722647cb878699474ab121bdd5440c247a284209755dc22  /tmp/search-ports.tar.gz' | sha256sum -c -
+          tar -tzf /tmp/search-ports.tar.gz > /tmp/search-ports-paths.txt
+          test -s /tmp/search-ports-paths.txt
+          while IFS= read -r path; do
+            case "$path" in
+              crates/search-ports|crates/search-ports/*) ;;
+              *) echo "out-of-scope archive path: $path" >&2; exit 1 ;;
+            esac
+            case "$path" in
+              /*|../*|*'/../'*|*'/..') echo "unsafe archive path: $path" >&2; exit 1 ;;
+            esac
+          done < /tmp/search-ports-paths.txt
+          tar -xzf /tmp/search-ports.tar.gz
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy --no-self-update
+          rustup override set 1.98.0
+          rustc -Vv
+          cargo -V
+
+      - name: Remove transport surface and format product code
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/transport/search-ports.part*
+          rm -f .github/workflows/zz-import-search-ports-w0-v2.yml
+          rmdir .github/transport 2>/dev/null || true
+          cargo fmt --all
+          git fetch origin main
+          mapfile -t changed < <(git diff --name-only origin/main --)
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              crates/search-ports/*) ;;
+              *) echo "out-of-scope final product path: $path" >&2; exit 1 ;;
+            esac
+          done
+          git diff --check origin/main --
+
+      - name: Validate exact machine registry and package boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import tomllib
+
+          root = Path('crates/search-ports')
+          manifest = tomllib.loads((root / 'Cargo.toml').read_text())
+          dependencies = set((manifest.get('dependencies') or {}).keys())
+          if dependencies != {'search-contracts'}:
+              raise SystemExit(f'exact dependency set differs: {sorted(dependencies)}')
+          if manifest.get('build') or (root / 'build.rs').exists():
+              raise SystemExit('build script is forbidden')
+
+          registry = tomllib.loads(Path('swarm/coverage/ports.toml').read_text())
+          ports = registry.get('port', [])
+          if registry.get('port_count') != 23 or len(ports) != 23:
+              raise SystemExit('expected exactly 23 registered ports')
+          expected_methods = sum(len(port['methods']) for port in ports)
+          if registry.get('method_count') != 80 or expected_methods != 80:
+              raise SystemExit('expected exactly 80 registered operations')
+
+          expected_modules = {
+              'access.rs', 'conformance.rs', 'context.rs', 'control.rs', 'error.rs',
+              'handles.rs', 'index.rs', 'lib.rs', 'optional.rs', 'preparation.rs',
+              'query.rs', 'runtime.rs', 'source.rs', 'stream.rs',
+          }
+          actual_modules = {path.name for path in (root / 'src').glob('*.rs')}
+          if actual_modules != expected_modules:
+              raise SystemExit(
+                  f'module set differs; missing={sorted(expected_modules - actual_modules)}, '
+                  f'extra={sorted(actual_modules - expected_modules)}'
+              )
+
+          for port in ports:
+              module = root / 'src' / f"{port['trait_module']}.rs"
+              text = module.read_text()
+              if not re.search(rf'\bpub trait\s+{re.escape(port["name"])}\b', text):
+                  raise SystemExit(f'{module}: missing trait {port["name"]}')
+              for method in port['methods']:
+                  if not re.search(rf'\bfn\s+{re.escape(method)}\s*\(', text):
+                      raise SystemExit(f'{module}: missing method {port["name"]}::{method}')
+
+          source = '\n'.join(path.read_text() for path in sorted((root / 'src').glob('*.rs')))
+          forbidden = (
+              'todo!(', 'unimplemented!(', 'unsafe {', 'unsafe fn', 'extern "C"',
+              'std::fs', 'std::net', 'std::process', 'tokio::', 'async_std::',
+              'reqwest::', 'ureq::', 'Command::new', 'include_bytes!', 'include_str!',
+          )
+          for marker in forbidden:
+              if marker in source:
+                  raise SystemExit(f'forbidden package-boundary marker: {marker!r}')
+
+          handwritten_lines = sum(
+              len(path.read_text().splitlines()) for path in (root / 'src').glob('*.rs')
+          )
+          if handwritten_lines > 5_500:
+              raise SystemExit(f'line budget exceeded: {handwritten_lines}')
+          print({
+              'ports': len(ports),
+              'methods': expected_methods,
+              'modules': len(actual_modules),
+              'handwritten_lines': handwritten_lines,
+          })
+          PY
+
+      - name: Run exact package qualification
+        shell: bash
+        run: |
+          cargo fmt --all -- --check
+          cargo check -p search-ports --all-targets --locked
+          cargo test -p search-ports --all-targets --locked
+          cargo clippy -p search-ports --all-targets --locked -- -D warnings
+          cargo doc -p search-ports --no-deps --locked
+
+      - name: Run complete workspace regression
+        shell: bash
+        run: |
+          cargo check --workspace --all-targets --locked
+          cargo test --workspace --all-targets --locked
+
+      - name: Commit exact validated product tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A crates/search-ports .github/transport .github/workflows/zz-import-search-ports-w0-v2.yml
+          git commit -m 'feat(ports): implement W0 vendor-neutral interfaces (#50)'
+          git push origin "HEAD:refs/heads/${BRANCH}"
+          echo "PRODUCT_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Prove final branch diff and open exact-head PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          mapfile -t changed < <(git diff --name-only origin/main...HEAD)
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in crates/search-ports/*) ;; *) echo "unexpected PR path: $path" >&2; exit 1 ;; esac
+          done
+          pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$pr" ]; then
+            url="$(gh pr create --repo "$REPO" --base main --head "$BRANCH" \
+              --title 'W0: implement search-ports vendor-neutral interfaces' \
+              --body $'Closes #50\n\nImplements all 23 registry-owned vendor-neutral port traits and all 80 exact operations, bounded operation context, opaque guards, mutation identity, finite pages/streams, typed failures, and deterministic conformance fakes.\n\nThe exact head passed package fmt/check/test/Clippy/rustdoc and complete workspace check/test on Rust 1.98.0. Final diff is restricted to `crates/search-ports/**`.')"
+            pr="${url##*/}"
+          fi
+          echo "PR_NUMBER=$pr" >> "$GITHUB_ENV"
+          actual="$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+          test "$actual" = "$PRODUCT_HEAD"
+
+      - name: Merge only the exact qualified head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(gh api -X PUT "repos/${REPO}/pulls/${PR_NUMBER}/merge" \
+            -f merge_method=squash -f sha="$PRODUCT_HEAD")"
+          echo "$response"
+          test "$(jq -r .merged <<<"$response")" = true
+          echo "MERGE_SHA=$(jq -r .sha <<<"$response")" >> "$GITHUB_ENV"
+
+      - name: Prove merged bytes from fresh main and close branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$MERGE_SHA"
+          rm -rf /tmp/search-ports-main-proof
+          git worktree add --detach /tmp/search-ports-main-proof origin/main
+          test -f /tmp/search-ports-main-proof/crates/search-ports/src/conformance.rs
+          grep -q 'pub const PORTS: \[PortDescriptor; 23\]' /tmp/search-ports-main-proof/crates/search-ports/src/conformance.rs
+          grep -q 'pub const PORT_METHODS: \[PortMethodDescriptor; 80\]' /tmp/search-ports-main-proof/crates/search-ports/src/conformance.rs
+          cargo check --manifest-path /tmp/search-ports-main-proof/Cargo.toml -p search-ports --all-targets --locked
+          gh api -X DELETE "repos/${REPO}/git/refs/heads/${BRANCH}" || true
