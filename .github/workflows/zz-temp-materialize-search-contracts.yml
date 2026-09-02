@@ -40,7 +40,8 @@ jobs:
         run: |
           set -euo pipefail
           cat \
-            .github/tmp/search-contracts-payload.bin.00 \
+            .github/tmp/search-contracts-payload.bin.00.00 \
+            .github/tmp/search-contracts-payload.bin.00.01 \
             .github/tmp/search-contracts-payload.bin.01 \
             .github/tmp/search-contracts-payload.bin.02 \
             > /tmp/search-contracts-payload.tar.xz
