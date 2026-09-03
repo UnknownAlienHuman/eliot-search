@@ -12,6 +12,7 @@ use crate::{DataRootIdentity, OwnerBinding, OwnerError, OwnerOperation, RuntimeM
 pub const MAX_OWNER_HEALTH_REASONS: usize = 16;
 
 /// Finite process-monotonic lease window.
+#[allow(clippy::struct_field_names)]
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct LeaseWindow {
     acquired_at: MonotonicInstant,
@@ -341,7 +342,7 @@ pub struct DrainToken {
 }
 
 impl DrainToken {
-    pub(crate) fn new(
+    pub(crate) const fn new(
         binding: OwnerBinding,
         operation: OwnerOperation,
         reason: DrainReason,
@@ -437,7 +438,7 @@ pub struct ReleasePermit {
 }
 
 impl ReleasePermit {
-    pub(crate) fn new(
+    pub(crate) const fn new(
         binding: OwnerBinding,
         drain_operation: OwnerOperation,
         dependency_receipt_digest: Blake3Digest32,

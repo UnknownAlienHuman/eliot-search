@@ -272,7 +272,7 @@ pub struct OwnerOperation {
 impl OwnerOperation {
     /// Creates an operation fence.
     #[must_use]
-    pub fn new(mutation: MutationIdentity, request_digest: Blake3Digest32) -> Self {
+    pub const fn new(mutation: MutationIdentity, request_digest: Blake3Digest32) -> Self {
         Self {
             mutation,
             request_digest,

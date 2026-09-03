@@ -184,7 +184,7 @@ pub enum AcquireCommitObservation {
     /// Primitive and durable record match exact plan.
     VerifiedApplied {
         /// Exact read-back record.
-        record: OwnerRecord,
+        record: Box<OwnerRecord>,
         /// Whether the exact OS primitive is verified held.
         primitive_verified: bool,
         /// Post-mutation readback receipt.
@@ -205,9 +205,9 @@ pub enum AcquireResolution {
     /// Exact acquisition completed.
     Acquired {
         /// Process-local owner authority.
-        guard: OwnerGuard,
+        guard: Box<OwnerGuard>,
         /// Exact verification receipt.
-        receipt: OwnerVerificationReceipt,
+        receipt: Box<OwnerVerificationReceipt>,
     },
     /// No mutation occurred and acquisition was rejected.
     RejectedBeforeMutation,
@@ -240,9 +240,9 @@ pub enum AcquireRecovery {
     /// Exact live state reconstructed process-local authority.
     Reconstructed {
         /// Reconstructed owner guard.
-        guard: OwnerGuard,
+        guard: Box<OwnerGuard>,
         /// Exact readback receipt.
-        receipt: OwnerVerificationReceipt,
+        receipt: Box<OwnerVerificationReceipt>,
     },
     /// Exact readback proves acquisition did not apply.
     NotApplied,
@@ -349,10 +349,10 @@ pub fn prepare_acquire(
     let recovery = classify_abandoned_owner(observation, policy);
     match recovery {
         RecoveryDecision::DenyLiveOwner => {
-            if let OwnerObservation::LiveConflictingOwner { record, .. } = observation {
-                if record.binding().owner().mode() != request.owner.mode() {
-                    return Err(OwnerError::OwnerModeConflict);
-                }
+            if let OwnerObservation::LiveConflictingOwner { record, .. } = observation
+                && record.binding().owner().mode() != request.owner.mode()
+            {
+                return Err(OwnerError::OwnerModeConflict);
             }
             return Err(OwnerError::DataRootAlreadyOwned);
         }
@@ -467,10 +467,10 @@ pub fn complete_acquire(
             record,
             primitive_verified: true,
             readback_receipt,
-        } if record == pending.expected_record => {
-            let receipt = verification_receipt(&record, readback_receipt);
-            let guard = OwnerGuard::from_record(&record);
-            let next = snapshot.advanced(OwnerState::Active { record })?;
+        } if record.as_ref() == &pending.expected_record => {
+            let receipt = Box::new(verification_receipt(record.as_ref(), readback_receipt));
+            let guard = Box::new(OwnerGuard::from_record(record.as_ref()));
+            let next = snapshot.advanced(OwnerState::Active { record: *record })?;
             Ok((next, AcquireResolution::Acquired { guard, receipt }))
         }
         AcquireCommitObservation::RejectedBeforeMutation => {
@@ -531,7 +531,13 @@ pub fn recover_acquisition(
             let next = snapshot.advanced(OwnerState::Active {
                 record: record.clone(),
             })?;
-            Ok((next, AcquireRecovery::Reconstructed { guard, receipt }))
+            Ok((
+                next,
+                AcquireRecovery::Reconstructed {
+                    guard: Box::new(guard),
+                    receipt: Box::new(receipt),
+                },
+            ))
         }
         OwnerObservation::Absent { highest_epoch, .. }
             if highest_epoch
@@ -632,7 +638,7 @@ pub fn renew_verified(
     Ok((next, receipt))
 }
 
-fn verification_receipt(
+const fn verification_receipt(
     record: &OwnerRecord,
     observation_receipt: ReceiptRef,
 ) -> OwnerVerificationReceipt {
@@ -690,20 +696,21 @@ fn verify_record_revision_advanced(
 }
 
 fn next_owner_epoch(previous: Option<OwnerEpoch>) -> Result<OwnerEpoch, OwnerError> {
-    match previous {
-        Some(epoch) => epoch
-            .checked_next()
-            .map_err(|_| OwnerError::ContractExhausted),
-        None => OwnerEpoch::new(1).map_err(|_| OwnerError::ContractExhausted),
-    }
+    previous.map_or_else(
+        || OwnerEpoch::new(1).map_err(|_| OwnerError::ContractExhausted),
+        |epoch| {
+            epoch
+                .checked_next()
+                .map_err(|_| OwnerError::ContractExhausted)
+        },
+    )
 }
 
 const fn maximum_epoch(left: Option<OwnerEpoch>, right: Option<OwnerEpoch>) -> Option<OwnerEpoch> {
     match (left, right) {
         (Some(left), Some(right)) if left.get() >= right.get() => Some(left),
-        (Some(_), Some(right)) => Some(right),
+        (Some(_) | None, Some(right)) => Some(right),
         (Some(left), None) => Some(left),
-        (None, Some(right)) => Some(right),
         (None, None) => None,
     }
 }
@@ -861,7 +868,7 @@ mod tests {
         let (active, _) = complete_acquire(
             &prepared,
             AcquireCommitObservation::VerifiedApplied {
-                record: record.clone(),
+                record: Box::new(record.clone()),
                 primitive_verified: true,
                 readback_receipt: ReceiptRef::new("receipt:readback").expect("receipt"),
             },

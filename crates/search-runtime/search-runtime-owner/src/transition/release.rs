@@ -33,7 +33,7 @@ pub enum ReleaseCommitObservation {
     /// Exact draining record and primitive remain held.
     VerifiedStillOwned {
         /// Exact read-back owner record.
-        record: OwnerRecord,
+        record: Box<OwnerRecord>,
         /// Exact readback receipt.
         readback_receipt: ReceiptRef,
     },
@@ -49,7 +49,7 @@ pub enum ReleaseCommitObservation {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReleaseResolution {
     /// Exact owner no longer claims the root.
-    Released(OwnerShutdownReceipt),
+    Released(Box<OwnerShutdownReceipt>),
     /// Exact draining owner still holds the root.
     StillOwned,
     /// Release was rejected before mutation.
@@ -256,7 +256,7 @@ pub fn complete_release(
         }
         ReleaseCommitObservation::VerifiedStillOwned {
             record: observed, ..
-        } if &observed == record => {
+        } if observed.as_ref() == record => {
             let next = snapshot.advanced(OwnerState::Draining {
                 record: record.clone(),
                 drain: drain.clone(),
@@ -312,7 +312,7 @@ pub fn recover_release(
         }
         ReleaseCommitObservation::VerifiedStillOwned {
             record: observed, ..
-        } if &observed == record => {
+        } if observed.as_ref() == record => {
             let next = snapshot.advanced(OwnerState::Draining {
                 record: record.clone(),
                 drain: drain.clone(),
@@ -376,7 +376,7 @@ fn finish_release(
         last_epoch: record.binding().epoch(),
         receipt: receipt.clone(),
     })?;
-    Ok((next, ReleaseResolution::Released(receipt)))
+    Ok((next, ReleaseResolution::Released(Box::new(receipt))))
 }
 
 fn quarantine_release(
@@ -394,7 +394,7 @@ fn quarantine_release(
     ))
 }
 
-fn verification_receipt(
+const fn verification_receipt(
     record: &OwnerRecord,
     observation_receipt: ReceiptRef,
 ) -> OwnerVerificationReceipt {

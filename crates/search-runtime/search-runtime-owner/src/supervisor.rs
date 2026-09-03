@@ -240,7 +240,7 @@ impl OwnerSupervisor {
 
     /// Returns the last clean shutdown receipt when released.
     #[must_use]
-    pub fn shutdown_receipt(&self) -> Option<&OwnerShutdownReceipt> {
+    pub const fn shutdown_receipt(&self) -> Option<&OwnerShutdownReceipt> {
         match self.snapshot.state() {
             crate::OwnerState::Released { receipt, .. } => Some(receipt),
             _ => None,

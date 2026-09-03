@@ -1,9 +1,6 @@
 //! Content-minimized health and shared mutation-boundary classification.
 
-use search_domain::{
-    AdmissionState, CancellationState, MutationObservation, MutationStart, PostconditionState,
-    SafetyState, classify_mutation_outcome,
-};
+use search_domain::{MutationObservation, classify_mutation_outcome};
 
 use crate::{
     LiveOwnerStatus, OwnerHealth, OwnerHealthReason, OwnerHealthState, OwnerLifecycle,
@@ -68,13 +65,12 @@ pub fn owner_health(snapshot: &OwnerSnapshot, observation: &OwnerObservation) ->
                     Some(record.binding().root()),
                 )
             } else {
-                OwnerHealth::with_reasons(
+                bounded_health(
                     OwnerHealthState::Quarantined,
                     Some(record.binding().epoch()),
                     Some(record.binding().root()),
                     reasons,
                 )
-                .expect("owner-health reason count is statically bounded")
             }
         }
         OwnerState::Acquiring { .. }
@@ -96,39 +92,19 @@ pub fn owner_health(snapshot: &OwnerSnapshot, observation: &OwnerObservation) ->
 /// Converts explicit mutation-boundary facts to the shared semantic outcome.
 #[must_use]
 pub const fn classify_owner_mutation_boundary(
-    mutation_may_have_started: bool,
-    postcondition_verified: bool,
-    cancelled: bool,
-    quarantined: bool,
-    rejected_before_mutation: bool,
+    observation: MutationObservation,
 ) -> search_domain::MutationOutcome {
-    classify_mutation_outcome(MutationObservation {
-        mutation_start: if mutation_may_have_started {
-            MutationStart::MayHaveStarted
-        } else {
-            MutationStart::NotStarted
-        },
-        postcondition: if postcondition_verified {
-            PostconditionState::Verified
-        } else {
-            PostconditionState::Unverified
-        },
-        cancellation: if cancelled {
-            CancellationState::Cancelled
-        } else {
-            CancellationState::NotCancelled
-        },
-        safety: if quarantined {
-            SafetyState::Quarantined
-        } else {
-            SafetyState::Consistent
-        },
-        admission: if rejected_before_mutation {
-            AdmissionState::RejectedBeforeMutation
-        } else {
-            AdmissionState::Admitted
-        },
-    })
+    classify_mutation_outcome(observation)
+}
+
+fn bounded_health(
+    state: OwnerHealthState,
+    owner_epoch: Option<search_contracts::OwnerEpoch>,
+    root: Option<crate::DataRootIdentity>,
+    reasons: impl IntoIterator<Item = OwnerHealthReason>,
+) -> OwnerHealth {
+    OwnerHealth::with_reasons(state, owner_epoch, root, reasons)
+        .unwrap_or_else(|_| OwnerHealth::healthy(OwnerHealthState::Quarantined, owner_epoch, root))
 }
 
 fn one_reason(
@@ -136,24 +112,32 @@ fn one_reason(
     snapshot: &OwnerSnapshot,
     reason: OwnerHealthReason,
 ) -> OwnerHealth {
-    OwnerHealth::with_reasons(
+    bounded_health(
         state,
         snapshot.state().highest_epoch(),
         Some(snapshot.state().root()),
         [reason],
     )
-    .expect("one owner-health reason is always bounded")
 }
 
 #[cfg(test)]
 mod tests {
-    use search_domain::{MutationOutcomeClass, MutationRetryability};
+    use search_domain::{
+        AdmissionState, CancellationState, MutationObservation, MutationOutcomeClass,
+        MutationRetryability, MutationStart, PostconditionState, SafetyState,
+    };
 
     use super::classify_owner_mutation_boundary;
 
     #[test]
     fn cancellation_after_possible_mutation_remains_unknown() {
-        let outcome = classify_owner_mutation_boundary(true, false, true, false, false);
+        let outcome = classify_owner_mutation_boundary(MutationObservation {
+            mutation_start: MutationStart::MayHaveStarted,
+            postcondition: PostconditionState::Unverified,
+            cancellation: CancellationState::Cancelled,
+            safety: SafetyState::Consistent,
+            admission: AdmissionState::Admitted,
+        });
         assert_eq!(outcome.class, MutationOutcomeClass::Unknown);
         assert_eq!(outcome.retryability, MutationRetryability::AfterReadback);
     }
