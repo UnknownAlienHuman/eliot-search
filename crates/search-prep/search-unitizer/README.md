@@ -9,7 +9,7 @@ Turn a materialization into deterministic unit occurrences and an immutable unit
 ## Owns
 
 - unitizer profiles
-- UnitOccurrence creation
+- `UnitOccurrence` creation
 - native anchor preservation
 - ordinal/structural identity rules
 - unit manifest digest and determinism

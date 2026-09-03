@@ -9,7 +9,7 @@ Own the serialized epoch publication/commit/recovery state machine through vendo
 ## Owns
 
 - publication intents, exact mutation sequence and readback
-- guarded VisibleEpoch commit
+- guarded `VisibleEpoch` commit
 - compensation/recovery/doctor decisions
 - committed retired-point manifests
 

@@ -10,8 +10,8 @@ Admission rules are evaluated by `search-source-admission`; this crate verifies 
 ## Owns
 
 - root registration and policy binding
-- SourceMembership and ReferencePortfolio lifecycle
-- SourceView / WorkspaceViewRevision resolution
+- `SourceMembership` and `ReferencePortfolio` lifecycle
+- `SourceView` / `WorkspaceViewRevision` resolution
 - source-owner/cutover state
 
 ## Must not own

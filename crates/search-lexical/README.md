@@ -8,7 +8,7 @@ Encode documents and queries into immutable sparse-vector profiles without ownin
 
 ## Owns
 
-- code_v1 and text_neutral_v1 profile behavior
+- `code_v1` and `text_neutral_v1` profile behavior
 - tokenization, Unicode and identifier expansion
 - document/query compatibility fixtures
 - term-index/collision policy
