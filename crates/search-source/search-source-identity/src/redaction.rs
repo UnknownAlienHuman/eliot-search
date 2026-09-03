@@ -1,13 +1,11 @@
 //! Content-minimized identity and binding views.
 
 use search_contracts::{
-    BoundedList, CatalogRevision, PathBindingId, RootBindingId, SourceId,
-    SourceIdentityKind,
+    BoundedList, CatalogRevision, PathBindingId, RootBindingId, SourceId, SourceIdentityKind,
 };
 
 use crate::{
-    IdentityError, IdentityResolution, PathBindingRecord, PathBindingState,
-    MAX_IDENTITY_CANDIDATES,
+    IdentityError, IdentityResolution, MAX_IDENTITY_CANDIDATES, PathBindingRecord, PathBindingState,
 };
 
 /// Redacted identity/binding lifecycle class.
@@ -118,8 +116,7 @@ pub fn redacted_resolution_view(
     };
     Ok(RedactedIdentityView {
         state,
-        source_ids: BoundedList::new(ids)
-            .map_err(|_| IdentityError::IdentityCapacityExceeded)?,
+        source_ids: BoundedList::new(ids).map_err(|_| IdentityError::IdentityCapacityExceeded)?,
         identity_kind,
         root_binding_id: None,
         path_binding_id: None,
@@ -130,8 +127,9 @@ pub fn redacted_resolution_view(
 }
 
 /// Builds a redacted view of one path-binding interval.
-#[must_use]
-pub fn redacted_binding_view(binding: &PathBindingRecord) -> RedactedIdentityView {
+pub fn redacted_binding_view(
+    binding: &PathBindingRecord,
+) -> Result<RedactedIdentityView, IdentityError> {
     let (state, opened_revision, closed_revision) = match binding.state {
         PathBindingState::Active { opened_revision } => (
             RedactedIdentityState::BindingActive,
@@ -148,17 +146,17 @@ pub fn redacted_binding_view(binding: &PathBindingRecord) -> RedactedIdentityVie
             Some(closed_revision),
         ),
     };
-    RedactedIdentityView {
+    Ok(RedactedIdentityView {
         state,
         source_ids: BoundedList::new(vec![binding.source_id])
-            .expect("one source ID is within the static view bound"),
+            .map_err(|_| IdentityError::IdentityCapacityExceeded)?,
         identity_kind: Some(binding.stable_key.identity_kind()),
         root_binding_id: Some(binding.root_binding_id),
         path_binding_id: Some(binding.binding_id),
         opened_revision,
         closed_revision,
         reason: None,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -169,9 +167,7 @@ mod tests {
     };
 
     use super::{RedactedIdentityState, redacted_binding_view};
-    use crate::{
-        PathBindingRecord, PathBindingState, StableIdentityKey,
-    };
+    use crate::{PathBindingRecord, PathBindingState, StableIdentityKey};
 
     #[test]
     fn binding_view_contains_no_path_text() {
@@ -184,8 +180,7 @@ mod tests {
                 &crate::PathObservation {
                     root_binding_id: RootBindingId::from_bytes([4; 16]),
                     root_relative_lookup_path: "private/name.rs".into(),
-                    profile_revision: search_contracts::NonZeroRevision::new(1)
-                        .expect("revision"),
+                    profile_revision: search_contracts::NonZeroRevision::new(1).expect("revision"),
                     profile_schema_digest: Blake3Digest32::from_bytes([5; 32]),
                     normalization_attested: true,
                 },
@@ -212,7 +207,7 @@ mod tests {
                 opened_revision: CatalogRevision::new(1),
             },
         };
-        let view = redacted_binding_view(&binding);
+        let view = redacted_binding_view(&binding).expect("redacted view");
         assert_eq!(view.state, RedactedIdentityState::BindingActive);
         assert!(!format!("{view:?}").contains("private/name.rs"));
     }

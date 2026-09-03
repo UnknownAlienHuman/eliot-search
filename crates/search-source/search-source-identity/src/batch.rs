@@ -1,12 +1,12 @@
 //! Finite identity batch resolution with complete cancellation/budget accounting.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, btree_map::Entry};
 
 use search_contracts::{BoundedList, OpaqueId};
 
 use crate::{
-    CreationPolicy, IdentityError, IdentityResolution, PriorIdentityCandidates,
-    ResolutionPolicy, StableIdentityEvidence, ValidatedIdentityObservation, resolve_identity,
+    CreationPolicy, IdentityError, IdentityResolution, PriorIdentityCandidates, ResolutionPolicy,
+    StableIdentityEvidence, ValidatedIdentityObservation, resolve_identity,
 };
 
 /// Maximum observations in one pure identity batch.
@@ -40,7 +40,7 @@ impl IdentityBatchControl {
     /// # Errors
     ///
     /// Zero comparison budget is rejected.
-    pub fn new(
+    pub const fn new(
         comparison_budget: usize,
         cancel_after_items: Option<usize>,
     ) -> Result<Self, IdentityError> {
@@ -111,10 +111,8 @@ pub fn resolve_batch(
     let mut comparisons_used = 0_usize;
     let mut cancellation_observed = false;
     let mut budget_exhausted = false;
-    let mut seen_exact: BTreeMap<
-        (crate::CanonicalPathKey, StableIdentityEvidence),
-        usize,
-    > = BTreeMap::new();
+    let mut seen_exact: BTreeMap<(crate::CanonicalPathKey, StableIdentityEvidence), usize> =
+        BTreeMap::new();
     let mut seen_by_path: BTreeMap<crate::CanonicalPathKey, StableIdentityEvidence> =
         BTreeMap::new();
 
@@ -128,28 +126,31 @@ pub fn resolve_batch(
         } else {
             let observed = item.observation.as_inner();
             let exact_key = (observed.path_key.clone(), observed.stable_evidence);
-            if seen_exact.contains_key(&exact_key) {
-                IdentityBatchOutcome::DuplicateObservation
-            } else if seen_by_path
-                .get(&observed.path_key)
-                .is_some_and(|prior_evidence| prior_evidence != &observed.stable_evidence)
-            {
-                IdentityBatchOutcome::ConflictingObservation
-            } else if item.prior.len() > remaining_budget {
-                budget_exhausted = true;
-                IdentityBatchOutcome::BudgetExhausted
-            } else {
-                let comparisons = item.prior.len();
-                remaining_budget -= comparisons;
-                comparisons_used = comparisons_used.saturating_add(comparisons);
-                seen_exact.insert(exact_key, index);
-                seen_by_path.insert(observed.path_key.clone(), observed.stable_evidence);
-                let per_item_budget = comparisons.max(1);
-                match ResolutionPolicy::new(item.creation, per_item_budget, false)
-                    .and_then(|policy| resolve_identity(&item.observation, &item.prior, policy))
-                {
-                    Ok(resolution) => IdentityBatchOutcome::Resolved(Box::new(resolution)),
-                    Err(error) => IdentityBatchOutcome::Invalid(error),
+            match seen_exact.entry(exact_key) {
+                Entry::Occupied(_) => IdentityBatchOutcome::DuplicateObservation,
+                Entry::Vacant(exact_entry) => {
+                    if seen_by_path
+                        .get(&observed.path_key)
+                        .is_some_and(|prior_evidence| prior_evidence != &observed.stable_evidence)
+                    {
+                        IdentityBatchOutcome::ConflictingObservation
+                    } else if item.prior.len() > remaining_budget {
+                        budget_exhausted = true;
+                        IdentityBatchOutcome::BudgetExhausted
+                    } else {
+                        let comparisons = item.prior.len();
+                        remaining_budget -= comparisons;
+                        comparisons_used = comparisons_used.saturating_add(comparisons);
+                        exact_entry.insert(index);
+                        seen_by_path.insert(observed.path_key.clone(), observed.stable_evidence);
+                        let per_item_budget = comparisons.max(1);
+                        match ResolutionPolicy::new(item.creation, per_item_budget, false).and_then(
+                            |policy| resolve_identity(&item.observation, &item.prior, policy),
+                        ) {
+                            Ok(resolution) => IdentityBatchOutcome::Resolved(Box::new(resolution)),
+                            Err(error) => IdentityBatchOutcome::Invalid(error),
+                        }
+                    }
                 }
             }
         };
@@ -159,8 +160,7 @@ pub fn resolve_batch(
         });
     }
 
-    let entries = BoundedList::new(entries)
-        .map_err(|_| IdentityError::IdentityCapacityExceeded)?;
+    let entries = BoundedList::new(entries).map_err(|_| IdentityError::IdentityCapacityExceeded)?;
     Ok(IdentityBatchDecision {
         entries,
         comparisons_used,
@@ -172,13 +172,10 @@ pub fn resolve_batch(
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        Blake3Digest32, BoundedList, CatalogRevision, NonZeroRevision, OpaqueId,
-        RootBindingId,
+        Blake3Digest32, BoundedList, CatalogRevision, NonZeroRevision, OpaqueId, RootBindingId,
     };
 
-    use super::{
-        IdentityBatchControl, IdentityBatchItem, IdentityBatchOutcome, resolve_batch,
-    };
+    use super::{IdentityBatchControl, IdentityBatchItem, IdentityBatchOutcome, resolve_batch};
     use crate::{
         CreationPolicy, IdentityObservation, ObservationConfidence, PriorIdentityCandidates,
         StableIdentityEvidence, StableIdentityKey,
@@ -210,16 +207,11 @@ mod tests {
         crate::validate_identity_observation(
             IdentityObservation {
                 path_key,
-                stable_evidence: StableIdentityEvidence::Exact(
-                    StableIdentityKey::Filesystem {
-                        volume_identity: Blake3Digest32::from_bytes([stable_byte; 32]),
-                        file_identity: Blake3Digest32::from_bytes([
-                            stable_byte.wrapping_add(1);
-                            32
-                        ]),
-                        generation: Some(1),
-                    },
-                ),
+                stable_evidence: StableIdentityEvidence::Exact(StableIdentityKey::Filesystem {
+                    volume_identity: Blake3Digest32::from_bytes([stable_byte; 32]),
+                    file_identity: Blake3Digest32::from_bytes([stable_byte.wrapping_add(1); 32]),
+                    generation: Some(1),
+                }),
                 content_digest_hint: None,
                 metadata_generation: Some(1),
                 byte_length_hint: Some(1),
@@ -270,16 +262,10 @@ mod tests {
 
     #[test]
     fn conflicting_same_path_is_not_arbitrarily_resolved() {
-        let items = BoundedList::new(vec![
-            item("item:1", "same", 1),
-            item("item:2", "same", 2),
-        ])
-        .expect("batch");
-        let result = resolve_batch(
-            items,
-            IdentityBatchControl::new(10, None).expect("control"),
-        )
-        .expect("decision");
+        let items = BoundedList::new(vec![item("item:1", "same", 1), item("item:2", "same", 2)])
+            .expect("batch");
+        let result = resolve_batch(items, IdentityBatchControl::new(10, None).expect("control"))
+            .expect("decision");
         assert!(matches!(
             result.entries.as_slice()[1].outcome,
             IdentityBatchOutcome::ConflictingObservation

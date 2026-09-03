@@ -3,8 +3,7 @@
 use std::collections::BTreeSet;
 
 use search_contracts::{
-    BoundedList, BoundedSet, OpaqueCanonicalBytes, SourceId, SourceIdentity,
-    SourceNamespaceId,
+    BoundedList, BoundedSet, OpaqueCanonicalBytes, SourceId, SourceIdentity, SourceNamespaceId,
 };
 
 use crate::{
@@ -32,9 +31,7 @@ pub struct PriorIdentityCandidate {
 
 /// Finite prior candidate set.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PriorIdentityCandidates(
-    BoundedList<PriorIdentityCandidate, MAX_IDENTITY_CANDIDATES>,
-);
+pub struct PriorIdentityCandidates(BoundedList<PriorIdentityCandidate, MAX_IDENTITY_CANDIDATES>);
 
 impl PriorIdentityCandidates {
     /// Creates a finite candidate set and rejects duplicate durable source IDs.
@@ -55,6 +52,7 @@ impl PriorIdentityCandidates {
     }
 
     /// Candidates in deterministic input order.
+    #[must_use]
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &PriorIdentityCandidate> {
         self.0.iter()
     }
@@ -98,7 +96,7 @@ impl ResolutionPolicy {
     /// # Errors
     ///
     /// A zero or excessive comparison budget is rejected.
-    pub fn new(
+    pub const fn new(
         creation: CreationPolicy,
         comparison_budget: usize,
         cancelled: bool,
@@ -237,7 +235,7 @@ pub fn resolve_identity(
     let mut path_was_reused = false;
 
     for candidate in prior.iter() {
-        if candidate.identity.identity_kind != stable_key.identity_kind() {
+        if candidate.identity.identity_kind != candidate.stable_key.identity_kind() {
             return Err(IdentityError::IdentityObservationInvalid);
         }
         if candidate.stable_key == stable_key {
@@ -248,13 +246,11 @@ pub fn resolve_identity(
         {
             claimed_conflicts.insert(candidate.identity.source_id);
         }
-        if candidate.active_paths.contains(&observed.path_key)
-            && candidate.stable_key != stable_key
+        if candidate.active_paths.contains(&observed.path_key) && candidate.stable_key != stable_key
         {
             active_path_conflicts.insert(candidate.identity.source_id);
         }
-        if candidate.closed_paths.contains(&observed.path_key)
-            && candidate.stable_key != stable_key
+        if candidate.closed_paths.contains(&observed.path_key) && candidate.stable_key != stable_key
         {
             path_was_reused = true;
         }
@@ -266,7 +262,10 @@ pub fn resolve_identity(
         });
     }
     if let Some(source_id) = exact_ids.iter().next().copied() {
-        if observed.claimed_source_id.is_some_and(|claimed| claimed != source_id) {
+        if observed
+            .claimed_source_id
+            .is_some_and(|claimed| claimed != source_id)
+        {
             let existing_source_ids = bounded_source_ids([source_id])?;
             return Ok(IdentityResolution::Conflict {
                 claimed_source_id: observed.claimed_source_id,
@@ -316,8 +315,10 @@ pub fn derive_source_identity(
     source_namespace_id: SourceNamespaceId,
     source_id: SourceId,
 ) -> Result<SourceIdentity, IdentityError> {
-    if draft.stable_key.identity_kind() != draft.stable_key.identity_kind() {
-        return Err(IdentityError::SourceIdentityConflict);
+    if source_namespace_id.as_bytes().iter().all(|byte| *byte == 0)
+        || source_id.as_bytes().iter().all(|byte| *byte == 0)
+    {
+        return Err(IdentityError::SourceIdentityInsufficientEvidence);
     }
     Ok(SourceIdentity {
         source_namespace_id,
@@ -329,7 +330,7 @@ pub fn derive_source_identity(
 
 /// Compares exact expected stable identity with an observed evidence value.
 #[must_use]
-pub const fn compare_identity(
+pub fn compare_identity(
     expected: StableIdentityKey,
     observed: StableIdentityEvidence,
 ) -> IdentityMatchDecision {
@@ -364,8 +365,7 @@ fn path_candidates(
 fn bounded_source_ids(
     ids: impl IntoIterator<Item = SourceId>,
 ) -> Result<BoundedList<SourceId, MAX_IDENTITY_CANDIDATES>, IdentityError> {
-    BoundedList::new(ids.into_iter().collect())
-        .map_err(|_| IdentityError::IdentityCapacityExceeded)
+    BoundedList::new(ids.into_iter().collect()).map_err(|_| IdentityError::IdentityCapacityExceeded)
 }
 
 fn encode_stable_key(key: StableIdentityKey) -> Result<OpaqueCanonicalBytes, IdentityError> {
@@ -411,9 +411,8 @@ fn encode_stable_key(key: StableIdentityKey) -> Result<OpaqueCanonicalBytes, Ide
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        Blake3Digest32, BoundedSet, CatalogRevision, NonZeroRevision,
-        OpaqueCanonicalBytes, RootBindingId, SourceId, SourceIdentity, SourceIdentityKind,
-        SourceNamespaceId,
+        Blake3Digest32, BoundedSet, CatalogRevision, NonZeroRevision, OpaqueCanonicalBytes,
+        RootBindingId, SourceId, SourceIdentity, SourceIdentityKind, SourceNamespaceId,
     };
 
     use super::{
@@ -491,8 +490,8 @@ mod tests {
     #[test]
     fn exact_stable_key_matches_existing() {
         let stable_key = key(1);
-        let prior = PriorIdentityCandidates::new(vec![candidate(7, stable_key)])
-            .expect("candidates");
+        let prior =
+            PriorIdentityCandidates::new(vec![candidate(7, stable_key)]).expect("candidates");
         let result = resolve_identity(
             &observation(stable_key),
             &prior,
@@ -506,11 +505,9 @@ mod tests {
     #[test]
     fn same_stable_key_for_two_sources_is_collision() {
         let stable_key = key(1);
-        let prior = PriorIdentityCandidates::new(vec![
-            candidate(7, stable_key),
-            candidate(8, stable_key),
-        ])
-        .expect("candidates");
+        let prior =
+            PriorIdentityCandidates::new(vec![candidate(7, stable_key), candidate(8, stable_key)])
+                .expect("candidates");
         let result = resolve_identity(
             &observation(stable_key),
             &prior,

@@ -59,18 +59,14 @@ impl IdentityError {
         match self {
             Self::FilesystemProfileUnsupported => "FILESYSTEM_PROFILE_UNSUPPORTED",
             Self::IdentityObservationInvalid => "IDENTITY_OBSERVATION_INVALID",
-            Self::SourceIdentityInsufficientEvidence => {
-                "SOURCE_IDENTITY_INSUFFICIENT_EVIDENCE"
-            }
+            Self::SourceIdentityInsufficientEvidence => "SOURCE_IDENTITY_INSUFFICIENT_EVIDENCE",
             Self::SourceIdentityAmbiguous => "SOURCE_IDENTITY_AMBIGUOUS",
             Self::SourceIdentityCollision => "SOURCE_IDENTITY_COLLISION",
             Self::SourceIdentityConflict => "SOURCE_IDENTITY_CONFLICT",
             Self::PathBindingConflict => "PATH_BINDING_CONFLICT",
             Self::PathBindingHistoryInvalid => "PATH_BINDING_HISTORY_INVALID",
             Self::PathEscapesAdmittedRoot => "PATH_ESCAPES_ADMITTED_ROOT",
-            Self::PathReuseRequiresNewResolution => {
-                "PATH_REUSE_REQUIRES_NEW_RESOLUTION"
-            }
+            Self::PathReuseRequiresNewResolution => "PATH_REUSE_REQUIRES_NEW_RESOLUTION",
             Self::HardlinkIdentityUnproved => "HARDLINK_IDENTITY_UNPROVED",
             Self::LineageIdentityAmbiguous => "LINEAGE_IDENTITY_AMBIGUOUS",
             Self::RepositoryBoundaryConflict => "REPOSITORY_BOUNDARY_CONFLICT",

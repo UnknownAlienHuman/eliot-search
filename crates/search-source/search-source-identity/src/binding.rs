@@ -3,13 +3,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
-    Blake3Digest32, BoundedList, CatalogRevision, PathBindingId, ReceiptRef,
-    RootBindingId, SourceId, SourceOwnerGeneration, WorkspaceId,
+    Blake3Digest32, BoundedList, CatalogRevision, PathBindingId, ReceiptRef, RootBindingId,
+    SourceId, SourceOwnerGeneration, WorkspaceId,
 };
 
 use crate::{
-    CanonicalPathKey, IdentityError, LinkBehavior, StableIdentityEvidence,
-    StableIdentityKey,
+    CanonicalPathKey, IdentityError, LinkBehavior, StableIdentityEvidence, StableIdentityKey,
 };
 
 /// Maximum bindings returned by one hard-link grouping decision.
@@ -58,9 +57,10 @@ impl PathBindingState {
     #[must_use]
     pub const fn opened_revision(self) -> CatalogRevision {
         match self {
-            Self::Active { opened_revision } | Self::Closed { opened_revision, .. } => {
-                opened_revision
-            }
+            Self::Active { opened_revision }
+            | Self::Closed {
+                opened_revision, ..
+            } => opened_revision,
         }
     }
 
@@ -147,10 +147,7 @@ pub fn open_path_binding(
     if request.path_key.root_binding_id() != request.root_binding_id {
         return Err(IdentityError::PathEscapesAdmittedRoot);
     }
-    verify_next_catalog_revision(
-        request.expected_catalog_revision,
-        request.opened_revision,
-    )?;
+    verify_next_catalog_revision(request.expected_catalog_revision, request.opened_revision)?;
     for existing in active_bindings {
         if existing.binding_id == request.binding_id {
             return Err(IdentityError::PathBindingConflict);
@@ -408,8 +405,7 @@ pub fn relate_hardlink_bindings(
             return Err(IdentityError::HardlinkIdentityUnproved);
         }
     }
-    BoundedList::new(ids.into_iter().collect())
-        .map_err(|_| IdentityError::IdentityCapacityExceeded)
+    BoundedList::new(ids.into_iter().collect()).map_err(|_| IdentityError::IdentityCapacityExceeded)
 }
 
 /// Content-free binding-history validation receipt.
@@ -461,7 +457,7 @@ pub fn validate_binding_history(
         intervals.sort_unstable_by_key(|interval| interval.0);
         for pair in intervals.windows(2) {
             let previous_end = pair[0].1.unwrap_or(u64::MAX);
-            if previous_end >= pair[1].0 {
+            if previous_end > pair[1].0 {
                 return Err(IdentityError::PathBindingHistoryInvalid);
             }
         }
@@ -570,9 +566,7 @@ mod tests {
         BindingCloseReason, OpenBindingRequest, PathBindingEvent, PathBindingState,
         open_path_binding, transition_path_binding,
     };
-    use crate::{
-        CanonicalPathKey, StableIdentityEvidence, StableIdentityKey,
-    };
+    use crate::{CanonicalPathKey, StableIdentityEvidence, StableIdentityKey};
 
     fn stable(byte: u8) -> StableIdentityKey {
         StableIdentityKey::Filesystem {

@@ -3,8 +3,8 @@
 use core::fmt;
 
 use search_contracts::{
-    Blake3Digest32, CatalogRevision, NonZeroRevision, RepositoryLineageId, RootBindingId,
-    SourceId, SourceIdentityKind,
+    Blake3Digest32, CatalogRevision, NonZeroRevision, RepositoryLineageId, RootBindingId, SourceId,
+    SourceIdentityKind,
 };
 
 use crate::IdentityError;
@@ -236,13 +236,13 @@ impl CanonicalPathKey {
 
     /// UTF-8 byte length of the lookup spelling.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.lookup_path.len()
     }
 
     /// Returns whether the lookup spelling is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.lookup_path.is_empty()
     }
 }
@@ -254,7 +254,10 @@ impl fmt::Debug for CanonicalPathKey {
             .field("root_binding_id", &self.root_binding_id)
             .field("profile_revision", &self.profile_revision)
             .field("profile_schema_digest", &self.profile_schema_digest)
-            .field("lookup_path", &format_args!("<redacted:{} bytes>", self.lookup_path.len()))
+            .field(
+                "lookup_path",
+                &format_args!("<redacted:{} bytes>", self.lookup_path.len()),
+            )
             .finish()
     }
 }
@@ -309,11 +312,7 @@ fn validate_relative_lookup_path(path: &str) -> Result<(), IdentityError> {
     let Some(first) = segments.next() else {
         return Err(IdentityError::PathEscapesAdmittedRoot);
     };
-    if first.is_empty()
-        || first == "."
-        || first == ".."
-        || first.as_bytes().get(1) == Some(&b':')
-    {
+    if first.is_empty() || first == "." || first == ".." || first.as_bytes().get(1) == Some(&b':') {
         return Err(IdentityError::PathEscapesAdmittedRoot);
     }
     if segments.any(|segment| segment.is_empty() || segment == "." || segment == "..") {
@@ -367,7 +366,7 @@ impl StableIdentityKey {
 }
 
 /// Missing load-bearing stable evidence.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum MissingIdentityEvidence {
     /// Stable local volume identity is unavailable.
     VolumeIdentity,
@@ -434,7 +433,7 @@ pub struct IdentityObservation {
 
 /// Validated observation accepted by resolution functions.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ValidatedIdentityObservation(IdentityObservation);
+pub struct ValidatedIdentityObservation(pub(crate) IdentityObservation);
 
 impl ValidatedIdentityObservation {
     /// Original validated observation.
@@ -500,8 +499,8 @@ mod tests {
     use search_contracts::{Blake3Digest32, NonZeroRevision, RootBindingId};
 
     use super::{
-        CaseBehavior, FilesystemIdentityProfile, LinkBehavior, PathObservation,
-        ReparseBehavior, StableFieldPolicy, UnicodeBehavior, derive_canonical_path_key,
+        CaseBehavior, FilesystemIdentityProfile, LinkBehavior, PathObservation, ReparseBehavior,
+        StableFieldPolicy, UnicodeBehavior, derive_canonical_path_key,
     };
     use crate::IdentityError;
 
@@ -543,16 +542,11 @@ mod tests {
             profile_schema_digest: Blake3Digest32::from_bytes([1; 32]),
             normalization_attested: true,
         };
-        let sensitive = derive_canonical_path_key(
-            &observation,
-            profile(CaseBehavior::Sensitive),
-        )
-        .expect("key");
-        let insensitive = derive_canonical_path_key(
-            &observation,
-            profile(CaseBehavior::InsensitiveAscii),
-        )
-        .expect("key");
+        let sensitive =
+            derive_canonical_path_key(&observation, profile(CaseBehavior::Sensitive)).expect("key");
+        let insensitive =
+            derive_canonical_path_key(&observation, profile(CaseBehavior::InsensitiveAscii))
+                .expect("key");
         assert_ne!(sensitive, insensitive);
         assert_eq!(insensitive.as_str(), "src/lib.rs");
     }

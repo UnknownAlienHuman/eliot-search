@@ -26,29 +26,27 @@ pub use batch::{
     IdentityBatchOutcome, MAX_IDENTITY_BATCH_ITEMS, resolve_batch,
 };
 pub use binding::{
-    BindingCloseReason, OpenBindingRequest, PathBindingEvent, PathBindingRecord,
-    PathBindingState, PathBindingTransition, PathHistoryReceipt, MAX_BINDING_HISTORY_ENTRIES,
-    MAX_HARDLINK_BINDINGS, open_path_binding, relate_hardlink_bindings,
-    transition_path_binding, validate_binding_history,
+    BindingCloseReason, MAX_BINDING_HISTORY_ENTRIES, MAX_HARDLINK_BINDINGS, OpenBindingRequest,
+    PathBindingEvent, PathBindingRecord, PathBindingState, PathBindingTransition,
+    PathHistoryReceipt, open_path_binding, relate_hardlink_bindings, transition_path_binding,
+    validate_binding_history,
 };
 pub use error::IdentityError;
 pub use evidence::{
     CanonicalPathKey, CaseBehavior, FilesystemIdentityProfile, IdentityObservation, LinkBehavior,
     MAX_IDENTITY_PATH_BYTES, MissingIdentityEvidence, ObservationConfidence, PathObservation,
-    ReparseBehavior, StableFieldPolicy, StableIdentityEvidence, StableIdentityKey,
-    UnicodeBehavior, ValidatedIdentityObservation, derive_canonical_path_key,
-    validate_identity_observation,
+    ReparseBehavior, StableFieldPolicy, StableIdentityEvidence, StableIdentityKey, UnicodeBehavior,
+    ValidatedIdentityObservation, derive_canonical_path_key, validate_identity_observation,
 };
 pub use lineage::{
     LineageProof, MAX_LINEAGE_CANDIDATES, MAX_REMOTE_FINGERPRINTS, PriorRepositoryLineage,
-    ProvenLineageRelation, RepositoryBoundary, RepositoryLineageDecision,
-    RepositoryLineageDraft, RepositoryLineageObservation, ValidatedRepositoryObservation,
-    WorkspaceIdentityInput, WorkspaceViewFence, advance_workspace_view,
-    classify_repository_lineage, derive_workspace_identity, validate_repository_observation,
+    ProvenLineageRelation, RepositoryBoundary, RepositoryLineageDecision, RepositoryLineageDraft,
+    RepositoryLineageObservation, ValidatedRepositoryObservation, WorkspaceIdentityInput,
+    WorkspaceViewFence, advance_workspace_view, classify_repository_lineage,
+    derive_workspace_identity, validate_repository_observation,
 };
 pub use redaction::{
-    RedactedIdentityState, RedactedIdentityView, redacted_binding_view,
-    redacted_resolution_view,
+    RedactedIdentityState, RedactedIdentityView, redacted_binding_view, redacted_resolution_view,
 };
 pub use resolution::{
     CreationPolicy, ExistingIdentityEvidence, IdentityDraft, IdentityMatchDecision,

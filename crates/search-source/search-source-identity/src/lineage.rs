@@ -4,8 +4,7 @@ use std::collections::BTreeSet;
 
 use search_contracts::{
     Blake3Digest32, BoundedList, BoundedSet, GitObjectId, NonZeroRevision, ReceiptRef,
-    RepositoryLineageId, RootBindingId, WorkspaceId, WorkspaceInstance,
-    WorkspaceViewRevisionId,
+    RepositoryLineageId, RootBindingId, WorkspaceId, WorkspaceInstance, WorkspaceViewRevisionId,
 };
 
 use crate::IdentityError;
@@ -42,8 +41,7 @@ pub struct RepositoryLineageObservation {
     /// Exact current HEAD object hint; not sufficient for lineage alone.
     pub head_object: Option<GitObjectId>,
     /// Bounded remote fingerprints; names/URLs alone never prove lineage.
-    pub remote_fingerprints:
-        BoundedSet<Blake3Digest32, MAX_REMOTE_FINGERPRINTS>,
+    pub remote_fingerprints: BoundedSet<Blake3Digest32, MAX_REMOTE_FINGERPRINTS>,
     /// Explicit repository boundary.
     pub boundary: RepositoryBoundary,
     /// Observation profile revision.
@@ -104,8 +102,7 @@ pub struct PriorRepositoryLineage {
     /// Stable object-database identity when available.
     pub object_database_identity_digest: Option<Blake3Digest32>,
     /// Known local worktree identities.
-    pub worktree_identity_digests:
-        BoundedSet<Blake3Digest32, MAX_LINEAGE_CANDIDATES>,
+    pub worktree_identity_digests: BoundedSet<Blake3Digest32, MAX_LINEAGE_CANDIDATES>,
     /// Explicit accepted repository boundary.
     pub boundary: RepositoryBoundary,
 }
@@ -227,9 +224,10 @@ pub fn classify_repository_lineage(
                 == candidate.object_database_identity_digest;
         if repository_matches || object_database_matches {
             exact.insert(candidate.lineage_id);
-            if observed.worktree_identity_digest.is_some_and(|worktree| {
-                candidate.worktree_identity_digests.contains(&worktree)
-            }) {
+            if observed
+                .worktree_identity_digest
+                .is_some_and(|worktree| candidate.worktree_identity_digests.contains(&worktree))
+            {
                 same_worktree.insert(candidate.lineage_id);
             }
         }
@@ -245,13 +243,9 @@ pub fn classify_repository_lineage(
             return Ok(RepositoryLineageDecision::Conflict { lineage_id });
         }
         return if same_worktree.contains(&lineage_id) {
-            Ok(RepositoryLineageDecision::SameLineageSameWorktree {
-                lineage_id,
-            })
+            Ok(RepositoryLineageDecision::SameLineageSameWorktree { lineage_id })
         } else {
-            Ok(RepositoryLineageDecision::SameLineageNewWorktree {
-                lineage_id,
-            })
+            Ok(RepositoryLineageDecision::SameLineageNewWorktree { lineage_id })
         };
     }
 
@@ -286,7 +280,7 @@ pub fn classify_repository_lineage(
 }
 
 /// Inputs for a caller-supplied workspace identity.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WorkspaceIdentityInput {
     /// Caller-supplied stable workspace identity.
     pub workspace_id: WorkspaceId,
@@ -381,21 +375,18 @@ pub fn advance_workspace_view(
 fn bounded_lineage_ids(
     ids: impl IntoIterator<Item = RepositoryLineageId>,
 ) -> Result<BoundedList<RepositoryLineageId, MAX_LINEAGE_CANDIDATES>, IdentityError> {
-    BoundedList::new(ids.into_iter().collect())
-        .map_err(|_| IdentityError::IdentityCapacityExceeded)
+    BoundedList::new(ids.into_iter().collect()).map_err(|_| IdentityError::IdentityCapacityExceeded)
 }
 
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        Blake3Digest32, BoundedSet, NonZeroRevision, RepositoryLineageId,
-        RootBindingId,
+        Blake3Digest32, BoundedSet, NonZeroRevision, RepositoryLineageId, RootBindingId,
     };
 
     use super::{
         PriorRepositoryLineage, RepositoryBoundary, RepositoryLineageDecision,
-        RepositoryLineageObservation, classify_repository_lineage,
-        validate_repository_observation,
+        RepositoryLineageObservation, classify_repository_lineage, validate_repository_observation,
     };
 
     fn observation(boundary: RepositoryBoundary) -> super::ValidatedRepositoryObservation {
@@ -422,12 +413,9 @@ mod tests {
             worktree_identity_digests: BoundedSet::empty(),
             boundary: RepositoryBoundary::Worktree,
         };
-        let decision = classify_repository_lineage(
-            &observation(RepositoryBoundary::Worktree),
-            &[prior],
-            None,
-        )
-        .expect("decision");
+        let decision =
+            classify_repository_lineage(&observation(RepositoryBoundary::Worktree), &[prior], None)
+                .expect("decision");
         assert!(matches!(
             decision,
             RepositoryLineageDecision::SameLineageNewWorktree { .. }
@@ -436,12 +424,9 @@ mod tests {
 
     #[test]
     fn submodule_is_not_collapsed_into_parent() {
-        let decision = classify_repository_lineage(
-            &observation(RepositoryBoundary::Submodule),
-            &[],
-            None,
-        )
-        .expect("decision");
+        let decision =
+            classify_repository_lineage(&observation(RepositoryBoundary::Submodule), &[], None)
+                .expect("decision");
         assert!(matches!(
             decision,
             RepositoryLineageDecision::SubmoduleBoundary(_)
