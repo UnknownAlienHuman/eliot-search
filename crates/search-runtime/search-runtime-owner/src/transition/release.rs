@@ -424,12 +424,14 @@ fn verify_record_revision_advanced(
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        ArtifactDigest, Blake3Digest32, DataRootId, InstallationId,
-        InstallationIncarnationId, NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef,
+        ArtifactDigest, Blake3Digest32, DataRootId, InstallationId, InstallationIncarnationId,
+        NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef,
     };
     use search_ports::{IdempotencyClass, MonotonicInstant, MutationIdentity};
 
-    use super::{ModeChangeDecision, ReleaseCommitObservation, ReleaseResolution, complete_release};
+    use super::{
+        ModeChangeDecision, ReleaseCommitObservation, ReleaseResolution, complete_release,
+    };
     use crate::{
         DataRootIdentity, DataRootLocationClass, DrainFence, DrainReason, ExecutableIdentity,
         LeaseWindow, OwnerBinding, OwnerIdentity, OwnerOperation, OwnerRecord, OwnerSnapshot,
@@ -500,9 +502,8 @@ mod tests {
                 record,
             })
             .expect("releasing");
-        let (next, result) =
-            complete_release(&snapshot, ReleaseCommitObservation::OutcomeUnknown)
-                .expect("transition");
+        let (next, result) = complete_release(&snapshot, ReleaseCommitObservation::OutcomeUnknown)
+            .expect("transition");
         assert_eq!(result, ReleaseResolution::OutcomeUnknown);
         assert!(matches!(
             next.state(),

@@ -186,13 +186,7 @@ impl OwnerSupervisor {
         permit: &ReleasePermit,
         operation: OwnerOperation,
     ) -> Result<ReleasePlan, OwnerError> {
-        let (next, plan) = prepare_release(
-            &self.snapshot,
-            guard,
-            drain_token,
-            permit,
-            operation,
-        )?;
+        let (next, plan) = prepare_release(&self.snapshot, guard, drain_token, permit, operation)?;
         self.snapshot = next;
         Ok(plan)
     }

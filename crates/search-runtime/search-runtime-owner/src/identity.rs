@@ -4,8 +4,8 @@ use core::fmt;
 use core::num::{NonZeroU32, NonZeroU64};
 
 use search_contracts::{
-    ArtifactDigest, Blake3Digest32, DataRootId, InstallationId,
-    InstallationIncarnationId, OwnerEpoch,
+    ArtifactDigest, Blake3Digest32, DataRootId, InstallationId, InstallationIncarnationId,
+    OwnerEpoch,
 };
 use search_ports::MutationIdentity;
 
@@ -105,10 +105,10 @@ impl ProcessCreationIdentity {
         creation_marker: u64,
         identity_digest: Blake3Digest32,
     ) -> Result<Self, OwnerError> {
-        let process_id = NonZeroU32::new(process_id)
-            .ok_or(OwnerError::OwnerProcessIdentityMismatch)?;
-        let creation_marker = NonZeroU64::new(creation_marker)
-            .ok_or(OwnerError::OwnerProcessIdentityMismatch)?;
+        let process_id =
+            NonZeroU32::new(process_id).ok_or(OwnerError::OwnerProcessIdentityMismatch)?;
+        let creation_marker =
+            NonZeroU64::new(creation_marker).ok_or(OwnerError::OwnerProcessIdentityMismatch)?;
         Ok(Self {
             process_id,
             creation_marker,
@@ -239,11 +239,7 @@ pub struct OwnerBinding {
 impl OwnerBinding {
     /// Creates a complete owner binding.
     #[must_use]
-    pub const fn new(
-        root: DataRootIdentity,
-        owner: OwnerIdentity,
-        epoch: OwnerEpoch,
-    ) -> Self {
+    pub const fn new(root: DataRootIdentity, owner: OwnerIdentity, epoch: OwnerEpoch) -> Self {
         Self { root, owner, epoch }
     }
 
@@ -276,10 +272,7 @@ pub struct OwnerOperation {
 impl OwnerOperation {
     /// Creates an operation fence.
     #[must_use]
-    pub fn new(
-        mutation: MutationIdentity,
-        request_digest: Blake3Digest32,
-    ) -> Self {
+    pub fn new(mutation: MutationIdentity, request_digest: Blake3Digest32) -> Self {
         Self {
             mutation,
             request_digest,

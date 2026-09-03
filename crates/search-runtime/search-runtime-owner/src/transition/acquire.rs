@@ -1,8 +1,6 @@
 //! Acquisition, abandoned-owner recovery, guard verification, and renewal.
 
-use search_contracts::{
-    Blake3Digest32, BoundedList, NonZeroRevision, OwnerEpoch, ReceiptRef,
-};
+use search_contracts::{Blake3Digest32, BoundedList, NonZeroRevision, OwnerEpoch, ReceiptRef};
 
 use super::{MAX_OWNER_EFFECTS, OwnerEffect, bounded_effects};
 use crate::{
@@ -127,8 +125,9 @@ impl OwnerObservation {
             Self::Absent { highest_epoch, .. }
             | Self::Ambiguous { highest_epoch, .. }
             | Self::Corrupt { highest_epoch, .. } => *highest_epoch,
-            Self::LiveMatchingOwner { record, .. }
-            | Self::LiveConflictingOwner { record, .. } => Some(record.binding().epoch()),
+            Self::LiveMatchingOwner { record, .. } | Self::LiveConflictingOwner { record, .. } => {
+                Some(record.binding().epoch())
+            }
             Self::StaleRecordIdentityAbsent { highest_epoch, .. } => Some(*highest_epoch),
         }
     }
@@ -535,9 +534,8 @@ pub fn recover_acquisition(
             Ok((next, AcquireRecovery::Reconstructed { guard, receipt }))
         }
         OwnerObservation::Absent { highest_epoch, .. }
-            if highest_epoch.is_none_or(|value| {
-                value < pending.expected_record.binding().epoch()
-            }) =>
+            if highest_epoch
+                .is_none_or(|value| value < pending.expected_record.binding().epoch()) =>
         {
             let next = snapshot.advanced(OwnerState::Vacant {
                 root: pending.expected_record.binding().root(),
@@ -700,10 +698,7 @@ fn next_owner_epoch(previous: Option<OwnerEpoch>) -> Result<OwnerEpoch, OwnerErr
     }
 }
 
-const fn maximum_epoch(
-    left: Option<OwnerEpoch>,
-    right: Option<OwnerEpoch>,
-) -> Option<OwnerEpoch> {
+const fn maximum_epoch(left: Option<OwnerEpoch>, right: Option<OwnerEpoch>) -> Option<OwnerEpoch> {
     match (left, right) {
         (Some(left), Some(right)) if left.get() >= right.get() => Some(left),
         (Some(_), Some(right)) => Some(right),
@@ -716,8 +711,8 @@ const fn maximum_epoch(
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        ArtifactDigest, Blake3Digest32, DataRootId, InstallationId,
-        InstallationIncarnationId, NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef,
+        ArtifactDigest, Blake3Digest32, DataRootId, InstallationId, InstallationIncarnationId,
+        NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef,
     };
     use search_ports::{IdempotencyClass, MonotonicInstant, MutationIdentity};
 

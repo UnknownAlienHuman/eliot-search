@@ -3,9 +3,7 @@
 use core::fmt;
 use std::collections::BTreeSet;
 
-use search_contracts::{
-    Blake3Digest32, BoundedSet, NonZeroRevision, OwnerEpoch, ReceiptRef,
-};
+use search_contracts::{Blake3Digest32, BoundedSet, NonZeroRevision, OwnerEpoch, ReceiptRef};
 use search_ports::MonotonicInstant;
 
 use crate::{DataRootIdentity, OwnerBinding, OwnerError, OwnerOperation, RuntimeMode};
@@ -590,8 +588,8 @@ impl OwnerHealth {
         root: Option<DataRootIdentity>,
         reasons: impl IntoIterator<Item = OwnerHealthReason>,
     ) -> Result<Self, OwnerError> {
-        let reasons = BoundedSet::from_items(reasons)
-            .map_err(|_| OwnerError::OwnerIdentityAmbiguous)?;
+        let reasons =
+            BoundedSet::from_items(reasons).map_err(|_| OwnerError::OwnerIdentityAmbiguous)?;
         Ok(Self {
             state,
             owner_epoch,
@@ -614,7 +612,9 @@ pub(crate) fn validate_dependency_receipts(
             return Err(OwnerError::OwnerReleasePreconditionMissing);
         }
     }
-    let required = DependencyComponent::REQUIRED.into_iter().collect::<BTreeSet<_>>();
+    let required = DependencyComponent::REQUIRED
+        .into_iter()
+        .collect::<BTreeSet<_>>();
     if observed == required {
         Ok(())
     } else {
@@ -625,15 +625,15 @@ pub(crate) fn validate_dependency_receipts(
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        ArtifactDigest, Blake3Digest32, DataRootId, InstallationId,
-        InstallationIncarnationId, NonZeroRevision, OpaqueId, OwnerEpoch,
+        ArtifactDigest, Blake3Digest32, DataRootId, InstallationId, InstallationIncarnationId,
+        NonZeroRevision, OpaqueId, OwnerEpoch,
     };
     use search_ports::{IdempotencyClass, MonotonicInstant, MutationIdentity};
 
     use super::{LeaseWindow, OwnerGuard, OwnerRecord};
     use crate::{
-        DataRootIdentity, DataRootLocationClass, ExecutableIdentity, OwnerBinding,
-        OwnerError, OwnerIdentity, OwnerOperation, ProcessCreationIdentity, RuntimeMode,
+        DataRootIdentity, DataRootLocationClass, ExecutableIdentity, OwnerBinding, OwnerError,
+        OwnerIdentity, OwnerOperation, ProcessCreationIdentity, RuntimeMode,
     };
 
     fn record() -> OwnerRecord {

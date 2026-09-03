@@ -3,8 +3,7 @@
 use search_contracts::{Blake3Digest32, NonZeroRevision, OwnerEpoch};
 
 use crate::{
-    DataRootIdentity, DrainReason, OwnerError, OwnerOperation, OwnerRecord,
-    OwnerShutdownReceipt,
+    DataRootIdentity, DrainReason, OwnerError, OwnerOperation, OwnerRecord, OwnerShutdownReceipt,
 };
 
 /// Cloneable fence corresponding to a process-local drain token.
