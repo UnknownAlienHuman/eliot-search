@@ -11,7 +11,7 @@ Persist only bounded technical control state and publish immutable snapshots for
 - journal schema and migrations
 - publication intents/receipts and route metadata
 - source/control references, cursors and fences
-- atomic Arc<ControlSnapshot> publication
+- atomic `Arc<ControlSnapshot>` publication
 - corruption quarantine and write counters
 
 ## Must not own
