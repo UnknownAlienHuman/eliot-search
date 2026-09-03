@@ -1,6 +1,6 @@
 # Function contract — `search-config`
 
-**Status:** logical implementation contract; no runtime behavior is implemented yet.
+**Status:** W1 pure implementation complete; concrete acquisition and runtime application remain caller-owned.
 
 All functions are pure and I/O-free. Callers capture file bytes, environment variables, CLI values,
 platform facts, accepted capability receipts and time before invoking this crate.
@@ -14,6 +14,13 @@ platform facts, accepted capability receipts and time before invoking this crate
 - Plaintext secrets are invalid in every layer. Only explicitly typed opaque `SecretRef` values may pass.
 - Every returned diagnostic is redacted and bounded.
 - Equal canonical inputs produce byte-identical snapshots, fingerprints, deltas and plans.
+
+## Implemented representation notes
+
+- Optional capability fields use an explicit `ConfigValue::Absent`; absence is never inferred from a missing higher-precedence key.
+- `ConfigFingerprint` is SHA-256 over a bounded canonical preimage containing schema/profile identities, descriptor revisions/digests and package-validated section digests.
+- The parser accepts the finite baseline TOML subset used by the project configuration: top-level `schema_version` and `profile`, flat package tables, booleans, signed integers, strings and arrays of strings. Unsupported TOML constructs fail closed.
+- Ordinary `Debug` representations redact unvalidated text, paths and opaque secret references.
 
 ## Operations
 

@@ -2,9 +2,9 @@
 
 **W1 support package — deterministic local configuration layering and reload planning.**
 
-**Status:** package boundary and implementation contract only; behavior is intentionally unimplemented.
+**Status:** W1 deterministic mechanics implemented and locally qualified; runtime acquisition and package-specific application remain external.
 
-This package owns parsing-independent configuration documents, deterministic layer precedence,
+This package owns bounded TOML configuration documents, deterministic layer precedence,
 section registration, validation dispatch, redaction, effective-config fingerprints and
 reconfiguration plans. Capability packages own their typed section schemas and runtime state.
 
