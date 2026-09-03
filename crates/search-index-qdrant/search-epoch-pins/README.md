@@ -16,7 +16,7 @@ Protect active query snapshots and old collection routes in memory without writi
 
 ## Must not own
 
-- durable QueryFenceLease for normal reads
+- durable `QueryFenceLease` for normal reads
 - query result storage
 - publication or deletion decisions
 - indefinite pins

@@ -8,15 +8,15 @@ Derive stable source identity, retain path history and enforce single-writer nam
 
 ## Owns
 
-- SourceIdentity derivation
-- PathBinding history
+- `SourceIdentity` derivation
+- `PathBinding` history
 - revision occurrence identity hooks
-- SourceNamespaceOwnership state machine
+- `SourceNamespaceOwnership` state machine
 - cutover receipt validation and fencing
 
 ## Must not own
 
-- corpus/access policy inside SourceIdentity
+- corpus/access policy inside `SourceIdentity`
 - file content reads
 - retrieval membership or ranking
 

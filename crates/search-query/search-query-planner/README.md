@@ -4,14 +4,14 @@
 
 **Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-Compile a normalized recipe, coherent view, validated grant and budgets into an immutable vendor-neutral SearchTaskPlan.
+Compile a normalized recipe, coherent view, validated grant and budgets into an immutable vendor-neutral `SearchTaskPlan`.
 
 ## Owns
 
 - recipe normalization
 - load-bearing dependency capture
 - bounded leg graph
-- PlanFingerprint
+- `PlanFingerprint`
 - deterministic ordering and replan triggers
 - priority and budget assignment
 

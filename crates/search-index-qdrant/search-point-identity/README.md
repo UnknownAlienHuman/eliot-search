@@ -8,7 +8,7 @@ Encode canonical point keys, derive namespace-separated IDs and make collisions 
 
 ## Owns
 
-- versioned ProjectionPointKey encoding
+- versioned `ProjectionPointKey` encoding
 - canonical CBOR bytes
 - BLAKE3-256 full digest
 - 128-bit UUID projection

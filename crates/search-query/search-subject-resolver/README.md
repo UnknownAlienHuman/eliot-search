@@ -10,7 +10,7 @@ Resolve an entity under an explicit source view using a deterministic ladder and
 
 - cursor/handle/qualified-name resolution ladder
 - exact name and signature compatibility
-- bounded SubjectAmbiguitySet
+- bounded `SubjectAmbiguitySet`
 - resolution evidence and assurance
 
 ## Must not own
