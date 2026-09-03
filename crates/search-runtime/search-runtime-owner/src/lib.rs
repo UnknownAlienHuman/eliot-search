@@ -37,8 +37,8 @@ pub use transition::{
     AcquireCommitObservation, AcquirePlan, AcquireRecovery, AcquireRequest, AcquireResolution,
     LiveOwnerStatus, ModeChangeDecision, OwnerEffect, OwnerObservation, RecoveryDecision,
     RecoveryEvidence, RecoveryPolicy, ReleaseCommitObservation, ReleasePlan, ReleaseResolution,
-    RenewalReceipt, classify_abandoned_owner, classify_owner_mutation_boundary, complete_acquire,
-    complete_release, owner_health, plan_mode_or_root_change, prepare_acquire, prepare_release,
-    recover_acquisition, recover_release, renew_verified, verify_owner_guard,
+    RenewalReceipt, begin_drain, classify_abandoned_owner, classify_owner_mutation_boundary,
+    complete_acquire, complete_release, owner_health, plan_mode_or_root_change, prepare_acquire,
+    prepare_release, recover_acquisition, recover_release, renew_verified, verify_owner_guard,
     verify_release_preconditions,
 };

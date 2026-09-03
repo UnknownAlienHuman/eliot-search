@@ -766,7 +766,7 @@ mod tests {
             owner: owner(),
             operation: operation(),
             token_digest: Blake3Digest32::from_bytes([12; 32]),
-            lease: crate::LeaseWindow::new(
+            lease: LeaseWindow::new(
                 MonotonicInstant::from_ticks(1),
                 MonotonicInstant::from_ticks(1),
                 MonotonicInstant::from_ticks(10),
