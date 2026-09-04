@@ -19,5 +19,8 @@ search-source-registry.workspace = true
 search-source-identity.workspace = true
 search-safe-reader.workspace = true
 
+[dev-dependencies]
+search-source-admission.workspace = true
+
 [lints]
 workspace = true
