@@ -1,5 +1,6 @@
 name: qualify-workspace-once
 
+# Retry after source identity/registry/reconcile and subject resolver contract repairs.
 on:
   push:
     branches: [main]
