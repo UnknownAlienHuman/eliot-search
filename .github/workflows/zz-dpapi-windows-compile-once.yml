@@ -1,0 +1,80 @@
+name: qualify-dpapi-windows-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-dpapi-windows-compile-once.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: qualify-dpapi-windows-once
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Compile and exercise scoped current-user DPAPI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo check -p search-os-secrets-windows --all-targets --locked
+
+          $probe = @'
+          use search_os_secrets_windows::{
+              protect_current_user, unprotect_current_user, ProtectionScope, SecretBytes,
+          };
+
+          fn main() {
+              let scope = ProtectionScope::new(
+                  "github-actions-windows-user",
+                  "eliot-search-ci",
+                  "dpapi-probe-v1",
+                  "revision-store-master-key",
+              ).expect("scope");
+              let wrong_scope = ProtectionScope::new(
+                  "github-actions-windows-user",
+                  "eliot-search-ci",
+                  "dpapi-probe-v1",
+                  "wrong-purpose",
+              ).expect("wrong scope");
+              let plaintext = SecretBytes::new(b"bounded-dpapi-round-trip".to_vec())
+                  .expect("plaintext");
+              let protected = protect_current_user(&plaintext, &scope).expect("protect");
+              assert_ne!(protected.as_bytes(), plaintext.expose_secret());
+              let recovered = unprotect_current_user(&protected, &scope).expect("unprotect");
+              assert_eq!(recovered.expose_secret(), plaintext.expose_secret());
+              assert!(unprotect_current_user(&protected, &wrong_scope).is_err());
+          }
+          '@
+          New-Item -ItemType Directory -Force -Path target\dpapi-probe | Out-Null
+          Set-Content -Path target\dpapi-probe\main.rs -Value $probe -Encoding utf8
+          $rlib = Get-ChildItem target\debug\deps\search_os_secrets_windows-*.rlib |
+            Select-Object -First 1
+          if (-not $rlib) { throw 'DPAPI adapter rlib was not produced' }
+          rustc target\dpapi-probe\main.rs `
+            --edition 2024 `
+            -L dependency=target\debug\deps `
+            --extern search_os_secrets_windows=$($rlib.FullName) `
+            -o target\dpapi-probe\dpapi-probe.exe
+          & target\dpapi-probe\dpapi-probe.exe
+
+      - name: Remove one-shot workflow after exact Windows qualification
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git rm -- .github/workflows/zz-dpapi-windows-compile-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(secrets): retain successful Windows DPAPI qualification'
+          git push origin HEAD:main
