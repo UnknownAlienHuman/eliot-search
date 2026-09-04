@@ -6,6 +6,7 @@ use crate::continuation::SearchPage;
 use crate::direct_store::{IndexedSource, StoreSearchResult};
 use crate::result_handles::{PublicHandledMatch, ResultHandleExpansion};
 use crate::sha256;
+use crate::storage_security::StorageSecurityStatus;
 
 pub(crate) const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
@@ -14,6 +15,7 @@ pub(crate) fn emit_indexed_source(
     source: &IndexedSource,
     invalidated_continuations: usize,
     invalidated_handles: usize,
+    storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     write_line(
         writer,
@@ -27,7 +29,7 @@ pub(crate) fn emit_indexed_source(
                 "\"invalidated_handles\":{},",
                 "\"diagnostic_internal_identifiers\":true,",
                 "\"source_backed\":true,\"durable_revision\":true,",
-                "\"encrypted_at_rest\":false}}"
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
             ),
             source.source_id,
             source.revision_id,
@@ -38,6 +40,8 @@ pub(crate) fn emit_indexed_source(
             source.changed,
             invalidated_continuations,
             invalidated_handles,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
         ),
     )
 }
@@ -46,6 +50,7 @@ pub(crate) fn emit_streaming_search(
     writer: &mut impl Write,
     namespace_id: &str,
     result: &StoreSearchResult,
+    storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     write_line(
         writer,
@@ -54,11 +59,14 @@ pub(crate) fn emit_streaming_search(
                 "{{\"event\":\"corpus_search_started\",",
                 "\"namespace_id\":\"{}\",\"registered_sources\":{},",
                 "\"active_sources\":{},\"source_backed\":true,",
-                "\"durable_revision\":true,\"encrypted_at_rest\":false}}"
+                "\"durable_revision\":true,\"storage_backend\":{},",
+                "\"encrypted_at_rest\":{}}}"
             ),
             namespace_id,
             result.registered_sources,
             result.active_sources,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
         ),
     )?;
     for gap in &result.gaps {
@@ -85,7 +93,7 @@ pub(crate) fn emit_streaming_search(
                 "\"matches\":{},\"gaps\":{},\"searched_sources\":{},",
                 "\"active_sources\":{},\"complete\":{},",
                 "\"match_limit_reached\":{},\"source_backed\":true,",
-                "\"encrypted_at_rest\":false}}"
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
             ),
             result.matches.len(),
             result.gaps.len(),
@@ -93,6 +101,8 @@ pub(crate) fn emit_streaming_search(
             result.active_sources,
             result.complete,
             result.match_limit_reached,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
         ),
     )
 }
@@ -101,6 +111,7 @@ pub(crate) fn emit_search_page(
     writer: &mut impl Write,
     page: &SearchPage,
     public_matches: &[PublicHandledMatch],
+    storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     if page.matches.len() != public_matches.len() {
         return Err("SERVICE_HANDLE_PAGE_MISMATCH".to_owned());
@@ -112,12 +123,15 @@ pub(crate) fn emit_search_page(
                 "{{\"event\":\"search_page_started\",",
                 "\"page_start\":{},\"page_end\":{},",
                 "\"total_matches\":{},\"retained_matches\":{},",
-                "\"session_scoped\":true,\"source_backed\":true}}"
+                "\"session_scoped\":true,\"source_backed\":true,",
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
             ),
             page.page_start,
             page.page_end,
             page.coverage.total_matches,
             page.coverage.retained_matches,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
         ),
     )?;
     for (index, gap) in page.gaps.iter().enumerate() {
@@ -158,7 +172,8 @@ pub(crate) fn emit_search_page(
                 "\"total_matches\":{},\"retained_matches\":{},",
                 "\"candidate_window_truncated\":{},\"gap_count\":{},",
                 "\"gap_details_truncated\":{},\"session_scoped\":true,",
-                "\"source_backed\":true,\"encrypted_at_rest\":false}}"
+                "\"source_backed\":true,\"storage_backend\":{},",
+                "\"encrypted_at_rest\":{}}}"
             ),
             page.page_start,
             page.page_end,
@@ -177,6 +192,8 @@ pub(crate) fn emit_search_page(
             page.coverage.candidate_window_truncated,
             page.coverage.gap_count,
             page.coverage.gap_details_truncated,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
         ),
     )
 }
@@ -184,6 +201,7 @@ pub(crate) fn emit_search_page(
 pub(crate) fn emit_handle_expansion(
     writer: &mut impl Write,
     expansion: &ResultHandleExpansion,
+    storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     write_line(
         writer,
@@ -194,13 +212,15 @@ pub(crate) fn emit_handle_expansion(
                 "\"byte_end\":{},\"source_byte_length\":{},",
                 "\"encoding\":\"hex\",\"bytes\":{},",
                 "\"session_scoped\":true,\"source_backed\":true,",
-                "\"encrypted_at_rest\":false}}"
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
             ),
             json_string(&expansion.source_handle),
             expansion.byte_start,
             expansion.byte_end,
             expansion.source_byte_length,
             json_string(&sha256::hex(&expansion.bytes)),
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
         ),
     )
 }
