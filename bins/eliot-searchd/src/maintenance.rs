@@ -10,7 +10,6 @@ use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use crate::revision_protection::PROTECTED_OBJECT_EXTENSION;
 use crate::sha256;
 
 const CONTROL_DIRECTORY: &str = "control";
@@ -324,10 +323,7 @@ enum GeneratedObject {
 fn classify_generated_object(name: &str) -> GeneratedObject {
     for (suffix, format) in [
         (".bin", RevisionObjectFormat::Plaintext),
-        (
-            concat!(".", PROTECTED_OBJECT_EXTENSION),
-            RevisionObjectFormat::Protected,
-        ),
+        (".dpapi", RevisionObjectFormat::Protected),
     ] {
         if let Some(revision_id) = name.strip_suffix(suffix) {
             if sha256::decode_digest(revision_id).is_some() {
