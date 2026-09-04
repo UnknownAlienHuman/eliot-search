@@ -1,6 +1,6 @@
 name: qualify-workspace-once
 
-# Retry after result projection dependency and retention replay repairs.
+# Retry after the control migration state machine repair.
 on:
   push:
     branches: [main]
