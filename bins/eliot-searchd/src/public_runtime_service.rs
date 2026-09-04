@@ -25,6 +25,7 @@ use crate::service_output::{
     emit_streaming_search, json_string, write_error, write_line,
 };
 use crate::sha256;
+use crate::storage_security::StorageSecurityStatus;
 
 const PROTOCOL_VERSION: u16 = 1;
 const MAX_COMMAND_BYTES: usize = 256 * 1024;
@@ -58,6 +59,7 @@ fn run_service(root: &Path) -> Result<(), String> {
         guard.canonical_root(),
         &store.namespace_id(),
     )?;
+    let mut storage = StorageSecurityStatus::inspect(guard.canonical_root())?;
     let mut continuations = ContinuationCatalog::new(&store.namespace_id());
     let mut handles = ResultHandleCatalog::new(&store.namespace_id());
 
@@ -79,7 +81,7 @@ fn run_service(root: &Path) -> Result<(), String> {
                 "\"opaque_source_handles_available\":true,",
                 "\"default_page_size\":{},\"max_page_size\":{},",
                 "\"max_handle_expansion_bytes\":{},",
-                "\"encrypted_at_rest\":false}}"
+                "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
             ),
             PROTOCOL_VERSION,
             store.namespace_id(),
@@ -89,6 +91,8 @@ fn run_service(root: &Path) -> Result<(), String> {
             DEFAULT_PAGE_SIZE,
             MAX_PAGE_SIZE,
             MAX_HANDLE_EXPANSION_BYTES,
+            storage.json(),
+            storage.encrypted_at_rest,
         ),
     )?;
 
@@ -114,6 +118,7 @@ fn run_service(root: &Path) -> Result<(), String> {
             &mut continuations,
             &mut handles,
             guard.canonical_root(),
+            &mut storage,
             &mut writer,
         ) {
             Ok(ServiceControl::Continue) => {}
@@ -140,6 +145,7 @@ fn execute_command(
     continuations: &mut ContinuationCatalog,
     handles: &mut ResultHandleCatalog,
     canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
     writer: &mut impl std::io::Write,
 ) -> Result<ServiceControl, String> {
     let fields = command.split('\t').collect::<Vec<_>>();
@@ -153,6 +159,7 @@ fn execute_command(
                 canonical_root,
                 &store.namespace_id(),
             )?;
+            refresh_storage(storage, canonical_root)?;
             write_line(
                 writer,
                 &format!(
@@ -162,7 +169,8 @@ fn execute_command(
                         "\"verified_revisions\":{},\"directory_manifests\":{},",
                         "\"live_continuations\":{},",
                         "\"retained_continuation_matches\":{},",
-                        "\"live_source_handles\":{},\"health\":{}}}"
+                        "\"live_source_handles\":{},\"health\":{},",
+                        "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
                     ),
                     store.namespace_id(),
                     verification.registered_sources,
@@ -173,6 +181,8 @@ fn execute_command(
                     continuations.retained_matches(),
                     handles.live_count(),
                     Health::DIRECT_STORE.json(),
+                    storage.json(),
+                    storage.encrypted_at_rest,
                 ),
             )?;
         }
@@ -191,12 +201,16 @@ fn execute_command(
             )?;
             return Ok(ServiceControl::Stop);
         }
-        ("verify", [_]) => emit_verification(writer, store, canonical_root)?,
+        ("verify", [_]) => {
+            refresh_storage(storage, canonical_root)?;
+            emit_verification(writer, store, canonical_root, storage)?;
+        }
         ("verify-directory-manifests", [_]) => {
             let manifests = verify_directory_manifests(
                 canonical_root,
                 &store.namespace_id(),
             )?;
+            refresh_storage(storage, canonical_root)?;
             write_line(
                 writer,
                 &format!(
@@ -205,17 +219,22 @@ fn execute_command(
                         "\"namespace_id\":\"{}\",\"manifest_files\":{},",
                         "\"directories\":{},\"current_entries\":{},",
                         "\"highest_generation\":{},\"source_backed\":true,",
-                        "\"encrypted_at_rest\":false}}"
+                        "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
                     ),
                     store.namespace_id(),
                     manifests.manifest_files,
                     manifests.directories,
                     manifests.current_entries,
                     manifests.highest_generation,
+                    json_string(storage.backend),
+                    storage.encrypted_at_rest,
                 ),
             )?;
         }
-        ("list-sources", [_]) => emit_source_list(writer, store)?,
+        ("list-sources", [_]) => {
+            refresh_storage(storage, canonical_root)?;
+            emit_source_list(writer, store, storage)?;
+        }
         ("index-file", [_, path_hex]) => {
             let indexed = store.index_file(&decode_path(path_hex)?)?;
             let (invalidated_continuations, invalidated_handles) = if indexed.changed {
@@ -223,11 +242,13 @@ fn execute_command(
             } else {
                 (0, 0)
             };
+            refresh_storage(storage, canonical_root)?;
             emit_indexed_source(
                 writer,
                 &indexed,
                 invalidated_continuations,
                 invalidated_handles,
+                storage,
             )?;
         }
         ("index-directory", [_, path_hex]) => {
@@ -238,8 +259,9 @@ fn execute_command(
             } else {
                 invalidate_search_state(continuations, handles)
             };
+            refresh_storage(storage, canonical_root)?;
             for source in &indexed {
-                emit_indexed_source(writer, source, 0, 0)?;
+                emit_indexed_source(writer, source, 0, 0, storage)?;
             }
             write_line(
                 writer,
@@ -249,13 +271,15 @@ fn execute_command(
                         "\"namespace_id\":\"{}\",\"sources\":{},",
                         "\"changed\":{},\"invalidated_continuations\":{},",
                         "\"invalidated_handles\":{},\"source_backed\":true,",
-                        "\"encrypted_at_rest\":false}}"
+                        "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
                     ),
                     store.namespace_id(),
                     indexed.len(),
                     changed,
                     invalidated_continuations,
                     invalidated_handles,
+                    json_string(storage.backend),
+                    storage.encrypted_at_rest,
                 ),
             )?;
         }
@@ -273,6 +297,7 @@ fn execute_command(
                 canonical_root,
                 &store.namespace_id(),
             )?;
+            refresh_storage(storage, canonical_root)?;
             write_line(
                 writer,
                 &format!(
@@ -286,7 +311,7 @@ fn execute_command(
                         "\"manifest_digest\":\"{}\",\"manifest_files\":{},",
                         "\"invalidated_continuations\":{},",
                         "\"invalidated_handles\":{},\"source_backed\":true,",
-                        "\"encrypted_at_rest\":false}}"
+                        "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
                     ),
                     result.namespace_id,
                     result.directory_digest,
@@ -304,13 +329,16 @@ fn execute_command(
                     manifests.manifest_files,
                     invalidated_continuations,
                     invalidated_handles,
+                    json_string(storage.backend),
+                    storage.encrypted_at_rest,
                 ),
             )?;
         }
         ("search", [_, mode, query_hex]) => {
             let query = decode_query(query_hex)?;
             let result = store.search(&query, parse_search_mode(mode)?)?;
-            emit_streaming_search(writer, &store.namespace_id(), &result)?;
+            refresh_storage(storage, canonical_root)?;
+            emit_streaming_search(writer, &store.namespace_id(), &result, storage)?;
         }
         ("search-page", [_, mode, page_size, query_hex]) => {
             let query = decode_query(query_hex)?;
@@ -322,7 +350,8 @@ fn execute_command(
             let public = handles
                 .mint_page(store, &page.matches)
                 .map_err(handle_error)?;
-            emit_search_page(writer, &page, &public)?;
+            refresh_storage(storage, canonical_root)?;
+            emit_search_page(writer, &page, &public, storage)?;
         }
         ("continue", [_, token, page_size]) => {
             let page_size = parse_page_size(page_size)?;
@@ -332,7 +361,8 @@ fn execute_command(
             let public = handles
                 .mint_page(store, &page.matches)
                 .map_err(handle_error)?;
-            emit_search_page(writer, &page, &public)?;
+            refresh_storage(storage, canonical_root)?;
+            emit_search_page(writer, &page, &public, storage)?;
         }
         ("expand-handle", [_, token, start, end]) => {
             let start = parse_u64(start, "SERVICE_START_OFFSET_INVALID")?;
@@ -340,12 +370,14 @@ fn execute_command(
             let expansion = handles
                 .expand(store, token, start, end)
                 .map_err(handle_error)?;
-            emit_handle_expansion(writer, &expansion)?;
+            refresh_storage(storage, canonical_root)?;
+            emit_handle_expansion(writer, &expansion, storage)?;
         }
         ("retire", [_, source_id]) => {
             let source = store.retire_source(source_id)?;
             let (invalidated_continuations, invalidated_handles) =
                 invalidate_search_state(continuations, handles);
+            refresh_storage(storage, canonical_root)?;
             write_line(
                 writer,
                 &format!(
@@ -354,13 +386,16 @@ fn execute_command(
                         "\"source_id\":\"{}\",\"revision_id\":\"{}\",",
                         "\"sequence\":{},\"active\":false,",
                         "\"invalidated_continuations\":{},",
-                        "\"invalidated_handles\":{}}}"
+                        "\"invalidated_handles\":{},\"storage_backend\":{},",
+                        "\"encrypted_at_rest\":{}}}"
                     ),
                     source.source_id,
                     source.revision_id,
                     source.sequence,
                     invalidated_continuations,
                     invalidated_handles,
+                    json_string(storage.backend),
+                    storage.encrypted_at_rest,
                 ),
             )?;
         }
@@ -371,6 +406,7 @@ fn execute_command(
                 return Err("SERVICE_REVISION_SLICE_TOO_LARGE".to_owned());
             }
             let slice = store.read_revision_range(revision_id, start, end)?;
+            refresh_storage(storage, canonical_root)?;
             write_line(
                 writer,
                 &format!(
@@ -380,13 +416,16 @@ fn execute_command(
                         "\"byte_start\":{},\"byte_end\":{},",
                         "\"encoding\":\"hex\",\"bytes\":\"{}\",",
                         "\"diagnostic_internal_identifiers\":true,",
-                        "\"source_backed\":true,\"encrypted_at_rest\":false}}"
+                        "\"source_backed\":true,\"storage_backend\":{},",
+                        "\"encrypted_at_rest\":{}}}"
                     ),
                     slice.revision_id,
                     slice.content_digest,
                     slice.byte_start,
                     slice.byte_end,
                     sha256::hex(&slice.bytes),
+                    json_string(storage.backend),
+                    storage.encrypted_at_rest,
                 ),
             )?;
         }
@@ -398,6 +437,7 @@ fn execute_command(
             };
             store.verify()?;
             let result = guarded_collect_orphan_revisions(canonical_root, apply)?;
+            refresh_storage(storage, canonical_root)?;
             write_line(
                 writer,
                 &format!(
@@ -405,25 +445,45 @@ fn execute_command(
                         "{{\"event\":\"direct_store_gc_complete\",",
                         "\"namespace_id\":\"{}\",\"applied\":{},",
                         "\"referenced_revisions\":{},\"scanned_objects\":{},",
+                        "\"plaintext_objects\":{},\"protected_objects\":{},",
+                        "\"temporary_objects\":{},",
+                        "\"referenced_plaintext_objects\":{},",
+                        "\"referenced_protected_objects\":{},",
                         "\"orphan_objects\":{},\"orphan_bytes\":{},",
                         "\"deleted_objects\":{},\"deleted_bytes\":{},",
-                        "\"unexpected_objects\":{}}}"
+                        "\"unexpected_objects\":{},\"storage_security\":{},",
+                        "\"encrypted_at_rest\":{}}}"
                     ),
                     store.namespace_id(),
                     result.applied,
                     result.referenced_revisions,
                     result.scanned_objects,
+                    result.plaintext_objects,
+                    result.protected_objects,
+                    result.temporary_objects,
+                    result.referenced_plaintext_objects,
+                    result.referenced_protected_objects,
                     result.orphan_objects,
                     result.orphan_bytes,
                     result.deleted_objects,
                     result.deleted_bytes,
                     result.unexpected_objects,
+                    storage.json(),
+                    storage.encrypted_at_rest,
                 ),
             )?;
         }
         _ => return Err("SERVICE_COMMAND_INVALID".to_owned()),
     }
     Ok(ServiceControl::Continue)
+}
+
+fn refresh_storage(
+    storage: &mut StorageSecurityStatus,
+    canonical_root: &Path,
+) -> Result<(), String> {
+    *storage = StorageSecurityStatus::inspect(canonical_root)?;
+    Ok(())
 }
 
 fn invalidate_search_state(
@@ -437,6 +497,7 @@ fn emit_verification(
     writer: &mut impl std::io::Write,
     store: &DirectStore,
     canonical_root: &Path,
+    storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     let verification = store.verify()?;
     let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
@@ -450,7 +511,7 @@ fn emit_verification(
                 "\"referenced_revisions\":{},\"verified_revisions\":{},",
                 "\"total_revision_bytes\":{},\"manifest_files\":{},",
                 "\"manifest_directories\":{},\"source_backed\":true,",
-                "\"encrypted_at_rest\":false}}"
+                "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
             ),
             store.namespace_id(),
             verification.source_events,
@@ -461,6 +522,8 @@ fn emit_verification(
             verification.total_revision_bytes,
             manifests.manifest_files,
             manifests.directories,
+            storage.json(),
+            storage.encrypted_at_rest,
         ),
     )
 }
@@ -468,6 +531,7 @@ fn emit_verification(
 fn emit_source_list(
     writer: &mut impl std::io::Write,
     store: &DirectStore,
+    storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     let sources = store.list_sources();
     for source in &sources {
@@ -495,9 +559,16 @@ fn emit_source_list(
     write_line(
         writer,
         &format!(
-            "{{\"event\":\"source_list_complete\",\"namespace_id\":\"{}\",\"sources\":{},\"diagnostic_internal_identifiers\":true}}",
+            concat!(
+                "{{\"event\":\"source_list_complete\",",
+                "\"namespace_id\":\"{}\",\"sources\":{},",
+                "\"diagnostic_internal_identifiers\":true,",
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
+            ),
             store.namespace_id(),
             sources.len(),
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
         ),
     )
 }
