@@ -1,0 +1,20 @@
+[package]
+name = "search-os-secrets-windows"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
