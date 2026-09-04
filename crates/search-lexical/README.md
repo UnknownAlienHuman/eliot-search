@@ -1,26 +1,25 @@
 # search-lexical
 
-**C11 — Deterministic lexical encoder.**
+**C11 — deterministic lexical analyzer and sparse encoder.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** implemented pure lexical analysis plus qualified sparse document/query encoding. No index or corpus store is owned by this crate.
 
-Encode documents and queries into immutable sparse-vector profiles without owning an index.
+Implemented behavior:
 
-## Owns
+- bounded Unicode alphanumeric tokenization with exact original byte offsets;
+- explicit case, underscore, minimum-length, stop-word and position-gap policy;
+- deterministic term statistics;
+- stable seeded term-to-index mapping;
+- reject-or-measure collision policy with a finite rate threshold;
+- raw, logarithmic and BM25 local TF weighting;
+- binary, raw and logarithmic query TF weighting;
+- explicit `None`, Qdrant-delegated, or frozen-local IDF mode;
+- structural prevention of double IDF;
+- sorted unique finite sparse vectors;
+- exact profile/qualification/statistics/fingerprint receipts;
+- no I/O, index mutation, provider selection, or hidden fallback.
 
-- `code_v1` and `text_neutral_v1` profile behavior
-- tokenization, Unicode and identifier expansion
-- document/query compatibility fixtures
-- term-index/collision policy
-- profile and fixture digests
-
-## Must not own
-
-- inverted-index or searchable corpus storage
-- implicit English stopwords/stemming
-- runtime fallback between providers
-- using BM25 to prove exact identity or absence
+A profile is unusable until `validate_sparse_profile` receives a matching accepted qualification receipt. Any tokenizer, mapping, weighting, IDF, collision, artifact or fixture change requires a different profile fingerprint and collection generation.
 
 - **Delivery wave:** W3 / P06
-- **Soft source-line target:** 8,500
 - **Agent instructions:** [AGENTS.md](AGENTS.md)

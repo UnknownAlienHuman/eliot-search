@@ -8,7 +8,7 @@ publish = false
 readme = "README.md"
 
 [lib]
-path = "src/lib.rs"
+path = "src/root.rs"
 
 [dependencies]
 search-contracts.workspace = true
