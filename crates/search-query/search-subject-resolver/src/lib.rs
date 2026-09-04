@@ -20,9 +20,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
     AmbiguousSubjectCandidate, AssuranceClass, Blake3Digest32, BoundedList,
-    BoundedNonContentMetadata, BoundedSet, EntityKind, MatchBasis, MAX_LIST_ITEMS,
-    MAX_SET_ITEMS, OpaqueId, ReceiptRef, ResolvedSubject, SearchReasonCodeV1,
-    SubjectAmbiguitySet,
+    BoundedNonContentMetadata, BoundedSet, EntityKind, MAX_LIST_ITEMS, MAX_SET_ITEMS, MatchBasis,
+    ReceiptRef, ResolvedSubject, SearchReasonCodeV1, SubjectAmbiguitySet,
 };
 
 /// Closed resolver failure surface.
@@ -243,8 +242,6 @@ impl SubjectCandidate {
     ) -> Result<(), SubjectError> {
         if rank_resolution_basis(self.match_basis) != Some(priority)
             || self.subject.match_basis != self.match_basis
-            || self.subject.entity_kind
-                != self.subject.entity_kind
             || self.context_digest != context.context_digest
         {
             return Err(SubjectError::SubjectReportInvalid);
@@ -493,10 +490,7 @@ pub fn resolve_subject(
             .into_values()
             .map(|mut values| {
                 stable_sort_candidates(&mut values);
-                values
-                    .into_iter()
-                    .next()
-                    .expect("non-empty hypothesis")
+                values.into_iter().next().expect("non-empty hypothesis")
             })
             .collect::<Vec<_>>();
         let ambiguity = build_ambiguity_set(
@@ -589,10 +583,17 @@ fn stable_sort_candidates(candidates: &mut [SubjectCandidate]) {
     candidates.sort_by(|left, right| {
         rank_resolution_basis(left.match_basis)
             .cmp(&rank_resolution_basis(right.match_basis))
-            .then_with(|| right.entity_kind_compatible.cmp(&left.entity_kind_compatible))
+            .then_with(|| {
+                right
+                    .entity_kind_compatible
+                    .cmp(&left.entity_kind_compatible)
+            })
             .then_with(|| assurance_rank(right.assurance).cmp(&assurance_rank(left.assurance)))
             .then_with(|| left.portfolio_priority.cmp(&right.portfolio_priority))
-            .then_with(|| left.source_identity_digest.cmp(&right.source_identity_digest))
+            .then_with(|| {
+                left.source_identity_digest
+                    .cmp(&right.source_identity_digest)
+            })
             .then_with(|| left.coordinate_digest.cmp(&right.coordinate_digest))
             .then_with(|| left.candidate_digest.cmp(&right.candidate_digest))
     });
@@ -600,11 +601,10 @@ fn stable_sort_candidates(candidates: &mut [SubjectCandidate]) {
 
 const fn assurance_rank(value: AssuranceClass) -> u8 {
     match value {
-        AssuranceClass::ExactBytes => 5,
-        AssuranceClass::MappedText => 4,
-        AssuranceClass::Structural => 3,
-        AssuranceClass::IndexedLexical => 2,
-        AssuranceClass::SemanticOnly => 1,
+        AssuranceClass::ExactBytes => 4,
+        AssuranceClass::MappedText => 3,
+        AssuranceClass::LossyText => 2,
+        AssuranceClass::DescriptiveOnly => 1,
     }
 }
 
@@ -681,51 +681,45 @@ pub fn issue_resolution_receipt(
     if evidence.len() > limits.max_evidence_receipts {
         return Err(SubjectError::SubjectBudgetExhausted);
     }
-    let candidate_set_digest = Blake3Digest32::from_bytes(blake3_256(
-        &candidate_set_digest_input(&candidate_digests)?,
-    ));
-    let (output_kind, selected_candidate_digest, ambiguity_candidate_digests) =
-        match resolution {
-            SubjectResolution::Resolved {
-                candidate_digest, ..
-            } => (
-                ResolutionOutputKind::Resolved,
-                Some(*candidate_digest),
-                Vec::new(),
-            ),
-            SubjectResolution::Ambiguous { ambiguity, .. } => {
-                let digests = ambiguity
-                    .candidates
-                    .iter()
-                    .filter_map(|candidate| {
-                        candidates
-                            .iter()
-                            .find(|source| {
-                                source.subject.canonical_handle == candidate.source_handle
-                                    && source.match_basis == candidate.match_basis
-                            })
-                            .map(|source| source.candidate_digest)
-                    })
-                    .collect::<Vec<_>>();
-                if digests.len() != ambiguity.candidates.len() {
-                    return Err(SubjectError::SubjectReportInvalid);
-                }
-                (ResolutionOutputKind::Ambiguous, None, digests)
+    let candidate_set_digest =
+        Blake3Digest32::from_bytes(blake3_256(&candidate_set_digest_input(&candidate_digests)?));
+    let (output_kind, selected_candidate_digest, ambiguity_candidate_digests) = match resolution {
+        SubjectResolution::Resolved {
+            candidate_digest, ..
+        } => (
+            ResolutionOutputKind::Resolved,
+            Some(*candidate_digest),
+            Vec::new(),
+        ),
+        SubjectResolution::Ambiguous { ambiguity, .. } => {
+            let digests = ambiguity
+                .candidates
+                .iter()
+                .filter_map(|candidate| {
+                    candidates
+                        .iter()
+                        .find(|source| {
+                            source.subject.canonical_handle == candidate.source_handle
+                                && source.match_basis == candidate.match_basis
+                        })
+                        .map(|source| source.candidate_digest)
+                })
+                .collect::<Vec<_>>();
+            if digests.len() != ambiguity.candidates.len() {
+                return Err(SubjectError::SubjectReportInvalid);
             }
-            SubjectResolution::NotFound { .. } => {
-                (ResolutionOutputKind::NotFound, None, Vec::new())
-            }
-            SubjectResolution::ScopeEmpty => {
-                (ResolutionOutputKind::ScopeEmpty, None, Vec::new())
-            }
-            SubjectResolution::Incomplete { .. } => {
-                (ResolutionOutputKind::Incomplete, None, Vec::new())
-            }
-        };
+            (ResolutionOutputKind::Ambiguous, None, digests)
+        }
+        SubjectResolution::NotFound { .. } => (ResolutionOutputKind::NotFound, None, Vec::new()),
+        SubjectResolution::ScopeEmpty => (ResolutionOutputKind::ScopeEmpty, None, Vec::new()),
+        SubjectResolution::Incomplete { .. } => {
+            (ResolutionOutputKind::Incomplete, None, Vec::new())
+        }
+    };
     let ambiguity_candidate_digests = BoundedList::new(ambiguity_candidate_digests)
         .map_err(|_| SubjectError::SubjectBudgetExhausted)?;
-    let evidence_receipt_refs = BoundedList::new(evidence)
-        .map_err(|_| SubjectError::SubjectBudgetExhausted)?;
+    let evidence_receipt_refs =
+        BoundedList::new(evidence).map_err(|_| SubjectError::SubjectBudgetExhausted)?;
     let receipt_input = resolution_receipt_digest_input(
         request,
         context,
@@ -856,12 +850,41 @@ fn resolution_receipt_digest_input(
 }
 
 fn append(output: &mut Vec<u8>, value: &[u8]) -> Result<(), SubjectError> {
-    let length = u64::try_from(value.len())
-        .map_err(|_| SubjectError::SubjectBudgetExhausted)?;
+    let length = u64::try_from(value.len()).map_err(|_| SubjectError::SubjectBudgetExhausted)?;
     output.extend_from_slice(&length.to_be_bytes());
     output.extend_from_slice(value);
     if output.len() > 8 * 1024 * 1024 {
         return Err(SubjectError::SubjectBudgetExhausted);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use search_contracts::{AssuranceClass, MatchBasis};
+
+    use super::{ResolutionPriority, assurance_rank, rank_resolution_basis};
+
+    #[test]
+    fn assurance_order_matches_the_contract_loss_ladder() {
+        assert!(
+            assurance_rank(AssuranceClass::ExactBytes) > assurance_rank(AssuranceClass::MappedText)
+        );
+        assert!(
+            assurance_rank(AssuranceClass::MappedText) > assurance_rank(AssuranceClass::LossyText)
+        );
+        assert!(
+            assurance_rank(AssuranceClass::LossyText)
+                > assurance_rank(AssuranceClass::DescriptiveOnly)
+        );
+    }
+
+    #[test]
+    fn semantic_similarity_is_not_subject_resolution_authority() {
+        assert_eq!(rank_resolution_basis(MatchBasis::Semantic), None);
+        assert_eq!(
+            rank_resolution_basis(MatchBasis::Structural),
+            Some(ResolutionPriority::Structural)
+        );
+    }
 }
