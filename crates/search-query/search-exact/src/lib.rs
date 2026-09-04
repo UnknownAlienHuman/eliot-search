@@ -20,14 +20,13 @@ use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
-    Blake3Digest32, BoundedCanonicalBytes, BoundedList, BoundedNonContentMetadata,
-    BoundedSet, BufferSnapshotId, CatalogRevision, CoverageDenominatorKind,
-    ExactCompletenessRequirements, ExactConclusion, ExactExecutionReport,
-    ExactInputDomain, ExactItemFailure, ExactItemFailureKind, ExactMatch,
-    ExactPredicate, ExactPredicateKind, ExactScanDenominator, ExactScanPlan,
-    ExactScanPlanRef, MAX_LIST_ITEMS, MAX_RAW_BYTES, MAX_REASON_CODES,
-    PlanFingerprint, PlanId, ProfileId, ReceiptRef, SearchReasonCodeV1,
-    SourceRevisionId, SourceRevisionRef,
+    Blake3Digest32, BoundedCanonicalBytes, BoundedList, BoundedNonContentMetadata, BoundedSet,
+    BufferSnapshotId, CatalogRevision, CoverageDenominatorKind, ExactCompletenessRequirements,
+    ExactConclusion, ExactExecutionReport, ExactInputDomain, ExactItemFailure,
+    ExactItemFailureKind, ExactMatch, ExactPredicate, ExactPredicateKind, ExactScanDenominator,
+    ExactScanPlan, ExactScanPlanRef, MAX_LIST_ITEMS, MAX_RAW_BYTES, MAX_REASON_CODES,
+    PlanFingerprint, PlanId, ProfileId, ReceiptRef, SearchReasonCodeV1, SourceRevisionId,
+    SourceRevisionRef,
 };
 
 /// Closed exact-plane failure surface.
@@ -174,9 +173,7 @@ pub struct ExactPredicateProfile {
 }
 
 /// Validates a profile without authorizing any source scope.
-pub fn validate_predicate_profile(
-    profile: &ExactPredicateProfile,
-) -> Result<(), ExactError> {
+pub fn validate_predicate_profile(profile: &ExactPredicateProfile) -> Result<(), ExactError> {
     if profile.max_pattern_bytes == 0
         || profile.max_pattern_bytes > MAX_RAW_BYTES
         || profile.max_input_bytes == 0
@@ -221,9 +218,7 @@ pub fn validate_predicate_profile(
     {
         return Err(ExactError::ExactEngineNotQualified);
     }
-    if profile.input_domain != ExactInputDomain::StructuralIr
-        && profile.max_structural_depth != 0
-    {
+    if profile.input_domain != ExactInputDomain::StructuralIr && profile.max_structural_depth != 0 {
         return Err(ExactError::ExactRequestInvalid);
     }
     Ok(())
@@ -295,10 +290,9 @@ pub fn compile_predicate(
         return Err(ExactError::ExactPredicateInvalid);
     }
 
-    let canonical = BoundedCanonicalBytes::<MAX_RAW_BYTES>::from_validated(
-        request.serialized_form.clone(),
-    )
-    .map_err(|_| ExactError::ContractViolation)?;
+    let canonical =
+        BoundedCanonicalBytes::<MAX_RAW_BYTES>::from_validated(request.serialized_form.clone())
+            .map_err(|_| ExactError::ContractViolation)?;
     let contract = ExactPredicate {
         kind: request.kind,
         engine_and_version: profile.engine_and_version.clone(),
@@ -308,8 +302,7 @@ pub fn compile_predicate(
     };
     let digest_input = predicate_digest_input(&request, &profile)?;
     let predicate_digest = Blake3Digest32::from_bytes(blake3_256(&digest_input));
-    let literal = (request.kind == ExactPredicateKind::Literal)
-        .then_some(request.serialized_form);
+    let literal = (request.kind == ExactPredicateKind::Literal).then_some(request.serialized_form);
     Ok(CompiledExactPredicate {
         contract,
         profile,
@@ -350,8 +343,8 @@ pub struct MatchSpan {
 impl MatchSpan {
     /// Validates a non-empty range against one input length.
     pub fn validate(self, input_len: usize) -> Result<(), ExactError> {
-        let end = usize::try_from(self.byte_end)
-            .map_err(|_| ExactError::ExactPredicateLimitExceeded)?;
+        let end =
+            usize::try_from(self.byte_end).map_err(|_| ExactError::ExactPredicateLimitExceeded)?;
         if self.byte_start >= self.byte_end || end > input_len {
             Err(ExactError::ExactReportInvalid)
         } else {
@@ -371,8 +364,8 @@ pub enum ExactInput<'a> {
     StructuralIr(&'a [u8]),
 }
 
-impl ExactInput<'_> {
-    fn bytes(self) -> &[u8] {
+impl<'a> ExactInput<'a> {
+    fn bytes(self) -> &'a [u8] {
         match self {
             Self::RawBytes(bytes) | Self::StructuralIr(bytes) => bytes,
             Self::DecodedText(text) => text.as_bytes(),
@@ -480,8 +473,7 @@ fn find_literal(
         return Err(ExactError::ExactPredicateInvalid);
     }
     if normalization == NormalizationPolicy::AsciiCaseInsensitive
-        && (needle.iter().any(|byte| !byte.is_ascii())
-            || input.iter().any(|byte| !byte.is_ascii()))
+        && (needle.iter().any(|byte| !byte.is_ascii()) || input.iter().any(|byte| !byte.is_ascii()))
     {
         return Err(ExactError::ExactEncodingUnsupported);
     }
@@ -771,9 +763,7 @@ pub fn compile_exact_scan(
     if identity.unsaved_buffer_snapshot_ids.len() > MAX_LIST_ITEMS {
         return Err(ExactError::ExactPredicateLimitExceeded);
     }
-    if requirements.require_every_denominator_item
-        && !denominator.completeness.is_complete()
-    {
+    if requirements.require_every_denominator_item && !denominator.completeness.is_complete() {
         return Err(ExactError::ExactDenominatorIncomplete);
     }
     let contract = ExactScanPlan {
@@ -845,7 +835,10 @@ pub fn validate_plan_before_execution(
     if !current.predicate_profile_current {
         return Err(ExactError::ExactEngineNotQualified);
     }
-    if plan.contract.completeness_requirements.require_current_observation
+    if plan
+        .contract
+        .completeness_requirements
+        .require_current_observation
         && !current.current_observation
     {
         return Err(ExactError::ExactObservationGap);
@@ -1059,8 +1052,8 @@ pub fn execute_item(
     };
 
     let mut matches = Vec::with_capacity(spans.len());
-    for span in spans {
-        let exact_match = projector.project(item, readback, &plan.predicate, span)?;
+    for span in &spans {
+        let exact_match = projector.project(item, readback, &plan.predicate, *span)?;
         exact_match
             .validate()
             .map_err(|_| ExactError::ExactReportInvalid)?;
@@ -1151,14 +1144,7 @@ pub fn execute_exact_scan(
             )?);
             continue;
         }
-        let execution = execute_item(
-            plan,
-            permit,
-            item,
-            &readback,
-            engine,
-            projector,
-        )?;
+        let execution = execute_item(plan, permit, item, &readback, engine, projector)?;
         scanned_bytes = scanned_bytes
             .checked_add(execution.scanned_bytes)
             .ok_or(ExactError::ExactBudgetExhausted)?;
@@ -1226,8 +1212,7 @@ pub fn assemble_execution_report(
             matches.extend(execution.matches.into_vec());
         } else if let Some(failure) = execution.failure {
             match failure.failure_kind {
-                ExactItemFailureKind::RevisionUnavailable
-                | ExactItemFailureKind::ScopeChanged => {
+                ExactItemFailureKind::RevisionUnavailable | ExactItemFailureKind::ScopeChanged => {
                     scope_drifted |= failure.failure_kind == ExactItemFailureKind::ScopeChanged;
                     changed.push(failure);
                 }
@@ -1267,8 +1252,7 @@ pub fn assemble_execution_report(
     };
     let report = ExactExecutionReport {
         plan_ref: plan.plan_ref(),
-        matched_items: BoundedList::new(matches)
-            .map_err(|_| ExactError::ExactBudgetExhausted)?,
+        matched_items: BoundedList::new(matches).map_err(|_| ExactError::ExactBudgetExhausted)?,
         scanned_items: completed_items,
         scanned_bytes,
         unreadable_items: BoundedList::new(unreadable)
@@ -1346,8 +1330,7 @@ pub fn checkpoint_execution(
     result_receipt_refs: Vec<ReceiptRef>,
     blake3_256: impl Fn(&[u8]) -> [u8; 32],
 ) -> Result<ExactCheckpoint, ExactError> {
-    if completed_items.len() != result_receipt_refs.len()
-        || completed_items.len() > MAX_LIST_ITEMS
+    if completed_items.len() != result_receipt_refs.len() || completed_items.len() > MAX_LIST_ITEMS
     {
         return Err(ExactError::ExactReportInvalid);
     }
@@ -1509,9 +1492,7 @@ pub fn verify_execution_report(
     if coverage == ExactCoverage::ExecutionInvalid {
         return Err(ExactError::ExactReportInvalid);
     }
-    let report_digest = Blake3Digest32::from_bytes(blake3_256(
-        &report_digest_input(plan, report)?,
-    ));
+    let report_digest = Blake3Digest32::from_bytes(blake3_256(&report_digest_input(plan, report)?));
     Ok(ExactVerificationReceipt {
         plan_ref: report.plan_ref,
         denominator_digest: plan.denominator.denominator_digest,
@@ -1613,8 +1594,7 @@ pub fn revalidate_complete_negative(
 }
 
 fn append(output: &mut Vec<u8>, value: &[u8]) -> Result<(), ExactError> {
-    let length = u64::try_from(value.len())
-        .map_err(|_| ExactError::ExactPredicateLimitExceeded)?;
+    let length = u64::try_from(value.len()).map_err(|_| ExactError::ExactPredicateLimitExceeded)?;
     output.extend_from_slice(&length.to_be_bytes());
     output.extend_from_slice(value);
     if output.len() > MAX_RAW_BYTES {

@@ -20,9 +20,8 @@ use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
-    AssuranceClass, Blake3Digest32, BoundedList, EntityKind, EvidenceRole,
-    MAX_LIST_ITEMS, OpaqueId, ProfileId, ReceiptRef, RepresentationId,
-    SourceRevisionRef, UnitId,
+    AssuranceClass, Blake3Digest32, BoundedList, EntityKind, EvidenceRole, MAX_LIST_ITEMS,
+    ProfileId, ReceiptRef, RepresentationId, SourceRevisionRef, UnitId,
 };
 
 /// Maximum UTF-8 bytes retained for one public identifier or attribute value.
@@ -209,11 +208,7 @@ pub fn validate_parser_profile(
         && profile.max_attributes_per_node <= MAX_LIST_ITEMS
         && profile.max_diagnostics > 0
         && profile.max_diagnostics <= MAX_LIST_ITEMS;
-    if floating
-        || profile.supported_editions.is_empty()
-        || !limits_valid
-        || !profile.no_execute
-    {
+    if floating || profile.supported_editions.is_empty() || !limits_valid || !profile.no_execute {
         return Err(EnrichError::ParserProfileInvalid);
     }
     if qualification.profile_digest != profile.profile_digest
@@ -353,8 +348,8 @@ pub struct TextRange {
 impl TextRange {
     /// Validates a non-empty range within the representation.
     pub fn validate(self, representation_len: usize) -> Result<(), EnrichError> {
-        let end = usize::try_from(self.byte_end)
-            .map_err(|_| EnrichError::StructuralFactUnmapped)?;
+        let end =
+            usize::try_from(self.byte_end).map_err(|_| EnrichError::StructuralFactUnmapped)?;
         if self.byte_start >= self.byte_end
             || self.line_start >= self.line_end
             || end > representation_len
@@ -452,7 +447,11 @@ pub fn parse_rust_no_execute(
     blake3_256: impl Fn(&[u8]) -> [u8; 32],
 ) -> Result<RustSyntaxTree, EnrichError> {
     let budget = budget.validate()?;
-    if !profile.profile.supported_editions.contains(&representation.edition) {
+    if !profile
+        .profile
+        .supported_editions
+        .contains(&representation.edition)
+    {
         return Err(EnrichError::RustInputUnsupported);
     }
     if representation.bytes.len() > profile.profile.max_input_bytes
@@ -491,8 +490,8 @@ pub fn parse_rust_no_execute(
         let line_start = offset;
         let content_start = line_start.saturating_add(leading);
         let content_end = line_start.saturating_add(line.len());
-        let line_number = u64::try_from(line_index)
-            .map_err(|_| EnrichError::ParseBudgetExhausted)?;
+        let line_number =
+            u64::try_from(line_index).map_err(|_| EnrichError::ParseBudgetExhausted)?;
         let range = TextRange {
             byte_start: u64::try_from(content_start)
                 .map_err(|_| EnrichError::StructuralFactUnmapped)?,
@@ -530,9 +529,11 @@ pub fn parse_rust_no_execute(
             if nodes.len() >= profile.profile.max_nodes || nodes.len() >= budget.max_nodes {
                 return Err(EnrichError::ParseBudgetExhausted);
             }
-            if classified.name.as_ref().is_some_and(|name| {
-                name.is_empty() || name.len() > MAX_STRUCTURAL_TEXT_BYTES
-            }) {
+            if classified
+                .name
+                .as_ref()
+                .is_some_and(|name| name.is_empty() || name.len() > MAX_STRUCTURAL_TEXT_BYTES)
+            {
                 classified.name = None;
                 classified.recovered = true;
                 push_diagnostic(
@@ -639,8 +640,7 @@ pub fn parse_rust_no_execute(
         coordinate_map_digest: representation.coordinate_map_digest,
         parser_profile_digest: profile.profile.profile_digest,
         nodes: BoundedList::new(nodes).map_err(|_| EnrichError::ContractViolation)?,
-        diagnostics: BoundedList::new(diagnostics)
-            .map_err(|_| EnrichError::ContractViolation)?,
+        diagnostics: BoundedList::new(diagnostics).map_err(|_| EnrichError::ContractViolation)?,
         state,
         steps,
     })
@@ -652,11 +652,7 @@ struct ClassifiedLine {
     recovered: bool,
 }
 
-fn classify_line(
-    line: &str,
-    depth: usize,
-    attributes: &[String],
-) -> Option<ClassifiedLine> {
+fn classify_line(line: &str, depth: usize, attributes: &[String]) -> Option<ClassifiedLine> {
     let line = strip_visibility_and_qualifiers(line);
     let is_test = attributes.iter().any(|attribute| {
         attribute.starts_with("#[test")
@@ -664,7 +660,14 @@ fn classify_line(
             || attribute.contains("cfg_attr(test")
     });
     let declarations = [
-        ("fn ", if depth > 0 { RustSyntaxKind::Method } else { RustSyntaxKind::Function }),
+        (
+            "fn ",
+            if depth > 0 {
+                RustSyntaxKind::Method
+            } else {
+                RustSyntaxKind::Function
+            },
+        ),
         ("struct ", RustSyntaxKind::Type),
         ("enum ", RustSyntaxKind::Type),
         ("union ", RustSyntaxKind::Type),
@@ -679,7 +682,12 @@ fn classify_line(
     ];
     for (prefix, mut kind) in declarations {
         if let Some(rest) = line.strip_prefix(prefix) {
-            if is_test && matches!(kind, RustSyntaxKind::Function | RustSyntaxKind::Method | RustSyntaxKind::Module) {
+            if is_test
+                && matches!(
+                    kind,
+                    RustSyntaxKind::Function | RustSyntaxKind::Method | RustSyntaxKind::Module
+                )
+            {
                 kind = RustSyntaxKind::Test;
             }
             let name = parse_identifier(rest);
@@ -752,8 +760,17 @@ fn parse_macro_invocation(line: &str) -> Option<String> {
 
 fn looks_structural(line: &str) -> bool {
     [
-        "fn ", "struct ", "enum ", "trait ", "impl ", "mod ", "type ",
-        "const ", "static ", "macro ", "macro_rules!",
+        "fn ",
+        "struct ",
+        "enum ",
+        "trait ",
+        "impl ",
+        "mod ",
+        "type ",
+        "const ",
+        "static ",
+        "macro ",
+        "macro_rules!",
     ]
     .iter()
     .any(|needle| line.contains(needle))
@@ -855,10 +872,7 @@ pub fn extract_configuration_predicate(
         .strip_prefix("#[cfg_attr(")
         .and_then(|value| value.strip_suffix(")]"))
     {
-        split_top_level(body)?
-            .into_iter()
-            .next()
-            .map(str::trim)
+        split_top_level(body)?.into_iter().next().map(str::trim)
     } else {
         None
     };
@@ -889,20 +903,22 @@ fn parse_cfg_expression(
         (
             "all",
             ConfigurationPredicate::All
-                as fn(BoundedList<ConfigurationPredicate, MAX_LIST_ITEMS>)
-                    -> ConfigurationPredicate,
+                as fn(
+                    BoundedList<ConfigurationPredicate, MAX_LIST_ITEMS>,
+                ) -> ConfigurationPredicate,
         ),
         (
             "any",
             ConfigurationPredicate::Any
-                as fn(BoundedList<ConfigurationPredicate, MAX_LIST_ITEMS>)
-                    -> ConfigurationPredicate,
+                as fn(
+                    BoundedList<ConfigurationPredicate, MAX_LIST_ITEMS>,
+                ) -> ConfigurationPredicate,
         ),
     ] {
         if let Some(inner) = value
             .strip_prefix(name)
-            .and_then(str::trim_start)
-            .strip_prefix('(')
+            .map(str::trim_start)
+            .and_then(|body| body.strip_prefix('('))
             .and_then(|body| body.strip_suffix(')'))
         {
             let items = split_top_level(inner)?
@@ -919,8 +935,8 @@ fn parse_cfg_expression(
     }
     if let Some(inner) = value
         .strip_prefix("not")
-        .and_then(str::trim_start)
-        .strip_prefix('(')
+        .map(str::trim_start)
+        .and_then(|body| body.strip_prefix('('))
         .and_then(|body| body.strip_suffix(')'))
     {
         return Ok(ConfigurationPredicate::Not(Box::new(parse_cfg_expression(
@@ -1019,10 +1035,7 @@ fn canonical_cfg(value: &ConfigurationPredicate) -> Result<Vec<u8>, EnrichError>
     Ok(output)
 }
 
-fn encode_cfg(
-    value: &ConfigurationPredicate,
-    output: &mut Vec<u8>,
-) -> Result<(), EnrichError> {
+fn encode_cfg(value: &ConfigurationPredicate, output: &mut Vec<u8>) -> Result<(), EnrichError> {
     match value {
         ConfigurationPredicate::All(items) => {
             output.push(1);
@@ -1191,13 +1204,8 @@ pub fn extract_structural_facts(
                 .get(index.min(representation.unit_ids.len().saturating_sub(1)))
                 .copied()
         };
-        let digest_input = fact_digest_input(
-            tree,
-            node,
-            entity_kind,
-            role,
-            configuration.as_ref(),
-        )?;
+        let digest_input =
+            fact_digest_input(tree, node, entity_kind, role, configuration.as_ref())?;
         facts.push(StructuralFact {
             fact_digest: Blake3Digest32::from_bytes(blake3_256(&digest_input)),
             source_revision_ref: tree.source_revision_ref,
@@ -1392,7 +1400,10 @@ pub fn extract_structural_relations(
             .cmp(&right.from_fact_digest)
             .then_with(|| left.kind.cmp(&right.kind))
             .then_with(|| left.to_fact_digest.cmp(&right.to_fact_digest))
-            .then_with(|| left.unresolved_target_name.cmp(&right.unresolved_target_name))
+            .then_with(|| {
+                left.unresolved_target_name
+                    .cmp(&right.unresolved_target_name)
+            })
     });
     BoundedList::new(relations).map_err(|_| EnrichError::ContractViolation)
 }
@@ -1496,12 +1507,12 @@ pub fn build_enrichment_manifest(
     let fact_set_digest = digest_list(
         b"eliot-search/structural-fact-set/v1",
         &fact_digests,
-        blake3_256,
+        &blake3_256,
     )?;
     let relation_set_digest = digest_list(
         b"eliot-search/structural-relation-set/v1",
         &relation_digests,
-        blake3_256,
+        &blake3_256,
     )?;
     let mut gaps = BTreeSet::new();
     if tree.state == ParseState::DegradedTolerantSyntax {
@@ -1521,11 +1532,11 @@ pub fn build_enrichment_manifest(
     manifest_input.extend_from_slice(tree.parser_profile_digest.as_bytes());
     manifest_input.extend_from_slice(fact_set_digest.as_bytes());
     manifest_input.extend_from_slice(relation_set_digest.as_bytes());
+    manifest_input.extend_from_slice(&u64::try_from(facts.len()).unwrap_or(u64::MAX).to_be_bytes());
     manifest_input.extend_from_slice(
-        &u64::try_from(facts.len()).unwrap_or(u64::MAX).to_be_bytes(),
-    );
-    manifest_input.extend_from_slice(
-        &u64::try_from(relations.len()).unwrap_or(u64::MAX).to_be_bytes(),
+        &u64::try_from(relations.len())
+            .unwrap_or(u64::MAX)
+            .to_be_bytes(),
     );
     manifest_input.extend_from_slice(
         &u64::try_from(tree.diagnostics.len())
@@ -1576,13 +1587,7 @@ pub fn enrich_code(
     receipt_ref: ReceiptRef,
     blake3_256: impl Fn(&[u8]) -> [u8; 32] + Copy,
 ) -> Result<StructuralFacts, EnrichError> {
-    let tree = parse_rust_no_execute(
-        representation,
-        profile,
-        budget,
-        cancellation,
-        blake3_256,
-    )?;
+    let tree = parse_rust_no_execute(representation, profile, budget, cancellation, blake3_256)?;
     let facts = extract_structural_facts(
         &tree,
         representation,
@@ -1591,20 +1596,9 @@ pub fn enrich_code(
         cancellation,
         blake3_256,
     )?;
-    let relations = extract_structural_relations(
-        &facts,
-        profile,
-        budget,
-        cancellation,
-        blake3_256,
-    )?;
-    let manifest = build_enrichment_manifest(
-        &tree,
-        &facts,
-        &relations,
-        receipt_ref,
-        blake3_256,
-    )?;
+    let relations =
+        extract_structural_relations(&facts, profile, budget, cancellation, blake3_256)?;
+    let manifest = build_enrichment_manifest(&tree, &facts, &relations, receipt_ref, blake3_256)?;
     Ok(StructuralFacts {
         tree,
         facts,
@@ -1675,7 +1669,7 @@ fn entity_kind(kind: RustSyntaxKind) -> EntityKind {
 fn digest_list(
     domain: &[u8],
     values: &[Blake3Digest32],
-    blake3_256: impl Fn(&[u8]) -> [u8; 32],
+    blake3_256: &impl Fn(&[u8]) -> [u8; 32],
 ) -> Result<Blake3Digest32, EnrichError> {
     let mut bytes = Vec::new();
     append(&mut bytes, domain)?;
