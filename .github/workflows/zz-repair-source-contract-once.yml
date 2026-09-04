@@ -129,9 +129,16 @@ jobs:
               lambda match: f'RootBindingId::from_bytes([{match.group(1)}; 16])',
               text,
           )
-          if imports != 1 or helpers != 1 or root_ids == 0:
+          text, unused_files = re.subn(
+              r'\(Some\(file\), Some\(_\), false, (false|true)\)',
+              lambda match: f'(Some(_file), Some(_), false, {match.group(1)})',
+              text,
+          )
+          if imports != 1 or helpers != 1 or root_ids == 0 or unused_files != 2:
               raise SystemExit(
-                  f'reconcile patch mismatch: imports={imports}, helpers={helpers}, root_ids={root_ids}'
+                  'reconcile patch mismatch: '
+                  f'imports={imports}, helpers={helpers}, root_ids={root_ids}, '
+                  f'unused_files={unused_files}'
               )
           reconcile.write_text(text, encoding='utf-8')
           PY
