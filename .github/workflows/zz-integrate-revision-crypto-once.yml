@@ -1,5 +1,6 @@
 name: integrate-revision-crypto-once
 
+# Retry after the workspace declared its exact inherited Rust version.
 on:
   push:
     branches: [main]
