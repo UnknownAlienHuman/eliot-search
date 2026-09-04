@@ -30,7 +30,7 @@ jobs:
           rustup toolchain install 1.98.0 --profile minimal --component rustfmt --no-self-update
           rustup override set 1.98.0
 
-      - name: Add the missing registry-facing identity contract
+      - name: Align shared identity and source-spine tests
         shell: bash
         run: |
           set -euo pipefail
@@ -45,292 +45,72 @@ jobs:
               raise SystemExit('SourceIdentity derive did not match expected source')
           contracts.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          current = Path('crates/search-source/search-source-identity/src/current.rs')
-          current.write_text(r'''//! Registry-facing current source binding and observation view.
-//!
-//! Stable source identity, path-binding history, and content observations have
-//! distinct authority. This module provides the finite aggregate consumed by
-//! the registry and reconciler without making a path or content digest part of
-//! [`SourceIdentity`] itself.
-
-use search_contracts::{
-    Blake3Digest32, NonZeroRevision, ReceiptRef, RootBindingId, SourceIdentity,
-};
-
-use crate::IdentityError;
-
-/// Conservative limits for registry-facing identity values.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct IdentityLimits {
-    /// Maximum UTF-8 bytes in one canonical root-relative path.
-    pub max_relative_path_bytes: usize,
-}
-
-impl IdentityLimits {
-    /// Validates every finite dimension.
-    pub const fn validate(self) -> Result<Self, IdentityError> {
-        if self.max_relative_path_bytes == 0 {
-            Err(IdentityError::IdentityCapacityExceeded)
-        } else {
-            Ok(self)
-        }
-    }
-}
-
-/// Default finite limits for registry-facing identity values.
-pub const DEFAULT_IDENTITY_LIMITS: IdentityLimits = IdentityLimits {
-    max_relative_path_bytes: 4_096,
-};
-
-/// Canonical path relative to one admitted logical root.
-///
-/// The value uses `/` separators, contains no empty, `.` or `..` component,
-/// and is never interpreted as stable source identity.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct CanonicalRelativePath(String);
-
-impl CanonicalRelativePath {
-    /// Validates and owns an already-canonical root-relative path.
-    pub fn new(
-        value: impl Into<String>,
-        limits: IdentityLimits,
-    ) -> Result<Self, IdentityError> {
-        let limits = limits.validate()?;
-        let value = value.into();
-        if value.is_empty()
-            || value.as_bytes().len() > limits.max_relative_path_bytes
-            || value.starts_with('/')
-            || value.ends_with('/')
-            || value.contains('\\')
-            || value.chars().any(char::is_control)
-            || value
-                .split('/')
-                .any(|component| component.is_empty() || matches!(component, "." | ".."))
-        {
-            return Err(IdentityError::PathEscapesAdmittedRoot);
-        }
-        Ok(Self(value))
-    }
-
-    /// Exact canonical relative path text.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl AsRef<str> for CanonicalRelativePath {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-/// Exact current content/path observation retained outside stable identity.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SourceObservation {
-    /// Admitted logical root containing the path.
-    pub root_binding_id: RootBindingId,
-    /// Canonical path relative to the admitted root.
-    pub relative_path: CanonicalRelativePath,
-    /// Reuse-resistant final-file identity when the platform supports it.
-    pub stable_file_identity_digest: Option<Blake3Digest32>,
-    /// Digest of exact observed source bytes.
-    pub content_digest: Blake3Digest32,
-    /// Exact observed source byte length.
-    pub content_bytes: u64,
-    /// Content-free authoritative observation receipt.
-    pub observation_receipt: ReceiptRef,
-}
-
-/// Stable source identity plus independently revisioned current binding and
-/// content observation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SourceBinding {
-    identity: SourceIdentity,
-    observation: SourceObservation,
-    binding_revision: NonZeroRevision,
-    observation_revision: NonZeroRevision,
-}
-
-impl SourceBinding {
-    /// Creates a registry-facing current binding from already-validated values.
-    #[must_use]
-    pub const fn new(
-        identity: SourceIdentity,
-        observation: SourceObservation,
-        binding_revision: NonZeroRevision,
-        observation_revision: NonZeroRevision,
-    ) -> Self {
-        Self {
-            identity,
-            observation,
-            binding_revision,
-            observation_revision,
-        }
-    }
-
-    /// Stable source identity, independent from current path and bytes.
-    #[must_use]
-    pub const fn identity(&self) -> &SourceIdentity {
-        &self.identity
-    }
-
-    /// Complete current observation.
-    #[must_use]
-    pub const fn observation(&self) -> &SourceObservation {
-        &self.observation
-    }
-
-    /// Admitted logical root binding.
-    #[must_use]
-    pub const fn root_binding_id(&self) -> RootBindingId {
-        self.observation.root_binding_id
-    }
-
-    /// Current canonical root-relative path.
-    #[must_use]
-    pub const fn relative_path(&self) -> &CanonicalRelativePath {
-        &self.observation.relative_path
-    }
-
-    /// Current stable final-file identity when supported.
-    #[must_use]
-    pub const fn stable_file_identity_digest(&self) -> Option<Blake3Digest32> {
-        self.observation.stable_file_identity_digest
-    }
-
-    /// Digest of exact current source bytes.
-    #[must_use]
-    pub const fn content_digest(&self) -> Blake3Digest32 {
-        self.observation.content_digest
-    }
-
-    /// Exact current source byte length.
-    #[must_use]
-    pub const fn content_bytes(&self) -> u64 {
-        self.observation.content_bytes
-    }
-
-    /// Current path/root binding revision.
-    #[must_use]
-    pub const fn binding_revision(&self) -> NonZeroRevision {
-        self.binding_revision
-    }
-
-    /// Current content-observation revision.
-    #[must_use]
-    pub const fn observation_revision(&self) -> NonZeroRevision {
-        self.observation_revision
-    }
-
-    /// Content-free authoritative observation receipt.
-    #[must_use]
-    pub const fn observation_receipt(&self) -> &ReceiptRef {
-        &self.observation.observation_receipt
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn canonical_relative_path_rejects_escape_and_ambiguous_separators() {
-        for value in ["", "/rooted", "trailing/", "a//b", "a/../b", "a\\b"] {
-            assert!(CanonicalRelativePath::new(value, DEFAULT_IDENTITY_LIMITS).is_err());
-        }
-        assert_eq!(
-            CanonicalRelativePath::new("src/lib.rs", DEFAULT_IDENTITY_LIMITS)
-                .expect("canonical path")
-                .as_str(),
-            "src/lib.rs"
-        );
-    }
-}
-''', encoding='utf-8')
-
-          lib = Path('crates/search-source/search-source-identity/src/lib.rs')
-          text = lib.read_text(encoding='utf-8')
-          if 'pub mod current;' not in text:
-              text = text.replace('pub mod binding;\n', 'pub mod binding;\npub mod current;\n', 1)
-          export_anchor = 'pub use error::IdentityError;\n'
-          export = '''pub use current::{
-    CanonicalRelativePath, DEFAULT_IDENTITY_LIMITS, IdentityLimits, SourceBinding,
-    SourceObservation,
-};
-pub use search_contracts::{RootBindingId, SourceIdentity};
-'''
-          if export not in text:
-              if export_anchor not in text:
-                  raise SystemExit('source identity export anchor missing')
-              text = text.replace(export_anchor, export_anchor + export, 1)
-          lib.write_text(text, encoding='utf-8')
-
           registry = Path('crates/search-source/search-source-registry/src/lib.rs')
           text = registry.read_text(encoding='utf-8')
-          text = text.replace(
-              '    use search_contracts::OwnerEpoch;',
-              '''    use search_contracts::{
-        OpaqueCanonicalBytes, OwnerEpoch, SourceId, SourceIdentityKind,
-        SourceNamespaceId,
-    };''',
-              1,
-          )
-          old = '''    fn source_identity(name: &str) -> SourceIdentity {
-        SourceIdentity::new(
-            OpaqueId::new("namespace:test").expect("namespace"),
-            OpaqueId::new(format!("source:{name}")).expect("source"),
-        )
-    }'''
-          new = '''    fn source_identity(name: &str) -> SourceIdentity {
-        let mut source_id = [0_u8; 16];
-        for (index, byte) in name.bytes().enumerate() {
-            source_id[index % source_id.len()] ^= byte;
-        }
-        SourceIdentity {
-            source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
-            source_id: SourceId::from_bytes(source_id),
-            identity_kind: SourceIdentityKind::NtfsFile,
-            stable_identity_components: OpaqueCanonicalBytes::from_validated(
-                format!("registry-test:{name}").into_bytes(),
-            )
-            .expect("stable identity components"),
-        }
-    }'''
-          if old not in text:
-              raise SystemExit('registry SourceIdentity test helper did not match')
-          registry.write_text(text.replace(old, new, 1), encoding='utf-8')
+          old_import = '    use search_contracts::OwnerEpoch;'
+          new_import = '''    use search_contracts::{
+              OpaqueCanonicalBytes, OwnerEpoch, SourceId, SourceIdentityKind,
+              SourceNamespaceId,
+          };'''
+          if old_import not in text:
+              raise SystemExit('registry test import did not match')
+          text = text.replace(old_import, new_import, 1)
+          old_helper = '''    fn source_identity(name: &str) -> SourceIdentity {
+              SourceIdentity::new(
+                  OpaqueId::new("namespace:test").expect("namespace"),
+                  OpaqueId::new(format!("source:{name}")).expect("source"),
+              )
+          }'''
+          new_helper = '''    fn source_identity(name: &str) -> SourceIdentity {
+              let mut source_id = [0_u8; 16];
+              for (index, byte) in name.bytes().enumerate() {
+                  let slot = index % source_id.len();
+                  source_id[slot] ^= byte;
+              }
+              SourceIdentity {
+                  source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
+                  source_id: SourceId::from_bytes(source_id),
+                  identity_kind: SourceIdentityKind::NtfsFile,
+                  stable_identity_components: OpaqueCanonicalBytes::from_validated(
+                      format!("registry-test:{name}").into_bytes(),
+                  )
+                  .expect("stable identity components"),
+              }
+          }'''
+          if old_helper not in text:
+              raise SystemExit('registry SourceIdentity helper did not match')
+          registry.write_text(text.replace(old_helper, new_helper, 1), encoding='utf-8')
 
           reconcile = Path('crates/search-source/search-source-reconcile/src/lib.rs')
           text = reconcile.read_text(encoding='utf-8')
-          text = text.replace(
-              '    use search_contracts::{OwnerEpoch, ReceiptRef};',
-              '''    use search_contracts::{
-        OpaqueCanonicalBytes, OwnerEpoch, ReceiptRef, SourceId,
-        SourceIdentityKind, SourceNamespaceId,
-    };''',
-              1,
-          )
-          old = '''    fn source_identity() -> SourceIdentity {
-        SourceIdentity::new(
-            OpaqueId::new("namespace:test").expect("namespace"),
-            OpaqueId::new("source:test").expect("source"),
-        )
-    }'''
-          new = '''    fn source_identity() -> SourceIdentity {
-        SourceIdentity {
-            source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
-            source_id: SourceId::from_bytes([2; 16]),
-            identity_kind: SourceIdentityKind::NtfsFile,
-            stable_identity_components: OpaqueCanonicalBytes::from_validated(
-                b"reconcile-test:source".to_vec(),
-            )
-            .expect("stable identity components"),
-        }
-    }'''
-          if old not in text:
-              raise SystemExit('reconcile SourceIdentity test helper did not match')
-          reconcile.write_text(text.replace(old, new, 1), encoding='utf-8')
+          old_import = '    use search_contracts::{OwnerEpoch, ReceiptRef};'
+          new_import = '''    use search_contracts::{
+              OpaqueCanonicalBytes, OwnerEpoch, ReceiptRef, SourceId,
+              SourceIdentityKind, SourceNamespaceId,
+          };'''
+          if old_import not in text:
+              raise SystemExit('reconcile test import did not match')
+          text = text.replace(old_import, new_import, 1)
+          old_helper = '''    fn source_identity() -> SourceIdentity {
+              SourceIdentity::new(
+                  OpaqueId::new("namespace:test").expect("namespace"),
+                  OpaqueId::new("source:test").expect("source"),
+              )
+          }'''
+          new_helper = '''    fn source_identity() -> SourceIdentity {
+              SourceIdentity {
+                  source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
+                  source_id: SourceId::from_bytes([2; 16]),
+                  identity_kind: SourceIdentityKind::NtfsFile,
+                  stable_identity_components: OpaqueCanonicalBytes::from_validated(
+                      b"reconcile-test:source".to_vec(),
+                  )
+                  .expect("stable identity components"),
+              }
+          }'''
+          if old_helper not in text:
+              raise SystemExit('reconcile SourceIdentity helper did not match')
+          reconcile.write_text(text.replace(old_helper, new_helper, 1), encoding='utf-8')
           PY
 
       - name: Format and qualify the repaired source spine
@@ -349,7 +129,7 @@ pub use search_contracts::{RootBindingId, SourceIdentity};
           cargo test -p search-source-reconcile --all-targets --locked
           cargo check --workspace --all-targets --all-features --locked
 
-      - name: Commit compiler-qualified contract and remove one-shot workflow
+      - name: Commit compiler-qualified contract and remove workflow
         shell: bash
         run: |
           set -euo pipefail
