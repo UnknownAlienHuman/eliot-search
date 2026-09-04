@@ -1,0 +1,105 @@
+name: qualify-workspace-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-qualify-workspace-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: qualify-workspace-once
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.98.0 --profile minimal \
+            --component clippy --component rustfmt --no-self-update
+          rustup override set 1.98.0
+          rustc -Vv
+          cargo -V
+
+      - name: Check complete workspace
+        shell: bash
+        run: cargo check --workspace --all-targets --all-features --locked
+
+      - name: Test complete workspace
+        shell: bash
+        run: cargo test --workspace --all-targets --all-features --locked
+
+      - name: Build public documentation
+        shell: bash
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --all-features --no-deps --locked
+
+      - name: Enforce Clippy warnings
+        shell: bash
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install exact Rust toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustup toolchain install 1.98.0 --profile minimal --component clippy --component rustfmt --no-self-update
+          rustup override set 1.98.0
+          rustc -Vv
+          cargo -V
+
+      - name: Check complete workspace
+        shell: pwsh
+        run: cargo check --workspace --all-targets --all-features --locked
+
+      - name: Test complete workspace
+        shell: pwsh
+        run: cargo test --workspace --all-targets --all-features --locked
+
+      - name: Enforce Clippy warnings
+        shell: pwsh
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+  cleanup:
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Remove successful one-shot qualification workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/zz-qualify-workspace-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: record cross-platform workspace qualification"
+          git pull --rebase origin main
+          git push origin HEAD:main
