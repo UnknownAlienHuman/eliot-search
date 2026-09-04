@@ -1,0 +1,50 @@
+name: clean-probe-branch-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-clean-probe-branch-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clean-probe-branch-once
+  cancel-in-progress: false
+
+jobs:
+  clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      REPO: UnknownAlienHuman/eliot-search
+      BRANCH: DO_NOT_CREATE_PROBE
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Delete the exact stray branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api -X DELETE "repos/${REPO}/git/refs/heads/${BRANCH}"
+          mapfile -t branches < <(gh api --paginate "repos/${REPO}/branches?per_page=100" --jq '.[].name')
+          printf '%s\n' "${branches[@]}"
+          test "${#branches[@]}" -eq 1
+          test "${branches[0]}" = main
+
+      - name: Remove this one-shot workflow from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/zz-clean-probe-branch-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: remove stray probe branch"
+          git pull --rebase origin main
+          git push origin HEAD:main
