@@ -15,6 +15,7 @@
 
 pub mod batch;
 pub mod binding;
+pub mod current;
 pub mod error;
 pub mod evidence;
 pub mod lineage;
@@ -30,6 +31,10 @@ pub use binding::{
     PathBindingEvent, PathBindingRecord, PathBindingState, PathBindingTransition,
     PathHistoryReceipt, open_path_binding, relate_hardlink_bindings, transition_path_binding,
     validate_binding_history,
+};
+pub use current::{
+    CanonicalRelativePath, DEFAULT_IDENTITY_LIMITS, IdentityLimits, SourceBinding,
+    SourceObservation,
 };
 pub use error::IdentityError;
 pub use evidence::{
@@ -54,3 +59,4 @@ pub use resolution::{
     PriorIdentityCandidate, PriorIdentityCandidates, ResolutionGap, ResolutionPolicy,
     compare_identity, derive_source_identity, resolve_identity,
 };
+pub use search_contracts::{RootBindingId, SourceIdentity};
