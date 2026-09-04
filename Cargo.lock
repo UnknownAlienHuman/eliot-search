@@ -547,6 +547,7 @@ dependencies = [
 name = "search-result-projector"
 version = "0.0.0"
 dependencies = [
+ "search-access",
  "search-candidate-validator",
  "search-contracts",
  "search-domain",

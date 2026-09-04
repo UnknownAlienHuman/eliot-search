@@ -20,9 +20,8 @@ use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId,
-    ObjectResidencyKeyDigest, PurgeFenceRevision, ReceiptRef,
-    SourceMembershipId, SourceRevisionId,
+    Blake3Digest32, CollectionGenerationId, Epoch, ObjectResidencyKeyDigest, OpaqueId,
+    PurgeFenceRevision, ReceiptRef, SourceMembershipId, SourceRevisionId,
 };
 
 /// Closed retention/purge/restore failure.
@@ -297,7 +296,11 @@ impl RetentionCatalog {
     ) -> Result<&RetentionLease, RetentionError> {
         self.validate_interval(issued_at_ms, expires_at_ms)?;
         self.register_operation(&operation)?;
-        if let Some(existing) = self.leases.get(&lease_id) {
+        if self.leases.contains_key(&lease_id) {
+            let existing = self
+                .leases
+                .get(&lease_id)
+                .ok_or(RetentionError::LeaseNotFound)?;
             if existing.last_operation == operation
                 && existing.owner_id == owner_id
                 && existing.target == target
@@ -445,19 +448,14 @@ impl RetentionCatalog {
     }
 
     fn validate_interval(&self, issued: u64, expires: u64) -> Result<(), RetentionError> {
-        if expires <= issued
-            || expires.saturating_sub(issued) > self.policy.max_lease_duration_ms
-        {
+        if expires <= issued || expires.saturating_sub(issued) > self.policy.max_lease_duration_ms {
             Err(RetentionError::InvalidLease)
         } else {
             Ok(())
         }
     }
 
-    fn register_operation(
-        &mut self,
-        operation: &RetentionOperation,
-    ) -> Result<(), RetentionError> {
+    fn register_operation(&mut self, operation: &RetentionOperation) -> Result<(), RetentionError> {
         if let Some(existing) = self.operations.get(&operation.operation_id) {
             return if *existing == operation.request_digest {
                 Ok(())
@@ -468,10 +466,8 @@ impl RetentionCatalog {
         if self.operations.len() >= self.policy.max_operations {
             return Err(RetentionError::CapacityExceeded);
         }
-        self.operations.insert(
-            operation.operation_id.clone(),
-            operation.request_digest,
-        );
+        self.operations
+            .insert(operation.operation_id.clone(), operation.request_digest);
         Ok(())
     }
 }
@@ -499,10 +495,7 @@ impl PurgeManifest {
         if self.purge_generation == 0
             || self.targets.is_empty()
             || self.targets.len() > policy.max_purge_targets
-            || self
-                .targets
-                .windows(2)
-                .any(|pair| pair[0] >= pair[1])
+            || self.targets.windows(2).any(|pair| pair[0] >= pair[1])
         {
             return Err(RetentionError::InvalidPurgeManifest);
         }
@@ -644,10 +637,7 @@ impl PurgeCoordinator {
     }
 
     /// Commits the restrictive live-deny barrier first.
-    pub fn accept_live_deny(
-        &mut self,
-        receipt: PurgeLayerReceipt,
-    ) -> Result<(), RetentionError> {
+    pub fn accept_live_deny(&mut self, receipt: PurgeLayerReceipt) -> Result<(), RetentionError> {
         self.accept_layer(
             PurgePhase::Prepared,
             PurgePhase::LiveDenyCommitted,
@@ -764,10 +754,7 @@ impl PurgeCoordinator {
 
     /// Marks external mutation outcome unknown without advancing success.
     pub fn mark_outcome_unknown(&mut self) -> Result<(), RetentionError> {
-        if matches!(
-            self.phase,
-            PurgePhase::Complete | PurgePhase::Quarantined
-        ) {
+        if matches!(self.phase, PurgePhase::Complete | PurgePhase::Quarantined) {
             return Err(RetentionError::InvalidPurgeTransition);
         }
         self.phase = PurgePhase::OutcomeUnknown;
@@ -858,10 +845,7 @@ pub fn validate_reclaim_manifest(
 ) -> Result<(), RetentionError> {
     if manifest.objects.is_empty()
         || manifest.objects.len() > max_objects
-        || manifest
-            .objects
-            .windows(2)
-            .any(|pair| pair[0] >= pair[1])
+        || manifest.objects.windows(2).any(|pair| pair[0] >= pair[1])
     {
         return Err(RetentionError::ReclaimManifestMismatch);
     }
@@ -949,10 +933,7 @@ impl RestoreCoordinator {
     }
 
     /// Accepts exact control checkpoint readback.
-    pub fn verify_control(
-        &mut self,
-        receipt: RestoreLayerReceipt,
-    ) -> Result<(), RetentionError> {
+    pub fn verify_control(&mut self, receipt: RestoreLayerReceipt) -> Result<(), RetentionError> {
         self.verify_receipt(&receipt)?;
         if self.phase != RestorePhase::RestorePendingRevalidation
             || receipt.readback_digest != self.manifest.control_checkpoint_digest
@@ -989,10 +970,7 @@ impl RestoreCoordinator {
     }
 
     /// Accepts exact index snapshot readback while remaining direct-only.
-    pub fn verify_index(
-        &mut self,
-        receipt: RestoreLayerReceipt,
-    ) -> Result<(), RetentionError> {
+    pub fn verify_index(&mut self, receipt: RestoreLayerReceipt) -> Result<(), RetentionError> {
         self.verify_receipt(&receipt)?;
         if self.phase != RestorePhase::DirectOnly
             || receipt.readback_digest != self.manifest.index_snapshot_digest
