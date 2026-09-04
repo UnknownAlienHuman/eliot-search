@@ -781,11 +781,8 @@ impl ControlSnapshotPublisher {
         &mut self,
         journal: &ControlJournal,
     ) -> Result<SnapshotPublishReceipt, ControlError> {
-        let snapshot = rebuild_control_snapshot(
-            journal.read_snapshot()?,
-            journal.identity(),
-            journal.limits,
-        )?;
+        let snapshot =
+            rebuild_control_snapshot(journal.read_snapshot()?, journal.identity(), journal.limits)?;
         let receipt = SnapshotPublishReceipt {
             identity: snapshot.identity,
             generation: snapshot.generation,
@@ -858,7 +855,7 @@ pub struct ControlStoreHealth {
 }
 
 /// Validated migration descriptor.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MigrationPlan {
     /// Current schema version.
     pub from_version: u32,
@@ -884,7 +881,10 @@ impl MigrationPlan {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MigrationState {
     /// No migration is in progress.
-    Stable { version: u32 },
+    Stable {
+        /// Current verified schema version.
+        version: u32,
+    },
     /// Durable intent exists.
     Planned(MigrationPlan),
     /// External mutation may have applied.
@@ -921,8 +921,8 @@ impl MigrationMachine {
     /// Records a forward migration plan.
     pub fn plan(&mut self, plan: MigrationPlan) -> Result<(), ControlError> {
         let plan = plan.validate()?;
-        match self.state {
-            MigrationState::Stable { version } if version == plan.from_version => {
+        match &self.state {
+            MigrationState::Stable { version } if *version == plan.from_version => {
                 self.state = MigrationState::Planned(plan);
                 Ok(())
             }
@@ -933,8 +933,9 @@ impl MigrationMachine {
 
     /// Marks the external migration outcome unresolved.
     pub fn mark_outcome_unknown(&mut self) -> Result<(), ControlError> {
-        let MigrationState::Planned(plan) = self.state else {
-            return Err(ControlError::MigrationUnverified);
+        let plan = match &self.state {
+            MigrationState::Planned(plan) => plan.clone(),
+            _ => return Err(ControlError::MigrationUnverified),
         };
         self.state = MigrationState::OutcomeUnknown(plan);
         Ok(())
@@ -947,8 +948,8 @@ impl MigrationMachine {
         observed_plan_digest: Blake3Digest32,
         fixture_verified: bool,
     ) -> Result<(), ControlError> {
-        let plan = match self.state {
-            MigrationState::Planned(plan) | MigrationState::OutcomeUnknown(plan) => plan,
+        let plan = match &self.state {
+            MigrationState::Planned(plan) | MigrationState::OutcomeUnknown(plan) => plan.clone(),
             _ => return Err(ControlError::MigrationUnverified),
         };
         if observed_version != plan.to_version
@@ -964,12 +965,47 @@ impl MigrationMachine {
 
     /// Commits verified migration state as stable.
     pub fn commit_verified(&mut self) -> Result<(), ControlError> {
-        let MigrationState::Verified(plan) = self.state else {
-            return Err(ControlError::MigrationUnverified);
+        let version = match &self.state {
+            MigrationState::Verified(plan) => plan.to_version,
+            _ => return Err(ControlError::MigrationUnverified),
         };
-        self.state = MigrationState::Stable {
-            version: plan.to_version,
-        };
+        self.state = MigrationState::Stable { version };
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use search_contracts::{Blake3Digest32, ReceiptRef};
+
+    use super::{MigrationMachine, MigrationPlan, MigrationState};
+
+    fn plan() -> MigrationPlan {
+        MigrationPlan {
+            from_version: 1,
+            to_version: 2,
+            plan_digest: Blake3Digest32::from_bytes([7; 32]),
+            fixture_ref: ReceiptRef::new("receipt:migration-fixture").expect("receipt"),
+        }
+    }
+
+    #[test]
+    fn non_copy_plan_survives_unknown_readback_and_commit() {
+        let plan = plan();
+        let mut machine = MigrationMachine::new(1).expect("machine");
+        machine.plan(plan.clone()).expect("plan");
+        machine.mark_outcome_unknown().expect("unknown");
+        machine.verify(2, plan.plan_digest, true).expect("verify");
+        machine.commit_verified().expect("commit");
+        assert_eq!(machine.state(), &MigrationState::Stable { version: 2 });
+    }
+
+    #[test]
+    fn failed_fixture_verification_quarantines_migration() {
+        let plan = plan();
+        let mut machine = MigrationMachine::new(1).expect("machine");
+        machine.plan(plan.clone()).expect("plan");
+        assert!(machine.verify(2, plan.plan_digest, false).is_err());
+        assert!(matches!(machine.state(), MigrationState::Quarantined(_)));
     }
 }
