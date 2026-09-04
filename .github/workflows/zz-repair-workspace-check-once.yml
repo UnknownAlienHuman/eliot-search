@@ -36,6 +36,7 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           manifest = Path('crates/search-query/search-result-projector/Cargo.toml')
           text = manifest.read_text(encoding='utf-8')
@@ -49,18 +50,7 @@ jobs:
 
           retention = Path('crates/search-runtime/search-retention/src/lib.rs')
           text = retention.read_text(encoding='utf-8')
-          old = '''        if let Some(existing) = self.leases.get(&lease_id) {
-              if existing.last_operation == operation
-                  && existing.owner_id == owner_id
-                  && existing.target == target
-                  && existing.issued_at_ms == issued_at_ms
-                  && existing.expires_at_ms == expires_at_ms
-              {
-                  return Ok(existing);
-              }
-              return Err(RetentionError::LeaseConflict);
-          }'''
-          new = '''        if self.leases.contains_key(&lease_id) {
+          replacement = '''        if self.leases.contains_key(&lease_id) {
               let existing = self
                   .leases
                   .get(&lease_id)
@@ -75,9 +65,17 @@ jobs:
               }
               return Err(RetentionError::LeaseConflict);
           }'''
-          if old not in text:
-              raise SystemExit('retention create_lease replay block missing')
-          retention.write_text(text.replace(old, new, 1), encoding='utf-8')
+          text, replacements = re.subn(
+              r'        if let Some\(existing\) = self\.leases\.get\(&lease_id\) \{.*?'
+              r'            return Err\(RetentionError::LeaseConflict\);\n        \}',
+              replacement,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if replacements != 1:
+              raise SystemExit(f'retention replay replacement count={replacements}')
+          retention.write_text(text, encoding='utf-8')
           PY
 
       - name: Format, resolve lockfile, and qualify both packages
