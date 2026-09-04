@@ -36,6 +36,7 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           contracts = Path('crates/search-contracts/src/source.rs')
           text = contracts.read_text(encoding='utf-8')
@@ -47,21 +48,16 @@ jobs:
 
           registry = Path('crates/search-source/search-source-registry/src/lib.rs')
           text = registry.read_text(encoding='utf-8')
-          old_import = '    use search_contracts::OwnerEpoch;'
-          new_import = '''    use search_contracts::{
-              OpaqueCanonicalBytes, OwnerEpoch, SourceId, SourceIdentityKind,
-              SourceNamespaceId,
-          };'''
-          if old_import not in text:
-              raise SystemExit('registry test import did not match')
-          text = text.replace(old_import, new_import, 1)
-          old_helper = '''    fn source_identity(name: &str) -> SourceIdentity {
-              SourceIdentity::new(
-                  OpaqueId::new("namespace:test").expect("namespace"),
-                  OpaqueId::new(format!("source:{name}")).expect("source"),
-              )
-          }'''
-          new_helper = '''    fn source_identity(name: &str) -> SourceIdentity {
+          text, imports = re.subn(
+              r'    use search_contracts::OwnerEpoch;',
+              '    use search_contracts::{\n'
+              '        OpaqueCanonicalBytes, OwnerEpoch, SourceId, SourceIdentityKind,\n'
+              '        SourceNamespaceId,\n'
+              '    };',
+              text,
+              count=1,
+          )
+          helper = '''    fn source_identity(name: &str) -> SourceIdentity {
               let mut source_id = [0_u8; 16];
               for (index, byte) in name.bytes().enumerate() {
                   let slot = index % source_id.len();
@@ -76,28 +72,32 @@ jobs:
                   )
                   .expect("stable identity components"),
               }
-          }'''
-          if old_helper not in text:
-              raise SystemExit('registry SourceIdentity helper did not match')
-          registry.write_text(text.replace(old_helper, new_helper, 1), encoding='utf-8')
+          }
+
+          '''
+          text, helpers = re.subn(
+              r'    fn source_identity\(name: &str\) -> SourceIdentity \{.*?\n    \}\n\n(?=    fn source_binding)',
+              helper,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if imports != 1 or helpers != 1:
+              raise SystemExit(f'registry patch mismatch: imports={imports}, helpers={helpers}')
+          registry.write_text(text, encoding='utf-8')
 
           reconcile = Path('crates/search-source/search-source-reconcile/src/lib.rs')
           text = reconcile.read_text(encoding='utf-8')
-          old_import = '    use search_contracts::{OwnerEpoch, ReceiptRef};'
-          new_import = '''    use search_contracts::{
-              OpaqueCanonicalBytes, OwnerEpoch, ReceiptRef, SourceId,
-              SourceIdentityKind, SourceNamespaceId,
-          };'''
-          if old_import not in text:
-              raise SystemExit('reconcile test import did not match')
-          text = text.replace(old_import, new_import, 1)
-          old_helper = '''    fn source_identity() -> SourceIdentity {
-              SourceIdentity::new(
-                  OpaqueId::new("namespace:test").expect("namespace"),
-                  OpaqueId::new("source:test").expect("source"),
-              )
-          }'''
-          new_helper = '''    fn source_identity() -> SourceIdentity {
+          text, imports = re.subn(
+              r'    use search_contracts::\{OwnerEpoch, ReceiptRef\};',
+              '    use search_contracts::{\n'
+              '        OpaqueCanonicalBytes, OwnerEpoch, ReceiptRef, SourceId,\n'
+              '        SourceIdentityKind, SourceNamespaceId,\n'
+              '    };',
+              text,
+              count=1,
+          )
+          helper = '''    fn source_identity() -> SourceIdentity {
               SourceIdentity {
                   source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
                   source_id: SourceId::from_bytes([2; 16]),
@@ -107,10 +107,19 @@ jobs:
                   )
                   .expect("stable identity components"),
               }
-          }'''
-          if old_helper not in text:
-              raise SystemExit('reconcile SourceIdentity helper did not match')
-          reconcile.write_text(text.replace(old_helper, new_helper, 1), encoding='utf-8')
+          }
+
+          '''
+          text, helpers = re.subn(
+              r'    fn source_identity\(\) -> SourceIdentity \{.*?\n    \}\n\n(?=    fn path)',
+              helper,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if imports != 1 or helpers != 1:
+              raise SystemExit(f'reconcile patch mismatch: imports={imports}, helpers={helpers}')
+          reconcile.write_text(text, encoding='utf-8')
           PY
 
       - name: Format and qualify the repaired source spine
