@@ -4,6 +4,8 @@ use std::io::Write;
 
 use crate::continuation::SearchPage;
 use crate::direct_store::{IndexedSource, StoreSearchResult};
+use crate::result_handles::{PublicHandledMatch, ResultHandleExpansion};
+use crate::sha256;
 
 pub(crate) const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
@@ -11,6 +13,7 @@ pub(crate) fn emit_indexed_source(
     writer: &mut impl Write,
     source: &IndexedSource,
     invalidated_continuations: usize,
+    invalidated_handles: usize,
 ) -> Result<(), String> {
     write_line(
         writer,
@@ -21,6 +24,8 @@ pub(crate) fn emit_indexed_source(
                 "\"content_digest\":\"{}\",\"path_digest\":\"{}\",",
                 "\"byte_length\":{},\"identity_strength\":\"{}\",",
                 "\"changed\":{},\"invalidated_continuations\":{},",
+                "\"invalidated_handles\":{},",
+                "\"diagnostic_internal_identifiers\":true,",
                 "\"source_backed\":true,\"durable_revision\":true,",
                 "\"encrypted_at_rest\":false}}"
             ),
@@ -32,6 +37,7 @@ pub(crate) fn emit_indexed_source(
             source.identity_strength,
             source.changed,
             invalidated_continuations,
+            invalidated_handles,
         ),
     )
 }
@@ -61,14 +67,15 @@ pub(crate) fn emit_streaming_search(
             &format!(
                 concat!(
                     "{{\"event\":\"source_gap\",\"source_id\":\"{}\",",
-                    "\"revision_id\":\"{}\",\"reason\":\"{}\"}}"
+                    "\"revision_id\":\"{}\",\"reason\":\"{}\",",
+                    "\"diagnostic_internal_identifiers\":true}}"
                 ),
                 gap.source_id, gap.revision_id, gap.reason,
             ),
         )?;
     }
     for item in &result.matches {
-        emit_match(writer, item)?;
+        emit_internal_match(writer, item)?;
     }
     write_line(
         writer,
@@ -76,21 +83,16 @@ pub(crate) fn emit_streaming_search(
             concat!(
                 "{{\"event\":\"corpus_search_complete\",",
                 "\"matches\":{},\"gaps\":{},\"searched_sources\":{},",
-                "\"searched_bytes\":{},\"active_sources\":{},",
-                "\"complete\":{},\"match_limit_reached\":{},",
-                "\"source_budget_exhausted\":{},",
-                "\"byte_budget_exhausted\":{},\"source_backed\":true,",
+                "\"active_sources\":{},\"complete\":{},",
+                "\"match_limit_reached\":{},\"source_backed\":true,",
                 "\"encrypted_at_rest\":false}}"
             ),
             result.matches.len(),
             result.gaps.len(),
             result.searched_sources,
-            result.searched_bytes,
             result.active_sources,
             result.complete,
             result.match_limit_reached,
-            result.source_budget_exhausted,
-            result.byte_budget_exhausted,
         ),
     )
 }
@@ -98,7 +100,11 @@ pub(crate) fn emit_streaming_search(
 pub(crate) fn emit_search_page(
     writer: &mut impl Write,
     page: &SearchPage,
+    public_matches: &[PublicHandledMatch],
 ) -> Result<(), String> {
+    if page.matches.len() != public_matches.len() {
+        return Err("SERVICE_HANDLE_PAGE_MISMATCH".to_owned());
+    }
     write_line(
         writer,
         &format!(
@@ -114,25 +120,27 @@ pub(crate) fn emit_search_page(
             page.coverage.retained_matches,
         ),
     )?;
-    for gap in &page.gaps {
+    for (index, gap) in page.gaps.iter().enumerate() {
         write_line(
             writer,
             &format!(
                 concat!(
-                    "{{\"event\":\"source_gap\",\"source_id\":\"{}\",",
-                    "\"revision_id\":\"{}\",\"reason\":\"{}\"}}"
+                    "{{\"event\":\"source_gap\",\"gap_index\":{},",
+                    "\"reason\":\"{}\",",
+                    "\"diagnostic_internal_identifiers\":false}}"
                 ),
-                gap.source_id, gap.revision_id, gap.reason,
+                index,
+                gap.reason,
             ),
         )?;
     }
-    for item in &page.matches {
-        emit_match(writer, item)?;
+    for item in public_matches {
+        emit_public_match(writer, item)?;
     }
     let continuation = page
         .continuation_token
         .as_ref()
-        .map_or_else(|| "null".to_owned(), |token| format!("\"{token}\""));
+        .map_or_else(|| "null".to_owned(), |token| json_string(token));
     let expires = page
         .expires_in_ms
         .map_or_else(|| "null".to_owned(), |value| value.to_string());
@@ -145,10 +153,8 @@ pub(crate) fn emit_search_page(
                 "\"exhausted\":{},\"continuation_token\":{},",
                 "\"expires_in_ms\":{},\"registered_sources\":{},",
                 "\"active_sources\":{},\"searched_sources\":{},",
-                "\"searched_bytes\":{},\"corpus_complete\":{},",
-                "\"complete\":{},\"match_limit_reached\":{},",
-                "\"source_budget_exhausted\":{},",
-                "\"byte_budget_exhausted\":{},",
+                "\"corpus_complete\":{},\"complete\":{},",
+                "\"match_limit_reached\":{},",
                 "\"total_matches\":{},\"retained_matches\":{},",
                 "\"candidate_window_truncated\":{},\"gap_count\":{},",
                 "\"gap_details_truncated\":{},\"session_scoped\":true,",
@@ -156,19 +162,16 @@ pub(crate) fn emit_search_page(
             ),
             page.page_start,
             page.page_end,
-            page.matches.len(),
+            public_matches.len(),
             page.exhausted,
             continuation,
             expires,
             page.coverage.registered_sources,
             page.coverage.active_sources,
             page.coverage.searched_sources,
-            page.coverage.searched_bytes,
             page.coverage.corpus_complete,
             page.coverage.complete(),
             page.coverage.match_limit_reached,
-            page.coverage.source_budget_exhausted,
-            page.coverage.byte_budget_exhausted,
             page.coverage.total_matches,
             page.coverage.retained_matches,
             page.coverage.candidate_window_truncated,
@@ -178,7 +181,31 @@ pub(crate) fn emit_search_page(
     )
 }
 
-fn emit_match(
+pub(crate) fn emit_handle_expansion(
+    writer: &mut impl Write,
+    expansion: &ResultHandleExpansion,
+) -> Result<(), String> {
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"source_handle_expanded\",",
+                "\"source_handle\":{},\"byte_start\":{},",
+                "\"byte_end\":{},\"source_byte_length\":{},",
+                "\"encoding\":\"hex\",\"bytes\":{},",
+                "\"session_scoped\":true,\"source_backed\":true,",
+                "\"encrypted_at_rest\":false}}"
+            ),
+            json_string(&expansion.source_handle),
+            expansion.byte_start,
+            expansion.byte_end,
+            expansion.source_byte_length,
+            json_string(&sha256::hex(&expansion.bytes)),
+        ),
+    )
+}
+
+fn emit_internal_match(
     writer: &mut impl Write,
     item: &crate::direct_store::StoredMatch,
 ) -> Result<(), String> {
@@ -191,6 +218,7 @@ fn emit_match(
                 "\"path_digest\":\"{}\",\"evidence_id\":\"{}\",",
                 "\"byte_start\":{},\"byte_end\":{},",
                 "\"line\":{},\"column_bytes\":{},",
+                "\"diagnostic_internal_identifiers\":true,",
                 "\"source_backed\":true}}"
             ),
             item.source_id,
@@ -202,6 +230,34 @@ fn emit_match(
             item.byte_end,
             item.line,
             item.column_bytes,
+        ),
+    )
+}
+
+fn emit_public_match(
+    writer: &mut impl Write,
+    item: &PublicHandledMatch,
+) -> Result<(), String> {
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"match\",\"source_handle\":{},",
+                "\"evidence_id\":{},\"byte_start\":{},",
+                "\"byte_end\":{},\"line\":{},\"column_bytes\":{},",
+                "\"source_byte_length\":{},\"expires_in_ms\":{},",
+                "\"session_scoped\":true,",
+                "\"diagnostic_internal_identifiers\":false,",
+                "\"source_backed\":true}}"
+            ),
+            json_string(&item.source_handle),
+            json_string(&item.evidence_id),
+            item.byte_start,
+            item.byte_end,
+            item.line,
+            item.column_bytes,
+            item.source_byte_length,
+            item.expires_in_ms,
         ),
     )
 }

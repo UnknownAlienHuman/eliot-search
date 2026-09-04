@@ -20,7 +20,7 @@ pub(crate) const MAX_RETAINED_MATCHES: usize = 25_000;
 pub(crate) const MAX_PAGE_SIZE: usize = 1_000;
 /// Default matches returned by one page.
 pub(crate) const DEFAULT_PAGE_SIZE: usize = 100;
-/// Maximum source-gap details returned on the first page.
+/// Maximum source-gap details retained on the first page.
 pub(crate) const MAX_GAP_DETAILS: usize = 256;
 /// Finite process-local continuation lifetime.
 pub(crate) const CONTINUATION_TTL: Duration = Duration::from_secs(15 * 60);
@@ -55,11 +55,8 @@ pub(crate) struct PageCoverage {
     pub(crate) registered_sources: usize,
     pub(crate) active_sources: usize,
     pub(crate) searched_sources: usize,
-    pub(crate) searched_bytes: u64,
     pub(crate) corpus_complete: bool,
     pub(crate) match_limit_reached: bool,
-    pub(crate) source_budget_exhausted: bool,
-    pub(crate) byte_budget_exhausted: bool,
     pub(crate) total_matches: usize,
     pub(crate) retained_matches: usize,
     pub(crate) candidate_window_truncated: bool,
@@ -173,11 +170,8 @@ impl ContinuationCatalog {
             registered_sources: result.registered_sources,
             active_sources: result.active_sources,
             searched_sources: result.searched_sources,
-            searched_bytes: result.searched_bytes,
             corpus_complete: result.complete,
             match_limit_reached: result.match_limit_reached,
-            source_budget_exhausted: result.source_budget_exhausted,
-            byte_budget_exhausted: result.byte_budget_exhausted,
             total_matches,
             retained_matches,
             candidate_window_truncated,
