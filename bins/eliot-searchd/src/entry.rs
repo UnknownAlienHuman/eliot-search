@@ -23,6 +23,7 @@ mod maintenance_guard;
 mod public_runtime_service;
 mod result_handles;
 mod revision_protection;
+mod secure_commands;
 mod service_output;
 mod sha256;
 mod source_fence;
@@ -33,5 +34,6 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     authenticated_proxy::maybe_run()
         .or_else(public_runtime_service::maybe_run)
+        .or_else(secure_commands::maybe_run)
         .unwrap_or_else(app::run_main)
 }
