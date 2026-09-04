@@ -1,6 +1,6 @@
 name: qualify-workspace-once
 
-# Retry after the control migration state machine repair.
+# Retry after exact search and code enrichment ownership repairs.
 on:
   push:
     branches: [main]
