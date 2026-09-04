@@ -1,6 +1,6 @@
 name: integrate-revision-crypto-once
 
-# Final retry: include the rustfmt-validated evaluation module in the exact commit set.
+# Final qualification also repairs two compiler-proven defects in search-eval evidence handling.
 on:
   push:
     branches: [main]
@@ -63,6 +63,53 @@ jobs:
                   )
               if not any(item["name"] == package for item in metadata()["packages"]):
                   raise SystemExit("revision crypto package remains outside the workspace")
+          PY
+
+      - name: Repair compiler-proven evaluation evidence defects
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/search-eval/src/evidence.rs")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              "use std::collections::{BTreeMap, BTreeSet};",
+              "use std::collections::BTreeMap;",
+              1,
+          )
+          old = '''        if let Some(existing) = self.attempts.get(&key) {
+                      if existing == &evidence {
+                          return Ok(existing);
+                      }
+                      return Err(EvalError::AttemptConflict);
+                  }
+                  if self.attempts.len() >= self.max_attempts {
+                      return Err(EvalError::BudgetExceeded);
+                  }
+                  self.attempts.insert(key, evidence);
+                  Ok(self.attempts.get(&key).expect("inserted evidence"))'''
+          new = '''        if self.attempts.contains_key(&key) {
+                      if self.attempts.get(&key) != Some(&evidence) {
+                          return Err(EvalError::AttemptConflict);
+                      }
+                      return self.attempts.get(&key).ok_or(EvalError::AttemptConflict);
+                  }
+                  if self.attempts.len() >= self.max_attempts {
+                      return Err(EvalError::BudgetExceeded);
+                  }
+                  self.attempts.insert(key, evidence);
+                  self.attempts.get(&key).ok_or(EvalError::AttemptConflict)'''
+          if old not in text:
+              raise SystemExit("EvidenceLedger block did not match expected source")
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              "    let mut previous = None;",
+              "    let mut previous: Option<ResourceSample> = None;",
+              1,
+          )
+          path.write_text(text, encoding="utf-8")
           PY
 
       - name: Resolve lockfile, format and compile
@@ -137,6 +184,7 @@ jobs:
           git add Cargo.toml Cargo.lock \
             crates/search-runtime/search-revision-crypto \
             crates/search-eval/src/metrics.rs \
+            crates/search-eval/src/evidence.rs \
             docs/implementation/revision-encryption.md
           if ! git diff --quiet; then
             echo "Unexpected unstaged files after rustfmt:" >&2
