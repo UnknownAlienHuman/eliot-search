@@ -1,17 +1,19 @@
 //! Primary ELIOT Search daemon entrypoint.
 //!
-//! The primary binary now composes the owner-fenced persistent DIRECT runtime,
+//! The primary binary composes the owner-fenced persistent DIRECT runtime,
 //! bounded continuation windows, opaque source handles, directory manifests,
-//! guarded maintenance, and the one-shot command surface. The earlier immutable
-//! snapshot/BM25 daemon remains available as `eliot-search-snapshotd`.
+//! guarded maintenance, and authenticated loopback access. The earlier
+//! immutable snapshot/BM25 daemon remains `eliot-search-snapshotd`.
 
 #![forbid(unsafe_code)]
 
 mod app;
+mod authenticated_proxy;
 mod continuation;
 mod development;
 mod direct_store;
 mod directory_manifest;
+mod endpoint;
 mod maintenance;
 mod maintenance_guard;
 mod public_runtime_service;
@@ -23,5 +25,7 @@ mod source_fence;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    public_runtime_service::maybe_run().unwrap_or_else(app::run_main)
+    authenticated_proxy::maybe_run()
+        .or_else(public_runtime_service::maybe_run)
+        .unwrap_or_else(app::run_main)
 }
