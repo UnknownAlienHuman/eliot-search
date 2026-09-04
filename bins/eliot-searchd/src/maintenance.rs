@@ -1,15 +1,16 @@
 //! Explicit maintenance for the development DIRECT corpus.
 //!
 //! Repair removes only an unterminated final event after the complete preceding
-//! SHA-256 chain verifies. GC removes only generated immutable revision objects
-//! that are absent from the verified control-log reference set. Both operations
-//! require the caller to hold the data-root owner lock.
+//! SHA-256 chain verifies. GC removes only generated immutable plaintext or
+//! DPAPI revision objects that are absent from the verified control-log
+//! reference set. Both operations require the data-root owner lock.
 
 use std::collections::BTreeSet;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
+use crate::revision_protection::PROTECTED_OBJECT_EXTENSION;
 use crate::sha256;
 
 const CONTROL_DIRECTORY: &str = "control";
@@ -36,6 +37,11 @@ pub(crate) struct LogRepairResult {
 pub(crate) struct GarbageCollectionResult {
     pub(crate) referenced_revisions: usize,
     pub(crate) scanned_objects: usize,
+    pub(crate) plaintext_objects: usize,
+    pub(crate) protected_objects: usize,
+    pub(crate) temporary_objects: usize,
+    pub(crate) referenced_plaintext_objects: usize,
+    pub(crate) referenced_protected_objects: usize,
     pub(crate) orphan_objects: usize,
     pub(crate) orphan_bytes: u64,
     pub(crate) deleted_objects: usize,
@@ -146,6 +152,11 @@ pub(crate) fn collect_orphan_revisions(
 
     let mut objects = Vec::new();
     let mut unexpected_objects = 0_usize;
+    let mut plaintext_objects = 0_usize;
+    let mut protected_objects = 0_usize;
+    let mut temporary_objects = 0_usize;
+    let mut referenced_plaintext_objects = 0_usize;
+    let mut referenced_protected_objects = 0_usize;
     let mut shard_entries = fs::read_dir(&revisions)
         .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
         .collect::<Result<Vec<_>, _>>()
@@ -186,22 +197,45 @@ pub(crate) fn collect_orphan_revisions(
             }
             let name = entry.file_name().to_string_lossy().into_owned();
             match classify_generated_object(&name) {
-                GeneratedObject::Revision(revision_id) => {
+                GeneratedObject::Revision {
+                    revision_id,
+                    format,
+                } => {
                     if !revision_id.starts_with(shard_name.as_ref()) {
                         unexpected_objects = unexpected_objects.saturating_add(1);
                         continue;
                     }
+                    let referenced = inventory.referenced_revisions.contains(&revision_id);
+                    match format {
+                        RevisionObjectFormat::Plaintext => {
+                            plaintext_objects = plaintext_objects.saturating_add(1);
+                            if referenced {
+                                referenced_plaintext_objects =
+                                    referenced_plaintext_objects.saturating_add(1);
+                            }
+                        }
+                        RevisionObjectFormat::Protected => {
+                            protected_objects = protected_objects.saturating_add(1);
+                            if referenced {
+                                referenced_protected_objects =
+                                    referenced_protected_objects.saturating_add(1);
+                            }
+                        }
+                    }
                     objects.push(ObjectCandidate {
                         path,
                         byte_length: metadata.len(),
-                        referenced: inventory.referenced_revisions.contains(&revision_id),
+                        referenced,
                     });
                 }
-                GeneratedObject::Temporary => objects.push(ObjectCandidate {
-                    path,
-                    byte_length: metadata.len(),
-                    referenced: false,
-                }),
+                GeneratedObject::Temporary => {
+                    temporary_objects = temporary_objects.saturating_add(1);
+                    objects.push(ObjectCandidate {
+                        path,
+                        byte_length: metadata.len(),
+                        referenced: false,
+                    });
+                }
                 GeneratedObject::Unexpected => {
                     unexpected_objects = unexpected_objects.saturating_add(1);
                 }
@@ -250,6 +284,11 @@ pub(crate) fn collect_orphan_revisions(
     Ok(GarbageCollectionResult {
         referenced_revisions: inventory.referenced_revisions.len(),
         scanned_objects: objects.len(),
+        plaintext_objects,
+        protected_objects,
+        temporary_objects,
+        referenced_plaintext_objects,
+        referenced_protected_objects,
         orphan_objects,
         orphan_bytes,
         deleted_objects,
@@ -266,17 +305,37 @@ struct ObjectCandidate {
     referenced: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RevisionObjectFormat {
+    Plaintext,
+    Protected,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum GeneratedObject {
-    Revision(String),
+    Revision {
+        revision_id: String,
+        format: RevisionObjectFormat,
+    },
     Temporary,
     Unexpected,
 }
 
 fn classify_generated_object(name: &str) -> GeneratedObject {
-    if let Some(revision_id) = name.strip_suffix(".bin") {
-        if sha256::decode_digest(revision_id).is_some() {
-            return GeneratedObject::Revision(revision_id.to_owned());
+    for (suffix, format) in [
+        (".bin", RevisionObjectFormat::Plaintext),
+        (
+            concat!(".", PROTECTED_OBJECT_EXTENSION),
+            RevisionObjectFormat::Protected,
+        ),
+    ] {
+        if let Some(revision_id) = name.strip_suffix(suffix) {
+            if sha256::decode_digest(revision_id).is_some() {
+                return GeneratedObject::Revision {
+                    revision_id: revision_id.to_owned(),
+                    format,
+                };
+            }
         }
     }
     if name.starts_with('.') && name.ends_with(".tmp") {
