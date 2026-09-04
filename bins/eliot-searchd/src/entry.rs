@@ -26,6 +26,7 @@ mod revision_protection;
 mod service_output;
 mod sha256;
 mod source_fence;
+mod storage_security;
 
 use std::process::ExitCode;
 
