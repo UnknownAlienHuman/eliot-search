@@ -1,6 +1,6 @@
 name: integrate-revision-crypto-once
 
-# Retry after the workspace declared its exact inherited Rust version.
+# Final retry: include the rustfmt-validated evaluation module in the exact commit set.
 on:
   push:
     branches: [main]
@@ -73,6 +73,7 @@ jobs:
           cargo fmt --all
           git diff --check
           cargo check -p search-revision-crypto --all-targets --locked
+          cargo check -p search-eval --all-targets --locked
           if [[ -f scripts/check-rust-boundaries.mjs ]]; then
             node scripts/check-rust-boundaries.mjs
           fi
@@ -128,18 +129,21 @@ jobs:
           rm -f crates/search-runtime/search-revision-crypto/examples/qualification.rs
           rmdir crates/search-runtime/search-revision-crypto/examples 2>/dev/null || true
 
-      - name: Commit qualified package and remove one-shot workflow
+      - name: Commit only qualified changes
         shell: bash
         run: |
           set -euo pipefail
           git rm -- .github/workflows/zz-integrate-revision-crypto-once.yml
           git add Cargo.toml Cargo.lock \
             crates/search-runtime/search-revision-crypto \
+            crates/search-eval/src/metrics.rs \
             docs/implementation/revision-encryption.md
-          if git diff --cached --quiet; then
-            echo "No integration changes remain."
-            exit 0
+          if ! git diff --quiet; then
+            echo "Unexpected unstaged files after rustfmt:" >&2
+            git diff --name-only >&2
+            exit 1
           fi
+          git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat(revisions): qualify authenticated revision encryption"
