@@ -1,0 +1,140 @@
+name: finalize-windows-dpapi-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-finalize-windows-dpapi-once.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-windows-dpapi-once
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Ensure adapter is a workspace package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import json
+          import re
+          import subprocess
+          from pathlib import Path
+
+          package = "search-os-secrets-windows"
+          member = "crates/search-runtime/search-os-secrets-windows"
+
+          def metadata():
+              result = subprocess.run(
+                  ["cargo", "metadata", "--no-deps", "--format-version", "1"],
+                  text=True,
+                  capture_output=True,
+              )
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr)
+              return json.loads(result.stdout)
+
+          if not any(item["name"] == package for item in metadata()["packages"]):
+              path = Path("Cargo.toml")
+              text = path.read_text(encoding="utf-8")
+              match = re.search(r"(?ms)^members\s*=\s*\[(.*?)^\]", text)
+              if match is None:
+                  raise SystemExit("workspace.members array not found")
+              body = match.group(1)
+              if member not in body:
+                  body += ("" if body.endswith("\n") else "\n") + f'  "{member}",\n'
+                  path.write_text(
+                      text[:match.start(1)] + body + text[match.end(1):],
+                      encoding="utf-8",
+                  )
+              if not any(item["name"] == package for item in metadata()["packages"]):
+                  raise SystemExit("DPAPI adapter remains outside the workspace")
+          '@ | python -
+
+      - name: Update lockfile and build the Windows implementation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo generate-lockfile
+          cargo fmt --all
+          git diff --check
+          cargo build -p search-os-secrets-windows --locked
+          if (Test-Path scripts/check-rust-boundaries.mjs) {
+            node scripts/check-rust-boundaries.mjs
+          }
+
+      - name: Exercise current-user and wrong-scope behavior
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $probe = @'
+          use search_os_secrets_windows::{
+              protect_current_user, unprotect_current_user, ProtectionScope, SecretBytes,
+          };
+
+          fn main() {
+              let scope = ProtectionScope::new(
+                  "github-actions-windows-user",
+                  "eliot-search-ci",
+                  "dpapi-probe-v1",
+                  "revision-store-master-key",
+              ).expect("scope");
+              let wrong_scope = ProtectionScope::new(
+                  "github-actions-windows-user",
+                  "eliot-search-ci",
+                  "dpapi-probe-v1",
+                  "wrong-purpose",
+              ).expect("wrong scope");
+              let plaintext = SecretBytes::new(b"bounded-dpapi-round-trip".to_vec())
+                  .expect("plaintext");
+              let protected = protect_current_user(&plaintext, &scope).expect("protect");
+              assert_ne!(protected.as_bytes(), plaintext.expose_secret());
+              let recovered = unprotect_current_user(&protected, &scope).expect("unprotect");
+              assert_eq!(recovered.expose_secret(), plaintext.expose_secret());
+              assert!(unprotect_current_user(&protected, &wrong_scope).is_err());
+          }
+          '@
+          New-Item -ItemType Directory -Force -Path target\dpapi-probe | Out-Null
+          Set-Content target\dpapi-probe\main.rs $probe -Encoding utf8
+          $rlib = Get-ChildItem target\debug\deps\search_os_secrets_windows-*.rlib |
+            Select-Object -First 1
+          if (-not $rlib) { throw 'DPAPI adapter rlib was not produced' }
+          rustc target\dpapi-probe\main.rs `
+            --edition 2021 `
+            -L dependency=target\debug\deps `
+            --extern search_os_secrets_windows=$($rlib.FullName) `
+            -o target\dpapi-probe\dpapi-probe.exe
+          & target\dpapi-probe\dpapi-probe.exe
+
+      - name: Commit only the qualified adapter state
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git rm --ignore-unmatch `
+            .github/workflows/zz-finalize-windows-dpapi-once.yml `
+            .github/workflows/zz-integrate-windows-dpapi-once.yml `
+            .github/workflows/zz-dpapi-windows-compile-once.yml
+          git add Cargo.toml Cargo.lock `
+            crates/search-runtime/search-os-secrets-windows `
+            docs/implementation/windows-secret-adapter.md
+          if (git diff --cached --quiet) {
+            Write-Host 'No finalization changes remain.'
+            exit 0
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(secrets): qualify scoped Windows DPAPI adapter'
+          git push origin HEAD:main
