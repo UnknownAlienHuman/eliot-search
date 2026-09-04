@@ -25,7 +25,6 @@ wave2-source = [
 ]
 wave3-index = [
     "wave2-source",
-    "dep:search-lexical",
     "dep:search-projection-planner",
     "dep:search-point-identity",
     "dep:search-qdrant-supervisor",
@@ -72,6 +71,7 @@ search-runtime-owner.workspace = true
 search-os-secrets.workspace = true
 search-control-redb.workspace = true
 search-provider-protocol.workspace = true
+search-lexical.workspace = true
 
 search-source-admission = { workspace = true, optional = true }
 search-source-registry = { workspace = true, optional = true }
@@ -83,7 +83,6 @@ search-materializer = { workspace = true, optional = true }
 search-unitizer = { workspace = true, optional = true }
 search-code-enricher = { workspace = true, optional = true }
 
-search-lexical = { workspace = true, optional = true }
 search-projection-planner = { workspace = true, optional = true }
 search-point-identity = { workspace = true, optional = true }
 search-qdrant-supervisor = { workspace = true, optional = true }

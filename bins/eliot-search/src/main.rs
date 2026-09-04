@@ -1,4 +1,4 @@
-//! Protocol-only CLI for the local ELIOT Search daemon.
+//! Bounded protocol-only CLI for the local ELIOT Search daemon.
 
 #![forbid(unsafe_code)]
 
@@ -16,31 +16,23 @@ const MAX_RESPONSE_BYTES: usize = 64 * 1_024;
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug)]
-enum Command {
-    Health,
-    Status,
-    Version,
-    Refresh,
-    Shutdown,
-    Search(String),
+enum ClientCommand {
+    Plain(&'static str),
+    Query { wire_name: &'static str, value: String },
 }
 
-impl Command {
+impl ClientCommand {
     fn wire(&self) -> io::Result<String> {
         match self {
-            Self::Health => Ok("health".to_owned()),
-            Self::Status => Ok("status".to_owned()),
-            Self::Version => Ok("version".to_owned()),
-            Self::Refresh => Ok("refresh".to_owned()),
-            Self::Shutdown => Ok("shutdown".to_owned()),
-            Self::Search(query) => {
-                if query.is_empty() || query.len() > MAX_QUERY_BYTES {
+            Self::Plain(value) => Ok((*value).to_owned()),
+            Self::Query { wire_name, value } => {
+                if value.is_empty() || value.len() > MAX_QUERY_BYTES {
                     return Err(io::Error::new(
                         ErrorKind::InvalidInput,
-                        "search query must be non-empty and at most 1024 UTF-8 bytes",
+                        "query must be non-empty and at most 1024 UTF-8 bytes",
                     ));
                 }
-                Ok(format!("search:{}", hex_encode(query.as_bytes())))
+                Ok(format!("{wire_name}:{}", hex_encode(value.as_bytes())))
             }
         }
     }
@@ -48,7 +40,7 @@ impl Command {
 
 #[derive(Debug)]
 struct Options {
-    command: Command,
+    command: ClientCommand,
     address: Option<SocketAddr>,
     data_root: PathBuf,
     token_file: Option<PathBuf>,
@@ -70,55 +62,82 @@ fn main() {
 }
 
 fn run(options: Options) -> io::Result<String> {
-    let address = match options.address {
-        Some(address) => address,
-        None => read_endpoint(&options.data_root)?.unwrap_or(
-            DEFAULT_ADDRESS
-                .parse()
-                .map_err(|_| io::Error::new(ErrorKind::InvalidData, "invalid default endpoint"))?,
-        ),
-    };
+    let address = options
+        .address
+        .or(read_endpoint(&options.data_root)?)
+        .unwrap_or(DEFAULT_ADDRESS.parse().map_err(|_| {
+            io::Error::new(ErrorKind::InvalidData, "invalid default endpoint")
+        })?);
     ensure_loopback(address.ip())?;
-
-    let token_file = options
+    let token_path = options
         .token_file
         .unwrap_or_else(|| options.data_root.join("runtime").join("auth.token"));
-    let token = read_token(&token_file)?;
+    let token = read_small_regular_utf8(&token_path, 128)?.trim().to_owned();
+    if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "authentication token must be exactly 64 hexadecimal characters",
+        ));
+    }
     let command = options.command.wire()?;
-
     let mut stream = TcpStream::connect_timeout(&address, IO_TIMEOUT)?;
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
-    let request = format!("ELIOT_SEARCH/1 {token} {command}\n");
-    stream.write_all(request.as_bytes())?;
+    write!(stream, "ELIOT_SEARCH/1 {token} {command}\n")?;
     stream.flush()?;
-    read_bounded_response(&mut stream, MAX_RESPONSE_BYTES)
+    read_response(&mut stream)
 }
 
 fn parse_options() -> io::Result<Options> {
-    let mut command: Option<Command> = None;
+    let mut arguments = env::args().skip(1).collect::<Vec<_>>();
+    if arguments.first().is_some_and(|value| matches!(value.as_str(), "-h" | "--help")) {
+        print_help();
+        process::exit(0);
+    }
+    if arguments.first().is_some_and(|value| matches!(value.as_str(), "-V" | "--version")) {
+        println!("eliot-search {}", env!("CARGO_PKG_VERSION"));
+        process::exit(0);
+    }
+
+    let command_name = if arguments.is_empty() {
+        "health".to_owned()
+    } else {
+        arguments.remove(0)
+    };
+    let command = match command_name.as_str() {
+        "health" | "status" | "version" | "refresh" | "shutdown" => {
+            ClientCommand::Plain(match command_name.as_str() {
+                "health" => "health",
+                "status" => "status",
+                "version" => "version",
+                "refresh" => "refresh",
+                "shutdown" => "shutdown",
+                _ => unreachable!(),
+            })
+        }
+        "search" | "lexical" => {
+            let value = take_value(&mut arguments, &command_name)?;
+            ClientCommand::Query {
+                wire_name: if command_name == "search" { "search" } else { "lexical" },
+                value,
+            }
+        }
+        _ => {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("unknown command: {command_name}"),
+            ));
+        }
+    };
+
     let mut address = None;
     let mut data_root = default_data_root()?;
     let mut token_file = None;
-
-    let mut arguments = env::args().skip(1);
-    while let Some(argument) = arguments.next() {
-        match argument.as_str() {
-            "health" => set_command(&mut command, Command::Health)?,
-            "status" => set_command(&mut command, Command::Status)?,
-            "version" => set_command(&mut command, Command::Version)?,
-            "refresh" => set_command(&mut command, Command::Refresh)?,
-            "shutdown" => set_command(&mut command, Command::Shutdown)?,
-            "search" => {
-                let query = arguments.next().ok_or_else(|| {
-                    io::Error::new(ErrorKind::InvalidInput, "search requires a quoted query")
-                })?;
-                set_command(&mut command, Command::Search(query))?;
-            }
+    while !arguments.is_empty() {
+        let flag = arguments.remove(0);
+        match flag.as_str() {
             "--address" => {
-                let value = arguments.next().ok_or_else(|| {
-                    io::Error::new(ErrorKind::InvalidInput, "--address requires a value")
-                })?;
+                let value = take_value(&mut arguments, "--address")?;
                 let parsed = value.parse::<SocketAddr>().map_err(|_| {
                     io::Error::new(ErrorKind::InvalidInput, "invalid socket address")
                 })?;
@@ -126,48 +145,36 @@ fn parse_options() -> io::Result<Options> {
                 address = Some(parsed);
             }
             "--data-root" => {
-                data_root = PathBuf::from(arguments.next().ok_or_else(|| {
-                    io::Error::new(ErrorKind::InvalidInput, "--data-root requires a value")
-                })?);
+                data_root = PathBuf::from(take_value(&mut arguments, "--data-root")?);
             }
             "--token-file" => {
-                token_file = Some(PathBuf::from(arguments.next().ok_or_else(|| {
-                    io::Error::new(ErrorKind::InvalidInput, "--token-file requires a value")
-                })?));
-            }
-            "--help" | "-h" => {
-                print_help();
-                process::exit(0);
-            }
-            "--version" | "-V" => {
-                println!("eliot-search {}", env!("CARGO_PKG_VERSION"));
-                process::exit(0);
+                token_file = Some(PathBuf::from(take_value(&mut arguments, "--token-file")?));
             }
             _ => {
                 return Err(io::Error::new(
                     ErrorKind::InvalidInput,
-                    format!("unknown argument: {argument}"),
+                    format!("unknown option: {flag}"),
                 ));
             }
         }
     }
-
     Ok(Options {
-        command: command.unwrap_or(Command::Health),
+        command,
         address,
         data_root,
         token_file,
     })
 }
 
-fn set_command(slot: &mut Option<Command>, command: Command) -> io::Result<()> {
-    if slot.replace(command).is_some() {
-        return Err(io::Error::new(
+fn take_value(arguments: &mut Vec<String>, name: &str) -> io::Result<String> {
+    if arguments.is_empty() {
+        Err(io::Error::new(
             ErrorKind::InvalidInput,
-            "exactly one command may be supplied",
-        ));
+            format!("{name} requires a value"),
+        ))
+    } else {
+        Ok(arguments.remove(0))
     }
-    Ok(())
 }
 
 fn read_endpoint(data_root: &Path) -> io::Result<Option<SocketAddr>> {
@@ -175,14 +182,7 @@ fn read_endpoint(data_root: &Path) -> io::Result<Option<SocketAddr>> {
     if !path.exists() {
         return Ok(None);
     }
-    let metadata = fs::symlink_metadata(&path)?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > 16 * 1_024 {
-        return Err(io::Error::new(
-            ErrorKind::InvalidData,
-            "endpoint descriptor must be a bounded regular file",
-        ));
-    }
-    let body = fs::read_to_string(path)?;
+    let body = read_small_regular_utf8(&path, 16 * 1_024)?;
     let mut lines = body.lines();
     if lines.next() != Some("ELIOT_SEARCH_ENDPOINT_V1") {
         return Err(io::Error::new(
@@ -206,77 +206,49 @@ fn read_endpoint(data_root: &Path) -> io::Result<Option<SocketAddr>> {
                 ));
             }
             let parsed = value.parse::<SocketAddr>().map_err(|_| {
-                io::Error::new(ErrorKind::InvalidData, "invalid endpoint descriptor address")
+                io::Error::new(ErrorKind::InvalidData, "invalid endpoint address")
             })?;
             ensure_loopback(parsed.ip())?;
             address = Some(parsed);
         }
     }
     address.map(Some).ok_or_else(|| {
-        io::Error::new(
-            ErrorKind::InvalidData,
-            "endpoint descriptor has no address",
-        )
+        io::Error::new(ErrorKind::InvalidData, "endpoint descriptor has no address")
     })
 }
 
-fn read_token(path: &Path) -> io::Result<String> {
+fn read_small_regular_utf8(path: &Path, maximum: u64) -> io::Result<String> {
     let metadata = fs::symlink_metadata(path)?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > 128 {
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > maximum {
         return Err(io::Error::new(
             ErrorKind::InvalidData,
-            "authentication token must be a small regular file",
+            "expected a bounded regular file",
         ));
     }
-    let token = fs::read_to_string(path)?.trim().to_owned();
-    if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(io::Error::new(
-            ErrorKind::InvalidData,
-            "authentication token must be exactly 64 hexadecimal characters",
-        ));
-    }
-    Ok(token)
+    fs::read_to_string(path)
 }
 
-fn read_bounded_response(stream: &mut TcpStream, limit: usize) -> io::Result<String> {
-    let mut bytes = Vec::with_capacity(512);
-    let mut buffer = [0_u8; 512];
-    let mut newline = None;
-    loop {
-        let read = stream.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        let remaining = limit
-            .checked_sub(bytes.len())
-            .ok_or_else(|| io::Error::new(ErrorKind::InvalidData, "response too large"))?;
-        if read > remaining {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "response exceeds the bounded protocol frame",
-            ));
-        }
-        let start = bytes.len();
-        bytes.extend_from_slice(&buffer[..read]);
-        if let Some(relative) = buffer[..read].iter().position(|byte| *byte == b'\n') {
-            newline = Some(start + relative);
-            break;
-        }
+fn read_response(stream: &mut TcpStream) -> io::Result<String> {
+    let mut bytes = Vec::new();
+    (&mut *stream)
+        .take(u64::try_from(MAX_RESPONSE_BYTES + 1).unwrap_or(u64::MAX))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_RESPONSE_BYTES {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "response exceeds the bounded protocol frame",
+        ));
     }
-
-    let end = newline.unwrap_or(bytes.len());
-    if let Some(newline_index) = newline {
-        if bytes[newline_index + 1..]
-            .iter()
-            .any(|byte| !byte.is_ascii_whitespace())
-        {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "daemon returned multiple protocol frames",
-            ));
-        }
+    while bytes.last().is_some_and(u8::is_ascii_whitespace) {
+        bytes.pop();
     }
-    String::from_utf8(bytes[..end].to_vec())
+    if bytes.contains(&b'\n') {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "daemon returned multiple protocol frames",
+        ));
+    }
+    String::from_utf8(bytes)
         .map_err(|_| io::Error::new(ErrorKind::InvalidData, "response is not UTF-8"))
 }
 
@@ -321,15 +293,18 @@ fn print_help() {
         concat!(
             "eliot-search {}\n\n",
             "USAGE:\n",
-            "    eliot-search [health|status|version|refresh|shutdown] [OPTIONS]\n",
-            "    eliot-search search \"QUERY\" [OPTIONS]\n\n",
+            "  eliot-search [health|status|version|refresh|shutdown] [OPTIONS]\n",
+            "  eliot-search search \"LITERAL\" [OPTIONS]\n",
+            "  eliot-search lexical \"TERMS\" [OPTIONS]\n\n",
             "OPTIONS:\n",
-            "    --address <IP:PORT>   Override the loopback endpoint\n",
-            "    --data-root <PATH>    Read endpoint and token from this local state root\n",
-            "    --token-file <PATH>   Override the local authentication token file\n",
-            "    -V, --version         Print client version\n",
-            "    -h, --help            Print help\n\n",
-            "refresh captures and publishes a new immutable retained-revision snapshot."
+            "  --address <IP:PORT>   Override the loopback endpoint\n",
+            "  --data-root <PATH>    Read endpoint and token from this state root\n",
+            "  --token-file <PATH>   Override the local token file\n",
+            "  -V, --version         Print client version\n",
+            "  -h, --help            Print help\n\n",
+            "search: retained-revision literal matching.\n",
+            "lexical: deterministic BM25 ranking over the active snapshot.\n",
+            "refresh: atomically rebuild snapshot plus lexical index."
         ),
         env!("CARGO_PKG_VERSION")
     );

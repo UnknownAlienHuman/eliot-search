@@ -1,8 +1,9 @@
-//! Bootable local ELIOT Search daemon with retained-revision DIRECT search.
+//! Bootable local ELIOT Search daemon with retained-revision DIRECT and lexical search.
 
 #![forbid(unsafe_code)]
 
 mod control_store;
+mod lexical;
 mod snapshot;
 
 use std::env;
@@ -15,6 +16,7 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use control_store::{DevelopmentControlStore, SnapshotControl};
+use lexical::{LexicalIndex, LexicalIndexLimits, LexicalSearchResult};
 use snapshot::{SnapshotIndex, SnapshotLimits, SnapshotSearchResult, hex32};
 
 const DEFAULT_ADDRESS: &str = "127.0.0.1:39171";
@@ -24,9 +26,11 @@ const MAX_QUERY_BYTES: usize = 1_024;
 const DEFAULT_MAX_FILES: usize = 10_000;
 const DEFAULT_MAX_FILE_BYTES: u64 = 2 * 1_024 * 1_024;
 const DEFAULT_MAX_TOTAL_BYTES: u64 = 512 * 1_024 * 1_024;
-const DEFAULT_MAX_RESULTS: usize = 32;
+const DEFAULT_MAX_RESULTS: usize = 8;
+const MAX_CONFIGURED_RESULTS: usize = 8;
 const DEFAULT_MAX_EXCERPT_CHARS: usize = 240;
-const IO_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_CONFIGURED_EXCERPT_CHARS: usize = 512;
+const IO_TIMEOUT: Duration = Duration::from_secs(30);
 const PROTOCOL_PREFIX: &str = "ELIOT_SEARCH/1";
 
 #[derive(Debug)]
@@ -107,6 +111,7 @@ impl EndpointFile {
         address: SocketAddr,
         source_root_count: usize,
         snapshot: &SnapshotIndex,
+        lexical: &LexicalIndex,
     ) -> io::Result<Self> {
         let path = runtime_dir.join("endpoint.v1");
         let temporary = runtime_dir.join(format!(
@@ -120,16 +125,19 @@ impl EndpointFile {
                 "address={}\n",
                 "protocol=1\n",
                 "source_backed_search=true\n",
+                "lexical_search=true\n",
                 "production_ready=false\n",
                 "encrypted_revisions=false\n",
                 "source_roots={}\n",
                 "snapshot_id={}\n",
-                "manifest_fingerprint={}\n"
+                "manifest_fingerprint={}\n",
+                "lexical_index_fingerprint={}\n"
             ),
             address,
             source_root_count,
             snapshot.snapshot_id(),
             hex32(snapshot.manifest_fingerprint()),
+            hex32(lexical.index_fingerprint()),
         );
         let mut file = OpenOptions::new()
             .write(true)
@@ -190,6 +198,7 @@ fn serve(mut options: Options) -> io::Result<()> {
         &options.source_roots,
         options.limits,
     )?;
+    let mut lexical = build_lexical_index(&options.data_root, &snapshot, options.limits)?;
     publish_snapshot_control(&mut control, &snapshot)?;
 
     let listener = TcpListener::bind(options.address)?;
@@ -200,20 +209,23 @@ fn serve(mut options: Options) -> io::Result<()> {
         address,
         options.source_roots.len(),
         &snapshot,
+        &lexical,
     )?;
 
     println!(
         concat!(
             "{{\"service\":\"eliot-searchd\",\"state\":\"READY\",",
-            "\"stage\":\"W2_DIRECT_SNAPSHOT\",\"address\":\"{}\",",
+            "\"stage\":\"W3_LOCAL_LEXICAL\",\"address\":\"{}\",",
             "\"source_roots\":{},\"snapshot_id\":\"{}\",",
-            "\"indexed_files\":{},\"source_backed_search\":true,",
+            "\"indexed_files\":{},\"lexical_terms\":{},",
+            "\"source_backed_search\":true,\"lexical_search\":true,",
             "\"encrypted_revisions\":false,\"production_ready\":false}}"
         ),
         address,
         options.source_roots.len(),
         snapshot.snapshot_id(),
         snapshot.stats().indexed_files,
+        lexical.term_count(),
     );
 
     loop {
@@ -232,6 +244,7 @@ fn serve(mut options: Options) -> io::Result<()> {
                     &options.source_roots,
                     options.limits,
                     &mut snapshot,
+                    &mut lexical,
                     &mut control,
                 )? {
                     break;
@@ -248,6 +261,24 @@ fn serve(mut options: Options) -> io::Result<()> {
     Ok(())
 }
 
+fn build_lexical_index(
+    data_root: &Path,
+    snapshot: &SnapshotIndex,
+    limits: SnapshotLimits,
+) -> io::Result<LexicalIndex> {
+    LexicalIndex::build(
+        data_root,
+        snapshot.snapshot_id(),
+        snapshot.manifest_path(),
+        snapshot.manifest_fingerprint(),
+        LexicalIndexLimits::baseline(
+            limits.max_results,
+            limits.max_file_bytes,
+            limits.max_excerpt_chars,
+        ),
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_connection(
     stream: &mut TcpStream,
@@ -257,6 +288,7 @@ fn handle_connection(
     source_roots: &[PathBuf],
     limits: SnapshotLimits,
     snapshot: &mut SnapshotIndex,
+    lexical: &mut LexicalIndex,
     control: &mut DevelopmentControlStore,
 ) -> io::Result<bool> {
     let request = match read_bounded_line(stream, MAX_REQUEST_BYTES) {
@@ -283,13 +315,19 @@ fn handle_connection(
 
     match command.unwrap_or_default() {
         "health" => {
-            write_response(stream, &render_health(snapshot, control, false))?;
+            write_response(stream, &render_health(snapshot, lexical, control, false))?;
             Ok(false)
         }
         "status" => {
             write_response(
                 stream,
-                &render_status(address, source_roots.len(), snapshot, control),
+                &render_status(
+                    address,
+                    source_roots.len(),
+                    snapshot,
+                    lexical,
+                    control,
+                ),
             )?;
             Ok(false)
         }
@@ -305,14 +343,22 @@ fn handle_connection(
             Ok(false)
         }
         "refresh" => {
-            match SnapshotIndex::capture(data_root, source_roots, limits) {
-                Ok(new_snapshot) => {
+            match SnapshotIndex::capture(data_root, source_roots, limits)
+                .and_then(|new_snapshot| {
+                    build_lexical_index(data_root, &new_snapshot, limits)
+                        .map(|new_lexical| (new_snapshot, new_lexical))
+                }) {
+                Ok((new_snapshot, new_lexical)) => {
                     if let Err(error) = publish_snapshot_control(control, &new_snapshot) {
                         write_error(stream, "SNAPSHOT_CONTROL_COMMIT_FAILED", &error.to_string())?;
                         return Ok(false);
                     }
                     *snapshot = new_snapshot;
-                    write_response(stream, &render_health(snapshot, control, true))?;
+                    *lexical = new_lexical;
+                    write_response(
+                        stream,
+                        &render_health(snapshot, lexical, control, true),
+                    )?;
                 }
                 Err(error) => {
                     write_error(stream, "SNAPSHOT_REFRESH_FAILED", &error.to_string())?;
@@ -328,27 +374,28 @@ fn handle_connection(
             Ok(true)
         }
         value if value.starts_with("search:") => {
-            let query_bytes = match decode_hex(&value[7..]) {
-                Ok(bytes) => bytes,
-                Err(error) => {
-                    write_error(stream, "INVALID_QUERY", &error.to_string())?;
-                    return Ok(false);
-                }
-            };
-            if query_bytes.is_empty() || query_bytes.len() > MAX_QUERY_BYTES {
-                write_error(stream, "INVALID_QUERY", "query exceeds its finite bounds")?;
+            let Some(query) = decode_query(stream, &value[7..])? else {
                 return Ok(false);
-            }
-            let query = match String::from_utf8(query_bytes) {
-                Ok(query) => query,
-                Err(_) => {
-                    write_error(stream, "INVALID_QUERY", "query is not UTF-8")?;
-                    return Ok(false);
-                }
             };
             match snapshot.search(&query) {
-                Ok(result) => write_response(stream, &render_search_response(&query, &result))?,
+                Ok(mut result) => {
+                    result.complete &= capture_complete(snapshot);
+                    write_response(stream, &render_search_response(&query, &result))?;
+                }
                 Err(error) => write_error(stream, "SEARCH_FAILED", &error.to_string())?,
+            }
+            Ok(false)
+        }
+        value if value.starts_with("lexical:") => {
+            let Some(query) = decode_query(stream, &value[8..])? else {
+                return Ok(false);
+            };
+            match lexical.search(&query) {
+                Ok(mut result) => {
+                    result.complete &= capture_complete(snapshot);
+                    write_response(stream, &render_lexical_response(&query, &result))?;
+                }
+                Err(error) => write_error(stream, "LEXICAL_SEARCH_FAILED", &error.to_string())?,
             }
             Ok(false)
         }
@@ -357,6 +404,32 @@ fn handle_connection(
             Ok(false)
         }
     }
+}
+
+fn decode_query(stream: &mut TcpStream, encoded: &str) -> io::Result<Option<String>> {
+    let query_bytes = match decode_hex(encoded) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            write_error(stream, "INVALID_QUERY", &error.to_string())?;
+            return Ok(None);
+        }
+    };
+    if query_bytes.is_empty() || query_bytes.len() > MAX_QUERY_BYTES {
+        write_error(stream, "INVALID_QUERY", "query exceeds its finite bounds")?;
+        return Ok(None);
+    }
+    match String::from_utf8(query_bytes) {
+        Ok(query) => Ok(Some(query)),
+        Err(_) => {
+            write_error(stream, "INVALID_QUERY", "query is not UTF-8")?;
+            Ok(None)
+        }
+    }
+}
+
+fn capture_complete(snapshot: &SnapshotIndex) -> bool {
+    let stats = snapshot.stats();
+    !stats.truncated && stats.unreadable_files == 0 && stats.unstable_files == 0
 }
 
 fn publish_snapshot_control(
@@ -370,13 +443,14 @@ fn publish_snapshot_control(
             fingerprint_algorithm: snapshot.fingerprint_algorithm().to_owned(),
             indexed_files: snapshot.stats().indexed_files,
             total_bytes: snapshot.stats().total_bytes,
-            capture_complete: !snapshot.stats().truncated,
+            capture_complete: capture_complete(snapshot),
         })
         .map_err(io::Error::other)
 }
 
 fn render_health(
     snapshot: &SnapshotIndex,
+    lexical: &LexicalIndex,
     control: &DevelopmentControlStore,
     refreshed: bool,
 ) -> String {
@@ -384,21 +458,27 @@ fn render_health(
     format!(
         concat!(
             "{{\"ok\":true,\"service\":\"eliot-searchd\",",
-            "\"state\":\"READY\",\"stage\":\"W2_DIRECT_SNAPSHOT\",",
+            "\"state\":\"READY\",\"stage\":\"W3_LOCAL_LEXICAL\",",
             "\"snapshot_id\":\"{}\",\"manifest_fingerprint\":\"{}\",",
             "\"fingerprint_algorithm\":\"{}\",\"indexed_files\":{},",
             "\"snapshot_bytes\":{},\"capture_complete\":{},",
+            "\"lexical_documents\":{},\"lexical_terms\":{},",
+            "\"lexical_postings\":{},\"lexical_index_fingerprint\":\"{}\",",
             "\"source_backed_search\":true,\"retained_revision_readback\":true,",
-            "\"encrypted_revisions\":false,\"production_ready\":false,",
-            "\"control_generation\":{},\"recovered_previous_active\":{},",
-            "\"refreshed\":{}}}"
+            "\"lexical_search\":true,\"encrypted_revisions\":false,",
+            "\"production_ready\":false,\"control_generation\":{},",
+            "\"recovered_previous_active\":{},\"refreshed\":{}}}"
         ),
         snapshot.snapshot_id(),
         hex32(snapshot.manifest_fingerprint()),
         snapshot.fingerprint_algorithm(),
         stats.indexed_files,
         stats.total_bytes,
-        !stats.truncated,
+        capture_complete(snapshot),
+        lexical.document_count(),
+        lexical.term_count(),
+        lexical.posting_count(),
+        hex32(lexical.index_fingerprint()),
         control.generation(),
         control.recovered_previous_active(),
         refreshed,
@@ -409,13 +489,14 @@ fn render_status(
     address: SocketAddr,
     source_root_count: usize,
     snapshot: &SnapshotIndex,
+    lexical: &LexicalIndex,
     control: &DevelopmentControlStore,
 ) -> String {
     let stats = snapshot.stats();
     format!(
         concat!(
             "{{\"ok\":true,\"service\":\"eliot-searchd\",",
-            "\"state\":\"READY\",\"stage\":\"W2_DIRECT_SNAPSHOT\",",
+            "\"state\":\"READY\",\"stage\":\"W3_LOCAL_LEXICAL\",",
             "\"pid\":{},\"address\":\"{}\",\"source_roots\":{},",
             "\"snapshot_id\":\"{}\",\"manifest_path\":\"{}\",",
             "\"indexed_files\":{},\"snapshot_bytes\":{},",
@@ -423,9 +504,12 @@ fn render_status(
             "\"skipped_links\":{},\"skipped_policy\":{},",
             "\"skipped_binary\":{},\"unreadable_files\":{},",
             "\"unstable_files\":{},\"capture_truncated\":{},",
+            "\"capture_complete\":{},\"lexical_analyzer\":\"{}\",",
+            "\"lexical_documents\":{},\"lexical_terms\":{},",
+            "\"lexical_postings\":{},\"lexical_index_fingerprint\":\"{}\",",
             "\"control_generation\":{},\"control_directory\":\"{}\",",
-            "\"source_backed_search\":true,\"encrypted_revisions\":false,",
-            "\"production_ready\":false}}"
+            "\"source_backed_search\":true,\"lexical_search\":true,",
+            "\"encrypted_revisions\":false,\"production_ready\":false}}"
         ),
         process::id(),
         address,
@@ -442,6 +526,12 @@ fn render_status(
         stats.unreadable_files,
         stats.unstable_files,
         stats.truncated,
+        capture_complete(snapshot),
+        escape_json(lexical.analyzer_id()),
+        lexical.document_count(),
+        lexical.term_count(),
+        lexical.posting_count(),
+        hex32(lexical.index_fingerprint()),
         control.generation(),
         escape_json(&control.directory().display().to_string()),
     )
@@ -487,6 +577,60 @@ fn render_search_response(query: &str, result: &SnapshotSearchResult) -> String 
             item.column_bytes,
             item.byte_start,
             item.byte_end,
+            escape_json(&item.excerpt),
+        ));
+    }
+    output.push_str("]}");
+    output
+}
+
+fn render_lexical_response(query: &str, result: &LexicalSearchResult) -> String {
+    let mut output = format!(
+        concat!(
+            "{{\"ok\":true,\"mode\":\"LEXICAL_BM25_RETAINED_REVISION\",",
+            "\"query\":\"{}\",\"snapshot_id\":\"{}\",",
+            "\"manifest_fingerprint\":\"{}\",\"lexical_index_fingerprint\":\"{}\",",
+            "\"analyzer\":\"{}\",\"denominator_documents\":{},",
+            "\"indexed_terms\":{},\"indexed_postings\":{},",
+            "\"query_term_count\":{},\"candidate_documents\":{},",
+            "\"unavailable_revisions\":{},\"complete\":{},\"truncated\":{},",
+            "\"source_backed\":true,\"retained_revision_readback\":true,",
+            "\"encrypted_at_rest\":false,\"production_ready\":false,",
+            "\"results\":["
+        ),
+        escape_json(query),
+        result.snapshot_id,
+        hex32(result.snapshot_manifest_fingerprint),
+        hex32(result.index_fingerprint),
+        escape_json(&result.analyzer_id),
+        result.denominator_documents,
+        result.indexed_terms,
+        result.indexed_postings,
+        result.query_term_count,
+        result.candidate_documents,
+        result.unavailable_revisions,
+        result.complete,
+        result.truncated,
+    );
+    for (index, item) in result.matches.iter().enumerate() {
+        if index != 0 {
+            output.push(',');
+        }
+        output.push_str(&format!(
+            concat!(
+                "{{\"root\":{},\"path\":\"{}\",",
+                "\"revision_fingerprint\":\"{}\",\"score\":{:.8},",
+                "\"matched_terms\":{},\"line\":{},\"column_bytes\":{},",
+                "\"byte_start\":{},\"excerpt\":\"{}\"}}"
+            ),
+            item.root_index,
+            escape_json(&item.relative_path),
+            hex32(item.revision_fingerprint),
+            item.score,
+            item.matched_terms,
+            item.line,
+            item.column_bytes,
+            item.byte_start,
             escape_json(&item.excerpt),
         ));
     }
@@ -659,13 +803,16 @@ fn write_error(stream: &mut TcpStream, code: &str, detail: &str) -> io::Result<(
 
 fn write_response(stream: &mut TcpStream, response: &str) -> io::Result<()> {
     if response.len() > MAX_RESPONSE_BYTES {
-        return Err(io::Error::new(
-            ErrorKind::InvalidData,
-            "response exceeds the bounded protocol frame",
-        ));
+        return write_error_fallback(stream, "RESPONSE_TOO_LARGE");
     }
     stream.write_all(response.as_bytes())?;
     stream.write_all(b"\n")?;
+    stream.flush()
+}
+
+fn write_error_fallback(stream: &mut TcpStream, code: &str) -> io::Result<()> {
+    let response = format!("{{\"ok\":false,\"error\":\"{code}\"}}\n");
+    stream.write_all(response.as_bytes())?;
     stream.flush()
 }
 
@@ -833,6 +980,14 @@ fn parse_options() -> io::Result<Options> {
 
     ensure_loopback(address.ip())?;
     limits.validate()?;
+    if limits.max_results > MAX_CONFIGURED_RESULTS
+        || limits.max_excerpt_chars > MAX_CONFIGURED_EXCERPT_CHARS
+    {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "response-shaping limits exceed the protocol ceiling",
+        ));
+    }
     let token_file = token_file.unwrap_or_else(|| data_root.join("runtime").join("auth.token"));
     Ok(Options {
         address,
@@ -911,7 +1066,7 @@ fn self_test() -> io::Result<()> {
     println!(
         concat!(
             "{{\"ok\":true,\"service\":\"eliot-searchd\",",
-            "\"self_test\":\"PASS\",\"mode\":\"DIRECT_RETAINED_REVISION\"}}"
+            "\"self_test\":\"PASS\",\"mode\":\"W3_LOCAL_LEXICAL\"}}"
         )
     );
     Ok(())
@@ -931,8 +1086,8 @@ fn print_help() {
             "    --max-files <N>           Snapshot file ceiling (default {})\n",
             "    --max-file-bytes <N>      Per-file byte ceiling (default {})\n",
             "    --max-total-bytes <N>     Snapshot byte ceiling (default {})\n",
-            "    --max-results <N>         Per-query result ceiling (default {})\n",
-            "    --max-excerpt-chars <N>   Excerpt character ceiling (default {})\n",
+            "    --max-results <N>         Result ceiling, at most {} (default {})\n",
+            "    --max-excerpt-chars <N>   Excerpt ceiling, at most {} (default {})\n",
             "    --self-test               Run bounded startup self-test and exit\n",
             "    -V, --version             Print version\n",
             "    -h, --help                Print help\n\n",
@@ -944,7 +1099,9 @@ fn print_help() {
         DEFAULT_MAX_FILES,
         DEFAULT_MAX_FILE_BYTES,
         DEFAULT_MAX_TOTAL_BYTES,
+        MAX_CONFIGURED_RESULTS,
         DEFAULT_MAX_RESULTS,
+        MAX_CONFIGURED_EXCERPT_CHARS,
         DEFAULT_MAX_EXCERPT_CHARS,
     );
 }
