@@ -1,0 +1,208 @@
+name: fix-control-migration-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-fix-control-migration-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-control-migration-once
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --no-self-update
+          rustup override set 1.98.0
+
+      - name: Make migration state ownership explicit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('crates/search-control-redb/src/lib.rs')
+          text = path.read_text(encoding='utf-8')
+          text, derives = re.subn(
+              r'#\[derive\(Clone, Copy, Debug, Eq, PartialEq\)\]\npub struct MigrationPlan',
+              '#[derive(Clone, Debug, Eq, PartialEq)]\npub struct MigrationPlan',
+              text,
+              count=1,
+          )
+
+          plan_method = '''    pub fn plan(&mut self, plan: MigrationPlan) -> Result<(), ControlError> {
+              let plan = plan.validate()?;
+              match &self.state {
+                  MigrationState::Stable { version } if *version == plan.from_version => {
+                      self.state = MigrationState::Planned(plan);
+                      Ok(())
+                  }
+                  MigrationState::Stable { .. } => Err(ControlError::SchemaMismatch),
+                  _ => Err(ControlError::MigrationUnverified),
+              }
+          }'''
+          text, plans = re.subn(
+              r'    pub fn plan\(&mut self, plan: MigrationPlan\) -> Result<\(\), ControlError> \{.*?\n    \}',
+              plan_method,
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          unknown_method = '''    pub fn mark_outcome_unknown(&mut self) -> Result<(), ControlError> {
+              let plan = match &self.state {
+                  MigrationState::Planned(plan) => plan.clone(),
+                  _ => return Err(ControlError::MigrationUnverified),
+              };
+              self.state = MigrationState::OutcomeUnknown(plan);
+              Ok(())
+          }'''
+          text, unknowns = re.subn(
+              r'    pub fn mark_outcome_unknown\(&mut self\) -> Result<\(\), ControlError> \{.*?\n    \}',
+              unknown_method,
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          verify_method = '''    pub fn verify(
+              &mut self,
+              observed_version: u32,
+              observed_plan_digest: Blake3Digest32,
+              fixture_verified: bool,
+          ) -> Result<(), ControlError> {
+              let plan = match &self.state {
+                  MigrationState::Planned(plan) | MigrationState::OutcomeUnknown(plan) => {
+                      plan.clone()
+                  }
+                  _ => return Err(ControlError::MigrationUnverified),
+              };
+              if observed_version != plan.to_version
+                  || observed_plan_digest != plan.plan_digest
+                  || !fixture_verified
+              {
+                  self.state = MigrationState::Quarantined(ControlError::MigrationUnverified);
+                  return Err(ControlError::MigrationUnverified);
+              }
+              self.state = MigrationState::Verified(plan);
+              Ok(())
+          }'''
+          text, verifies = re.subn(
+              r'    pub fn verify\(\n.*?\n    \}',
+              verify_method,
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          commit_method = '''    pub fn commit_verified(&mut self) -> Result<(), ControlError> {
+              let version = match &self.state {
+                  MigrationState::Verified(plan) => plan.to_version,
+                  _ => return Err(ControlError::MigrationUnverified),
+              };
+              self.state = MigrationState::Stable { version };
+              Ok(())
+          }'''
+          text, commits = re.subn(
+              r'    pub fn commit_verified\(&mut self\) -> Result<\(\), ControlError> \{.*?\n    \}',
+              commit_method,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if (derives, plans, unknowns, verifies, commits) != (1, 1, 1, 1, 1):
+              raise SystemExit(
+                  'migration patch mismatch: '
+                  f'derives={derives}, plans={plans}, unknowns={unknowns}, '
+                  f'verifies={verifies}, commits={commits}'
+              )
+
+          if '#[cfg(test)]\nmod migration_tests {' in text:
+              raise SystemExit('migration tests unexpectedly already exist')
+          text += r'''
+
+          #[cfg(test)]
+          mod migration_tests {
+              use search_contracts::{Blake3Digest32, ReceiptRef};
+
+              use super::{MigrationMachine, MigrationPlan, MigrationState};
+
+              fn plan() -> MigrationPlan {
+                  MigrationPlan {
+                      from_version: 1,
+                      to_version: 2,
+                      plan_digest: Blake3Digest32::from_bytes([7; 32]),
+                      fixture_ref: ReceiptRef::new("receipt:migration-fixture")
+                          .expect("receipt"),
+                  }
+              }
+
+              #[test]
+              fn non_copy_plan_survives_unknown_readback_and_commit() {
+                  let plan = plan();
+                  let mut machine = MigrationMachine::new(1).expect("machine");
+                  machine.plan(plan.clone()).expect("plan");
+                  machine.mark_outcome_unknown().expect("unknown");
+                  machine
+                      .verify(2, plan.plan_digest, true)
+                      .expect("verify");
+                  machine.commit_verified().expect("commit");
+                  assert_eq!(machine.state(), &MigrationState::Stable { version: 2 });
+              }
+
+              #[test]
+              fn failed_fixture_verification_quarantines_migration() {
+                  let plan = plan();
+                  let mut machine = MigrationMachine::new(1).expect("machine");
+                  machine.plan(plan.clone()).expect("plan");
+                  assert!(machine.verify(2, plan.plan_digest, false).is_err());
+                  assert!(matches!(machine.state(), MigrationState::Quarantined(_)));
+              }
+          }
+          '''
+          path.write_text(text, encoding='utf-8')
+          PY
+          rustfmt --edition 2024 crates/search-control-redb/src/lib.rs
+
+      - name: Qualify migration state machine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check -p search-control-redb --all-targets --locked
+          cargo test -p search-control-redb --all-targets --locked
+          git diff --check
+
+      - name: Commit qualified repair and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/zz-fix-control-migration-once.yml
+          git add crates/search-control-redb/src/lib.rs
+          if ! git diff --quiet; then
+            echo 'Unexpected unstaged changes:' >&2
+            git diff --name-only >&2
+            exit 1
+          fi
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(control): make migration plan ownership explicit'
+          git pull --rebase origin main
+          git push origin HEAD:main
