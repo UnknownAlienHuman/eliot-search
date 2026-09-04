@@ -82,8 +82,15 @@ jobs:
               count=1,
               flags=re.S,
           )
-          if imports != 1 or helpers != 1:
-              raise SystemExit(f'registry patch mismatch: imports={imports}, helpers={helpers}')
+          text, root_ids = re.subn(
+              r'RootBindingId::from_bytes\(\[([0-9]+); 32\]\)',
+              lambda match: f'RootBindingId::from_bytes([{match.group(1)}; 16])',
+              text,
+          )
+          if imports != 1 or helpers != 1 or root_ids == 0:
+              raise SystemExit(
+                  f'registry patch mismatch: imports={imports}, helpers={helpers}, root_ids={root_ids}'
+              )
           registry.write_text(text, encoding='utf-8')
 
           reconcile = Path('crates/search-source/search-source-reconcile/src/lib.rs')
@@ -117,8 +124,15 @@ jobs:
               count=1,
               flags=re.S,
           )
-          if imports != 1 or helpers != 1:
-              raise SystemExit(f'reconcile patch mismatch: imports={imports}, helpers={helpers}')
+          text, root_ids = re.subn(
+              r'RootBindingId::from_bytes\(\[([0-9]+); 32\]\)',
+              lambda match: f'RootBindingId::from_bytes([{match.group(1)}; 16])',
+              text,
+          )
+          if imports != 1 or helpers != 1 or root_ids == 0:
+              raise SystemExit(
+                  f'reconcile patch mismatch: imports={imports}, helpers={helpers}, root_ids={root_ids}'
+              )
           reconcile.write_text(text, encoding='utf-8')
           PY
 
