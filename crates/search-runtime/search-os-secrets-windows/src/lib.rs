@@ -243,7 +243,10 @@ impl fmt::Debug for ProtectedSecret {
         formatter
             .debug_struct("ProtectedSecret")
             .field("version", &self.version)
-            .field("bytes", &format_args!("<{} protected bytes>", self.bytes.len()))
+            .field(
+                "bytes",
+                &format_args!("<{} protected bytes>", self.bytes.len()),
+            )
             .finish()
     }
 }
@@ -296,7 +299,7 @@ pub fn unprotect_current_user(
 
 #[cfg(windows)]
 mod windows {
-    use core::ffi::{c_void, c_wchar};
+    use core::ffi::c_void;
     use core::ptr::{null, null_mut};
     use core::slice;
 
@@ -317,7 +320,7 @@ mod windows {
     unsafe extern "system" {
         fn CryptProtectData(
             input: *const DataBlob,
-            description: *const c_wchar,
+            description: *const u16,
             optional_entropy: *const DataBlob,
             reserved: *mut c_void,
             prompt: *mut c_void,
@@ -327,7 +330,7 @@ mod windows {
 
         fn CryptUnprotectData(
             input: *const DataBlob,
-            description: *mut *mut c_wchar,
+            description: *mut *mut u16,
             optional_entropy: *const DataBlob,
             reserved: *mut c_void,
             prompt: *mut c_void,
@@ -436,7 +439,7 @@ mod windows {
             size: 0,
             data: null_mut(),
         };
-        let mut description: *mut c_wchar = null_mut();
+        let mut description: *mut u16 = null_mut();
         // SAFETY: every input blob points to a live immutable slice for the
         // duration of the call; output/description pointers are initialized and
         // become caller-owned LocalAlloc allocations only on success.
@@ -477,5 +480,35 @@ mod windows {
         // SAFETY: copied plaintext is cleared in the OS allocation before free.
         unsafe { clear_and_free_local(output.data, length) };
         SecretBytes::new(plaintext)
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_dpapi_tests {
+    use super::{ProtectionScope, SecretBytes, protect_current_user, unprotect_current_user};
+
+    #[test]
+    fn current_user_round_trip_is_scope_bound() {
+        let scope = ProtectionScope::new(
+            "cargo-test-current-user",
+            "eliot-search-ci",
+            "dpapi-regression-v1",
+            "revision-store-master-key",
+        )
+        .expect("scope");
+        let wrong_scope = ProtectionScope::new(
+            "cargo-test-current-user",
+            "eliot-search-ci",
+            "dpapi-regression-v1",
+            "wrong-purpose",
+        )
+        .expect("wrong scope");
+        let plaintext = SecretBytes::new(b"bounded-dpapi-round-trip".to_vec()).expect("plaintext");
+
+        let protected = protect_current_user(&plaintext, &scope).expect("protect");
+        assert_ne!(protected.as_bytes(), plaintext.expose_secret());
+        let recovered = unprotect_current_user(&protected, &scope).expect("unprotect");
+        assert_eq!(recovered.expose_secret(), plaintext.expose_secret());
+        assert!(unprotect_current_user(&protected, &wrong_scope).is_err());
     }
 }

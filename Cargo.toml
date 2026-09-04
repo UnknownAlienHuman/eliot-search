@@ -47,6 +47,7 @@ members = [
     "bins/eliot-search-model-worker",
     "bins/eliot-search-doc-worker",
   "crates/search-runtime/search-revision-crypto",
+  "crates/search-runtime/search-os-secrets-windows",
 ]
 
 [workspace.package]
