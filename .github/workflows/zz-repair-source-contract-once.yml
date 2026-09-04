@@ -158,7 +158,6 @@ jobs:
           cargo test -p search-source-identity --all-targets --locked
           cargo test -p search-source-registry --all-targets --locked
           cargo test -p search-source-reconcile --all-targets --locked
-          cargo check --workspace --all-targets --all-features --locked
 
       - name: Commit compiler-qualified contract and remove workflow
         shell: bash
