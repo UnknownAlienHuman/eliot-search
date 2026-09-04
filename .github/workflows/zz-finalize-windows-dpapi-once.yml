@@ -77,6 +77,7 @@ jobs:
               ("use core::ffi::{c_void, c_wchar};", "use core::ffi::c_void;"),
               ("description: *const c_wchar,", "description: *const u16,"),
               ("description: *mut *mut c_wchar,", "description: *mut *mut u16,"),
+              ("let mut description: *mut c_wchar = null_mut();", "let mut description: *mut u16 = null_mut();"),
           ]
           for old, new in replacements:
               if old not in text:
