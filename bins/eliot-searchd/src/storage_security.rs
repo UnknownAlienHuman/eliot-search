@@ -137,7 +137,7 @@ fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
             let name = entry.file_name();
             let name = name.to_string_lossy();
             let suffix = format!(".{PROTECTED_OBJECT_EXTENSION}");
-            let Some(revision_id) = name.strip_suffix(&suffix) else {
+            let Some(revision_id) = name.strip_suffix(suffix.as_str()) else {
                 continue;
             };
             if sha256::decode_digest(revision_id).is_none()
