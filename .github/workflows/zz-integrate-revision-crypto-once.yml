@@ -1,0 +1,146 @@
+name: integrate-revision-crypto-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-integrate-revision-crypto-once.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: integrate-revision-crypto-once
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Ensure workspace membership
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import re
+          import subprocess
+          from pathlib import Path
+
+          package = "search-revision-crypto"
+          member = "crates/search-runtime/search-revision-crypto"
+
+          def metadata():
+              result = subprocess.run(
+                  ["cargo", "metadata", "--no-deps", "--format-version", "1"],
+                  text=True,
+                  capture_output=True,
+              )
+              if result.returncode != 0:
+                  raise SystemExit(result.stderr)
+              return json.loads(result.stdout)
+
+          if not any(item["name"] == package for item in metadata()["packages"]):
+              path = Path("Cargo.toml")
+              text = path.read_text(encoding="utf-8")
+              match = re.search(r"(?ms)^members\s*=\s*\[(.*?)^\]", text)
+              if match is None:
+                  raise SystemExit("workspace.members array not found")
+              body = match.group(1)
+              if member not in body:
+                  body += ("" if body.endswith("\n") else "\n") + f'  "{member}",\n'
+                  path.write_text(
+                      text[:match.start(1)] + body + text[match.end(1):],
+                      encoding="utf-8",
+                  )
+              if not any(item["name"] == package for item in metadata()["packages"]):
+                  raise SystemExit("revision crypto package remains outside the workspace")
+          PY
+
+      - name: Resolve lockfile, format and compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check -p search-revision-crypto --all-targets
+          cargo fmt --all
+          git diff --check
+          cargo check -p search-revision-crypto --all-targets --locked
+          if [[ -f scripts/check-rust-boundaries.mjs ]]; then
+            node scripts/check-rust-boundaries.mjs
+          fi
+
+      - name: Exercise round-trip and negative authentication boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p crates/search-runtime/search-revision-crypto/examples
+          cat > crates/search-runtime/search-revision-crypto/examples/qualification.rs <<'RS'
+          use std::num::NonZeroU64;
+
+          use search_revision_crypto::{
+              EncryptedRevisionEnvelope, RevisionBinding, RevisionKey,
+              open_revision, seal_revision, sha256_digest,
+          };
+
+          fn binding(content: &[u8]) -> RevisionBinding {
+              RevisionBinding {
+                  key_generation: NonZeroU64::new(1).expect("non-zero"),
+                  source_revision_binding_digest: sha256_digest(b"source-1@revision-1"),
+                  residency_binding_digest: sha256_digest(b"residency-private-local"),
+                  encryption_profile_digest: sha256_digest(b"aes-256-gcm-v1"),
+                  content_digest: sha256_digest(content),
+                  plaintext_length: u64::try_from(content.len()).expect("length"),
+              }
+          }
+
+          fn main() {
+              let plaintext = b"immutable source revision bytes";
+              let key = RevisionKey::generate(
+                  NonZeroU64::new(1).expect("non-zero"),
+              ).expect("key generation");
+              let expected = binding(plaintext);
+              let envelope = seal_revision(&key, expected, plaintext).expect("seal");
+              let encoded = envelope.encode().expect("encode");
+              let decoded = EncryptedRevisionEnvelope::decode(&encoded).expect("decode");
+              let opened = open_revision(&key, expected, &decoded).expect("open");
+              assert_eq!(opened.as_bytes(), plaintext);
+
+              let mut wrong_residency = expected;
+              wrong_residency.residency_binding_digest = sha256_digest(b"other-residency");
+              assert!(open_revision(&key, wrong_residency, &decoded).is_err());
+
+              let mut tampered = encoded;
+              let last = tampered.last_mut().expect("ciphertext byte");
+              *last ^= 1;
+              let tampered = EncryptedRevisionEnvelope::decode(&tampered).expect("structural decode");
+              assert!(open_revision(&key, expected, &tampered).is_err());
+          }
+          RS
+          cargo run -p search-revision-crypto --example qualification --locked
+          rm -f crates/search-runtime/search-revision-crypto/examples/qualification.rs
+          rmdir crates/search-runtime/search-revision-crypto/examples 2>/dev/null || true
+
+      - name: Commit qualified package and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -- .github/workflows/zz-integrate-revision-crypto-once.yml
+          git add Cargo.toml Cargo.lock \
+            crates/search-runtime/search-revision-crypto \
+            docs/implementation/revision-encryption.md
+          if git diff --cached --quiet; then
+            echo "No integration changes remain."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(revisions): qualify authenticated revision encryption"
+          git pull --rebase origin main
+          git push origin HEAD:main
