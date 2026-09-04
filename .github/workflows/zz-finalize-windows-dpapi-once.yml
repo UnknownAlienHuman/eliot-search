@@ -64,13 +64,38 @@ jobs:
                   raise SystemExit("DPAPI adapter remains outside the workspace")
           '@ | python -
 
+      - name: Repair exact Win32 wide-string FFI types
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          from pathlib import Path
+
+          path = Path("crates/search-runtime/search-os-secrets-windows/src/lib.rs")
+          text = path.read_text(encoding="utf-8")
+          replacements = [
+              ("use core::ffi::{c_void, c_wchar};", "use core::ffi::c_void;"),
+              ("description: *const c_wchar,", "description: *const u16,"),
+              ("description: *mut *mut c_wchar,", "description: *mut *mut u16,"),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f"expected FFI fragment not found: {old}")
+              text = text.replace(old, new, 1)
+          if "c_wchar" in text:
+              raise SystemExit("unresolved c_wchar usage remains")
+          path.write_text(text, encoding="utf-8")
+          '@ | python -
+
       - name: Update lockfile and build the Windows implementation
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           cargo generate-lockfile
-          cargo fmt --all
+          cargo fmt -p search-os-secrets-windows
+          cargo fmt -p search-os-secrets-windows -- --check
           git diff --check
+          cargo check -p search-os-secrets-windows --all-targets --locked
           cargo build -p search-os-secrets-windows --locked
           if (Test-Path scripts/check-rust-boundaries.mjs) {
             node scripts/check-rust-boundaries.mjs
@@ -108,16 +133,23 @@ jobs:
           }
           '@
           New-Item -ItemType Directory -Force -Path target\dpapi-probe | Out-Null
-          Set-Content target\dpapi-probe\main.rs $probe -Encoding utf8
+          [IO.File]::WriteAllText(
+            'target\dpapi-probe\main.rs',
+            $probe,
+            [Text.UTF8Encoding]::new($false)
+          )
           $rlib = Get-ChildItem target\debug\deps\search_os_secrets_windows-*.rlib |
             Select-Object -First 1
           if (-not $rlib) { throw 'DPAPI adapter rlib was not produced' }
           rustc target\dpapi-probe\main.rs `
-            --edition 2021 `
+            --edition 2024 `
             -L dependency=target\debug\deps `
             --extern search_os_secrets_windows=$($rlib.FullName) `
             -o target\dpapi-probe\dpapi-probe.exe
           & target\dpapi-probe\dpapi-probe.exe
+          if ($LASTEXITCODE -ne 0) {
+            throw "DPAPI qualification probe failed with exit code $LASTEXITCODE"
+          }
 
       - name: Commit only the qualified adapter state
         shell: pwsh
@@ -130,11 +162,16 @@ jobs:
           git add Cargo.toml Cargo.lock `
             crates/search-runtime/search-os-secrets-windows `
             docs/implementation/windows-secret-adapter.md
-          if (git diff --cached --quiet) {
-            Write-Host 'No finalization changes remain.'
-            exit 0
+          $unexpected = @(git diff --name-only)
+          if ($unexpected.Count -ne 0) {
+            throw "Unexpected unstaged changes: $($unexpected -join ', ')"
+          }
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Staged DPAPI integration failed git diff --check'
           }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'feat(secrets): qualify scoped Windows DPAPI adapter'
+          git pull --rebase origin main
           git push origin HEAD:main
