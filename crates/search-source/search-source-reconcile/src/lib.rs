@@ -461,9 +461,7 @@ pub fn reconcile_source(
         ObservationPresence::Missing => ReconcileAction::RetireMissing {
             expected_source_revision: registered.source_revision(),
         },
-        ObservationPresence::Present => {
-            reconcile_present(registered, &observation, limits)?
-        }
+        ObservationPresence::Present => reconcile_present(registered, &observation, limits)?,
     };
     Ok(ReconcileOutcome::Planned(ReconcilePlan {
         source_identity: observation.source_identity,
@@ -516,8 +514,8 @@ fn reconcile_present(
                 quarantine_as_error(ReconcileQuarantineReason::AmbiguousMoveOrReplacement)
             }
         }
-        (Some(file), Some(_), false, false) => Ok(ReconcileAction::NoChange),
-        (Some(file), Some(_), false, true) => Ok(ReconcileAction::UpdateContent {
+        (Some(_file), Some(_), false, false) => Ok(ReconcileAction::NoChange),
+        (Some(_file), Some(_), false, true) => Ok(ReconcileAction::UpdateContent {
             expected_observation_revision: binding.observation_revision(),
             next_observation_revision: next_revision(binding.observation_revision())?,
             content_digest: observed_content_digest,
@@ -530,19 +528,17 @@ fn reconcile_present(
             new_path: observed_path.clone(),
             stable_file_identity_digest: file,
         }),
-        (Some(file), Some(_), true, true) => {
-            Ok(ReconcileAction::RebindPathAndUpdateContent {
-                expected_binding_revision: binding.binding_revision(),
-                next_binding_revision: next_revision(binding.binding_revision())?,
-                expected_observation_revision: binding.observation_revision(),
-                next_observation_revision: next_revision(binding.observation_revision())?,
-                old_path: binding.relative_path().clone(),
-                new_path: observed_path.clone(),
-                stable_file_identity_digest: file,
-                content_digest: observed_content_digest,
-                content_bytes: observed_content_bytes,
-            })
-        }
+        (Some(file), Some(_), true, true) => Ok(ReconcileAction::RebindPathAndUpdateContent {
+            expected_binding_revision: binding.binding_revision(),
+            next_binding_revision: next_revision(binding.binding_revision())?,
+            expected_observation_revision: binding.observation_revision(),
+            next_observation_revision: next_revision(binding.observation_revision())?,
+            old_path: binding.relative_path().clone(),
+            new_path: observed_path.clone(),
+            stable_file_identity_digest: file,
+            content_digest: observed_content_digest,
+            content_bytes: observed_content_bytes,
+        }),
         (None, Some(file), false, false) | (None, Some(file), false, true) => {
             Ok(ReconcileAction::BindStableFileIdentity {
                 expected_binding_revision: binding.binding_revision(),
@@ -556,9 +552,7 @@ fn reconcile_present(
         (Some(_), None, false, true) | (None, None, false, true) => {
             denial_as_error(ReconcileDenialReason::ReplacementIdentityEvidenceMissing)
         }
-        (Some(_), None, false, false) | (None, None, false, false) => {
-            Ok(ReconcileAction::NoChange)
-        }
+        (Some(_), None, false, false) | (None, None, false, false) => Ok(ReconcileAction::NoChange),
     }
 }
 
@@ -669,27 +663,35 @@ impl ReconcileLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use search_contracts::{OwnerEpoch, ReceiptRef};
+    use search_contracts::{
+        OpaqueCanonicalBytes, OwnerEpoch, ReceiptRef, SourceId, SourceIdentityKind,
+        SourceNamespaceId,
+    };
+    use search_ports::{IdempotencyClass, MutationIdentity};
     use search_source_admission::{
         AdmissionGrant, AdmissionOperation, AdmissionProfile, ResidencyClass, SourceModality,
     };
     use search_source_identity::{SourceBinding, SourceObservation};
-    use search_source_registry::{AdmissionBindingProof, RegistryBatch, RegistryChange, RegistryOperation, SourceRegistry, DEFAULT_REGISTRY_LIMITS};
-    use search_ports::{IdempotencyClass, MutationIdentity};
+    use search_source_registry::{
+        AdmissionBindingProof, DEFAULT_REGISTRY_LIMITS, RegistryBatch, RegistryChange,
+        RegistryOperation, SourceRegistry,
+    };
 
     fn source_identity() -> SourceIdentity {
-        SourceIdentity::new(
-            OpaqueId::new("namespace:test").expect("namespace"),
-            OpaqueId::new("source:test").expect("source"),
-        )
+        SourceIdentity {
+            source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
+            source_id: SourceId::from_bytes([2; 16]),
+            identity_kind: SourceIdentityKind::NtfsFile,
+            stable_identity_components: OpaqueCanonicalBytes::from_validated(
+                b"reconcile-test:source".to_vec(),
+            )
+            .expect("stable identity components"),
+        }
     }
 
     fn path(value: &str) -> CanonicalRelativePath {
-        CanonicalRelativePath::new(
-            value,
-            search_source_identity::DEFAULT_IDENTITY_LIMITS,
-        )
-        .expect("path")
+        CanonicalRelativePath::new(value, search_source_identity::DEFAULT_IDENTITY_LIMITS)
+            .expect("path")
     }
 
     fn registered() -> RegisteredSource {
@@ -697,13 +699,12 @@ mod tests {
         let binding = SourceBinding::new(
             identity.clone(),
             SourceObservation {
-                root_binding_id: RootBindingId::from_bytes([1; 32]),
+                root_binding_id: RootBindingId::from_bytes([1; 16]),
                 relative_path: path("old.rs"),
                 stable_file_identity_digest: Some(Blake3Digest32::from_bytes([2; 32])),
                 content_digest: Blake3Digest32::from_bytes([3; 32]),
                 content_bytes: 10,
-                observation_receipt: ReceiptRef::new("receipt:source")
-                    .expect("receipt"),
+                observation_receipt: ReceiptRef::new("receipt:source").expect("receipt"),
             },
             NonZeroRevision::new(1).expect("revision"),
             NonZeroRevision::new(1).expect("revision"),
@@ -725,8 +726,7 @@ mod tests {
                 Blake3Digest32::from_bytes([5; 32]),
             ),
         };
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         registry
             .apply(RegistryBatch {
                 expected_registry_revision: 0,
@@ -741,8 +741,7 @@ mod tests {
                         candidate_id: OpaqueId::new("candidate:test").expect("candidate"),
                         source_identity: identity.clone(),
                         assignment_digest: Blake3Digest32::from_bytes([7; 32]),
-                        assignment_receipt: ReceiptRef::new("receipt:assignment")
-                            .expect("receipt"),
+                        assignment_receipt: ReceiptRef::new("receipt:assignment").expect("receipt"),
                         readback_verified: true,
                     },
                     receipt: ReceiptRef::new("receipt:register").expect("receipt"),
@@ -754,8 +753,7 @@ mod tests {
 
     fn operation(name: &str, digest: u8) -> ReconcileOperation {
         ReconcileOperation::new(
-            OpaqueId::new(format!("reconcile-operation:{name}"))
-                .expect("operation"),
+            OpaqueId::new(format!("reconcile-operation:{name}")).expect("operation"),
             Blake3Digest32::from_bytes([digest; 32]),
         )
     }
@@ -764,7 +762,7 @@ mod tests {
         ReconcileObservation {
             source_identity: source_identity(),
             presence: ObservationPresence::Present,
-            root_binding_id: RootBindingId::from_bytes([1; 32]),
+            root_binding_id: RootBindingId::from_bytes([1; 16]),
             relative_path: Some(path("old.rs")),
             stable_file_identity_digest: Some(Blake3Digest32::from_bytes([2; 32])),
             content_digest: Some(Blake3Digest32::from_bytes([3; 32])),
@@ -772,9 +770,7 @@ mod tests {
             security_disposition: ReconcileSecurityDisposition::Permitted,
             security_barrier_revision: NonZeroRevision::new(1).expect("revision"),
             owner_epoch: OwnerEpoch::new(1).expect("epoch"),
-            observation_receipt: Some(
-                ReceiptRef::new("receipt:reconcile").expect("receipt"),
-            ),
+            observation_receipt: Some(ReceiptRef::new("receipt:reconcile").expect("receipt")),
         }
     }
 
@@ -907,7 +903,11 @@ mod tests {
         .expect("outcome") else {
             panic!("stale owner must deny")
         };
-        assert!(denial.reasons.contains(&ReconcileDenialReason::OwnerEpochMismatch));
+        assert!(
+            denial
+                .reasons
+                .contains(&ReconcileDenialReason::OwnerEpochMismatch)
+        );
     }
 
     #[test]
@@ -920,8 +920,7 @@ mod tests {
             DEFAULT_RECONCILE_LIMITS,
         )
         .expect("outcome");
-        let mut ledger = ReconcileLedger::new(DEFAULT_RECONCILE_LIMITS)
-            .expect("ledger");
+        let mut ledger = ReconcileLedger::new(DEFAULT_RECONCILE_LIMITS).expect("ledger");
         assert!(!ledger.record(outcome.clone()).expect("first").replayed);
         assert!(ledger.record(outcome).expect("replay").replayed);
     }

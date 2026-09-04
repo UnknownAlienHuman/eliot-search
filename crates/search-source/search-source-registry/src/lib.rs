@@ -111,9 +111,7 @@ impl RegistryError {
             Self::SourceAlreadyRegistered => "REGISTRY_SOURCE_ALREADY_REGISTERED",
             Self::SourceNotFound => "REGISTRY_SOURCE_NOT_FOUND",
             Self::AdmissionBindingMismatch => "REGISTRY_ADMISSION_BINDING_MISMATCH",
-            Self::AdmissionBindingEvidenceMissing => {
-                "REGISTRY_ADMISSION_BINDING_EVIDENCE_MISSING"
-            }
+            Self::AdmissionBindingEvidenceMissing => "REGISTRY_ADMISSION_BINDING_EVIDENCE_MISSING",
             Self::SourceBindingConflict => "REGISTRY_SOURCE_BINDING_CONFLICT",
             Self::SourceRevisionConflict => "REGISTRY_SOURCE_REVISION_CONFLICT",
             Self::MembershipCollision => "REGISTRY_MEMBERSHIP_COLLISION",
@@ -492,7 +490,10 @@ impl RegistryBatch {
                 if !cutovers.insert(corpus.clone()) {
                     return Err(RegistryError::DuplicateBatchTarget);
                 }
-                if memberships.iter().any(|membership| &membership.corpus_id == corpus) {
+                if memberships
+                    .iter()
+                    .any(|membership| &membership.corpus_id == corpus)
+                {
                     return Err(RegistryError::DuplicateBatchTarget);
                 }
             }
@@ -777,8 +778,7 @@ fn register_source(
     if !assignment.readback_verified {
         return Err(RegistryError::AdmissionBindingEvidenceMissing);
     }
-    let source_revision = NonZeroRevision::new(1)
-        .map_err(|_| RegistryError::ContractExhausted)?;
+    let source_revision = NonZeroRevision::new(1).map_err(|_| RegistryError::ContractExhausted)?;
     sources.insert(
         binding.identity().clone(),
         RegisteredSource {
@@ -884,10 +884,7 @@ fn add_membership(
             return Err(RegistryError::CutoverGenerationConflict);
         }
     } else {
-        active_generations.insert(
-            membership.key.corpus_id.clone(),
-            membership.generation,
-        );
+        active_generations.insert(membership.key.corpus_id.clone(), membership.generation);
     }
     memberships.insert(
         membership.key.clone(),
@@ -953,9 +950,7 @@ fn apply_cutover(
     if inventory.len() != cutover.frozen_inventory.len() {
         return Err(RegistryError::CutoverInventoryInvalid);
     }
-    if active_generations.get(&cutover.corpus_id).copied()
-        != cutover.expected_generation
-    {
+    if active_generations.get(&cutover.corpus_id).copied() != cutover.expected_generation {
         return Err(RegistryError::CutoverGenerationConflict);
     }
     if let Some(current) = cutover.expected_generation {
@@ -1016,37 +1011,44 @@ fn apply_cutover(
             }
         }
     }
-    active_generations.insert(
-        cutover.corpus_id.clone(),
-        cutover.next_generation,
-    );
+    active_generations.insert(cutover.corpus_id.clone(), cutover.next_generation);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use search_contracts::OwnerEpoch;
+    use search_contracts::{
+        OpaqueCanonicalBytes, OwnerEpoch, SourceId, SourceIdentityKind, SourceNamespaceId,
+    };
     use search_ports::{IdempotencyClass, MutationIdentity};
     use search_source_admission::{
         AdmissionOperation, AdmissionProfile, ResidencyClass, SourceModality,
     };
-    use search_source_identity::{
-        CanonicalRelativePath, RootBindingId, SourceObservation,
-    };
+    use search_source_identity::{CanonicalRelativePath, RootBindingId, SourceObservation};
 
     fn source_identity(name: &str) -> SourceIdentity {
-        SourceIdentity::new(
-            OpaqueId::new("namespace:test").expect("namespace"),
-            OpaqueId::new(format!("source:{name}")).expect("source"),
-        )
+        let mut source_id = [0_u8; 16];
+        for (index, byte) in name.bytes().enumerate() {
+            let slot = index % source_id.len();
+            source_id[slot] ^= byte;
+        }
+        SourceIdentity {
+            source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
+            source_id: SourceId::from_bytes(source_id),
+            identity_kind: SourceIdentityKind::NtfsFile,
+            stable_identity_components: OpaqueCanonicalBytes::from_validated(
+                format!("registry-test:{name}").into_bytes(),
+            )
+            .expect("stable identity components"),
+        }
     }
 
     fn source_binding(name: &str) -> SourceBinding {
         SourceBinding::new(
             source_identity(name),
             SourceObservation {
-                root_binding_id: RootBindingId::from_bytes([1; 32]),
+                root_binding_id: RootBindingId::from_bytes([1; 16]),
                 relative_path: CanonicalRelativePath::new(
                     format!("{name}.rs"),
                     search_source_identity::DEFAULT_IDENTITY_LIMITS,
@@ -1065,20 +1067,17 @@ mod tests {
 
     fn admission(name: &str) -> AdmissionGrant {
         AdmissionGrant {
-            candidate_id: OpaqueId::new(format!("candidate:{name}"))
-                .expect("candidate"),
+            candidate_id: OpaqueId::new(format!("candidate:{name}")).expect("candidate"),
             profile: AdmissionProfile::Direct,
             modality: SourceModality::RegularFile,
             residency: ResidencyClass::LocalFixed,
             policy_revision: NonZeroRevision::new(1).expect("revision"),
             owner_epoch: OwnerEpoch::new(1).expect("epoch"),
-            security_barrier_revision: NonZeroRevision::new(1)
-                .expect("revision"),
+            security_barrier_revision: NonZeroRevision::new(1).expect("revision"),
             evidence_digest: Blake3Digest32::from_bytes([4; 32]),
             operation: AdmissionOperation::new(
                 MutationIdentity::new(
-                    OpaqueId::new(format!("admission-operation:{name}"))
-                        .expect("operation"),
+                    OpaqueId::new(format!("admission-operation:{name}")).expect("operation"),
                     IdempotencyClass::RetrySameIdentity,
                 ),
                 Blake3Digest32::from_bytes([5; 32]),
@@ -1088,8 +1087,7 @@ mod tests {
 
     fn assignment(name: &str) -> AdmissionBindingProof {
         AdmissionBindingProof {
-            candidate_id: OpaqueId::new(format!("candidate:{name}"))
-                .expect("candidate"),
+            candidate_id: OpaqueId::new(format!("candidate:{name}")).expect("candidate"),
             source_identity: source_identity(name),
             assignment_digest: Blake3Digest32::from_bytes([6; 32]),
             assignment_receipt: ReceiptRef::new(format!("receipt:assignment:{name}"))
@@ -1100,8 +1098,7 @@ mod tests {
 
     fn operation(name: &str, digest: u8) -> RegistryOperation {
         RegistryOperation::new(
-            OpaqueId::new(format!("registry-operation:{name}"))
-                .expect("operation"),
+            OpaqueId::new(format!("registry-operation:{name}")).expect("operation"),
             Blake3Digest32::from_bytes([digest; 32]),
         )
     }
@@ -1111,14 +1108,12 @@ mod tests {
             admission: admission(name),
             binding: source_binding(name),
             assignment: assignment(name),
-            receipt: ReceiptRef::new(format!("receipt:register:{name}"))
-                .expect("receipt"),
+            receipt: ReceiptRef::new(format!("receipt:register:{name}")).expect("receipt"),
         }
     }
 
     fn registry_with_source(name: &str) -> SourceRegistry {
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         registry
             .apply(RegistryBatch {
                 expected_registry_revision: 0,
@@ -1131,8 +1126,7 @@ mod tests {
 
     #[test]
     fn registration_is_exact_revision_guarded() {
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         assert_eq!(
             registry.apply(RegistryBatch {
                 expected_registry_revision: 1,
@@ -1146,8 +1140,7 @@ mod tests {
 
     #[test]
     fn full_payload_operation_replay_is_exact() {
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         let batch = RegistryBatch {
             expected_registry_revision: 0,
             operation: operation("register", 1),
@@ -1162,8 +1155,7 @@ mod tests {
 
     #[test]
     fn operation_identity_reuse_with_other_payload_is_rejected() {
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         registry
             .apply(RegistryBatch {
                 expected_registry_revision: 0,
@@ -1183,11 +1175,9 @@ mod tests {
 
     #[test]
     fn candidate_assignment_mismatch_is_atomic_failure() {
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         let mut proof = assignment("one");
-        proof.candidate_id = OpaqueId::new("candidate:other")
-            .expect("candidate");
+        proof.candidate_id = OpaqueId::new("candidate:other").expect("candidate");
         assert_eq!(
             registry.apply(RegistryBatch {
                 expected_registry_revision: 0,
@@ -1196,8 +1186,7 @@ mod tests {
                     admission: admission("one"),
                     binding: source_binding("one"),
                     assignment: proof,
-                    receipt: ReceiptRef::new("receipt:register")
-                        .expect("receipt"),
+                    receipt: ReceiptRef::new("receipt:register").expect("receipt"),
                 }],
             }),
             Err(RegistryError::AdmissionBindingMismatch)
@@ -1247,8 +1236,7 @@ mod tests {
                         source_identity: source_identity("one"),
                     },
                     generation: NonZeroRevision::new(1).expect("generation"),
-                    receipt: ReceiptRef::new("receipt:membership")
-                        .expect("receipt"),
+                    receipt: ReceiptRef::new("receipt:membership").expect("receipt"),
                 })],
             })
             .expect("membership");
@@ -1258,26 +1246,20 @@ mod tests {
                 operation: operation("retire", 3),
                 changes: vec![RegistryChange::RetireSource {
                     identity: source_identity("one"),
-                    expected_source_revision: NonZeroRevision::new(1)
-                        .expect("revision"),
+                    expected_source_revision: NonZeroRevision::new(1).expect("revision"),
                     receipt: ReceiptRef::new("receipt:retire").expect("receipt"),
                 }],
             })
             .expect("retire");
         let portfolio = registry
-            .active_portfolio(
-                &corpus,
-                NonZeroRevision::new(1).expect("generation"),
-                10,
-            )
+            .active_portfolio(&corpus, NonZeroRevision::new(1).expect("generation"), 10)
             .expect("portfolio");
         assert!(portfolio.is_empty());
     }
 
     #[test]
     fn namespace_cutover_is_atomic_and_inventory_bound() {
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         registry
             .apply(RegistryBatch {
                 expected_registry_revision: 0,
@@ -1290,39 +1272,27 @@ mod tests {
             .apply(RegistryBatch {
                 expected_registry_revision: 1,
                 operation: operation("cutover", 2),
-                changes: vec![RegistryChange::CutoverNamespace(
-                    NamespaceCutover {
-                        corpus_id: corpus.clone(),
-                        expected_generation: None,
-                        next_generation: NonZeroRevision::new(1)
-                            .expect("generation"),
-                        frozen_inventory: vec![
-                            source_identity("one"),
-                            source_identity("two"),
-                        ],
-                        inventory_digest: Blake3Digest32::from_bytes([7; 32]),
-                        authorization_verified: true,
-                        readback_verified: true,
-                        receipt: ReceiptRef::new("receipt:cutover")
-                            .expect("receipt"),
-                    },
-                )],
+                changes: vec![RegistryChange::CutoverNamespace(NamespaceCutover {
+                    corpus_id: corpus.clone(),
+                    expected_generation: None,
+                    next_generation: NonZeroRevision::new(1).expect("generation"),
+                    frozen_inventory: vec![source_identity("one"), source_identity("two")],
+                    inventory_digest: Blake3Digest32::from_bytes([7; 32]),
+                    authorization_verified: true,
+                    readback_verified: true,
+                    receipt: ReceiptRef::new("receipt:cutover").expect("receipt"),
+                })],
             })
             .expect("cutover");
         let portfolio = registry
-            .active_portfolio(
-                &corpus,
-                NonZeroRevision::new(1).expect("generation"),
-                10,
-            )
+            .active_portfolio(&corpus, NonZeroRevision::new(1).expect("generation"), 10)
             .expect("portfolio");
         assert_eq!(portfolio.len(), 2);
     }
 
     #[test]
     fn failed_multi_change_batch_does_not_partially_register() {
-        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS)
-            .expect("registry");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         let mut invalid = assignment("two");
         invalid.readback_verified = false;
         assert_eq!(

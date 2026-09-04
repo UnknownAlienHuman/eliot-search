@@ -648,6 +648,7 @@ dependencies = [
  "search-domain",
  "search-ports",
  "search-safe-reader",
+ "search-source-admission",
  "search-source-identity",
  "search-source-registry",
 ]

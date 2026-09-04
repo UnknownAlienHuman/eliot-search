@@ -216,7 +216,7 @@ pub enum SourceIdentityKind {
     AdmittedVirtualSnapshot,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SourceIdentity {
     pub source_namespace_id: SourceNamespaceId,
     pub source_id: SourceId,

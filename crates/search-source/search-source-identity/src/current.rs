@@ -43,10 +43,7 @@ pub struct CanonicalRelativePath(String);
 
 impl CanonicalRelativePath {
     /// Validates and owns an already-canonical root-relative path.
-    pub fn new(
-        value: impl Into<String>,
-        limits: IdentityLimits,
-    ) -> Result<Self, IdentityError> {
+    pub fn new(value: impl Into<String>, limits: IdentityLimits) -> Result<Self, IdentityError> {
         let limits = limits.validate()?;
         let value = value.into();
         if value.is_empty()
