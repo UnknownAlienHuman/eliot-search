@@ -1,4 +1,4 @@
-//! Protocol-only command-line client for the local ELIOT Search daemon.
+//! Protocol-only CLI for the local ELIOT Search daemon.
 
 #![forbid(unsafe_code)]
 
@@ -11,24 +11,35 @@ use std::process;
 use std::time::Duration;
 
 const DEFAULT_ADDRESS: &str = "127.0.0.1:39171";
-const MAX_RESPONSE_BYTES: usize = 16 * 1_024;
-const IO_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_QUERY_BYTES: usize = 1_024;
+const MAX_RESPONSE_BYTES: usize = 64 * 1_024;
+const IO_TIMEOUT: Duration = Duration::from_secs(15);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 enum Command {
     Health,
     Status,
     Version,
     Shutdown,
+    Search(String),
 }
 
 impl Command {
-    const fn wire(self) -> &'static str {
+    fn wire(&self) -> io::Result<String> {
         match self {
-            Self::Health => "health",
-            Self::Status => "status",
-            Self::Version => "version",
-            Self::Shutdown => "shutdown",
+            Self::Health => Ok("health".to_owned()),
+            Self::Status => Ok("status".to_owned()),
+            Self::Version => Ok("version".to_owned()),
+            Self::Shutdown => Ok("shutdown".to_owned()),
+            Self::Search(query) => {
+                if query.is_empty() || query.len() > MAX_QUERY_BYTES {
+                    return Err(io::Error::new(
+                        ErrorKind::InvalidInput,
+                        "search query must be non-empty and at most 1024 UTF-8 bytes",
+                    ));
+                }
+                Ok(format!("search:{}", hex_encode(query.as_bytes())))
+            }
         }
     }
 }
@@ -71,11 +82,12 @@ fn run(options: Options) -> io::Result<String> {
         .token_file
         .unwrap_or_else(|| options.data_root.join("runtime").join("auth.token"));
     let token = read_token(&token_file)?;
+    let command = options.command.wire()?;
 
     let mut stream = TcpStream::connect_timeout(&address, IO_TIMEOUT)?;
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
-    let request = format!("ELIOT_SEARCH/1 {token} {}\n", options.command.wire());
+    let request = format!("ELIOT_SEARCH/1 {token} {command}\n");
     stream.write_all(request.as_bytes())?;
     stream.flush()?;
     read_bounded_response(&mut stream, MAX_RESPONSE_BYTES)
@@ -94,6 +106,12 @@ fn parse_options() -> io::Result<Options> {
             "status" => set_command(&mut command, Command::Status)?,
             "version" => set_command(&mut command, Command::Version)?,
             "shutdown" => set_command(&mut command, Command::Shutdown)?,
+            "search" => {
+                let query = arguments.next().ok_or_else(|| {
+                    io::Error::new(ErrorKind::InvalidInput, "search requires a quoted query")
+                })?;
+                set_command(&mut command, Command::Search(query))?;
+            }
             "--address" => {
                 let value = arguments.next().ok_or_else(|| {
                     io::Error::new(ErrorKind::InvalidInput, "--address requires a value")
@@ -178,8 +196,7 @@ fn read_endpoint(data_root: &Path) -> io::Result<Option<SocketAddr>> {
 }
 
 fn read_token(path: &Path) -> io::Result<String> {
-    let token = fs::read_to_string(path)?;
-    let token = token.trim().to_owned();
+    let token = fs::read_to_string(path)?.trim().to_owned();
     if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(io::Error::new(
             ErrorKind::InvalidData,
@@ -192,6 +209,7 @@ fn read_token(path: &Path) -> io::Result<String> {
 fn read_bounded_response(stream: &mut TcpStream, limit: usize) -> io::Result<String> {
     let mut bytes = Vec::with_capacity(512);
     let mut buffer = [0_u8; 512];
+    let mut newline = None;
     loop {
         let read = stream.read(&mut buffer)?;
         if read == 0 {
@@ -206,21 +224,25 @@ fn read_bounded_response(stream: &mut TcpStream, limit: usize) -> io::Result<Str
                 "response exceeds the bounded protocol frame",
             ));
         }
+        let start = bytes.len();
         bytes.extend_from_slice(&buffer[..read]);
-        if bytes.contains(&b'\n') {
+        if let Some(relative) = buffer[..read].iter().position(|byte| *byte == b'\n') {
+            newline = Some(start + relative);
             break;
         }
     }
-    let newline = bytes.iter().position(|byte| *byte == b'\n');
+
     let end = newline.unwrap_or(bytes.len());
-    if bytes[end.saturating_add(1)..]
-        .iter()
-        .any(|byte| !byte.is_ascii_whitespace())
-    {
-        return Err(io::Error::new(
-            ErrorKind::InvalidData,
-            "daemon returned multiple protocol frames",
-        ));
+    if let Some(newline_index) = newline {
+        if bytes[newline_index + 1..]
+            .iter()
+            .any(|byte| !byte.is_ascii_whitespace())
+        {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "daemon returned multiple protocol frames",
+            ));
+        }
     }
     String::from_utf8(bytes[..end].to_vec())
         .map_err(|_| io::Error::new(ErrorKind::InvalidData, "response is not UTF-8"))
@@ -252,9 +274,19 @@ fn ensure_loopback(ip: IpAddr) -> io::Result<()> {
     }
 }
 
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
+}
+
 fn print_help() {
     println!(
-        "eliot-search {}\n\nUSAGE:\n    eliot-search [health|status|version|shutdown] [OPTIONS]\n\nOPTIONS:\n    --address <IP:PORT>   Override the loopback endpoint\n    --data-root <PATH>    Read endpoint and token from this local state root\n    --token-file <PATH>   Override the local authentication token file\n    -V, --version         Print client version\n    -h, --help            Print help",
+        "eliot-search {}\n\nUSAGE:\n    eliot-search [health|status|version|shutdown] [OPTIONS]\n    eliot-search search \"QUERY\" [OPTIONS]\n\nOPTIONS:\n    --address <IP:PORT>   Override the loopback endpoint\n    --data-root <PATH>    Read endpoint and token from this local state root\n    --token-file <PATH>   Override the local authentication token file\n    -V, --version         Print client version\n    -h, --help            Print help",
         env!("CARGO_PKG_VERSION")
     );
 }
