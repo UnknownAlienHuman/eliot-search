@@ -1,12 +1,12 @@
 //! Deterministic A/B/C scheduling and immutable attempt evidence.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use search_contracts::{Blake3Digest32, OpaqueId, ReceiptRef};
 
 use crate::{
-    BaselineRole, ControlCase, EvalError, EvalLimits, FingerprintBuilder,
-    FrozenRunManifest, ValidatedBaseline, ValidatedControlCorpus,
+    BaselineRole, ControlCase, EvalError, EvalLimits, FingerprintBuilder, FrozenRunManifest,
+    ValidatedBaseline, ValidatedControlCorpus,
 };
 
 /// One deterministic attempt scheduled inside a case block.
@@ -117,10 +117,7 @@ pub fn plan_case_block(
             value.checked_mul(
                 usize::try_from(run.input().warmups)
                     .unwrap_or(usize::MAX)
-                    .saturating_add(
-                        usize::try_from(run.input().repetitions)
-                            .unwrap_or(usize::MAX),
-                    ),
+                    .saturating_add(usize::try_from(run.input().repetitions).unwrap_or(usize::MAX)),
             )
         })
         .ok_or(EvalError::BudgetExceeded)?;
@@ -128,7 +125,10 @@ pub fn plan_case_block(
         return Err(EvalError::CaseBlockInvalid);
     }
 
-    let case_ids = cases.iter().map(|case| case.case_id.clone()).collect::<Vec<_>>();
+    let case_ids = cases
+        .iter()
+        .map(|case| case.case_id.clone())
+        .collect::<Vec<_>>();
     let mut fingerprint = FingerprintBuilder::new(b"eliot-search/eval/case-block/v1");
     fingerprint.push_digest(run.run_digest());
     fingerprint.push_u64(block_index);
@@ -273,7 +273,11 @@ pub fn validate_case_evidence(
     {
         return Err(EvalError::EvidenceStatusInvalid);
     }
-    validate_samples(&evidence.resource_samples, evidence.started_tick, evidence.ended_tick)?;
+    validate_samples(
+        &evidence.resource_samples,
+        evidence.started_tick,
+        evidence.ended_tick,
+    )?;
     match evidence.status {
         AttemptStatus::Success | AttemptStatus::Partial => {
             if evidence.output_digest.is_none() || evidence.raw_output_ref.is_none() {
@@ -353,17 +357,17 @@ impl EvidenceLedger {
         evidence: ValidatedCaseEvidence,
     ) -> Result<&ValidatedCaseEvidence, EvalError> {
         let key = evidence.evidence.attempt_digest;
-        if let Some(existing) = self.attempts.get(&key) {
-            if existing == &evidence {
-                return Ok(existing);
+        if self.attempts.contains_key(&key) {
+            if self.attempts.get(&key) != Some(&evidence) {
+                return Err(EvalError::AttemptConflict);
             }
-            return Err(EvalError::AttemptConflict);
+            return self.attempts.get(&key).ok_or(EvalError::AttemptConflict);
         }
         if self.attempts.len() >= self.max_attempts {
             return Err(EvalError::BudgetExceeded);
         }
         self.attempts.insert(key, evidence);
-        Ok(self.attempts.get(&key).expect("inserted evidence"))
+        self.attempts.get(&key).ok_or(EvalError::AttemptConflict)
     }
 
     /// Deterministically ordered accepted evidence.
@@ -483,7 +487,7 @@ fn validate_samples(
     started_tick: u64,
     ended_tick: u64,
 ) -> Result<(), EvalError> {
-    let mut previous = None;
+    let mut previous: Option<ResourceSample> = None;
     for sample in samples {
         if sample.tick < started_tick || sample.tick > ended_tick {
             return Err(EvalError::EvidenceStatusInvalid);

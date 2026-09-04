@@ -396,7 +396,8 @@ pub fn open_revision(
         return Err(RevisionCryptoError::AuthenticationFailed);
     }
     let aad = associated_data(envelope.binding, envelope.nonce);
-    let cipher = key.with_key_bytes(|bytes| Aes256Gcm::new_from_slice(bytes))
+    let cipher = key
+        .with_key_bytes(|bytes| Aes256Gcm::new_from_slice(bytes))
         .map_err(|_| RevisionCryptoError::InvalidKey)?;
     let plaintext = cipher
         .decrypt(
@@ -425,7 +426,8 @@ fn seal_with_nonce(
     nonce: [u8; REVISION_NONCE_BYTES],
 ) -> Result<EncryptedRevisionEnvelope, RevisionCryptoError> {
     let aad = associated_data(binding, nonce);
-    let cipher = key.with_key_bytes(|bytes| Aes256Gcm::new_from_slice(bytes))
+    let cipher = key
+        .with_key_bytes(|bytes| Aes256Gcm::new_from_slice(bytes))
         .map_err(|_| RevisionCryptoError::InvalidKey)?;
     let ciphertext_and_tag = cipher
         .encrypt(
@@ -478,21 +480,16 @@ fn validate_envelope(envelope: &EncryptedRevisionEnvelope) -> Result<(), Revisio
         .checked_add(REVISION_TAG_BYTES)
         .ok_or(RevisionCryptoError::LengthOverflow)?;
     if envelope.ciphertext_and_tag.len() != expected_ciphertext_length
-        || envelope.ciphertext_and_tag.len()
-            > MAX_REVISION_PLAINTEXT_BYTES + REVISION_TAG_BYTES
+        || envelope.ciphertext_and_tag.len() > MAX_REVISION_PLAINTEXT_BYTES + REVISION_TAG_BYTES
     {
         return Err(RevisionCryptoError::InvalidEnvelope);
     }
     Ok(())
 }
 
-fn associated_data(
-    binding: RevisionBinding,
-    nonce: [u8; REVISION_NONCE_BYTES],
-) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(
-        AAD_DOMAIN.len() + 2 + 1 + 8 + REVISION_NONCE_BYTES + 32 * 4 + 8,
-    );
+fn associated_data(binding: RevisionBinding, nonce: [u8; REVISION_NONCE_BYTES]) -> Vec<u8> {
+    let mut aad =
+        Vec::with_capacity(AAD_DOMAIN.len() + 2 + 1 + 8 + REVISION_NONCE_BYTES + 32 * 4 + 8);
     aad.extend_from_slice(AAD_DOMAIN);
     aad.extend_from_slice(&REVISION_ENVELOPE_VERSION.to_be_bytes());
     aad.push(ALGORITHM_AES_256_GCM);

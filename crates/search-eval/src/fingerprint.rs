@@ -49,11 +49,6 @@ impl FingerprintBuilder {
         self.mix(&value.to_be_bytes());
     }
 
-    /// Adds a signed integer.
-    pub(crate) fn push_i64(&mut self, value: i64) {
-        self.mix(&value.to_be_bytes());
-    }
-
     /// Adds a Boolean.
     pub(crate) fn push_bool(&mut self, value: bool) {
         self.mix(&[u8::from(value)]);

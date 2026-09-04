@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use search_contracts::{Blake3Digest32, OpaqueId, ReceiptRef};
 
 use crate::{
-    AttemptStatus, EvalError, EvalLimits, FingerprintBuilder, FrozenRunManifest,
-    MetricDefinition, MetricDirection, MissingValuePolicy, ResourceSample,
-    ValidatedAcceptancePolicy, ValidatedCaseEvidence, ValidatedMetricRegistry,
+    AttemptStatus, EvalError, EvalLimits, FingerprintBuilder, FrozenRunManifest, MetricDefinition,
+    MetricDirection, MissingValuePolicy, ResourceSample, ValidatedAcceptancePolicy,
+    ValidatedCaseEvidence, ValidatedMetricRegistry,
 };
 
 /// Terminal state of one caller-supplied metric observation.
@@ -142,8 +142,8 @@ pub fn score_case(
         return Err(EvalError::MetricRegistryInvalid);
     }
 
-    let complete = attempt.status == AttemptStatus::Success
-        && metrics.values().all(|metric| metric.complete);
+    let complete =
+        attempt.status == AttemptStatus::Success && metrics.values().all(|metric| metric.complete);
     let mut fingerprint = FingerprintBuilder::new(b"eliot-search/eval/case-metrics/v1");
     fingerprint.push_digest(attempt.run_digest);
     fingerprint.push_text(attempt.case_id.as_str());
@@ -190,7 +190,10 @@ fn score_observation(
 
     match observation.state {
         MetricObservationState::Measured => {
-            if !matches!(attempt_status, AttemptStatus::Success | AttemptStatus::Partial) {
+            if !matches!(
+                attempt_status,
+                AttemptStatus::Success | AttemptStatus::Partial
+            ) {
                 return Err(EvalError::EvidenceStatusInvalid);
             }
             let numerator = observation.numerator.ok_or(EvalError::MetricUnavailable)?;
@@ -377,15 +380,11 @@ pub fn aggregate_block(
     fingerprint.push_digest(run.run_digest());
     fingerprint.push_text(baseline_id.as_str());
     fingerprint.push_u64(u64::try_from(cases.len()).map_err(|_| EvalError::ContractExhausted)?);
+    fingerprint.push_u64(u64::try_from(measured.len()).map_err(|_| EvalError::ContractExhausted)?);
+    fingerprint
+        .push_u64(u64::try_from(failed_attempt_count).map_err(|_| EvalError::ContractExhausted)?);
     fingerprint.push_u64(
-        u64::try_from(measured.len()).map_err(|_| EvalError::ContractExhausted)?,
-    );
-    fingerprint.push_u64(
-        u64::try_from(failed_attempt_count).map_err(|_| EvalError::ContractExhausted)?,
-    );
-    fingerprint.push_u64(
-        u64::try_from(unavailable_attempt_count)
-            .map_err(|_| EvalError::ContractExhausted)?,
+        u64::try_from(unavailable_attempt_count).map_err(|_| EvalError::ContractExhausted)?,
     );
     for metric in aggregate.values() {
         fingerprint_aggregate(&mut fingerprint, metric);
@@ -588,26 +587,21 @@ pub fn compare_abc(
         let baseline_b_value = b.and_then(|value| value.value);
         let candidate_value = c.and_then(|value| value.value);
         let strongest_baseline_value = match (baseline_a_value, baseline_b_value) {
-            (Some(left), Some(right)) => Some(strongest_baseline(
-                definition.direction,
-                left,
-                right,
-            )),
+            (Some(left), Some(right)) => {
+                Some(strongest_baseline(definition.direction, left, right))
+            }
             _ => None,
         };
-        let improvement = candidate_value.zip(strongest_baseline_value).map(
-            |(candidate, strongest)| improvement_amount(
-                definition.direction,
-                candidate,
-                strongest,
-            ),
-        );
+        let improvement =
+            candidate_value
+                .zip(strongest_baseline_value)
+                .map(|(candidate, strongest)| {
+                    improvement_amount(definition.direction, candidate, strongest)
+                });
         let threshold_passed = candidate_value.is_some_and(|candidate| {
             passes_threshold(definition.direction, candidate, rule.candidate_threshold)
         });
-        let non_inferior = improvement.is_some_and(|value| {
-            value >= -rule.maximum_regression
-        });
+        let non_inferior = improvement.is_some_and(|value| value >= -rule.maximum_regression);
         let material_gain = improvement.is_some_and(|value| value >= rule.practical_effect);
 
         if rule.primary {
@@ -913,13 +907,7 @@ pub fn compute_resource_report(
     evidence: &[ValidatedCaseEvidence],
     limits: EvalLimits,
 ) -> Result<ResourceReport, EvalError> {
-    compute_resource_report_for_lane(
-        run,
-        baseline_id,
-        evidence,
-        ResourceLane::Measured,
-        limits,
-    )
+    compute_resource_report_for_lane(run, baseline_id, evidence, ResourceLane::Measured, limits)
 }
 
 /// Computes one exact warm-up or measured resource lane.
@@ -994,19 +982,14 @@ pub fn compute_resource_report_for_lane(
     fingerprint.push_digest(run.run_digest());
     fingerprint.push_text(baseline_id.as_str());
     fingerprint.push_u64(resource_lane_tag(lane));
-    fingerprint.push_u64(
-        u64::try_from(selected.len()).map_err(|_| EvalError::ContractExhausted)?,
-    );
-    fingerprint.push_u64(
-        u64::try_from(sample_count).map_err(|_| EvalError::ContractExhausted)?,
-    );
+    fingerprint.push_u64(u64::try_from(selected.len()).map_err(|_| EvalError::ContractExhausted)?);
+    fingerprint.push_u64(u64::try_from(sample_count).map_err(|_| EvalError::ContractExhausted)?);
     fingerprint.push_u64(cpu_millis);
     fingerprint.push_u64(peak_memory_bytes);
     fingerprint.push_u64(read_bytes);
     fingerprint.push_u64(write_bytes);
     fingerprint.push_u64(
-        u64::try_from(missing_sample_attempts)
-            .map_err(|_| EvalError::ContractExhausted)?,
+        u64::try_from(missing_sample_attempts).map_err(|_| EvalError::ContractExhausted)?,
     );
     for reference in &evidence_refs {
         fingerprint.push_text(reference.as_str());
@@ -1070,15 +1053,10 @@ fn summarize_samples(samples: &[ResourceSample]) -> Result<ResourceSummary, Eval
     })
 }
 
-fn canonicalize_receipts(
-    receipts: &mut Vec<ReceiptRef>,
-    maximum: usize,
-) -> Result<(), EvalError> {
+fn canonicalize_receipts(receipts: &mut Vec<ReceiptRef>, maximum: usize) -> Result<(), EvalError> {
     receipts.sort();
     receipts.dedup();
-    if receipts.len() > maximum
-        || receipts.iter().any(|receipt| receipt.as_str().is_empty())
-    {
+    if receipts.len() > maximum || receipts.iter().any(|receipt| receipt.as_str().is_empty()) {
         return Err(EvalError::BudgetExceeded);
     }
     Ok(())
