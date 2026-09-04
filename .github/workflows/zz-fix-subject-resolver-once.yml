@@ -1,0 +1,143 @@
+name: fix-subject-resolver-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-fix-subject-resolver-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-subject-resolver-once
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --no-self-update
+          rustup override set 1.98.0
+
+      - name: Align resolver with canonical assurance classes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/search-query/search-subject-resolver/src/lib.rs')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  '    MAX_SET_ITEMS, OpaqueId, ReceiptRef, ResolvedSubject, SearchReasonCodeV1,',
+                  '    MAX_SET_ITEMS, ReceiptRef, ResolvedSubject, SearchReasonCodeV1,',
+              ),
+              (
+                  '''            || self.subject.entity_kind
+                  != self.subject.entity_kind
+              || self.context_digest != context.context_digest''',
+                  '''            || self.context_digest != context.context_digest''',
+              ),
+              (
+                  '''const fn assurance_rank(value: AssuranceClass) -> u8 {
+              match value {
+                  AssuranceClass::ExactBytes => 5,
+                  AssuranceClass::MappedText => 4,
+                  AssuranceClass::Structural => 3,
+                  AssuranceClass::IndexedLexical => 2,
+                  AssuranceClass::SemanticOnly => 1,
+              }
+          }''',
+                  '''const fn assurance_rank(value: AssuranceClass) -> u8 {
+              match value {
+                  AssuranceClass::ExactBytes => 4,
+                  AssuranceClass::MappedText => 3,
+                  AssuranceClass::LossyText => 2,
+                  AssuranceClass::DescriptiveOnly => 1,
+              }
+          }''',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'expected resolver fragment missing: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          if '#[cfg(test)]\nmod tests {' in text:
+              raise SystemExit('unexpected existing resolver tests')
+          text += r'''
+
+          #[cfg(test)]
+          mod tests {
+              use search_contracts::{AssuranceClass, MatchBasis};
+
+              use super::{assurance_rank, rank_resolution_basis, ResolutionPriority};
+
+              #[test]
+              fn assurance_order_matches_the_contract_loss_ladder() {
+                  assert!(
+                      assurance_rank(AssuranceClass::ExactBytes)
+                          > assurance_rank(AssuranceClass::MappedText)
+                  );
+                  assert!(
+                      assurance_rank(AssuranceClass::MappedText)
+                          > assurance_rank(AssuranceClass::LossyText)
+                  );
+                  assert!(
+                      assurance_rank(AssuranceClass::LossyText)
+                          > assurance_rank(AssuranceClass::DescriptiveOnly)
+                  );
+              }
+
+              #[test]
+              fn semantic_similarity_is_not_subject_resolution_authority() {
+                  assert_eq!(rank_resolution_basis(MatchBasis::Semantic), None);
+                  assert_eq!(
+                      rank_resolution_basis(MatchBasis::Structural),
+                      Some(ResolutionPriority::Structural)
+                  );
+              }
+          }
+          '''
+          path.write_text(text, encoding='utf-8')
+          PY
+          rustfmt --edition 2024 crates/search-query/search-subject-resolver/src/lib.rs
+
+      - name: Qualify resolver behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check -p search-subject-resolver --all-targets --locked
+          cargo test -p search-subject-resolver --all-targets --locked
+          git diff --check
+
+      - name: Commit qualified repair and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/zz-fix-subject-resolver-once.yml
+          git add crates/search-query/search-subject-resolver/src/lib.rs
+          if ! git diff --quiet; then
+            echo 'Unexpected unstaged changes:' >&2
+            git diff --name-only >&2
+            exit 1
+          fi
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(query): align subject assurance and validation'
+          git pull --rebase origin main
+          git push origin HEAD:main
