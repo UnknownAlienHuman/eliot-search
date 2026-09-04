@@ -46,6 +46,16 @@ jobs:
               text,
               count=1,
           )
+          text, stable_docs = re.subn(
+              r'    /// No migration is in progress\.\n    Stable \{ version: u32 \},',
+              '    /// No migration is in progress.\n'
+              '    Stable {\n'
+              '        /// Current verified schema version.\n'
+              '        version: u32,\n'
+              '    },',
+              text,
+              count=1,
+          )
 
           plan_method = '''    pub fn plan(&mut self, plan: MigrationPlan) -> Result<(), ControlError> {
               let plan = plan.validate()?;
@@ -127,11 +137,11 @@ jobs:
               count=1,
               flags=re.S,
           )
-          if (derives, plans, unknowns, verifies, commits) != (1, 1, 1, 1, 1):
+          if (derives, stable_docs, plans, unknowns, verifies, commits) != (1, 1, 1, 1, 1, 1):
               raise SystemExit(
                   'migration patch mismatch: '
-                  f'derives={derives}, plans={plans}, unknowns={unknowns}, '
-                  f'verifies={verifies}, commits={commits}'
+                  f'derives={derives}, stable_docs={stable_docs}, plans={plans}, '
+                  f'unknowns={unknowns}, verifies={verifies}, commits={commits}'
               )
 
           if '#[cfg(test)]\nmod migration_tests {' in text:
