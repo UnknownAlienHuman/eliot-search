@@ -36,45 +36,43 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('crates/search-query/search-subject-resolver/src/lib.rs')
           text = path.read_text(encoding='utf-8')
 
-          replacements = [
-              (
-                  '    MAX_SET_ITEMS, OpaqueId, ReceiptRef, ResolvedSubject, SearchReasonCodeV1,',
-                  '    MAX_SET_ITEMS, ReceiptRef, ResolvedSubject, SearchReasonCodeV1,',
-              ),
-              (
-                  '''            || self.subject.entity_kind
-                  != self.subject.entity_kind
-              || self.context_digest != context.context_digest''',
-                  '''            || self.context_digest != context.context_digest''',
-              ),
-              (
-                  '''const fn assurance_rank(value: AssuranceClass) -> u8 {
-              match value {
-                  AssuranceClass::ExactBytes => 5,
-                  AssuranceClass::MappedText => 4,
-                  AssuranceClass::Structural => 3,
-                  AssuranceClass::IndexedLexical => 2,
-                  AssuranceClass::SemanticOnly => 1,
-              }
-          }''',
-                  '''const fn assurance_rank(value: AssuranceClass) -> u8 {
+          text, imports = re.subn(
+              r'(MAX_SET_ITEMS,)\s+OpaqueId,\s+(ReceiptRef,)',
+              r'\1 \2',
+              text,
+              count=1,
+          )
+          text, tautologies = re.subn(
+              r'\n\s*\|\| self\.subject\.entity_kind\s*!= self\.subject\.entity_kind',
+              '',
+              text,
+              count=1,
+          )
+          assurance = '''const fn assurance_rank(value: AssuranceClass) -> u8 {
               match value {
                   AssuranceClass::ExactBytes => 4,
                   AssuranceClass::MappedText => 3,
                   AssuranceClass::LossyText => 2,
                   AssuranceClass::DescriptiveOnly => 1,
               }
-          }''',
-              ),
-          ]
-          for old, new in replacements:
-              if old not in text:
-                  raise SystemExit(f'expected resolver fragment missing: {old[:80]!r}')
-              text = text.replace(old, new, 1)
+          }'''
+          text, ranks = re.subn(
+              r'const fn assurance_rank\(value: AssuranceClass\) -> u8 \{.*?\n\}',
+              assurance,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if imports != 1 or tautologies != 1 or ranks != 1:
+              raise SystemExit(
+                  f'resolver patch mismatch: imports={imports}, '
+                  f'tautologies={tautologies}, ranks={ranks}'
+              )
 
           if '#[cfg(test)]\nmod tests {' in text:
               raise SystemExit('unexpected existing resolver tests')
@@ -84,7 +82,7 @@ jobs:
           mod tests {
               use search_contracts::{AssuranceClass, MatchBasis};
 
-              use super::{assurance_rank, rank_resolution_basis, ResolutionPriority};
+              use super::{ResolutionPriority, assurance_rank, rank_resolution_basis};
 
               #[test]
               fn assurance_order_matches_the_contract_loss_ladder() {
