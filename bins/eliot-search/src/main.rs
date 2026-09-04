@@ -13,13 +13,14 @@ use std::time::Duration;
 const DEFAULT_ADDRESS: &str = "127.0.0.1:39171";
 const MAX_QUERY_BYTES: usize = 1_024;
 const MAX_RESPONSE_BYTES: usize = 64 * 1_024;
-const IO_TIMEOUT: Duration = Duration::from_secs(15);
+const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug)]
 enum Command {
     Health,
     Status,
     Version,
+    Refresh,
     Shutdown,
     Search(String),
 }
@@ -30,6 +31,7 @@ impl Command {
             Self::Health => Ok("health".to_owned()),
             Self::Status => Ok("status".to_owned()),
             Self::Version => Ok("version".to_owned()),
+            Self::Refresh => Ok("refresh".to_owned()),
             Self::Shutdown => Ok("shutdown".to_owned()),
             Self::Search(query) => {
                 if query.is_empty() || query.len() > MAX_QUERY_BYTES {
@@ -105,6 +107,7 @@ fn parse_options() -> io::Result<Options> {
             "health" => set_command(&mut command, Command::Health)?,
             "status" => set_command(&mut command, Command::Status)?,
             "version" => set_command(&mut command, Command::Version)?,
+            "refresh" => set_command(&mut command, Command::Refresh)?,
             "shutdown" => set_command(&mut command, Command::Shutdown)?,
             "search" => {
                 let query = arguments.next().ok_or_else(|| {
@@ -172,6 +175,13 @@ fn read_endpoint(data_root: &Path) -> io::Result<Option<SocketAddr>> {
     if !path.exists() {
         return Ok(None);
     }
+    let metadata = fs::symlink_metadata(&path)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > 16 * 1_024 {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "endpoint descriptor must be a bounded regular file",
+        ));
+    }
     let body = fs::read_to_string(path)?;
     let mut lines = body.lines();
     if lines.next() != Some("ELIOT_SEARCH_ENDPOINT_V1") {
@@ -180,22 +190,44 @@ fn read_endpoint(data_root: &Path) -> io::Result<Option<SocketAddr>> {
             "unsupported endpoint descriptor",
         ));
     }
+    let mut address = None;
     for line in lines {
-        if let Some(value) = line.strip_prefix("address=") {
-            let address = value.parse::<SocketAddr>().map_err(|_| {
+        let Some((key, value)) = line.split_once('=') else {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "malformed endpoint descriptor",
+            ));
+        };
+        if key == "address" {
+            if address.is_some() {
+                return Err(io::Error::new(
+                    ErrorKind::InvalidData,
+                    "endpoint descriptor repeats address",
+                ));
+            }
+            let parsed = value.parse::<SocketAddr>().map_err(|_| {
                 io::Error::new(ErrorKind::InvalidData, "invalid endpoint descriptor address")
             })?;
-            ensure_loopback(address.ip())?;
-            return Ok(Some(address));
+            ensure_loopback(parsed.ip())?;
+            address = Some(parsed);
         }
     }
-    Err(io::Error::new(
-        ErrorKind::InvalidData,
-        "endpoint descriptor has no address",
-    ))
+    address.map(Some).ok_or_else(|| {
+        io::Error::new(
+            ErrorKind::InvalidData,
+            "endpoint descriptor has no address",
+        )
+    })
 }
 
 fn read_token(path: &Path) -> io::Result<String> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() > 128 {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "authentication token must be a small regular file",
+        ));
+    }
     let token = fs::read_to_string(path)?.trim().to_owned();
     if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(io::Error::new(
@@ -276,7 +308,7 @@ fn ensure_loopback(ip: IpAddr) -> io::Result<()> {
 
 fn hex_encode(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
+    let mut output = String::with_capacity(bytes.len().saturating_mul(2));
     for byte in bytes {
         output.push(char::from(HEX[usize::from(byte >> 4)]));
         output.push(char::from(HEX[usize::from(byte & 0x0f)]));
@@ -286,7 +318,19 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 fn print_help() {
     println!(
-        "eliot-search {}\n\nUSAGE:\n    eliot-search [health|status|version|shutdown] [OPTIONS]\n    eliot-search search \"QUERY\" [OPTIONS]\n\nOPTIONS:\n    --address <IP:PORT>   Override the loopback endpoint\n    --data-root <PATH>    Read endpoint and token from this local state root\n    --token-file <PATH>   Override the local authentication token file\n    -V, --version         Print client version\n    -h, --help            Print help",
+        concat!(
+            "eliot-search {}\n\n",
+            "USAGE:\n",
+            "    eliot-search [health|status|version|refresh|shutdown] [OPTIONS]\n",
+            "    eliot-search search \"QUERY\" [OPTIONS]\n\n",
+            "OPTIONS:\n",
+            "    --address <IP:PORT>   Override the loopback endpoint\n",
+            "    --data-root <PATH>    Read endpoint and token from this local state root\n",
+            "    --token-file <PATH>   Override the local authentication token file\n",
+            "    -V, --version         Print client version\n",
+            "    -h, --help            Print help\n\n",
+            "refresh captures and publishes a new immutable retained-revision snapshot."
+        ),
         env!("CARGO_PKG_VERSION")
     );
 }
