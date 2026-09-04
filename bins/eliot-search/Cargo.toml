@@ -9,6 +9,10 @@ readme = "README.md"
 
 [[bin]]
 name = "eliot-search"
+path = "src/entry.rs"
+
+[[bin]]
+name = "eliot-search-snapshot"
 path = "src/main.rs"
 
 [dependencies]

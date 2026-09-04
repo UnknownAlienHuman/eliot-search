@@ -9,6 +9,10 @@ readme = "README.md"
 
 [[bin]]
 name = "eliot-searchd"
+path = "src/entry.rs"
+
+[[bin]]
+name = "eliot-search-snapshotd"
 path = "src/main.rs"
 
 [features]
