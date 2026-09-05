@@ -33,6 +33,9 @@ mod source_root_commands;
 mod source_roots;
 mod storage_security;
 
+#[cfg(all(test, windows))]
+mod protected_ingest_tests;
+
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

@@ -3,11 +3,10 @@
 //! The store uses an OS-locked data root, immutable revision objects, a
 //! SHA-256-chained append-only source log, exact readback verification, stable
 //! native file identity where the platform exposes one, and bounded literal
-//! search over retained revisions. Revision bytes are currently plaintext and
-//! every public status/result reports `encrypted_at_rest=false`; this is not the
-//! production encrypted-revision adapter.
+//! search over retained revisions. Its default writer is plaintext; primary
+//! composition supplies a verified protected writer before catalog publication.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -15,6 +14,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::development::{MAX_SCAN_INPUT_BYTES, ScanResult, scan_text};
 use crate::sha256;
+
+#[path = "direct_store_ingest.rs"]
+mod ingest;
 
 const CONTROL_DIRECTORY: &str = "control";
 const REVISION_DIRECTORY: &str = "revisions";
@@ -263,34 +265,21 @@ impl DirectStore {
         sha256::hex(&self.namespace_id)
     }
 
-    /// Indexes one exact same-handle file snapshot.
+    /// Indexes one exact same-handle snapshot using the development writer.
     pub(crate) fn index_file(&mut self, path: &Path) -> Result<IndexedSource, String> {
-        let mut results = self.index_paths(vec![path.to_path_buf()])?;
-        results
-            .pop()
-            .ok_or_else(|| "DIRECT_INDEX_EMPTY_RESULT".to_owned())
+        self.index_file_with_writer(path, &mut |store, source, bytes| {
+            store.persist_revision(&source.revision_id, &source.content_digest, bytes)
+        })
     }
 
-    /// Deterministically indexes every regular non-link file below a directory.
+    /// Indexes a bounded directory batch using the development writer.
     pub(crate) fn index_directory(
         &mut self,
         directory: &Path,
     ) -> Result<Vec<IndexedSource>, String> {
-        let canonical_directory = fs::canonicalize(directory)
-            .map_err(|error| format!("DIRECT_DIRECTORY_CANONICALIZE_ERROR:{error}"))?;
-        if canonical_directory == self.root {
-            return Err("DIRECT_SOURCE_DIRECTORY_IS_DATA_ROOT".to_owned());
-        }
-        ensure_directory(&canonical_directory)?;
-        let mut paths = Vec::new();
-        collect_regular_files(
-            &canonical_directory,
-            &self.root,
-            0,
-            &mut paths,
-        )?;
-        paths.sort_by_key(|path| path_identity_bytes(path));
-        self.index_paths(paths)
+        self.index_directory_with_writer(directory, &mut |store, source, bytes| {
+            store.persist_revision(&source.revision_id, &source.content_digest, bytes)
+        })
     }
 
     /// Retires one source from future corpus search without deleting revisions.
@@ -524,103 +513,6 @@ impl DirectStore {
             byte_end,
             bytes: bytes[start..end].to_vec(),
         })
-    }
-
-    fn index_paths(&mut self, paths: Vec<PathBuf>) -> Result<Vec<IndexedSource>, String> {
-        if paths.is_empty() {
-            return Ok(Vec::new());
-        }
-        if paths.len() > MAX_DIRECTORY_FILES {
-            return Err("DIRECT_DIRECTORY_FILE_LIMIT_EXCEEDED".to_owned());
-        }
-        let mut snapshots = paths
-            .iter()
-            .map(|path| read_file_snapshot(path, &self.root))
-            .collect::<Result<Vec<_>, _>>()?;
-        snapshots.sort_by(|left, right| left.path_digest.cmp(&right.path_digest));
-
-        let mut seen_source_ids = BTreeSet::new();
-        let mut drafts = Vec::new();
-        let mut results = Vec::with_capacity(snapshots.len());
-        for snapshot in snapshots {
-            let file_identity = sha256::decode_digest(&snapshot.file_identity_digest)
-                .ok_or_else(|| "DIRECT_FILE_IDENTITY_INVALID".to_owned())?;
-            let source_id = sha256::hex(&sha256::digest_parts(
-                b"eliot-search/direct-source-id/v1",
-                &[&self.namespace_id, &file_identity],
-            ));
-            if !seen_source_ids.insert(source_id.clone()) {
-                return Err("DIRECT_DUPLICATE_SOURCE_IN_BATCH".to_owned());
-            }
-            let content_digest_bytes = sha256::decode_digest(&snapshot.content_digest)
-                .ok_or_else(|| "DIRECT_CONTENT_DIGEST_INVALID".to_owned())?;
-            let byte_length = u64::try_from(snapshot.bytes.len())
-                .map_err(|_| "DIRECT_SOURCE_TOO_LARGE".to_owned())?;
-            let revision_id = sha256::hex(&sha256::digest_parts(
-                b"eliot-search/direct-revision-id/v1",
-                &[
-                    source_id.as_bytes(),
-                    &content_digest_bytes,
-                    &byte_length.to_be_bytes(),
-                ],
-            ));
-            self.persist_revision(&revision_id, &snapshot.content_digest, &snapshot.bytes)?;
-
-            if let Some(existing) = self.registry.latest.get(&source_id) {
-                if existing.file_identity_digest != snapshot.file_identity_digest {
-                    return Err("DIRECT_SOURCE_ID_COLLISION".to_owned());
-                }
-                if existing.state == SourceState::Active
-                    && existing.revision_id == revision_id
-                    && existing.path_digest == snapshot.path_digest
-                {
-                    results.push(IndexedSource {
-                        source_id,
-                        revision_id,
-                        content_digest: snapshot.content_digest,
-                        path_digest: snapshot.path_digest,
-                        byte_length,
-                        identity_strength: snapshot.identity_strength.tag(),
-                        changed: false,
-                    });
-                    continue;
-                }
-            }
-
-            let operation_id = sha256::hex(&sha256::digest_parts(
-                b"eliot-search/direct-index-operation/v1",
-                &[
-                    source_id.as_bytes(),
-                    revision_id.as_bytes(),
-                    snapshot.path_digest.as_bytes(),
-                ],
-            ));
-            drafts.push(RecordDraft {
-                operation_id,
-                state: SourceState::Active,
-                source_id: source_id.clone(),
-                revision_id: revision_id.clone(),
-                content_digest: snapshot.content_digest.clone(),
-                byte_length,
-                file_identity_digest: snapshot.file_identity_digest,
-                path_digest: snapshot.path_digest.clone(),
-                identity_strength: snapshot.identity_strength,
-            });
-            results.push(IndexedSource {
-                source_id,
-                revision_id,
-                content_digest: snapshot.content_digest,
-                path_digest: snapshot.path_digest,
-                byte_length,
-                identity_strength: snapshot.identity_strength.tag(),
-                changed: true,
-            });
-        }
-
-        if !drafts.is_empty() {
-            self.append_drafts(drafts)?;
-        }
-        Ok(results)
     }
 
     fn persist_revision(
@@ -994,7 +886,17 @@ fn load_registry(path: &Path) -> Result<RegistryState, String> {
     Ok(state)
 }
 
-fn read_file_snapshot(path: &Path, data_root: &Path) -> Result<FileSnapshot, String> {
+fn read_file_snapshot(
+    path: &Path,
+    data_root: &Path,
+    remaining_batch_bytes: usize,
+) -> Result<FileSnapshot, String> {
+    let max_bytes = remaining_batch_bytes.min(MAX_SCAN_INPUT_BYTES);
+    let limit_error = if remaining_batch_bytes < MAX_SCAN_INPUT_BYTES {
+        "DIRECT_BATCH_BYTES_EXCEEDED"
+    } else {
+        "DIRECT_SOURCE_TOO_LARGE"
+    };
     let initial = fs::symlink_metadata(path)
         .map_err(|error| format!("DIRECT_SOURCE_OPEN_ERROR:{error}"))?;
     if initial.file_type().is_symlink() || is_reparse(&initial) {
@@ -1020,19 +922,19 @@ fn read_file_snapshot(path: &Path, data_root: &Path) -> Result<FileSnapshot, Str
     let mut file = File::open(&canonical_path)
         .map_err(|error| format!("DIRECT_SOURCE_OPEN_ERROR:{error}"))?;
     let before = observe_source_file(&file, &canonical_path)?;
-    if before.byte_length > u64::try_from(MAX_SCAN_INPUT_BYTES).unwrap_or(u64::MAX) {
-        return Err("DIRECT_SOURCE_TOO_LARGE".to_owned());
+    if before.byte_length > u64::try_from(max_bytes).unwrap_or(u64::MAX) {
+        return Err(limit_error.to_owned());
     }
     let mut bytes = Vec::with_capacity(
         usize::try_from(before.byte_length)
-            .map_err(|_| "DIRECT_SOURCE_TOO_LARGE".to_owned())?,
+            .map_err(|_| limit_error.to_owned())?,
     );
     (&mut file)
-        .take(u64::try_from(MAX_SCAN_INPUT_BYTES + 1).unwrap_or(u64::MAX))
+        .take(u64::try_from(max_bytes + 1).unwrap_or(u64::MAX))
         .read_to_end(&mut bytes)
         .map_err(|error| format!("DIRECT_SOURCE_READ_ERROR:{error}"))?;
-    if bytes.len() > MAX_SCAN_INPUT_BYTES {
-        return Err("DIRECT_SOURCE_TOO_LARGE".to_owned());
+    if bytes.len() > max_bytes {
+        return Err(limit_error.to_owned());
     }
     let after = observe_source_file(&file, &canonical_path)?;
     if before != after

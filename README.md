@@ -45,6 +45,11 @@ The primary daemon has not yet migrated its file-based control state to that ada
 tests remain unexecuted. `search-qdrant-bridge` still provides an in-memory model, not a live network adapter.
 The original audit's scanner-only finding describes its baseline, not this change.
 
+New Windows revision writes protect and verify objects before publishing source metadata, without a
+plaintext revision intermediary. Batch source bytes are bounded and A/B/A revisions can be reactivated;
+see [revision write ordering](docs/runtime/DIRECT_REVISION_WRITES.md) for exact failure boundaries.
+This does not qualify Windows crash durability or make the existing source log transactional.
+
 The primary data-root owner now restores the bounded observation-root catalog under its OS lock.
 Explicit registration, listing, unregistering and synchronization commands are documented in
 [Source-root registration](docs/runtime/SOURCE_ROOT_REGISTRATION.md). This filesystem registration
@@ -64,8 +69,10 @@ cargo +1.98.0 check --workspace --all-targets --all-features --locked
 ```
 
 The [Manual workspace check](.github/workflows/manual-workspace-check.yml) runs this command once per
-explicit dispatch, with a Linux or Windows runner choice. It has read-only repository permissions,
-checks the dispatched SHA and never generates source, changes the lockfile or pushes commits.
+explicit dispatch, with a Linux or Windows runner choice. Enable `core_tests` to also execute control,
+preparation and primary-runtime regressions, including native protected-write tests on Windows.
+It has read-only repository permissions, checks the dispatched SHA and never generates source,
+changes the lockfile or pushes commits.
 
 Focused preparation, control-backend, primary-runtime and sealed-store regression tests can be selected with:
 

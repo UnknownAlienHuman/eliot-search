@@ -1,10 +1,8 @@
-//! Revision-protected facade over the append-only development DIRECT catalog.
+//! Revision-protected facade over the append-only DIRECT catalog.
 //!
-//! The existing catalog remains the authority for source identity, lifecycle,
-//! and the SHA-256 chained event log. On Windows this facade migrates every
-//! referenced plaintext revision into a DPAPI object, removes the plaintext
-//! only after exact protected readback, and serves search/ranges from protected
-//! objects. Other platforms retain the explicit plaintext development profile.
+//! New Windows revisions are protected and read back before source metadata is
+//! published. Existing plaintext revisions are migrated on opening. Other
+//! platforms retain the explicit plaintext-development storage profile.
 
 #![allow(
     clippy::missing_errors_doc,
@@ -17,6 +15,7 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use zeroize::Zeroizing;
 
 use crate::development::ScanResult;
 use crate::direct_preparation::{prepare_and_scan, validate_query};
@@ -26,11 +25,12 @@ use crate::sha256;
 
 #[path = "secure_direct_store_storage_io.rs"]
 mod storage_io;
+#[path = "secure_revision_writer.rs"]
+mod revision_writer;
 
 use storage_io::{
-    legacy_path, load_event_count, load_inventory, persist_immutable_object,
-    protected_path, read_plaintext_path, read_regular_file,
-    remove_plaintext_after_readback,
+    legacy_path, load_event_count, load_inventory, protected_path,
+    read_plaintext_path, read_regular_file, remove_plaintext_after_readback,
 };
 
 pub(crate) use plaintext::{
@@ -51,8 +51,7 @@ struct RevisionMetadata {
     byte_length: u64,
 }
 
-/// DIRECT store that adds platform revision-object protection to the existing
-/// append-only source catalog.
+/// DIRECT catalog with a platform-specific prepublication revision writer.
 pub(crate) struct DirectStore {
     root: PathBuf,
     inner: plaintext::DirectStore,
@@ -100,24 +99,35 @@ impl DirectStore {
         self.inner.namespace_id()
     }
 
-    /// Indexes one exact same-handle file snapshot and seals its revision.
+    /// Verifies stored revision bytes before making the source revision visible.
     pub(crate) fn index_file(&mut self, path: &Path) -> Result<IndexedSource, String> {
-        let indexed = self.inner.index_file(path)?;
-        self.seal_indexed(&indexed)?;
+        let indexed = if self.protector.encrypts_new_objects() {
+            let root = &self.root;
+            let protector = &self.protector;
+            self.inner.index_file_with_writer(path, &mut |_, source, bytes| {
+                revision_writer::persist_before_publication(root, protector, source, bytes)
+            })?
+        } else {
+            self.inner.index_file(path)?
+        };
         self.refresh_inventory()?;
         Ok(indexed)
     }
 
-    /// Deterministically indexes and seals every regular non-link file below a
-    /// directory.
+    /// Protects and verifies every batch object before publishing source events.
     pub(crate) fn index_directory(
         &mut self,
         directory: &Path,
     ) -> Result<Vec<IndexedSource>, String> {
-        let indexed = self.inner.index_directory(directory)?;
-        for source in &indexed {
-            self.seal_indexed(source)?;
-        }
+        let indexed = if self.protector.encrypts_new_objects() {
+            let root = &self.root;
+            let protector = &self.protector;
+            self.inner.index_directory_with_writer(directory, &mut |_, source, bytes| {
+                revision_writer::persist_before_publication(root, protector, source, bytes)
+            })?
+        } else {
+            self.inner.index_directory(directory)?
+        };
         self.refresh_inventory()?;
         Ok(indexed)
     }
@@ -352,68 +362,23 @@ impl DirectStore {
         Ok(())
     }
 
-    fn seal_indexed(&self, source: &IndexedSource) -> Result<(), String> {
-        if !self.protector.encrypts_new_objects() {
-            return Ok(());
-        }
-        self.seal_revision(&RevisionMetadata {
-            source_id: source.source_id.clone(),
-            revision_id: source.revision_id.clone(),
-            content_digest: source.content_digest.clone(),
-            byte_length: source.byte_length,
-        })
-    }
-
     fn seal_revision(&self, metadata: &RevisionMetadata) -> Result<(), String> {
         verify_revision_identity(metadata)?;
-        let plaintext_path = legacy_path(&self.root, &metadata.revision_id)?;
-        let protected_path = protected_path(&self.root, &metadata.revision_id)?;
-
-        if protected_path.exists() {
-            let protected = read_regular_file(
-                &protected_path,
-                MAX_REVISION_OBJECT_BYTES,
-                "DIRECT_REVISION_PROTECTED_READ_ERROR",
+        let path = legacy_path(&self.root, &metadata.revision_id)?;
+        if path.exists() {
+            let plaintext = Zeroizing::new(read_plaintext_path(&path, metadata)?);
+            revision_writer::persist_verified(
+                &self.root,
+                &self.protector,
+                metadata,
+                &plaintext,
             )?;
-            let readback = self.protector.unprotect(
-                &protected,
-                &metadata.revision_id,
-                &metadata.content_digest,
-                metadata.byte_length,
-            )?;
-            verify_plaintext(metadata, &readback)?;
-            if plaintext_path.exists() {
-                let plaintext = read_plaintext_path(&plaintext_path, metadata)?;
-                if plaintext != readback {
-                    return Err("DIRECT_REVISION_MIGRATION_CONFLICT".to_owned());
-                }
-                remove_plaintext_after_readback(&plaintext_path)?;
-            }
-            return Ok(());
+            remove_plaintext_after_readback(&path)
+        } else {
+            // Opening an existing protected revision never needs current-path bytes.
+            let _verified = Zeroizing::new(self.read_revision_detailed(metadata)?);
+            Ok(())
         }
-
-        let plaintext = read_plaintext_path(&plaintext_path, metadata)?;
-        let protected = self.protector.protect(
-            &metadata.revision_id,
-            &metadata.content_digest,
-            &plaintext,
-        )?;
-        persist_immutable_object(&protected_path, &protected)?;
-        let observed = read_regular_file(
-            &protected_path,
-            MAX_REVISION_OBJECT_BYTES,
-            "DIRECT_REVISION_PROTECTED_READ_ERROR",
-        )?;
-        let readback = self.protector.unprotect(
-            &observed,
-            &metadata.revision_id,
-            &metadata.content_digest,
-            metadata.byte_length,
-        )?;
-        if readback != plaintext {
-            return Err("DIRECT_REVISION_PROTECTED_READBACK_MISMATCH".to_owned());
-        }
-        remove_plaintext_after_readback(&plaintext_path)
     }
 
     fn read_verified_revision(
