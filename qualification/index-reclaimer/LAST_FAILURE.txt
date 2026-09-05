@@ -1,0 +1,5 @@
+Status: FAIL
+Base commit: e696218def0fb702c282e16827cb6496e48a8077
+Patch outcome: failure
+Verification outcome: skipped
+RetainReason enum anchor missing
