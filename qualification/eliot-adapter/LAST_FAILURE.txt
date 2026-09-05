@@ -1,0 +1,4 @@
+Status: FAIL
+Base commit: 6f8fc4a7aa0660b176c6e0411195df31d64ec290
+Patch outcome: skipped
+Verification outcome: skipped
