@@ -1,0 +1,132 @@
+name: one-shot verify current runtime
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-verify-runtime.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-verify-current-runtime
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 70
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+          rustc -Vv
+          cargo -V
+
+      - name: Verify current product surface
+        id: verify
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            printf '%s\n' '== PowerShell parsers =='
+            pwsh -NoProfile -Command '$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/eliot-search-dev.ps1),[ref]$tokens,[ref]$errors)>$null;if($errors.Count){$errors|Format-List -Force|Out-String|Write-Error;exit 1}'
+            pwsh -NoProfile -Command '$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path qualification/direct-runtime/test_windows_runner.ps1),[ref]$tokens,[ref]$errors)>$null;if($errors.Count){$errors|Format-List -Force|Out-String|Write-Error;exit 1}'
+
+            printf '%s\n' '== Bootstrap qualification =='
+            python -m py_compile tools/validate-integration-bootstrap.py qualification/integration-bootstrap/test_integration_bootstrap_v1.py
+            python qualification/integration-bootstrap/test_integration_bootstrap_v1.py
+
+            printf '%s\n' '== Workspace formatting =='
+            cargo fmt --all -- --check
+
+            printf '%s\n' '== Workspace compile =='
+            cargo check --workspace --all-targets --locked
+
+            printf '%s\n' '== Workspace tests =='
+            cargo test --workspace --all-targets --locked
+
+            printf '%s\n' '== Workspace clippy =='
+            cargo clippy --workspace --all-targets --locked -- -D warnings
+
+            printf '%s\n' '== Workspace rustdoc =='
+            cargo doc --workspace --no-deps --locked
+
+            printf '%s\n' '== Executable self-tests =='
+            cargo run --locked -q -p eliot-searchd -- --self-test
+            cargo run --locked -q -p eliot-search -- --self-test
+            cargo run --locked -q -p eliot-search-model-worker -- --self-test
+            cargo run --locked -q -p eliot-search-doc-worker -- --self-test
+
+            printf '%s\n' '== Windows runner E2E =='
+            pwsh -NoProfile -File qualification/direct-runtime/test_windows_runner.ps1
+
+            printf '%s\n' '== Clean checkout =='
+            git diff --check
+            git diff --exit-code
+          } 2>&1 | tee runtime-verification.log
+
+      - name: Publish bounded verification evidence and remove one-shot workflow
+        if: always()
+        shell: bash
+        env:
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p qualification/direct-runtime
+          rm -f .github/workflows/zz-one-shot-verify-runtime.yml
+          if [ "$VERIFY_OUTCOME" = success ]; then
+            cat > qualification/direct-runtime/LAST_VERIFIED.md <<EOF
+          # DIRECT runtime verification
+
+          Status: **PASS**
+
+          Git commit tested: \`${GITHUB_SHA}\`
+          Runner: \`windows-latest\`
+          Rust: \`1.98.0\`
+
+          Passed:
+
+          - PowerShell parser checks;
+          - bootstrap qualification corpus;
+          - \`cargo fmt --all -- --check\`;
+          - \`cargo check --workspace --all-targets --locked\`;
+          - \`cargo test --workspace --all-targets --locked\`;
+          - \`cargo clippy --workspace --all-targets --locked -- -D warnings\`;
+          - \`cargo doc --workspace --no-deps --locked\`;
+          - all four executable self-tests;
+          - Windows development runner start/search/stop/restart qualification;
+          - clean-checkout verification.
+          EOF
+            rm -f qualification/direct-runtime/LAST_FAILURE.txt
+            subject="verify(runtime): record green Windows qualification"
+          else
+            {
+              printf 'Status: FAIL\n'
+              printf 'Git commit tested: %s\n' "$GITHUB_SHA"
+              printf 'Runner: windows-latest\n'
+              printf 'Rust: 1.98.0\n'
+              printf '%s\n' '--- bounded log tail ---'
+              tail -n 500 runtime-verification.log || true
+            } > qualification/direct-runtime/LAST_FAILURE.txt
+            rm -f qualification/direct-runtime/LAST_VERIFIED.md
+            subject="verify(runtime): record failed Windows qualification"
+          fi
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
