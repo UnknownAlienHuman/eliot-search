@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 use zeroize::Zeroizing;
 
-use super::storage_io::{persist_immutable_object, protected_path, read_regular_file};
+use super::storage_io::{legacy_path, persist_immutable_object, protected_path, read_regular_file};
 use super::{
     IndexedSource, MAX_REVISION_OBJECT_BYTES, RevisionMetadata, RevisionProtector,
     verify_plaintext,
@@ -23,6 +23,14 @@ pub(super) fn persist_before_publication(
         content_digest: source.content_digest.clone(),
         byte_length: source.byte_length,
     };
+    // Referenced legacy objects are migrated when the store opens. An orphan
+    // plaintext object from an earlier failed ingestion is not such a migration:
+    // do not silently keep it beside a newly published protected revision.
+    match fs::symlink_metadata(legacy_path(root, &metadata.revision_id)?) {
+        Ok(_) => return Err("DIRECT_NEW_REVISION_PLAINTEXT_PRESENT".to_owned()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(_) => return Err("DIRECT_REVISION_OBJECT_INSPECTION_FAILED".to_owned()),
+    }
     persist_verified(root, protector, &metadata, plaintext)
 }
 
@@ -68,3 +76,7 @@ pub(super) fn persist_verified(
     }
     Ok(())
 }
+
+#[cfg(all(test, windows))]
+#[path = "secure_revision_writer_tests.rs"]
+mod tests;

@@ -1,7 +1,6 @@
 # DIRECT revision write ordering
 
-The primary Windows DIRECT store now supplies a protected revision writer to the existing source
-catalog. New revision bytes follow this order:
+The primary Windows DIRECT store supplies a protected revision writer to the source catalog:
 
 ```text
 bounded same-handle source snapshot
@@ -11,57 +10,70 @@ bounded same-handle source snapshot
   -> source-event publication
 ```
 
-Neither a new `.bin` revision nor a plaintext temporary file is created by this protected write path.
-The existing plaintext-development writer remains explicit on other platforms. Existing referenced
-plaintext objects are still migrated on opening: protect and verify first, then remove the old object.
-Removing a directory entry is not secure physical erasure.
+This protected path creates neither a new `.bin` revision nor a plaintext temporary file. The
+plaintext-development writer remains explicit on other platforms. Referenced legacy plaintext is
+migrated separately on opening: protect and verify, then remove the old directory entry. That removal
+is not physical secure erasure and does not erase previous backups or filesystem history.
+
+## Immutable object publication
+
+Only protected bytes enter the staging file. After flushing it, publication uses a no-clobber hard link,
+not a rename that can replace an existing destination. Conflicting existing objects, links and invalid
+object types are refused. Filesystems without hard-link support fail closed; there is no overwrite
+fallback. Failed writes close the staging file before cleanup, including on Windows. An exact encoded
+readback precedes success; the revision writer additionally decrypts and compares the exact input bytes.
+
+A retry checks existing ciphertext by decryption. It does not require two randomized DPAPI calls to
+produce identical ciphertext. A new admission refuses a same-ID orphan `.bin` with
+`DIRECT_NEW_REVISION_PLAINTEXT_PRESENT` instead of silently retaining it beside ciphertext. Referenced
+legacy migration uses a separate entrypoint and remains supported. Orphan cleanup is explicit; this
+refusal does not claim that old plaintext elsewhere has been removed.
 
 ## Batch and retry semantics
 
-All input snapshots and duplicate source identities are checked before invoking storage. The complete
-batch has a 512 MiB retained source-byte ceiling; each read receives the remaining budget before
-allocating its buffer. The existing 64 MiB per-file ceiling also applies. Empty files consume zero
-source bytes. These are source-buffer limits, not a total-process RSS or latency guarantee.
+Input snapshots and duplicate identities are checked before storage. A batch retains at most 512 MiB
+of source bytes, with the remaining budget applied before each allocation and a 64 MiB per-file cap.
+Empty files consume zero source bytes. These limits do not describe total process RSS or latency.
 
-Every revision writer must succeed before any new source event in that ingestion batch is appended.
-Failure before that point leaves the source catalog unchanged but can leave orphan revision objects.
-A retry reads and verifies an existing object rather than overwriting it. Even an unchanged source
-requires storage readback. Native Windows tests deliberately block a new protected target to check
-that neither new metadata nor a plaintext copy is published on protection failure.
+Every revision writer must succeed before any new source event in that batch is appended. Earlier
+object writes may leave orphan ciphertext when a later writer fails, but no batch metadata is published
+at that point. Even an unchanged source requires storage readback. Stale in-memory catalogs are rejected
+before ingestion effects.
 
-Index-operation v2 identities additionally bind the exact previous source record. Returning from A to
-B to A, or reactivating a retired source with the same bytes, is therefore a new transition rather than
-a replay of its first indexing operation. Retained source/revision IDs and existing event-log records
-remain unchanged. Repeating the already-current active revision/path remains a no-op after readback.
-A stale in-memory catalog is rejected before new ingestion storage effects.
+Index-operation v2 binds the previous source record. A -> B -> A and retired-source reactivation are new
+transitions, not replays of the first admission. Source/revision IDs and existing event records stay
+unchanged. Repeating the already-current active revision/path is a no-op after storage readback.
 
 ## Remaining boundaries
 
-This change does not make the append-only source log an atomic multi-record database. An interrupted
-log append or post-append readback still needs the existing repair/recovery path; the daemon migration
-to the real redb adapter is not complete. The prepublication guarantee is about revision storage
-failure before log append, not rollback of an ambiguous log commit or atomicity across roots.
+The append-only source log is not yet an atomic multi-record database. An interrupted log append or
+post-append readback still needs repair/recovery; daemon control-state migration to redb is unfinished.
+The object publication barrier does not imply rollback of an ambiguous log commit or atomicity across
+registered roots.
 
-Full native file-handle/race admission, Windows power-loss durability, old orphan-plaintext cleanup,
-canonical durable representation/unit manifests, and live Qdrant publication remain unqualified or
-unfinished. No fallback cipher, new dependency, Python service or alternative index is introduced.
+Native final-handle/race admission, Windows power-loss durability, complete old orphan cleanup, durable
+representation/unit manifests and live Qdrant publication remain unqualified or unfinished. The process
+exit test below is not a machine power-loss test. No new cipher, dependency, Python service or index is
+introduced.
 
 ## Verification
-
-Seven ingestion unit tests cover rejected writers, a later writer failure, aggregate byte budgets,
-A/B/A transitions, reactivation, stale catalogs and empty files. Two Windows-only primary-store tests
-use the real platform protector and fail its next target for a file and a directory batch. They assert
-byte-identical old control state, no new `.bin`, and successful exact retry after the failure is removed.
 
 ```sh
 cargo +1.98.0 check --workspace --all-targets --all-features --locked
 cargo +1.98.0 test --locked -p eliot-searchd --bin eliot-searchd
 ```
 
-The manual workspace workflow now has an optional `core_tests` input. On `windows-2025` it includes
-these native tests as well as control, preparation and primary-process regressions. Its default still
-runs one workspace check, and all triggers remain `workflow_dispatch` only.
+Ingestion tests cover writer failures, byte budgets, A/B/A, reactivation, stale catalogs and empty files.
+Filesystem tests cover identical retries, conflicting and racing writes, empty objects and Unix symlinks.
+Their synthetic encoded bytes test publication only, not cryptography.
 
-Compilation and Rust test execution were unavailable in the authoring environment. These checks are
-required before claiming a passing build or Windows security qualification; added tests are not executed
-evidence. No product or gate acceptance is issued by this change.
+Windows-only tests use the real platform protector for file/batch rejection, corrupt ciphertext, legacy
+migration, orphan-plaintext refusal and process exit after ciphertext readback but before the source
+log append. The process test reopens the data root, verifies that no source event or plaintext copy was
+published, then retries against the existing encrypted orphan. Its ignored helper is launched by the
+parent test; no failure-injection switch is added to the product executable.
+
+The existing manual workflow's optional `core_tests` input runs these tests on the selected platform.
+Use `windows-2025` for DPAPI coverage. The default remains one workspace check; the trigger remains
+`workflow_dispatch` only. Compilation, Rust tests, formatting and Clippy have not been executed in the
+authoring environment. Passing-build and native-security claims require those runs, not source presence.

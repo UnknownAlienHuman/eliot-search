@@ -169,21 +169,17 @@ fn read_text_file(
 }
 
 pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() || bytes.len() > MAX_REVISION_OBJECT_BYTES {
+        return Err("DIRECT_REVISION_PROTECTED_SIZE_INVALID".to_owned());
+    }
     let parent = path
         .parent()
         .ok_or_else(|| "DIRECT_REVISION_PARENT_MISSING".to_owned())?;
     ensure_child_directory(parent)?;
-    if path.exists() {
-        let existing = read_regular_file(
-            path,
-            MAX_REVISION_OBJECT_BYTES,
-            "DIRECT_REVISION_PROTECTED_READ_ERROR",
-        )?;
-        return if existing == bytes {
-            Ok(())
-        } else {
-            Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned())
-        };
+    match fs::symlink_metadata(path) {
+        Ok(_) => return verify_encoded_object(path, bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("DIRECT_REVISION_OBJECT_INSPECTION_FAILED".to_owned()),
     }
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -204,25 +200,44 @@ pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), 
         .open(&temporary)
         .map_err(|error| format!("DIRECT_REVISION_PROTECTED_CREATE_ERROR:{error}"))?;
     if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+        // Windows cannot unlink the still-open staging file.
+        drop(file);
         let _ = fs::remove_file(&temporary);
         return Err(format!("DIRECT_REVISION_PROTECTED_WRITE_ERROR:{error}"));
     }
     drop(file);
-    if let Err(error) = fs::rename(&temporary, path) {
-        let _ = fs::remove_file(&temporary);
-        if path.exists() {
-            let existing = read_regular_file(
-                path,
-                MAX_REVISION_OBJECT_BYTES,
-                "DIRECT_REVISION_PROTECTED_READ_ERROR",
-            )?;
-            if existing == bytes {
-                return Ok(());
+    // rename may overwrite an existing object on Unix. A hard-link publication
+    // is no-clobber on both target platforms, even if another object appeared
+    // after the initial absence check. No unsafe replacement fallback exists.
+    match fs::hard_link(&temporary, path) {
+        Ok(()) => {
+            fs::remove_file(&temporary)
+                .map_err(|error| format!("DIRECT_REVISION_TEMP_CLEANUP_ERROR:{error}"))?;
+            sync_directory(parent)?;
+            verify_encoded_object(path, bytes)
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&temporary);
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                verify_encoded_object(path, bytes)
+            } else {
+                Err(format!("DIRECT_REVISION_PROTECTED_PUBLISH_ERROR:{error}"))
             }
         }
-        return Err(format!("DIRECT_REVISION_PROTECTED_RENAME_ERROR:{error}"));
     }
-    sync_directory(parent)
+}
+
+fn verify_encoded_object(path: &Path, expected: &[u8]) -> Result<(), String> {
+    let existing = read_regular_file(
+        path,
+        MAX_REVISION_OBJECT_BYTES,
+        "DIRECT_REVISION_PROTECTED_READ_ERROR",
+    )?;
+    if existing == expected {
+        Ok(())
+    } else {
+        Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned())
+    }
 }
 
 pub(super) fn remove_plaintext_after_readback(path: &Path) -> Result<(), String> {
@@ -309,3 +324,7 @@ fn sync_directory(path: &Path) -> Result<(), String> {
 fn sync_directory(_path: &Path) -> Result<(), String> {
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "immutable_object_tests.rs"]
+mod tests;
