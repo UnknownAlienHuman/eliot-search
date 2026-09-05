@@ -1,0 +1,153 @@
+name: one-shot preserve Qdrant stop digest
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-qdrant-stop-digest.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-qdrant-stop-digest
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Preserve immutable stop request digest
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee qdrant-stop-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-index-qdrant/search-qdrant-supervisor/src/lib.rs')
+          text = path.read_text()
+          start = text.index('    pub fn finish_stop(')
+          end = text.index('\n    /// Explicitly quarantines process state.', start)
+          block = text[start:end]
+          old_context = '''        let (instance, operation) = match &self.state {
+                      SupervisorState::Stopping {
+                          instance,
+                          operation,
+                          ..
+                      }
+                      | SupervisorState::StopOutcomeUnknown {
+                          instance,
+                          operation,
+                          ..
+                      } => (instance.clone(), operation.clone()),'''
+          new_context = '''        let (instance, operation, request_digest) = match &self.state {
+                      SupervisorState::Stopping {
+                          instance,
+                          operation,
+                          request_digest,
+                          ..
+                      }
+                      | SupervisorState::StopOutcomeUnknown {
+                          instance,
+                          operation,
+                          request_digest,
+                      } => (instance.clone(), operation.clone(), *request_digest),'''
+          if old_context not in block:
+              if 'let (instance, operation, request_digest)' not in block:
+                  raise SystemExit('finish_stop context anchor missing')
+          else:
+              block = block.replace(old_context, new_context, 1)
+
+          zero_digest = 'request_digest: Blake3Digest32::from_bytes([0; 32]),'
+          if zero_digest in block:
+              block = block.replace(zero_digest, 'request_digest,', 1)
+          if zero_digest in block:
+              raise SystemExit('zero stop digest remains in finish_stop')
+          if 'request_digest,' not in block:
+              raise SystemExit('preserved request digest is absent')
+
+          path.write_text(text[:start] + block + text[end:])
+          PY
+          cargo fmt --all
+
+      - name: Verify Qdrant supervisor and workspace
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-qdrant-supervisor --all-targets --locked
+            cargo test -p search-qdrant-supervisor --all-targets --locked
+            cargo clippy -p search-qdrant-supervisor --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            if grep -n 'request_digest: Blake3Digest32::from_bytes(\[0; 32\])' crates/search-index-qdrant/search-qdrant-supervisor/src/lib.rs; then
+              echo 'zero digest regression remains'
+              exit 1
+            fi
+            git diff --check
+          } 2>&1 | tee qdrant-stop-verify.log
+
+      - name: Commit verified repair or bounded failure evidence
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-qdrant-stop-digest.yml
+          mkdir -p qualification/qdrant-supervisor
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/qdrant-supervisor/LAST_FAILURE.txt
+            cat > qualification/qdrant-supervisor/STOP_DIGEST_VERIFIED.md <<EOF
+          # Qdrant stop digest verification
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          The exact immutable stop \`request_digest\` is retained when a live
+          process readback moves the supervisor to \`StopOutcomeUnknown\`.
+          The zero-digest substitution is forbidden by qualification.
+          EOF
+            git add -A
+            subject="fix(qdrant-supervisor): preserve unknown-stop request digest"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-qdrant-stop-digest.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 250 qdrant-stop-patch.log 2>/dev/null || true
+              tail -n 500 qdrant-stop-verify.log 2>/dev/null || true
+            } > qualification/qdrant-supervisor/LAST_FAILURE.txt
+            git add -A
+            subject="verify(qdrant-supervisor): record failed stop-digest repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
