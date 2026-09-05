@@ -1,0 +1,235 @@
+name: one-shot make namespace cutover atomic
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-registry-cutover-atomicity.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-registry-cutover-atomicity
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Move operation commit behind successful route CAS
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee registry-cutover-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-source/search-source-registry/src/lib.rs')
+          text = path.read_text()
+          start = text.index('    /// Performs one exact namespace owner cutover atomically in the model.')
+          end = text.index('\n    fn validate_new_operation(', start)
+          replacement = '''    /// Performs one exact namespace owner cutover atomically in the model.
+              ///
+              /// Validation and revision computation occur before any route,
+              /// registry-revision or operation-ledger mutation. Exact replay is
+              /// accepted only when the already-committed route and receipt match
+              /// the complete original request.
+              pub fn cutover_namespace(
+                  &mut self,
+                  request: NamespaceCutoverRequest,
+                  readback_receipt: ReceiptRef,
+              ) -> Result<NamespaceRoute, RegistryError> {
+                  if let Some(existing) = self.operations.get(&request.operation.operation_id) {
+                      if existing.request_digest != request.request_digest {
+                          return Err(RegistryError::OperationConflict);
+                      }
+                      let expected_route_revision = request
+                          .expected_route_revision
+                          .checked_next()
+                          .map_err(|_| RegistryError::ContractExhausted)?;
+                      let route = self
+                          .namespace_routes
+                          .get(&request.source_namespace_id)
+                          .ok_or(RegistryError::OperationReplayMismatch)?;
+                      if route.owner_generation == request.new_generation
+                          && route.owner_epoch == request.new_owner_epoch
+                          && route.revision == expected_route_revision
+                          && route.state == NamespaceCutoverState::Complete
+                          && route.cutover_receipt.as_ref() == Some(&readback_receipt)
+                      {
+                          return Ok(route.clone());
+                      }
+                      return Err(RegistryError::OperationReplayMismatch);
+                  }
+
+                  self.validate_new_operation(&request.operation)?;
+                  let current = self
+                      .namespace_routes
+                      .get(&request.source_namespace_id)
+                      .cloned()
+                      .ok_or(RegistryError::NamespaceRouteNotFound)?;
+                  if current.state != NamespaceCutoverState::Active
+                      || current.owner_generation != request.expected_old_generation
+                      || current.owner_epoch != request.expected_owner_epoch
+                      || current.revision != request.expected_route_revision
+                  {
+                      return Err(RegistryError::NamespaceRouteConflict);
+                  }
+                  if request.new_generation == request.expected_old_generation
+                      || request.new_owner_epoch <= request.expected_owner_epoch
+                  {
+                      return Err(RegistryError::InvalidNamespaceCutover);
+                  }
+
+                  let next_route_revision = current
+                      .revision
+                      .checked_next()
+                      .map_err(|_| RegistryError::ContractExhausted)?;
+                  let before_registry_revision = self.revision;
+                  let after_registry_revision = before_registry_revision
+                      .checked_add(1)
+                      .ok_or(RegistryError::RevisionOverflow)?;
+                  let route = NamespaceRoute {
+                      source_namespace_id: request.source_namespace_id,
+                      owner_generation: request.new_generation,
+                      owner_epoch: request.new_owner_epoch,
+                      revision: next_route_revision,
+                      state: NamespaceCutoverState::Complete,
+                      cutover_receipt: Some(readback_receipt),
+                  };
+                  let operation_receipt = RegistryMutationReceipt {
+                      operation: request.operation,
+                      request_digest: request.request_digest,
+                      before_revision: before_registry_revision,
+                      after_revision: after_registry_revision,
+                      membership_ids: Vec::new(),
+                      replayed: false,
+                  };
+
+                  self.namespace_routes
+                      .insert(request.source_namespace_id, route.clone());
+                  self.revision = after_registry_revision;
+                  self.operations.insert(
+                      operation_receipt.operation.operation_id.clone(),
+                      operation_receipt,
+                  );
+                  Ok(route)
+              }
+          '''
+          text = text[:start] + replacement + text[end:]
+
+          helper_marker = '    fn register_cutover_operation(\n'
+          if helper_marker in text:
+              helper_start = text.index(helper_marker)
+              helper_end = text.index('\n}\n\nimpl Default for SourceRegistry', helper_start)
+              text = text[:helper_start] + text[helper_end:]
+
+          enum_anchor = '''    /// Operation identity was reused with another full request digest.
+              OperationConflict,
+              /// Operation ledger capacity is exhausted.'''
+          enum_replacement = '''    /// Operation identity was reused with another full request digest.
+              OperationConflict,
+              /// Exact replay does not match the committed route or receipt.
+              OperationReplayMismatch,
+              /// Operation ledger capacity is exhausted.'''
+          if 'OperationReplayMismatch,' not in text:
+              if enum_anchor not in text:
+                  raise SystemExit('RegistryError operation anchor missing')
+              text = text.replace(enum_anchor, enum_replacement, 1)
+
+          code_anchor = '''            Self::OperationConflict => "SOURCE_REGISTRY_OPERATION_CONFLICT",
+                      Self::OperationCapacityExceeded => "SOURCE_REGISTRY_OPERATION_CAPACITY",'''
+          code_replacement = '''            Self::OperationConflict => "SOURCE_REGISTRY_OPERATION_CONFLICT",
+                      Self::OperationReplayMismatch => "SOURCE_REGISTRY_OPERATION_REPLAY_MISMATCH",
+                      Self::OperationCapacityExceeded => "SOURCE_REGISTRY_OPERATION_CAPACITY",'''
+          if 'SOURCE_REGISTRY_OPERATION_REPLAY_MISMATCH' not in text:
+              if code_anchor not in text:
+                  raise SystemExit('RegistryError code anchor missing')
+              text = text.replace(code_anchor, code_replacement, 1)
+
+          path.write_text(text)
+          PY
+          cargo fmt --all
+
+      - name: Verify registry atomicity repair
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-source-registry --all-targets --locked
+            cargo test -p search-source-registry --all-targets --locked
+            cargo clippy -p search-source-registry --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            if grep -n 'register_cutover_operation' crates/search-source/search-source-registry/src/lib.rs; then
+              echo 'pre-validation cutover operation mutation remains'
+              exit 1
+            fi
+            git diff --check
+          } 2>&1 | tee registry-cutover-verify.log
+
+      - name: Commit verified atomicity fix or bounded failure
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-registry-cutover-atomicity.yml
+          mkdir -p qualification/source-registry
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/source-registry/LAST_FAILURE.txt
+            cat > qualification/source-registry/CUTOVER_ATOMICITY_VERIFIED.md <<EOF
+          # Namespace cutover atomicity
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Rejected cutovers no longer mutate the operation ledger. Route,
+          registry revision and terminal operation receipt are committed only
+          after all expected generation, owner-epoch and revision fences pass.
+          Exact replay requires the already-committed route and receipt.
+          EOF
+            git add -A
+            subject="fix(source-registry): commit cutover operation atomically"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-registry-cutover-atomicity.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 300 registry-cutover-patch.log 2>/dev/null || true
+              tail -n 600 registry-cutover-verify.log 2>/dev/null || true
+            } > qualification/source-registry/LAST_FAILURE.txt
+            git add -A
+            subject="verify(source-registry): record failed cutover-atomicity repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
