@@ -1,0 +1,7 @@
+Status: FAIL
+Base commit: 96540302f9f3c5f787530aced9882155bcb2af7a
+Patch outcome: failure
+Verification outcome: skipped
+Traceback (most recent call last):
+  File "<stdin>", line 14, in <module>
+ValueError: substring not found
