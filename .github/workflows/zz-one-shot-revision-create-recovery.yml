@@ -1,0 +1,648 @@
+name: one-shot add revision create recovery
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-revision-create-recovery.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-revision-create-recovery
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Retain bounded immutable-create metadata for recovery
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee revision-create-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-source/search-revision-store/src/lib.rs')
+          text = path.read_text()
+
+          effect_end = '''pub struct RevisionWriteEffect {
+              /// Exact logical object key.
+              pub key: RevisionObjectKey,
+              /// Authenticated encrypted envelope.
+              pub encrypted: EncryptedRevision,
+              /// Immutable mutation identity.
+              pub operation: MutationIdentity,
+              /// Digest of complete canonical write request.
+              pub request_digest: Blake3Digest32,
+          }
+          '''
+          pending_types = '''pub struct RevisionWriteEffect {
+              /// Exact logical object key.
+              pub key: RevisionObjectKey,
+              /// Authenticated encrypted envelope.
+              pub encrypted: EncryptedRevision,
+              /// Immutable mutation identity.
+              pub operation: MutationIdentity,
+              /// Digest of complete canonical write request.
+              pub request_digest: Blake3Digest32,
+          }
+
+          /// Process-local lifecycle of an immutable create awaiting readback.
+          #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+          pub enum PendingRevisionCreateState {
+              /// Exact create metadata is retained before external mutation.
+              Prepared,
+              /// Create may have committed and requires authoritative readback.
+              OutcomeUnknown,
+              /// Conflicting readback blocks retry and publication.
+              Quarantined,
+          }
+
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          struct PendingRevisionCreate {
+              key: RevisionObjectKey,
+              cipher_suite: RevisionCipherSuite,
+              key_domain_id: EncryptionKeyDomainId,
+              associated_data_digest: Blake3Digest32,
+              ciphertext_digest: Blake3Digest32,
+              plaintext_bytes: u64,
+              ciphertext_bytes: u64,
+              operation: MutationIdentity,
+              request_digest: Blake3Digest32,
+              state: PendingRevisionCreateState,
+          }
+
+          impl PendingRevisionCreate {
+              fn from_effect(
+                  effect: &RevisionWriteEffect,
+              ) -> Result<Self, RevisionStoreError> {
+                  Ok(Self {
+                      key: effect.key,
+                      cipher_suite: effect.encrypted.cipher_suite,
+                      key_domain_id: effect.encrypted.key_domain_id,
+                      associated_data_digest: effect.encrypted.associated_data_digest,
+                      ciphertext_digest: effect.encrypted.ciphertext_digest,
+                      plaintext_bytes: effect.encrypted.plaintext_bytes,
+                      ciphertext_bytes: u64::try_from(effect.encrypted.ciphertext.len())
+                          .map_err(|_| RevisionStoreError::CiphertextSizeInvalid)?,
+                      operation: effect.operation.clone(),
+                      request_digest: effect.request_digest,
+                      state: PendingRevisionCreateState::Prepared,
+                  })
+              }
+
+              fn matches_effect(
+                  &self,
+                  effect: &RevisionWriteEffect,
+              ) -> Result<bool, RevisionStoreError> {
+                  Ok(self.key == effect.key
+                      && self.cipher_suite == effect.encrypted.cipher_suite
+                      && self.key_domain_id == effect.encrypted.key_domain_id
+                      && self.associated_data_digest
+                          == effect.encrypted.associated_data_digest
+                      && self.ciphertext_digest == effect.encrypted.ciphertext_digest
+                      && self.plaintext_bytes == effect.encrypted.plaintext_bytes
+                      && self.ciphertext_bytes
+                          == u64::try_from(effect.encrypted.ciphertext.len())
+                              .map_err(|_| RevisionStoreError::CiphertextSizeInvalid)?
+                      && self.operation == effect.operation
+                      && self.request_digest == effect.request_digest)
+              }
+          }
+          '''
+          if 'pub enum PendingRevisionCreateState {' not in text:
+              if effect_end not in text:
+                  raise SystemExit('RevisionWriteEffect anchor missing')
+              text = text.replace(effect_end, pending_types, 1)
+
+          receipt_end = '''pub struct RevisionObjectReceipt {
+              /// Exact object key.
+              pub key: RevisionObjectKey,
+              /// Logical record revision.
+              pub record_revision: NonZeroRevision,
+              /// Ciphertext digest, retained even after logical deletion.
+              pub ciphertext_digest: Blake3Digest32,
+              /// Immutable mutation identity.
+              pub operation: MutationIdentity,
+              /// Exact backend readback receipt.
+              pub backend_receipt: ReceiptRef,
+          }
+          '''
+          recovery_type = '''pub struct RevisionObjectReceipt {
+              /// Exact object key.
+              pub key: RevisionObjectKey,
+              /// Logical record revision.
+              pub record_revision: NonZeroRevision,
+              /// Ciphertext digest, retained even after logical deletion.
+              pub ciphertext_digest: Blake3Digest32,
+              /// Immutable mutation identity.
+              pub operation: MutationIdentity,
+              /// Exact backend readback receipt.
+              pub backend_receipt: ReceiptRef,
+          }
+
+          /// Authoritative recovery result for an unresolved immutable create.
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub enum RevisionCreateRecovery {
+              /// Exact object was verified and committed to the catalog.
+              Created(RevisionObjectReceipt),
+              /// Exact object key is authoritatively absent; retry is safe.
+              NotApplied {
+                  /// Content-free absence receipt.
+                  receipt: ReceiptRef,
+              },
+              /// Backend state remains unverifiable.
+              OutcomeUnknown,
+              /// Conflicting object identity or metadata was observed.
+              Quarantined,
+          }
+          '''
+          if 'pub enum RevisionCreateRecovery {' not in text:
+              if receipt_end not in text:
+                  raise SystemExit('RevisionObjectReceipt anchor missing')
+              text = text.replace(receipt_end, recovery_type, 1)
+
+          field_anchor = '''    records: BTreeMap<RevisionObjectKey, RevisionObjectRecord>,
+              operations: BTreeMap<search_contracts::OpaqueId, Blake3Digest32>,'''
+          field_replacement = '''    records: BTreeMap<RevisionObjectKey, RevisionObjectRecord>,
+              pending_creates: BTreeMap<RevisionObjectKey, PendingRevisionCreate>,
+              operations: BTreeMap<search_contracts::OpaqueId, Blake3Digest32>,'''
+          if 'pending_creates: BTreeMap<RevisionObjectKey, PendingRevisionCreate>' not in text:
+              if field_anchor not in text:
+                  raise SystemExit('RevisionStore field anchor missing')
+              text = text.replace(field_anchor, field_replacement, 1)
+
+          constructor_anchor = '''            records: BTreeMap::new(),
+                      operations: BTreeMap::new(),'''
+          constructor_replacement = '''            records: BTreeMap::new(),
+                      pending_creates: BTreeMap::new(),
+                      operations: BTreeMap::new(),'''
+          if 'pending_creates: BTreeMap::new()' not in text:
+              if constructor_anchor not in text:
+                  raise SystemExit('RevisionStore constructor anchor missing')
+              text = text.replace(constructor_anchor, constructor_replacement, 1)
+
+          prepare_start = text.index('    /// Prepares immutable creation of an encrypted revision object.')
+          prepare_end = text.index('\n    /// Accepts immutable create only after exact backend readback.', prepare_start)
+          prepare_replacement = '''    /// Prepares immutable creation of an encrypted revision object.
+              ///
+              /// Only bounded metadata is retained for recovery; ciphertext is
+              /// not duplicated in the catalog. Equal prepared replay returns the
+              /// caller-owned effect, while unknown outcome blocks blind reissue.
+              pub fn prepare_put(
+                  &mut self,
+                  key: RevisionObjectKey,
+                  encrypted: EncryptedRevision,
+                  operation: MutationIdentity,
+                  request_digest: Blake3Digest32,
+              ) -> Result<RevisionWriteEffect, RevisionStoreError> {
+                  if encrypted.ciphertext.len() > self.limits.max_ciphertext_bytes {
+                      return Err(RevisionStoreError::CiphertextSizeInvalid);
+                  }
+                  if encrypted.plaintext_bytes == 0 {
+                      return Err(RevisionStoreError::PlaintextLengthInvalid);
+                  }
+                  let effect = RevisionWriteEffect {
+                      key,
+                      encrypted,
+                      operation,
+                      request_digest,
+                  };
+
+                  if let Some(existing) = self.records.get(&key) {
+                      if existing.ciphertext_digest == effect.encrypted.ciphertext_digest
+                          && existing.associated_data_digest
+                              == effect.encrypted.associated_data_digest
+                          && existing.key_domain_id == effect.encrypted.key_domain_id
+                          && existing.cipher_suite == effect.encrypted.cipher_suite
+                          && existing.plaintext_bytes == effect.encrypted.plaintext_bytes
+                          && existing.ciphertext_bytes
+                              == u64::try_from(effect.encrypted.ciphertext.len())
+                                  .map_err(|_| RevisionStoreError::CiphertextSizeInvalid)?
+                          && matches!(existing.state, RevisionObjectState::Active)
+                      {
+                          self.register_operation(&effect.operation, effect.request_digest)?;
+                          return Ok(effect);
+                      }
+                      return Err(RevisionStoreError::ImmutableObjectCollision);
+                  }
+
+                  let pending = PendingRevisionCreate::from_effect(&effect)?;
+                  if let Some(existing) = self.pending_creates.get(&key) {
+                      if !existing.matches_effect(&effect)? {
+                          return Err(RevisionStoreError::CreatePendingConflict);
+                      }
+                      return match existing.state {
+                          PendingRevisionCreateState::Prepared => Ok(effect),
+                          PendingRevisionCreateState::OutcomeUnknown => {
+                              Err(RevisionStoreError::OutcomeUnknown)
+                          }
+                          PendingRevisionCreateState::Quarantined => {
+                              Err(RevisionStoreError::CreateQuarantined)
+                          }
+                      };
+                  }
+                  let occupied = self
+                      .records
+                      .len()
+                      .checked_add(self.pending_creates.len())
+                      .ok_or(RevisionStoreError::ObjectCapacityExceeded)?;
+                  if occupied >= self.limits.max_objects {
+                      return Err(RevisionStoreError::ObjectCapacityExceeded);
+                  }
+                  self.register_operation(&effect.operation, effect.request_digest)?;
+                  self.pending_creates.insert(key, pending);
+                  Ok(effect)
+              }
+          '''
+          text = text[:prepare_start] + prepare_replacement + text[prepare_end:]
+
+          finish_start = text.index('    /// Accepts immutable create only after exact backend readback.')
+          finish_end = text.index('\n    /// Verifies a backend read against the logical immutable record.', finish_start)
+          finish_replacement = '''    /// Accepts immutable create only after exact backend readback.
+              pub fn finish_put(
+                  &mut self,
+                  effect: RevisionWriteEffect,
+                  readback: &RevisionReadback,
+              ) -> Result<RevisionObjectReceipt, RevisionStoreError> {
+                  if let Some(existing) = self.records.get(&effect.key) {
+                      let backend_receipt = verify_write_readback(&effect, readback)?;
+                      if existing.ciphertext_digest != effect.encrypted.ciphertext_digest
+                          || existing.associated_data_digest
+                              != effect.encrypted.associated_data_digest
+                          || !matches!(existing.state, RevisionObjectState::Active)
+                      {
+                          return Err(RevisionStoreError::ImmutableObjectCollision);
+                      }
+                      return Ok(RevisionObjectReceipt {
+                          key: effect.key,
+                          record_revision: existing.record_revision,
+                          ciphertext_digest: existing.ciphertext_digest,
+                          operation: effect.operation,
+                          backend_receipt,
+                      });
+                  }
+
+                  let pending = self
+                      .pending_creates
+                      .get(&effect.key)
+                      .cloned()
+                      .ok_or(RevisionStoreError::CreateNotPrepared)?;
+                  if !pending.matches_effect(&effect)? {
+                      return Err(RevisionStoreError::OperationMismatch);
+                  }
+                  if pending.state == PendingRevisionCreateState::Quarantined {
+                      return Err(RevisionStoreError::CreateQuarantined);
+                  }
+                  match verify_write_readback(&effect, readback) {
+                      Ok(backend_receipt) => {
+                          self.commit_pending_create(pending, backend_receipt)
+                      }
+                      Err(RevisionStoreError::OutcomeUnknown) => {
+                          if let Some(pending) = self.pending_creates.get_mut(&effect.key) {
+                              pending.state = PendingRevisionCreateState::OutcomeUnknown;
+                          }
+                          Err(RevisionStoreError::OutcomeUnknown)
+                      }
+                      Err(error) => {
+                          if let Some(pending) = self.pending_creates.get_mut(&effect.key) {
+                              pending.state = PendingRevisionCreateState::Quarantined;
+                          }
+                          Err(error)
+                      }
+                  }
+              }
+
+              /// Resolves a possible immutable create commit by exact readback.
+              pub fn recover_put(
+                  &mut self,
+                  key: RevisionObjectKey,
+                  operation: &MutationIdentity,
+                  request_digest: Blake3Digest32,
+                  readback: &RevisionReadback,
+              ) -> Result<RevisionCreateRecovery, RevisionStoreError> {
+                  let pending = self
+                      .pending_creates
+                      .get(&key)
+                      .cloned()
+                      .ok_or(RevisionStoreError::CreateNotPrepared)?;
+                  if &pending.operation != operation
+                      || pending.request_digest != request_digest
+                  {
+                      return Err(RevisionStoreError::OperationMismatch);
+                  }
+                  if pending.state == PendingRevisionCreateState::Quarantined {
+                      return Ok(RevisionCreateRecovery::Quarantined);
+                  }
+                  match readback {
+                      RevisionReadback::Present { .. } => {
+                          match verify_pending_create_readback(&pending, readback) {
+                              Ok(backend_receipt) => self
+                                  .commit_pending_create(pending, backend_receipt)
+                                  .map(RevisionCreateRecovery::Created),
+                              Err(_) => {
+                                  if let Some(pending) = self.pending_creates.get_mut(&key) {
+                                      pending.state = PendingRevisionCreateState::Quarantined;
+                                  }
+                                  Ok(RevisionCreateRecovery::Quarantined)
+                              }
+                          }
+                      }
+                      RevisionReadback::Absent { receipt } => {
+                          self.pending_creates.remove(&key);
+                          Ok(RevisionCreateRecovery::NotApplied {
+                              receipt: receipt.clone(),
+                          })
+                      }
+                      RevisionReadback::Unverifiable => {
+                          if let Some(pending) = self.pending_creates.get_mut(&key) {
+                              pending.state = PendingRevisionCreateState::OutcomeUnknown;
+                          }
+                          Ok(RevisionCreateRecovery::OutcomeUnknown)
+                      }
+                      RevisionReadback::Conflict => {
+                          if let Some(pending) = self.pending_creates.get_mut(&key) {
+                              pending.state = PendingRevisionCreateState::Quarantined;
+                          }
+                          Ok(RevisionCreateRecovery::Quarantined)
+                      }
+                  }
+              }
+
+              /// Returns the lifecycle of one pending immutable create.
+              #[must_use]
+              pub fn pending_create_state(
+                  &self,
+                  key: RevisionObjectKey,
+              ) -> Option<PendingRevisionCreateState> {
+                  self.pending_creates.get(&key).map(|pending| pending.state)
+              }
+
+              fn commit_pending_create(
+                  &mut self,
+                  pending: PendingRevisionCreate,
+                  backend_receipt: ReceiptRef,
+              ) -> Result<RevisionObjectReceipt, RevisionStoreError> {
+                  if self.records.contains_key(&pending.key) {
+                      return Err(RevisionStoreError::ImmutableObjectCollision);
+                  }
+                  let record_revision = NonZeroRevision::new(1)
+                      .map_err(|_| RevisionStoreError::ContractExhausted)?;
+                  let record = RevisionObjectRecord {
+                      key: pending.key,
+                      cipher_suite: pending.cipher_suite,
+                      key_domain_id: pending.key_domain_id,
+                      associated_data_digest: pending.associated_data_digest,
+                      ciphertext_digest: pending.ciphertext_digest,
+                      plaintext_bytes: pending.plaintext_bytes,
+                      ciphertext_bytes: pending.ciphertext_bytes,
+                      record_revision,
+                      state: RevisionObjectState::Active,
+                  };
+                  self.pending_creates.remove(&pending.key);
+                  self.records.insert(pending.key, record);
+                  Ok(RevisionObjectReceipt {
+                      key: pending.key,
+                      record_revision,
+                      ciphertext_digest: pending.ciphertext_digest,
+                      operation: pending.operation,
+                      backend_receipt,
+                  })
+              }
+          '''
+          text = text[:finish_start] + finish_replacement + text[finish_end:]
+
+          mark_start = text.index('    /// Marks a prepared mutation as outcome-unknown.')
+          mark_end = text.index('\n    /// Quarantines one contradictory logical object.', mark_start)
+          mark_replacement = '''    /// Marks a prepared mutation as outcome-unknown.
+              pub fn mark_outcome_unknown(
+                  &mut self,
+                  key: RevisionObjectKey,
+                  mutation: UnknownRevisionMutation,
+                  operation: &MutationIdentity,
+                  request_digest: Blake3Digest32,
+              ) -> Result<(), RevisionStoreError> {
+                  if mutation == UnknownRevisionMutation::Create {
+                      let pending = self
+                          .pending_creates
+                          .get_mut(&key)
+                          .ok_or(RevisionStoreError::CreateNotPrepared)?;
+                      if &pending.operation != operation
+                          || pending.request_digest != request_digest
+                      {
+                          return Err(RevisionStoreError::OperationMismatch);
+                      }
+                      if pending.state == PendingRevisionCreateState::Quarantined {
+                          return Err(RevisionStoreError::CreateQuarantined);
+                      }
+                      pending.state = PendingRevisionCreateState::OutcomeUnknown;
+                      return Ok(());
+                  }
+
+                  let record = self.records.get_mut(&key).ok_or(RevisionStoreError::NotFound)?;
+                  match &record.state {
+                      RevisionObjectState::DeletePrepared {
+                          operation: expected,
+                          request_digest: expected_digest,
+                      } if mutation == UnknownRevisionMutation::Delete
+                          && expected == operation
+                          && *expected_digest == request_digest => {}
+                      _ => return Err(RevisionStoreError::OperationMismatch),
+                  }
+                  record.state = RevisionObjectState::OutcomeUnknown {
+                      mutation,
+                      operation: operation.clone(),
+                      request_digest,
+                  };
+                  Ok(())
+              }
+          '''
+          text = text[:mark_start] + mark_replacement + text[mark_end:]
+
+          quarantine_start = text.index('    /// Quarantines one contradictory logical object.')
+          quarantine_end = text.index('\n    fn register_operation(', quarantine_start)
+          quarantine_replacement = '''    /// Quarantines one contradictory logical object or pending create.
+              pub fn quarantine(&mut self, key: RevisionObjectKey) -> Result<(), RevisionStoreError> {
+                  let mut found = false;
+                  if let Some(pending) = self.pending_creates.get_mut(&key) {
+                      pending.state = PendingRevisionCreateState::Quarantined;
+                      found = true;
+                  }
+                  if let Some(record) = self.records.get_mut(&key) {
+                      record.state = RevisionObjectState::Quarantined;
+                      found = true;
+                  }
+                  if found {
+                      Ok(())
+                  } else {
+                      Err(RevisionStoreError::NotFound)
+                  }
+              }
+          '''
+          text = text[:quarantine_start] + quarantine_replacement + text[quarantine_end:]
+
+          helper_anchor = '\n/// Concrete immutable-object backend contract.\n'
+          helper = '''
+          fn verify_pending_create_readback(
+              pending: &PendingRevisionCreate,
+              readback: &RevisionReadback,
+          ) -> Result<ReceiptRef, RevisionStoreError> {
+              match readback {
+                  RevisionReadback::Present {
+                      key,
+                      cipher_suite,
+                      key_domain_id,
+                      associated_data_digest,
+                      ciphertext_digest,
+                      plaintext_bytes,
+                      ciphertext_bytes,
+                      receipt,
+                  } if *key == pending.key
+                      && *cipher_suite == pending.cipher_suite
+                      && *key_domain_id == pending.key_domain_id
+                      && *associated_data_digest == pending.associated_data_digest
+                      && *ciphertext_digest == pending.ciphertext_digest
+                      && *plaintext_bytes == pending.plaintext_bytes
+                      && *ciphertext_bytes == pending.ciphertext_bytes => Ok(receipt.clone()),
+                  RevisionReadback::Unverifiable => Err(RevisionStoreError::OutcomeUnknown),
+                  RevisionReadback::Present { .. }
+                  | RevisionReadback::Absent { .. }
+                  | RevisionReadback::Conflict => Err(RevisionStoreError::ReadbackMismatch),
+              }
+          }
+          '''
+          if 'fn verify_pending_create_readback(' not in text:
+              if helper_anchor not in text:
+                  raise SystemExit('RevisionBackend helper anchor missing')
+              text = text.replace(helper_anchor, helper + helper_anchor, 1)
+
+          error_anchor = '''    /// Logical object key is unknown.
+              NotFound,
+              /// Logical record is not active/readable.'''
+          error_replacement = '''    /// Logical object key is unknown.
+              NotFound,
+              /// Create completion/recovery has no retained pending metadata.
+              CreateNotPrepared,
+              /// Same immutable key has another pending create request.
+              CreatePendingConflict,
+              /// Pending create is quarantined by conflicting readback.
+              CreateQuarantined,
+              /// Logical record is not active/readable.'''
+          if 'CreateNotPrepared,' not in text:
+              if error_anchor not in text:
+                  raise SystemExit('RevisionStoreError create anchor missing')
+              text = text.replace(error_anchor, error_replacement, 1)
+
+          code_anchor = '''            Self::NotFound => "REVISION_STORE_NOT_FOUND",
+                      Self::NotReadable => "REVISION_STORE_NOT_READABLE",'''
+          code_replacement = '''            Self::NotFound => "REVISION_STORE_NOT_FOUND",
+                      Self::CreateNotPrepared => "REVISION_STORE_CREATE_NOT_PREPARED",
+                      Self::CreatePendingConflict => "REVISION_STORE_CREATE_PENDING_CONFLICT",
+                      Self::CreateQuarantined => "REVISION_STORE_CREATE_QUARANTINED",
+                      Self::NotReadable => "REVISION_STORE_NOT_READABLE",'''
+          if 'REVISION_STORE_CREATE_NOT_PREPARED' not in text:
+              if code_anchor not in text:
+                  raise SystemExit('RevisionStoreError code anchor missing')
+              text = text.replace(code_anchor, code_replacement, 1)
+
+          path.write_text(text)
+
+          functions_path = Path('crates/search-source/search-revision-store/FUNCTIONS.md')
+          functions = functions_path.read_text()
+          section = '''
+
+          ## Immutable create recovery
+
+          Before an immutable object create crosses the backend boundary, the
+          catalog retains only its exact bounded metadata: object key, cipher
+          suite, key domain, AAD/ciphertext digests, byte lengths and operation
+          fence. Ciphertext is not duplicated. Unknown outcomes block blind
+          create replay and resolve only through authoritative present/absent or
+          quarantined conflicting readback.
+          '''
+          if '## Immutable create recovery' not in functions:
+              functions_path.write_text(functions + section)
+          PY
+          cargo fmt --all
+
+      - name: Verify revision create recovery and workspace
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-revision-store --all-targets --locked
+            cargo test -p search-revision-store --all-targets --locked
+            cargo clippy -p search-revision-store --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            grep -q 'pending_creates: BTreeMap<RevisionObjectKey, PendingRevisionCreate>' crates/search-source/search-revision-store/src/lib.rs
+            grep -q 'pub fn recover_put' crates/search-source/search-revision-store/src/lib.rs
+            git diff --check
+          } 2>&1 | tee revision-create-verify.log
+
+      - name: Commit verified recovery or bounded failure evidence
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-revision-create-recovery.yml
+          mkdir -p qualification/revision-store
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/revision-store/LAST_FAILURE.txt
+            cat > qualification/revision-store/CREATE_RECOVERY_VERIFIED.md <<EOF
+          # Immutable revision create recovery
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Pending immutable creates retain exact metadata without duplicating
+          ciphertext. Unknown outcomes block blind replay and resolve only by
+          exact authoritative readback.
+          EOF
+            git add -A
+            subject="fix(revision-store): retain and recover unknown creates"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-revision-create-recovery.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 400 revision-create-patch.log 2>/dev/null || true
+              tail -n 750 revision-create-verify.log 2>/dev/null || true
+            } > qualification/revision-store/LAST_FAILURE.txt
+            git add -A
+            subject="verify(revision-store): record failed create-recovery repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
