@@ -1,0 +1,505 @@
+Status: FAIL
+Git commit tested: 8be5773648d8c2c2e9ec2d251ef57a30c970045e
+Runner: windows-latest
+Rust: 1.98.0
+--- bounded log tail ---
+     }
+ 
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-runtime\search-os-secrets\src\lib.rs:775:
+     /// Explicitly quarantines one reference.
+[31m-    pub fn quarantine(
+[0m[31m-        &mut self,
+[0m[31m-        id: &OpaqueId,
+[0m[31m-        reason: SecretError,
+[0m[31m-    ) -> Result<(), SecretError> {
+[0m[31m-        self.records
+[0m[31m-            .get_mut(id)
+[0m[31m-            .ok_or(SecretError::NotFound)?
+[0m[31m-            .state = SecretRecordState::Quarantined(reason);
+[0m[32m+    pub fn quarantine(&mut self, id: &OpaqueId, reason: SecretError) -> Result<(), SecretError> {
+[0m[32m+        self.records.get_mut(id).ok_or(SecretError::NotFound)?.state =
+[0m[32m+            SecretRecordState::Quarantined(reason);
+[0m         Ok(())
+     }
+ 
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-runtime\search-os-secrets\src\lib.rs:1045:
+                     ciphertext_digest: Blake3Digest32::from_bytes([7; 32]),
+                     record_revision: NonZeroRevision::new(2).expect("revision"),
+                     operation,
+[31m-                    durable_receipt: Some(
+[0m[31m-                        ReceiptRef::new("receipt:rotation").expect("receipt"),
+[0m[31m-                    ),
+[0m[32m+                    durable_receipt: Some(ReceiptRef::new("receipt:rotation").expect("receipt")),
+[0m                 },
+             )
+             .expect("confirm");
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-runtime\search-os-secrets\src\lib.rs:1054:
+         assert_eq!(receipt.reference.version().get(), 2);
+[31m-        assert!(matches!(catalog.get(&id).expect("record").state(), SecretRecordState::Active));
+[0m[32m+        assert!(matches!(
+[0m[32m+            catalog.get(&id).expect("record").state(),
+[0m[32m+            SecretRecordState::Active
+[0m[32m+        ));
+[0m     }
+ 
+     #[test]
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-runtime\search-os-secrets\src\lib.rs:1090:
+                 &SecretDeleteReadback {
+                     reference_absent: false,
+                     operation,
+[31m-                    durable_receipt: Some(
+[0m[31m-                        ReceiptRef::new("receipt:delete").expect("receipt"),
+[0m[31m-                    ),
+[0m[32m+                    durable_receipt: Some(ReceiptRef::new("receipt:delete").expect("receipt"),),
+[0m                 },
+             ),
+             Err(SecretError::OutcomeUnknown)
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:495:
+                 RevisionState::Pending(_)
+                 | RevisionState::OutcomeUnknown(_)
+                 | RevisionState::Active(_)
+[31m-                | RevisionState::Quarantined { .. } => {
+[0m[31m-                    Err(RevisionStoreError::RevisionConflict)
+[0m[31m-                }
+[0m[32m+                | RevisionState::Quarantined { .. } => Err(RevisionStoreError::RevisionConflict),
+[0m             };
+         }
+         validate_next_source_revision(&self.states, &intent.key)?;
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:538:
+     ) -> Result<RevisionStoreReceipt, RevisionStoreError> {
+         let intent = match self.state(key)? {
+             RevisionState::Pending(intent) | RevisionState::OutcomeUnknown(intent)
+[31m-                if &intent.operation == operation => intent.clone(),
+[0m[32m+                if &intent.operation == operation =>
+[0m[32m+            {
+[0m[32m+                intent.clone()
+[0m[32m+            }
+[0m             RevisionState::Pending(_) | RevisionState::OutcomeUnknown(_) => {
+                 return Err(RevisionStoreError::OperationConflict);
+             }
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:635:
+     if ciphertext_bytes == 0 || ciphertext_bytes > limits.max_ciphertext_bytes {
+         return Err(RevisionStoreError::CiphertextSizeInvalid);
+     }
+[31m-    if intent.payload.nonce().is_empty()
+[0m[31m-        || intent.payload.nonce().len() > limits.max_nonce_bytes
+[0m[31m-    {
+[0m[32m+    if intent.payload.nonce().is_empty() || intent.payload.nonce().len() > limits.max_nonce_bytes {
+[0m         return Err(RevisionStoreError::NonceInvalid);
+     }
+     if intent.authorization_receipt.is_none() {
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:740:
+     type BackendError;
+ 
+     /// Attempts one atomic immutable encrypted-object write.
+[31m-    fn write_immutable(
+[0m[31m-        &mut self,
+[0m[31m-        intent: &RevisionWriteIntent,
+[0m[31m-    ) -> Result<(), Self::BackendError>;
+[0m[32m+    fn write_immutable(&mut self, intent: &RevisionWriteIntent) -> Result<(), Self::BackendError>;
+[0m 
+     /// Reads exact content-free object metadata after write or unknown outcome.
+     fn readback(
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:776:
+ 
+     fn operation(name: &str, digest: u8) -> RevisionOperation {
+         RevisionOperation::new(
+[31m-            OpaqueId::new(format!("revision-operation:{name}"))
+[0m[31m-                .expect("operation"),
+[0m[32m+            OpaqueId::new(format!("revision-operation:{name}")).expect("operation"),
+[0m             Blake3Digest32::from_bytes([digest; 32]),
+         )
+     }
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:790:
+             vec![content; 12],
+             vec![content; 32],
+             EncryptionBinding {
+[31m-                key_reference: OpaqueId::new("secret:revision-key")
+[0m[31m-                    .expect("key"),
+[0m[32m+                key_reference: OpaqueId::new("secret:revision-key").expect("key"),
+[0m                 key_version: NonZeroRevision::new(1).expect("version"),
+                 cipher_suite: CipherSuite::AuthenticatedEncryptionV1,
+             },
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:805:
+             key: key(revision),
+             source_binding_revision: NonZeroRevision::new(1).expect("revision"),
+             payload: payload(content),
+[31m-            storage_object_id: OpaqueId::new(format!("object:{name}"))
+[0m[31m-                .expect("object"),
+[0m[31m-            residency_key: OpaqueId::new("residency:local")
+[0m[31m-                .expect("residency"),
+[0m[32m+            storage_object_id: OpaqueId::new(format!("object:{name}")).expect("object"),
+[0m[32m+            residency_key: OpaqueId::new("residency:local").expect("residency"),
+[0m             authorization_receipt: Some(
+[31m-                ReceiptRef::new(format!("receipt:authorization:{name}"))
+[0m[31m-                    .expect("receipt"),
+[0m[32m+                ReceiptRef::new(format!("receipt:authorization:{name}")).expect("receipt"),
+[0m             ),
+             operation: operation(name, content),
+         }
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:822:
+             key: intent.key.clone(),
+             storage_object_id: intent.storage_object_id.clone(),
+             ciphertext_digest: intent.payload.ciphertext_digest,
+[31m-            ciphertext_bytes: u64::try_from(intent.payload.ciphertext_len())
+[0m[31m-                .expect("length"),
+[0m[32m+            ciphertext_bytes: u64::try_from(intent.payload.ciphertext_len()).expect("length"),
+[0m             plaintext_digest: intent.payload.plaintext_digest,
+             plaintext_bytes: intent.payload.plaintext_bytes,
+             encryption: intent.payload.encryption.clone(),
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:830:
+             readback_verified: true,
+[31m-            object_receipt: Some(
+[0m[31m-                ReceiptRef::new("receipt:object").expect("receipt"),
+[0m[31m-            ),
+[0m[32m+            object_receipt: Some(ReceiptRef::new("receipt:object").expect("receipt")),
+[0m         }
+     }
+ 
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:844:
+ 
+     #[test]
+     fn first_revision_must_be_one_and_revisions_are_sequential() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         assert_eq!(
+             store.prepare_append(intent(2, "two", 2)),
+             Err(RevisionStoreError::RevisionSequenceInvalid)
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:863:
+ 
+     #[test]
+     fn exact_active_revision_replays_without_rewrite() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         let intent = intent(1, "one", 1);
+         store.prepare_append(intent.clone()).expect("prepare");
+         store
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:871:
+             .confirm_append(&intent.key, &intent.operation, readback(&intent))
+             .expect("confirm");
+[31m-        let PrepareAppendResult::AlreadyStored(receipt) = store
+[0m[31m-            .prepare_append(intent)
+[0m[31m-            .expect("replay")
+[0m[32m+        let PrepareAppendResult::AlreadyStored(receipt) =
+[0m[32m+            store.prepare_append(intent).expect("replay")
+[0m         else {
+             panic!("exact immutable revision must replay")
+         };
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:881:
+ 
+     #[test]
+     fn same_revision_with_other_content_is_conflict() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         let first = intent(1, "one", 1);
+         store.prepare_append(first.clone()).expect("prepare");
+         store
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:896:
+ 
+     #[test]
+     fn unknown_write_is_not_active_success() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         let intent = intent(1, "one", 1);
+         store.prepare_append(intent.clone()).expect("prepare");
+         store
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:911:
+ 
+     #[test]
+     fn exact_readback_recovers_unknown_write() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         let intent = intent(1, "one", 1);
+         store.prepare_append(intent.clone()).expect("prepare");
+         store
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:920:
+             .expect("unknown");
+         assert!(matches!(
+             store
+[31m-                .recover_unknown(
+[0m[31m-                    &intent.key,
+[0m[31m-                    &intent.operation,
+[0m[31m-                    Some(readback(&intent)),
+[0m[31m-                )
+[0m[32m+                .recover_unknown(&intent.key, &intent.operation, Some(readback(&intent)),)
+[0m                 .expect("recover"),
+             RecoveryResult::Applied(_)
+         ));
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:933:
+ 
+     #[test]
+     fn absent_readback_removes_unknown_intent_for_retry() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         let intent = intent(1, "one", 1);
+         store.prepare_append(intent.clone()).expect("prepare");
+         store
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:954:
+ 
+     #[test]
+     fn contradictory_readback_quarantines_revision() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         let intent = intent(1, "one", 1);
+         store.prepare_append(intent.clone()).expect("prepare");
+         store
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-revision-store\src\lib.rs:977:
+ 
+     #[test]
+     fn operation_id_reuse_with_other_request_digest_is_rejected() {
+[31m-        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS)
+[0m[31m-            .expect("store");
+[0m[32m+        let mut store = RevisionStore::new(DEFAULT_REVISION_STORE_LIMITS).expect("store");
+[0m         let first = intent(1, "same", 1);
+         store.prepare_append(first.clone()).expect("prepare");
+         store
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-safe-reader\src\lib.rs:318:
+                 &self.stable_file_identity_digest,
+             )
+             .field("source_bytes", &self.source_bytes)
+[31m-            .field(
+[0m[31m-                "security_barrier_revision",
+[0m[31m-                &self.security_barrier_revision,
+[0m[31m-            )
+[0m[32m+            .field("security_barrier_revision", &self.security_barrier_revision)
+[0m             .field("before_metadata_receipt", &self.before_metadata_receipt)
+             .field("after_metadata_receipt", &self.after_metadata_receipt)
+             .field("read_receipt", &self.read_receipt)
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-safe-reader\src\lib.rs:352:
+     ) -> Result<Self::Handle, Self::BackendError>;
+ 
+     /// Inspects load-bearing metadata from the exact already-open handle.
+[31m-    fn inspect(
+[0m[31m-        &mut self,
+[0m[31m-        handle: &Self::Handle,
+[0m[31m-    ) -> Result<FinalHandleMetadata, Self::BackendError>;
+[0m[32m+    fn inspect(&mut self, handle: &Self::Handle)
+[0m[32m+    -> Result<FinalHandleMetadata, Self::BackendError>;
+[0m 
+     /// Reads the exact finite range from the same already-open handle.
+     fn read_exact_at(
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-safe-reader\src\lib.rs:445:
+             return Err(SafeReadError::SecurityDenied);
+         }
+     }
+[31m-    if metadata.security_barrier_revision
+[0m[31m-        != request.expected_security_barrier_revision
+[0m[31m-    {
+[0m[32m+    if metadata.security_barrier_revision != request.expected_security_barrier_revision {
+[0m         return Err(SafeReadError::SecurityRevisionMismatch);
+     }
+[31m-    if metadata.stable_file_identity_digest
+[0m[31m-        != request.expected_stable_file_identity_digest
+[0m[31m-    {
+[0m[32m+    if metadata.stable_file_identity_digest != request.expected_stable_file_identity_digest {
+[0m         return Err(SafeReadError::StableIdentityMismatch);
+     }
+     if metadata.source_bytes == 0 || metadata.source_bytes > limits.max_source_bytes {
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-safe-reader\src\lib.rs:554:
+             security_disposition: ReadSecurityDisposition::Permitted,
+             security_barrier_revision: NonZeroRevision::new(3).expect("revision"),
+             change_token: OpaqueId::new("change:one").expect("token"),
+[31m-            metadata_receipt: Some(
+[0m[31m-                ReceiptRef::new("receipt:metadata").expect("receipt"),
+[0m[31m-            ),
+[0m[32m+            metadata_receipt: Some(ReceiptRef::new("receipt:metadata").expect("receipt")),
+[0m         }
+     }
+ 
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-safe-reader\src\lib.rs:563:
+     fn request() -> SafeReadRequest {
+         SafeReadRequest {
+[31m-            relative_path: RelativePathToken::new(
+[0m[31m-                "src/lib.rs",
+[0m[31m-                DEFAULT_SAFE_READ_LIMITS,
+[0m[31m-            )
+[0m[31m-            .expect("path"),
+[0m[32m+            relative_path: RelativePathToken::new("src/lib.rs", DEFAULT_SAFE_READ_LIMITS)
+[0m[32m+                .expect("path"),
+[0m             expected_root_identity_digest: Blake3Digest32::from_bytes([1; 32]),
+             expected_stable_file_identity_digest: Blake3Digest32::from_bytes([2; 32]),
+[31m-            expected_security_barrier_revision: NonZeroRevision::new(3)
+[0m[31m-                .expect("revision"),
+[0m[32m+            expected_security_barrier_revision: NonZeroRevision::new(3).expect("revision"),
+[0m             range: ReadRange {
+                 offset: 1,
+                 length: 3,
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-safe-reader\src\lib.rs:591:
+ 
+     #[test]
+     fn exact_same_handle_read_succeeds() {
+[31m-        let result = safe_read(&mut backend(), &request(), DEFAULT_SAFE_READ_LIMITS)
+[0m[31m-            .expect("read");
+[0m[32m+        let result = safe_read(&mut backend(), &request(), DEFAULT_SAFE_READ_LIMITS).expect("read");
+[0m         assert_eq!(result.bytes(), b"bcd");
+     }
+ 
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-safe-reader\src\lib.rs:662:
+ 
+     #[test]
+     fn result_debug_does_not_dump_source_bytes() {
+[31m-        let result = safe_read(&mut backend(), &request(), DEFAULT_SAFE_READ_LIMITS)
+[0m[31m-            .expect("read");
+[0m[32m+        let result = safe_read(&mut backend(), &request(), DEFAULT_SAFE_READ_LIMITS).expect("read");
+[0m         let debug = format!("{result:?}");
+         assert!(!debug.contains("bcd"));
+         assert!(debug.contains("<3 bytes>"));
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:28:
+ use core::fmt;
+ use std::collections::BTreeSet;
+ 
+[31m-use search_contracts::{
+[0m[31m-    Blake3Digest32, NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef,
+[0m[31m-};
+[0m[32m+use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef};
+[0m use search_ports::{MonotonicInstant, MutationIdentity};
+ 
+ /// Conservative finite admission limits.
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:250:
+ 
+ impl AdmissionOperation {
+     /// Creates an admission replay fence.
+[31m-    pub const fn new(
+[0m[31m-        mutation: MutationIdentity,
+[0m[31m-        request_digest: Blake3Digest32,
+[0m[31m-    ) -> Self {
+[0m[32m+    pub const fn new(mutation: MutationIdentity, request_digest: Blake3Digest32) -> Self {
+[0m         Self {
+             mutation,
+             request_digest,
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:573:
+             None => {}
+             Some(attestation) => {
+                 if !attestation.proof_verified {
+[31m-                    quarantine.insert(
+[0m[31m-                        AdmissionQuarantineReason::VirtualAttestationUnauthenticated,
+[0m[31m-                    );
+[0m[32m+                    quarantine.insert(AdmissionQuarantineReason::VirtualAttestationUnauthenticated);
+[0m                 }
+                 if attestation.candidate_id != request.candidate.candidate_id
+                     || attestation.content_digest != request.candidate.content_digest
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:748:
+     fn operation(name: &str, digest: u8) -> AdmissionOperation {
+         AdmissionOperation::new(
+             MutationIdentity::new(
+[31m-                OpaqueId::new(format!("admission-operation:{name}"))
+[0m[31m-                    .expect("operation"),
+[0m[32m+                OpaqueId::new(format!("admission-operation:{name}")).expect("operation"),
+[0m                 IdempotencyClass::RetrySameIdentity,
+             ),
+             Blake3Digest32::from_bytes([digest; 32]),
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:771:
+ 
+     fn evidence() -> AdmissionEvidence {
+         AdmissionEvidence {
+[31m-            source_observation_receipt: ReceiptRef::new("receipt:source")
+[0m[31m-                .expect("receipt"),
+[0m[31m-            owner_verification_receipt: ReceiptRef::new("receipt:owner")
+[0m[31m-                .expect("receipt"),
+[0m[31m-            security_barrier_receipt: ReceiptRef::new("receipt:security")
+[0m[31m-                .expect("receipt"),
+[0m[32m+            source_observation_receipt: ReceiptRef::new("receipt:source").expect("receipt"),
+[0m[32m+            owner_verification_receipt: ReceiptRef::new("receipt:owner").expect("receipt"),
+[0m[32m+            security_barrier_receipt: ReceiptRef::new("receipt:security").expect("receipt"),
+[0m             evidence_digest: Blake3Digest32::from_bytes([1; 32]),
+             additional_receipts: Vec::new(),
+         }
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:786:
+         AdmissionRequest {
+             operation: operation(candidate, 2),
+             candidate: SourceCandidate {
+[31m-                candidate_id: OpaqueId::new(format!("candidate:{candidate}"))
+[0m[31m-                    .expect("candidate"),
+[0m[32m+                candidate_id: OpaqueId::new(format!("candidate:{candidate}")).expect("candidate"),
+[0m                 profile: AdmissionProfile::Direct,
+                 modality: SourceModality::RegularFile,
+                 residency: ResidencyClass::LocalFixed,
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:817:
+ 
+     #[test]
+     fn exact_current_request_is_admitted() {
+[31m-        assert!(matches!(evaluate(request("one")), AdmissionOutcome::Admitted(_)));
+[0m[32m+        assert!(matches!(
+[0m[32m+            evaluate(request("one")),
+[0m[32m+            AdmissionOutcome::Admitted(_)
+[0m[32m+        ));
+[0m     }
+ 
+     #[test]
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:827:
+         let AdmissionOutcome::Denied(denial) = evaluate(request) else {
+             panic!("stale epoch must deny")
+         };
+[31m-        assert!(denial.reasons.contains(&AdmissionDenialReason::OwnerEpochMismatch));
+[0m[32m+        assert!(
+[0m[32m+            denial
+[0m[32m+                .reasons
+[0m[32m+                .contains(&AdmissionDenialReason::OwnerEpochMismatch)
+[0m[32m+        );
+[0m     }
+ 
+     #[test]
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:837:
+         let AdmissionOutcome::Denied(denial) = evaluate(request) else {
+             panic!("remote residency must deny")
+         };
+[31m-        assert!(denial.reasons.contains(&AdmissionDenialReason::ResidencyDenied));
+[0m[32m+        assert!(
+[0m[32m+            denial
+[0m[32m+                .reasons
+[0m[32m+                .contains(&AdmissionDenialReason::ResidencyDenied)
+[0m[32m+        );
+[0m     }
+ 
+     #[test]
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:844:
+     fn contradictory_security_evidence_quarantines() {
+         let mut request = request("one");
+         request.security_disposition = SecurityDisposition::Quarantined;
+[31m-        assert!(matches!(evaluate(request), AdmissionOutcome::Quarantined(_)));
+[0m[32m+        assert!(matches!(
+[0m[32m+            evaluate(request),
+[0m[32m+            AdmissionOutcome::Quarantined(_)
+[0m[32m+        ));
+[0m     }
+ 
+     #[test]
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:882:
+             proof_digest: Blake3Digest32::from_bytes([5; 32]),
+             proof_verified: false,
+         });
+[31m-        assert!(matches!(evaluate(request), AdmissionOutcome::Quarantined(_)));
+[0m[32m+        assert!(matches!(
+[0m[32m+            evaluate(request),
+[0m[32m+            AdmissionOutcome::Quarantined(_)
+[0m[32m+        ));
+[0m     }
+ 
+     #[test]
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:899:
+     #[test]
+     fn exact_operation_replay_returns_same_terminal_outcome() {
+         let outcome = evaluate(request("one"));
+[31m-        let mut ledger = AdmissionLedger::new(DEFAULT_ADMISSION_LIMITS)
+[0m[31m-            .expect("ledger");
+[0m[32m+        let mut ledger = AdmissionLedger::new(DEFAULT_ADMISSION_LIMITS).expect("ledger");
+[0m         assert!(!ledger.record(outcome.clone()).expect("first").replayed);
+         let replay = ledger.record(outcome).expect("replay");
+         assert!(replay.replayed);
+Diff in \\?\D:\a\eliot-search\eliot-search\crates\search-source\search-source-admission\src\lib.rs:916:
+             Blake3Digest32::from_bytes([99; 32]),
+         );
+         let second = evaluate(second_request);
+[31m-        let mut ledger = AdmissionLedger::new(DEFAULT_ADMISSION_LIMITS)
+[0m[31m-            .expect("ledger");
+[0m[32m+        let mut ledger = AdmissionLedger::new(DEFAULT_ADMISSION_LIMITS).expect("ledger");
+[0m         ledger.record(first).expect("first");
+         assert_eq!(
+             ledger.record(second),
