@@ -1,0 +1,252 @@
+name: one-shot fix unitizer terminal empty line
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-unitizer-terminal-line.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-unitizer-terminal-line
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Repair line-span validation
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee unitizer-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-prep/search-unitizer/src/lib.rs')
+          text = path.read_text()
+          old_doc = '''/// The caller must provide the exact UTF-8 text and a complete ordered line
+          /// index whose spans cover every text byte exactly once.'''
+          new_doc = '''/// The caller must provide the exact UTF-8 text and a complete ordered line
+          /// index whose spans cover every text byte exactly once. A single zero-
+          /// length final span at end-of-input is permitted to represent the empty
+          /// logical line after a trailing line terminator.'''
+          if old_doc in text:
+              text = text.replace(old_doc, new_doc, 1)
+
+          validate_start = text.index('    pub fn validate(&self) -> Result<(), UnitizationError> {')
+          validate_end = text.index('\n    /// Returns the line containing an exact byte offset.', validate_start)
+          replacement = '''    pub fn validate(&self) -> Result<(), UnitizationError> {
+                  validate_line_spans(&self.text, &self.line_spans)
+              }
+          '''
+          text = text[:validate_start] + replacement + text[validate_end:]
+
+          helper_anchor = '\n/// Finite deterministic unitization profile.\n'
+          helper = r'''
+          fn validate_line_spans(
+              text: &str,
+              line_spans: &[SourceLineSpan],
+          ) -> Result<(), UnitizationError> {
+              let text_len = u64::try_from(text.len())
+                  .map_err(|_| UnitizationError::LengthOverflow)?;
+              if text.is_empty() {
+                  return match line_spans {
+                      [span]
+                          if span.line_number == 1
+                              && span.byte_start == 0
+                              && span.byte_end == 0 => Ok(()),
+                      _ => Err(UnitizationError::LineIndexMismatch),
+                  };
+              }
+              if line_spans.is_empty() {
+                  return Err(UnitizationError::LineIndexMismatch);
+              }
+
+              let mut expected_start = 0_u64;
+              for (index, span) in line_spans.iter().enumerate() {
+                  let expected_line = u64::try_from(index)
+                      .ok()
+                      .and_then(|value| value.checked_add(1))
+                      .ok_or(UnitizationError::LengthOverflow)?;
+                  let is_last = index + 1 == line_spans.len();
+                  let is_terminal_empty = is_last
+                      && index > 0
+                      && span.byte_start == text_len
+                      && span.byte_end == text_len;
+                  if span.line_number != expected_line
+                      || span.byte_start != expected_start
+                      || span.byte_end < span.byte_start
+                      || span.byte_end > text_len
+                      || (span.byte_end == span.byte_start && !is_terminal_empty)
+                  {
+                      return Err(UnitizationError::LineIndexMismatch);
+                  }
+                  let start = usize::try_from(span.byte_start)
+                      .map_err(|_| UnitizationError::LengthOverflow)?;
+                  let end = usize::try_from(span.byte_end)
+                      .map_err(|_| UnitizationError::LengthOverflow)?;
+                  if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+                      return Err(UnitizationError::LineIndexMismatch);
+                  }
+                  expected_start = span.byte_end;
+              }
+              if expected_start != text_len {
+                  return Err(UnitizationError::LineIndexMismatch);
+              }
+              Ok(())
+          }
+          '''
+          if 'fn validate_line_spans(' not in text:
+              if helper_anchor not in text:
+                  raise SystemExit('unitizer helper anchor missing')
+              text = text.replace(helper_anchor, helper + helper_anchor, 1)
+
+          if 'accepts_terminal_empty_line_after_lf' not in text:
+              tests = r'''
+
+          #[cfg(test)]
+          mod tests {
+              use super::{SourceLineSpan, UnitizationError, validate_line_spans};
+
+              const fn span(line_number: u64, byte_start: u64, byte_end: u64) -> SourceLineSpan {
+                  SourceLineSpan {
+                      line_number,
+                      byte_start,
+                      byte_end,
+                  }
+              }
+
+              #[test]
+              fn accepts_terminal_empty_line_after_lf() {
+                  assert_eq!(
+                      validate_line_spans("alpha\n", &[span(1, 0, 6), span(2, 6, 6)]),
+                      Ok(())
+                  );
+              }
+
+              #[test]
+              fn accepts_terminal_empty_line_after_crlf() {
+                  assert_eq!(
+                      validate_line_spans("alpha\r\n", &[span(1, 0, 7), span(2, 7, 7)]),
+                      Ok(())
+                  );
+              }
+
+              #[test]
+              fn accepts_single_empty_line_for_empty_input() {
+                  assert_eq!(validate_line_spans("", &[span(1, 0, 0)]), Ok(()));
+              }
+
+              #[test]
+              fn rejects_zero_length_span_inside_nonempty_input() {
+                  assert_eq!(
+                      validate_line_spans(
+                          "alpha\n",
+                          &[span(1, 0, 0), span(2, 0, 6), span(3, 6, 6)]
+                      ),
+                      Err(UnitizationError::LineIndexMismatch)
+                  );
+              }
+
+              #[test]
+              fn rejects_terminal_empty_span_before_end_of_input() {
+                  assert_eq!(
+                      validate_line_spans("alpha", &[span(1, 0, 4), span(2, 4, 4)]),
+                      Err(UnitizationError::LineIndexMismatch)
+                  );
+              }
+
+              #[test]
+              fn rejects_missing_byte_coverage() {
+                  assert_eq!(
+                      validate_line_spans("alpha", &[span(1, 0, 4)]),
+                      Err(UnitizationError::LineIndexMismatch)
+                  );
+              }
+          }
+          '''
+              text += tests
+
+          path.write_text(text)
+          PY
+          cargo fmt --all
+
+      - name: Verify unitizer contract and workspace
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-unitizer --all-targets --locked
+            cargo test -p search-unitizer --all-targets --locked
+            cargo clippy -p search-unitizer --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            git diff --check
+          } 2>&1 | tee unitizer-verify.log
+
+      - name: Commit verified contract repair or bounded failure
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-unitizer-terminal-line.yml
+          mkdir -p qualification/unitizer
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/unitizer/LAST_FAILURE.txt
+            cat > qualification/unitizer/TERMINAL_EMPTY_LINE_VERIFIED.md <<EOF
+          # Unitizer terminal-empty-line contract
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          A single zero-length final span at end-of-input is accepted for text
+          ending in LF or CRLF. Empty input remains one empty logical line.
+          Interior or prematurely placed zero-length spans remain rejected.
+          EOF
+            git add -A
+            subject="fix(unitizer): accept materializer terminal empty line"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-unitizer-terminal-line.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 250 unitizer-patch.log 2>/dev/null || true
+              tail -n 500 unitizer-verify.log 2>/dev/null || true
+            } > qualification/unitizer/LAST_FAILURE.txt
+            git add -A
+            subject="verify(unitizer): record failed terminal-line repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
