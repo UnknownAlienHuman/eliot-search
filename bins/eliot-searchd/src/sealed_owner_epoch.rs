@@ -12,8 +12,11 @@ use std::path::Path;
 
 use crate::sealed_digest::{DigestError, Sha256Digest};
 use crate::sealed_root_lock::{SealedRootLease, SealedRootLockError};
-use crate::sealed_store::{SealedStoreError, SensitiveBytes};
+use crate::sealed_store::SealedStoreError;
+#[cfg(windows)]
+use crate::sealed_store::SensitiveBytes;
 use crate::sealed_transaction::SealedTransactionError;
+#[cfg(windows)]
 use crate::sealed_transaction_guard::put_idempotent_verified;
 
 /// Maximum historical owner epochs validated during one acquisition.
@@ -139,13 +142,14 @@ impl OwnerEpochRecord {
         self.validate()?;
         Ok(format!(
             concat!(
-                "{OWNER_EPOCH_MAGIC}\n",
+                "{}\n",
                 "format_version={}\n",
                 "epoch={}\n",
                 "previous_epoch={}\n",
                 "previous_record_sha256={}\n",
                 "root_binding_sha256={}\n"
             ),
+            OWNER_EPOCH_MAGIC,
             self.format_version,
             self.epoch,
             self.previous_epoch,
@@ -491,5 +495,45 @@ mod platform {
             binding.extend_from_slice(&unit.to_le_bytes());
         }
         sha256(&binding).map_err(OwnerEpochError::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn first_record() -> OwnerEpochRecord {
+        OwnerEpochRecord {
+            format_version: OWNER_EPOCH_FORMAT_VERSION,
+            epoch: 1,
+            previous_epoch: 0,
+            previous_record_sha256: Sha256Digest::from_hex(ZERO_DIGEST_HEX).expect("zero digest"),
+            root_binding_sha256: Sha256Digest::from_hex(&"ab".repeat(32)).expect("root digest"),
+        }
+    }
+
+    #[test]
+    fn epoch_record_encoding_has_exact_header_and_round_trips() {
+        let record = first_record();
+        let encoded = record.encode().expect("encode");
+        assert!(encoded.starts_with("ELIOT-SEALED-OWNER-EPOCH-V1\nformat_version=1\nepoch=1\n"));
+        assert_eq!(encoded.lines().count(), OWNER_EPOCH_FIELD_COUNT + 1);
+        assert!(encoded.ends_with('\n'));
+        assert_eq!(OwnerEpochRecord::decode(encoded.as_bytes()).expect("decode"), record);
+    }
+
+    #[test]
+    fn duplicate_epoch_field_and_missing_terminator_are_rejected() {
+        let encoded = first_record().encode().expect("encode");
+        let duplicate = format!("{encoded}epoch=1\n");
+        assert_eq!(OwnerEpochRecord::decode(duplicate.as_bytes()), Err(OwnerEpochError::ChainInvalid));
+        assert_eq!(OwnerEpochRecord::decode(encoded.trim_end().as_bytes()), Err(OwnerEpochError::ChainInvalid));
+    }
+
+    #[test]
+    fn invalid_first_predecessor_cannot_be_encoded() {
+        let mut record = first_record();
+        record.previous_epoch = 1;
+        assert_eq!(record.encode(), Err(OwnerEpochError::PredecessorMismatch));
     }
 }
