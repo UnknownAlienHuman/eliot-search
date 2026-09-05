@@ -34,12 +34,16 @@ The separate `eliot-search-snapshotd` / `eliot-search-snapshot` binaries are ear
 Qdrant baseline. In particular, the snapshot daemon's local lexical engine must not become a second
 product index.
 
-The primary DIRECT store retains and verifies revisions but still searches with the development scanner.
-Shared materializer/unitizer code exists; its durable bindings and runtime composition remain unfinished.
+The primary DIRECT store now sends verified retained bytes through shared UTF-8 materialization,
+unit layout and bounded cross-unit literal matching rather than the development scanner. This is
+[read-side preparation](docs/runtime/DIRECT_PREPARATION.md), recomputed in memory; durable canonical
+representation/unit manifests, profile/receipt bindings and revision-store composition remain unfinished.
+Existing SHA-256 storage identities are preserved, not relabeled as BLAKE3 or replaced with fake receipts.
 `search-control-redb` now includes a concrete `PersistentControlJournal` with real disk transactions,
 exact replay/recovery and explicit owner handoff; see [control backend](docs/runtime/CONTROL_REDB.md).
 The primary daemon has not yet migrated its file-based control state to that adapter, and the new Rust
 tests remain unexecuted. `search-qdrant-bridge` still provides an in-memory model, not a live network adapter.
+The original audit's scanner-only finding describes its baseline, not this change.
 
 The primary data-root owner now restores the bounded observation-root catalog under its OS lock.
 Explicit registration, listing, unregistering and synchronization commands are documented in
@@ -63,12 +67,14 @@ The [Manual workspace check](.github/workflows/manual-workspace-check.yml) runs 
 explicit dispatch, with a Linux or Windows runner choice. It has read-only repository permissions,
 checks the dispatched SHA and never generates source, changes the lockfile or pushes commits.
 
-Focused control-backend, primary-runtime and sealed-store regression tests can be selected with:
+Focused preparation, control-backend, primary-runtime and sealed-store regression tests can be selected with:
 
 ```sh
+cargo +1.98.0 test -p search-materializer -p search-unitizer -p search-exact --locked
 cargo +1.98.0 test -p search-control-redb --lib --locked
 cargo +1.98.0 test -p eliot-searchd --bin eliot-searchd --locked
 cargo +1.98.0 test -p eliot-searchd --test persistent_roots_process --locked
+cargo +1.98.0 test -p eliot-searchd --test direct_preparation_process --locked
 cargo +1.98.0 test -p eliot-searchd --bin eliot-search-sealed-recover --locked
 ```
 

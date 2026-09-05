@@ -25,8 +25,6 @@ wave2-source = [
     "dep:search-source-identity",
     "dep:search-safe-reader",
     "dep:search-revision-store",
-    "dep:search-materializer",
-    "dep:search-unitizer",
 ]
 wave3-index = [
     "wave2-source",
@@ -57,7 +55,6 @@ wave5-current = [
 ]
 wave6-proof = [
     "wave5-current",
-    "dep:search-exact",
     "dep:search-subject-resolver",
     "dep:search-comparator",
 ]
@@ -85,8 +82,9 @@ search-source-identity = { workspace = true, optional = true }
 search-source-reconcile = { workspace = true, optional = true }
 search-safe-reader = { workspace = true, optional = true }
 search-revision-store = { workspace = true, optional = true }
-search-materializer = { workspace = true, optional = true }
-search-unitizer = { workspace = true, optional = true }
+# Shared byte mechanics are mandatory for DIRECT, not a wave/gate acceptance.
+search-materializer.workspace = true
+search-unitizer.workspace = true
 search-code-enricher = { workspace = true, optional = true }
 
 search-projection-planner = { workspace = true, optional = true }
@@ -99,7 +97,7 @@ search-index-reclaimer = { workspace = true, optional = true }
 
 search-access = { workspace = true, optional = true }
 search-overlay = { workspace = true, optional = true }
-search-exact = { workspace = true, optional = true }
+search-exact.workspace = true
 search-subject-resolver = { workspace = true, optional = true }
 search-query-planner = { workspace = true, optional = true }
 search-retrieval-executor = { workspace = true, optional = true }

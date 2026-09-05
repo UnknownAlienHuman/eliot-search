@@ -12,6 +12,7 @@ mod app;
 mod authenticated_proxy;
 mod continuation;
 mod development;
+mod direct_preparation;
 #[path = "direct_store.rs"]
 mod plaintext_direct_store;
 #[path = "secure_direct_store.rs"]

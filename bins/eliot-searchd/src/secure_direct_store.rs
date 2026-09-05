@@ -18,7 +18,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::development::{ScanResult, scan_text};
+use crate::development::ScanResult;
+use crate::direct_preparation::{prepare_and_scan, validate_query};
 use crate::plaintext_direct_store as plaintext;
 use crate::revision_protection::RevisionProtector;
 use crate::sha256;
@@ -133,15 +134,14 @@ impl DirectStore {
         self.inner.list_sources()
     }
 
-    /// Searches active protected revisions after exact decrypt/readback.
+    /// Searches active protected revisions after exact decrypt/readback and
+    /// shared UTF-8 materialization/unitization. Preparation gaps stay explicit.
     pub(crate) fn search(
         &self,
         query: &str,
         ascii_insensitive: bool,
     ) -> Result<StoreSearchResult, String> {
-        if query.is_empty() {
-            return Err("DIRECT_QUERY_EMPTY".to_owned());
-        }
+        validate_query(query).map_err(str::to_owned)?;
         let active = self
             .inner
             .list_sources()
@@ -201,7 +201,21 @@ impl DirectStore {
             let ScanResult {
                 matches: source_matches,
                 coverage,
-            } = scan_text(&text, query, ascii_insensitive)?;
+            } = match prepare_and_scan(text, query, ascii_insensitive) {
+                Ok(result) => result,
+                Err(reason) => {
+                    complete = false;
+                    if gaps.len() >= MAX_SEARCH_GAPS {
+                        break;
+                    }
+                    gaps.push(StoreGap {
+                        source_id: source.source_id.clone(),
+                        revision_id: source.revision_id.clone(),
+                        reason,
+                    });
+                    continue;
+                }
+            };
             searched_sources = searched_sources.saturating_add(1);
             if !coverage.complete {
                 complete = false;
