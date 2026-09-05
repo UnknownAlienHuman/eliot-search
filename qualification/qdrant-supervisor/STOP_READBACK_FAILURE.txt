@@ -1,0 +1,5 @@
+Status: FAIL
+Base commit: d5d1e7d8d98e3e3f91c889d2b0d6e915bf7b2122
+Patch outcome: failure
+Verification outcome: skipped
+StopEffect anchor missing
