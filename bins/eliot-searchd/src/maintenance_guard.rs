@@ -10,6 +10,7 @@ pub(crate) fn guarded_collect_orphan_revisions(
     root: &Path,
     apply: bool,
 ) -> Result<GarbageCollectionResult, String> {
+    crate::catalog_presence::require_existing(root)?;
     let preview = collect_orphan_revisions(root, false)?;
     if !apply {
         return Ok(preview);

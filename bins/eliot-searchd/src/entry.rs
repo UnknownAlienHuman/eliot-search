@@ -10,6 +10,7 @@
 
 mod app;
 mod authenticated_proxy;
+mod catalog_presence;
 mod continuation;
 mod development;
 mod direct_preparation;

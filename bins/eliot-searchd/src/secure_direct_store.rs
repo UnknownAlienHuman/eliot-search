@@ -74,14 +74,16 @@ impl fmt::Debug for DirectStore {
 impl DirectStore {
     /// Opens the source catalog and recovers every referenced protected object.
     pub(crate) fn open(root: &Path) -> Result<Self, String> {
+        // Refuse lost catalog state before the legacy initializer can write.
+        crate::catalog_presence::check_before_open(root)?;
         let canonical_root = fs::canonicalize(root)
             .map_err(|error| format!("DIRECT_ROOT_CANONICALIZE_ERROR:{error}"))?;
         let inner = plaintext::DirectStore::open(&canonical_root)?;
         let namespace_id = sha256::decode_digest(&inner.namespace_id())
             .ok_or_else(|| "DIRECT_NAMESPACE_INVALID".to_owned())?;
         let revision_root = canonical_root.join(REVISION_DIRECTORY);
-        let protector = RevisionProtector::open(namespace_id, &revision_root)?;
         let inventory = load_inventory(&canonical_root)?;
+        let protector = RevisionProtector::open(namespace_id, &revision_root)?;
         let mut store = Self {
             root: canonical_root,
             inner,
@@ -281,6 +283,8 @@ impl DirectStore {
 
     /// Reopens the event log and verifies every referenced revision object.
     pub(crate) fn verify(&self) -> Result<StoreVerification, String> {
+        // Verification must not repair missing files by initializing them.
+        crate::catalog_presence::require_existing(&self.root)?;
         let reopened = plaintext::DirectStore::open(&self.root)?;
         if reopened.namespace_id() != self.inner.namespace_id()
             || reopened.list_sources() != self.inner.list_sources()
