@@ -8,6 +8,11 @@ commit recovery, read-only snapshots, current-receipt publication and explicit o
 Vendor types remain private. The previous `ControlJournal` reference model and its public API are
 preserved in `src/reference.rs`; it is not a fallback for an unavailable disk backend.
 
+The public `ControlSnapshotPublisher` fences generation, owner epoch and immutable journal identity
+before updating the existing snapshot pointer. Equal-generation content or operation conflicts are
+rejected. Disk publication and disk recovery use this same public boundary. See
+[readback and publication fences](../../docs/runtime/CONTROL_READBACK_FENCES.md).
+
 The primary daemon has not yet migrated its existing file-based control state to this adapter.
 Native file/root admission, migration, cancellation/deadline composition, pruning and full P02
 qualification remain unfinished. The added tests have not been run in the authoring environment.

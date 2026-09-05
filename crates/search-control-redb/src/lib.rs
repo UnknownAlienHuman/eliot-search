@@ -4,10 +4,13 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-// Keep the original model and its existing public API intact. The persistent
-// implementation does real I/O and must never be substituted by this model.
+// Keep reference transitions available as the model, not as a disk fallback.
 mod reference;
 mod persistent;
+mod snapshot_guard;
 
 pub use reference::*;
 pub use persistent::PersistentControlJournal;
+// Explicit export supersedes the unfenced publisher from the reference glob.
+// Existing callers, including PersistentControlJournal, use this public boundary.
+pub use snapshot_guard::ControlSnapshotPublisher;
