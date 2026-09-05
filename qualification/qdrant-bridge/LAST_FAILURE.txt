@@ -1,0 +1,5 @@
+Status: FAIL
+Base commit: c7c213e07c053b91618d104e64b6b9ddb81981c5
+Patch outcome: failure
+Verification outcome: skipped
+PointMutationReadback insertion anchor missing
