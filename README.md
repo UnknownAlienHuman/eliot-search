@@ -1,167 +1,90 @@
 # ELIOT Search
 
-**Local-first data preparation and retrieval provider for ELIOT Memory OS.**
+**Local-first data preparation and retrieval provider. Target: Rust + Qdrant.**
 
-> **Status: Architecture 8.4 published; exact P00 contract pack and 45-package swarm scaffold; bounded
-> W1–W10 implementation and qualification packets; no business implementation.** Runtime correctness,
-> Windows security, provider qualification, performance, Product Pulse and product acceptance remain
-> unproven.
+> **Implementation in progress, not a deployment-ready product.** Rust implementations and development
+> runtimes exist. Durable redb integration, the canonical DIRECT preparation pipeline and a live Qdrant
+> data plane are not yet qualified. See the [Rust/Qdrant audit](docs/audit/ELIOT_SEARCH_AUDIT_2026-09-04.md).
+> Architecture and task packets describe requirements; they are not completion evidence.
 
 ## Product boundary
 
-ELIOT Search owns local source observation, immutable revision readback, preparation, rebuildable
-retrieval projections, exact scans, compact candidate results, currentness, handles, purge and rebuild.
-It is not a memory system, online research service, task controller, canonical knowledge store or client
-authority service.
+ELIOT Search owns source observation, immutable revision readback, preparation, rebuildable retrieval
+projections, exact scans, compact candidates, currentness, handles, purge and rebuild. It is not a memory
+system, online research service, task controller, canonical knowledge store or client authority service.
 
-## Foundation
+The architecture remains:
 
-```text
-search-contracts   shared IDs, wire/domain records and reason registries
-     ├─ search-domain   pure transition, ordering, eligibility and coverage meaning
-     ├─ search-ports    shared vendor-neutral trait boundary and conformance interfaces
-     └─ search-config   pure configuration layering, redaction and reconfiguration planning
+- Rust product runtime; one daemon owner for each data root.
+- Immutable filesystem CAS for retained revisions and preparation artifacts.
+- redb for content-free technical control state, never a search index.
+- Qdrant as the only indexed retrieval backend. DIRECT must also work without Qdrant.
+- Candidates are not evidence: exact source-backed validation remains mandatory.
+
+The normative design is [Architecture 8.4](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md).
+Concrete OS, redb, Qdrant and worker adapters are constructed by the daemon; vendor types, credentials
+and reusable authorization decisions must not escape public ports. Paths are locators, not source IDs.
+
+## Actual entrypoints and integration gaps
+
+`cargo run -p eliot-searchd` selects `bins/eliot-searchd/src/entry.rs`.
+`cargo run -p eliot-search` selects `bins/eliot-search/src/entry.rs`.
+
+The separate `eliot-search-snapshotd` / `eliot-search-snapshot` binaries are earlier experiments, not the
+Qdrant baseline. In particular, the snapshot daemon's local lexical engine must not become a second
+product index.
+
+The primary DIRECT store retains and verifies revisions but still searches with the development scanner.
+Shared materializer/unitizer code exists; its durable bindings and runtime composition remain unfinished.
+`search-control-redb` and `search-qdrant-bridge` currently provide in-memory models, not qualified durable
+and network adapters. `source_roots.rs` exists but is not wired into either daemon entrypoint.
+
+Some development/qualification tooling still uses Python. Its migration does not substitute for finishing
+the Rust runtime. No new Python product service or alternative index is part of the target architecture.
+
+## Build verification
+
+The repository pins Rust 1.98.0. Run against the exact revision being evaluated:
+
+```sh
+cargo +1.98.0 check --workspace --all-targets --all-features --locked
 ```
 
-The P00 implementation projection is under [`docs/contracts/p00/`](docs/contracts/p00/README.md).
-Configuration ownership is under [`config/`](config/README.md). Registry-declared package
-`FUNCTIONS.md` files specify operation preconditions, postconditions, idempotency, cancellation,
-unknown-outcome recovery, resource bounds and required fixtures.
+The [Manual workspace check](.github/workflows/manual-workspace-check.yml) runs this command once per
+explicit dispatch, with a Linux or Windows runner choice. It has read-only repository permissions,
+checks the dispatched SHA and never generates source, changes the lockfile or pushes commits.
 
-## Swarm decomposition
+Focused sealed-store/owner-epoch regression tests can be selected with:
 
-The workspace contains **41 library packages and 4 binaries**. One writer owns one Cargo package. A
-package targets at most 7,500 `src/` lines unless its assignment sets a lower target; split review is
-mandatory before 8,500 total hand-written lines and 10,000 is a hard stop.
-
-Four machine registries define the bounded agent packet:
-
-```text
-swarm/crates.toml             package path, dependencies, earliest wave and assignment
-swarm/function-packets.toml   primary function/contract packet and package write scope
-swarm/stages.toml             W0–W10 package sets and shared current-stage context
-swarm/stage-readsets.toml     replacement context for packages reused at later stages
+```sh
+cargo +1.98.0 test -p eliot-searchd --bin eliot-search-sealed-recover --locked
 ```
 
-Current implementation authorization is only
-[`swarm/launch-state.toml`](swarm/launch-state.toml). Registry or future-stage presence is not permission
-to start work.
+A successful compile is not end-to-end qualification. Windows security needs native Windows tests;
+real Qdrant needs live integration tests; restart, crash recovery and exact historical readback must be
+verified through the primary daemon. Unexecuted checks remain unexecuted, not accepted.
 
-The stage registry contains **68 package-stage assignments**. All 45 packages appear once at their
-earliest wave; **23 later-stage assignments across 13 reused packages** receive replacement contexts.
-Previous stage packets and dependency implementation internals are replaced by accepted public handoffs
-plus one narrow current-stage supplement. Static package context is capped at sixteen files, with the
-architecture master available only through the contract-challenge process.
+## Agent and acceptance boundaries
 
-Important progressive reentries include:
+Read [AGENTS.md](AGENTS.md) before changing code. Each package's `FUNCTIONS.md` defines its preconditions,
+postconditions, idempotency, bounds and required fixtures. The current Cargo manifests define actual
+packages and binary targets; historical scaffold counts must not override them.
 
-```text
-eliot-searchd        W1 → W2 → W3 → W4 → W5 → W6 → W7 → W8 → W10
-search-publication  W3 → W7 → W10
-eliot-search         W1 → W8 standalone client delta
-search-eval          W4 → W9 Product Pulse → W10 candidate evaluation
-```
+Swarm launch authority remains [swarm/launch-state.toml](swarm/launch-state.toml), with package scopes in
+`swarm/crates.toml` and `swarm/function-packets.toml`, stage/readset definitions in `swarm/stages.toml`
+and `swarm/stage-readsets.toml`, and handoffs under [docs/handoff](docs/handoff/README.md). This README
+neither advances a gate nor issues an acceptance receipt. A feature flag, existing source file, model
+unit test or commit title cannot do that either.
 
-## Prepared product slices
+Configuration ownership is under [config](config/README.md); shared contracts are under
+[docs/contracts/p00](docs/contracts/p00/README.md). Plaintext secrets are invalid configuration. Optional
+models/documents/advanced-scale features remain subject to their existing explicit qualification gates.
+Missing or unavailable evidence cannot authorize them. Never replace an unavailable real backend with an
+in-memory model while advertising the real capability, and never invent digests or receipts to bridge APIs.
 
-- **W1–W2 / P01–P04:** process/control shell, secrets, provider framing, source admission/identity,
-  stable no-execute reads, immutable revision CAS, materialization and unitization.
-- **W3 / P05–P07:** lexical profiles, qualified Qdrant process/data plane, exact projection manifests,
-  serialized publication, route/epoch pins and exact ordinary reclaim.
-- **W4 / P08:** pre-candidate access, bounded planning/execution, exact source-backed validation,
-  handles, compact results, continuations, protocol and evaluation seams.
-- **W5 / P09–P10:** observation-gap reconciliation, truthful current-workspace preflight,
-  saved/unsaved overlays and qualified no-execute Rust tolerant syntax.
-- **W6 / P11–P12:** ambiguity-preserving resolution, descriptive lineage/configuration-aware comparison
-  and frozen-denominator exact proof.
-- **W7 / P13:** restrictive-security linearization, durable handles, CAS mark/sweep, purge/tombstones,
-  restore quarantine and lifecycle receipt separation.
-- **W8 / P14:** mutually authenticated generic local client edge, standalone CLI and disabled optional
-  ELIOT/Research leaf profiles.
-- **W9 / P15:** Windows Product Pulse contract with 49 mandatory control cases, 33 metrics and 60
-  mandatory G5 probes. Corpus, baselines, environment and acceptance policy remain unselected.
-- **W10 / P16–P18:** candidate-specific optional model, document and advanced-scale contracts with
-  exact artifact/profile qualification, paired incremental evaluation, migration/rollback and complete
-  removal back to the accepted P15 baseline.
-
-Handoff indexes are under [`docs/handoff/`](docs/handoff/README.md). The exact stage-context assembly is
-[`docs/handoff/SWARM_STAGE_READSETS.md`](docs/handoff/SWARM_STAGE_READSETS.md). External/provider
-qualification registries are under [`qualification/`](qualification/). Empty, disabled, unselected or
-unavailable records are explicit non-acceptance states.
-
-## Configuration
-
-`search-config` owns only deterministic parsing/layering, provenance, redaction, fingerprints, diffs
-and composite reconfiguration planning. Capability packages own their typed sections and runtime
-application. Plaintext secrets are invalid; only opaque secret references may appear in configuration.
-
-The example file is safe DIRECT mode. Indexed settings remain disabled or `UNQUALIFIED`. Optional
-semantic, document and advanced-scale flags remain false and profile references absent.
-
-## Launch gate
-
-Current P00/W0 order remains:
-
-```text
-1. search-contracts
-2. after accepted contracts handoff/API digest:
-   - search-domain
-   - search-ports
-3. integration owner publishes W0 receipt
-```
-
-Every W1+ package remains blocked. W7 emits a separate lifecycle prerequisite receipt rather than a
-central gate. W8 requires G3 plus that lifecycle receipt; W9 requires G4 plus lifecycle; W10 requires the
-independently accepted P15/G5 Product Pulse.
-
-W10 additionally requires:
-
-```text
-accepted P15 Product Pulse + independent review
-+ one dedicated candidate ADR
-+ exact Windows artifact/profile/license qualification
-+ measured material incremental benefit
-+ complete removal/fallback proof
-+ migration/rollback proof when applicable
-```
-
-Package/stage presence, Cargo feature, configuration, worker readiness, a model/version name or a
-successful unit test cannot authorize optional depth.
-
-## Non-overclaim rules
-
-- retrieval and optional models nominate candidates; exact source readback is still required;
-- model rerank cannot add candidates, widen scope, claim completeness or emit client dispositions;
-- document workers cannot execute scripts/macros/hooks/shell, use network or follow remote resources;
-- exact negative proof uses an authoritative frozen denominator, never Qdrant/top-k/model candidates;
-- material ambiguity and incomplete coverage remain explicit;
-- Qdrant aliases and worker readiness are not visibility or capability commits;
-- optional provider failure cannot break the accepted DIRECT/LEXICAL/CODE baseline;
-- active schema/topology is never reinterpreted in place;
-- removal restores the accepted P15 handler/profile/route/config before optional physical reclaim;
-- secure erase is never claimed without evidence.
-
-## Port rule
-
-Capability/orchestration packages consume `search-ports`. Concrete redb, OS-secret, Qdrant and optional
-worker implementations are constructed only by `eliot-searchd`. Vendor/native types, credentials, raw
-collections, point IDs and reusable authorization decisions never cross public ports.
-
-## Honest status
-
-`Cargo.toml` files and placeholder `src/lib.rs` / `src/main.rs` establish package boundaries only. P00
-still must implement contracts/domain/ports, pin the real Windows-compatible toolchain/dependencies,
-generate `Cargo.lock` and execute the real policy/test suite.
-
-```text
-business/runtime implementation: absent
-accepted package wave receipts: absent
-stage assignments/readsets: 68 / 23 structurally prepared
-Qdrant/model/document/scale artifacts: unselected
-Product Pulse: not accepted
-optional depth: disabled and unauthorized
-current launch authority: P00 / W0
-```
+Exact negative claims require a frozen authoritative denominator, not top-k retrieval. Incomplete
+coverage and ambiguity remain explicit. Document workers must not execute source scripts/macros/hooks,
+access the network or follow remote resources. Logical deletion is not proof of physical secure erase.
 
 ## License
 
