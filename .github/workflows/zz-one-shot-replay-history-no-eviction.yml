@@ -1,0 +1,361 @@
+name: one-shot make request replay history non-evicting
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-replay-history-no-eviction.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-replay-history-no-eviction
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout exact latest main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Require clean qualified baseline
+        shell: bash
+        run: |
+          test -f qualification/CURRENT_STATUS.md
+          test ! -f qualification/CURRENT_FAILURES.txt
+          if find qualification -type f \( -iname '*FAIL*.txt' -o -name 'LAST_FAILURE.txt' -o -name '*FAILURE.txt' \) -print -quit | grep -q .; then
+            echo 'unresolved qualification failure marker exists'
+            find qualification -type f \( -iname '*FAIL*.txt' -o -name 'LAST_FAILURE.txt' -o -name '*FAILURE.txt' \) -print
+            exit 1
+          fi
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Replace terminal eviction with bounded session exhaustion
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee replay-history-patch.log
+          from pathlib import Path
+
+          protocol_path = Path('crates/search-provider-protocol/src/lib.rs')
+          protocol = protocol_path.read_text()
+
+          protocol = protocol.replace(
+              '''    /// Maximum terminal request records retained for replay detection.
+              pub max_terminal_history: usize,''',
+              '''    /// Maximum request identities accepted in one session.
+              ///
+              /// Every accepted identity is retained through session close so an
+              /// old terminal replay can never become a fresh request.
+              pub max_terminal_history: usize,''',
+              1,
+          )
+          old_limits = '''            || max_in_flight == 0
+                      || max_terminal_history == 0
+                  {'''
+          new_limits = '''            || max_in_flight == 0
+                      || max_terminal_history == 0
+                      || max_terminal_history < max_in_flight
+                  {'''
+          if old_limits in protocol:
+              protocol = protocol.replace(old_limits, new_limits, 1)
+          elif 'max_terminal_history < max_in_flight' not in protocol:
+              raise SystemExit('ProtocolLimits consistency anchor missing')
+
+          protocol = protocol.replace('    terminal_order: Vec<RequestId>,\n', '')
+          protocol = protocol.replace('            terminal_order: Vec::new(),\n', '')
+
+          admission_anchor = '''        if self.in_flight() >= self.limits.max_in_flight {
+                      return Err(ProtocolError::InFlightLimitExceeded);
+                  }
+                  self.requests'''
+          admission_replacement = '''        if self.requests.len() >= self.limits.max_terminal_history {
+                      return Err(ProtocolError::ReplayHistoryLimitExceeded);
+                  }
+                  if self.in_flight() >= self.limits.max_in_flight {
+                      return Err(ProtocolError::InFlightLimitExceeded);
+                  }
+                  self.requests'''
+          if 'ReplayHistoryLimitExceeded' not in protocol[protocol.index('pub fn admit_request'):protocol.index('/// Advances one request')]:
+              if admission_anchor not in protocol:
+                  raise SystemExit('SessionMachine admission anchor missing')
+              protocol = protocol.replace(admission_anchor, admission_replacement, 1)
+
+          finish_anchor = '''        self.terminal_order.push(request_id);
+                  self.prune_terminal_history();
+                  Ok(())'''
+          if finish_anchor in protocol:
+              protocol = protocol.replace(finish_anchor, '        Ok(())', 1)
+
+          prune_start = protocol.find('    fn prune_terminal_history(&mut self) {')
+          if prune_start != -1:
+              prune_end = protocol.index('\n    }\n}\n\n/// Closed provider-protocol failure registry.', prune_start)
+              protocol = protocol[:prune_start] + protocol[prune_end + len('\n    }'):]
+
+          error_anchor = '''    /// In-flight request capacity is exhausted.
+              InFlightLimitExceeded,
+              /// Contradictory protocol state requires quarantine.'''
+          error_replacement = '''    /// In-flight request capacity is exhausted.
+              InFlightLimitExceeded,
+              /// Non-evicting replay ledger is full; a new session is required.
+              ReplayHistoryLimitExceeded,
+              /// Contradictory protocol state requires quarantine.'''
+          if 'ReplayHistoryLimitExceeded,' not in protocol[protocol.index('pub enum ProtocolError'):]:
+              if error_anchor not in protocol:
+                  raise SystemExit('ProtocolError history anchor missing')
+              protocol = protocol.replace(error_anchor, error_replacement, 1)
+
+          code_anchor = '''            Self::InFlightLimitExceeded => "PROTOCOL_IN_FLIGHT_LIMIT",
+                      Self::Quarantined => "PROTOCOL_QUARANTINED",'''
+          code_replacement = '''            Self::InFlightLimitExceeded => "PROTOCOL_IN_FLIGHT_LIMIT",
+                      Self::ReplayHistoryLimitExceeded => "PROTOCOL_REPLAY_HISTORY_LIMIT",
+                      Self::Quarantined => "PROTOCOL_QUARANTINED",'''
+          if 'PROTOCOL_REPLAY_HISTORY_LIMIT' not in protocol:
+              if code_anchor not in protocol:
+                  raise SystemExit('ProtocolError history code anchor missing')
+              protocol = protocol.replace(code_anchor, code_replacement, 1)
+
+          if 'terminal_history_must_reserve_every_in_flight_request' not in protocol:
+              protocol += r'''
+
+          #[cfg(test)]
+          mod replay_history_tests {
+              use super::{ProtocolError, ProtocolLimits};
+
+              #[test]
+              fn terminal_history_must_reserve_every_in_flight_request() {
+                  assert_eq!(
+                      ProtocolLimits::new(1024, 512, 8, 7),
+                      Err(ProtocolError::InvalidLimits)
+                  );
+                  assert!(ProtocolLimits::new(1024, 512, 8, 8).is_ok());
+              }
+          }
+          '''
+          protocol_path.write_text(protocol)
+
+          adapter_path = Path('crates/search-eliot-adapter/src/adapter.rs')
+          adapter = adapter_path.read_text()
+          adapter = adapter.replace(
+              '''            max_retained_terminal: NonZeroUsize::new(max_retained_terminal)
+                          .ok_or(AdapterError::InvalidLimits)?,
+                      max_payload_bytes:''',
+              '''            max_retained_terminal: NonZeroUsize::new(max_retained_terminal)
+                          .ok_or(AdapterError::InvalidLimits)?,
+                      max_payload_bytes:''',
+              1,
+          )
+          constructor_end = '''        })
+              }
+
+              /// Maximum requests that may be non-terminal simultaneously.'''
+          if 'limits.max_retained_terminal < limits.max_in_flight' not in adapter:
+              replacement = '''        };
+                  if limits.max_retained_terminal < limits.max_in_flight {
+                      return Err(AdapterError::InvalidLimits);
+                  }
+                  Ok(limits)
+              }
+
+              /// Maximum requests that may be non-terminal simultaneously.'''
+              start = adapter.index('        Ok(Self {', adapter.index('pub fn new('))
+              end = adapter.index(constructor_end, start)
+              block = adapter[start:end + len('        })')]
+              if not block.startswith('        Ok(Self {'):
+                  raise SystemExit('AdapterLimits constructor block missing')
+              inner = block.replace('        Ok(Self {', '        let limits = Self {', 1)
+              if not inner.endswith('        })'):
+                  raise SystemExit('AdapterLimits constructor suffix missing')
+              inner = inner[:-len('        })')] + '        };'
+              adapter = adapter[:start] + inner + replacement + adapter[end + len(constructor_end):]
+
+          adapter = adapter.replace(
+              '''    /// Maximum terminal records retained for replay classification.''',
+              '''    /// Maximum request identities accepted in one adapter session.
+              ///
+              /// Identities are never evicted before session close.''',
+              1,
+          )
+          adapter = adapter.replace('    terminal_order: Vec<RequestId>,\n', '')
+          adapter = adapter.replace('            terminal_order: Vec::new(),\n', '')
+
+          adapter_admission_anchor = '''        if self.in_flight() >= self.limits.max_in_flight() {
+                      return Err(AdapterError::InFlightLimitExceeded);
+                  }
+                  self.requests.insert('''
+          adapter_admission_replacement = '''        if self.requests.len() >= self.limits.max_retained_terminal() {
+                      return Err(AdapterError::ReplayHistoryLimitExceeded);
+                  }
+                  if self.in_flight() >= self.limits.max_in_flight() {
+                      return Err(AdapterError::InFlightLimitExceeded);
+                  }
+                  self.requests.insert('''
+          region = adapter[adapter.index('pub fn admit<P>'):adapter.index('/// Marks one accepted request')]
+          if 'ReplayHistoryLimitExceeded' not in region:
+              if adapter_admission_anchor not in adapter:
+                  raise SystemExit('EliotAdapter admission anchor missing')
+              adapter = adapter.replace(adapter_admission_anchor, adapter_admission_replacement, 1)
+
+          adapter_finish_anchor = '''        self.terminal_order.push(receipt.request_id);
+                  self.prune_terminal_history();
+                  Ok(())'''
+          if adapter_finish_anchor in adapter:
+              adapter = adapter.replace(adapter_finish_anchor, '        Ok(())', 1)
+
+          adapter_prune_start = adapter.find('    fn prune_terminal_history(&mut self) {')
+          if adapter_prune_start != -1:
+              adapter_prune_end = adapter.index('\n    }\n}\n\n/// Closed adapter failure registry.', adapter_prune_start)
+              adapter = adapter[:adapter_prune_start] + adapter[adapter_prune_end + len('\n    }'):]
+
+          adapter_error_anchor = '''    /// Non-terminal request capacity is exhausted.
+              InFlightLimitExceeded,
+              /// Request identity is unknown.'''
+          adapter_error_replacement = '''    /// Non-terminal request capacity is exhausted.
+              InFlightLimitExceeded,
+              /// Non-evicting replay ledger is full; a new session is required.
+              ReplayHistoryLimitExceeded,
+              /// Request identity is unknown.'''
+          if 'ReplayHistoryLimitExceeded,' not in adapter[adapter.index('pub enum AdapterError'):]:
+              if adapter_error_anchor not in adapter:
+                  raise SystemExit('AdapterError history anchor missing')
+              adapter = adapter.replace(adapter_error_anchor, adapter_error_replacement, 1)
+
+          adapter_code_anchor = '''            Self::InFlightLimitExceeded => "ELIOT_ADAPTER_IN_FLIGHT_LIMIT",
+                      Self::RequestNotFound => "ELIOT_ADAPTER_REQUEST_NOT_FOUND",'''
+          adapter_code_replacement = '''            Self::InFlightLimitExceeded => "ELIOT_ADAPTER_IN_FLIGHT_LIMIT",
+                      Self::ReplayHistoryLimitExceeded => "ELIOT_ADAPTER_REPLAY_HISTORY_LIMIT",
+                      Self::RequestNotFound => "ELIOT_ADAPTER_REQUEST_NOT_FOUND",'''
+          if 'ELIOT_ADAPTER_REPLAY_HISTORY_LIMIT' not in adapter:
+              if adapter_code_anchor not in adapter:
+                  raise SystemExit('AdapterError history code anchor missing')
+              adapter = adapter.replace(adapter_code_anchor, adapter_code_replacement, 1)
+
+          adapter_path.write_text(adapter)
+
+          for functions_path, section in [
+              (
+                  Path('crates/search-provider-protocol/FUNCTIONS.md'),
+                  '''
+
+          ## Non-evicting request replay ledger
+
+          Every request admitted in a provider session reserves a permanent
+          replay-ledger slot through session close. Terminal identities are not
+          evicted. Once the finite ledger is full, new request identities are
+          rejected and the client must establish a new authenticated session.
+          `max_terminal_history` must be at least `max_in_flight`.
+          ''',
+              ),
+              (
+                  Path('crates/search-eliot-adapter/FUNCTIONS.md'),
+                  '''
+
+          ## Non-evicting adapter replay ledger
+
+          Every admitted request identity remains classified until adapter
+          session close. Terminal receipts are never evicted, because arbitrary
+          request IDs have no safe finite high-watermark. When the bounded ledger
+          is full, new identities fail closed and require a new session.
+          ''',
+              ),
+          ]:
+              functions = functions_path.read_text()
+              heading = section.strip().splitlines()[0]
+              if heading not in functions:
+                  functions_path.write_text(functions + section)
+          PY
+          cargo fmt --all
+
+      - name: Verify non-evicting replay protection and workspace
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-provider-protocol -p search-eliot-adapter --all-targets --locked
+            cargo test -p search-provider-protocol -p search-eliot-adapter --all-targets --locked
+            cargo clippy -p search-provider-protocol -p search-eliot-adapter --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            if grep -R -n 'prune_terminal_history\|terminal_order' crates/search-provider-protocol/src crates/search-eliot-adapter/src; then
+              echo 'terminal replay eviction remains'
+              exit 1
+            fi
+            grep -q 'ReplayHistoryLimitExceeded' crates/search-provider-protocol/src/lib.rs
+            grep -q 'ReplayHistoryLimitExceeded' crates/search-eliot-adapter/src/adapter.rs
+            git diff --check
+          } 2>&1 | tee replay-history-verify.log
+
+      - name: Commit verified replay repair or bounded failure evidence
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-replay-history-no-eviction.yml
+          mkdir -p qualification/provider-protocol qualification/eliot-adapter
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/provider-protocol/REPLAY_FAILURE.txt qualification/eliot-adapter/LAST_FAILURE.txt
+            cat > qualification/provider-protocol/REPLAY_HISTORY_VERIFIED.md <<EOF
+          # Provider request replay history
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Request identities are retained through session close and never
+          evicted. A full replay ledger rejects new requests and requires a new
+          authenticated session.
+          EOF
+            cat > qualification/eliot-adapter/REPLAY_HISTORY_VERIFIED.md <<EOF
+          # ELIOT adapter request replay history
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Request identities and terminal receipts remain classified through
+          adapter session close. Capacity exhaustion fails closed instead of
+          turning old replays into fresh work.
+          EOF
+            git add -A
+            subject="fix(protocol): stop evicting terminal replay identities"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-replay-history-no-eviction.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 500 replay-history-patch.log 2>/dev/null || true
+              tail -n 900 replay-history-verify.log 2>/dev/null || true
+            } > qualification/provider-protocol/REPLAY_FAILURE.txt
+            cp qualification/provider-protocol/REPLAY_FAILURE.txt qualification/eliot-adapter/LAST_FAILURE.txt
+            git add -A
+            subject="verify(protocol): record failed replay-history repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
