@@ -6,13 +6,13 @@
 //! retires only a missing source whose current path digest still equals the old
 //! directory binding. Moved/rebound sources are preserved.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::direct_store::{DirectStore, IndexedSource, SourceSummary};
+use crate::direct_store::{DirectStore, IndexedSource};
 use crate::sha256;
 
 const CONTROL_DIRECTORY: &str = "control";
@@ -343,7 +343,7 @@ fn persist_manifest(root: &Path, manifest: &DirectoryManifest) -> Result<(), Str
         }
         return Err(format!("DIRECT_MANIFEST_RENAME_ERROR:{error}"));
     }
-    sync_directory(root)?;
+    sync_manifest_directory(root)?;
     Ok(())
 }
 
@@ -400,7 +400,7 @@ fn load_manifest_file(path: &Path) -> Result<DirectoryManifest, String> {
     }
     let mut text = String::new();
     File::open(path)
-        .and_then(|mut file| {
+        .and_then(|file| {
             file.take(u64::try_from(MAX_MANIFEST_BYTES + 1).unwrap_or(u64::MAX))
                 .read_to_string(&mut text)
         })
@@ -471,7 +471,7 @@ fn manifest_root(data_root: &Path) -> Result<PathBuf, String> {
     if !root.exists() {
         fs::create_dir(&root)
             .map_err(|error| format!("DIRECT_MANIFEST_DIRECTORY_CREATE_ERROR:{error}"))?;
-        sync_directory(&control)?;
+        sync_manifest_directory(&control)?;
     }
     ensure_directory(&root)?;
     Ok(root)
@@ -593,13 +593,13 @@ fn is_reparse(_metadata: &Metadata) -> bool {
 }
 
 #[cfg(unix)]
-fn sync_directory(path: &Path) -> Result<(), String> {
+fn sync_manifest_directory(path: &Path) -> Result<(), String> {
     File::open(path)
         .and_then(|file| file.sync_all())
         .map_err(|error| format!("DIRECT_MANIFEST_DIRECTORY_SYNC_ERROR:{error}"))
 }
 
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<(), String> {
+fn sync_manifest_directory(_path: &Path) -> Result<(), String> {
     Ok(())
 }

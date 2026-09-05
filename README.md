@@ -37,7 +37,14 @@ product index.
 The primary DIRECT store retains and verifies revisions but still searches with the development scanner.
 Shared materializer/unitizer code exists; its durable bindings and runtime composition remain unfinished.
 `search-control-redb` and `search-qdrant-bridge` currently provide in-memory models, not qualified durable
-and network adapters. `source_roots.rs` exists but is not wired into either daemon entrypoint.
+and network adapters.
+
+The primary data-root owner now restores the bounded observation-root catalog under its OS lock.
+Explicit registration, listing, unregistering and synchronization commands are documented in
+[Source-root registration](docs/runtime/SOURCE_ROOT_REGISTRATION.md). This filesystem registration
+adapter is not redb integration, an access grant, a live watcher or a current-workspace proof.
+The original audit describes its baseline commit; the earlier roots-not-wired finding is superseded by
+this integration. Windows handle-race and power-loss qualification remain outstanding.
 
 Some development/qualification tooling still uses Python. Its migration does not substitute for finishing
 the Rust runtime. No new Python product service or alternative index is part of the target architecture.
@@ -54,9 +61,11 @@ The [Manual workspace check](.github/workflows/manual-workspace-check.yml) runs 
 explicit dispatch, with a Linux or Windows runner choice. It has read-only repository permissions,
 checks the dispatched SHA and never generates source, changes the lockfile or pushes commits.
 
-Focused sealed-store/owner-epoch regression tests can be selected with:
+Focused primary-runtime and sealed-store regression tests can be selected with:
 
 ```sh
+cargo +1.98.0 test -p eliot-searchd --bin eliot-searchd --locked
+cargo +1.98.0 test -p eliot-searchd --test persistent_roots_process --locked
 cargo +1.98.0 test -p eliot-searchd --bin eliot-search-sealed-recover --locked
 ```
 

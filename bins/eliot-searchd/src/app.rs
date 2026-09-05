@@ -61,6 +61,13 @@ fn help() -> &'static str {
         "  eliot-searchd --verify-root ROOT\n",
         "  eliot-searchd --retire-source ROOT SOURCE_ID\n",
         "  eliot-searchd --read-revision ROOT REVISION_ID START END\n\n",
+        "PERSISTENT SOURCE-ROOT REGISTRATION:\n",
+        "  eliot-searchd --source-roots ROOT\n",
+        "  eliot-searchd --register-source-root ROOT DIRECTORY\n",
+        "  eliot-searchd --unregister-source-root ROOT DIRECTORY\n",
+        "  eliot-searchd --sync-source-roots ROOT\n",
+        "Registration controls explicit observation, not access grants or purge.\n",
+        "Unregistering does not revoke already retained revisions.\n\n",
         "MAINTENANCE:\n",
         "  eliot-searchd --repair-root ROOT\n",
         "  eliot-searchd --gc-root ROOT --dry-run\n",
@@ -92,10 +99,16 @@ fn write_response(output: &mut impl Write, value: &str) -> io::Result<()> {
 }
 
 fn serve_stdio(health: Health) -> io::Result<()> {
-    let input = io::stdin();
-    let mut output = io::stdout().lock();
+    serve_control(health, &mut io::stdin().lock(), &mut io::stdout().lock())
+}
+
+fn serve_control(
+    health: Health,
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+) -> io::Result<()> {
     write_response(
-        &mut output,
+        output,
         &format!(
             concat!(
                 "{{\"event\":\"ready\",\"protocol_version\":{},",
@@ -110,33 +123,36 @@ fn serve_stdio(health: Health) -> io::Result<()> {
         ),
     )?;
 
-    for line in input.lock().lines() {
-        let line = line?;
-        if line.len() > MAX_COMMAND_BYTES {
-            write_response(&mut output, "{\"error\":\"COMMAND_TOO_LARGE\"}")?;
-            continue;
-        }
+    loop {
+        let line = match crate::protocol_io::read_line(input, MAX_COMMAND_BYTES) {
+            Ok(Some(line)) => line,
+            Ok(None) => return Ok(()),
+            Err(error) => {
+                write_response(output, &format!("{{\"error\":\"{}\"}}", error.code()))?;
+                // Do not drain an unbounded frame or execute its unread suffix.
+                return Err(io::Error::new(io::ErrorKind::InvalidData, error));
+            }
+        };
         match Command::parse(&line) {
-            Ok(Command::Health) => write_response(&mut output, &health.json())?,
-            Ok(Command::Version) => write_response(&mut output, &version_json())?,
+            Ok(Command::Health) => write_response(output, &health.json())?,
+            Ok(Command::Version) => write_response(output, &version_json())?,
             Ok(Command::Shutdown) => {
                 write_response(
-                    &mut output,
+                    output,
                     "{\"status\":\"draining\",\"accepted\":true}",
                 )?;
                 write_response(
-                    &mut output,
+                    output,
                     "{\"status\":\"stopped\",\"clean\":true}",
                 )?;
                 return Ok(());
             }
             Err(code) => write_response(
-                &mut output,
+                output,
                 &format!("{{\"error\":\"{code}\"}}"),
             )?,
         }
     }
-    Ok(())
 }
 
 fn open_direct_store(root: &Path) -> Result<(DataRootGuard, DirectStore), String> {
@@ -378,6 +394,7 @@ fn run() -> Result<(), String> {
             require_argument_count(&arguments, 1)?;
             self_test().map_err(str::to_owned)?;
             println!(
+                "{}",
                 concat!(
                     "{\"status\":\"ok\",\"component\":\"eliot-searchd\",",
                     "\"development_stdin_scan_available\":true,",
@@ -404,6 +421,8 @@ fn run() -> Result<(), String> {
             drop(store);
             drop(guard);
         }
+        "--source-roots" | "--register-source-root" | "--unregister-source-root"
+        | "--sync-source-roots" => crate::source_root_commands::run(&arguments)?,
         "--scan-stdin" | "--scan-stdin-ascii-insensitive" => {
             require_argument_count(&arguments, 2)?;
             emit_one_shot_scan(
@@ -607,8 +626,39 @@ pub(crate) fn run_main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("{{\"error\":\"{}\"}}", error.replace('"', "'"));
+            eprintln!("{{\"error\":\"{}\"}}", crate::source_root_commands::escape_json(&error));
             ExitCode::from(2)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn oversized_frame_terminates_session_without_executing_suffix() {
+        let mut bytes = vec![b'x'; MAX_COMMAND_BYTES + 3];
+        bytes.extend_from_slice(b"\nshutdown\n");
+        let mut input = Cursor::new(bytes);
+        let mut output = Vec::new();
+        assert!(serve_control(Health::SHELL, &mut input, &mut output).is_err());
+        let response = String::from_utf8(output).unwrap();
+        assert!(response.contains("COMMAND_TOO_LARGE"));
+        assert!(!response.contains("draining"));
+        assert!(!response.contains("stopped"));
+        assert_eq!(input.position(), (MAX_COMMAND_BYTES + 2) as u64);
+    }
+
+    #[test]
+    fn valid_control_session_reports_health_and_clean_shutdown() {
+        let mut input = Cursor::new(b"health\r\nversion\nshutdown\n");
+        let mut output = Vec::new();
+        serve_control(Health::SHELL, &mut input, &mut output).unwrap();
+        let response = String::from_utf8(output).unwrap();
+        assert_eq!(response.lines().count(), 5);
+        assert!(response.contains("\"source_backed_search_available\":false"));
+        assert!(response.contains("\"clean\":true"));
     }
 }
