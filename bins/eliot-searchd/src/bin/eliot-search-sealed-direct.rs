@@ -38,8 +38,8 @@ struct FileObservation {
 enum FileIdentity {
     #[cfg(windows)]
     Windows {
-        volume_serial: Option<u32>,
-        file_index: Option<u64>,
+        volume_serial: u32,
+        file_index: u64,
     },
     #[cfg(unix)]
     Unix { device: u64, inode: u64 },
@@ -140,11 +140,11 @@ fn observe_file(file: &File) -> Result<FileObservation, String> {
 
     #[cfg(windows)]
     let identity = {
-        use std::os::windows::fs::MetadataExt;
-
+        let observed = eliot_searchd::native_file::observe(file)
+            .map_err(|error| error.code().to_owned())?;
         FileIdentity::Windows {
-            volume_serial: metadata.volume_serial_number(),
-            file_index: metadata.file_index(),
+            volume_serial: observed.volume_serial,
+            file_index: observed.file_index,
         }
     };
     #[cfg(unix)]

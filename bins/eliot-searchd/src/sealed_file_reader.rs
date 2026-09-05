@@ -213,13 +213,19 @@ mod platform {
         if !metadata.is_file() {
             return Err(FinalFileReadError::NotRegularFile);
         }
+        let native = eliot_searchd::native_file::observe(file).map_err(|error| match error {
+            eliot_searchd::native_file::ObservationError::ReparsePointDenied => {
+                FinalFileReadError::ReparsePointDenied
+            }
+            _ => FinalFileReadError::OpenFailed,
+        })?;
         Ok(Observation {
-            length: metadata.len(),
-            volume_serial: metadata.volume_serial_number(),
-            file_index: metadata.file_index(),
-            last_write_time: metadata.last_write_time(),
-            creation_time: metadata.creation_time(),
-            file_attributes: metadata.file_attributes(),
+            length: native.length,
+            volume_serial: Some(native.volume_serial),
+            file_index: Some(native.file_index),
+            last_write_time: native.last_write_time,
+            creation_time: native.creation_time,
+            file_attributes: native.attributes,
         })
     }
 }

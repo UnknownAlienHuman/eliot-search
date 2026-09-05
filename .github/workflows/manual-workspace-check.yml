@@ -49,6 +49,10 @@ jobs:
         if: ${{ inputs.core_tests }}
         shell: bash
         run: cargo +1.98.0 test --locked -p search-control-redb -p search-materializer -p search-unitizer -p search-exact --lib
+      - name: Execute package-native adapter regressions
+        if: ${{ inputs.core_tests }}
+        shell: bash
+        run: cargo +1.98.0 test --locked -p eliot-searchd --lib --test stable_native_identity_api
       - name: Execute primary-runtime and process regression tests
         if: ${{ inputs.core_tests }}
         shell: bash

@@ -975,7 +975,7 @@ fn observe_source_file(file: &File, canonical_path: &Path) -> Result<SourceFileO
         .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_nanos());
     let (identity_material, identity_strength) =
-        platform_file_identity(&metadata, canonical_path);
+        platform_file_identity(file, &metadata, canonical_path)?;
     Ok(SourceFileObservation {
         byte_length: metadata.len(),
         modified_nanos,
@@ -988,31 +988,37 @@ fn observe_source_file(file: &File, canonical_path: &Path) -> Result<SourceFileO
 }
 
 #[cfg(unix)]
-fn platform_file_identity(metadata: &Metadata, _path: &Path) -> (Vec<u8>, IdentityStrength) {
+fn platform_file_identity(
+    _file: &File,
+    metadata: &Metadata,
+    _path: &Path,
+) -> Result<(Vec<u8>, IdentityStrength), String> {
     use std::os::unix::fs::MetadataExt;
     let mut bytes = Vec::with_capacity(16);
     bytes.extend_from_slice(&metadata.dev().to_be_bytes());
     bytes.extend_from_slice(&metadata.ino().to_be_bytes());
-    (bytes, IdentityStrength::Native)
+    Ok((bytes, IdentityStrength::Native))
 }
 
 #[cfg(windows)]
-fn platform_file_identity(metadata: &Metadata, path: &Path) -> (Vec<u8>, IdentityStrength) {
-    use std::os::windows::fs::MetadataExt;
-    match (metadata.volume_serial_number(), metadata.file_index()) {
-        (Some(volume), Some(index)) => {
-            let mut bytes = Vec::with_capacity(12);
-            bytes.extend_from_slice(&volume.to_be_bytes());
-            bytes.extend_from_slice(&index.to_be_bytes());
-            (bytes, IdentityStrength::Native)
-        }
-        _ => (path_identity_bytes(path), IdentityStrength::PathBound),
-    }
+fn platform_file_identity(
+    file: &File,
+    _metadata: &Metadata,
+    _path: &Path,
+) -> Result<(Vec<u8>, IdentityStrength), String> {
+    let observed = eliot_searchd::native_file::observe(file)
+        .map_err(|error| error.code().to_owned())?;
+    // Preserve the existing NTFS identity encoding without a path-only fallback.
+    Ok((observed.legacy_identity_bytes().to_vec(), IdentityStrength::Native))
 }
 
 #[cfg(not(any(unix, windows)))]
-fn platform_file_identity(_metadata: &Metadata, path: &Path) -> (Vec<u8>, IdentityStrength) {
-    (path_identity_bytes(path), IdentityStrength::PathBound)
+fn platform_file_identity(
+    _file: &File,
+    _metadata: &Metadata,
+    path: &Path,
+) -> Result<(Vec<u8>, IdentityStrength), String> {
+    Ok((path_identity_bytes(path), IdentityStrength::PathBound))
 }
 
 #[cfg(unix)]

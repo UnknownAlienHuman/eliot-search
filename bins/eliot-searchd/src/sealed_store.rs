@@ -645,6 +645,8 @@ mod platform {
         validate_regular_non_reparse(path, false)?;
         let mut file = File::open(path).map_err(map_not_found)?;
         let before = file.metadata().map_err(|_| SealedStoreError::IoFailure)?;
+        let before_identity = eliot_searchd::native_file::observe(&file)
+            .map_err(|_| SealedStoreError::IoFailure)?;
         if before.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
             return Err(SealedStoreError::ReparsePointDenied);
         }
@@ -662,11 +664,12 @@ mod platform {
             return Err(SealedStoreError::EnvelopeTooLarge);
         }
         let after = file.metadata().map_err(|_| SealedStoreError::IoFailure)?;
+        let after_identity = eliot_searchd::native_file::observe(&file)
+            .map_err(|_| SealedStoreError::IoFailure)?;
         if before.len() != after.len()
             || before.last_write_time() != after.last_write_time()
             || before.creation_time() != after.creation_time()
-            || before.volume_serial_number() != after.volume_serial_number()
-            || before.file_index() != after.file_index()
+            || before_identity != after_identity
         {
             return Err(SealedStoreError::ObjectChangedDuringRead);
         }

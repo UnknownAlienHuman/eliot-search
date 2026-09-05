@@ -357,8 +357,10 @@ fn verify_path_identity(path: &Path, file: &File) -> Result<(), String> {
     if link_metadata.file_type().is_symlink() || !link_metadata.is_file() {
         return Err("SERVICE_RECORD_FILE_INVALID".to_owned());
     }
+    #[cfg(unix)]
     let path_metadata = fs::metadata(path)
         .map_err(|error| format!("SERVICE_RECORD_METADATA_ERROR:{error}"))?;
+    #[cfg(unix)]
     let handle_metadata = file
         .metadata()
         .map_err(|error| format!("SERVICE_RECORD_METADATA_ERROR:{error}"))?;
@@ -375,10 +377,18 @@ fn verify_path_identity(path: &Path, file: &File) -> Result<(), String> {
 
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt;
-        if path_metadata.volume_serial_number() != handle_metadata.volume_serial_number()
-            || path_metadata.file_index() != handle_metadata.file_index()
-        {
+        use std::os::windows::fs::OpenOptionsExt;
+        let path_file = OpenOptions::new()
+            .access_mode(0x80) // FILE_READ_ATTRIBUTES
+            .share_mode(0x1 | 0x2 | 0x4)
+            .custom_flags(0x0020_0000) // FILE_FLAG_OPEN_REPARSE_POINT
+            .open(path)
+            .map_err(|_| "SERVICE_RECORD_METADATA_ERROR".to_owned())?;
+        let path_identity = eliot_searchd::native_file::observe(&path_file)
+            .map_err(|error| error.code().to_owned())?;
+        let handle_identity = eliot_searchd::native_file::observe(file)
+            .map_err(|error| error.code().to_owned())?;
+        if path_identity.legacy_identity_bytes() != handle_identity.legacy_identity_bytes() {
             return Err("SERVICE_RECORD_IDENTITY_CHANGED".to_owned());
         }
     }

@@ -131,11 +131,10 @@ mod platform {
         }
         let canonical = fs::canonicalize(data_root)
             .map_err(|_| RootIdentityError::ObservationFailed)?;
+        let observed = eliot_searchd::native_file::observe(&file)
+            .map_err(|_| RootIdentityError::ObservationFailed)?;
         let mut binding = b"eliot-search/sealed-root-binding/v1\0".to_vec();
-        binding.extend_from_slice(
-            &metadata.volume_serial_number().unwrap_or(0).to_be_bytes(),
-        );
-        binding.extend_from_slice(&metadata.file_index().unwrap_or(0).to_be_bytes());
+        binding.extend_from_slice(&observed.legacy_identity_bytes());
         for unit in canonical.as_os_str().encode_wide() {
             binding.extend_from_slice(&unit.to_le_bytes());
         }

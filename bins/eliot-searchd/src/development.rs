@@ -214,8 +214,8 @@ enum PlatformFileIdentity {
     Unix { device: u64, inode: u64 },
     #[cfg(windows)]
     Windows {
-        volume_serial: Option<u32>,
-        file_index: Option<u64>,
+        volume_serial: u32,
+        file_index: u64,
     },
     #[cfg(not(any(unix, windows)))]
     Portable,
@@ -245,10 +245,11 @@ fn observe_file(file: &File) -> Result<FileObservation, String> {
 
     #[cfg(windows)]
     let platform_identity = {
-        use std::os::windows::fs::MetadataExt;
+        let observed = eliot_searchd::native_file::observe(file)
+            .map_err(|error| error.code().to_owned())?;
         PlatformFileIdentity::Windows {
-            volume_serial: metadata.volume_serial_number(),
-            file_index: metadata.file_index(),
+            volume_serial: observed.volume_serial,
+            file_index: observed.file_index,
         }
     };
 

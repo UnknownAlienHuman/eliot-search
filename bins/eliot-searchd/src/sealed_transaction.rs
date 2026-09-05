@@ -207,7 +207,7 @@ mod platform {
         SealedTransactionReceipt, SensitiveBytes, TransactionStatus,
         open_sealed, seal_immutable, validate_operation_id,
     };
-    use std::fs::{self, File, OpenOptions};
+    use std::fs::{self, File, OpenOptions, TryLockError};
     use std::io::{self, Read, Write};
     use std::os::windows::fs::MetadataExt;
     use std::path::{Path, PathBuf};
@@ -405,12 +405,9 @@ mod platform {
             .write(true)
             .open(path)
             .map_err(|_| SealedTransactionError::IoFailure)?;
-        file.try_lock().map_err(|error| {
-            if error.kind() == io::ErrorKind::WouldBlock {
-                SealedTransactionError::OperationBusy
-            } else {
-                SealedTransactionError::IoFailure
-            }
+        file.try_lock().map_err(|error| match error {
+            TryLockError::WouldBlock => SealedTransactionError::OperationBusy,
+            TryLockError::Error(_) => SealedTransactionError::IoFailure,
         })?;
         Ok(OperationLock { file })
     }
@@ -507,6 +504,8 @@ mod platform {
         }
         let mut file = File::open(path).map_err(|_| SealedTransactionError::IoFailure)?;
         let before = file.metadata().map_err(|_| SealedTransactionError::IoFailure)?;
+        let before_identity = eliot_searchd::native_file::observe(&file)
+            .map_err(|_| SealedTransactionError::IoFailure)?;
         let mut value = String::new();
         (&mut file)
             .take(u64::try_from(MAX_METADATA_BYTES + 1).unwrap_or(u64::MAX))
@@ -516,10 +515,11 @@ mod platform {
             return Err(SealedTransactionError::IoFailure);
         }
         let after = file.metadata().map_err(|_| SealedTransactionError::IoFailure)?;
+        let after_identity = eliot_searchd::native_file::observe(&file)
+            .map_err(|_| SealedTransactionError::IoFailure)?;
         if before.len() != after.len()
             || before.last_write_time() != after.last_write_time()
-            || before.file_index() != after.file_index()
-            || before.volume_serial_number() != after.volume_serial_number()
+            || before_identity != after_identity
         {
             return Err(SealedTransactionError::ReadbackMismatch);
         }
@@ -552,9 +552,10 @@ mod platform {
     fn encode_receipt(receipt: &Receipt) -> String {
         format!(
             concat!(
-                "{RECEIPT_MAGIC}\noperation={}\nobject={}\n",
+                "{}\noperation={}\nobject={}\n",
                 "plaintext_bytes={}\nciphertext_bytes={}\n"
             ),
+            RECEIPT_MAGIC,
             receipt.operation_id,
             receipt.object_id,
             receipt.plaintext_bytes,
@@ -623,5 +624,28 @@ mod platform {
         value
             .parse::<u64>()
             .map_err(|_| SealedTransactionError::ReadbackMismatch)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn receipt_encoding_retains_the_exact_legacy_wire_bytes() {
+            let receipt = Receipt {
+                operation_id: "operation-1".to_owned(),
+                object_id: "object-1".to_owned(),
+                plaintext_bytes: 12,
+                ciphertext_bytes: 256,
+            };
+            let encoded = encode_receipt(&receipt);
+            assert_eq!(encoded, concat!(
+                "ELIOT-SEALED-RECEIPT-V1\noperation=operation-1\nobject=object-1\n",
+                "plaintext_bytes=12\nciphertext_bytes=256\n",
+            ));
+            let fields = parse_metadata(&encoded, RECEIPT_MAGIC).unwrap();
+            assert_eq!(fields.len(), 4);
+            assert_eq!(parse_u64(field(&fields, "plaintext_bytes").unwrap()).unwrap(), 12);
+        }
     }
 }

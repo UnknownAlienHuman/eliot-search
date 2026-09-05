@@ -10,6 +10,10 @@ repository.workspace = true
 publish = false
 readme = "README.md"
 
+# Stateless native boundary shared only by this package's bin/test targets.
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "eliot-searchd"
 path = "src/entry.rs"
