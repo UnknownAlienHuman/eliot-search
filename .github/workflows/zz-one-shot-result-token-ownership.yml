@@ -1,0 +1,205 @@
+name: one-shot harden result token ownership
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-result-token-ownership.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-result-token-ownership
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Make issued bearer token move-only
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee result-token-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-query/search-result-projector/src/lib.rs')
+          text = path.read_text()
+
+          old_header = '''/// Opaque handle returned by the handle owner.
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub struct IssuedResultHandle {
+              /// Stable handle identity.
+              pub handle_id: HandleId,
+              /// Opaque bearer token returned once to the caller.
+              pub token: OpaqueHandleToken,
+              /// Handle retention class.
+              pub kind: HandleKind,
+              /// Content-free handle creation receipt.
+              pub receipt: ReceiptRef,
+          }'''
+          new_header = '''/// Opaque handle returned by the handle owner.
+          ///
+          /// The bearer token is deliberately private and the value is
+          /// non-cloneable. It can leave this boundary only by consuming the
+          /// issued handle:
+          ///
+          /// ```compile_fail
+          /// use search_result_projector::IssuedResultHandle;
+          ///
+          /// fn duplicate(handle: &IssuedResultHandle) {
+          ///     let _copy = handle.clone();
+          /// }
+          /// ```
+          #[derive(Debug, Eq, PartialEq)]
+          pub struct IssuedResultHandle {
+              handle_id: HandleId,
+              token: OpaqueHandleToken,
+              kind: HandleKind,
+              receipt: ReceiptRef,
+          }
+
+          impl IssuedResultHandle {
+              /// Creates one move-only issued result handle.
+              #[must_use]
+              pub const fn new(
+                  handle_id: HandleId,
+                  token: OpaqueHandleToken,
+                  kind: HandleKind,
+                  receipt: ReceiptRef,
+              ) -> Self {
+                  Self {
+                      handle_id,
+                      token,
+                      kind,
+                      receipt,
+                  }
+              }
+
+              /// Stable handle identity.
+              #[must_use]
+              pub const fn handle_id(&self) -> HandleId {
+                  self.handle_id
+              }
+
+              /// Handle retention class.
+              #[must_use]
+              pub const fn kind(&self) -> HandleKind {
+                  self.kind
+              }
+
+              /// Content-free handle creation receipt.
+              #[must_use]
+              pub const fn receipt(&self) -> &ReceiptRef {
+                  &self.receipt
+              }
+
+              /// Consumes the issued handle and releases the bearer token once.
+              #[must_use]
+              pub fn into_parts(
+                  self,
+              ) -> (HandleId, OpaqueHandleToken, HandleKind, ReceiptRef) {
+                  (self.handle_id, self.token, self.kind, self.receipt)
+              }
+          }'''
+          if old_header not in text:
+              if 'pub struct IssuedResultHandle {' not in text or 'pub fn into_parts(' not in text:
+                  raise SystemExit('IssuedResultHandle anchor missing')
+          else:
+              text = text.replace(old_header, new_header, 1)
+
+          replacements = {
+              '#[derive(Clone, Debug, Eq, PartialEq)]\npub struct ProjectedResult':
+                  '#[derive(Debug, Eq, PartialEq)]\npub struct ProjectedResult',
+              '#[derive(Clone, Debug, Eq, PartialEq)]\npub struct ResultEnvelope':
+                  '#[derive(Debug, Eq, PartialEq)]\npub struct ResultEnvelope',
+          }
+          for old, new in replacements.items():
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise SystemExit(f'result ownership derive anchor missing: {old}')
+
+          path.write_text(text)
+          PY
+          cargo fmt --all
+
+      - name: Verify result token boundary
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-result-projector --all-targets --locked
+            cargo test -p search-result-projector --locked
+            cargo test -p search-result-projector --doc --locked
+            cargo clippy -p search-result-projector --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            git diff --check
+          } 2>&1 | tee result-token-verify.log
+
+      - name: Commit verified ownership repair or bounded failure
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-result-token-ownership.yml
+          mkdir -p qualification/result-projector
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/result-projector/LAST_FAILURE.txt
+            cat > qualification/result-projector/TOKEN_OWNERSHIP_VERIFIED.md <<EOF
+          # Result bearer-token ownership
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Issued bearer tokens are private and move-only at the result boundary.
+          Result handles and envelopes cannot be cloned; token release consumes
+          the issued handle through \`into_parts\`.
+          EOF
+            git add -A
+            subject="fix(result-projector): make issued bearer tokens move-only"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-result-token-ownership.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 250 result-token-patch.log 2>/dev/null || true
+              tail -n 500 result-token-verify.log 2>/dev/null || true
+            } > qualification/result-projector/LAST_FAILURE.txt
+            git add -A
+            subject="verify(result-projector): record failed token-ownership repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
