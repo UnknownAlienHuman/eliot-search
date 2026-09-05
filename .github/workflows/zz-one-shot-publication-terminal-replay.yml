@@ -1,0 +1,512 @@
+name: one-shot make publication terminal replay exact
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-publication-terminal-replay.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-publication-terminal-replay
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout exact latest main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Require green consolidated baseline
+        shell: bash
+        run: |
+          test -f qualification/CURRENT_STATUS.md
+          test ! -f qualification/CURRENT_FAILURES.txt
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Persist typed terminal publication outcomes
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee publication-terminal-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-index-qdrant/search-publication/src/lib.rs')
+          text = path.read_text()
+
+          receipt_end = '''pub struct PublicationReceipt {
+              /// Terminal receipt identity.
+              pub publication_receipt_id: PublicationReceiptId,
+              /// Intent identity.
+              pub publication_intent_id: PublicationIntentId,
+              /// Exact committed route.
+              pub route: VisibleRoute,
+              /// Exact desired manifest digest.
+              pub desired_manifest_digest: Blake3Digest32,
+              /// Exact retired manifest digest.
+              pub retired_manifest_digest: Blake3Digest32,
+              /// Complete evidence digest.
+              pub evidence_digest: Blake3Digest32,
+              /// Immutable operation identity.
+              pub operation: MutationIdentity,
+              /// Content-free control receipt.
+              pub control_receipt: ReceiptRef,
+          }
+          '''
+          terminal_types = '''pub struct PublicationReceipt {
+              /// Terminal receipt identity.
+              pub publication_receipt_id: PublicationReceiptId,
+              /// Intent identity.
+              pub publication_intent_id: PublicationIntentId,
+              /// Exact committed route.
+              pub route: VisibleRoute,
+              /// Exact desired manifest digest.
+              pub desired_manifest_digest: Blake3Digest32,
+              /// Exact retired manifest digest.
+              pub retired_manifest_digest: Blake3Digest32,
+              /// Complete evidence digest.
+              pub evidence_digest: Blake3Digest32,
+              /// Immutable operation identity.
+              pub operation: MutationIdentity,
+              /// Content-free control receipt.
+              pub control_receipt: ReceiptRef,
+          }
+
+          /// Terminal receipt for a publication safely fenced before visibility.
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub struct PublicationAbortReceipt {
+              /// Durable publication intent.
+              pub publication_intent_id: PublicationIntentId,
+              /// Target collection generation that was fenced.
+              pub collection_generation_id: CollectionGenerationId,
+              /// Target epoch that never became serving authority.
+              pub target_epoch: Epoch,
+              /// Exact staged manifest digest fenced from serving.
+              pub staged_manifest_digest: Blake3Digest32,
+              /// Immutable publication operation.
+              pub operation: MutationIdentity,
+              /// Content-free abandoned-stage fence receipt.
+              pub fence_receipt: ReceiptRef,
+          }
+
+          /// Exactly one terminal outcome retained per publication operation.
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub enum PublicationTerminalOutcome {
+              /// Visible route commit completed and was verified.
+              Committed(PublicationReceipt),
+              /// Staged state was fenced before a visible route commit.
+              Aborted(PublicationAbortReceipt),
+          }
+
+          /// Result of publication admission.
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub enum PublicationAdmission {
+              /// A new publication was prepared and has one external effect.
+              Fresh(PublicationEffect),
+              /// Exact terminal operation replay returned its original outcome.
+              Replay(PublicationTerminalOutcome),
+          }
+
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          struct PublicationOperationRecord {
+              operation: MutationIdentity,
+              request_digest: Blake3Digest32,
+              terminal: Option<PublicationTerminalOutcome>,
+          }
+          '''
+          if 'pub enum PublicationTerminalOutcome {' not in text:
+              if receipt_end not in text:
+                  raise SystemExit('PublicationReceipt anchor missing')
+              text = text.replace(receipt_end, terminal_types, 1)
+
+          field_old = '    operations: BTreeMap<OpaqueId, Blake3Digest32>,\n'
+          field_new = '    operations: BTreeMap<OpaqueId, PublicationOperationRecord>,\n'
+          if field_old in text:
+              text = text.replace(field_old, field_new, 1)
+          elif field_new not in text:
+              raise SystemExit('publication operation map anchor missing')
+
+          prepare_start = text.index('    /// Validates and prepares a publication.')
+          prepare_end = text.index('\n    /// Accepts exact durable intent readback.', prepare_start)
+          prepare_replacement = '''    /// Validates and prepares a publication or replays its terminal outcome.
+              pub fn prepare(
+                  &mut self,
+                  request: PublicationRequest,
+              ) -> Result<PublicationAdmission, PublicationError> {
+                  let operation_id = request.operation.operation_id.clone();
+                  if let Some(existing) = self.operations.get(&operation_id) {
+                      if existing.operation != request.operation
+                          || existing.request_digest != request.request_digest
+                      {
+                          return Err(PublicationError::OperationConflict);
+                      }
+                      return match replay_terminal(
+                          existing.request_digest,
+                          existing.terminal.as_ref(),
+                          request.request_digest,
+                      )? {
+                          Some(outcome) => Ok(PublicationAdmission::Replay(outcome)),
+                          None => Err(PublicationError::PublicationAlreadyActive),
+                      };
+                  }
+                  if !matches!(
+                      self.phase,
+                      PublicationPhase::Idle
+                          | PublicationPhase::Committed
+                          | PublicationPhase::Aborted
+                  ) {
+                      return Err(PublicationError::PublicationAlreadyActive);
+                  }
+                  if self.operations.len() >= self.policy.max_operations() {
+                      return Err(PublicationError::OperationCapacityExceeded);
+                  }
+                  validate_request(&request, self.policy)?;
+                  let effect = PublicationEffect::PersistIntent {
+                      request_digest: request.request_digest,
+                      desired_manifest_digest: request
+                          .projection_plan
+                          .manifest
+                          .desired_manifest_digest,
+                      action_manifest_digest: request
+                          .projection_plan
+                          .manifest
+                          .action_manifest_digest,
+                  };
+                  self.operations.insert(
+                      operation_id,
+                      PublicationOperationRecord {
+                          operation: request.operation.clone(),
+                          request_digest: request.request_digest,
+                          terminal: None,
+                      },
+                  );
+                  self.active = Some(ActivePublication {
+                      request,
+                      intent_readback: None,
+                      point_readback: None,
+                      closure_readback: None,
+                      manifest_readback: None,
+                      evidence_digest: None,
+                  });
+                  self.phase = PublicationPhase::Prepared;
+                  Ok(PublicationAdmission::Fresh(effect))
+              }
+          '''
+          text = text[:prepare_start] + prepare_replacement + text[prepare_end:]
+
+          finish_commit_start = text.index('    /// Accepts exact route commit readback and publishes terminal authority.')
+          finish_commit_end = text.index('\n    /// Begins compensation before a route commit has an unknown outcome.', finish_commit_start)
+          finish_commit_replacement = '''    /// Accepts exact route commit readback and publishes terminal authority.
+              pub fn finish_control_commit(
+                  &mut self,
+                  readback: RouteCommitReadback,
+              ) -> Result<PublicationReceipt, PublicationError> {
+                  if !matches!(
+                      self.phase,
+                      PublicationPhase::ReadbackVerified
+                          | PublicationPhase::ControlCommitOutcomeUnknown
+                  ) {
+                      return Err(PublicationError::InvalidTransition);
+                  }
+                  let active = self.active_ref()?.clone();
+                  let evidence_digest = active
+                      .evidence_digest
+                      .ok_or(PublicationError::TargetManifestMissing)?;
+                  let closure = active
+                      .closure_readback
+                      .as_ref()
+                      .ok_or(PublicationError::OldPointClosureMissing)?;
+                  let expected_revision = active
+                      .request
+                      .current_route
+                      .route_revision
+                      .checked_next()
+                      .map_err(|_| PublicationError::ContractExhausted)?;
+                  if readback.publication_intent_id
+                      != active.request.publication_intent_id
+                      || readback.publication_receipt_id
+                          != active.request.publication_receipt_id
+                      || readback.route.collection_generation_id
+                          != active.request.target_collection_generation_id
+                      || readback.route.visible_epoch != active.request.target_epoch
+                      || readback.route.route_revision != expected_revision
+                      || readback.route.visible_manifest_digest
+                          != active
+                              .request
+                              .projection_plan
+                              .manifest
+                              .desired_manifest_digest
+                      || readback.route.owner_epoch
+                          != active.request.current_route.owner_epoch
+                      || readback.evidence_digest != evidence_digest
+                  {
+                      return self.quarantine_with(
+                          PublicationError::ControlCommitReadbackMismatch,
+                      );
+                  }
+                  let receipt = PublicationReceipt {
+                      publication_receipt_id: readback.publication_receipt_id,
+                      publication_intent_id: readback.publication_intent_id,
+                      route: readback.route,
+                      desired_manifest_digest: active
+                          .request
+                          .projection_plan
+                          .manifest
+                          .desired_manifest_digest,
+                      retired_manifest_digest: closure.retired_manifest_digest,
+                      evidence_digest,
+                      operation: active.request.operation.clone(),
+                      control_receipt: readback.receipt,
+                  };
+                  self.finish_operation(
+                      &active.request.operation,
+                      active.request.request_digest,
+                      PublicationTerminalOutcome::Committed(receipt.clone()),
+                  )?;
+                  self.active = None;
+                  self.last_receipt = Some(receipt.clone());
+                  self.phase = PublicationPhase::Committed;
+                  Ok(receipt)
+              }
+          '''
+          text = text[:finish_commit_start] + finish_commit_replacement + text[finish_commit_end:]
+
+          finish_abort_start = text.index('    /// Accepts exact abandoned-stage fence readback.')
+          finish_abort_end = text.index('\n    /// Explicitly quarantines publication state.', finish_abort_start)
+          finish_abort_replacement = '''    /// Accepts exact abandoned-stage fence readback and records terminal abort.
+              pub fn finish_abort(
+                  &mut self,
+                  publication_intent_id: PublicationIntentId,
+                  staged_manifest_digest: Blake3Digest32,
+                  fence_receipt: ReceiptRef,
+              ) -> Result<PublicationAbortReceipt, PublicationError> {
+                  self.require_phase(PublicationPhase::Compensating)?;
+                  let active = self.active_ref()?.clone();
+                  if active.request.publication_intent_id != publication_intent_id
+                      || active
+                          .request
+                          .projection_plan
+                          .manifest
+                          .desired_manifest_digest
+                          != staged_manifest_digest
+                  {
+                      return self.quarantine_with(
+                          PublicationError::CompensationReadbackMismatch,
+                      );
+                  }
+                  let receipt = PublicationAbortReceipt {
+                      publication_intent_id,
+                      collection_generation_id: active
+                          .request
+                          .target_collection_generation_id,
+                      target_epoch: active.request.target_epoch,
+                      staged_manifest_digest,
+                      operation: active.request.operation.clone(),
+                      fence_receipt,
+                  };
+                  self.finish_operation(
+                      &active.request.operation,
+                      active.request.request_digest,
+                      PublicationTerminalOutcome::Aborted(receipt.clone()),
+                  )?;
+                  self.active = None;
+                  self.phase = PublicationPhase::Aborted;
+                  Ok(receipt)
+              }
+          '''
+          text = text[:finish_abort_start] + finish_abort_replacement + text[finish_abort_end:]
+
+          helper_start = text.index('    fn register_operation(')
+          helper_end = text.index('\n    fn require_phase(', helper_start)
+          helper_replacement = '''    fn finish_operation(
+                  &mut self,
+                  operation: &MutationIdentity,
+                  request_digest: Blake3Digest32,
+                  outcome: PublicationTerminalOutcome,
+              ) -> Result<(), PublicationError> {
+                  let record = self
+                      .operations
+                      .get_mut(&operation.operation_id)
+                      .ok_or(PublicationError::OperationStateCorrupt)?;
+                  if &record.operation != operation
+                      || record.request_digest != request_digest
+                  {
+                      return Err(PublicationError::OperationConflict);
+                  }
+                  if record.terminal.is_some() {
+                      return Err(PublicationError::OperationAlreadyTerminal);
+                  }
+                  record.terminal = Some(outcome);
+                  Ok(())
+              }
+          '''
+          text = text[:helper_start] + helper_replacement + text[helper_end:]
+
+          helper_anchor = '\nfn validate_request(\n'
+          generic_helper = '''
+          fn replay_terminal<T: Clone>(
+              stored_digest: Blake3Digest32,
+              terminal: Option<&T>,
+              request_digest: Blake3Digest32,
+          ) -> Result<Option<T>, PublicationError> {
+              if stored_digest != request_digest {
+                  return Err(PublicationError::OperationConflict);
+              }
+              Ok(terminal.cloned())
+          }
+          '''
+          if 'fn replay_terminal<T: Clone>(' not in text:
+              if helper_anchor not in text:
+                  raise SystemExit('publication helper anchor missing')
+              text = text.replace(helper_anchor, generic_helper + helper_anchor, 1)
+
+          error_anchor = '''    /// Mutation identity was reused with another request digest.
+              OperationConflict,
+              /// Operation ledger capacity is exhausted.'''
+          error_replacement = '''    /// Mutation identity was reused with another request digest or identity.
+              OperationConflict,
+              /// Operation record is missing or inconsistent with active state.
+              OperationStateCorrupt,
+              /// A second terminal outcome was attempted for one operation.
+              OperationAlreadyTerminal,
+              /// Operation ledger capacity is exhausted.'''
+          if 'OperationStateCorrupt,' not in text:
+              if error_anchor not in text:
+                  raise SystemExit('PublicationError operation anchor missing')
+              text = text.replace(error_anchor, error_replacement, 1)
+
+          code_anchor = '''            Self::OperationConflict => "PUBLICATION_OPERATION_CONFLICT",
+                      Self::OperationCapacityExceeded => "PUBLICATION_OPERATION_CAPACITY",'''
+          code_replacement = '''            Self::OperationConflict => "PUBLICATION_OPERATION_CONFLICT",
+                      Self::OperationStateCorrupt => "PUBLICATION_OPERATION_STATE_CORRUPT",
+                      Self::OperationAlreadyTerminal => "PUBLICATION_OPERATION_ALREADY_TERMINAL",
+                      Self::OperationCapacityExceeded => "PUBLICATION_OPERATION_CAPACITY",'''
+          if 'PUBLICATION_OPERATION_STATE_CORRUPT' not in text:
+              if code_anchor not in text:
+                  raise SystemExit('PublicationError operation code anchor missing')
+              text = text.replace(code_anchor, code_replacement, 1)
+
+          if 'terminal_replay_requires_the_exact_request_digest' not in text:
+              text += r'''
+
+          #[cfg(test)]
+          mod terminal_replay_tests {
+              use super::{PublicationError, replay_terminal};
+              use search_contracts::Blake3Digest32;
+
+              #[test]
+              fn terminal_replay_requires_the_exact_request_digest() {
+                  let digest = Blake3Digest32::from_bytes([1; 32]);
+                  let other = Blake3Digest32::from_bytes([2; 32]);
+                  assert_eq!(replay_terminal(digest, Some(&7_u8), digest), Ok(Some(7)));
+                  assert_eq!(replay_terminal::<u8>(digest, None, digest), Ok(None));
+                  assert_eq!(
+                      replay_terminal(digest, Some(&7_u8), other),
+                      Err(PublicationError::OperationConflict)
+                  );
+              }
+          }
+          '''
+
+          path.write_text(text)
+
+          functions_path = Path('crates/search-index-qdrant/search-publication/FUNCTIONS.md')
+          functions = functions_path.read_text()
+          section = '''
+
+          ## Terminal publication replay
+
+          Each publication operation retains one typed terminal outcome:
+          committed route receipt or aborted-stage fence receipt. Re-admitting
+          the exact same operation and request digest returns that original
+          outcome without reopening publication or repeating Qdrant/control
+          effects. Reuse with another identity or digest conflicts.
+          '''
+          if '## Terminal publication replay' not in functions:
+              functions_path.write_text(functions + section)
+          PY
+          cargo fmt --all
+
+      - name: Verify terminal publication replay and workspace
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-publication --all-targets --locked
+            cargo test -p search-publication --all-targets --locked
+            cargo clippy -p search-publication --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            grep -q 'pub enum PublicationTerminalOutcome' crates/search-index-qdrant/search-publication/src/lib.rs
+            grep -q 'pub enum PublicationAdmission' crates/search-index-qdrant/search-publication/src/lib.rs
+            grep -q 'PublicationTerminalOutcome::Aborted' crates/search-index-qdrant/search-publication/src/lib.rs
+            if grep -q 'operations: BTreeMap<OpaqueId, Blake3Digest32>' crates/search-index-qdrant/search-publication/src/lib.rs; then
+              echo 'digest-only publication operation ledger remains'
+              exit 1
+            fi
+            git diff --check
+          } 2>&1 | tee publication-terminal-verify.log
+
+      - name: Commit verified terminal replay or bounded failure evidence
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-publication-terminal-replay.yml
+          mkdir -p qualification/publication
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/publication/LAST_FAILURE.txt
+            cat > qualification/publication/TERMINAL_REPLAY_VERIFIED.md <<EOF
+          # Publication terminal replay
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Committed and safely aborted publication operations retain one typed
+          terminal outcome. Exact replay returns the original receipt without
+          reopening publication or repeating external effects.
+          EOF
+            git add -A
+            subject="fix(publication): retain and replay terminal outcomes"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-publication-terminal-replay.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 500 publication-terminal-patch.log 2>/dev/null || true
+              tail -n 900 publication-terminal-verify.log 2>/dev/null || true
+            } > qualification/publication/LAST_FAILURE.txt
+            git add -A
+            subject="verify(publication): record failed terminal-replay repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
