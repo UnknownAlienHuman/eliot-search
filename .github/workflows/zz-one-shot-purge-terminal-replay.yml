@@ -1,0 +1,319 @@
+name: one-shot make purge finalization idempotent
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-purge-terminal-replay.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-purge-terminal-replay
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Persist one terminal purge receipt and reject mutation afterward
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee purge-terminal-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-runtime/search-retention/src/lib.rs')
+          text = path.read_text()
+
+          field_anchor = '''    /// Monotone purge-state revision.
+              pub revision: NonZeroRevision,
+          }'''
+          field_replacement = '''    /// Monotone purge-state revision.
+              pub revision: NonZeroRevision,
+              /// Exactly one terminal receipt after logical purge completion.
+              pub terminal_receipt: Option<PurgeReceipt>,
+          }'''
+          purge_state_region = text[text.index('pub struct PurgeState'):text.index('/// One layer mutation effect.')]
+          if 'terminal_receipt: Option<PurgeReceipt>' not in purge_state_region:
+              if field_anchor not in text:
+                  raise SystemExit('PurgeState revision anchor missing')
+              text = text.replace(field_anchor, field_replacement, 1)
+
+          init_anchor = '''            revision: NonZeroRevision::new(1)
+                          .map_err(|_| RetentionError::ContractExhausted)?,
+                  };'''
+          init_replacement = '''            revision: NonZeroRevision::new(1)
+                          .map_err(|_| RetentionError::ContractExhausted)?,
+                      terminal_receipt: None,
+                  };'''
+          if 'terminal_receipt: None' not in text:
+              if init_anchor not in text:
+                  raise SystemExit('PurgeState initializer anchor missing')
+              text = text.replace(init_anchor, init_replacement, 1)
+
+          next_anchor = '''        let state = self.purges.get(purge_id).ok_or(RetentionError::PurgeNotFound)?;
+                  for layer in PurgeLayer::REQUIRED {'''
+          next_replacement = '''        let state = self.purges.get(purge_id).ok_or(RetentionError::PurgeNotFound)?;
+                  if state.terminal_receipt.is_some() {
+                      return Ok(None);
+                  }
+                  for layer in PurgeLayer::REQUIRED {'''
+          if next_anchor in text and 'return Ok(None);\n        }\n        for layer' not in text:
+              text = text.replace(next_anchor, next_replacement, 1)
+
+          method_names = [
+              'complete_layer',
+              'record_backup_disposition',
+              'set_secure_erase_state',
+              'mark_layer_unknown',
+          ]
+          for method_name in method_names:
+              method_start = text.index(f'    pub fn {method_name}(')
+              next_method = text.find('\n    ///', method_start + 10)
+              if next_method == -1:
+                  next_method = text.find('\n    fn ', method_start + 10)
+              region = text[method_start:next_method]
+              if 'PurgeAlreadyFinalized' in region:
+                  continue
+              patterns = [
+                  '''        let state = self
+                      .purges
+                      .get_mut(&effect.purge_id)
+                      .ok_or(RetentionError::PurgeNotFound)?;''',
+                  '''        let state = self
+                      .purges
+                      .get_mut(purge_id)
+                      .ok_or(RetentionError::PurgeNotFound)?;''',
+              ]
+              replaced = False
+              for anchor in patterns:
+                  if anchor in region:
+                      replacement = anchor + '''
+                  if state.terminal_receipt.is_some() {
+                      return Err(RetentionError::PurgeAlreadyFinalized);
+                  }'''
+                      region = region.replace(anchor, replacement, 1)
+                      replaced = True
+                      break
+              if not replaced:
+                  raise SystemExit(f'purge terminal guard anchor missing in {method_name}')
+              text = text[:method_start] + region + text[next_method:]
+
+          finish_start = text.index('    /// Finalizes logical purge only when every required layer has exact terminal')
+          finish_end = text.index('\n    /// Begins restore in a non-serving pending-revalidation state.', finish_start)
+          finish_replacement = '''    /// Finalizes logical purge exactly once after every required layer.
+              ///
+              /// Exact replay with the same tombstone receipt returns the original
+              /// terminal receipt. A different tombstone receipt conflicts and no
+              /// subject or purge revision advances again.
+              pub fn finish_purge<D>(
+                  &mut self,
+                  purge_id: &OpaqueId,
+                  tombstone_receipt: ReceiptRef,
+                  digester: &D,
+              ) -> Result<PurgeReceipt, RetentionError>
+              where
+                  D: RetentionDigester,
+              {
+                  if let Some(existing) = self
+                      .purges
+                      .get(purge_id)
+                      .ok_or(RetentionError::PurgeNotFound)?
+                      .terminal_receipt
+                      .as_ref()
+                  {
+                      return if existing.tombstone_receipt == tombstone_receipt {
+                          Ok(existing.clone())
+                      } else {
+                          Err(RetentionError::PurgeTerminalConflict)
+                      };
+                  }
+
+                  let state = self
+                      .purges
+                      .get(purge_id)
+                      .cloned()
+                      .ok_or(RetentionError::PurgeNotFound)?;
+                  if PurgeLayer::REQUIRED
+                      .into_iter()
+                      .any(|layer| !layer_terminal(&state, layer))
+                      || matches!(state.backup_disposition, BackupDisposition::Unresolved)
+                  {
+                      return Err(RetentionError::PurgeIncomplete);
+                  }
+                  let subject = self
+                      .subjects
+                      .get(&state.request.subject)
+                      .ok_or(RetentionError::SubjectNotFound)?;
+                  if !matches!(
+                      &subject.state,
+                      RetentionState::PurgePending { purge_id: active }
+                          if active == purge_id
+                  ) {
+                      return Err(RetentionError::InvalidTransition);
+                  }
+                  let next_subject_revision = subject
+                      .record_revision
+                      .checked_next()
+                      .map_err(|_| RetentionError::ContractExhausted)?;
+                  let next_purge_revision = state
+                      .revision
+                      .checked_next()
+                      .map_err(|_| RetentionError::ContractExhausted)?;
+                  let layer_receipt_digest = digester.digest_purge_layers(&state);
+                  let receipt = PurgeReceipt {
+                      purge_id: purge_id.clone(),
+                      subject: state.request.subject.clone(),
+                      purge_fence_revision: state.request.purge_fence_revision,
+                      layer_receipt_digest,
+                      backup_disposition: state.backup_disposition,
+                      secure_erase: state.secure_erase,
+                      tombstone_receipt: tombstone_receipt.clone(),
+                  };
+
+                  let subject = self
+                      .subjects
+                      .get_mut(&state.request.subject)
+                      .ok_or(RetentionError::SubjectNotFound)?;
+                  subject.record_revision = next_subject_revision;
+                  subject.state = RetentionState::Purged {
+                      purge_id: purge_id.clone(),
+                      tombstone_receipt,
+                  };
+                  let purge = self
+                      .purges
+                      .get_mut(purge_id)
+                      .ok_or(RetentionError::PurgeNotFound)?;
+                  purge.revision = next_purge_revision;
+                  purge.terminal_receipt = Some(receipt.clone());
+                  Ok(receipt)
+              }
+          '''
+          text = text[:finish_start] + finish_replacement + text[finish_end:]
+
+          error_anchor = '''    /// One or more required purge layers are incomplete.
+              PurgeIncomplete,
+              /// Restore identity/owner epoch conflicts.'''
+          error_replacement = '''    /// One or more required purge layers are incomplete.
+              PurgeIncomplete,
+              /// Purge already has a terminal receipt and cannot mutate further.
+              PurgeAlreadyFinalized,
+              /// Replay supplied a different terminal tombstone receipt.
+              PurgeTerminalConflict,
+              /// Restore identity/owner epoch conflicts.'''
+          if 'PurgeAlreadyFinalized,' not in text:
+              if error_anchor not in text:
+                  raise SystemExit('RetentionError purge terminal anchor missing')
+              text = text.replace(error_anchor, error_replacement, 1)
+
+          code_anchor = '''            Self::PurgeIncomplete => "RETENTION_PURGE_INCOMPLETE",
+                      Self::RestoreIdentityConflict => "RETENTION_RESTORE_IDENTITY_CONFLICT",'''
+          code_replacement = '''            Self::PurgeIncomplete => "RETENTION_PURGE_INCOMPLETE",
+                      Self::PurgeAlreadyFinalized => "RETENTION_PURGE_ALREADY_FINALIZED",
+                      Self::PurgeTerminalConflict => "RETENTION_PURGE_TERMINAL_CONFLICT",
+                      Self::RestoreIdentityConflict => "RETENTION_RESTORE_IDENTITY_CONFLICT",'''
+          if 'RETENTION_PURGE_ALREADY_FINALIZED' not in text:
+              if code_anchor not in text:
+                  raise SystemExit('RetentionError terminal code anchor missing')
+              text = text.replace(code_anchor, code_replacement, 1)
+
+          path.write_text(text)
+
+          functions_path = Path('crates/search-runtime/search-retention/FUNCTIONS.md')
+          functions = functions_path.read_text()
+          section = '''
+
+          ## Terminal purge replay
+
+          Purge finalization stores exactly one `PurgeReceipt` in the durable
+          logical state. Subject and purge revisions advance once. Repeating
+          finalization with the same tombstone receipt returns the original
+          receipt; a different receipt is a terminal conflict. Layer and backup
+          state cannot mutate after finalization.
+          '''
+          if '## Terminal purge replay' not in functions:
+              functions_path.write_text(functions + section)
+          PY
+          cargo fmt --all
+
+      - name: Verify terminal purge idempotency and workspace
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-retention --all-targets --locked
+            cargo test -p search-retention --all-targets --locked
+            cargo clippy -p search-retention --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            grep -q 'terminal_receipt: Option<PurgeReceipt>' crates/search-runtime/search-retention/src/lib.rs
+            grep -q 'PurgeTerminalConflict' crates/search-runtime/search-retention/src/lib.rs
+            git diff --check
+          } 2>&1 | tee purge-terminal-verify.log
+
+      - name: Commit verified purge repair or bounded failure evidence
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-purge-terminal-replay.yml
+          mkdir -p qualification/retention
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/retention/LAST_FAILURE.txt
+            cat > qualification/retention/PURGE_TERMINAL_REPLAY_VERIFIED.md <<EOF
+          # Purge terminal replay
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Logical purge finalization now advances subject and purge revisions
+          exactly once. Exact replay returns the original receipt; a different
+          tombstone receipt conflicts and terminal purge state cannot mutate.
+          EOF
+            git add -A
+            subject="fix(retention): make purge finalization terminal and idempotent"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-purge-terminal-replay.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 400 purge-terminal-patch.log 2>/dev/null || true
+              tail -n 750 purge-terminal-verify.log 2>/dev/null || true
+            } > qualification/retention/LAST_FAILURE.txt
+            git add -A
+            subject="verify(retention): record failed terminal-purge repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
