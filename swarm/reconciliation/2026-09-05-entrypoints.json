@@ -1,0 +1,153 @@
+{
+  "schema": "eliot-search/entrypoint-manifests-v1",
+  "source_commit": "8ef226d8dca4368e2fe83c37c870f56190b2c168",
+  "basis": "Exact two manifests and six tracked src/bin paths; auto-discovery must be confirmed with cargo metadata. Not compiled target reachability.",
+  "observations": {
+    "eliot-searchd": {
+      "manifest_git_blob": "97cdd44b1711574adacbf89fbde147ca6ab89ee2",
+      "default_run": "eliot-searchd",
+      "direct_nonoptional_dependencies": [
+        "search-config",
+        "search-contracts",
+        "search-control-redb",
+        "search-domain",
+        "search-exact",
+        "search-lexical",
+        "search-materializer",
+        "search-os-secrets",
+        "search-ports",
+        "search-provider-protocol",
+        "search-runtime-owner",
+        "search-unitizer",
+        "zeroize"
+      ],
+      "direct_optional_dependencies": [
+        "search-access",
+        "search-candidate-validator",
+        "search-code-enricher",
+        "search-comparator",
+        "search-continuation",
+        "search-epoch-pins",
+        "search-eval",
+        "search-handles",
+        "search-index-reclaimer",
+        "search-overlay",
+        "search-point-identity",
+        "search-projection-planner",
+        "search-publication",
+        "search-qdrant-bridge",
+        "search-qdrant-supervisor",
+        "search-query-planner",
+        "search-result-projector",
+        "search-retention",
+        "search-retrieval-executor",
+        "search-revision-store",
+        "search-safe-reader",
+        "search-source-admission",
+        "search-source-identity",
+        "search-source-reconcile",
+        "search-source-registry",
+        "search-subject-resolver"
+      ],
+      "features": {
+        "default": [
+          "wave1-shell"
+        ],
+        "wave1-shell": [],
+        "wave2-source": [
+          "dep:search-source-admission",
+          "dep:search-source-registry",
+          "dep:search-source-identity",
+          "dep:search-safe-reader",
+          "dep:search-revision-store"
+        ],
+        "wave3-index": [
+          "wave2-source",
+          "dep:search-projection-planner",
+          "dep:search-point-identity",
+          "dep:search-qdrant-supervisor",
+          "dep:search-qdrant-bridge",
+          "dep:search-publication",
+          "dep:search-epoch-pins",
+          "dep:search-index-reclaimer"
+        ],
+        "wave4-query": [
+          "wave3-index",
+          "dep:search-access",
+          "dep:search-query-planner",
+          "dep:search-retrieval-executor",
+          "dep:search-candidate-validator",
+          "dep:search-handles",
+          "dep:search-result-projector",
+          "dep:search-continuation",
+          "dep:search-eval"
+        ],
+        "wave5-current": [
+          "wave4-query",
+          "dep:search-source-reconcile",
+          "dep:search-overlay",
+          "dep:search-code-enricher"
+        ],
+        "wave6-proof": [
+          "wave5-current",
+          "dep:search-subject-resolver",
+          "dep:search-comparator"
+        ],
+        "wave7-lifecycle": [
+          "wave6-proof",
+          "dep:search-retention"
+        ],
+        "full-baseline": [
+          "wave7-lifecycle"
+        ]
+      },
+      "explicit_bins": [
+        {
+          "name": "eliot-searchd",
+          "path": "src/entry.rs"
+        },
+        {
+          "name": "eliot-search-snapshotd",
+          "path": "src/main.rs"
+        }
+      ],
+      "autobins_default_enabled": true,
+      "auto_bin_candidates": [
+        "eliot-search-sealed-authority",
+        "eliot-search-sealed-catalog",
+        "eliot-search-sealed-direct",
+        "eliot-search-sealed-recover",
+        "eliot-search-sealed-store",
+        "eliot-search-sealed-transaction"
+      ]
+    },
+    "eliot-search": {
+      "manifest_git_blob": "018dcaab2ba79944c372e3b96ef6748eee522343",
+      "default_run": "eliot-search",
+      "direct_nonoptional_dependencies": [
+        "search-config",
+        "search-contracts",
+        "search-ports",
+        "search-provider-protocol"
+      ],
+      "direct_optional_dependencies": [],
+      "features": {},
+      "explicit_bins": [
+        {
+          "name": "eliot-search",
+          "path": "src/entry.rs"
+        },
+        {
+          "name": "eliot-search-snapshot",
+          "path": "src/main.rs"
+        }
+      ],
+      "autobins_default_enabled": true,
+      "auto_bin_candidates": []
+    }
+  },
+  "candidate_only": true,
+  "candidate_patch": "docs/execution/2026-09-05/T02_TARGET_ISOLATION.patch",
+  "source_files_moved": 0,
+  "runtime_acceptance": false
+}

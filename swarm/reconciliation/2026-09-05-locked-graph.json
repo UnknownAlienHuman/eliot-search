@@ -1,0 +1,85 @@
+{
+  "schema": "eliot-search/workspace-locked-edges-v1",
+  "source_commit": "8ef226d8dca4368e2fe83c37c870f56190b2c168",
+  "source_git_blobs": {
+    "Cargo.toml": "d6977c6a9d3e2369d44b094103dbab737855ea07",
+    "Cargo.lock": "098e3b3d7d4f59ed013ca52fe2d4ba25ca689f88"
+  },
+  "basis": "All workspace rows in the exact checked-in lockfile. Not cargo metadata, enabled-feature resolution, native compilation or runtime reachability.",
+  "authorizes_execution": false,
+  "counts": {
+    "workspace_packages": 47,
+    "external_package_versions": 30,
+    "locked_internal_edges": 208
+  },
+  "dependency_kind": "UNKNOWN_UNLESS_MANIFEST_CLASSIFIED",
+  "workspace_dependencies": {
+    "eliot-search": ["search-config", "search-contracts", "search-ports", "search-provider-protocol"],
+    "eliot-search-doc-worker": ["search-contracts", "search-materializer", "search-ports", "search-provider-protocol"],
+    "eliot-search-model-worker": ["search-contracts", "search-model-provider", "search-ports", "search-provider-protocol"],
+    "eliot-searchd": ["search-access", "search-candidate-validator", "search-code-enricher", "search-comparator", "search-config", "search-continuation", "search-contracts", "search-control-redb", "search-domain", "search-epoch-pins", "search-eval", "search-exact", "search-handles", "search-index-reclaimer", "search-lexical", "search-materializer", "search-os-secrets", "search-overlay", "search-point-identity", "search-ports", "search-projection-planner", "search-provider-protocol", "search-publication", "search-qdrant-bridge", "search-qdrant-supervisor", "search-query-planner", "search-result-projector", "search-retention", "search-retrieval-executor", "search-revision-store", "search-runtime-owner", "search-safe-reader", "search-source-admission", "search-source-identity", "search-source-reconcile", "search-source-registry", "search-subject-resolver", "search-unitizer", "zeroize"],
+    "search-access": ["search-contracts", "search-domain", "search-ports"],
+    "search-candidate-validator": ["search-access", "search-contracts", "search-domain", "search-ports"],
+    "search-code-enricher": ["search-contracts", "search-domain", "search-ports"],
+    "search-comparator": ["search-contracts", "search-domain", "search-subject-resolver"],
+    "search-config": ["search-contracts"],
+    "search-continuation": ["search-access", "search-config", "search-contracts", "search-domain", "search-epoch-pins", "search-ports", "search-query-planner"],
+    "search-contracts": [],
+    "search-control-redb": ["redb", "search-config", "search-contracts", "search-domain", "search-ports", "sha2"],
+    "search-domain": ["search-contracts"],
+    "search-eliot-adapter": ["search-contracts", "search-domain", "search-provider-protocol"],
+    "search-epoch-pins": ["search-contracts", "search-domain", "search-ports"],
+    "search-eval": ["search-config", "search-contracts", "search-domain"],
+    "search-exact": ["search-access", "search-contracts", "search-domain", "search-ports"],
+    "search-handles": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-index-reclaimer": ["search-config", "search-contracts", "search-domain", "search-epoch-pins", "search-ports"],
+    "search-lexical": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-materializer": ["search-contracts", "search-domain", "search-ports"],
+    "search-model-provider": ["search-contracts", "search-domain", "search-ports"],
+    "search-os-secrets": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-os-secrets-windows": [],
+    "search-overlay": ["search-config", "search-contracts", "search-domain", "search-lexical", "search-ports", "search-unitizer"],
+    "search-point-identity": ["search-contracts", "search-domain"],
+    "search-ports": ["search-contracts"],
+    "search-projection-planner": ["search-contracts", "search-domain", "search-point-identity", "search-ports"],
+    "search-provider-protocol": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-publication": ["search-contracts", "search-domain", "search-point-identity", "search-ports", "search-projection-planner"],
+    "search-qdrant-bridge": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-qdrant-supervisor": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-query-planner": ["search-access", "search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-research-export-adapter": ["search-contracts", "search-domain", "search-ports", "search-provider-protocol"],
+    "search-result-projector": ["search-access", "search-candidate-validator", "search-contracts", "search-domain", "search-handles", "search-ports"],
+    "search-retention": ["search-config", "search-contracts", "search-domain", "search-epoch-pins", "search-handles", "search-index-reclaimer", "search-ports"],
+    "search-retrieval-executor": ["search-access", "search-config", "search-contracts", "search-domain", "search-epoch-pins", "search-lexical", "search-ports", "search-query-planner"],
+    "search-revision-crypto": ["aes-gcm", "getrandom 0.3.4", "sha2", "zeroize"],
+    "search-revision-store": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-runtime-owner": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-safe-reader": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-source-admission": ["search-config", "search-contracts", "search-domain", "search-ports"],
+    "search-source-identity": ["search-contracts", "search-domain"],
+    "search-source-reconcile": ["search-config", "search-contracts", "search-domain", "search-ports", "search-safe-reader", "search-source-admission", "search-source-identity", "search-source-registry"],
+    "search-source-registry": ["search-contracts", "search-domain", "search-ports", "search-source-admission", "search-source-identity"],
+    "search-subject-resolver": ["search-contracts", "search-domain"],
+    "search-unitizer": ["search-contracts", "search-domain", "search-ports"]
+  },
+  "unregistered_members_with_no_incoming_locked_edges": ["search-revision-crypto", "search-os-secrets-windows"],
+  "known_manifest_classifications": [
+    {
+      "from": "search-source-reconcile",
+      "to": "search-source-admission",
+      "kind": "dev",
+      "manifest_blob": "f4572cf7a0b88b2159807dcfb0a1c6adea360fa7"
+    }
+  ],
+  "locked_closure_counts_excluding_root": {
+    "eliot-searchd": {
+      "local": 38,
+      "external_versions": 15
+    },
+    "eliot-search": {
+      "local": 5,
+      "external_versions": 0
+    }
+  },
+  "not_measured": ["cargo_metadata", "feature_and_target_resolution", "all_package_source_line_counts", "expanded_module_graph", "runtime_call_graph"]
+}

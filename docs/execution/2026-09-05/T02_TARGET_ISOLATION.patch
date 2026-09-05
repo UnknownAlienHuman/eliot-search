@@ -1,0 +1,72 @@
+--- a/bins/eliot-searchd/Cargo.toml
++++ b/bins/eliot-searchd/Cargo.toml
+@@ -1,5 +1,6 @@
+ [package]
+ name = "eliot-searchd"
++autobins = false
+ default-run = "eliot-searchd"
+ version.workspace = true
+ edition.workspace = true
+@@ -12,9 +13,40 @@
+ name = "eliot-searchd"
+ path = "src/entry.rs"
+ 
+-[[bin]]
++[[example]]
+ name = "eliot-search-snapshotd"
+ path = "src/main.rs"
++test = true
++
++[[example]]
++name = "eliot-search-sealed-authority"
++path = "src/bin/eliot-search-sealed-authority.rs"
++test = true
++
++[[example]]
++name = "eliot-search-sealed-catalog"
++path = "src/bin/eliot-search-sealed-catalog.rs"
++test = true
++
++[[example]]
++name = "eliot-search-sealed-direct"
++path = "src/bin/eliot-search-sealed-direct.rs"
++test = true
++
++[[example]]
++name = "eliot-search-sealed-recover"
++path = "src/bin/eliot-search-sealed-recover.rs"
++test = true
++
++[[example]]
++name = "eliot-search-sealed-store"
++path = "src/bin/eliot-search-sealed-store.rs"
++test = true
++
++[[example]]
++name = "eliot-search-sealed-transaction"
++path = "src/bin/eliot-search-sealed-transaction.rs"
++test = true
+ 
+ [features]
+ default = ["wave1-shell"]
+--- a/bins/eliot-search/Cargo.toml
++++ b/bins/eliot-search/Cargo.toml
+@@ -1,5 +1,6 @@
+ [package]
+ name = "eliot-search"
++autobins = false
+ default-run = "eliot-search"
+ version.workspace = true
+ edition.workspace = true
+@@ -12,9 +13,10 @@
+ name = "eliot-search"
+ path = "src/entry.rs"
+ 
+-[[bin]]
++[[example]]
+ name = "eliot-search-snapshot"
+ path = "src/main.rs"
++test = true
+ 
+ [dependencies]
+ search-contracts.workspace = true
