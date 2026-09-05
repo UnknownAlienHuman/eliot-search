@@ -6,7 +6,7 @@
 
 use std::env;
 use std::ffi::OsString;
-use std::io::{self, BufRead};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -22,10 +22,14 @@ use crate::result_handles::{
 };
 use crate::service_output::{
     emit_handle_expansion, emit_indexed_source, emit_search_page,
-    emit_streaming_search, json_string, write_error, write_line,
+    emit_streaming_search, json_string, write_line,
 };
 use crate::sha256;
 use crate::storage_security::StorageSecurityStatus;
+
+#[path = "service_session.rs"]
+mod session;
+use session::{MutationAttempt, ServiceControl};
 
 const PROTOCOL_VERSION: u16 = 1;
 const MAX_COMMAND_BYTES: usize = 256 * 1024;
@@ -96,47 +100,33 @@ fn run_service(root: &Path) -> Result<(), String> {
         ),
     )?;
 
-    loop {
-        let line = match read_bounded_line(&mut reader) {
-            Ok(Some(line)) => line,
-            Ok(None) => break,
-            Err(error) => {
-                write_error(&mut writer, &error)?;
-                continue;
-            }
-        };
-        let command = match std::str::from_utf8(&line) {
-            Ok(command) => command,
-            Err(_) => {
-                write_error(&mut writer, "SERVICE_COMMAND_NOT_UTF8")?;
-                continue;
-            }
-        };
-        match execute_command(
-            command,
-            &mut store,
-            &mut continuations,
-            &mut handles,
-            guard.canonical_root(),
-            &mut storage,
-            &mut writer,
-        ) {
-            Ok(ServiceControl::Continue) => {}
-            Ok(ServiceControl::Stop) => break,
-            Err(error) => write_error(&mut writer, &error)?,
-        }
+    let result = session::serve(
+        &mut reader,
+        &mut writer,
+        MAX_COMMAND_BYTES,
+        |command, output, attempt| {
+            execute_command(
+                command,
+                &mut store,
+                &mut continuations,
+                &mut handles,
+                guard.canonical_root(),
+                &mut storage,
+                (output, attempt),
+            )
+        },
+    );
+    if result.is_err() {
+        // Invalidate before unwinding the store and finally releasing its owner.
+        // No queued command, clean-stop receipt or automatic retry follows.
+        invalidate_search_state(&mut continuations, &mut handles);
     }
+    result?;
     write_line(
         &mut writer,
         "{\"event\":\"data_root_stopped\",\"clean\":true}",
     )?;
     Ok(())
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ServiceControl {
-    Continue,
-    Stop,
 }
 
 fn execute_command(
@@ -146,8 +136,9 @@ fn execute_command(
     handles: &mut ResultHandleCatalog,
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
-    writer: &mut impl std::io::Write,
+    operation: (&mut impl std::io::Write, &mut MutationAttempt),
 ) -> Result<ServiceControl, String> {
+    let (writer, attempt) = operation;
     let fields = command.split('\t').collect::<Vec<_>>();
     let Some(name) = fields.first().copied() else {
         return Err("SERVICE_COMMAND_EMPTY".to_owned());
@@ -236,7 +227,9 @@ fn execute_command(
             emit_source_list(writer, store, storage)?;
         }
         ("index-file", [_, path_hex]) => {
-            let indexed = store.index_file(&decode_path(path_hex)?)?;
+            let path = decode_path(path_hex)?;
+            attempt.arm();
+            let indexed = store.index_file(&path)?;
             let (invalidated_continuations, invalidated_handles) = if indexed.changed {
                 invalidate_search_state(continuations, handles)
             } else {
@@ -252,7 +245,9 @@ fn execute_command(
             )?;
         }
         ("index-directory", [_, path_hex]) => {
-            let indexed = store.index_directory(&decode_path(path_hex)?)?;
+            let directory = decode_path(path_hex)?;
+            attempt.arm();
+            let indexed = store.index_directory(&directory)?;
             let changed = indexed.iter().filter(|source| source.changed).count();
             let (invalidated_continuations, invalidated_handles) = if changed == 0 {
                 (0, 0)
@@ -285,6 +280,7 @@ fn execute_command(
         }
         ("sync-directory", [_, path_hex]) => {
             let directory = decode_path(path_hex)?;
+            attempt.arm();
             let result = sync_directory(store, canonical_root, &directory)?;
             let (invalidated_continuations, invalidated_handles) =
                 if result.changed_sources == 0 && result.retired_sources == 0 {
@@ -374,6 +370,7 @@ fn execute_command(
             emit_handle_expansion(writer, &expansion, storage)?;
         }
         ("retire", [_, source_id]) => {
+            attempt.arm();
             let source = store.retire_source(source_id)?;
             let (invalidated_continuations, invalidated_handles) =
                 invalidate_search_state(continuations, handles);
@@ -436,6 +433,9 @@ fn execute_command(
                 _ => return Err("SERVICE_GC_MODE_INVALID".to_owned()),
             };
             store.verify()?;
+            if apply {
+                attempt.arm();
+            }
             let result = guarded_collect_orphan_revisions(canonical_root, apply)?;
             refresh_storage(storage, canonical_root)?;
             write_line(
@@ -603,47 +603,6 @@ fn parse_page_size(value: &str) -> Result<usize, String> {
 fn decode_query(value: &str) -> Result<String, String> {
     String::from_utf8(decode_hex(value, MAX_SCAN_QUERY_BYTES)?)
         .map_err(|_| "SERVICE_QUERY_NOT_UTF8".to_owned())
-}
-
-fn read_bounded_line(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
-    let mut output = Vec::new();
-    let mut too_large = false;
-    loop {
-        let buffer = reader
-            .fill_buf()
-            .map_err(|error| format!("SERVICE_READ_ERROR:{error}"))?;
-        if buffer.is_empty() {
-            return if output.is_empty() {
-                Ok(None)
-            } else if too_large {
-                Err("SERVICE_COMMAND_TOO_LARGE".to_owned())
-            } else {
-                Ok(Some(output))
-            };
-        }
-        let newline = buffer.iter().position(|byte| *byte == b'\n');
-        let consumed = newline.map_or(buffer.len(), |index| index + 1);
-        let content_length = newline.unwrap_or(buffer.len());
-        if !too_large {
-            if output.len().saturating_add(content_length) > MAX_COMMAND_BYTES {
-                too_large = true;
-                output.clear();
-            } else {
-                output.extend_from_slice(&buffer[..content_length]);
-            }
-        }
-        reader.consume(consumed);
-        if newline.is_some() {
-            if output.last() == Some(&b'\r') {
-                output.pop();
-            }
-            return if too_large {
-                Err("SERVICE_COMMAND_TOO_LARGE".to_owned())
-            } else {
-                Ok(Some(output))
-            };
-        }
-    }
 }
 
 fn decode_path(value: &str) -> Result<PathBuf, String> {

@@ -1,116 +1,83 @@
 # ELIOT Search
 
-**Local-first data preparation and retrieval provider. Target: Rust + Qdrant.**
+Local-first data preparation and retrieval. **Target architecture: Rust + Qdrant.**
+Implementation is incomplete; this is not a qualified production release.
 
-> **Implementation in progress, not a deployment-ready product.** Rust implementations and development
-> runtimes exist. Durable redb integration, the canonical DIRECT preparation pipeline and a live Qdrant
-> data plane are not yet qualified. See the [Rust/Qdrant audit](docs/audit/ELIOT_SEARCH_AUDIT_2026-09-04.md).
-> Architecture and task packets describe requirements; they are not completion evidence.
+## Runtime
 
-## Product boundary
+The supported entrypoints are `eliot-searchd` and `eliot-search`, both built from
+`src/entry.rs` in their respective packages. The six sealed prototypes and two
+snapshot programs are now test-harness targets, not installable product binaries
+or runnable examples. Their source and regression tests remain in all-target checks.
+The snapshot/BM25 experiment is not an alternative product index.
 
-ELIOT Search owns source observation, immutable revision readback, preparation, rebuildable retrieval
-projections, exact scans, compact candidates, currentness, handles, purge and rebuild. It is not a memory
-system, online research service, task controller, canonical knowledge store or client authority service.
+The primary DIRECT runtime retains and verifies source revisions, then uses the
+shared UTF-8 materializer, unitizer and cross-unit literal matcher. Windows writes
+protect and verify new revisions before source publication. Existing SHA-256
+identities are not relabeled as BLAKE3 or replaced by fabricated receipts.
 
-The architecture remains:
+Persistent root registration is connected. Missing catalog state with retained
+objects is rejected rather than recreated as an empty corpus. A damaged proxy
+exchange is not reused for another client. The primary service now stops after
+an uncertain mutation or failed response, discards handles and refuses queued
+commands; invalid or oversized frames also terminate the session.
 
-- Rust product runtime; one daemon owner for each data root.
-- Immutable filesystem CAS for retained revisions and preparation artifacts.
-- redb for content-free technical control state, never a search index.
-- Qdrant as the only indexed retrieval backend. DIRECT must also work without Qdrant.
-- Candidates are not evidence: exact source-backed validation remains mandatory.
+The main unfinished integrations are **primary control-state migration to redb,
+durable canonical preparation manifests, and the real Qdrant data plane**.
+`PersistentControlJournal` already performs real redb I/O, but the primary source
+catalog has not switched to it. The Qdrant bridge remains an in-memory model.
+Preparation is currently recomputed at query time. Native Windows security,
+full ownership/currentness/access/lifecycle behavior and release qualification
+still require the corresponding task implementations and executed tests.
 
-The normative design is [Architecture 8.4](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md).
-Concrete OS, redb, Qdrant and worker adapters are constructed by the daemon; vendor types, credentials
-and reusable authorization decisions must not escape public ports. Paths are locators, not source IDs.
+## Build and tests
 
-## Actual entrypoints and integration gaps
-
-`cargo run -p eliot-searchd` selects `bins/eliot-searchd/src/entry.rs`.
-`cargo run -p eliot-search` selects `bins/eliot-search/src/entry.rs`.
-
-The separate `eliot-search-snapshotd` / `eliot-search-snapshot` binaries are earlier experiments, not the
-Qdrant baseline. In particular, the snapshot daemon's local lexical engine must not become a second
-product index.
-
-The primary DIRECT store now sends verified retained bytes through shared UTF-8 materialization,
-unit layout and bounded cross-unit literal matching rather than the development scanner. This is
-[read-side preparation](docs/runtime/DIRECT_PREPARATION.md), recomputed in memory; durable canonical
-representation/unit manifests, profile/receipt bindings and revision-store composition remain unfinished.
-Existing SHA-256 storage identities are preserved, not relabeled as BLAKE3 or replaced with fake receipts.
-`search-control-redb` now includes a concrete `PersistentControlJournal` with real disk transactions,
-exact replay/recovery and explicit owner handoff; see [control backend](docs/runtime/CONTROL_REDB.md).
-The primary daemon has not yet migrated its file-based control state to that adapter, and the new Rust
-tests remain unexecuted. `search-qdrant-bridge` still provides an in-memory model, not a live network adapter.
-The original audit's scanner-only finding describes its baseline, not this change.
-
-New Windows revision writes protect and verify objects before publishing source metadata, without a
-plaintext revision intermediary. Batch source bytes are bounded and A/B/A revisions can be reactivated;
-see [revision write ordering](docs/runtime/DIRECT_REVISION_WRITES.md) for exact failure boundaries.
-This does not qualify Windows crash durability or make the existing source log transactional.
-
-The primary data-root owner now restores the bounded observation-root catalog under its OS lock.
-Explicit registration, listing, unregistering and synchronization commands are documented in
-[Source-root registration](docs/runtime/SOURCE_ROOT_REGISTRATION.md). This filesystem registration
-adapter is not redb integration, an access grant, a live watcher or a current-workspace proof.
-The original audit describes its baseline commit; the earlier roots-not-wired finding is superseded by
-this integration. Windows handle-race and power-loss qualification remain outstanding.
-
-Some development/qualification tooling still uses Python. Its migration does not substitute for finishing
-the Rust runtime. No new Python product service or alternative index is part of the target architecture.
-
-## Build verification
-
-The repository pins Rust 1.98.0. Run against the exact revision being evaluated:
+Rust is pinned to 1.98.0. Build the main executables explicitly:
 
 ```sh
+cargo +1.98.0 build --release --locked -p eliot-searchd -p eliot-search --bins
 cargo +1.98.0 check --workspace --all-targets --all-features --locked
+cargo +1.98.0 test --workspace --all-targets --all-features --locked
 ```
 
-The [Manual workspace check](.github/workflows/manual-workspace-check.yml) runs this command once per
-explicit dispatch, with a Linux or Windows runner choice. Enable `core_tests` to also execute control,
-preparation and primary-runtime regressions, including native protected-write tests on Windows.
-It has read-only repository permissions, checks the dispatched SHA and never generates source,
-changes the lockfile or pushes commits.
-
-Focused preparation, control-backend, primary-runtime and sealed-store regression tests can be selected with:
+Focused tests:
 
 ```sh
-cargo +1.98.0 test -p search-materializer -p search-unitizer -p search-exact --locked
-cargo +1.98.0 test -p search-control-redb --lib --locked
-cargo +1.98.0 test -p eliot-searchd --bin eliot-searchd --locked
-cargo +1.98.0 test -p eliot-searchd --test persistent_roots_process --locked
-cargo +1.98.0 test -p eliot-searchd --test direct_preparation_process --locked
-cargo +1.98.0 test -p eliot-searchd --bin eliot-search-sealed-recover --locked
+cargo +1.98.0 test --locked -p search-control-redb --lib
+cargo +1.98.0 test --locked -p search-materializer -p search-unitizer -p search-exact --lib
+cargo +1.98.0 test --locked -p eliot-searchd --bin eliot-searchd --test persistent_roots_process --test direct_preparation_process --test catalog_loss_process --test service_failure_process --test product_targets
+cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-sealed-recover
 ```
 
-A successful compile is not end-to-end qualification. Windows security needs native Windows tests;
-real Qdrant needs live integration tests; restart, crash recovery and exact historical readback must be
-verified through the primary daemon. Unexecuted checks remain unexecuted, not accepted.
+[Manual workspace check](.github/workflows/manual-workspace-check.yml) remains
+`workflow_dispatch` only, read-only and exact-SHA. `core_tests` runs the primary
+regressions and all eight retained legacy harnesses. Native DPAPI tests require
+the Windows runner; they are not validated by a Linux run. No fresh passing
+Rust build or test run is claimed by this change.
 
-## Agent and acceptance boundaries
+## Boundaries and documentation
 
-Read [AGENTS.md](AGENTS.md) before changing code. Each package's `FUNCTIONS.md` defines its preconditions,
-postconditions, idempotency, bounds and required fixtures. The current Cargo manifests define actual
-packages and binary targets; historical scaffold counts must not override them.
+Qdrant is the only indexed retrieval backend. DIRECT works independently of it.
+redb stores technical control state, never searchable content. Immutable revisions
+and derived artifacts belong in scoped CAS. Candidates require source-backed
+validation; handles never grant access. Exact negative claims require a frozen
+source denominator, not top-k results. Logical deletion is not physical erasure.
+Optional models/documents stay behind their explicit qualification gates.
 
-Swarm launch authority remains [swarm/launch-state.toml](swarm/launch-state.toml), with package scopes in
-`swarm/crates.toml` and `swarm/function-packets.toml`, stage/readset definitions in `swarm/stages.toml`
-and `swarm/stage-readsets.toml`, and handoffs under [docs/handoff](docs/handoff/README.md). This README
-neither advances a gate nor issues an acceptance receipt. A feature flag, existing source file, model
-unit test or commit title cannot do that either.
+Read [AGENTS.md](AGENTS.md) and package `FUNCTIONS.md` before changing code. The
+[normative architecture](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md)
+remains authoritative. Existing task PRs track completion; landing code in `main`
+does not fabricate accepted gates or independent review.
 
-Configuration ownership is under [config](config/README.md); shared contracts are under
-[docs/contracts/p00](docs/contracts/p00/README.md). Plaintext secrets are invalid configuration. Optional
-models/documents/advanced-scale features remain subject to their existing explicit qualification gates.
-Missing or unavailable evidence cannot authorize them. Never replace an unavailable real backend with an
-in-memory model while advertising the real capability, and never invent digests or receipts to bridge APIs.
+[DIRECT smoke commands](QUICKSTART.md) ·
+[service fail-stop and target isolation](docs/runtime/SERVICE_FAIL_STOP.md) ·
+[root registration](docs/runtime/SOURCE_ROOT_REGISTRATION.md) ·
+[revision writes](docs/runtime/DIRECT_REVISION_WRITES.md) ·
+[DIRECT preparation](docs/runtime/DIRECT_PREPARATION.md) ·
+[redb adapter](docs/runtime/CONTROL_REDB.md) ·
+[catalog/proxy guards](docs/runtime/CATALOG_LOSS_AND_CHANNEL_FAILURE.md)
 
-Exact negative claims require a frozen authoritative denominator, not top-k retrieval. Incomplete
-coverage and ambiguity remain explicit. Document workers must not execute source scripts/macros/hooks,
-access the network or follow remote resources. Logical deletion is not proof of physical secure erase.
-
-## License
+Python remains in some development validators; no Python product service is part
+of the architecture. Migrating that tooling does not replace finishing the runtime.
 
 MIT. See [LICENSE](LICENSE).

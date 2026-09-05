@@ -52,4 +52,11 @@ jobs:
       - name: Execute primary-runtime and process regression tests
         if: ${{ inputs.core_tests }}
         shell: bash
-        run: cargo +1.98.0 test --locked -p eliot-searchd --bin eliot-searchd --bin eliot-search-sealed-recover --test persistent_roots_process --test direct_preparation_process --test catalog_loss_process
+        run: cargo +1.98.0 test --locked -p eliot-searchd --bin eliot-searchd --test persistent_roots_process --test direct_preparation_process --test catalog_loss_process --test service_failure_process --test product_targets
+      - name: Execute retained legacy test harnesses
+        if: ${{ inputs.core_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-snapshotd --test eliot-search-sealed-authority --test eliot-search-sealed-catalog --test eliot-search-sealed-direct --test eliot-search-sealed-recover --test eliot-search-sealed-store --test eliot-search-sealed-transaction
+          cargo +1.98.0 test --locked -p eliot-search --test eliot-search-snapshot

@@ -1,4 +1,6 @@
 [package]
+autobins = false
+autoexamples = false
 name = "eliot-searchd"
 default-run = "eliot-searchd"
 version.workspace = true
@@ -12,9 +14,48 @@ readme = "README.md"
 name = "eliot-searchd"
 path = "src/entry.rs"
 
-[[bin]]
+# Legacy implementations are harness-only. Their CLI main is never run.
+[[test]]
 name = "eliot-search-snapshotd"
 path = "src/main.rs"
+harness = true
+test = true
+
+[[test]]
+name = "eliot-search-sealed-authority"
+path = "src/bin/eliot-search-sealed-authority.rs"
+harness = true
+test = true
+
+[[test]]
+name = "eliot-search-sealed-catalog"
+path = "src/bin/eliot-search-sealed-catalog.rs"
+harness = true
+test = true
+
+[[test]]
+name = "eliot-search-sealed-direct"
+path = "src/bin/eliot-search-sealed-direct.rs"
+harness = true
+test = true
+
+[[test]]
+name = "eliot-search-sealed-recover"
+path = "src/bin/eliot-search-sealed-recover.rs"
+harness = true
+test = true
+
+[[test]]
+name = "eliot-search-sealed-store"
+path = "src/bin/eliot-search-sealed-store.rs"
+harness = true
+test = true
+
+[[test]]
+name = "eliot-search-sealed-transaction"
+path = "src/bin/eliot-search-sealed-transaction.rs"
+harness = true
+test = true
 
 [features]
 default = ["wave1-shell"]

@@ -1,4 +1,6 @@
 [package]
+autobins = false
+autoexamples = false
 name = "eliot-search"
 default-run = "eliot-search"
 version.workspace = true
@@ -12,9 +14,12 @@ readme = "README.md"
 name = "eliot-search"
 path = "src/entry.rs"
 
-[[bin]]
+# Legacy implementations are harness-only. Their CLI main is never run.
+[[test]]
 name = "eliot-search-snapshot"
 path = "src/main.rs"
+harness = true
+test = true
 
 [dependencies]
 search-contracts.workspace = true
