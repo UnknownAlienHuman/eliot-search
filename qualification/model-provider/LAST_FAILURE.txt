@@ -1,5 +1,5 @@
 Status: FAIL
-Base commit: af9cef70fd9561161c4c41c489a4bfd1ecf9f73b
+Base commit: 1616a48d7713a71872902c614902c0cae82aa78f
 Patch outcome: failure
 Verification outcome: skipped
-derive anchor missing for EmbeddingRequest
+ModelInput ownership anchor missing
