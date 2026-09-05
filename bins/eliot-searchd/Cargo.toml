@@ -1,5 +1,6 @@
 [package]
 name = "eliot-searchd"
+default-run = "eliot-searchd"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -76,6 +77,7 @@ search-os-secrets.workspace = true
 search-control-redb.workspace = true
 search-provider-protocol.workspace = true
 search-lexical.workspace = true
+zeroize = "=1.9.0"
 
 search-source-admission = { workspace = true, optional = true }
 search-source-registry = { workspace = true, optional = true }

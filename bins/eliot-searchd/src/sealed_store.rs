@@ -8,6 +8,7 @@
 
 use core::fmt;
 use std::path::Path;
+use zeroize::Zeroize;
 
 /// Maximum plaintext accepted for one sealed object.
 pub const MAX_PLAINTEXT_BYTES: usize = 64 * 1024 * 1024;
@@ -94,11 +95,13 @@ pub struct SensitiveBytes(Vec<u8>);
 
 impl SensitiveBytes {
     /// Creates a finite non-empty plaintext buffer.
-    pub fn new(bytes: Vec<u8>) -> Result<Self, SealedStoreError> {
+    pub fn new(mut bytes: Vec<u8>) -> Result<Self, SealedStoreError> {
         if bytes.is_empty() {
+            bytes.zeroize();
             return Err(SealedStoreError::EmptyPlaintext);
         }
         if bytes.len() > MAX_PLAINTEXT_BYTES {
+            bytes.zeroize();
             return Err(SealedStoreError::PlaintextTooLarge);
         }
         Ok(Self(bytes))
@@ -112,13 +115,13 @@ impl SensitiveBytes {
 
     /// Plaintext byte length.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Whether the plaintext buffer is empty. A valid instance is never empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }
@@ -135,7 +138,8 @@ impl fmt::Debug for SensitiveBytes {
 
 impl Drop for SensitiveBytes {
     fn drop(&mut self) {
-        wipe(&mut self.0);
+        // Zeroize the owned Vec, including spare capacity, through the safe API.
+        self.0.zeroize();
     }
 }
 
@@ -327,12 +331,7 @@ fn entropy_for(object_id: &str) -> Vec<u8> {
 }
 
 fn wipe(bytes: &mut [u8]) {
-    for byte in bytes {
-        // SAFETY: `byte` is a valid unique pointer for the duration of this
-        // call. Volatile writes prevent the explicit wipe from being removed.
-        unsafe { core::ptr::write_volatile(byte, 0) };
-    }
-    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+    bytes.zeroize();
 }
 
 #[cfg(not(windows))]
@@ -372,7 +371,10 @@ mod platform {
     }
 }
 
+// The exception is confined to the Windows ABI/LocalAlloc ownership boundary.
+// Shared storage and zeroization code retain the workspace unsafe-code denial.
 #[cfg(windows)]
+#[allow(unsafe_code)]
 mod platform {
     use super::{
         DeleteReceipt, Envelope, FORMAT_VERSION, MAX_ENVELOPE_BYTES,
@@ -521,13 +523,17 @@ mod platform {
         if envelope.object_id != object_id {
             return Err(SealedStoreError::ObjectBindingMismatch);
         }
-        let plaintext = unprotect_current_user(object_id, &envelope.ciphertext)?;
+        // Own plaintext in the zeroizing guard before any fallible validation.
+        let plaintext = SensitiveBytes::new(unprotect_current_user(
+            object_id,
+            &envelope.ciphertext,
+        )?)?;
         if u64::try_from(plaintext.len()).map_err(|_| SealedStoreError::PlaintextTooLarge)?
             != envelope.plaintext_bytes
         {
             return Err(SealedStoreError::ReadbackMismatch);
         }
-        SensitiveBytes::new(plaintext)
+        Ok(plaintext)
     }
 
     pub(super) fn verify_sealed(
@@ -824,5 +830,37 @@ mod platform {
         } else {
             SealedStoreError::IoFailure
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wipe_clears_every_byte_without_local_unsafe() {
+        let mut bytes = [0xa5_u8; 64];
+        wipe(&mut bytes);
+        assert_eq!(bytes, [0_u8; 64]);
+    }
+
+    #[test]
+    fn sensitive_owner_preserves_explicit_access_but_redacts_debug() {
+        let secret = b"sealed-plaintext-sentinel";
+        let bytes = SensitiveBytes::new(secret.to_vec()).expect("bounded plaintext");
+        assert_eq!(bytes.expose(), secret);
+        assert_eq!(bytes.len(), secret.len());
+        assert!(!bytes.is_empty());
+        let debug = format!("{bytes:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("sealed-plaintext-sentinel"));
+    }
+
+    #[test]
+    fn empty_plaintext_is_rejected() {
+        assert_eq!(
+            SensitiveBytes::new(Vec::new()).expect_err("empty plaintext"),
+            SealedStoreError::EmptyPlaintext
+        );
     }
 }
