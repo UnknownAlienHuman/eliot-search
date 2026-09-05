@@ -1,0 +1,394 @@
+name: one-shot bind provider authentication challenge
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-provider-auth-binding.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-provider-auth-binding
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+
+      - name: Bind authentication to provider-installed challenge
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee provider-auth-patch.log
+          from pathlib import Path
+
+          path = Path('crates/search-provider-protocol/src/lib.rs')
+          text = path.read_text()
+
+          reserved_anchor = '''        let kind = FrameKind::try_from(bytes[6])?;
+                  let sequence = u64::from_be_bytes('''
+          reserved_replacement = '''        let kind = FrameKind::try_from(bytes[6])?;
+                  if bytes[7] != 0 {
+                      return Err(ProtocolError::ReservedHeaderByteNonZero);
+                  }
+                  let sequence = u64::from_be_bytes('''
+          if 'ReservedHeaderByteNonZero' not in text:
+              if reserved_anchor not in text:
+                  raise SystemExit('wire reserved-byte anchor missing')
+              text = text.replace(reserved_anchor, reserved_replacement, 1)
+
+          old_proof = '''/// Authentication proof supplied to a qualified verifier.
+          #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+          pub struct AuthenticationProof {
+              /// Digest/MAC/proof bytes interpreted only by the injected verifier.
+              pub proof_digest: Blake3Digest32,
+              /// Exact transcript binding expected by the session.
+              pub binding: SessionBinding,
+          }'''
+          new_proof = '''/// Authentication proof supplied to a qualified verifier.
+          ///
+          /// The proof deliberately carries no caller-selected session binding.
+          /// The expected transcript is installed independently in the provider
+          /// session before this proof can be verified.
+          #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+          pub struct AuthenticationProof {
+              /// Digest, MAC or proof bytes interpreted only by the verifier.
+              pub proof_digest: Blake3Digest32,
+          }'''
+          if old_proof in text:
+              text = text.replace(old_proof, new_proof, 1)
+          elif 'pub binding: SessionBinding' in text:
+              raise SystemExit('authentication proof still exposes a binding')
+
+          state_anchor = '''    /// Version selected; exact pairing proof is still required.
+              Negotiated(ProtocolVersion),
+              /// Authenticated session admits bounded requests.'''
+          state_replacement = '''    /// Version selected; provider challenge binding is not yet installed.
+              Negotiated(ProtocolVersion),
+              /// Exact provider-installed challenge/transcript awaits proof.
+              PairingPending(SessionBinding),
+              /// Authenticated session admits bounded requests.'''
+          if 'PairingPending(SessionBinding)' not in text:
+              if state_anchor not in text:
+                  raise SystemExit('session state anchor missing')
+              text = text.replace(state_anchor, state_replacement, 1)
+
+          activate_start = text.index('    /// Activates the session after exact pairing verification.')
+          activate_end = text.index('\n    /// Accepts one exact client sequence.', activate_start)
+          replacement = '''    /// Installs one exact provider-generated challenge binding.
+              ///
+              /// Reinstalling the identical pending challenge is idempotent. A
+              /// different challenge cannot replace pending authentication state.
+              pub fn install_pairing_challenge(
+                  &mut self,
+                  binding: SessionBinding,
+              ) -> Result<SessionBinding, ProtocolError> {
+                  match self.state {
+                      SessionState::Negotiated(version) => {
+                          if binding.version != version {
+                              return Err(ProtocolError::PairingBindingMismatch);
+                          }
+                          self.state = SessionState::PairingPending(binding);
+                          Ok(binding)
+                      }
+                      SessionState::PairingPending(existing) if existing == binding => Ok(existing),
+                      SessionState::PairingPending(_) => Err(ProtocolError::PairingBindingMismatch),
+                      _ => Err(ProtocolError::InvalidSessionTransition),
+                  }
+              }
+
+              /// Activates only after proof of the provider-installed challenge.
+              pub fn activate(
+                  &mut self,
+                  proof: &AuthenticationProof,
+                  verifier: &impl PairingVerifier,
+              ) -> Result<SessionBinding, ProtocolError> {
+                  let expected = match self.state {
+                      SessionState::PairingPending(binding) => binding,
+                      SessionState::Negotiated(_) => {
+                          return Err(ProtocolError::PairingChallengeRequired);
+                      }
+                      _ => return Err(ProtocolError::InvalidSessionTransition),
+                  };
+                  verifier.verify(proof, expected)?;
+                  self.state = SessionState::Active(expected);
+                  Ok(expected)
+              }
+          '''
+          text = text[:activate_start] + replacement + text[activate_end:]
+
+          text = text.replace(
+              'SessionState::Offered | SessionState::Negotiated(_) => {',
+              'SessionState::Offered\n                | SessionState::Negotiated(_)\n                | SessionState::PairingPending(_) => {',
+          )
+
+          error_anchor = '''    /// Closed frame-kind tag is unknown.
+              UnknownFrameKind,
+              /// Declared body length and received bytes disagree.'''
+          error_replacement = '''    /// Closed frame-kind tag is unknown.
+              UnknownFrameKind,
+              /// Reserved fixed-header byte is non-zero.
+              ReservedHeaderByteNonZero,
+              /// Declared body length and received bytes disagree.'''
+          if 'ReservedHeaderByteNonZero,' not in text:
+              if error_anchor not in text:
+                  raise SystemExit('reserved-byte error anchor missing')
+              text = text.replace(error_anchor, error_replacement, 1)
+
+          auth_error_anchor = '''    /// Pairing or binding proof is absent or invalid.
+              AuthenticationRequired,
+              /// New requests were admitted after draining began.'''
+          auth_error_replacement = '''    /// Pairing or binding proof is absent or invalid.
+              AuthenticationRequired,
+              /// Provider challenge binding has not been installed.
+              PairingChallengeRequired,
+              /// Challenge version or attempted replacement binding differs.
+              PairingBindingMismatch,
+              /// New requests were admitted after draining began.'''
+          if 'PairingChallengeRequired,' not in text:
+              if auth_error_anchor not in text:
+                  raise SystemExit('pairing error anchor missing')
+              text = text.replace(auth_error_anchor, auth_error_replacement, 1)
+
+          code_anchor = '''            Self::UnknownFrameKind => "PROTOCOL_UNKNOWN_FRAME_KIND",
+                      Self::LengthMismatch => "PROTOCOL_LENGTH_MISMATCH",'''
+          code_replacement = '''            Self::UnknownFrameKind => "PROTOCOL_UNKNOWN_FRAME_KIND",
+                      Self::ReservedHeaderByteNonZero => "PROTOCOL_RESERVED_HEADER_BYTE_NON_ZERO",
+                      Self::LengthMismatch => "PROTOCOL_LENGTH_MISMATCH",'''
+          if 'PROTOCOL_RESERVED_HEADER_BYTE_NON_ZERO' not in text:
+              if code_anchor not in text:
+                  raise SystemExit('reserved-byte code anchor missing')
+              text = text.replace(code_anchor, code_replacement, 1)
+
+          auth_code_anchor = '''            Self::AuthenticationRequired => "PROTOCOL_AUTHENTICATION_REQUIRED",
+                      Self::SessionDraining => "PROTOCOL_SESSION_DRAINING",'''
+          auth_code_replacement = '''            Self::AuthenticationRequired => "PROTOCOL_AUTHENTICATION_REQUIRED",
+                      Self::PairingChallengeRequired => "PROTOCOL_PAIRING_CHALLENGE_REQUIRED",
+                      Self::PairingBindingMismatch => "PROTOCOL_PAIRING_BINDING_MISMATCH",
+                      Self::SessionDraining => "PROTOCOL_SESSION_DRAINING",'''
+          if 'PROTOCOL_PAIRING_CHALLENGE_REQUIRED' not in text:
+              if auth_code_anchor not in text:
+                  raise SystemExit('pairing code anchor missing')
+              text = text.replace(auth_code_anchor, auth_code_replacement, 1)
+
+          if 'proof_cannot_choose_its_session_binding' not in text:
+              tests = r'''
+
+          #[cfg(test)]
+          mod tests {
+              use std::cell::Cell;
+
+              use super::{
+                  AuthenticationProof, PairingVerifier, ProtocolError, ProtocolLimits,
+                  ProtocolRange, ProtocolVersion, SessionBinding, SessionMachine, WireFrame,
+                  FrameKind,
+              };
+              use search_contracts::{
+                  Blake3Digest32, InstallationIncarnationId, RequestId,
+              };
+
+              struct RecordingVerifier {
+                  expected: Cell<Option<SessionBinding>>,
+              }
+
+              impl PairingVerifier for RecordingVerifier {
+                  fn verify(
+                      &self,
+                      _proof: &AuthenticationProof,
+                      expected: SessionBinding,
+                  ) -> Result<(), ProtocolError> {
+                      self.expected.set(Some(expected));
+                      Ok(())
+                  }
+              }
+
+              fn version() -> ProtocolVersion {
+                  ProtocolVersion::new(1).expect("valid version")
+              }
+
+              fn range() -> ProtocolRange {
+                  ProtocolRange::new(version(), version()).expect("valid range")
+              }
+
+              fn binding(marker: u8) -> SessionBinding {
+                  SessionBinding {
+                      installation_incarnation_id: InstallationIncarnationId::from_bytes([
+                          marker; 16
+                      ]),
+                      version: version(),
+                      client_nonce_digest: Blake3Digest32::from_bytes([marker; 32]),
+                      provider_nonce_digest: Blake3Digest32::from_bytes([
+                          marker.wrapping_add(1); 32
+                      ]),
+                      transcript_digest: Blake3Digest32::from_bytes([
+                          marker.wrapping_add(2); 32
+                      ]),
+                  }
+              }
+
+              fn machine() -> SessionMachine {
+                  SessionMachine::new(
+                      ProtocolLimits::new(1024, 512, 8, 32).expect("valid limits"),
+                      1,
+                      1,
+                  )
+              }
+
+              #[test]
+              fn proof_cannot_choose_its_session_binding() {
+                  let mut session = machine();
+                  session.negotiate(range(), range()).expect("negotiate");
+                  let proof = AuthenticationProof {
+                      proof_digest: Blake3Digest32::from_bytes([9; 32]),
+                  };
+                  let verifier = RecordingVerifier {
+                      expected: Cell::new(None),
+                  };
+                  assert_eq!(
+                      session.activate(&proof, &verifier),
+                      Err(ProtocolError::PairingChallengeRequired)
+                  );
+
+                  let expected = binding(10);
+                  session
+                      .install_pairing_challenge(expected)
+                      .expect("install provider challenge");
+                  assert_eq!(
+                      session.install_pairing_challenge(binding(20)),
+                      Err(ProtocolError::PairingBindingMismatch)
+                  );
+                  assert_eq!(
+                      session.activate(&proof, &verifier),
+                      Ok(expected)
+                  );
+                  assert_eq!(verifier.expected.get(), Some(expected));
+              }
+
+              #[test]
+              fn nonzero_reserved_header_byte_is_rejected() {
+                  let limits = ProtocolLimits::new(1024, 512, 8, 32)
+                      .expect("valid limits");
+                  let frame = WireFrame {
+                      version: version(),
+                      kind: FrameKind::Health,
+                      sequence: 1,
+                      request_id: RequestId::from_bytes([3; 16]),
+                      body: Vec::new(),
+                  };
+                  let mut encoded = frame.encode(limits).expect("encode frame");
+                  encoded[7] = 1;
+                  assert_eq!(
+                      WireFrame::decode(&encoded, limits),
+                      Err(ProtocolError::ReservedHeaderByteNonZero)
+                  );
+              }
+          }
+          '''
+              text += tests
+
+          path.write_text(text)
+
+          functions_path = Path('crates/search-provider-protocol/FUNCTIONS.md')
+          functions = functions_path.read_text()
+          section = '''
+
+          ## Provider-bound pairing invariant
+
+          Authentication is now a three-step state transition:
+
+          1. negotiate a mutually supported protocol version;
+          2. install the exact provider-generated `SessionBinding` challenge;
+          3. verify a proof against that stored binding.
+
+          `AuthenticationProof` cannot carry or select its own binding. A pending
+          challenge may only be replayed identically and cannot be replaced.
+          Non-zero reserved header bytes are rejected before body allocation.
+          '''
+          if '## Provider-bound pairing invariant' not in functions:
+              functions_path.write_text(functions + section)
+          PY
+          cargo fmt --all
+
+      - name: Verify provider protocol state machine
+        id: verify
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            cargo fmt --all -- --check
+            cargo check -p search-provider-protocol --all-targets --locked
+            cargo test -p search-provider-protocol --all-targets --locked
+            cargo clippy -p search-provider-protocol --all-targets --locked -- -D warnings
+            cargo check --workspace --all-targets --locked
+            if grep -n 'verifier.verify(proof, proof.binding)' crates/search-provider-protocol/src/lib.rs; then
+              echo 'self-selected authentication binding remains'
+              exit 1
+            fi
+            git diff --check
+          } 2>&1 | tee provider-auth-verify.log
+
+      - name: Commit verified protocol repair or bounded failure
+        if: always()
+        shell: bash
+        env:
+          PATCH_OUTCOME: ${{ steps.patch.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-provider-auth-binding.yml
+          mkdir -p qualification/provider-protocol
+          if [ "$PATCH_OUTCOME" = success ] && [ "$VERIFY_OUTCOME" = success ]; then
+            rm -f qualification/provider-protocol/LAST_FAILURE.txt
+            cat > qualification/provider-protocol/PAIRING_BINDING_VERIFIED.md <<EOF
+          # Provider-bound pairing verification
+
+          Status: **PASS**
+
+          Base commit: \`${GITHUB_SHA}\`
+
+          Authentication proof is verified only against a provider-installed
+          session challenge. Proofs cannot select their own binding, challenge
+          replacement is denied, and non-zero reserved header bytes are rejected.
+          EOF
+            git add -A
+            subject="fix(protocol): bind pairing proof to provider challenge"
+          else
+            git reset --hard HEAD
+            rm -f .github/workflows/zz-one-shot-provider-auth-binding.yml
+            {
+              printf 'Status: FAIL\n'
+              printf 'Base commit: %s\n' "$GITHUB_SHA"
+              printf 'Patch outcome: %s\n' "$PATCH_OUTCOME"
+              printf 'Verification outcome: %s\n' "$VERIFY_OUTCOME"
+              tail -n 300 provider-auth-patch.log 2>/dev/null || true
+              tail -n 600 provider-auth-verify.log 2>/dev/null || true
+            } > qualification/provider-protocol/LAST_FAILURE.txt
+            git add -A
+            subject="verify(protocol): record failed pairing-binding repair"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$subject [skip ci]"
+          git push origin HEAD:main
+          if [ "$PATCH_OUTCOME" != success ] || [ "$VERIFY_OUTCOME" != success ]; then
+            exit 1
+          fi
