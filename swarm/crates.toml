@@ -493,7 +493,7 @@ soft_src_line_target = 7000
 assignment = "swarm/assignments/search-result-projector.md"
 functions = "crates/search-query/search-result-projector/FUNCTIONS.md"
 qualification = "qualification/query/W4_QUALIFICATION.md"
-deps = ["search-contracts", "search-domain", "search-ports", "search-candidate-validator", "search-handles"]
+deps = ["search-contracts", "search-domain", "search-ports", "search-access", "search-candidate-validator", "search-handles"]
 
 [[package]]
 name = "search-continuation"
