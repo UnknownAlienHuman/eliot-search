@@ -1,0 +1,5 @@
+Status: FAIL
+Base commit: 3a5c5c110994b587323abcd207d498919525216a
+Patch outcome: failure
+Verification outcome: skipped
+SourceIdentityCatalog anchor missing
