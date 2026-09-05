@@ -1,0 +1,5 @@
+Status: FAIL
+Base commit: 26540dce04414ddcd037f938f839fe3222e1a7c6
+Patch outcome: failure
+Verification outcome: skipped
+model provider import anchor missing
