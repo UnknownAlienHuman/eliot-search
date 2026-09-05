@@ -1,0 +1,604 @@
+Status: FAIL
+Tested main commit: 78c70d0783f1449dc664ec0903f42a39f45c46a5
+Verified at: 2026-09-05T01:58:19Z
+Linux job/result: failure/failure
+Windows job/result: failure/
+Branch cleanup failed: false
+
+===== Linux bounded log tail =====
+^^^^^^^^^^^^^^^
+
+warning: constant `MAGIC` is never used
+  --> bins/eliot-searchd/src/bin/../sealed_store.rs:19:7
+   |
+19 | const MAGIC: [u8; 8] = *b"ELSDPAPI";
+   |       ^^^^^
+
+warning: constant `FORMAT_VERSION` is never used
+  --> bins/eliot-searchd/src/bin/../sealed_store.rs:20:7
+   |
+20 | const FORMAT_VERSION: u16 = 1;
+   |       ^^^^^^^^^^^^^^
+
+warning: constant `HEADER_BYTES` is never used
+  --> bins/eliot-searchd/src/bin/../sealed_store.rs:21:7
+   |
+21 | const HEADER_BYTES: usize = 8 + 2 + 2 + 8 + 8;
+   |       ^^^^^^^^^^^^
+
+warning: multiple variants are never constructed
+  --> bins/eliot-searchd/src/bin/../sealed_store.rs:29:5
+   |
+25 | pub enum SealedStoreError {
+   |          ---------------- variants in this enum
+...
+29 |     InvalidObjectId,
+   |     ^^^^^^^^^^^^^^^
+30 |     /// The configured data root is absent or not a directory.
+31 |     InvalidDataRoot,
+   |     ^^^^^^^^^^^^^^^
+32 |     /// A symlink or Windows reparse point was encountered.
+33 |     ReparsePointDenied,
+   |     ^^^^^^^^^^^^^^^^^^
+34 |     /// The immutable target already exists.
+35 |     ObjectAlreadyExists,
+   |     ^^^^^^^^^^^^^^^^^^^
+36 |     /// The requested object does not exist.
+37 |     ObjectNotFound,
+   |     ^^^^^^^^^^^^^^
+...
+43 |     EnvelopeTooLarge,
+   |     ^^^^^^^^^^^^^^^^
+44 |     /// Persisted bytes do not match the strict envelope format.
+45 |     EnvelopeInvalid,
+   |     ^^^^^^^^^^^^^^^
+46 |     /// Persisted object identity differs from the requested identity.
+47 |     ObjectBindingMismatch,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+48 |     /// The object changed between metadata observation and readback.
+49 |     ObjectChangedDuringRead,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+50 |     /// DPAPI rejected protection or unprotection.
+51 |     DpapiFailure,
+   |     ^^^^^^^^^^^^
+52 |     /// A local filesystem operation failed.
+53 |     IoFailure,
+   |     ^^^^^^^^^
+54 |     /// Exact post-write readback differs from the intended envelope.
+55 |     ReadbackMismatch,
+   |     ^^^^^^^^^^^^^^^^
+   |
+   = note: `SealedStoreError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: methods `len` and `is_empty` are never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:115:12
+    |
+ 95 | impl SensitiveBytes {
+    | ------------------- methods in this implementation
+...
+115 |     pub fn len(&self) -> usize {
+    |            ^^^
+...
+121 |     pub fn is_empty(&self) -> bool {
+    |            ^^^^^^^^
+
+warning: struct `SealReceipt` is never constructed
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:144:12
+    |
+144 | pub struct SealReceipt {
+    |            ^^^^^^^^^^^
+
+warning: struct `DeleteReceipt` is never constructed
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:178:12
+    |
+178 | pub struct DeleteReceipt {
+    |            ^^^^^^^^^^^^^
+
+warning: struct `Envelope` is never constructed
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:188:8
+    |
+188 | struct Envelope {
+    |        ^^^^^^^^
+
+warning: associated items `encode` and `decode` are never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:195:8
+    |
+194 | impl Envelope {
+    | ------------- associated items in this implementation
+195 |     fn encode(&self) -> Result<Vec<u8>, SealedStoreError> {
+    |        ^^^^^^
+...
+219 |     fn decode(bytes: &[u8]) -> Result<Self, SealedStoreError> {
+    |        ^^^^^^
+
+warning: function `seal_immutable` is never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:278:8
+    |
+278 | pub fn seal_immutable(
+    |        ^^^^^^^^^^^^^^
+
+warning: function `delete_sealed` is never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:303:8
+    |
+303 | pub fn delete_sealed(
+    |        ^^^^^^^^^^^^^
+
+warning: function `validate_object_id` is never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:310:4
+    |
+310 | fn validate_object_id(value: &str) -> Result<(), SealedStoreError> {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `entropy_for` is never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:323:4
+    |
+323 | fn entropy_for(object_id: &str) -> Vec<u8> {
+    |    ^^^^^^^^^^^
+
+warning: function `seal_immutable` is never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:345:19
+    |
+345 |     pub(super) fn seal_immutable(
+    |                   ^^^^^^^^^^^^^^
+
+warning: function `delete_sealed` is never used
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:367:19
+    |
+367 |     pub(super) fn delete_sealed(
+    |                   ^^^^^^^^^^^^^
+
+warning: constant `MAX_OPERATION_ID_BYTES` is never used
+  --> bins/eliot-searchd/src/bin/../sealed_transaction.rs:16:11
+   |
+16 | pub const MAX_OPERATION_ID_BYTES: usize = 128;
+   |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple variants are never constructed
+  --> bins/eliot-searchd/src/bin/../sealed_transaction.rs:24:5
+   |
+20 | pub enum SealedTransactionError {
+   |          ---------------------- variants in this enum
+...
+24 |     InvalidOperationId,
+   |     ^^^^^^^^^^^^^^^^^^
+25 |     /// Operation is already executing in another process.
+26 |     OperationBusy,
+   |     ^^^^^^^^^^^^^
+27 |     /// Durable intent is malformed or conflicts with the request.
+28 |     IntentConflict,
+   |     ^^^^^^^^^^^^^^
+29 |     /// Durable receipt is malformed or conflicts with the request.
+30 |     ReceiptConflict,
+   |     ^^^^^^^^^^^^^^^
+31 |     /// An object exists without the exact operation intent/receipt.
+32 |     ObjectConflict,
+   |     ^^^^^^^^^^^^^^
+33 |     /// Existing decrypted bytes differ from retry input.
+34 |     ReplayContentMismatch,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+35 |     /// External effect cannot be classified safely.
+36 |     OutcomeUnknown,
+   |     ^^^^^^^^^^^^^^
+37 |     /// Filesystem operation failed.
+38 |     IoFailure,
+   |     ^^^^^^^^^
+39 |     /// Exact metadata readback failed.
+40 |     ReadbackMismatch,
+   |     ^^^^^^^^^^^^^^^^
+   |
+   = note: `SealedTransactionError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: variants `Created`, `Reconciled`, and `Replay` are never constructed
+  --> bins/eliot-searchd/src/bin/../sealed_transaction.rs:83:5
+   |
+81 | pub enum PutDisposition {
+   |          -------------- variants in this enum
+82 |     /// Intent and sealed object were created in this invocation.
+83 |     Created,
+   |     ^^^^^^^
+84 |     /// An earlier unknown write was proven by decrypt-and-compare.
+85 |     Reconciled,
+   |     ^^^^^^^^^^
+86 |     /// A complete receipt and exact object were replayed.
+87 |     Replay,
+   |     ^^^^^^
+   |
+   = note: `PutDisposition` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: variants `Absent`, `Prepared`, `Committed`, and `Conflicted` are never constructed
+   --> bins/eliot-searchd/src/bin/../sealed_transaction.rs:125:5
+    |
+123 | pub enum TransactionStatus {
+    |          ----------------- variants in this enum
+124 |     /// No intent or receipt exists.
+125 |     Absent,
+    |     ^^^^^^
+126 |     /// Intent exists and requires exact retry input for reconciliation.
+127 |     Prepared,
+    |     ^^^^^^^^
+128 |     /// Terminal receipt exists.
+129 |     Committed,
+    |     ^^^^^^^^^
+130 |     /// Intent and receipt coexist or metadata is contradictory.
+131 |     Conflicted,
+    |     ^^^^^^^^^^
+    |
+    = note: `TransactionStatus` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `validate_operation_id` is never used
+   --> bins/eliot-searchd/src/bin/../sealed_transaction.rs:165:4
+    |
+165 | fn validate_operation_id(value: &str) -> Result<(), SealedTransactionError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `eliot-searchd` (bin "eliot-search-sealed-direct") generated 23 warnings
+error: could not compile `eliot-searchd` (bin "eliot-search-sealed-direct") due to 1 previous error; 23 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: unused import: `std::collections::BTreeSet`
+ --> bins/eliot-searchd/src/snapshot.rs:9:5
+  |
+9 | use std::collections::BTreeSet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `eliot-searchd` (bin "eliot-search-sealed-catalog" test) generated 2 warnings
+error: could not compile `eliot-searchd` (bin "eliot-search-sealed-catalog" test) due to 2 previous errors; 2 warnings emitted
+warning: `eliot-searchd` (bin "eliot-search-sealed-recover") generated 3 warnings (1 duplicate)
+error: could not compile `eliot-searchd` (bin "eliot-search-sealed-recover") due to 2 previous errors; 3 warnings emitted
+warning: unused variable: `error`
+   --> bins/eliot-searchd/src/snapshot.rs:496:13
+    |
+496 |         Err(error) if final_path.exists() => {
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_error`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `snapshot_id` and `snapshot_manifest_fingerprint` are never used
+  --> bins/eliot-searchd/src/lexical/mod.rs:67:19
+   |
+66 | impl LexicalIndex {
+   | ----------------- methods in this implementation
+67 |     pub(crate) fn snapshot_id(&self) -> &str {
+   |                   ^^^^^^^^^^^
+...
+71 |     pub(crate) const fn snapshot_manifest_fingerprint(&self) -> [u8; 32] {
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `eliot-searchd` (bin "eliot-search-snapshotd") generated 3 warnings (run `cargo fix --bin "eliot-search-snapshotd" -p eliot-searchd` to apply 2 suggestions)
+FAIL workspace check exit=101
+
+===== workspace tests =====
+   Compiling search-contracts v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-contracts)
+   Compiling typenum v1.20.1
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.4
+   Compiling cpufeatures v0.2.17
+   Compiling subtle v2.6.1
+   Compiling opaque-debug v0.3.1
+   Compiling zeroize v1.9.0
+   Compiling generic-array v0.14.7
+   Compiling getrandom v0.2.17
+   Compiling rand_core v0.6.4
+   Compiling getrandom v0.3.4
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling polyval v0.6.2
+   Compiling block-buffer v0.10.4
+   Compiling aes v0.8.4
+   Compiling digest v0.10.7
+   Compiling ctr v0.9.2
+   Compiling ghash v0.5.1
+   Compiling aead v0.5.2
+   Compiling aes-gcm v0.10.3
+   Compiling sha2 v0.10.9
+   Compiling search-os-secrets-windows v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-os-secrets-windows)
+   Compiling search-domain v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-domain)
+   Compiling search-ports v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-ports)
+   Compiling search-config v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-config)
+   Compiling search-revision-crypto v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-revision-crypto)
+   Compiling search-access v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-access)
+   Compiling search-provider-protocol v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-provider-protocol)
+   Compiling search-lexical v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-lexical)
+   Compiling search-os-secrets v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-os-secrets)
+warning: function `fingerprint_parts` is never used
+  --> crates/search-lexical/src/sparse/fingerprint.rs:12:15
+   |
+12 | pub(super) fn fingerprint_parts<'a>(
+   |               ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling search-control-redb v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-control-redb)
+   Compiling search-runtime-owner v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-runtime-owner)
+   Compiling search-epoch-pins v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-epoch-pins)
+warning: field `owner` is never read
+   --> crates/search-index-qdrant/search-epoch-pins/src/lib.rs:492:5
+    |
+489 | pub struct RoutePinGuard {
+    |            ------------- field in this struct
+...
+492 |     owner: OpaqueId,
+    |     ^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `search-lexical` (lib) generated 1 warning
+   Compiling search-source-admission v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-source/search-source-admission)
+   Compiling search-source-identity v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-source/search-source-identity)
+   Compiling search-point-identity v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-point-identity)
+warning: `search-epoch-pins` (lib) generated 1 warning
+   Compiling search-query-planner v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-query-planner)
+warning: unused import: `BTreeMap`
+  --> crates/search-query/search-query-planner/src/lib.rs:17:24
+   |
+17 | use std::collections::{BTreeMap, BTreeSet};
+   |                        ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling search-handles v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-handles)
+   Compiling search-projection-planner v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-projection-planner)
+warning: `search-query-planner` (lib) generated 1 warning (run `cargo fix --lib -p search-query-planner` to apply 1 suggestion)
+   Compiling search-source-registry v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-source/search-source-registry)
+   Compiling search-index-reclaimer v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-index-reclaimer)
+   Compiling search-candidate-validator v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-candidate-validator)
+   Compiling search-safe-reader v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-source/search-safe-reader)
+   Compiling search-unitizer v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-prep/search-unitizer)
+   Compiling search-materializer v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-prep/search-materializer)
+   Compiling search-subject-resolver v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-subject-resolver)
+   Compiling search-model-provider v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-model-provider)
+   Compiling eliot-search-doc-worker v0.0.0 (/home/runner/work/eliot-search/eliot-search/bins/eliot-search-doc-worker)
+warning: unused import: `BTreeMap`
+  --> crates/search-model-provider/src/lib.rs:20:24
+   |
+20 | use std::collections::{BTreeMap, BTreeSet};
+   |                        ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling search-publication v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-publication)
+   Compiling search-overlay v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-overlay)
+warning: unused import: `NonZeroRevision`
+  --> crates/search-query/search-overlay/src/lib.rs:27:21
+   |
+27 |     MAX_LIST_ITEMS, NonZeroRevision, OpaqueId, OpaqueRef, OverlayRevision,
+   |                     ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling search-source-reconcile v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-source/search-source-reconcile)
+warning: `search-overlay` (lib test) generated 1 warning (run `cargo fix --lib -p search-overlay --tests` to apply 1 suggestion)
+   Compiling search-result-projector v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-result-projector)
+   Compiling search-retention v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-retention)
+   Compiling search-comparator v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-comparator)
+warning: `search-model-provider` (lib) generated 1 warning (run `cargo fix --lib -p search-model-provider` to apply 1 suggestion)
+   Compiling eliot-search-model-worker v0.0.0 (/home/runner/work/eliot-search/eliot-search/bins/eliot-search-model-worker)
+warning: field `policy` is never read
+   --> crates/search-runtime/search-retention/src/lib.rs:584:5
+    |
+583 | pub struct PurgeCoordinator {
+    |            ---------------- field in this struct
+584 |     policy: RetentionPolicy,
+    |     ^^^^^^
+    |
+    = note: `PurgeCoordinator` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `search-retention` (lib test) generated 1 warning
+   Compiling search-retrieval-executor v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-retrieval-executor)
+   Compiling search-continuation v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-continuation)
+   Compiling eliot-searchd v0.0.0 (/home/runner/work/eliot-search/eliot-search/bins/eliot-searchd)
+error: there is no argument named `OWNER_EPOCH_MAGIC`
+   --> bins/eliot-searchd/src/bin/../sealed_owner_epoch.rs:141:13
+    |
+141 | /             concat!(
+142 | |                 "{OWNER_EPOCH_MAGIC}\n",
+143 | |                 "format_version={}\n",
+144 | |                 "epoch={}\n",
+...   |
+147 | |                 "root_binding_sha256={}\n"
+148 | |             ),
+    | |_____________^
+    |
+    = note: did you intend to capture a variable `OWNER_EPOCH_MAGIC` from the surrounding scope?
+    = note: to avoid ambiguity, `format_args!` cannot capture variables when the format string is expanded from a macro
+
+warning: unused import: `SensitiveBytes`
+  --> bins/eliot-searchd/src/bin/../sealed_owner_epoch.rs:15:45
+   |
+15 | use crate::sealed_store::{SealedStoreError, SensitiveBytes};
+   |                                             ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::sealed_transaction_guard::put_idempotent_verified`
+  --> bins/eliot-searchd/src/bin/../sealed_owner_epoch.rs:17:5
+   |
+17 | use crate::sealed_transaction_guard::put_idempotent_verified;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: usage of an `unsafe` block
+   --> bins/eliot-searchd/src/bin/../sealed_store.rs:333:9
+    |
+333 |         unsafe { core::ptr::write_volatile(byte, 0) };
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: requested on the command line with `-D unsafe-code`
+
+warning: unused imports: `SealReceipt`, `open_sealed`, and `seal_immutable`
+  --> bins/eliot-searchd/src/bin/../sealed_transaction.rs:12:5
+   |
+12 |     SealReceipt, SealedStoreError, SensitiveBytes, open_sealed, seal_immutable,
+   |     ^^^^^^^^^^^                                    ^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: `eliot-searchd` (bin "eliot-search-sealed-recover" test) generated 3 warnings
+error: could not compile `eliot-searchd` (bin "eliot-search-sealed-recover" test) due to 2 previous errors; 3 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+FAIL workspace tests exit=101
+
+===== workspace clippy =====
+    Checking search-contracts v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-contracts)
+    Checking search-os-secrets-windows v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-os-secrets-windows)
+    Checking search-revision-crypto v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-revision-crypto)
+error: this could be a `const fn`
+   --> crates/search-runtime/search-revision-crypto/src/lib.rs:336:5
+    |
+336 | /     pub fn len(&self) -> usize {
+337 | |         self.bytes.len()
+338 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#missing_const_for_fn
+    = note: `-D clippy::missing-const-for-fn` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::missing_const_for_fn)]`
+help: make the function `const`
+    |
+336 |     pub const fn len(&self) -> usize {
+    |         +++++
+
+error: this could be a `const fn`
+   --> crates/search-runtime/search-revision-crypto/src/lib.rs:342:5
+    |
+342 | /     pub fn is_empty(&self) -> bool {
+343 | |         self.bytes.is_empty()
+344 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#missing_const_for_fn
+help: make the function `const`
+    |
+342 |     pub const fn is_empty(&self) -> bool {
+    |         +++++
+
+error: could not compile `search-revision-crypto` (lib test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `search-revision-crypto` (lib) due to 2 previous errors
+FAIL workspace clippy exit=101
+
+===== workspace rustdoc =====
+warning: function `fingerprint_parts` is never used
+  --> crates/search-lexical/src/sparse/fingerprint.rs:12:15
+   |
+12 | pub(super) fn fingerprint_parts<'a>(
+   |               ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `search-lexical` (lib) generated 1 warning
+warning: field `owner` is never read
+   --> crates/search-index-qdrant/search-epoch-pins/src/lib.rs:492:5
+    |
+489 | pub struct RoutePinGuard {
+    |            ------------- field in this struct
+...
+492 |     owner: OpaqueId,
+    |     ^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `search-epoch-pins` (lib) generated 1 warning
+warning: unused import: `BTreeMap`
+  --> crates/search-query/search-query-planner/src/lib.rs:17:24
+   |
+17 | use std::collections::{BTreeMap, BTreeSet};
+   |                        ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `search-query-planner` (lib) generated 1 warning (run `cargo fix --lib -p search-query-planner` to apply 1 suggestion)
+warning: unused import: `BTreeMap`
+  --> crates/search-model-provider/src/lib.rs:20:24
+   |
+20 | use std::collections::{BTreeMap, BTreeSet};
+   |                        ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `search-model-provider` (lib) generated 1 warning (run `cargo fix --lib -p search-model-provider` to apply 1 suggestion)
+ Documenting eliot-search-doc-worker v0.0.0 (/home/runner/work/eliot-search/eliot-search/bins/eliot-search-doc-worker)
+ Documenting search-comparator v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-comparator)
+ Documenting search-overlay v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-overlay)
+ Documenting search-revision-crypto v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-revision-crypto)
+ Documenting eliot-search-model-worker v0.0.0 (/home/runner/work/eliot-search/eliot-search/bins/eliot-search-model-worker)
+ Documenting search-source-reconcile v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-source/search-source-reconcile)
+ Documenting search-retention v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-runtime/search-retention)
+ Documenting search-publication v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-publication)
+ Documenting search-result-projector v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-result-projector)
+ Documenting search-retrieval-executor v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-retrieval-executor)
+ Documenting search-continuation v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-continuation)
+ Documenting search-source-registry v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-source/search-source-registry)
+ Documenting search-projection-planner v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-projection-planner)
+ Documenting search-index-reclaimer v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-index-qdrant/search-index-reclaimer)
+ Documenting search-exact v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-exact)
+ Documenting search-query-planner v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-query-planner)
+ Documenting search-candidate-validator v0.0.0 (/home/runner/work/eliot-search/eliot-search/crates/search-query/search-candidate-validator)
+ Documenting eliot-searchd v0.0.0 (/home/runner/work/eliot-search/eliot-search/bins/eliot-searchd)
+error[E0428]: the name `sync_directory` is defined multiple times
+   --> bins/eliot-searchd/src/directory_manifest.rs:596:1
+    |
+ 71 | / pub(crate) fn sync_directory(
+ 72 | |     store: &mut DirectStore,
+ 73 | |     data_root: &Path,
+ 74 | |     directory: &Path,
+...   |
+162 | |     })
+163 | | }
+    | |_- previous definition of the value `sync_directory` here
+...
+596 |   fn sync_directory(path: &Path) -> Result<(), String> {
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `sync_directory` redefined here
+    |
+    = note: `sync_directory` must be defined only once in the value namespace of this module
+
+error: invalid format string: expected `}`, found `\"`
+   --> bins/eliot-searchd/src/app.rs:381:17
+    |
+381 | /                 concat!(
+382 | |                     "{\"status\":\"ok\",\"component\":\"eliot-searchd\",",
+383 | |                     "\"development_stdin_scan_available\":true,",
+384 | |                     "\"development_file_scan_available\":true,",
+385 | |                     "\"persistent_direct_store_available\":true}"
+386 | |                 )
+    | |_________________^ expected `}` in format string
+    |
+    = note: if you intended to print `{`, you can escape it using `{{`
+
+For more information about this error, try `rustc --explain E0428`.
+error: could not document `eliot-searchd`
+warning: build failed, waiting for other jobs to finish...
+FAIL workspace rustdoc exit=101
+
+===== daemon self-test =====
+error: `cargo run` could not determine which binary to run. Use the `--bin` option to specify a binary, or the `default-run` manifest key.
+available binaries: eliot-search-sealed-authority, eliot-search-sealed-catalog, eliot-search-sealed-direct, eliot-search-sealed-recover, eliot-search-sealed-store, eliot-search-sealed-transaction, eliot-search-snapshotd, eliot-searchd
+FAIL daemon self-test exit=101
+
+===== cli self-test =====
+error: `cargo run` could not determine which binary to run. Use the `--bin` option to specify a binary, or the `default-run` manifest key.
+available binaries: eliot-search, eliot-search-snapshot
+FAIL cli self-test exit=101
+
+===== model worker self-test =====
+warning: unused import: `BTreeMap`
+  --> crates/search-model-provider/src/lib.rs:20:24
+   |
+20 | use std::collections::{BTreeMap, BTreeSet};
+   |                        ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+PASS model worker self-test
+
+===== document worker self-test =====
+PASS document worker self-test
+
+===== diff whitespace =====
+PASS diff whitespace
+
+===== Windows bounded log tail =====
+
