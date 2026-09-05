@@ -1,0 +1,375 @@
+name: one-shot consolidated repository audit v3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/zz-one-shot-consolidated-audit-v3.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: one-shot-consolidated-repository-audit-v3
+  cancel-in-progress: false
+
+env:
+  REPO: UnknownAlienHuman/eliot-search
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      base_sha: ${{ steps.base.outputs.sha }}
+    steps:
+      - name: Wait for every earlier workflow run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 2100))
+          while true; do
+            mapfile -t others < <(
+              gh api --paginate "repos/${REPO}/actions/runs?per_page=100" \
+                --jq ".workflow_runs[] | select((.id|tostring) != \"${GITHUB_RUN_ID}\" and (.status == \"queued\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"requested\" or .status == \"pending\")) | [.id,.name,.status,.head_sha] | @tsv"
+            )
+            if [ "${#others[@]}" -eq 0 ]; then
+              break
+            fi
+            printf 'waiting for %s earlier workflow run(s)\n' "${#others[@]}"
+            printf '%s\n' "${others[@]}"
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo 'timed out waiting for earlier workflows'
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Freeze exact main commit
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          sha="$(gh api "repos/${REPO}/commits/main" --jq .sha)"
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "frozen main: $sha"
+
+  linux:
+    needs: settle
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    outputs:
+      status: ${{ steps.audit.outputs.status }}
+      tail_b64: ${{ steps.audit.outputs.tail_b64 }}
+    steps:
+      - name: Checkout frozen main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.settle.outputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+          rustc -Vv
+          cargo -V
+
+      - name: Run Linux qualification
+        id: audit
+        shell: bash
+        run: |
+          set +e
+          log="$RUNNER_TEMP/eliot-linux-audit.log"
+          : > "$log"
+          failures=0
+
+          run_check() {
+            name="$1"
+            shift
+            printf '\n===== %s =====\n' "$name" | tee -a "$log"
+            "$@" >> "$log" 2>&1
+            code=$?
+            if [ "$code" -ne 0 ]; then
+              printf 'FAIL %s exit=%s\n' "$name" "$code" | tee -a "$log"
+              failures=$((failures + 1))
+            else
+              printf 'PASS %s\n' "$name" | tee -a "$log"
+            fi
+          }
+
+          run_check "failure markers" bash -c '
+            markers=$(find qualification -type f \( -iname "*FAIL*.txt" -o -name "LAST_FAILURE.txt" -o -name "*FAILURE.txt" \) ! -name "CURRENT_FAILURES.txt" -print)
+            if [ -n "$markers" ]; then printf "%s\n" "$markers"; exit 1; fi
+          '
+          run_check "lingering one-shot workflows" bash -c '
+            files=$(find .github/workflows -maxdepth 1 -type f -name "zz-one-shot-*.yml" ! -name "zz-one-shot-consolidated-audit-v3.yml" -print)
+            if [ -n "$files" ]; then printf "%s\n" "$files"; exit 1; fi
+          '
+          run_check "forbidden Rust stubs" bash -c '
+            if rg -n --glob "*.rs" "(todo!|unimplemented!)\\s*\\(" crates bins; then exit 1; fi
+          '
+          run_check "bootstrap python compile" python -m py_compile tools/validate-integration-bootstrap.py qualification/integration-bootstrap/test_integration_bootstrap_v1.py
+          run_check "bootstrap corpus" python qualification/integration-bootstrap/test_integration_bootstrap_v1.py
+          cp Cargo.lock "$RUNNER_TEMP/Cargo.lock.before"
+          run_check "lockfile generation" cargo generate-lockfile
+          run_check "lockfile reproducibility" cmp -s Cargo.lock "$RUNNER_TEMP/Cargo.lock.before"
+          cp "$RUNNER_TEMP/Cargo.lock.before" Cargo.lock
+          run_check "format" cargo fmt --all -- --check
+          run_check "workspace check" cargo check --workspace --all-targets --locked
+          run_check "workspace tests" cargo test --workspace --all-targets --locked
+          run_check "workspace clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
+          run_check "workspace rustdoc" cargo doc --workspace --no-deps --locked
+          run_check "daemon self-test" cargo run --locked -q -p eliot-searchd -- --self-test
+          run_check "cli self-test" cargo run --locked -q -p eliot-search -- --self-test
+          run_check "model worker self-test" cargo run --locked -q -p eliot-search-model-worker -- --self-test
+          run_check "document worker self-test" cargo run --locked -q -p eliot-search-doc-worker -- --self-test
+          run_check "diff whitespace" git diff --check
+
+          if [ "$failures" -eq 0 ]; then status=success; else status=failure; fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          tail -c 28000 "$log" | base64 -w0 | sed 's/^/tail_b64=/' >> "$GITHUB_OUTPUT"
+          if [ "$failures" -ne 0 ]; then exit 1; fi
+
+  windows:
+    needs: settle
+    runs-on: windows-latest
+    timeout-minutes: 85
+    outputs:
+      status: ${{ steps.audit.outputs.status }}
+      tail_b64: ${{ steps.audit.outputs.tail_b64 }}
+    steps:
+      - name: Checkout frozen main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.settle.outputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup override set 1.98.0
+          rustc -Vv
+          cargo -V
+
+      - name: Run Windows qualification
+        id: audit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $log = Join-Path $env:RUNNER_TEMP 'eliot-windows-audit.log'
+          Remove-Item $log -Force -ErrorAction SilentlyContinue
+          $failures = 0
+
+          function Invoke-Checked {
+            param([string]$Name, [scriptblock]$Command)
+            "`n===== $Name =====" | Tee-Object -FilePath $log -Append
+            & $Command 2>&1 | Tee-Object -FilePath $log -Append
+            $code = $LASTEXITCODE
+            if ($null -eq $code) { $code = 0 }
+            if ($code -ne 0) {
+              "FAIL $Name exit=$code" | Tee-Object -FilePath $log -Append
+              $script:failures++
+            }
+            else {
+              "PASS $Name" | Tee-Object -FilePath $log -Append
+            }
+            $global:LASTEXITCODE = 0
+          }
+
+          Invoke-Checked 'failure markers' {
+            $markers = @(Get-ChildItem qualification -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -ne 'CURRENT_FAILURES.txt' -and
+                $_.Name -match '(?i)(^LAST_FAILURE|FAILURE|FAIL\.txt)'
+              })
+            if ($markers.Count -ne 0) {
+              $markers.FullName | Write-Output
+              exit 1
+            }
+          }
+          Invoke-Checked 'lingering one-shot workflows' {
+            $files = @(Get-ChildItem .github/workflows/zz-one-shot-*.yml -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -ne 'zz-one-shot-consolidated-audit-v3.yml' })
+            if ($files.Count -ne 0) {
+              $files.FullName | Write-Output
+              exit 1
+            }
+          }
+          Invoke-Checked 'PowerShell parsers' {
+            foreach ($file in @(
+              'tools/eliot-search-dev.ps1',
+              'qualification/direct-runtime/test_windows_runner.ps1'
+            )) {
+              $tokens = $null
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                (Resolve-Path $file), [ref]$tokens, [ref]$errors
+              ) > $null
+              if ($errors.Count -ne 0) {
+                $errors | Format-List -Force | Out-String | Write-Error
+                exit 1
+              }
+            }
+          }
+          Invoke-Checked 'forbidden Rust stubs' {
+            rg -n --glob '*.rs' '(todo!|unimplemented!)\s*\(' crates bins
+            if ($LASTEXITCODE -eq 0) { exit 1 }
+            exit 0
+          }
+          Invoke-Checked 'bootstrap python compile' {
+            python -m py_compile tools/validate-integration-bootstrap.py qualification/integration-bootstrap/test_integration_bootstrap_v1.py
+          }
+          Invoke-Checked 'bootstrap corpus' {
+            python qualification/integration-bootstrap/test_integration_bootstrap_v1.py
+          }
+          Invoke-Checked 'format' { cargo fmt --all -- --check }
+          Invoke-Checked 'workspace check' { cargo check --workspace --all-targets --locked }
+          Invoke-Checked 'workspace tests' { cargo test --workspace --all-targets --locked }
+          Invoke-Checked 'workspace clippy' { cargo clippy --workspace --all-targets --locked -- -D warnings }
+          Invoke-Checked 'workspace rustdoc' { cargo doc --workspace --no-deps --locked }
+          Invoke-Checked 'daemon self-test' { cargo run --locked -q -p eliot-searchd -- --self-test }
+          Invoke-Checked 'cli self-test' { cargo run --locked -q -p eliot-search -- --self-test }
+          Invoke-Checked 'model worker self-test' { cargo run --locked -q -p eliot-search-model-worker -- --self-test }
+          Invoke-Checked 'document worker self-test' { cargo run --locked -q -p eliot-search-doc-worker -- --self-test }
+          Invoke-Checked 'Windows DIRECT E2E' {
+            pwsh -NoProfile -File qualification/direct-runtime/test_windows_runner.ps1
+          }
+          Invoke-Checked 'diff whitespace' { git diff --check }
+
+          $status = if ($failures -eq 0) { 'success' } else { 'failure' }
+          "status=$status" >> $env:GITHUB_OUTPUT
+          $tail = (Get-Content $log -Tail 800) -join "`n"
+          $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($tail))
+          "tail_b64=$encoded" >> $env:GITHUB_OUTPUT
+          if ($failures -ne 0) { exit 1 }
+
+  finalize:
+    if: always()
+    needs: [settle, linux, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout frozen main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.settle.outputs.base_sha }}
+          fetch-depth: 0
+
+      - name: Clean branches, publish exact status, and self-delete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ needs.settle.outputs.base_sha }}
+          LINUX_RESULT: ${{ needs.linux.result }}
+          LINUX_STATUS: ${{ needs.linux.outputs.status }}
+          LINUX_TAIL_B64: ${{ needs.linux.outputs.tail_b64 }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          WINDOWS_STATUS: ${{ needs.windows.outputs.status }}
+          WINDOWS_TAIL_B64: ${{ needs.windows.outputs.tail_b64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/zz-one-shot-*.yml
+          mkdir -p qualification
+
+          branch_failure=false
+          mapfile -t branches < <(gh api --paginate "repos/${REPO}/branches?per_page=100" --jq '.[].name')
+          for branch in "${branches[@]}"; do
+            if [ "$branch" = main ]; then continue; fi
+            encoded="$(python -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$branch")"
+            if ! gh api -X DELETE "repos/${REPO}/git/refs/heads/${encoded}"; then
+              branch_failure=true
+            fi
+          done
+          mapfile -t remaining < <(gh api --paginate "repos/${REPO}/branches?per_page=100" --jq '.[].name')
+          if [ "${#remaining[@]}" -ne 1 ] || [ "${remaining[0]}" != main ]; then
+            branch_failure=true
+          fi
+
+          success=true
+          [ "$LINUX_RESULT" = success ] || success=false
+          [ "$LINUX_STATUS" = success ] || success=false
+          [ "$WINDOWS_RESULT" = success ] || success=false
+          [ "$WINDOWS_STATUS" = success ] || success=false
+          [ "$branch_failure" = false ] || success=false
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          if [ "$success" = true ]; then
+            cat > qualification/CURRENT_STATUS.md <<EOF
+          # Current repository qualification
+
+          Status: **PASS**
+
+          - Tested main commit: \`${BASE_SHA}\`
+          - Verified at: \`${now}\`
+          - Toolchain: Rust \`1.98.0\`
+          - Platforms: \`ubuntu-latest\`, \`windows-latest\`
+          - Branches: \`main\` only
+
+          Both platforms passed failure-marker and one-shot cleanup checks,
+          forbidden-stub scan, bootstrap qualification, workspace formatting,
+          compile, tests, Clippy with warnings denied, rustdoc, daemon/CLI/worker
+          self-tests, and whitespace validation. Windows also passed the complete
+          DIRECT start-search-stop-restart qualification. Linux proved lockfile
+          reproducibility.
+
+          ## Proven scope
+
+          This proves the exact workspace and concrete components present at the
+          tested commit. It does not claim that production Qdrant transport, full
+          daemon composition of every source/index stage, or configured real
+          model/document backends exist unless separately qualified.
+          EOF
+            rm -f qualification/CURRENT_FAILURES.txt
+            subject="verify: record dual-platform green repository status"
+          else
+            linux_tail=""
+            windows_tail=""
+            if [ -n "${LINUX_TAIL_B64:-}" ]; then
+              linux_tail="$(printf '%s' "$LINUX_TAIL_B64" | base64 -d 2>/dev/null || true)"
+            fi
+            if [ -n "${WINDOWS_TAIL_B64:-}" ]; then
+              windows_tail="$(printf '%s' "$WINDOWS_TAIL_B64" | base64 -d 2>/dev/null || true)"
+            fi
+            cat > qualification/CURRENT_FAILURES.txt <<EOF
+          Status: FAIL
+          Tested main commit: ${BASE_SHA}
+          Verified at: ${now}
+          Linux job/result: ${LINUX_RESULT}/${LINUX_STATUS}
+          Windows job/result: ${WINDOWS_RESULT}/${WINDOWS_STATUS}
+          Branch cleanup failed: ${branch_failure}
+
+          ===== Linux bounded log tail =====
+          ${linux_tail}
+
+          ===== Windows bounded log tail =====
+          ${windows_tail}
+          EOF
+            rm -f qualification/CURRENT_STATUS.md
+            subject="verify: record dual-platform repository failures"
+          fi
+
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "$subject [skip ci]"
+            git fetch origin main
+            origin="$(git rev-parse origin/main)"
+            if [ "$origin" != "$BASE_SHA" ]; then
+              echo "main changed during audit: tested=$BASE_SHA current=$origin"
+              exit 1
+            fi
+            git push origin HEAD:main
+          fi
+          if [ "$success" != true ]; then exit 1; fi
