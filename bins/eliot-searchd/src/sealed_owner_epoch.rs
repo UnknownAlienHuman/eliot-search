@@ -286,11 +286,23 @@ fn parse_epoch_object_id(value: &str) -> Result<u64, OwnerEpochError> {
     if digits.len() != 20 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(OwnerEpochError::ChainInvalid);
     }
-    let epoch = parse_u64(digits.to_owned())?;
+    // Filenames use a fixed-width, zero-padded integer. Record fields do not.
+    // Do not use parse_u64 here: its canonical-record check rejects padding.
+    let epoch = digits
+        .parse::<u64>()
+        .map_err(|_| OwnerEpochError::ChainInvalid)?;
     if epoch == 0 || object_id(epoch) != value {
         return Err(OwnerEpochError::ChainInvalid);
     }
     Ok(epoch)
+}
+
+fn require_epoch_capacity(records: usize) -> Result<(), OwnerEpochError> {
+    if records >= MAX_OWNER_EPOCH_RECORDS {
+        Err(OwnerEpochError::EpochExhausted)
+    } else {
+        Ok(())
+    }
 }
 
 fn take(
@@ -334,7 +346,7 @@ mod platform {
         MAX_OWNER_EPOCH_RECORDS, OWNER_EPOCH_FORMAT_VERSION, OwnerEpochError,
         OwnerEpochGuard, OwnerEpochRecord, Sha256Digest, SensitiveBytes,
         ZERO_DIGEST_HEX, object_id, parse_epoch_object_id, put_idempotent_verified,
-        transaction_id,
+        require_epoch_capacity, transaction_id,
     };
     use crate::sealed_digest::sha256;
     use crate::sealed_root_lock::SealedRootLease;
@@ -358,6 +370,9 @@ mod platform {
         }
         let root_binding = root_binding(data_root)?;
         let records = discover_epoch_objects(data_root)?;
+        // Refuse before reconciliation or publication: writing one record past
+        // the reader's ceiling would make the next acquisition unrecoverable.
+        require_epoch_capacity(records.len())?;
         let mut previous_epoch = 0_u64;
         let mut previous_digest = Sha256Digest::from_hex(ZERO_DIGEST_HEX)?;
 
@@ -507,8 +522,10 @@ mod tests {
             format_version: OWNER_EPOCH_FORMAT_VERSION,
             epoch: 1,
             previous_epoch: 0,
-            previous_record_sha256: Sha256Digest::from_hex(ZERO_DIGEST_HEX).expect("zero digest"),
-            root_binding_sha256: Sha256Digest::from_hex(&"ab".repeat(32)).expect("root digest"),
+            previous_record_sha256: Sha256Digest::from_hex(ZERO_DIGEST_HEX)
+                .expect("zero digest"),
+            root_binding_sha256: Sha256Digest::from_hex(&"ab".repeat(32))
+                .expect("root digest"),
         }
     }
 
@@ -516,18 +533,29 @@ mod tests {
     fn epoch_record_encoding_has_exact_header_and_round_trips() {
         let record = first_record();
         let encoded = record.encode().expect("encode");
-        assert!(encoded.starts_with("ELIOT-SEALED-OWNER-EPOCH-V1\nformat_version=1\nepoch=1\n"));
+        assert!(encoded.starts_with(
+            "ELIOT-SEALED-OWNER-EPOCH-V1\nformat_version=1\nepoch=1\n"
+        ));
         assert_eq!(encoded.lines().count(), OWNER_EPOCH_FIELD_COUNT + 1);
         assert!(encoded.ends_with('\n'));
-        assert_eq!(OwnerEpochRecord::decode(encoded.as_bytes()).expect("decode"), record);
+        assert_eq!(
+            OwnerEpochRecord::decode(encoded.as_bytes()).expect("decode"),
+            record
+        );
     }
 
     #[test]
     fn duplicate_epoch_field_and_missing_terminator_are_rejected() {
         let encoded = first_record().encode().expect("encode");
         let duplicate = format!("{encoded}epoch=1\n");
-        assert_eq!(OwnerEpochRecord::decode(duplicate.as_bytes()), Err(OwnerEpochError::ChainInvalid));
-        assert_eq!(OwnerEpochRecord::decode(encoded.trim_end().as_bytes()), Err(OwnerEpochError::ChainInvalid));
+        assert_eq!(
+            OwnerEpochRecord::decode(duplicate.as_bytes()),
+            Err(OwnerEpochError::ChainInvalid)
+        );
+        assert_eq!(
+            OwnerEpochRecord::decode(encoded.trim_end().as_bytes()),
+            Err(OwnerEpochError::ChainInvalid)
+        );
     }
 
     #[test]
@@ -535,5 +563,35 @@ mod tests {
         let mut record = first_record();
         record.previous_epoch = 1;
         assert_eq!(record.encode(), Err(OwnerEpochError::PredecessorMismatch));
+    }
+
+    #[test]
+    fn generated_epoch_filenames_can_be_reopened() {
+        for epoch in [1, 2, 42, 1_000_000, u64::MAX] {
+            assert_eq!(parse_epoch_object_id(&object_id(epoch)), Ok(epoch));
+        }
+    }
+
+    #[test]
+    fn invalid_epoch_filenames_remain_rejected() {
+        for value in [
+            "owner-epoch-00000000000000000000",
+            "owner-epoch-1",
+            "owner-epoch-0000000000000000000x",
+            "owner-epoch-18446744073709551616",
+            "owner-epoch-+0000000000000000001",
+        ] {
+            assert_eq!(parse_epoch_object_id(value), Err(OwnerEpochError::ChainInvalid));
+        }
+        assert_eq!(parse_u64("01".to_owned()), Err(OwnerEpochError::ChainInvalid));
+    }
+
+    #[test]
+    fn full_history_refuses_append_before_creating_an_unreadable_record() {
+        assert_eq!(require_epoch_capacity(MAX_OWNER_EPOCH_RECORDS - 1), Ok(()));
+        assert_eq!(
+            require_epoch_capacity(MAX_OWNER_EPOCH_RECORDS),
+            Err(OwnerEpochError::EpochExhausted)
+        );
     }
 }
