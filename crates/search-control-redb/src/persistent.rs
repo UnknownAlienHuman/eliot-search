@@ -6,7 +6,7 @@
 //! invitation to initialize a new installation. Native path admission and owner
 //! succession are composition responsibilities; neither is inferred here.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs::File;
 
@@ -18,6 +18,7 @@ use crate::{CommitRecoveryDecision, ControlCommitReceipt, ControlError, ControlK
     JournalReadSnapshot, MutationId, SnapshotPublishReceipt, rebuild_control_snapshot};
 
 mod codec;
+mod transaction;
 use codec::{Header, StoredOperation, as_u64, decode_value, encode_value,
     request_fingerprint, validate_mutation};
 
@@ -39,6 +40,16 @@ pub struct PersistentControlJournal {
     pending: Option<(MutationId, [u8; 32])>,
     quarantined: bool,
     committed_writes: u64,
+    #[cfg(test)]
+    work: TestWork,
+}
+
+// Test-only work accounting. No telemetry or durable query counters are added.
+#[cfg(test)]
+#[derive(Default)]
+struct TestWork {
+    point_reads: std::sync::atomic::AtomicU64,
+    snapshot_reads: std::sync::atomic::AtomicU64,
 }
 
 impl fmt::Debug for PersistentControlJournal {
@@ -75,7 +86,11 @@ impl PersistentControlJournal {
             drop(write.open_table(OPERATIONS).map_err(|_| ControlError::CommitOutcomeUnknown)?);
         }
         write.commit().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        let result = Self { database, identity, limits, pending: None, quarantined: false, committed_writes: 1 };
+        let result = Self {
+            database, identity, limits, pending: None, quarantined: false, committed_writes: 1,
+            #[cfg(test)]
+            work: TestWork::default(),
+        };
         result.verify().map_err(|_| ControlError::CommitOutcomeUnknown)?;
         Ok(result)
     }
@@ -92,7 +107,11 @@ impl PersistentControlJournal {
         let metadata = file.metadata().map_err(|_| ControlError::StoreUnavailable)?;
         if !metadata.is_file() || metadata.len() == 0 { return Err(ControlError::StoreCorrupt); }
         let database = Database::builder().set_cache_size(CACHE_BYTES).create_file(file).map_err(map_database_error)?;
-        let result = Self { database, identity, limits, pending: None, quarantined: false, committed_writes: 0 };
+        let result = Self {
+            database, identity, limits, pending: None, quarantined: false, committed_writes: 0,
+            #[cfg(test)]
+            work: TestWork::default(),
+        };
         result.verify()?;
         Ok(result)
     }
@@ -217,6 +236,8 @@ impl PersistentControlJournal {
     /// Replay validates the complete canonical request, not merely a digest
     /// supplied by a caller. A commit or post-commit readback error blocks normal
     /// operations until `recover_transaction` resolves the exact request.
+    /// Normal mutation planning/readback touches only the command's keys. Full
+    /// consistency scans remain explicit and run when the journal is opened.
     pub fn transact(&mut self, mutation: ControlMutation) -> Result<ControlCommitReceipt, ControlError> {
         self.transact_inner(mutation, Boundary::Normal)
     }
@@ -226,7 +247,7 @@ impl PersistentControlJournal {
     /// A historical committed receipt is not a claim that its values remain
     /// current after later transactions. The ledger is not pruned by this adapter.
     pub fn recover_transaction(&mut self, mutation: &ControlMutation) -> Result<CommitRecoveryDecision, ControlError> {
-        validate_mutation(mutation, self.limits)?;
+        let changed_keys = validate_mutation(mutation, self.limits)?;
         let fingerprint = request_fingerprint(self.identity, mutation)?;
         if self.quarantined { return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine); }
         if self.pending.is_some_and(|pending| pending != (mutation.id(), fingerprint)) {
@@ -240,6 +261,12 @@ impl PersistentControlJournal {
         let header = self.header_from(&read)?;
         let result = match operation_from(&read, mutation.id(), &header, self.limits)? {
             Some(operation) if operation.request_sha256 == fingerprint => {
+                if transaction::verify_replay(
+                    self, &read, &header, &operation.receipt, mutation, &changed_keys,
+                ).is_err() {
+                    self.quarantined = true;
+                    return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine);
+                }
                 let mut receipt = operation.receipt;
                 receipt.replayed = true;
                 CommitRecoveryDecision::Committed(receipt)
@@ -270,6 +297,8 @@ impl PersistentControlJournal {
     }
 
     fn snapshot_from(&self, read: &ReadTransaction) -> Result<JournalReadSnapshot, ControlError> {
+        #[cfg(test)]
+        self.work.snapshot_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let header = self.header_from(read)?;
         let table = read.open_table(RECORDS).map_err(|_| ControlError::SchemaMismatch)?;
         let mut records = Vec::new();
@@ -311,83 +340,17 @@ impl PersistentControlJournal {
     }
 
     fn transact_inner(&mut self, mutation: ControlMutation, boundary: Boundary) -> Result<ControlCommitReceipt, ControlError> {
-        self.ensure_available()?;
-        let changed_keys = validate_mutation(&mutation, self.limits)?;
-        let fingerprint = request_fingerprint(self.identity, &mutation)?;
-        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        let before = self.header_from(&read)?;
-        if let Some(previous) = operation_from(&read, mutation.id(), &before, self.limits)? {
-            if previous.request_sha256 != fingerprint { return Err(ControlError::OperationConflict); }
-            let mut receipt = previous.receipt;
-            receipt.replayed = true;
-            return Ok(receipt);
+        let result = transaction::execute(self, mutation, boundary);
+        if matches!(&result, Err(
+            ControlError::StoreCorrupt | ControlError::IdentityMismatch
+            | ControlError::SchemaUnsupported | ControlError::SchemaMismatch
+            | ControlError::ForbiddenControlPayload
+        )) {
+            self.quarantined = true;
         }
-        if mutation.expected_generation() != before.generation { return Err(ControlError::TransactionConflict); }
-        if before.operations >= as_u64(self.limits.max_operation_records)? { return Err(ControlError::IdempotencyCapacityExceeded); }
-        let snapshot = self.snapshot_from(&read)?;
-        let mut staged = snapshot.records.into_iter().collect::<BTreeMap<_, _>>();
-        for key in mutation.deletes() { staged.remove(key); }
-        for write in mutation.writes() { staged.insert(write.key.clone(), write.value.clone()); }
-        let mut after = before.clone();
-        after.records = as_u64(staged.len())?;
-        after.value_bytes = staged.values().try_fold(0_u64, |total, value| {
-            total.checked_add(as_u64(value.len())?).ok_or(ControlError::BudgetExceeded)
-        })?;
-        if after.records > as_u64(self.limits.max_records)? || after.value_bytes > as_u64(self.limits.max_total_value_bytes)? {
-            return Err(ControlError::BudgetExceeded);
-        }
-        after.generation = before.generation.checked_add(1).ok_or(ControlError::GenerationExhausted)?;
-        after.operations = after.generation;
-        let receipt = ControlCommitReceipt {
-            operation_id: mutation.id(), command_digest: mutation.command_digest(),
-            before_generation: before.generation, after_generation: after.generation,
-            changed_keys, replayed: false,
-        };
-        let operation = StoredOperation { request_sha256: fingerprint, receipt: receipt.clone() };
-        let operation_bytes = operation.encode(self.limits)?;
-        after.operation_bytes = before.operation_bytes.checked_add(as_u64(operation_bytes.len())?).ok_or(ControlError::BudgetExceeded)?;
-        if after.operation_bytes > as_u64(self.limits.max_total_value_bytes)? { return Err(ControlError::IdempotencyCapacityExceeded); }
-        drop(read);
-        let mut write = self.database.begin_write().map_err(|_| ControlError::StoreUnavailable)?;
-        write.set_durability(Durability::Immediate);
-        {
-            let mut meta = write.open_table(META).map_err(|_| ControlError::SchemaMismatch)?;
-            {
-                let stored = meta.get("header").map_err(|_| ControlError::StoreUnavailable)?.ok_or(ControlError::StoreCorrupt)?;
-                if Header::decode(stored.value(), self.identity, self.limits)? != before { return Err(ControlError::TransactionConflict); }
-            }
-            let mut records = write.open_table(RECORDS).map_err(|_| ControlError::SchemaMismatch)?;
-            let mut operations = write.open_table(OPERATIONS).map_err(|_| ControlError::SchemaMismatch)?;
-            if operations.get(mutation.id().0.as_slice()).map_err(|_| ControlError::StoreUnavailable)?.is_some() {
-                return Err(ControlError::OperationConflict);
-            }
-            for key in mutation.deletes() { records.remove(key.as_bytes()).map_err(|_| ControlError::StoreUnavailable)?; }
-            for change in mutation.writes() {
-                let value = encode_value(&change.value);
-                records.insert(change.key.as_bytes(), value.as_slice()).map_err(|_| ControlError::StoreUnavailable)?;
-            }
-            operations.insert(mutation.id().0.as_slice(), operation_bytes.as_slice()).map_err(|_| ControlError::StoreUnavailable)?;
-            let header = after.encode();
-            meta.insert("header", header.as_slice()).map_err(|_| ControlError::StoreUnavailable)?;
-        }
-        boundary.before_commit()?;
-        // From this point a failure may hide a durable effect. Never report it
-        // as a safe-to-repeat pre-dispatch failure or expose a guessed snapshot.
-        self.pending = Some((mutation.id(), fingerprint));
-        write.commit().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        boundary.after_commit()?;
-        let observed = self.database.begin_read().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        let observed_header = self.header_from(&observed).map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        let observed_operation = operation_from(&observed, mutation.id(), &observed_header, self.limits)
-            .map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        let actual = self.snapshot_from(&observed).map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        if observed_header != after || observed_operation.as_ref() != Some(&operation)
-            || actual.records != staged.into_iter().collect::<Vec<_>>()
-        { return Err(ControlError::CommitOutcomeUnknown); }
-        self.pending = None;
-        self.committed_writes = self.committed_writes.saturating_add(1);
-        Ok(receipt)
+        result
     }
+
 }
 
 fn validate_identity(identity: JournalIdentity) -> Result<JournalIdentity, ControlError> {
