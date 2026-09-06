@@ -19,6 +19,9 @@ use super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitRec
     operation_from};
 
 mod codec;
+pub(super) mod visibility;
+pub use visibility::{PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
+    PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 #[cfg(test)]
 mod tests;
 
@@ -211,7 +214,7 @@ impl PersistentControlJournal {
     }
 
     fn require_intent_schema(&self) -> Result<(), ControlError> {
-        if self.identity.schema_version == PUBLICATION_INTENT_SCHEMA_VERSION { Ok(()) }
+        if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) { Ok(()) }
         else { Err(ControlError::SchemaUnsupported) }
     }
 
@@ -222,6 +225,9 @@ impl PersistentControlJournal {
         let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
         let header = self.header_from(&read)?;
         check.check(Point::ReadHeader)?;
+        if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+            self.snapshot_from_checked(&read, check)?;
+        }
         let records = read.open_table(RECORDS).map_err(map_table_error)?;
         let intent = match records.get(KEY).map_err(map_storage_error)? {
             Some(raw) => Some(codec::decode(&decode_value(raw.value(), self.limits)?)?),
@@ -256,6 +262,12 @@ impl PersistentControlJournal {
                     || (prepared_owner < self.identity.owner_epoch && !recovery_state)) {
                     return Err(ControlError::GenerationMismatch);
                 }
+                if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+                    let snapshot = self.snapshot_from_checked(&read, check)?;
+                    if !replay && update.previous.is_none() {
+                        visibility::validate_initial_intent(&snapshot, &update.next, self.limits)?;
+                    }
+                }
                 let table = read.open_table(RECORDS).map_err(map_table_error)?;
                 match table.get(KEY).map_err(map_storage_error)? {
                     Some(raw) => { codec::decode(&decode_value(raw.value(), self.limits)?)?; }
@@ -264,7 +276,7 @@ impl PersistentControlJournal {
             }
             self.transact_conditionally_checked(command, boundary, check)
         })();
-        if self.identity.schema_version == PUBLICATION_INTENT_SCHEMA_VERSION
+        if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error)) {
             self.quarantined = true;
         }

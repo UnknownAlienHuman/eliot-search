@@ -27,7 +27,9 @@ mod quarantine;
 mod diagnostics;
 mod publication;
 
-pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION};
+pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
+    PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
+    PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 pub use operation::{ControlCallError, ControlInterruption};
 pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};
 pub use diagnostics::{ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState};
@@ -210,7 +212,7 @@ impl PersistentControlJournal {
             }
             let key = ControlKey::new(key.value().to_vec(), self.limits).map_err(|_| ControlError::StoreCorrupt)?;
             let value = decode_value(value.value(), self.limits)?;
-            if self.identity.schema_version == PUBLICATION_INTENT_SCHEMA_VERSION {
+            if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
                 publication::validate_record(&key, &value)?;
             }
             total = total.checked_add(as_u64(value.len())?).ok_or(ControlError::StoreCorrupt)?;
@@ -218,11 +220,15 @@ impl PersistentControlJournal {
             records.push((key, value));
         }
         if total != header.value_bytes { return Err(ControlError::StoreCorrupt); }
-        if self.identity.schema_version == PUBLICATION_INTENT_SCHEMA_VERSION {
+        if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
             publication::verify_absence(read, header.generation, self.limits, &records, check)?;
         }
         check.check(Point::ReadComplete)?;
-        Ok(JournalReadSnapshot { identity: self.identity, generation: header.generation, records })
+        let snapshot = JournalReadSnapshot { identity: self.identity, generation: header.generation, records };
+        if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+            publication::visibility::validate_snapshot(read, &snapshot, self.limits, check)?;
+        }
+        Ok(snapshot)
     }
 
     fn verify_from_checked(&self, read: &ReadTransaction, check: &dyn Check) -> Result<JournalReadSnapshot, ControlError> {
@@ -265,7 +271,7 @@ impl PersistentControlJournal {
 
 fn validate_identity(identity: JournalIdentity) -> Result<JournalIdentity, ControlError> {
     identity.validate()?;
-    if !matches!(identity.schema_version, 1 | PUBLICATION_INTENT_SCHEMA_VERSION) {
+    if !matches!(identity.schema_version, 1 | PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
         return Err(ControlError::SchemaUnsupported);
     }
     Ok(identity)

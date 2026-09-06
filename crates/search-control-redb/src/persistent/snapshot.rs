@@ -77,7 +77,7 @@ impl PersistentControlJournal {
         check: &dyn Check,
     ) -> Result<ControlSnapshot, ControlError> {
         check.check(Point::SnapshotRebuild)?;
-        if self.identity.schema_version == super::PUBLICATION_INTENT_SCHEMA_VERSION {
+        if matches!(self.identity.schema_version, super::PUBLICATION_INTENT_SCHEMA_VERSION | super::PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
             super::publication::require_resolved(&readback.records)?;
         }
         let snapshot = rebuild_control_snapshot(readback, self.identity, self.limits)?;
