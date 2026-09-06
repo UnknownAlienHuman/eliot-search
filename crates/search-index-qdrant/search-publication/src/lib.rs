@@ -15,7 +15,7 @@ mod recovery;
 pub use error::PublicationError;
 pub use machine::{
     DEFAULT_MAX_PUBLICATION_POINTS, DurableIntent, PublicationCoordinator,
-    PublicationPhase, PublicationTransaction,
+    PublicationPhase, PublicationRestoreInput, PublicationTransaction,
 };
 pub use model::{
     AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt,

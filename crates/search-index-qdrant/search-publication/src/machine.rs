@@ -2,6 +2,9 @@
 
 use std::collections::BTreeSet;
 
+mod restore;
+pub use restore::PublicationRestoreInput;
+
 use search_contracts::{Blake3Digest32, Epoch, OpaqueId, ReceiptRef};
 use search_point_identity::PointId128;
 use search_projection_planner::{ManifestDiff, ProjectionManifest, diff_manifests};

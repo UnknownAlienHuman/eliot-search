@@ -9,8 +9,8 @@ acceptance is implied by these state transitions.
 
 `PublicationCoordinator::new` requires both `visible_epoch` and `last_reserved_epoch`.
 The latter includes aborted and abandoned reservations and must be reconstructed from verified
-control history. It is never inferred from VisibleEpoch. Only a resolved checkpoint may initialize
-a new coordinator; unresolved-intent hydration and startup qualification remain separate work.
+control history. It is never inferred from VisibleEpoch. `new` is only for a resolved checkpoint;
+`restore_inflight` below keeps unresolved work in the sole occupied coordinator slot.
 
 `submit` advances the reservation floor only after input validation and single-flight checks.
 `finalize_aborted` releases the active slot but neither lowers that floor nor advances visibility.
@@ -23,6 +23,38 @@ must retain it durably before index effects and reconstruct it during recovery. 
 schema-3 normal successor/commit APIs still reject skipped epochs. A complete abnormal-finalization
 and fencing protocol is required before live composition can commit past an abandoned epoch.
 No second ledger is introduced here.
+
+## In-flight restoration
+
+`restore_inflight(PublicationRestoreInput, max_points)` reconstructs an active coordinator and returns
+its recovery decision. The composition owner must supply the coherently verified journal route,
+original intent/preparation, exact recorded receipt prefix and fresh bound index observations under
+the live recovery barrier. It must not synthesize missing operation IDs, receipt references or digests.
+The input is transient and redacted in Debug, not another persisted schema or ownership credential.
+
+Restoration does not call `submit`, advance the reserved floor, replay a durable write or touch Qdrant.
+The retained target must equal the highest consumed reservation, even when it exceeds VisibleEpoch + 1.
+Existing stage/closure/readback/commit validators check the recorded prefix. Fresh observations then
+select the existing recovery decision. Contradictory inputs return no usable coordinator.
+
+Changed pre-commit owner/source/membership/access/shadow/purge/profile guards or partial effects lock
+the restored slot into COMPENSATING; they cannot be overwritten with new guards to continue forward.
+Bare ABORTED and PUBLICATION_BLOCKED remain blocked with the slot occupied. A new owner cannot roll
+back a proven committed epoch. Historical guard equality is not live authorization to emit results.
+
+A previous-process SNAPSHOT_PUBLISHED phase is normalized to CONTROL_COMMITTED. The input carries no
+old snapshot receipt, and a true `snapshot_published` observation is rejected. Completion and retired
+manifest emission require a new current-process snapshot acknowledgement through the existing path.
+The current-manifest pointer follows normal coordinator semantics: it installs the new manifest only
+at completion, while the occupied committed transaction retains both manifests for recovery.
+
+Nineteen tests in `tests/restore_inflight.rs` cover accepted prefixes, direct continuation, fresh snapshot
+acknowledgement, all seven guard changes, owner/route/epoch conflicts, receipt-prefix combinations,
+two-sided compensation, blocked terminal labels, point/receipt limits and redacted diagnostics.
+They are pure public-API fixtures, not executed process-restart or storage qualification; Rust tests
+remain NOT_RUN in this environment. Actual checkpoint/receipt producers and daemon startup wiring,
+durable abnormal finalization and skipped-epoch control commits remain unfinished. No shared port,
+existing signature, dependency, storage codec or redb-package size is changed by this additive API.
 
 ## Immutable point IDs before staging
 
