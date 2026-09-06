@@ -68,9 +68,10 @@ The H5 table migration and full closed port binding still require integration wo
 Initialization is only for a genuinely new journal at epoch zero, with supplied identities
 and complete guards; it is not a restore or namespace transfer. This implementation supports
 the normal next-epoch path only. It deliberately does not implement skipped-epoch reuse,
-abandon/invalidation-only finalization, route migration, successor reservation or reclaim.
-The retained intent slot still cannot be overwritten by a second begin. These operations
-must not be emulated by low-level raw writes or by changing an existing schema header.
+abandon/invalidation-only finalization, route migration or reclaim. Normal committed
+succession uses [a separate guarded reservation](SUCCESSOR_RESERVATION.md); ordinary
+`begin` still cannot replace the retained intent. Unimplemented recovery paths must not
+be emulated by low-level raw writes or by changing an existing schema header.
 The primary daemon has not been switched to this adapter.
 
 ## Verification boundary

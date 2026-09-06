@@ -22,6 +22,7 @@ mod codec;
 pub(super) mod visibility;
 pub use visibility::{PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
+pub use visibility::PublicationSuccessor;
 #[cfg(test)]
 mod tests;
 

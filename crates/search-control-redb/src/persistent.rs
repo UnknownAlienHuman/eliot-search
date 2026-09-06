@@ -30,6 +30,7 @@ mod publication;
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
+pub use publication::PublicationSuccessor;
 pub use operation::{ControlCallError, ControlInterruption};
 pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};
 pub use diagnostics::{ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState};

@@ -11,6 +11,7 @@ mod snapshot_guard;
 mod conditions;
 
 pub use reference::*;
+pub use persistent::PublicationSuccessor;
 pub use conditions::{ConditionalControlMutation, ControlRecordCondition};
 pub use persistent::{ControlCallError, ControlInterruption, PersistentControlJournal,
     ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest,

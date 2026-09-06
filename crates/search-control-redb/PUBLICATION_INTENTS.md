@@ -67,12 +67,12 @@ The only textual field is an opaque producer-validated reference, not a free-for
 payload. Its semantic validity remains the reference owner's obligation. No point-list,
 source-body, vector or query field is added. Debug omits reference contents.
 
-This is the typed-intent part of T09, not an accepted H5 schema. The full H5 physical
-table set, typed publication receipts/route state, atomic VisibleEpoch commit, successor
-epoch reservation, migration and primary daemon integration remain unfinished. The
-retained slot deliberately cannot be replaced by another `begin`, even after abort,
-until the guarded successor/finalization path is supplied. No gate or readiness flag
-is advanced and no dependency or workflow is changed.
+This is the typed-intent part of T09, not an accepted H5 schema. Schema-3 normal
+visibility commit and [committed succession](SUCCESSOR_RESERVATION.md) now have separate
+typed operations. Full H5 tables, aborted/skipped-epoch finalization, migration and
+primary daemon integration remain unfinished. Ordinary `begin` still cannot replace
+the retained slot, including after abort. No gate or readiness flag is advanced and
+no dependency or workflow is changed.
 
 ## Verification
 

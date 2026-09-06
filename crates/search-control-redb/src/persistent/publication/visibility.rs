@@ -14,6 +14,8 @@ use super::codec as intent_codec;
 
 mod codec;
 mod validation;
+mod succession;
+pub use succession::PublicationSuccessor;
 #[cfg(test)]
 mod tests;
 
