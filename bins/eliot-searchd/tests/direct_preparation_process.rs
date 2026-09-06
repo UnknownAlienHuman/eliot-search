@@ -27,8 +27,12 @@ impl Fixture {
     }
 
     fn run(&self, args: &[&str]) -> (ExitStatus, String, String) {
+        self.run_with_stdin(args, Stdio::null())
+    }
+
+    fn run_with_stdin(&self, args: &[&str], input: Stdio) -> (ExitStatus, String, String) {
         let mut child = Command::new(env!("CARGO_BIN_EXE_eliot-searchd"))
-            .args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+            .args(args).stdin(input).stdout(Stdio::piped()).stderr(Stdio::piped())
             .spawn().expect("primary daemon");
         let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();
@@ -148,4 +152,26 @@ fn primary_search_returns_each_overlapping_match_once() {
     for (index, row) in rows.iter().enumerate() {
         assert!(row.contains(&format!("\"byte_start\":{index},")), "{output}");
     }
+}
+
+#[test]
+fn one_shot_file_and_stdin_preserve_exact_matches_without_creating_a_catalog() {
+    let fixture = Fixture::new();
+    let text = "α aAa\r\nb\0aaaa\n";
+    fs::write(&fixture.source, text).unwrap();
+    let file = fixture.ok(&["--scan-file-ascii-insensitive", "aa", fixture.source.to_str().unwrap()]);
+    let (status, stdin, stderr) = fixture.run_with_stdin(&["--scan-stdin-ascii-insensitive", "aa"],
+        Stdio::from(fs::File::open(&fixture.source).unwrap()));
+    assert!(status.success(), "{stderr}");
+    let file_rows = matches(&file);
+    let stdin_rows = matches(&stdin);
+    assert_eq!(file_rows.len(), 5, "{file}");
+    assert_eq!(stdin_rows.len(), file_rows.len(), "{stdin}");
+    for ((file_row, stdin_row), start) in file_rows.iter().zip(&stdin_rows).zip([3, 4, 10, 11, 12]) {
+        assert!(file_row.contains(&format!("\"byte_start\":{start},")), "{file_row}");
+        assert_eq!(file_row.replace("\"source_backed\":true", "\"source_backed\":false"), *stdin_row);
+    }
+    assert!(file.contains("\"complete\":true") && stdin.contains("\"complete\":true"));
+    assert_eq!(fs::read(&fixture.source).unwrap(), text.as_bytes());
+    assert_eq!(fs::read_dir(&fixture.data).unwrap().count(), 0);
 }

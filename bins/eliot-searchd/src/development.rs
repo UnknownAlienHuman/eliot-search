@@ -110,82 +110,52 @@ pub(crate) struct ScanResult {
     pub(crate) coverage: ScanCoverage,
 }
 
-/// Performs bounded deterministic literal UTF-8 search.
+/// Uses the same bounded literal engine as retained DIRECT preparation.
+/// Only the historical one-shot LF/byte-coordinate projection belongs here.
 pub(crate) fn scan_text(
     text: &str,
     query: &str,
     ascii_insensitive: bool,
 ) -> Result<ScanResult, String> {
-    if query.is_empty() {
-        return Err("SCAN_QUERY_EMPTY".to_owned());
-    }
-    if query.len() > MAX_SCAN_QUERY_BYTES {
-        return Err("SCAN_QUERY_TOO_LARGE".to_owned());
-    }
-    if text.len() > MAX_SCAN_INPUT_BYTES {
-        return Err("SCAN_INPUT_TOO_LARGE".to_owned());
-    }
-    if query.len() > text.len() {
-        return Ok(ScanResult {
-            matches: Vec::new(),
-            coverage: ScanCoverage {
-                input_bytes: text.len(),
-                complete: true,
-                match_limit_reached: false,
-            },
-        });
-    }
+    use search_exact::literal::{LiteralError, LiteralLimits, scan_chunks};
 
-    let text_bytes = text.as_bytes();
-    let query_bytes = query.as_bytes();
-    let mut line_starts = vec![0_usize];
-    for (index, byte) in text_bytes.iter().copied().enumerate() {
-        if byte == b'\n' {
-            line_starts.push(index.saturating_add(1));
+    let result = scan_chunks(&[text], query, ascii_insensitive, LiteralLimits {
+        max_query_bytes: MAX_SCAN_QUERY_BYTES,
+        max_input_bytes: MAX_SCAN_INPUT_BYTES,
+        max_chunks: 1,
+        max_matches: MAX_SCAN_MATCHES,
+    }).map_err(|error| match error {
+        LiteralError::EmptyQuery => "SCAN_QUERY_EMPTY",
+        LiteralError::QueryTooLarge => "SCAN_QUERY_TOO_LARGE",
+        LiteralError::InputTooLarge => "SCAN_INPUT_TOO_LARGE",
+        other => other.code(),
+    }.to_owned())?;
+    let coverage = ScanCoverage {
+        input_bytes: result.input_bytes,
+        complete: result.complete(),
+        match_limit_reached: result.match_limit_reached,
+    };
+    let (mut consumed, mut line_start, mut line) = (0, 0, 0);
+    let matches = result.matches.into_iter().map(|range| {
+        // Ranges arrive in increasing start order, including overlaps. Count
+        // each prefix byte only once; do not allocate a table for every newline.
+        // LF alone advances this legacy API's line coordinate. CR/NUL remain
+        // source bytes; retained preparation keeps its own materializer policy.
+        for (offset, byte) in text.as_bytes()[consumed..range.start].iter().enumerate() {
+            if *byte == b'\n' {
+                line += 1;
+                line_start = consumed + offset + 1;
+            }
         }
-    }
-
-    let mut matches = Vec::new();
-    let last_start = text_bytes.len() - query_bytes.len();
-    let mut truncated = false;
-    for start in 0..=last_start {
-        if !text.is_char_boundary(start) {
-            continue;
-        }
-        let end = start + query_bytes.len();
-        if !text.is_char_boundary(end) {
-            continue;
-        }
-        let equal = if ascii_insensitive {
-            text_bytes[start..end].eq_ignore_ascii_case(query_bytes)
-        } else {
-            &text_bytes[start..end] == query_bytes
-        };
-        if !equal {
-            continue;
-        }
-        if matches.len() >= MAX_SCAN_MATCHES {
-            truncated = true;
-            break;
-        }
-        let line = line_starts
-            .partition_point(|line_start| *line_start <= start)
-            .saturating_sub(1);
-        matches.push(ScanMatch {
-            byte_start: start,
-            byte_end: end,
+        consumed = range.start;
+        ScanMatch {
+            byte_start: range.start,
+            byte_end: range.end,
             line,
-            column_bytes: start - line_starts[line],
-        });
-    }
-    Ok(ScanResult {
-        matches,
-        coverage: ScanCoverage {
-            input_bytes: text.len(),
-            complete: !truncated,
-            match_limit_reached: truncated,
-        },
-    })
+            column_bytes: range.start - line_start,
+        }
+    }).collect();
+    Ok(ScanResult { matches, coverage })
 }
 
 /// Reads bounded UTF-8 from standard input.
@@ -444,5 +414,65 @@ mod owner_tests {
             assert_eq!(owner.source_roots().available_count(), 1);
         }
         fs::remove_dir_all(base).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod scan_tests {
+    use super::*;
+
+    #[test]
+    fn shared_matcher_preserves_legacy_coordinates_and_ascii_only_folding() {
+        for text in ["", "aaaaa", "aAéAa", "ΑαA\0a", "\n\nx\r\nX", "a\rb", "𐀀a𐀀", "a\r\nβ\nz"] {
+            for query in ["a", "aa", "aaa", "é", "α", "𐀀", "\n", "\r\n", "\0", "\nX", "absent"] {
+                for insensitive in [false, true] {
+                    // Independent bounded oracle; never called by runtime code.
+                    let expected = text.as_bytes().windows(query.len()).enumerate()
+                        .filter(|(start, bytes)| text.is_char_boundary(*start)
+                            && text.is_char_boundary(start + query.len())
+                            && if insensitive { bytes.eq_ignore_ascii_case(query.as_bytes()) }
+                               else { *bytes == query.as_bytes() })
+                        .map(|(start, _)| {
+                            let prefix = &text.as_bytes()[..start];
+                            let line_start = prefix.iter().rposition(|byte| *byte == b'\n').map_or(0, |index| index + 1);
+                            ScanMatch { byte_start: start, byte_end: start + query.len(),
+                                line: prefix.iter().filter(|byte| **byte == b'\n').count(), column_bytes: start - line_start }
+                        }).collect::<Vec<_>>();
+                    let actual = scan_text(text, query, insensitive).unwrap();
+                    assert_eq!(actual.matches, expected, "text={text:?} query={query:?} insensitive={insensitive}");
+                    assert_eq!(actual.coverage, ScanCoverage { input_bytes: text.len(), complete: true, match_limit_reached: false });
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn output_ceiling_is_incomplete_only_when_an_additional_match_exists() {
+        for extra in [0, 1] {
+            let text = "a".repeat(MAX_SCAN_MATCHES + extra);
+            let actual = scan_text(&text, "a", false).unwrap();
+            assert_eq!(actual.matches.len(), MAX_SCAN_MATCHES);
+            assert_eq!(actual.matches.last().unwrap().byte_start, MAX_SCAN_MATCHES - 1);
+            assert_eq!(actual.coverage.complete, extra == 0);
+            assert_eq!(actual.coverage.match_limit_reached, extra != 0);
+        }
+    }
+
+    #[test]
+    fn repeated_long_prefix_uses_the_shared_linear_matcher() {
+        let count = 1024 * 1024;
+        let text = format!("{}b", "a".repeat(count));
+        let query = format!("{}b", "a".repeat(8192));
+        let actual = scan_text(&text, &query, false).unwrap();
+        assert_eq!(actual.matches, vec![ScanMatch { byte_start: count - 8192,
+            byte_end: count + 1, line: 0, column_bytes: count - 8192 }]);
+        assert!(actual.coverage.complete);
+    }
+
+    #[test]
+    fn caller_errors_still_use_the_existing_scan_namespace() {
+        assert_eq!(scan_text("", "", false), Err("SCAN_QUERY_EMPTY".to_owned()));
+        assert_eq!(scan_text("", &"a".repeat(MAX_SCAN_QUERY_BYTES + 1), false), Err("SCAN_QUERY_TOO_LARGE".to_owned()));
+        assert_eq!(scan_text(&"a".repeat(MAX_SCAN_INPUT_BYTES + 1), "a", false), Err("SCAN_INPUT_TOO_LARGE".to_owned()));
     }
 }

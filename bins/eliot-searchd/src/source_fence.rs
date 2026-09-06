@@ -1,37 +1,37 @@
-//! Deterministic source-state fence with constant extra memory.
+//! Shared source-state fingerprint for DIRECT handles and continuation windows.
 //!
-//! The fold commits namespace, source identity, current revision/content/path,
-//! length, active state, and source-event sequence without assembling one large
-//! concatenation buffer. Order comes from the DIRECT store's canonical source
-//! ordering.
+//! Preserve the exact length-delimited preimage previously duplicated in both
+//! callers. The unused alternate fold is not a compatible replacement for it.
+//! This is a session invalidation check, not live access/currentness authority.
 
 use crate::direct_store::DirectStore;
 use crate::sha256;
 
-/// Returns a deterministic digest of the complete current source state.
 pub(crate) fn digest(store: &DirectStore) -> String {
     let namespace = store.namespace_id();
-    let mut state = sha256::digest_parts(
-        b"eliot-search/direct-source-fence/init/v1",
-        &[namespace.as_bytes()],
-    );
-    for source in store.list_sources() {
-        let record = sha256::digest_parts(
-            b"eliot-search/direct-source-fence/record/v1",
-            &[
-                source.source_id.as_bytes(),
-                source.revision_id.as_bytes(),
-                source.content_digest.as_bytes(),
-                source.path_digest.as_bytes(),
-                &source.byte_length.to_be_bytes(),
-                &[u8::from(source.active)],
-                &source.sequence.to_be_bytes(),
-            ],
-        );
-        state = sha256::digest_parts(
-            b"eliot-search/direct-source-fence/fold/v1",
-            &[&state, &record],
-        );
+    let sources = store.list_sources();
+    let mut encoded = Vec::new();
+    append(&mut encoded, namespace.as_bytes());
+    for source in sources {
+        append(&mut encoded, source.source_id.as_bytes());
+        append(&mut encoded, source.revision_id.as_bytes());
+        append(&mut encoded, source.content_digest.as_bytes());
+        append(&mut encoded, source.path_digest.as_bytes());
+        encoded.extend_from_slice(&source.byte_length.to_be_bytes());
+        encoded.push(u8::from(source.active));
+        encoded.extend_from_slice(&source.sequence.to_be_bytes());
     }
-    sha256::hex(&state)
+    sha256::hex(&sha256::digest_parts(
+        b"eliot-search/direct-source-fence/v1",
+        &[&encoded],
+    ))
+}
+
+fn append(output: &mut Vec<u8>, value: &[u8]) {
+    output.extend_from_slice(
+        &u64::try_from(value.len())
+            .unwrap_or(u64::MAX)
+            .to_be_bytes(),
+    );
+    output.extend_from_slice(value);
 }
