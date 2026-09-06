@@ -3,11 +3,12 @@ use crate::canonical::{BoundedExpression, OpaqueId, OpaqueRef, UtcTimestamp};
 use crate::ids::{
     AccessPolicyRevision, BindingId, Blake3Digest32, BufferSnapshotId, CollectionGenerationId,
     ContinuationId, Epoch, GrantId, HandleId, HandleTokenDigest, InstallationIncarnationId,
-    NonZeroRevision, ObjectResidencyKeyDigest, PlanFingerprint, ProfileId, ProjectionMembershipId,
+    NonZeroRevision, ObjectResidencyKeyDigest, OwnerEpoch, PlanFingerprint, ProfileId,
+    ProjectionMembershipId,
     PublicationIntentId, PublicationReceiptId, PurgeFenceRevision, ReceiptRef, SourceNamespaceId,
     SourceOwnerGeneration, WorkspaceId, WorkspaceViewRevisionId,
 };
-use crate::query::{NativeAnchor, ObservationFreshness, StateDependency};
+use crate::query::{NativeAnchor, ObservationFreshness};
 use crate::reasons::SearchReasonCodeV1;
 use crate::results::ResultFence;
 use crate::schema::AssuranceClass;
@@ -172,12 +173,59 @@ pub enum PublicationIntentState {
     PublicationBlocked,
 }
 
+/// Exact expected generation values carried by one publication intent.
+///
+/// This is the same value type re-exported by the publication coordinator, not
+/// an ownership capability or evidence that any native readback took place.
+/// Every field must be compared with authoritative state in the same guarded
+/// control transaction before advancing the visible epoch. The owning adapters
+/// must advance these generations for the changes they protect; this record
+/// cannot enforce that obligation by itself.
+///
+/// There is deliberately no default or conversion from auxiliary profile
+/// dependencies. Zero catalog generations may be real initial state; they are
+/// never substituted for missing observations.
+///
+/// ```compile_fail
+/// use search_contracts::PublicationGuards;
+/// let missing: PublicationGuards = Default::default();
+/// ```
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PublicationGuards {
+    /// Runtime-owner epoch.
+    pub owner_epoch: OwnerEpoch,
+    /// Source catalog generation.
+    pub source_catalog_generation: u64,
+    /// Membership catalog generation.
+    pub membership_generation: u64,
+    /// Access-policy generation.
+    pub access_generation: u64,
+    /// Shadow-fence generation.
+    pub shadow_generation: u64,
+    /// Purge-fence generation.
+    pub purge_generation: u64,
+    /// Accepted projection-profile digest.
+    pub profile_digest: Blake3Digest32,
+}
+
+/// Publication identity, prepared manifest and the complete expected guard value.
+///
+/// The former auxiliary `StateDependency` list could not express the required
+/// generations. That old shape is not accepted as, or converted to, guards:
+///
+/// ```compile_fail
+/// use search_contracts::{BoundedList, MAX_LIST_ITEMS, PublicationIntent, StateDependency};
+/// fn discard_generations(intent: PublicationIntent) {
+///     let _: BoundedList<StateDependency, MAX_LIST_ITEMS> =
+///         intent.owner_source_membership_access_guards;
+/// }
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicationIntent {
     pub publication_intent_id: PublicationIntentId,
     pub target_epoch: Epoch,
     pub prepared_manifest_ref: ReceiptRef,
-    pub owner_source_membership_access_guards: BoundedList<StateDependency, MAX_LIST_ITEMS>,
+    pub owner_source_membership_access_guards: PublicationGuards,
     pub state: PublicationIntentState,
 }
 

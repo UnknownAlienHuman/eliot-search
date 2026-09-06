@@ -229,7 +229,14 @@ PublicationIntent:
   publication_intent_id: PublicationIntentId
   target_epoch: Epoch
   prepared_manifest_ref: ReceiptRef
-  owner_source_membership_access_guards: bounded_list<StateDependency>
+  owner_source_membership_access_guards:
+    owner_epoch: OwnerEpoch
+    source_catalog_generation: u64
+    membership_generation: u64
+    access_generation: u64
+    shadow_generation: u64
+    purge_generation: u64
+    profile_digest: Blake3Digest32
   state: PREPARED | INTENT_DURABLE | NEW_POINTS_ACKNOWLEDGED | OLD_POINTS_CLOSED_ACKNOWLEDGED | READBACK_VERIFIED | CONTROL_COMMITTED | RECLAIMABLE | COMPENSATING | ABORTED | INVALIDATION_ONLY_COMMITTED | PUBLICATION_BLOCKED
 
 PublicationReceipt:
@@ -248,6 +255,24 @@ AbandonedPublicationFence:
   fence_revision: NonZeroRevision
   receipt_ref: ReceiptRef
 ```
+
+The required nested guard value is `search_contracts::PublicationGuards`, re-exported unchanged as
+`search_publication::PublicationGuards`. Shape ownership remains the existing
+`publication_records` / `search-contracts.lifecycle` group; semantic transition ownership remains
+`search-domain.transitions`, and publication state ownership remains `search-publication.intent`.
+This is a nested value of `PublicationIntent`, not a new independent durable record or state owner.
+
+All seven fields are required. `StateDependency` remains an auxiliary profile/capability dependency
+elsewhere; neither an empty list nor profile digests can replace these generations. The value records
+expected state only. S13.4 still requires actual owner/source/membership/access/shadow/purge/profile
+validation and atomic comparison before `VisibleEpoch` changes. Constructing the value grants no
+access, does not prove an external effect and cannot advance a gate.
+
+Correction #141 changes the previous P00 shared-field shape. It is source-breaking for intent
+constructors; the coordinator's seven fields and public import path are preserved. Old serialized
+list-shaped intents must be rejected or explicitly migrated after revalidation, never defaulted into
+this record. No old intent codec, automatic migration, wire-version bump or accepted API handoff is
+assumed by this correction. See [compatibility and verification](PUBLICATION_GUARDS_CORRECTION.md).
 
 Uncommitted intents never change visible epoch. Skipped epochs are not reused. Abandonment is legal
 only after the exclusion fence is active before retrieval and IDF.

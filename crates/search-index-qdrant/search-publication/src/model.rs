@@ -3,29 +3,13 @@
 use std::collections::BTreeSet;
 
 use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, OwnerEpoch, ReceiptRef,
+    Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, ReceiptRef,
 };
 use search_point_identity::PointId128;
 use search_projection_planner::ProjectionManifest;
 
-/// Complete load-bearing generation fence for one publication transaction.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PublicationGuards {
-    /// Runtime-owner epoch.
-    pub owner_epoch: OwnerEpoch,
-    /// Source catalog generation.
-    pub source_catalog_generation: u64,
-    /// Membership catalog generation.
-    pub membership_generation: u64,
-    /// Access-policy generation.
-    pub access_generation: u64,
-    /// Shadow-fence generation.
-    pub shadow_generation: u64,
-    /// Purge-fence generation.
-    pub purge_generation: u64,
-    /// Accepted projection-profile digest.
-    pub profile_digest: Blake3Digest32,
-}
+/// Shared publication guard value; this re-export preserves the existing import path.
+pub use search_contracts::PublicationGuards;
 
 /// Exact immutable publication input prepared before epoch reservation.
 #[derive(Clone, Debug, Eq, PartialEq)]

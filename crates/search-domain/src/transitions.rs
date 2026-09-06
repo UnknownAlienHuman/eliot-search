@@ -213,9 +213,9 @@ pub fn transition_publication(
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        BoundedList, Epoch, InstallationIncarnationId, NamespaceOwnershipStatus, NonZeroRevision,
-        OpaqueId, OwnerEpoch, PolicyRevision, PublicationIntent, PublicationIntentId,
-        PublicationIntentState, ReceiptRef, SourceNamespaceId, SourceNamespaceOwnership,
+        Blake3Digest32, Epoch, InstallationIncarnationId, NamespaceOwnershipStatus, NonZeroRevision,
+        OpaqueId, OwnerEpoch, PolicyRevision, PublicationGuards, PublicationIntent,
+        PublicationIntentId, PublicationIntentState, ReceiptRef, SourceNamespaceId, SourceNamespaceOwnership,
         SourceOwnerGeneration,
     };
 
@@ -249,7 +249,15 @@ mod tests {
             publication_intent_id: PublicationIntentId::from_bytes([1; 16]),
             target_epoch: Epoch::new(1).expect("epoch"),
             prepared_manifest_ref: ReceiptRef::new("receipt:manifest").expect("receipt"),
-            owner_source_membership_access_guards: BoundedList::empty(),
+            owner_source_membership_access_guards: PublicationGuards {
+                owner_epoch: OwnerEpoch::new(7).expect("owner epoch"),
+                source_catalog_generation: 11,
+                membership_generation: 13,
+                access_generation: 17,
+                shadow_generation: 19,
+                purge_generation: 23,
+                profile_digest: Blake3Digest32::from_bytes([29; 32]),
+            },
             state,
         }
     }
@@ -316,5 +324,48 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn every_publication_transition_preserves_all_prepared_fields() {
+        let mut allowed = 0;
+        for &state in PublicationIntentState::ALL {
+            for &next_state in PublicationIntentState::ALL {
+                let current = publication(state);
+                let before = current.clone();
+                match transition_publication(&current, next_state) {
+                    Ok(next) => {
+                        allowed += 1;
+                        let mut expected = before.clone();
+                        expected.state = next_state;
+                        // Includes every generation, exact profile digest,
+                        // intent ID, target epoch and manifest reference.
+                        assert_eq!(next, expected);
+                    }
+                    Err(error) => {
+                        assert_eq!(error.kind(), DomainErrorKind::InvalidStateTransition);
+                    }
+                }
+                assert_eq!(current, before);
+            }
+        }
+        // This correction does not add or remove a state-machine edge.
+        assert_eq!(allowed, 23);
+    }
+
+    #[test]
+    fn terminal_publication_states_cannot_drop_guards_by_reopening() {
+        for state in [
+            PublicationIntentState::Reclaimable,
+            PublicationIntentState::Aborted,
+            PublicationIntentState::InvalidationOnlyCommitted,
+            PublicationIntentState::PublicationBlocked,
+        ] {
+            let current = publication(state);
+            for &next in PublicationIntentState::ALL {
+                assert!(transition_publication(&current, next).is_err());
+            }
+            assert_eq!(current, publication(state));
+        }
     }
 }
