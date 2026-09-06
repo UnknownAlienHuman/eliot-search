@@ -22,6 +22,7 @@ mod transaction;
 mod calls;
 mod operation;
 mod lifecycle;
+mod snapshot;
 
 pub use operation::{ControlCallError, ControlInterruption};
 use operation::{Check, Point, Unscoped};
@@ -120,51 +121,26 @@ impl PersistentControlJournal {
 
     /// Rebuilds the shared immutable snapshot from committed disk state.
     pub fn control_snapshot(&self) -> Result<ControlSnapshot, ControlError> {
-        rebuild_control_snapshot(self.read_snapshot()?, self.identity, self.limits)
+        self.control_snapshot_checked(&Unscoped)
     }
 
-    /// Publishes a snapshot only after exact readback of its current durable receipt.
-    /// A fabricated or historical receipt cannot publish an unrelated generation.
+    /// Publishes only after exact current durable receipt/readback verification.
+    /// Failure suspends publisher admission until verified disk recovery.
     pub fn publish_committed_snapshot(
         &self,
         receipt: &ControlCommitReceipt,
         publisher: &mut ControlSnapshotPublisher,
     ) -> Result<SnapshotPublishReceipt, ControlError> {
-        self.ensure_available()?;
-        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        let header = self.header_from(&read)?;
-        let stored = operation_from(&read, receipt.operation_id, &header, self.limits)?
-            .ok_or(ControlError::SnapshotPublicationFailed)?;
-        let mut expected = receipt.clone();
-        expected.replayed = false;
-        if stored.receipt != expected || receipt.after_generation != header.generation {
-            return Err(ControlError::SnapshotPublicationFailed);
-        }
-        let snapshot = rebuild_control_snapshot(self.snapshot_from(&read)?, self.identity, self.limits)?;
-        publisher.publish_snapshot_after_commit(receipt, snapshot)
+        self.publish_snapshot_checked(receipt, publisher, &Unscoped)
     }
 
-    /// Republishes the latest committed generation without replaying a mutation.
+    /// Verifies and republishes current disk state without replaying a mutation.
     /// An empty initialized journal has no commit receipt and returns `None`.
     pub fn recover_snapshot_publication(
         &self,
         publisher: &mut ControlSnapshotPublisher,
     ) -> Result<Option<SnapshotPublishReceipt>, ControlError> {
-        self.ensure_available()?;
-        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        let snapshot = self.verify_from(&read)?;
-        if snapshot.generation == 0 { return Ok(None); }
-        let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
-        for row in table.iter().map_err(map_storage_error)? {
-            let (id, bytes) = row.map_err(map_storage_error)?;
-            let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
-            let operation = StoredOperation::decode(bytes.value(), id, snapshot.generation, self.limits)?;
-            if operation.receipt.after_generation == snapshot.generation {
-                let state = rebuild_control_snapshot(snapshot, self.identity, self.limits)?;
-                return publisher.publish_snapshot_after_commit(&operation.receipt, state).map(Some);
-            }
-        }
-        Err(ControlError::SnapshotPublicationFailed)
+        self.recover_publication_checked(publisher, &Unscoped)
     }
 
     /// Verifies exact tables, metadata, records and the complete bounded receipt ledger.
@@ -210,10 +186,6 @@ impl PersistentControlJournal {
         Ok(header)
     }
 
-    fn snapshot_from(&self, read: &ReadTransaction) -> Result<JournalReadSnapshot, ControlError> {
-        self.snapshot_from_checked(read, &Unscoped)
-    }
-
     fn snapshot_from_checked(&self, read: &ReadTransaction, check: &dyn Check) -> Result<JournalReadSnapshot, ControlError> {
         #[cfg(test)]
         self.work.snapshot_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -238,10 +210,6 @@ impl PersistentControlJournal {
         if total != header.value_bytes { return Err(ControlError::StoreCorrupt); }
         check.check(Point::ReadComplete)?;
         Ok(JournalReadSnapshot { identity: self.identity, generation: header.generation, records })
-    }
-
-    fn verify_from(&self, read: &ReadTransaction) -> Result<JournalReadSnapshot, ControlError> {
-        self.verify_from_checked(read, &Unscoped)
     }
 
     fn verify_from_checked(&self, read: &ReadTransaction, check: &dyn Check) -> Result<JournalReadSnapshot, ControlError> {

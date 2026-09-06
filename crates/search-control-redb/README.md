@@ -2,98 +2,108 @@
 
 Bounded technical control state, never a searchable corpus.
 
-`PersistentControlJournal` is the concrete disk-backed adapter using pinned redb 2.6.3 without Python
-features. It implements atomic record/receipt transactions, exact-input replay protection, unknown
-commit recovery, read-only snapshots, current-receipt publication and explicit owner-epoch handoff.
-Vendor types remain private. The previous `ControlJournal` reference model and its public API are
-preserved in `src/reference.rs`; it is not a fallback for an unavailable disk backend.
+`PersistentControlJournal` uses pinned redb 2.6.3 without Python features. It provides atomic
+record/header/receipt transactions, exact-input replay protection, unknown-commit recovery,
+read-only snapshots and explicit owner-epoch handoff. Vendor types stay private. The in-memory
+`ControlJournal` in `src/reference.rs` remains a test/reference implementation, never a fallback
+for an unavailable disk backend.
 
-Normal mutations plan final record/byte counts from only the distinct touched keys, then verify the
-exact new header, receipt, written classes/bytes and deleted-key absence. They no longer copy or scan
-all unrelated records twice per write. The database remains privately owned by this journal; no second
-mutable catalog is introduced. Full structural verification still runs on create/open, explicit `verify`
-and recovery; an explicit snapshot request still reads the whole bounded snapshot.
+Normal mutation planning and readback inspect distinct touched keys rather than copying the entire
+record set. They verify final counters, the exact receipt, written classes/bytes and deleted-key
+absence. Full structural verification runs on create/open, explicit `verify` and recovery. Snapshot
+requests read the complete bounded live inventory.
 
-Replay validates the receipt's operation, command, generation and complete changed-key binding. When
-that receipt names the current generation, replay/recovery also verifies the actual values and absence
-of deleted keys. A historical receipt does not reapply or compare obsolete values against newer writes.
-Detected persistent record/schema/binding corruption quarantines mutation use. An uncertain commit
-keeps the exact-operation pending fence until recovery. These checks do not make the redb file an
-authenticated ciphertext format or allow other processes to modify it outside the owning adapter.
+Replay binds the actual canonical request, not just a caller-supplied digest. Current-generation
+replay/recovery verifies the actual values and deletions; historical replay neither compares old
+values against new ones nor restores them. Uncertain mutations remain pending until exact recovery.
+The disk file is not an authenticated ciphertext format; this adapter assumes exclusive ownership.
+Capability owners must validate payload semantics: a technical class tag alone does not prove that
+arbitrary bytes are content-free.
 
-The public `ControlSnapshotPublisher` fences generation, owner epoch and immutable journal identity
-before updating the existing snapshot pointer. Equal-generation content or operation conflicts are
-rejected. Disk publication and disk recovery use this same public boundary. See
-[readback and publication fences](../../docs/runtime/CONTROL_READBACK_FENCES.md).
+## Operation contexts
 
-## Context-controlled calls
+The existing `OperationContext` controls `read_snapshot_with_context`, `verify_with_context`,
+`transact_with_context`, `recover_transaction_with_context`, `create_with_context`,
+`open_with_context` and `advance_owner_with_context`. One monotonic relative budget spans each call;
+checks do not reset between stages. The opaque `budget_ref` is not decoded or treated as authority.
+Old low-level entrypoints use the same algorithms with an unscoped compatibility policy.
 
-`read_snapshot_with_context`, `verify_with_context`, `transact_with_context` and
-`recover_transaction_with_context` consume the existing `search_ports::OperationContext`.
-One monotonic relative deadline starts at call entry and spans all internal phases; cancellation
-is checked before dispatch, between bounded records and before returning a complete result.
-No partial snapshot is returned. Existing byte/item ceilings remain enforced; the opaque
-`budget_ref` is not decoded or treated as authority.
+Interruption after write-transaction dispatch is `CONTROL_COMMIT_OUTCOME_UNKNOWN`, even after an
+explicit successful staged abort. Only fresh exact recovery can establish commit or absence.
+Interrupted/transient recovery neither clears the pending fence nor invents corruption. Actual
+record/schema corruption still quarantines. Typed failures preserve exact mutation identity with
+redacted Debug output; no shared opaque ID or digest conversion is fabricated.
 
-The function contract's dispatch boundary is preserved: interruption after a write transaction
-begins is `CONTROL_COMMIT_OUTCOME_UNKNOWN`, even if an explicit staged abort succeeds.
-The exact request stays pending until a fresh recovery call verifies its committed receipt or
-absence. After possible commit, interruption likewise cannot release the fence or imply rollback.
-Interrupted or transiently unavailable recovery never clears the fence and never becomes a false
-corruption verdict. Actual record/schema corruption still quarantines. Failed recovery permits
-readback only, not a blind mutation retry. Historical replay does not restore obsolete values.
+Lifecycle calls return no usable guard after incomplete initialization, inspection or handoff.
+The caller supplies a verified regular-file handle and retains the external root-owner guard.
+`create` accepts an explicitly new empty file; `open` refuses empty existing files and never creates
+missing application tables. Native open may recover redb metadata, so interruption/transient failure
+after dispatch requires exact inspect/reopen. This is not side-effect-free `inspect_journal`.
 
-`ControlCallError` carries the closed journal reason, shared failure/retry classifications,
-interruption cause and exact requested `MutationId` (redacted in Debug). No operation identity is
-fabricated or converted to the shared port's distinct opaque ID. The old methods remain compatible
-unscoped low-level entrypoints and use the same algorithms, not a second implementation.
+Owner handoff consumes the old journal, allows only the next epoch or verified no-op, and preserves
+data generations and prior receipts. Lifecycle `MutationId` is error correlation only, not a new
+idempotency-ledger row or ownership grant. Reopening is resolved by the exact prior/intended header
+identity; a matching header cannot grant external root ownership.
 
-## Context-controlled lifecycle
+## Snapshot publication and admission
 
-`create_with_context`, `open_with_context` and `advance_owner_with_context` use the same call budget,
-including full record/receipt verification before returning a usable guard. The original lifecycle
-methods delegate to these engines with the existing unscoped compatibility policy. All three context
-methods require a caller-supplied `MutationId` for error correlation; it is not an idempotency-ledger
-entry or proof of completion. The exact header identity, not that correlation ID, resolves reopening.
+`control_snapshot_with_context`, `publish_committed_snapshot_with_context` and
+`recover_snapshot_publication_with_context` complete the context-controlled snapshot surface. Their
+old entrypoints delegate to the same checked paths. Receipt, records and recovery ledger are read
+through one coherent redb read transaction. Reconstruction uses the existing pure validator.
 
-The caller still owns native file admission and the external live root-owner guard. `create` accepts
-only an explicitly created empty file; `open` refuses an empty existing file and never creates missing
-application tables. Before native dispatch, cancellation does not initialize the file. After native
-creation/open, cancellation or transient inspection failure requires exact inspect/reopen: redb may
-already have initialized or recovered its own metadata. An open failure positively identifying schema,
-record or identity corruption remains a typed refusal to attach. No failed path deletes or replaces
-the file, returns a partially verified guard or interprets an incomplete schema as a fresh installation.
-This is not the contract's separate side-effect-free `inspect_journal` operation.
+A matching disk publication/recovery attempt suspends `ControlSnapshotPublisher` admission before
+inspection, including a pre-cancelled call. On failure, `current()` returns `None` and
+`requires_recovery()` is true. The sole previous Arc remains private for monotone identity, generation,
+content and operation comparisons; hiding the admission view does not erase those fences. Foreign
+journal identities or older owners are rejected before changing the correct publisher's state.
 
-Owner handoff consumes the old journal. It verifies the prior state, permits only the exact next epoch
-(or an already-current no-op), writes the new header with immediate durability, and verifies the full
-state under the same budget. Interruption after write dispatch is unknown even if staged abort succeeds;
-no usable journal escapes. Inspect the exact trusted prior/intended identities before a retry. A matching
-database header never grants external root ownership. Data generations and old operation receipts are
-unchanged, so recovery/replay of earlier mutations continues after a verified handoff.
+The fence retains the highest generation actually observed in a validated disk header, not an
+untrusted receipt's claimed generation. Recovery cannot reset it with an older/empty journal. Once a
+publisher is disk-bound, its caller-supplied snapshot and reference-model recovery entrypoints refuse
+updates, even while otherwise ready. Only verified disk publication can reopen admission.
 
-Checks are **cooperative**, not a hard wall-clock I/O guarantee: redb 2.6.3 and synchronous OS calls
-cannot be preempted by these probes. Expiration is detected at the next checkpoint. No detached worker or
-unbounded queue is introduced to disguise that limit. Daemon hard-timeout composition remains open.
+A pending mutation must be recovered first. Snapshot recovery cannot clear its operation fence, and
+transaction recovery alone does not publish a snapshot. Snapshot publication/recovery dispatches no
+durable write and never repeats a commit. An interrupted publication does not invent a new uncertain
+commit; the error preserves the interruption and requires fresh readback. Generation zero returns
+`None` rather than a fabricated mutation receipt and cannot replace a later published generation.
 
-The primary daemon has not yet migrated its file-based control state to this adapter. Full
-`ControlJournalPort` binding, context-controlled snapshot publication, native file/root admission,
-side-effect-free inspection, migration, capability-specific payload codecs, pruning and P02 qualification
-remain unfinished. No shared trait, disk schema/codec, digest, dependency, lockfile, workflow or
-qualification gate changes here.
+One cooperative deadline covers receipt readback, record/ledger scans, reconstruction and validation.
+The last cancellation checkpoint is immediately before the pointer swap, after all fallible scans
+and content comparisons. Success linearizes at that swap; cancellation arriving later cannot undo it
+or turn it into an unknown storage effect. All required validation precedes reopening admission.
 
-The lifecycle suite contains nineteen tests, including real journal files with deterministic checkpoints:
-pre-dispatch refusal, partial initialization, lost acknowledgement after initialization/handoff,
-interrupted full inspection, wrong identities/schemas, second-handle denial, no-op handoff, exact old
-mutation replay and accumulated deadlines. Existing transaction/context suites remain intact. These are
-application-boundary tests, not physical-power-loss tests. Rust compilation and execution remain
-**NOT_RUN** in the authoring environment: cargo/rustc are absent and archive retrieval failed DNS.
-No T09 completion, green build or product acceptance is claimed.
+This is a process-local publication fence, not automatic daemon integration. The caller must serialize
+commit/publication with request admission and consult the owning publisher for each admission. An
+already returned Arc or a cloned publisher is a historical view, not a live subscription, grant or
+revocation mechanism. Independent journal writes do not notify arbitrary cached snapshots.
 
-See [disk format, integration boundaries and verification](../../docs/runtime/CONTROL_REDB.md),
-[function contract](FUNCTIONS.md) and [agent instructions](AGENTS.md).
+## Verification and remaining work
+
+Checks are cooperative, not a hard wall-clock guarantee: synchronous redb/OS calls cannot be preempted.
+No detached worker, extra journal, queue, schema/codec/hash change or dependency was added for contexts.
+Native root/file admission, side-effect-free inspection, full `ControlJournalPort` binding,
+capability-specific codecs, migration, safe idempotency maintenance and P02 qualification remain open.
+The primary daemon has not yet migrated its file-based catalog to this adapter (T10/T11).
+
+Seventeen snapshot regression tests were added: phase cancellation/deadlines, blocked admission,
+no model bypass, forged/foreign receipts, empty and old-generation recovery, same-generation conflicts,
+corruption/transient reads, pending mutation separation, owner/restart recovery, final-checkpoint races
+and 10,000 read-only admissions. Existing transaction, context, lifecycle and snapshot-fence tests are
+retained. These are application-boundary fixtures, not machine power-loss qualification.
+
+Rust compilation and tests for this change are **NOT_RUN**: the local Cargo command was unavailable
+(exit 127); archive acquisition failed. Source/blob checks are not execution or independent acceptance.
+No T09 completion, gate advancement, Windows qualification or product-readiness claim is issued.
 
 ```sh
 cargo +1.98.0 test -p search-control-redb --lib --locked
 cargo +1.98.0 check --workspace --all-targets --all-features --locked
 ```
+
+See [function contract](FUNCTIONS.md), [agent instructions](AGENTS.md),
+[disk format](../../docs/runtime/CONTROL_REDB.md) and
+[earlier readback fences](../../docs/runtime/CONTROL_READBACK_FENCES.md). The snapshot admission
+semantics above supersede the earlier description that every rejected disk publication leaves the
+prior snapshot available to new requests. The prior immutable value itself is still preserved.

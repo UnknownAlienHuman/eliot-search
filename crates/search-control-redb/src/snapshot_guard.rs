@@ -1,7 +1,7 @@
 //! Publication fencing for the shared in-memory and disk-backed control APIs.
 //!
-//! The existing publisher retains the sole snapshot pointer. This boundary
-//! rejects rollback and identity substitution before that pointer can change.
+//! The existing publisher retains the sole snapshot pointer. A disk publication
+//! failure additionally suspends admission until fresh verified disk readback.
 
 use std::sync::Arc;
 
@@ -9,38 +9,84 @@ use crate::{ControlCommitReceipt, ControlError, ControlJournal, ControlKey,
     ControlSnapshot, ControlValue, JournalIdentity, MutationId, SnapshotPublishReceipt};
 use crate::reference;
 
+#[path = "snapshot_guard_disk.rs"]
+mod disk;
+
 /// Process-local immutable snapshot publisher with monotone identity fences.
 ///
-/// The caller must first obtain exact committed readback. This publisher checks
-/// ordering and consistency, not storage authenticity or client authorization.
-/// A publisher belongs to one immutable installation/root/path/schema binding.
+/// A disk-bound publisher accepts updates only from the journal's readback path.
+/// `current()` is an admission view, not authorization: already returned Arcs and
+/// cloned publishers are historical views, not live subscriptions to this owner.
 #[derive(Clone, Debug, Default)]
 pub struct ControlSnapshotPublisher {
     inner: reference::ControlSnapshotPublisher,
     current_operation: Option<MutationId>,
+    disk: Option<disk::DiskPublicationState>,
 }
 
 impl ControlSnapshotPublisher {
     /// Creates an empty publisher without granting source or owner authority.
     #[must_use]
     pub const fn new() -> Self {
-        Self { inner: reference::ControlSnapshotPublisher::new(), current_operation: None }
+        Self { inner: reference::ControlSnapshotPublisher::new(), current_operation: None, disk: None }
     }
 
-    /// Returns the current immutable snapshot. A rejected publication preserves it.
+    /// Current snapshot for admission, or `None` while disk publication is unresolved.
+    /// The last pointer is retained privately to enforce monotonic recovery.
     #[must_use]
-    pub fn current(&self) -> Option<Arc<ControlSnapshot>> { self.inner.current() }
+    pub fn current(&self) -> Option<Arc<ControlSnapshot>> {
+        if self.requires_recovery() { None } else { self.inner.current() }
+    }
 
-    /// Publishes a caller-verified snapshot without rolling back generation or owner.
+    /// Whether a failed/incomplete disk publication still blocks snapshot admission.
+    #[must_use]
+    pub fn requires_recovery(&self) -> bool {
+        self.disk.as_ref().is_some_and(|state| state.suspended)
+    }
+
+    /// Publishes a caller-verified snapshot to an unbound low-level publisher.
     ///
     /// # Errors
-    /// Rejects malformed receipts, foreign immutable bindings, older generations
-    /// or owner epochs, and conflicting content/operation at the same generation.
+    /// Rejects disk-bound publishers (use the actual journal), malformed receipts,
+    /// foreign identities, regressions and equal-generation content/operation changes.
+    /// A rejected low-level call leaves the prior pointer and admission state intact.
     pub fn publish_snapshot_after_commit(
         &mut self,
         commit: &ControlCommitReceipt,
         snapshot: ControlSnapshot,
     ) -> Result<SnapshotPublishReceipt, ControlError> {
+        if self.disk.is_some() { return Err(ControlError::SnapshotPublicationFailed); }
+        self.validate_publication(commit, &snapshot)?;
+        let receipt = self.inner.publish_snapshot_after_commit(commit, snapshot)?;
+        self.current_operation = Some(commit.operation_id);
+        Ok(receipt)
+    }
+
+    /// Recovers a model journal's snapshot into an unbound low-level publisher.
+    /// Disk journals cannot be replaced by a reference model, even after failure.
+    ///
+    /// # Errors
+    /// Rejects disk bindings, unavailable/inconsistent models and identity regressions.
+    pub fn recover_snapshot_publication(
+        &mut self,
+        journal: &ControlJournal,
+    ) -> Result<SnapshotPublishReceipt, ControlError> {
+        if self.disk.is_some() { return Err(ControlError::SnapshotPublicationFailed); }
+        // ControlJournal mutations require &mut; no mutation can interleave with
+        // these two read-only observations through this shared reference.
+        let next = journal.read_snapshot()?;
+        self.validate_next(next.identity, next.generation, &next.records)?;
+        let same_generation = self.inner.current().is_some_and(|current| current.generation == next.generation);
+        let receipt = self.inner.recover_snapshot_publication(journal)?;
+        if !same_generation { self.current_operation = None; }
+        Ok(receipt)
+    }
+
+    fn validate_publication(
+        &self,
+        commit: &ControlCommitReceipt,
+        snapshot: &ControlSnapshot,
+    ) -> Result<(), ControlError> {
         if commit.before_generation.checked_add(1) != Some(commit.after_generation)
             || snapshot.generation != commit.after_generation
             || commit.changed_keys.is_empty()
@@ -49,33 +95,12 @@ impl ControlSnapshotPublisher {
             return Err(ControlError::SnapshotPublicationFailed);
         }
         self.validate_next(snapshot.identity, snapshot.generation, &snapshot.records)?;
-        if self.current().is_some_and(|current| current.generation == snapshot.generation)
+        if self.inner.current().is_some_and(|current| current.generation == snapshot.generation)
             && self.current_operation.is_some_and(|operation| operation != commit.operation_id)
         {
             return Err(ControlError::SnapshotPublicationFailed);
         }
-        let receipt = self.inner.publish_snapshot_after_commit(commit, snapshot)?;
-        self.current_operation = Some(commit.operation_id);
-        Ok(receipt)
-    }
-
-    /// Recovers a model journal's current snapshot without replaying a mutation.
-    /// Disk journals use their own exact-readback method and the same publication fence.
-    ///
-    /// # Errors
-    /// Rejects unavailable or inconsistent journals and any identity/ordering regression.
-    pub fn recover_snapshot_publication(
-        &mut self,
-        journal: &ControlJournal,
-    ) -> Result<SnapshotPublishReceipt, ControlError> {
-        // ControlJournal mutations require &mut; no mutation can interleave with
-        // these two read-only observations through this shared reference.
-        let next = journal.read_snapshot()?;
-        self.validate_next(next.identity, next.generation, &next.records)?;
-        let same_generation = self.current().is_some_and(|current| current.generation == next.generation);
-        let receipt = self.inner.recover_snapshot_publication(journal)?;
-        if !same_generation { self.current_operation = None; }
-        Ok(receipt)
+        Ok(())
     }
 
     fn validate_next(
@@ -91,9 +116,8 @@ impl ControlSnapshotPublisher {
         {
             return Err(ControlError::SnapshotPublicationFailed);
         }
-        let Some(current) = self.current() else { return Ok(()); };
-        // A verified successor may advance its owner epoch, but not any stable
-        // journal identity field. A new installation needs a new publisher.
+        // Never validate against the admission view: it is hidden during recovery.
+        let Some(current) = self.inner.current() else { return Ok(()); };
         let stable_current = JournalIdentity { owner_epoch: identity.owner_epoch, ..current.identity };
         if stable_current != identity { return Err(ControlError::IdentityMismatch); }
         if identity.owner_epoch.get() < current.identity.owner_epoch.get()
