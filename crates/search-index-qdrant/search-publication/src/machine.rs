@@ -139,6 +139,9 @@ impl PublicationCoordinator {
 
     /// Reserves the next unused epoch for one prepared transaction.
     /// A reservation is never returned to the pool, even after compensation.
+    /// A physical point ID shared with the current manifest must retain its full
+    /// immutable entry. Changed entries need distinct identities from the point
+    /// owner; the coordinator never invents replacement IDs or mutates manifests.
     pub fn submit(
         &mut self,
         prepared: PreparedPublication,
@@ -153,6 +156,12 @@ impl PublicationCoordinator {
         if prepared.old_manifest != self.current_manifest
             || prepared.old_manifest_digest != self.current_manifest_digest
         {
+            return Err(PublicationError::InvalidPreparedPublication);
+        }
+        if changed_point_id_is_reused(prepared.old_manifest.as_ref(), &prepared.new_manifest) {
+            // Upserting a changed value under an old physical ID would destroy
+            // the old epoch before commit. Closing that ID would also close the
+            // newly staged point. Reject before consuming an epoch or slot.
             return Err(PublicationError::InvalidPreparedPublication);
         }
         let target_epoch = self
@@ -508,6 +517,31 @@ pub(crate) fn validate_manifest(
         return Err(PublicationError::InvalidPreparedPublication);
     }
     Ok(())
+}
+
+/// Inputs must already have passed bounded, strictly sorted manifest validation.
+/// A merge walk uses no cloned manifests, maps, ID sets or additional allocation.
+/// Exact retained entries are allowed; even a digest-only change is not retained.
+pub(crate) fn changed_point_id_is_reused(
+    old: Option<&ProjectionManifest>,
+    new: &ProjectionManifest,
+) -> bool {
+    let Some(old) = old else { return false; };
+    let mut previous = old.entries.iter().peekable();
+    for proposed in &new.entries {
+        while previous.peek().is_some_and(|entry| entry.point_id < proposed.point_id) {
+            let _ = previous.next();
+        }
+        if let Some(existing) = previous.peek() {
+            if existing.point_id == proposed.point_id {
+                if *existing != proposed {
+                    return true;
+                }
+                let _ = previous.next();
+            }
+        }
+    }
+    false
 }
 
 fn manifest_diff(transaction: &PublicationTransaction) -> Result<ManifestDiff, PublicationError> {

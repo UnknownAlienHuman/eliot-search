@@ -8,6 +8,9 @@ use search_point_identity::{PointId128, PointIdentityKey, ProjectionKind};
 use search_projection_planner::{ProjectionManifest, ProjectionManifestEntry, diff_manifests};
 use search_publication::*;
 
+#[path = "recovery_invariants/identity_conflicts.rs"]
+mod identity_conflicts;
+
 fn id(name: &str) -> OpaqueId { OpaqueId::new(name).unwrap() }
 fn epoch(value: i64) -> Epoch { Epoch::new(value).unwrap() }
 fn digest(value: u8) -> Blake3Digest32 { Blake3Digest32::from_bytes([value; 32]) }
@@ -167,20 +170,24 @@ fn compensation_receipt_is_bound_to_its_reservation_not_just_transaction_name() 
 }
 
 #[test]
-fn same_id_replacement_requires_both_removal_and_exact_old_state_restoration() {
-    let old = manifest(&[1]); let mut new = old.clone(); new.entries[0].payload_digest = digest(99);
+fn changed_content_with_a_distinct_id_still_requires_two_sided_compensation() {
+    let old = manifest(&[1]); let mut new = manifest(&[2]); new.entries[0].payload_digest = digest(99);
     let mut machine = durable(Some(old), new); let plan = machine.begin_compensation_plan().unwrap();
-    assert_eq!(plan.staged_ids, vec![point(1)]); assert_eq!(plan.closed_ids, vec![point(1)]);
+    assert_eq!(plan.staged_ids, vec![point(2)]); assert_eq!(plan.closed_ids, vec![point(1)]);
     assert_eq!(machine.compensate_exact(compensation(&plan)), Err(PublicationError::CompensationIncomplete));
     machine.compensate_and_restore(compensation(&plan), restoration(&plan)).unwrap();
 }
 
 #[test]
-fn compensation_plan_orders_changed_and_deleted_old_ids_canonically() {
+fn overlapping_changed_and_deleted_diff_is_rejected_before_publication() {
     let old = manifest(&[1, 2]); let mut new = manifest(&[2]); new.entries[0].payload_digest = digest(99);
-    let mut machine = durable(Some(old), new); let plan = machine.begin_compensation_plan().unwrap();
-    assert_eq!(plan.staged_ids, vec![point(2)]); assert_eq!(plan.closed_ids, vec![point(1), point(2)]);
-    machine.compensate_and_restore(compensation(&plan), restoration(&plan)).unwrap();
+    let difference = diff_manifests(&old, &new).unwrap();
+    assert!(difference.create.iter().any(|entry| entry.point_id == point(2)));
+    assert!(difference.retire.iter().any(|entry| entry.point_id == point(2)));
+    let mut machine = PublicationCoordinator::new(epoch(0), epoch(0), Some(old.clone()), Some(digest(1)), 32).unwrap();
+    assert_eq!(machine.submit(prepared(Some(old.clone()), new, "conflicting")), Err(PublicationError::InvalidPreparedPublication));
+    assert!(machine.active().is_none()); assert_eq!(machine.last_reserved_epoch(), epoch(0));
+    assert_eq!(machine.current_manifest(), Some(&old));
 }
 
 #[test]

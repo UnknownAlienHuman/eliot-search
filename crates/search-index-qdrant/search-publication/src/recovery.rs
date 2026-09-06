@@ -39,6 +39,14 @@ pub fn recover(
     };
     let old = transaction.prepared.old_manifest.as_ref().unwrap_or(&empty);
     crate::machine::validate_manifest(old, transaction.max_points)?;
+    if crate::machine::changed_point_id_is_reused(Some(old), &transaction.prepared.new_manifest) {
+        // Legacy/conflicting plans can report every ID acknowledged while having
+        // overwritten old-epoch content and closed the new version at its own
+        // starting epoch. ID-only observations cannot prove either version safe.
+        // Preserve the unresolved operation for explicit verified repair; neither
+        // forward continuation nor snapshot publication is permitted here.
+        return Ok(Decision::PublicationBlocked);
+    }
     // Refuse oversized observation lists before building sets or manifest copies.
     if observation.staged_ids.len() > transaction.prepared.new_manifest.entries.len()
         || observation.closed_ids.len() > old.entries.len()

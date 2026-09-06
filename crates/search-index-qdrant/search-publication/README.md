@@ -7,7 +7,7 @@ acceptance is implied by these state transitions.
 
 ## Consumed epochs
 
-`PublicationCoordinator::new` now requires both `visible_epoch` and `last_reserved_epoch`.
+`PublicationCoordinator::new` requires both `visible_epoch` and `last_reserved_epoch`.
 The latter includes aborted and abandoned reservations and must be reconstructed from verified
 control history. It is never inferred from VisibleEpoch. Only a resolved checkpoint may initialize
 a new coordinator; unresolved-intent hydration and startup qualification remain separate work.
@@ -20,16 +20,42 @@ snapshots remain cloneable for inspection, not as another owner.
 
 This local accounting does not persist the floor across process death. The journal/owner adapter
 must retain it durably before index effects and reconstruct it during recovery. The current redb
-schema-3 normal successor/commit APIs still reject skipped epochs; they are not automatically
-widened by this change. A complete abnormal-finalization/fencing protocol is required before live
-composition can commit past an abandoned epoch. No second ledger is introduced here.
+schema-3 normal successor/commit APIs still reject skipped epochs. A complete abnormal-finalization
+and fencing protocol is required before live composition can commit past an abandoned epoch.
+No second ledger is introduced here.
+
+## Immutable point IDs before staging
+
+A physical point ID shared by the current and proposed manifests is allowed only when the complete
+manifest entry is identical: identity key, source/projection memberships and all unit, reference,
+payload and named-vector digests. Unchanged entries are retained, not staged or closed.
+
+If an entry changes under the same ID, the raw planner diff places it in both create and retire.
+Qdrant upsert replaces the existing point, so staging would overwrite old-epoch data before control
+commit; the later closure would then close the new point at its own starting epoch. Exact-ID
+acknowledgements alone do not make this sequence safe. `submit` rejects it with
+`PUBLICATION_PREPARED_INVALID` before reserving an epoch or taking the active slot.
+
+The guard merge-walks the already bounded, sorted entries without allocating another manifest,
+lookup map or point set. It compares the complete entries, not only compact IDs or identity-key
+fields. Rejection leaves the current manifest, visibility and reservation floor unchanged.
+The point-identity/projection owner must provide a valid distinct identity for changed content;
+the coordinator does not invent IDs, reinterpret hash algorithms or edit supplied manifests.
+
+Recovery also blocks an already-recorded conflicting plan, even when all stage/closure IDs and
+commit/snapshot fields appear to match. It cannot return Continue, PublishSnapshot or automatic
+compensation for that plan. Existing evidence is retained for explicit verified repair; this guard
+neither repairs historical overwrites nor proves new IDs absent from every historical collection.
+Live artifact/schema/identity qualification and exact backend readback are still required.
+
+Backend reference: https://api.qdrant.tech/api-reference/points/upsert-points
 
 ## Two-sided compensation
 
 `begin_compensation_plan` returns exact sorted new IDs to remove/exclude and exact old IDs whose
 pre-mutation state must be restored. Repeating the call while COMPENSATING returns the same plan.
-For replacement under the same point ID, removal must precede restoration, and readback must verify
-the original payload/vector state and visibility bounds from the immutable old manifest.
+Normal replacement uses distinct IDs. A same-ID replacement is rejected before staging, rather
+than relying on eventual compensation to repair a pre-commit loss of the old version.
 
 `CompensationReceipt` is bound to the transaction and target epoch. `compensate_exact` is sufficient
 only if the diff contains no old retired points. Otherwise `compensate_and_restore` additionally
@@ -43,7 +69,7 @@ purge remain separate. This coordinator does not delete physical points or remov
 
 ## Abandonment and recovery
 
-`AbandonFence` now names the complete affected projection memberships in addition to its exact point
+`AbandonFence` names the complete affected projection memberships in addition to exact point
 accounting. A point-only filter does not qualify as membership-wide pre-retrieval/pre-IDF exclusion.
 The access/control owner must establish and verify the effective durable fence before supplying it.
 This API checks the exact membership set, transaction and epoch; it does not authenticate or execute
@@ -51,9 +77,9 @@ the producer's scope receipt. Partition-only proofs and invalidation-only commit
 complete port protocol.
 
 `recover` rejects unrelated visible epochs, missing or contradictory durable intents, oversized or
-duplicate observations, and incomplete committed readback. Old-point closures with no remaining new
-points still select two-sided compensation. COMPENSATING never becomes ordinary forward staging just
-because the observed ID sets look complete.
+duplicate observations, conflicting physical IDs, and incomplete committed readback. Old-point
+closures with no remaining new points still select two-sided compensation for nonconflicting plans.
+COMPENSATING never becomes forward staging just because the observed ID sets look complete.
 
 A committed decision requires the matching stage/closure/verified/control receipts and exact ID sets.
 A snapshot boolean cannot replace its bound acknowledgement. The bare `abandon_fence_durable` hint
@@ -62,20 +88,22 @@ exclusion. Continue means resume the normal verified steps, not permission to sk
 
 ## Compatibility and verification
 
-Package-owned API corrections: the constructor's explicit reservation floor; non-Clone coordinator;
-transaction pre-visible epoch and retained bounds; compensation receipt target epoch; and complete
-membership set in AbandonFence. Callers must supply actual values, not compatibility defaults.
-Transaction snapshots are obtained through the coordinator; direct unchecked struct construction is
-no longer supported. Shared `PublicationGuards`, storage codecs, Cargo dependencies, lockfile and
-workflows are unchanged. No code was added to the near-limit `search-control-redb` package.
+This guard changes acceptance of invalid same-ID plans, not public signatures, shared contracts,
+point-ID derivation, storage codecs, dependencies, lockfile or workflows. It adds no state owner
+and does not grow `search-control-redb`. Previously persisted conflicting plans require explicit
+repair; they are not silently grandfathered, rewritten, deleted or declared successfully published.
 
-21 regression tests were added in `tests/recovery_invariants.rs`; existing tests remain. They cover
-abort/non-reuse, explicit checkpoint reconstruction, exhaustion, conflicts, both compensation sides,
-same-ID replacement, canonical old-ID ordering, membership fences and contradictory recovery. Their
-synthetic receipts exercise pure semantics, not live Qdrant, redb, process restart or power loss.
+The 21 existing recovery tests are retained, with the two same-ID acceptance scenarios corrected:
+one tests valid distinct-ID two-sided compensation; the other proves rejection of an overlapping
+diff. Eleven additional tests cover every immutable field, vector-name/value changes, retained
+points, fresh/delete-only plans, valid full publication, unchanged state on rejection, competing
+submissions, 2,048 small manifest combinations and legacy recovery across phases. Fixtures are
+synthetic and exercise the public coordinator API, not live redb/Qdrant or native crash recovery.
+The child test module uses an explicit path and is not another Cargo test target.
 
-Rust compilation, tests, formatting and Clippy are NOT_RUN: Cargo is unavailable in the authoring
-runtime (`cargo +1.98.0 --version` exited 127). No executed or independent qualification is claimed.
+Rust compilation, tests, formatting and Clippy remain NOT_RUN: Cargo is unavailable in the authoring
+runtime (`cargo +1.98.0 test --locked -p search-publication --all-targets` exited 127).
+Source hashes and an independent merge-walk check are not executed Rust or independent acceptance.
 
 ```sh
 cargo +1.98.0 test --locked -p search-publication --all-targets
