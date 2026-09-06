@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::fs::File;
 
-use redb::{Database, DatabaseError, Durability, ReadTransaction, ReadableTable,
+use redb::{Database, Durability, ReadTransaction, ReadableTable,
     ReadableTableMetadata, StorageError, TableDefinition, TableHandle};
 
 use crate::{CommitRecoveryDecision, ControlCommitReceipt, ControlError, ControlKey,
@@ -21,6 +21,7 @@ mod codec;
 mod transaction;
 mod calls;
 mod operation;
+mod lifecycle;
 
 pub use operation::{ControlCallError, ControlInterruption};
 use operation::{Check, Point, Unscoped};
@@ -75,29 +76,7 @@ impl PersistentControlJournal {
     /// guard alive. This method does not replace an existing database. Failure
     /// after initialization may have started requires inspection/reopening.
     pub fn create(file: File, identity: JournalIdentity, limits: JournalLimits) -> Result<Self, ControlError> {
-        let identity = validate_identity(identity)?;
-        let limits = limits.validate()?;
-        let metadata = file.metadata().map_err(|_| ControlError::StoreUnavailable)?;
-        if !metadata.is_file() || metadata.len() != 0 { return Err(ControlError::StoreCorrupt); }
-        let database = Database::builder().set_cache_size(CACHE_BYTES).create_file(file)
-            .map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        let mut write = database.begin_write().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        write.set_durability(Durability::Immediate);
-        {
-            let mut meta = write.open_table(META).map_err(|_| ControlError::CommitOutcomeUnknown)?;
-            let header = Header::empty(identity).encode();
-            meta.insert("header", header.as_slice()).map_err(|_| ControlError::CommitOutcomeUnknown)?;
-            drop(write.open_table(RECORDS).map_err(|_| ControlError::CommitOutcomeUnknown)?);
-            drop(write.open_table(OPERATIONS).map_err(|_| ControlError::CommitOutcomeUnknown)?);
-        }
-        write.commit().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        let result = Self {
-            database, identity, limits, pending: None, quarantined: false, committed_writes: 1,
-            #[cfg(test)]
-            work: TestWork::default(),
-        };
-        result.verify().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        Ok(result)
+        Self::create_checked(file, identity, limits, &Unscoped)
     }
 
     /// Reopens an existing non-empty database without creating missing tables.
@@ -107,18 +86,7 @@ impl PersistentControlJournal {
     /// redb may recover its own unclean transaction state; this adapter never
     /// invokes forced integrity repair or invents missing application records.
     pub fn open(file: File, identity: JournalIdentity, limits: JournalLimits) -> Result<Self, ControlError> {
-        let identity = validate_identity(identity)?;
-        let limits = limits.validate()?;
-        let metadata = file.metadata().map_err(|_| ControlError::StoreUnavailable)?;
-        if !metadata.is_file() || metadata.len() == 0 { return Err(ControlError::StoreCorrupt); }
-        let database = Database::builder().set_cache_size(CACHE_BYTES).create_file(file).map_err(map_database_error)?;
-        let result = Self {
-            database, identity, limits, pending: None, quarantined: false, committed_writes: 0,
-            #[cfg(test)]
-            work: TestWork::default(),
-        };
-        result.verify()?;
-        Ok(result)
+        Self::open_checked(file, identity, limits, &Unscoped)
     }
 
     /// Performs an explicit, consuming handoff to the next verified owner epoch.
@@ -127,36 +95,9 @@ impl PersistentControlJournal {
     /// incarnation, path and schema bindings cannot change. Data generations
     /// and operation receipts are preserved. An already-current target is an
     /// idempotent readback. On failure this handle is consumed; after a possible
-    /// write, reopen using the exact intended identity to resolve the outcome.
-    pub fn advance_owner(mut self, next: JournalIdentity) -> Result<Self, ControlError> {
-        self.verify()?;
-        validate_identity(next)?;
-        if next == self.identity { return Ok(self); }
-        let stable = JournalIdentity { owner_epoch: self.identity.owner_epoch, ..next };
-        if stable != self.identity
-            || self.identity.owner_epoch.checked_next().map_err(|_| ControlError::GenerationExhausted)? != next.owner_epoch
-        { return Err(ControlError::IdentityMismatch); }
-        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        let before = self.header_from(&read)?;
-        drop(read);
-        let mut write = self.database.begin_write().map_err(|_| ControlError::StoreUnavailable)?;
-        write.set_durability(Durability::Immediate);
-        {
-            let mut meta = write.open_table(META).map_err(map_table_error)?;
-            {
-                let bytes = meta.get("header").map_err(map_storage_error)?.ok_or(ControlError::StoreCorrupt)?;
-                if Header::decode(bytes.value(), self.identity, self.limits)? != before {
-                    return Err(ControlError::TransactionConflict);
-                }
-            }
-            let after = Header { identity: next, ..before }.encode();
-            meta.insert("header", after.as_slice()).map_err(map_storage_error)?;
-        }
-        write.commit().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        self.identity = next;
-        self.verify().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        self.committed_writes = self.committed_writes.saturating_add(1);
-        Ok(self)
+    /// write, inspect the exact prior/intended identities before reopening.
+    pub fn advance_owner(self, next: JournalIdentity) -> Result<Self, ControlError> {
+        self.advance_owner_checked(next, &Unscoped)
     }
 
     /// Verified exact installation/root/owner/path/schema binding.
@@ -386,15 +327,6 @@ fn map_table_error(error: redb::TableError) -> ControlError {
         | redb::TableError::TypeDefinitionChanged { .. }
         | redb::TableError::TableDoesNotExist(_) => ControlError::SchemaMismatch,
         _ => ControlError::StoreUnavailable,
-    }
-}
-
-fn map_database_error(error: DatabaseError) -> ControlError {
-    match error {
-        DatabaseError::DatabaseAlreadyOpen => ControlError::StoreUnavailable,
-        DatabaseError::Storage(error) => map_storage_error(error),
-        DatabaseError::UpgradeRequired(_) => ControlError::MigrationUnverified,
-        _ => ControlError::StoreCorrupt,
     }
 }
 

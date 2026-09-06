@@ -48,22 +48,47 @@ interruption cause and exact requested `MutationId` (redacted in Debug). No oper
 fabricated or converted to the shared port's distinct opaque ID. The old methods remain compatible
 unscoped low-level entrypoints and use the same algorithms, not a second implementation.
 
+## Context-controlled lifecycle
+
+`create_with_context`, `open_with_context` and `advance_owner_with_context` use the same call budget,
+including full record/receipt verification before returning a usable guard. The original lifecycle
+methods delegate to these engines with the existing unscoped compatibility policy. All three context
+methods require a caller-supplied `MutationId` for error correlation; it is not an idempotency-ledger
+entry or proof of completion. The exact header identity, not that correlation ID, resolves reopening.
+
+The caller still owns native file admission and the external live root-owner guard. `create` accepts
+only an explicitly created empty file; `open` refuses an empty existing file and never creates missing
+application tables. Before native dispatch, cancellation does not initialize the file. After native
+creation/open, cancellation or transient inspection failure requires exact inspect/reopen: redb may
+already have initialized or recovered its own metadata. An open failure positively identifying schema,
+record or identity corruption remains a typed refusal to attach. No failed path deletes or replaces
+the file, returns a partially verified guard or interprets an incomplete schema as a fresh installation.
+This is not the contract's separate side-effect-free `inspect_journal` operation.
+
+Owner handoff consumes the old journal. It verifies the prior state, permits only the exact next epoch
+(or an already-current no-op), writes the new header with immediate durability, and verifies the full
+state under the same budget. Interruption after write dispatch is unknown even if staged abort succeeds;
+no usable journal escapes. Inspect the exact trusted prior/intended identities before a retry. A matching
+database header never grants external root ownership. Data generations and old operation receipts are
+unchanged, so recovery/replay of earlier mutations continues after a verified handoff.
+
 Checks are **cooperative**, not a hard wall-clock I/O guarantee: redb 2.6.3 and synchronous OS calls
-cannot be preempted by these probes. Expiration is detected when they return. No detached worker or
+cannot be preempted by these probes. Expiration is detected at the next checkpoint. No detached worker or
 unbounded queue is introduced to disguise that limit. Daemon hard-timeout composition remains open.
 
 The primary daemon has not yet migrated its file-based control state to this adapter. Full
-`ControlJournalPort` binding, context-controlled create/open/owner handoff and snapshot publication,
-native file/root admission, migration, capability-specific payload codecs, pruning and P02
-qualification remain unfinished. No shared trait, disk schema/codec, digest, dependency, lockfile,
-workflow or qualification gate changes here.
+`ControlJournalPort` binding, context-controlled snapshot publication, native file/root admission,
+side-effect-free inspection, migration, capability-specific payload codecs, pruning and P02 qualification
+remain unfinished. No shared trait, disk schema/codec, digest, dependency, lockfile, workflow or
+qualification gate changes here.
 
-Sixteen new tests use real journal files with deterministic cancellation and fake-clock checkpoints:
-pre-dispatch refusal, staged abort plus absence recovery, post-commit interruption, interrupted and
-transient recovery, actual corruption, empty/partial scans, historical replay and accumulated deadlines.
-They are application-boundary tests, not physical-power-loss tests. New and existing Rust suites have
-**not been compiled or run** in the authoring environment, where cargo/rustc and working download DNS
-were unavailable. No T09 completion, green build or product acceptance is claimed.
+The lifecycle suite contains nineteen tests, including real journal files with deterministic checkpoints:
+pre-dispatch refusal, partial initialization, lost acknowledgement after initialization/handoff,
+interrupted full inspection, wrong identities/schemas, second-handle denial, no-op handoff, exact old
+mutation replay and accumulated deadlines. Existing transaction/context suites remain intact. These are
+application-boundary tests, not physical-power-loss tests. Rust compilation and execution remain
+**NOT_RUN** in the authoring environment: cargo/rustc are absent and archive retrieval failed DNS.
+No T09 completion, green build or product acceptance is claimed.
 
 See [disk format, integration boundaries and verification](../../docs/runtime/CONTROL_REDB.md),
 [function contract](FUNCTIONS.md) and [agent instructions](AGENTS.md).

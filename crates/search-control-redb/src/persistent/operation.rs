@@ -62,7 +62,7 @@ impl ControlCallError {
                 ControlError::StoreUnavailable => PortErrorKind::DependencyUnavailable,
                 ControlError::StoreCorrupt | ControlError::IdentityMismatch
                 | ControlError::SchemaUnsupported | ControlError::SchemaMismatch
-                | ControlError::ForbiddenControlPayload => PortErrorKind::Quarantined,
+                | ControlError::ForbiddenControlPayload | ControlError::MigrationUnverified => PortErrorKind::Quarantined,
                 ControlError::TransactionConflict | ControlError::GenerationMismatch => PortErrorKind::StaleGeneration,
                 ControlError::OperationConflict => PortErrorKind::Conflict,
                 ControlError::BudgetExceeded | ControlError::GenerationExhausted
@@ -121,6 +121,9 @@ impl std::error::Error for ControlCallError {
 pub(super) enum Point {
     Start,
     Validated,
+    BeforeOpen,
+    AfterOpen,
+    LifecycleComplete,
     ReadHeader,
     ReadRecord,
     ReadOperation,
