@@ -9,6 +9,9 @@ use search_point_identity::{PointId128, PointIdentityKey, ProjectionKind};
 use search_projection_planner::{ProjectionManifest, ProjectionManifestEntry, diff_manifests};
 use search_publication::*;
 
+#[path = "support/abort_finalization.rs"]
+mod abort_support;
+
 fn id(value: &str) -> OpaqueId { OpaqueId::new(value).unwrap() }
 fn epoch(value: i64) -> Epoch { Epoch::new(value).unwrap() }
 fn digest(value: u8) -> Blake3Digest32 { Blake3Digest32::from_bytes([value; 32]) }
@@ -183,7 +186,9 @@ fn partial_effects_restore_two_sided_compensation_and_preserve_consumed_gaps() {
         transaction_id: plan.transaction_id, target_epoch: plan.target_epoch,
         restored_ids: plan.closed_ids, remaining_ids: vec![], readback_receipt: reference("restored"),
     }).unwrap();
-    restored.finalize_aborted().unwrap(); // Pure completion only; no durable receipt claim.
+    assert_eq!(restored.finalize_aborted(), Err(PublicationError::RecoveryBlocked));
+    abort_support::acknowledge(&mut restored); // Synthetic acknowledgements; no I/O claim.
+    restored.finalize_aborted().unwrap();
     let mut next = prepared(restored.current_manifest().cloned(), "next-after-resolution");
     next.new_manifest = manifest(&[3]);
     assert_eq!(restored.submit(next).unwrap(), epoch(10));

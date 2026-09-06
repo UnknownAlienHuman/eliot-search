@@ -13,7 +13,8 @@ control history. It is never inferred from VisibleEpoch. `new` is only for a res
 `restore_inflight` below keeps unresolved work in the sole occupied coordinator slot.
 
 `submit` advances the reservation floor only after input validation and single-flight checks.
-`finalize_aborted` releases the active slot but neither lowers that floor nor advances visibility.
+`finalize_aborted` releases the active slot only after durable-finalization and fresh snapshot
+acknowledgements; it neither lowers the consumed floor nor advances visibility.
 After aborting epoch 1 at visible epoch 0, the next reservation is epoch 2, not 1. Exhaustion rejects
 before changing either the slot or the floor. The coordinator is not Clone; immutable transaction
 snapshots remain cloneable for inspection, not as another owner.
@@ -98,6 +99,40 @@ A receipt reference is not itself evidence that the external adapter executed or
 The existing `begin_compensation` list-only projection is retained for create-only callers; using it
 does not bypass the required restoration at completion. Ordinary retired-point reclaim and security
 purge remain separate. This coordinator does not delete physical points or remove live policy fences.
+
+## Aborted-finalization acknowledgement barrier
+
+Compensation and abandonment now retain their exact verified readback/exclusion references instead
+of discarding them on entry to ABORTED. Large ID sets remain in the original manifests. The lifecycle is:
+
+```text
+verified compensation or exclusion
+→ prepare_abort_finalization (latch original command)
+→ authoritative journal commit/readback
+→ acknowledge_abort_commit
+→ current-process snapshot publication
+→ publish_abort_snapshot
+→ finalize_aborted (release slot)
+```
+
+The latched command binds the original intent/preparation, both manifest digests, consumed epoch,
+route, current guards, expected control generation, operation ID and exact resolution references.
+Changed retries cannot replace it. Commit acknowledgement requires that exact command, unchanged
+visibility and consumed floor, the same route/guards, and exactly the next control generation.
+Snapshot acknowledgement binds transaction, visible epoch and committed generation. Conflicting or
+missing acknowledgements preserve the slot and evidence; the old zero-argument `finalize_aborted`
+no longer succeeds on the ABORTED label alone. Previous acknowledgements never carry into a new task.
+
+The caller retains the live owner/recovery/admission barrier across these steps. This package checks
+supplied observations; it neither executes nor authenticates their producers. The disk operation,
+restart hydration of abnormal-finalization receipts and skipped-epoch commits are still unimplemented.
+Bare ABORTED restoration therefore stays blocked. No redb format, shared port or dependency changes.
+
+Sixteen new pure tests cover acknowledgement ordering, retained two-sided evidence, full exclusion,
+exact/changed retries, all guard axes, route/epoch/generation conflicts, stale snapshots, blocked
+recovery, next-transaction isolation and redaction. Existing successful abort fixtures now provide
+explicit synthetic commit/snapshot acknowledgements; negative fixtures remain. Rust tests are NOT_RUN
+without Cargo. Synthetic observations are not live journal/index or independent qualification evidence.
 
 ## Abandonment and recovery
 

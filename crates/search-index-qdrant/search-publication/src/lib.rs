@@ -14,6 +14,7 @@ mod recovery;
 
 pub use error::PublicationError;
 pub use machine::{
+    AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
     DEFAULT_MAX_PUBLICATION_POINTS, DurableIntent, PublicationCoordinator,
     PublicationPhase, PublicationRestoreInput, PublicationTransaction,
 };

@@ -10,6 +10,10 @@ use search_publication::*;
 
 #[path = "recovery_invariants/identity_conflicts.rs"]
 mod identity_conflicts;
+#[path = "support/abort_finalization.rs"]
+mod abort_support;
+#[path = "recovery_invariants/abort_finalization.rs"]
+mod abort_finalization;
 
 fn id(name: &str) -> OpaqueId { OpaqueId::new(name).unwrap() }
 fn epoch(value: i64) -> Epoch { Epoch::new(value).unwrap() }
@@ -93,6 +97,8 @@ fn aborted_reservations_are_never_reused_and_do_not_advance_visibility() {
         machine.persist_intent(id(&format!("persist-{expected}")), reference("intent")).unwrap();
         let plan = machine.begin_compensation_plan().unwrap();
         machine.compensate_exact(compensation(&plan)).unwrap();
+        assert_eq!(machine.finalize_aborted(), Err(PublicationError::RecoveryBlocked));
+        abort_support::acknowledge(&mut machine);
         machine.finalize_aborted().unwrap();
         assert_eq!(machine.visible_epoch(), epoch(0));
         assert_eq!(machine.last_reserved_epoch(), epoch(expected));
@@ -138,6 +144,7 @@ fn compensation_requires_restoration_of_every_old_closed_point() {
     assert_eq!(machine.finalize_aborted(), Err(PublicationError::InvalidTransition));
     assert_eq!(machine.active().unwrap().phase, PublicationPhase::Compensating);
     machine.compensate_and_restore(compensation(&plan), restoration(&plan)).unwrap();
+    abort_support::acknowledge(&mut machine);
     machine.finalize_aborted().unwrap();
     assert_eq!(machine.current_manifest(), Some(&old)); assert_eq!(machine.visible_epoch(), epoch(0));
     assert_eq!(machine.submit(prepared(Some(old), manifest(&[3]), "next")).unwrap(), epoch(2));
@@ -200,7 +207,9 @@ fn point_only_or_incomplete_membership_fence_cannot_abandon() {
     fence.excluded_projection_memberships.insert(id("membership-1"));
     assert_eq!(machine.abandon(&fence), Err(PublicationError::AbandonFenceMissing));
     fence.excluded_projection_memberships.insert(id("membership-2"));
-    machine.abandon(&fence).unwrap(); machine.finalize_aborted().unwrap();
+    machine.abandon(&fence).unwrap();
+    abort_support::acknowledge(&mut machine);
+    machine.finalize_aborted().unwrap();
     assert_eq!(machine.last_reserved_epoch(), epoch(1)); assert_eq!(machine.visible_epoch(), epoch(0));
     assert_eq!(machine.submit(prepared(Some(manifest(&[1])), manifest(&[3]), "next")).unwrap(), epoch(2));
 }

@@ -108,6 +108,7 @@ impl PublicationCoordinator {
                 snapshot_receipt: None,
                 max_points,
             }),
+            abort_finalization: super::abort::AbortFinalizationProgress::default(),
             max_points,
         };
         if let Some(stage) = input.stage_receipt {

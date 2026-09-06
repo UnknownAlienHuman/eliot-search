@@ -3,7 +3,9 @@
 use std::collections::BTreeSet;
 
 mod restore;
+mod abort;
 pub use restore::PublicationRestoreInput;
+pub use abort::{AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution};
 
 use search_contracts::{Blake3Digest32, Epoch, OpaqueId, ReceiptRef};
 use search_point_identity::PointId128;
@@ -82,6 +84,7 @@ pub struct PublicationCoordinator {
     current_manifest: Option<ProjectionManifest>,
     current_manifest_digest: Option<Blake3Digest32>,
     active: Option<PublicationTransaction>,
+    abort_finalization: abort::AbortFinalizationProgress,
     max_points: usize,
 }
 
@@ -115,6 +118,7 @@ impl PublicationCoordinator {
             current_manifest,
             current_manifest_digest,
             active: None,
+            abort_finalization: abort::AbortFinalizationProgress::default(),
             max_points,
         })
     }
@@ -437,7 +441,7 @@ impl PublicationCoordinator {
         {
             return Err(PublicationError::CompensationIncomplete);
         }
-        match restoration {
+        match &restoration {
             Some(restored) if restored.transaction_id == transaction.prepared.transaction_id
                 && restored.target_epoch == transaction.target_epoch
                 && restored.remaining_ids.is_empty()
@@ -446,6 +450,11 @@ impl PublicationCoordinator {
             _ => return Err(PublicationError::CompensationIncomplete),
         }
         transaction.phase = PublicationPhase::Aborted;
+        // Keep only exact evidence references; large ID lists remain in manifests.
+        self.abort_finalization.resolution = Some(AbortedPublicationResolution::Compensated {
+            removal_readback: receipt.readback_receipt,
+            restoration_readback: restoration.map(|value| value.readback_receipt),
+        });
         Ok(())
     }
 
@@ -472,14 +481,10 @@ impl PublicationCoordinator {
             return Err(PublicationError::AbandonFenceMissing);
         }
         transaction.phase = PublicationPhase::Aborted;
-        Ok(())
-    }
-
-    /// Removes an aborted transaction without advancing visibility or returning
-    /// its reserved epoch to the pool. Durable finalization remains a port effect.
-    pub fn finalize_aborted(&mut self) -> Result<(), PublicationError> {
-        self.active_at(PublicationPhase::Aborted)?;
-        self.active = None;
+        self.abort_finalization.resolution = Some(AbortedPublicationResolution::Excluded {
+            exclusion_receipt: fence.exclusion_receipt.clone(),
+            scope_digest: fence.excluded_scope_digest,
+        });
         Ok(())
     }
 
