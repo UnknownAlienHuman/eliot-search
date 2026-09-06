@@ -2,6 +2,9 @@
 
 use search_ports::{CancellationProbe, OperationContext};
 
+use crate::conditions::{bind_conditions, validate_conditions};
+use crate::{ConditionalControlMutation, ControlRecordCondition};
+
 use super::operation::{Budget, Check, Point};
 use super::{
     Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitReceipt, ControlError,
@@ -85,6 +88,66 @@ impl PersistentControlJournal {
         })
     }
 
+    /// Applies exact record preconditions and the mutation in one transaction.
+    ///
+    /// Conditions bind exact classes/bytes or absence. They are checked before
+    /// dispatch and again under the write transaction, before staging changes.
+    /// Conditions and the mutation share one cancellation/deadline budget and
+    /// one replay identity. A condition is not an authorization or schema proof.
+    ///
+    /// # Errors
+    /// False preconditions return `GenerationMismatch` without changing records
+    /// or adding a receipt. Interrupted possible writes require exact recovery;
+    /// changing/omitting conditions cannot replay or recover the original call.
+    pub fn transact_conditionally<C: CancellationProbe>(
+        &mut self,
+        command: ConditionalControlMutation,
+        context: &OperationContext<C>,
+    ) -> Result<ControlCommitReceipt, ControlCallError> {
+        let budget = Budget::new(context);
+        let id = command.mutation().id();
+        self.transact_conditionally_checked(command, Boundary::Normal, &budget)
+            .map_err(|error| budget.failure(error, Some(id)))
+    }
+
+    /// Recovers the complete conditional request without reapplying its guards
+    /// to a later pre-state or performing another mutation.
+    ///
+    /// Successful replay verifies the recorded request fingerprint and, for a
+    /// current-generation receipt, the actual post-state. The original command
+    /// may itself have changed a guarded key, so its preconditions are not run
+    /// again after commit. A historical receipt never restores obsolete values.
+    ///
+    /// # Errors
+    /// Interrupted/unavailable recovery preserves the exact pending fence.
+    /// A different condition set conflicts even with the same declared digest.
+    pub fn recover_conditional_transaction<C: CancellationProbe>(
+        &mut self,
+        command: &ConditionalControlMutation,
+        context: &OperationContext<C>,
+    ) -> Result<CommitRecoveryDecision, ControlCallError> {
+        let budget = Budget::new(context);
+        self.recover_transaction_with_conditions_checked(command.mutation(), command.conditions(), &budget)
+            .map_err(|error| {
+                let error = if budget.interrupted() { ControlError::CommitOutcomeUnknown } else { error };
+                budget.failure(error, Some(command.mutation().id())).for_recovery()
+            })
+    }
+
+    pub(super) fn transact_conditionally_checked(
+        &mut self,
+        command: ConditionalControlMutation,
+        boundary: Boundary,
+        check: &dyn Check,
+    ) -> Result<ControlCommitReceipt, ControlError> {
+        let (mutation, conditions) = command.into_parts();
+        let result = transaction::execute_with_conditions(self, mutation, &conditions, boundary, check);
+        if result.as_ref().err().is_some_and(|error| is_corruption(*error)) {
+            self.quarantined = true;
+        }
+        result
+    }
+
     pub(super) fn read_snapshot_checked(&self, check: &dyn Check) -> Result<JournalReadSnapshot, ControlError> {
         self.ensure_available()?;
         check.check(Point::Start)?;
@@ -104,10 +167,21 @@ impl PersistentControlJournal {
         mutation: &ControlMutation,
         check: &dyn Check,
     ) -> Result<CommitRecoveryDecision, ControlError> {
+        self.recover_transaction_with_conditions_checked(mutation, &[], check)
+    }
+
+    pub(super) fn recover_transaction_with_conditions_checked(
+        &mut self,
+        mutation: &ControlMutation,
+        conditions: &[ControlRecordCondition],
+        check: &dyn Check,
+    ) -> Result<CommitRecoveryDecision, ControlError> {
         if self.quarantined { return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine); }
         check.check(Point::Start)?;
         let changed_keys = validate_mutation(mutation, self.limits)?;
-        let fingerprint = request_fingerprint(self.identity, mutation)?;
+        validate_conditions(mutation, conditions, self.limits, || check.check(Point::PlanRecord))?;
+        let fingerprint = bind_conditions(request_fingerprint(self.identity, mutation)?, conditions,
+            || check.check(Point::PlanRecord))?;
         check.check(Point::Validated)?;
         if self.pending.is_some_and(|pending| pending != (mutation.id(), fingerprint)) {
             return Ok(CommitRecoveryDecision::ConflictingInput);
@@ -122,6 +196,9 @@ impl PersistentControlJournal {
                     transaction::verify_replay(
                         self, &read, &header, &operation.receipt, mutation, &changed_keys, check,
                     )?;
+                    if operation.receipt.after_generation == header.generation {
+                        transaction::verify_conditional_poststate(self, &read, conditions, &changed_keys, check)?;
+                    }
                     let mut receipt = operation.receipt;
                     receipt.replayed = true;
                     CommitRecoveryDecision::Committed(receipt)

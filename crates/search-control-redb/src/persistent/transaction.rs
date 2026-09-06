@@ -5,6 +5,9 @@
 //! checked counters plus exact old values of only the distinct touched keys;
 //! they do not build a second in-memory catalog or scan unrelated records.
 
+use crate::conditions::{bind_conditions, validate_conditions};
+use crate::ControlRecordCondition;
+
 use super::{
     Boundary, ControlCommitReceipt, ControlError, ControlKey, ControlMutation, Durability,
     Header, OPERATIONS, META, PersistentControlJournal, RECORDS, ReadTransaction,
@@ -19,10 +22,22 @@ pub(super) fn execute(
     boundary: Boundary,
     check: &dyn Check,
 ) -> Result<ControlCommitReceipt, ControlError> {
+    execute_with_conditions(journal, mutation, &[], boundary, check)
+}
+
+pub(super) fn execute_with_conditions(
+    journal: &mut PersistentControlJournal,
+    mutation: ControlMutation,
+    conditions: &[ControlRecordCondition],
+    boundary: Boundary,
+    check: &dyn Check,
+) -> Result<ControlCommitReceipt, ControlError> {
     journal.ensure_available()?;
     check.check(Point::Start)?;
     let changed_keys = validate_mutation(&mutation, journal.limits)?;
-    let fingerprint = request_fingerprint(journal.identity, &mutation)?;
+    validate_conditions(&mutation, conditions, journal.limits, || check.check(Point::PlanRecord))?;
+    let fingerprint = bind_conditions(request_fingerprint(journal.identity, &mutation)?, conditions,
+        || check.check(Point::PlanRecord))?;
     check.check(Point::Validated)?;
     let read = journal.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
     let before = journal.header_from(&read)?;
@@ -32,6 +47,9 @@ pub(super) fn execute(
             return Err(ControlError::OperationConflict);
         }
         verify_replay(journal, &read, &before, &previous.receipt, &mutation, &changed_keys, check)?;
+        if previous.receipt.after_generation == before.generation {
+            verify_conditional_poststate(journal, &read, conditions, &changed_keys, check)?;
+        }
         let mut receipt = previous.receipt;
         receipt.replayed = true;
         return Ok(receipt);
@@ -41,6 +59,10 @@ pub(super) fn execute(
     }
     if before.operations >= as_u64(journal.limits.max_operation_records)? {
         return Err(ControlError::IdempotencyCapacityExceeded);
+    }
+    {
+        let records = read.open_table(RECORDS).map_err(map_table_error)?;
+        verify_conditions(journal, &records, conditions, check, Point::PlanRecord)?;
     }
     let mut after = plan_records(journal, &read, &before, &mutation, &changed_keys, check)?;
     after.generation = before.generation.checked_add(1)
@@ -83,6 +105,11 @@ pub(super) fn execute(
         {
             return Err(ControlError::OperationConflict);
         }
+        // Validate pre-state again under the actual write transaction, before
+        // staging any change. These checks and the header comparison cannot
+        // interleave with another conforming writer. A condition may concern a
+        // key that this same command intentionally changes afterward.
+        verify_conditions(journal, &records, conditions, check, Point::StageRecord)?;
         for key in mutation.deletes() {
             check.check(Point::StageRecord)?;
             records.remove(key.as_bytes()).map_err(map_storage_error)?;
@@ -129,10 +156,32 @@ pub(super) fn execute(
     }
     verify_touched(journal, &observed, &mutation, check)
         .map_err(|_| ControlError::CommitOutcomeUnknown)?;
+    verify_conditional_poststate(journal, &observed, conditions, &receipt.changed_keys, check)
+        .map_err(|_| ControlError::CommitOutcomeUnknown)?;
     check.check(Point::MutationComplete).map_err(|_| ControlError::CommitOutcomeUnknown)?;
     journal.pending = None;
     journal.committed_writes = journal.committed_writes.saturating_add(1);
     Ok(receipt)
+}
+
+
+fn verify_conditions(
+    journal: &PersistentControlJournal,
+    records: &impl ReadableTable<&'static [u8], &'static [u8]>,
+    conditions: &[ControlRecordCondition],
+    check: &dyn Check,
+    point: Point,
+) -> Result<(), ControlError> {
+    for condition in conditions {
+        check.check(point)?;
+        note_lookup(journal);
+        let observed = records.get(condition.key().as_bytes()).map_err(map_storage_error)?;
+        // Bad stored classes/lengths are corruption, not an ordinary failed CAS.
+        // At most one temporary value is decoded per lookup.
+        let value = observed.map(|bytes| decode_value(bytes.value(), journal.limits)).transpose()?;
+        if value.as_ref() != condition.expected() { return Err(ControlError::GenerationMismatch); }
+    }
+    Ok(())
 }
 
 fn plan_records(
@@ -238,6 +287,30 @@ fn verify_touched(
     Ok(())
 }
 
+/// Conditions on keys not changed by this command must still hold at its
+/// current generation. Changed keys are instead checked against their exact
+/// intended post-state by verify_touched. Never use this for historical replay.
+pub(super) fn verify_conditional_poststate(
+    journal: &PersistentControlJournal,
+    read: &ReadTransaction,
+    conditions: &[ControlRecordCondition],
+    changed_keys: &[ControlKey],
+    check: &dyn Check,
+) -> Result<(), ControlError> {
+    if conditions.is_empty() { return Ok(()); }
+    let records = read.open_table(RECORDS).map_err(map_table_error)?;
+    for condition in conditions {
+        check.check(Point::Readback)?;
+        if changed_keys.binary_search(condition.key()).is_ok() { continue; }
+        note_lookup(journal);
+        let observed = records.get(condition.key().as_bytes()).map_err(map_storage_error)?;
+        let value = observed.map(|bytes| decode_value(bytes.value(), journal.limits)).transpose()?;
+        if value.as_ref() != condition.expected() { return Err(ControlError::StoreCorrupt); }
+    }
+    check.check(Point::Readback)?;
+    Ok(())
+}
+
 fn note_lookup(_journal: &PersistentControlJournal) {
     #[cfg(test)]
     _journal.work.point_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -245,3 +318,6 @@ fn note_lookup(_journal: &PersistentControlJournal) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod condition_tests;

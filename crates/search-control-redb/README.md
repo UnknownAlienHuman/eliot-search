@@ -20,6 +20,49 @@ The disk file is not an authenticated ciphertext format; this adapter assumes ex
 Capability owners must validate payload semantics: a technical class tag alone does not prove that
 arbitrary bytes are content-free.
 
+## Atomic record preconditions
+
+`ConditionalControlMutation` combines an existing `ControlMutation` with bounded
+`ControlRecordCondition::exact(key, value)` or `::absent(key)` assertions. The public
+`transact_conditionally` and `recover_conditional_transaction` entrypoints require an
+`OperationContext` and use the same transaction/recovery engines as ordinary mutations.
+
+Conditions compare exact classes and bytes, or actual absence, first in the coherent planning read
+and again inside the write transaction before any record changes. A false precondition returns
+`CONTROL_GENERATION_MISMATCH` without a commit or receipt. Global expected generation is still
+mandatory; an A/B/A transition cannot pass an older command merely because values became equal again.
+Condition-only keys are not listed as changed entities. A command with no writes/deletes is refused.
+
+The full condition set is bound to the actual request fingerprint using the domain
+`eliot-search/control-conditional-request/sha256/v1`. It includes the existing request SHA-256,
+condition count and sorted length-delimited keys, absence/exact tags, classes and expected values.
+No BLAKE3 field is populated with this SHA-256. Reordering distinct conditions is equivalent; adding,
+removing or changing any condition conflicts with a saved operation even when its declared digest is
+unchanged. Duplicate condition keys are refused; a condition may concern a key the mutation changes.
+Empty conditions preserve existing request fingerprints exactly. Old binaries can read unchanged
+journal framing, but cannot replay a nonempty conditional command through their unconditional API.
+
+Replay is not a second execution of the old preconditions. At the current receipt generation, changed
+keys must match the mutation's post-state and untouched condition keys must still match their asserted
+state. Contradiction is corruption, not a new failed CAS. Historical replay does not test obsolete
+conditions against newer values. Recovery after abort, lost acknowledgement, reopen or owner handoff
+requires the exact original condition set; stripping it cannot clear pending state.
+
+Writes + deletes + conditions share `max_mutation_items`. Expected values have the existing individual
+value ceiling and an aggregate ceiling of `max_total_value_bytes`. Validation, hashing, comparisons
+and recovery share one cooperative deadline. Normal work touches only changed/condition keys, not all
+unrelated records. The existing file/table/receipt layout and unconditional reference model are unchanged.
+
+This primitive supplies atomic technical comparisons, not the full `VisibleEpoch` protocol. It neither
+adds the H5 table inventory nor decides semantic owner/source/membership/access guard completeness.
+Those codecs and the actual live authorization barrier must be supplied before `ControlJournalPort`
+can be accepted. No new journal owner, mutable catalog or daemon cutover is introduced.
+
+Twenty-four conditional regression tests cover exact/absence/class guards, all-or-nothing batches,
+ABA, ordering, changed/stripped conditions, bounds, write-transaction revalidation, interruption,
+reopen/handoff, current versus historical recovery, corruption and touched-key work. A known-answer
+fingerprint was independently calculated; the Rust tests themselves remain **NOT_RUN** without Cargo.
+
 ## Operation contexts
 
 The existing `OperationContext` controls `read_snapshot_with_context`, `verify_with_context`,
