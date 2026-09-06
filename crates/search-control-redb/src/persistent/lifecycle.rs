@@ -133,10 +133,7 @@ impl PersistentControlJournal {
         limits: JournalLimits,
         check: &dyn Check,
     ) -> Result<Self, ControlError> {
-        preflight(&file, identity, limits, false, check)?;
-        check.check(Point::BeforeOpen)?;
-        let database = Database::builder().set_cache_size(CACHE_BYTES).create_file(file)
-            .map_err(open_error)?;
+        let database = open_existing_database_checked(file, identity, limits, check)?;
         let journal = from_database(database, identity, limits, 0);
         let verification = (|| {
             check.check(Point::AfterOpen)?;
@@ -144,7 +141,7 @@ impl PersistentControlJournal {
         })();
         match verification {
             Ok(()) => Ok(journal),
-            Err(error) if is_corruption(error) => Err(error),
+            Err(error) if is_corruption(error) || error == ControlError::StoreQuarantined => Err(error),
             // Dropping the unreturned guard releases only its own native handle;
             // it neither deletes the file nor rewrites missing application state.
             Err(_) => Err(ControlError::CommitOutcomeUnknown),
@@ -204,6 +201,16 @@ impl PersistentControlJournal {
         self.committed_writes = self.committed_writes.saturating_add(1);
         Ok(self)
     }
+}
+
+// Shared only with diagnostic quarantine recovery. Does not return a usable
+// journal until the caller completes its own specific admission/inspection.
+pub(super) fn open_existing_database_checked(
+    file: File, identity: JournalIdentity, limits: JournalLimits, check: &dyn Check,
+) -> Result<Database, ControlError> {
+    preflight(&file, identity, limits, false, check)?;
+    check.check(Point::BeforeOpen)?;
+    Database::builder().set_cache_size(CACHE_BYTES).create_file(file).map_err(open_error)
 }
 
 fn preflight(

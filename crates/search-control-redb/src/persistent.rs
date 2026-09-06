@@ -23,8 +23,10 @@ mod calls;
 mod operation;
 mod lifecycle;
 mod snapshot;
+mod quarantine;
 
 pub use operation::{ControlCallError, ControlInterruption};
+pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};
 use operation::{Check, Point, Unscoped};
 use codec::{Header, StoredOperation, as_u64, decode_value, encode_value,
     request_fingerprint, validate_mutation};
@@ -105,7 +107,7 @@ impl PersistentControlJournal {
     #[must_use]
     pub const fn identity(&self) -> JournalIdentity { self.identity }
 
-    /// Diagnostic count of successful initialization, transaction and owner-handoff calls.
+    /// Diagnostic count of successful initialization, data commits, owner handoffs and quarantine writes.
     /// Reads, recovery and idempotent replay do not increment it; this is not an I/O metric.
     #[must_use]
     pub const fn committed_writes(&self) -> u64 { self.committed_writes }
@@ -156,7 +158,7 @@ impl PersistentControlJournal {
     /// operations until `recover_transaction` resolves the exact request.
     /// Normal mutation planning/readback touches only the command's keys. Full
     /// consistency scans remain explicit and run when the journal is opened.
-    pub fn transact(&mut self, mutation: ControlMutation) -> Result<ControlCommitReceipt, ControlError> {
+    pub fn transact(&mut self, mutation: ControlMutation, ) -> Result<ControlCommitReceipt, ControlError> {
         self.transact_inner(mutation, Boundary::Normal)
     }
 
@@ -175,6 +177,7 @@ impl PersistentControlJournal {
     fn header_from(&self, read: &ReadTransaction) -> Result<Header, ControlError> {
         verify_tables(read)?;
         let meta = read.open_table(META).map_err(map_table_error)?;
+        quarantine::require_unquarantined(&meta)?;
         if meta.len().map_err(map_storage_error)? != 1 { return Err(ControlError::StoreCorrupt); }
         let bytes = meta.get("header").map_err(map_storage_error)?.ok_or(ControlError::StoreCorrupt)?;
         let header = Header::decode(bytes.value(), self.identity, self.limits)?;
