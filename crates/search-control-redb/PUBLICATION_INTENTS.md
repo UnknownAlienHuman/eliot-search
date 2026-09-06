@@ -12,7 +12,9 @@ There is no second database or publication coordinator.
   target epoch, manifest reference and all seven guards. The complete previous
   intent and expected journal generation are atomic preconditions.
 - `read_publication_intent` returns the last exact value and its coherent control
-  generation. `load_unresolved_publication` excludes resolved states, not records.
+  generation. `load_unresolved_publication` keeps a bare ABORTED value visible for recovery.
+- `read_publication_checkpoint` returns coherent route/visibility, intent and consumed
+  floor from one schema-3 read transaction; it never acknowledges external recovery.
 - `persist_publication_intent` and `recover_publication_intent` bind the complete
   command to the existing idempotency ledger. Replay does not reapply pre-state.
 
@@ -36,12 +38,17 @@ INVALIDATION_ONLY_COMMITTED or RECLAIMABLE. Those transitions require the comple
 VisibleEpoch/finalization operation; raw lower-level compatibility APIs are not
 an alternative product publication API.
 
-Unresolved records, including READBACK_VERIFIED, COMPENSATING and PUBLICATION_BLOCKED,
-block disk control-snapshot reconstruction/publication. CONTROL_COMMITTED resolves
-the durable mutation and allows snapshot reconstruction; it does not itself reopen
-publisher admission. Publication acknowledgement still follows verified snapshot
-publication. This avoids a circular requirement to publish a snapshot before its
-already committed control record can be read.
+Recovery-required records, including READBACK_VERIFIED, COMPENSATING,
+PUBLICATION_BLOCKED and a bare ABORTED value, block disk control-snapshot
+reconstruction/publication. ABORTED alone does not prove two-sided compensation
+or complete effective exclusion. Existing aborted records remain readable and
+retain their consumed epoch; they are not corruption or empty reusable slots.
+See [recovery checkpoint](RECOVERY_CHECKPOINT.md).
+
+CONTROL_COMMITTED resolves the durable mutation and allows snapshot reconstruction;
+it does not itself reopen publisher admission. Publication acknowledgement still
+follows verified snapshot publication. This avoids a circular requirement to publish
+a snapshot before its already committed control record can be read.
 
 The coordinator must supply actual external stage/closure/compensation evidence.
 Persisting a state does not manufacture that evidence, verify Qdrant or grant access.
@@ -51,13 +58,13 @@ cooperatively, not forcibly, interruptible.
 
 ## Explicit schema boundary
 
-Typed intent operations require `PUBLICATION_INTENT_SCHEMA_VERSION` (adapter schema 2).
-Schema 1 remains supported unchanged for existing callers and cannot invoke these
-operations. No existing header is upgraded or reinterpreted. Creation of a new schema-2
-journal is explicit; migration from schema 1 remains a separate unimplemented operation.
-The previous binary only accepts schema 1 and therefore cannot open schema 2 as a usable
-journal or silently overlook its unresolved intent. Supplying an expected schema 1 for
-an actual schema-2 file fails header validation.
+Typed intent operations accept adapter schemas 2 and 3. Schema 1 remains supported
+unchanged for existing low-level callers but cannot invoke typed-intent operations.
+Visibility and coherent publication checkpoints require schema 3. No existing header
+is upgraded or reinterpreted; creation at a supported schema is explicit and migration
+remains a separate unimplemented operation. Supplying a different expected schema for
+an existing file fails header validation. Implementations predating these schemas
+reject them instead of silently ignoring unresolved state.
 
 The outer table/header/receipt layouts are retained; the identity's schema version
 changes. The private intent value has `ELIPUB01` magic, fixed-width big-endian fields,

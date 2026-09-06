@@ -87,6 +87,8 @@ impl PublicationIntentUpdate {
     /// The coordinator must already have obtained the corresponding external
     /// acknowledgements/recovery evidence. Storage records the state; it does not
     /// create that evidence. The exact previous intent is an atomic precondition.
+    /// A bare ABORTED value remains recovery-required until compensation/fencing
+    /// has a complete separately verified durable finalization protocol.
     ///
     /// # Errors
     /// Rejects skipped/reversed edges and any visibility/finalization transition.
@@ -125,7 +127,7 @@ impl PublicationIntentUpdate {
 }
 
 /// Coherent control generation and the exact last durable intent, if initialized.
-/// Terminal state is retained for recovery; it is not returned as unresolved.
+/// Terminal labels remain recorded; ABORTED alone does not resolve external effects.
 #[derive(Clone, Eq, PartialEq)]
 pub struct PublicationIntentHead {
     /// Exact journal/root/owner identity that supplied this read.
@@ -159,9 +161,9 @@ impl PersistentControlJournal {
         self.read_intent_checked(&budget).map_err(|error| budget.failure(error, None))
     }
 
-    /// Returns the exact unresolved shared intent. BLOCKED and COMPENSATING stay
-    /// unresolved. CONTROL_COMMITTED resolves the durable mutation, not snapshot
-    /// admission; the existing snapshot publisher still must verify its commit.
+    /// Returns the exact recovery-required intent, including a bare ABORTED value.
+    /// BLOCKED and COMPENSATING remain unresolved. CONTROL_COMMITTED resolves
+    /// the durable mutation, not snapshot admission; its commit still needs publication.
     /// Resolved values are omitted here but retained by read_publication_intent.
     ///
     /// # Errors
@@ -176,6 +178,42 @@ impl PersistentControlJournal {
             Ok(head.intent.filter(|intent| unresolved(intent.state)))
         })();
         result.map_err(|error| budget.failure(error, None))
+    }
+
+    /// Reads route, visible epoch and consumed reservation history coherently.
+    /// One read transaction validates typed relationships and the bounded ledger;
+    /// it performs no writes, recovery, snapshot publication or source/index I/O.
+    /// This recovery-plane read does not authorize a new coordinator or clear holds.
+    ///
+    /// # Errors
+    /// Unsupported schema, missing/corrupt history, interruption or a pending
+    /// mutation returns no checkpoint. `None` means an explicitly new empty
+    /// schema-3 journal only, never a lost route or discarded aborted intent.
+    pub fn read_publication_checkpoint<C: CancellationProbe>(
+        &self, context: &OperationContext<C>,
+    ) -> Result<Option<crate::PublicationRecoveryCheckpoint>, ControlCallError> {
+        let budget = Budget::new(context);
+        self.read_checkpoint_checked(&budget).map_err(|error| budget.failure(error, None))
+    }
+
+    fn read_checkpoint_checked(&self, check: &dyn Check)
+        -> Result<Option<crate::PublicationRecoveryCheckpoint>, ControlError> {
+        self.ensure_available()?;
+        check.check(Point::Start)?;
+        if self.identity.schema_version != PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+            return Err(ControlError::SchemaUnsupported);
+        }
+        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
+        let snapshot = self.verify_from_checked(&read, check)?;
+        // Reuse the existing relationship validator; all observations stay in
+        // this same read transaction, with the original cooperative deadline.
+        let visibility = visibility::validate_snapshot(&read, &snapshot, self.limits, check)?;
+        let intent = snapshot.get(&ControlKey::new(KEY.to_vec(), self.limits)?)
+            .map(codec::decode).transpose()?;
+        check.check(Point::ReadComplete)?;
+        Ok(visibility.map(|visibility| crate::PublicationRecoveryCheckpoint {
+            identity: snapshot.identity, generation: snapshot.generation, visibility, intent,
+        }))
     }
 
     /// Persists a bounded typed intent through the existing conditional transaction
@@ -286,9 +324,10 @@ impl PersistentControlJournal {
 }
 
 pub(super) fn unresolved(state: PublicationIntentState) -> bool {
+    // The stored terminal label alone proves neither two-sided compensation nor
+    // effective membership-wide exclusion. Keep ABORTED recovery-visible.
     !matches!(state, PublicationIntentState::ControlCommitted
-        | PublicationIntentState::Aborted | PublicationIntentState::Reclaimable
-        | PublicationIntentState::InvalidationOnlyCommitted)
+        | PublicationIntentState::Reclaimable | PublicationIntentState::InvalidationOnlyCommitted)
 }
 
 pub(super) fn validate_record(key: &ControlKey, value: &ControlValue) -> Result<(), ControlError> {
