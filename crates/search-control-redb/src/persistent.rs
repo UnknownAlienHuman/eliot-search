@@ -25,7 +25,9 @@ mod lifecycle;
 mod snapshot;
 mod quarantine;
 mod diagnostics;
+mod publication;
 
+pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION};
 pub use operation::{ControlCallError, ControlInterruption};
 pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};
 pub use diagnostics::{ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState};
@@ -208,11 +210,17 @@ impl PersistentControlJournal {
             }
             let key = ControlKey::new(key.value().to_vec(), self.limits).map_err(|_| ControlError::StoreCorrupt)?;
             let value = decode_value(value.value(), self.limits)?;
+            if self.identity.schema_version == PUBLICATION_INTENT_SCHEMA_VERSION {
+                publication::validate_record(&key, &value)?;
+            }
             total = total.checked_add(as_u64(value.len())?).ok_or(ControlError::StoreCorrupt)?;
             if total > as_u64(self.limits.max_total_value_bytes)? { return Err(ControlError::StoreCorrupt); }
             records.push((key, value));
         }
         if total != header.value_bytes { return Err(ControlError::StoreCorrupt); }
+        if self.identity.schema_version == PUBLICATION_INTENT_SCHEMA_VERSION {
+            publication::verify_absence(read, header.generation, self.limits, &records, check)?;
+        }
         check.check(Point::ReadComplete)?;
         Ok(JournalReadSnapshot { identity: self.identity, generation: header.generation, records })
     }
@@ -257,7 +265,9 @@ impl PersistentControlJournal {
 
 fn validate_identity(identity: JournalIdentity) -> Result<JournalIdentity, ControlError> {
     identity.validate()?;
-    if identity.schema_version != 1 { return Err(ControlError::SchemaUnsupported); }
+    if !matches!(identity.schema_version, 1 | PUBLICATION_INTENT_SCHEMA_VERSION) {
+        return Err(ControlError::SchemaUnsupported);
+    }
     Ok(identity)
 }
 

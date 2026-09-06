@@ -14,7 +14,8 @@ pub use reference::*;
 pub use conditions::{ConditionalControlMutation, ControlRecordCondition};
 pub use persistent::{ControlCallError, ControlInterruption, PersistentControlJournal,
     ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest,
-    ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState};
+    ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState,
+    PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION};
 // Explicit export supersedes the unfenced publisher from the reference glob.
 // Existing callers, including PersistentControlJournal, use this public boundary.
 pub use snapshot_guard::ControlSnapshotPublisher;
