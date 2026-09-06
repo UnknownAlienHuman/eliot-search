@@ -19,6 +19,11 @@ use crate::{CommitRecoveryDecision, ControlCommitReceipt, ControlError, ControlK
 
 mod codec;
 mod transaction;
+mod calls;
+mod operation;
+
+pub use operation::{ControlCallError, ControlInterruption};
+use operation::{Check, Point, Unscoped};
 use codec::{Header, StoredOperation, as_u64, decode_value, encode_value,
     request_fingerprint, validate_mutation};
 
@@ -137,15 +142,15 @@ impl PersistentControlJournal {
         let mut write = self.database.begin_write().map_err(|_| ControlError::StoreUnavailable)?;
         write.set_durability(Durability::Immediate);
         {
-            let mut meta = write.open_table(META).map_err(|_| ControlError::SchemaMismatch)?;
+            let mut meta = write.open_table(META).map_err(map_table_error)?;
             {
-                let bytes = meta.get("header").map_err(|_| ControlError::StoreUnavailable)?.ok_or(ControlError::StoreCorrupt)?;
+                let bytes = meta.get("header").map_err(map_storage_error)?.ok_or(ControlError::StoreCorrupt)?;
                 if Header::decode(bytes.value(), self.identity, self.limits)? != before {
                     return Err(ControlError::TransactionConflict);
                 }
             }
             let after = Header { identity: next, ..before }.encode();
-            meta.insert("header", after.as_slice()).map_err(|_| ControlError::StoreUnavailable)?;
+            meta.insert("header", after.as_slice()).map_err(map_storage_error)?;
         }
         write.commit().map_err(|_| ControlError::CommitOutcomeUnknown)?;
         self.identity = next;
@@ -169,9 +174,7 @@ impl PersistentControlJournal {
 
     /// Reads a coherent bounded snapshot using a read-only database transaction.
     pub fn read_snapshot(&self) -> Result<JournalReadSnapshot, ControlError> {
-        self.ensure_available()?;
-        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        self.snapshot_from(&read)
+        self.read_snapshot_checked(&Unscoped)
     }
 
     /// Rebuilds the shared immutable snapshot from committed disk state.
@@ -210,9 +213,9 @@ impl PersistentControlJournal {
         let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
         let snapshot = self.verify_from(&read)?;
         if snapshot.generation == 0 { return Ok(None); }
-        let table = read.open_table(OPERATIONS).map_err(|_| ControlError::SchemaMismatch)?;
-        for row in table.iter().map_err(|_| ControlError::StoreUnavailable)? {
-            let (id, bytes) = row.map_err(|_| ControlError::StoreUnavailable)?;
+        let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
+        for row in table.iter().map_err(map_storage_error)? {
+            let (id, bytes) = row.map_err(map_storage_error)?;
             let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
             let operation = StoredOperation::decode(bytes.value(), id, snapshot.generation, self.limits)?;
             if operation.receipt.after_generation == snapshot.generation {
@@ -226,9 +229,7 @@ impl PersistentControlJournal {
     /// Verifies exact tables, metadata, records and the complete bounded receipt ledger.
     /// This is an application consistency check, not physical-media qualification.
     pub fn verify(&self) -> Result<JournalReadSnapshot, ControlError> {
-        self.ensure_available()?;
-        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        self.verify_from(&read)
+        self.verify_checked(&Unscoped)
     }
 
     /// Commits metadata, all record changes and the receipt in one immediate transaction.
@@ -247,35 +248,7 @@ impl PersistentControlJournal {
     /// A historical committed receipt is not a claim that its values remain
     /// current after later transactions. The ledger is not pruned by this adapter.
     pub fn recover_transaction(&mut self, mutation: &ControlMutation) -> Result<CommitRecoveryDecision, ControlError> {
-        let changed_keys = validate_mutation(mutation, self.limits)?;
-        let fingerprint = request_fingerprint(self.identity, mutation)?;
-        if self.quarantined { return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine); }
-        if self.pending.is_some_and(|pending| pending != (mutation.id(), fingerprint)) {
-            return Ok(CommitRecoveryDecision::ConflictingInput);
-        }
-        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        if self.verify_from(&read).is_err() {
-            self.quarantined = true;
-            return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine);
-        }
-        let header = self.header_from(&read)?;
-        let result = match operation_from(&read, mutation.id(), &header, self.limits)? {
-            Some(operation) if operation.request_sha256 == fingerprint => {
-                if transaction::verify_replay(
-                    self, &read, &header, &operation.receipt, mutation, &changed_keys,
-                ).is_err() {
-                    self.quarantined = true;
-                    return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine);
-                }
-                let mut receipt = operation.receipt;
-                receipt.replayed = true;
-                CommitRecoveryDecision::Committed(receipt)
-            }
-            Some(_) => return Ok(CommitRecoveryDecision::ConflictingInput),
-            None => CommitRecoveryDecision::NotCommittedRetrySameOperation,
-        };
-        self.pending = None;
-        Ok(result)
+        self.recover_transaction_checked(mutation, &Unscoped)
     }
 
     fn ensure_available(&self) -> Result<(), ControlError> {
@@ -284,27 +257,34 @@ impl PersistentControlJournal {
 
     fn header_from(&self, read: &ReadTransaction) -> Result<Header, ControlError> {
         verify_tables(read)?;
-        let meta = read.open_table(META).map_err(|_| ControlError::SchemaMismatch)?;
-        if meta.len().map_err(|_| ControlError::StoreUnavailable)? != 1 { return Err(ControlError::StoreCorrupt); }
-        let bytes = meta.get("header").map_err(|_| ControlError::StoreUnavailable)?.ok_or(ControlError::StoreCorrupt)?;
+        let meta = read.open_table(META).map_err(map_table_error)?;
+        if meta.len().map_err(map_storage_error)? != 1 { return Err(ControlError::StoreCorrupt); }
+        let bytes = meta.get("header").map_err(map_storage_error)?.ok_or(ControlError::StoreCorrupt)?;
         let header = Header::decode(bytes.value(), self.identity, self.limits)?;
-        let records = read.open_table(RECORDS).map_err(|_| ControlError::SchemaMismatch)?;
-        let operations = read.open_table(OPERATIONS).map_err(|_| ControlError::SchemaMismatch)?;
-        if records.len().map_err(|_| ControlError::StoreUnavailable)? != header.records
-            || operations.len().map_err(|_| ControlError::StoreUnavailable)? != header.operations
+        let records = read.open_table(RECORDS).map_err(map_table_error)?;
+        let operations = read.open_table(OPERATIONS).map_err(map_table_error)?;
+        if records.len().map_err(map_storage_error)? != header.records
+            || operations.len().map_err(map_storage_error)? != header.operations
         { return Err(ControlError::StoreCorrupt); }
         Ok(header)
     }
 
     fn snapshot_from(&self, read: &ReadTransaction) -> Result<JournalReadSnapshot, ControlError> {
+        self.snapshot_from_checked(read, &Unscoped)
+    }
+
+    fn snapshot_from_checked(&self, read: &ReadTransaction, check: &dyn Check) -> Result<JournalReadSnapshot, ControlError> {
         #[cfg(test)]
         self.work.snapshot_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        check.check(Point::ReadHeader)?;
         let header = self.header_from(read)?;
-        let table = read.open_table(RECORDS).map_err(|_| ControlError::SchemaMismatch)?;
+        check.check(Point::ReadHeader)?;
+        let table = read.open_table(RECORDS).map_err(map_table_error)?;
         let mut records = Vec::new();
         let mut total = 0_u64;
-        for row in table.iter().map_err(|_| ControlError::StoreUnavailable)? {
-            let (key, value) = row.map_err(|_| ControlError::StoreUnavailable)?;
+        for row in table.iter().map_err(map_storage_error)? {
+            check.check(Point::ReadRecord)?;
+            let (key, value) = row.map_err(map_storage_error)?;
             if records.len() >= self.limits.max_records || key.value().len() > self.limits.max_key_bytes {
                 return Err(ControlError::StoreCorrupt);
             }
@@ -315,17 +295,24 @@ impl PersistentControlJournal {
             records.push((key, value));
         }
         if total != header.value_bytes { return Err(ControlError::StoreCorrupt); }
+        check.check(Point::ReadComplete)?;
         Ok(JournalReadSnapshot { identity: self.identity, generation: header.generation, records })
     }
 
     fn verify_from(&self, read: &ReadTransaction) -> Result<JournalReadSnapshot, ControlError> {
-        let snapshot = self.snapshot_from(read)?;
+        self.verify_from_checked(read, &Unscoped)
+    }
+
+    fn verify_from_checked(&self, read: &ReadTransaction, check: &dyn Check) -> Result<JournalReadSnapshot, ControlError> {
+        let snapshot = self.snapshot_from_checked(read, check)?;
         let header = self.header_from(read)?;
-        let table = read.open_table(OPERATIONS).map_err(|_| ControlError::SchemaMismatch)?;
+        check.check(Point::ReadHeader)?;
+        let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
         let mut generations = BTreeSet::new();
         let mut total = 0_u64;
-        for row in table.iter().map_err(|_| ControlError::StoreUnavailable)? {
-            let (id, bytes) = row.map_err(|_| ControlError::StoreUnavailable)?;
+        for row in table.iter().map_err(map_storage_error)? {
+            check.check(Point::ReadOperation)?;
+            let (id, bytes) = row.map_err(map_storage_error)?;
             if generations.len() >= self.limits.max_operation_records { return Err(ControlError::StoreCorrupt); }
             let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
             let operation = StoredOperation::decode(bytes.value(), id, header.generation, self.limits)?;
@@ -336,16 +323,17 @@ impl PersistentControlJournal {
         if total != header.operation_bytes || as_u64(generations.len())? != header.generation {
             return Err(ControlError::StoreCorrupt);
         }
+        check.check(Point::ReadComplete)?;
         Ok(snapshot)
     }
 
     fn transact_inner(&mut self, mutation: ControlMutation, boundary: Boundary) -> Result<ControlCommitReceipt, ControlError> {
-        let result = transaction::execute(self, mutation, boundary);
-        if matches!(&result, Err(
-            ControlError::StoreCorrupt | ControlError::IdentityMismatch
-            | ControlError::SchemaUnsupported | ControlError::SchemaMismatch
-            | ControlError::ForbiddenControlPayload
-        )) {
+        self.transact_checked(mutation, boundary, &Unscoped)
+    }
+
+    fn transact_checked(&mut self, mutation: ControlMutation, boundary: Boundary, check: &dyn Check) -> Result<ControlCommitReceipt, ControlError> {
+        let result = transaction::execute(self, mutation, boundary, check);
+        if result.as_ref().err().is_some_and(|error| is_corruption(*error)) {
             self.quarantined = true;
         }
         result
@@ -360,24 +348,51 @@ fn validate_identity(identity: JournalIdentity) -> Result<JournalIdentity, Contr
 }
 
 fn verify_tables(read: &ReadTransaction) -> Result<(), ControlError> {
-    let mut names = read.list_tables().map_err(|_| ControlError::StoreUnavailable)?
+    let mut names = read.list_tables().map_err(map_storage_error)?
         .take(4).map(|table| table.name().to_owned()).collect::<Vec<_>>();
     names.sort();
     if !names.iter().map(String::as_str).eq(["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1"])
-        || read.list_multimap_tables().map_err(|_| ControlError::StoreUnavailable)?.next().is_some()
+        || read.list_multimap_tables().map_err(map_storage_error)?.next().is_some()
     { return Err(ControlError::SchemaMismatch); }
     Ok(())
 }
 
 fn operation_from(read: &ReadTransaction, id: MutationId, header: &Header, limits: JournalLimits) -> Result<Option<StoredOperation>, ControlError> {
-    let table = read.open_table(OPERATIONS).map_err(|_| ControlError::SchemaMismatch)?;
-    table.get(id.0.as_slice()).map_err(|_| ControlError::StoreUnavailable)?
+    let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
+    table.get(id.0.as_slice()).map_err(map_storage_error)?
         .map(|bytes| StoredOperation::decode(bytes.value(), id, header.generation, limits)).transpose()
+}
+
+fn is_corruption(error: ControlError) -> bool {
+    matches!(error, ControlError::StoreCorrupt | ControlError::IdentityMismatch
+        | ControlError::SchemaUnsupported | ControlError::SchemaMismatch
+        | ControlError::ForbiddenControlPayload)
+}
+
+fn map_storage_error(error: StorageError) -> ControlError {
+    match error {
+        StorageError::Corrupted(_) => ControlError::StoreCorrupt,
+        StorageError::ValueTooLarge(_) => ControlError::BudgetExceeded,
+        _ => ControlError::StoreUnavailable,
+    }
+}
+
+fn map_table_error(error: redb::TableError) -> ControlError {
+    match error {
+        redb::TableError::Storage(error) => map_storage_error(error),
+        redb::TableError::TableTypeMismatch { .. }
+        | redb::TableError::TableIsMultimap(_)
+        | redb::TableError::TableIsNotMultimap(_)
+        | redb::TableError::TypeDefinitionChanged { .. }
+        | redb::TableError::TableDoesNotExist(_) => ControlError::SchemaMismatch,
+        _ => ControlError::StoreUnavailable,
+    }
 }
 
 fn map_database_error(error: DatabaseError) -> ControlError {
     match error {
-        DatabaseError::DatabaseAlreadyOpen | DatabaseError::Storage(StorageError::Io(_)) => ControlError::StoreUnavailable,
+        DatabaseError::DatabaseAlreadyOpen => ControlError::StoreUnavailable,
+        DatabaseError::Storage(error) => map_storage_error(error),
         DatabaseError::UpgradeRequired(_) => ControlError::MigrationUnverified,
         _ => ControlError::StoreCorrupt,
     }
