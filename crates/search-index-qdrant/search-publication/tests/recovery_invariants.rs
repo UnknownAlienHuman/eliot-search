@@ -117,10 +117,10 @@ fn reconstruction_requires_the_explicit_resolved_reservation_floor() {
 
 #[test]
 fn exhausted_floor_does_not_wrap_or_consume_an_active_slot() {
-    let mut machine = PublicationCoordinator::new(epoch(0), epoch(i64::MAX), None, None, 32).unwrap();
+    let mut machine = PublicationCoordinator::new(epoch(0), epoch(i64::MAX - 1), None, None, 32).unwrap();
     assert_eq!(machine.submit(prepared(None, manifest(&[]), "overflow")), Err(PublicationError::ContractExhausted));
     assert!(machine.active().is_none()); assert_eq!(machine.visible_epoch(), epoch(0));
-    assert_eq!(machine.last_reserved_epoch(), epoch(i64::MAX));
+    assert_eq!(machine.last_reserved_epoch(), epoch(i64::MAX - 1));
 }
 
 #[test]

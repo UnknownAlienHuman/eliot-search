@@ -836,10 +836,23 @@ mod tests {
 
     #[test]
     fn encrypted_payload_debug_never_dumps_ciphertext() {
-        let payload = payload(7);
-        let debug = format!("{payload:?}");
-        assert!(!debug.contains("[7, 7"));
-        assert!(debug.contains("encrypted bytes"));
+        let mut payload = payload(7);
+        // Deliberately distinct from both public digest byte patterns (7 and 8).
+        payload.nonce = vec![113, 59, 211, 41];
+        payload.ciphertext = vec![229, 17, 193, 83, 251, 47];
+        let nonce_sentinel = format!("{:?}", payload.nonce());
+        let ciphertext_sentinel = format!("{:?}", payload.ciphertext());
+        for debug in [format!("{payload:?}"), format!("{payload:#?}")] {
+            assert!(!debug.contains(&nonce_sentinel));
+            assert!(!debug.contains(&ciphertext_sentinel));
+            assert!(!debug.contains("229,"));
+            assert!(!debug.contains("113,"));
+            assert!(debug.contains("<4 bytes>"));
+            assert!(debug.contains("<6 encrypted bytes>"));
+        }
+        // Positive controls: the sentinels would detect an accidental raw dump.
+        assert!(format!("{:?}", payload.ciphertext()).contains(&ciphertext_sentinel));
+        assert!(format!("{:?}", payload.nonce()).contains(&nonce_sentinel));
     }
 
     #[test]

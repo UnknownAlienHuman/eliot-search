@@ -124,7 +124,7 @@ fn constructor_rejects_skips_reused_identity_stale_guards_and_overflow() {
     }
     assert!(PublicationSuccessor::new(MutationId([10; 32]), digest(), u64::MAX,
         previous.clone(), visible, prepared(visible, 10)).is_err());
-    let mut exhausted = previous; exhausted.target_epoch = Epoch::new(i64::MAX).unwrap();
+    let mut exhausted = previous; exhausted.target_epoch = Epoch::new(i64::MAX - 1).unwrap();
     let mut full = visible; full.visible_epoch = exhausted.target_epoch;
     assert!(PublicationSuccessor::new(MutationId([10; 32]), digest(), 7,
         exhausted, full, prepared(visible, 10)).is_err());

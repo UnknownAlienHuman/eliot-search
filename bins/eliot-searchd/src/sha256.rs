@@ -1,7 +1,8 @@
-//! Small dependency-free SHA-256 implementation for development snapshots.
+//! SHA-256 byte API shared by the retained snapshot harness and DIRECT runtime.
 //!
-//! The implementation is safe Rust and follows FIPS 180-4. It is used only to
-//! content-address retained snapshot objects and verify exact readback.
+//! Raw hashes retain their standard SHA-256 meaning. Multipart framing is first
+//! specified in docs/runtime/DIRECT_HASH_FORMAT.md; it is not a BLAKE3 digest,
+//! keyed authenticator, or a compatibility claim for an external legacy store.
 
 const INITIAL_STATE: [u32; 8] = [
     0x6a09_e667,
@@ -33,6 +34,8 @@ const ROUND_CONSTANTS: [u32; 64] = [
     0x90be_fffa, 0xa450_6ceb, 0xbef9_a3f7, 0xc671_78f2,
 ];
 
+const PARTS_V1: &[u8] = b"eliot-search/sha256-parts/v1\0";
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) struct Sha256Digest([u8; 32]);
 
@@ -53,13 +56,7 @@ impl Sha256Digest {
     }
 
     pub(crate) fn hex(self) -> String {
-        const HEX: &[u8; 16] = b"0123456789abcdef";
-        let mut output = String::with_capacity(64);
-        for byte in self.0 {
-            output.push(char::from(HEX[usize::from(byte >> 4)]));
-            output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-        }
-        output
+        hex(&self.0)
     }
 }
 
@@ -158,11 +155,109 @@ fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
     state[7] = state[7].wrapping_add(h);
 }
 
+pub(crate) fn digest(bytes: &[u8]) -> [u8; 32] {
+    digest_bytes(bytes).as_bytes()
+}
+
+/// First defined multipart profile; see docs/runtime/DIRECT_HASH_FORMAT.md.
+/// Concrete slices accept fixed arrays of different lengths without losing bytes.
+/// Callers enforce their source/manifest/input byte ceilings before this pure call.
+pub(crate) fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+    let mut framed = Vec::new();
+    framed.extend_from_slice(PARTS_V1);
+    framed.extend_from_slice(&length(domain.len()));
+    framed.extend_from_slice(domain);
+    framed.extend_from_slice(&length(parts.len()));
+    for part in parts {
+        framed.extend_from_slice(&length(part.len()));
+        framed.extend_from_slice(part);
+    }
+    digest(&framed)
+}
+
+fn length(value: usize) -> [u8; 8] {
+    u64::try_from(value)
+        .expect("supported targets have at most 64-bit usize")
+        .to_be_bytes()
+}
+
+/// Encodes arbitrary bounded bytes, including public revision-range output.
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::new();
+    for &byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
+}
+
+pub(crate) fn decode_digest(value: &str) -> Option<[u8; 32]> {
+    Sha256Digest::from_hex(value).ok().map(Sha256Digest::as_bytes)
+}
+
 fn hex_nibble(byte: u8) -> Result<u8, String> {
     match byte {
         b'0'..=b'9' => Ok(byte - b'0'),
         b'a'..=b'f' => Ok(byte - b'a' + 10),
         b'A'..=b'F' => Ok(byte - b'A' + 10),
         _ => Err("SHA256_HEX_INVALID".to_owned()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raw_sha256_matches_standard_vectors_and_the_existing_newtype_api() {
+        for (input, expected) in [
+            (b"".as_slice(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+            (b"abc".as_slice(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+            (b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".as_slice(),
+             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
+        ] {
+            assert_eq!(hex(&digest(input)), expected);
+            assert_eq!(digest_bytes(input).hex(), expected);
+            assert_eq!(decode_digest(expected), Some(digest_bytes(input).as_bytes()));
+        }
+    }
+
+    #[test]
+    fn byte_encoding_and_digest_decoding_have_distinct_length_contracts() {
+        assert_eq!(hex(&[]), "");
+        assert_eq!(hex(&[0, 15, 16, 255]), "000f10ff");
+        let bytes = std::array::from_fn::<_, 32, _>(|index| u8::try_from(index).unwrap());
+        assert_eq!(decode_digest(&hex(&bytes).to_uppercase()), Some(bytes));
+        for bad in ["".to_owned(), "00".repeat(31), "00".repeat(33), "gg".repeat(32),
+            "é".repeat(32), format!(" {}", "00".repeat(32))] {
+            assert!(decode_digest(&bad).is_none());
+        }
+    }
+
+    #[test]
+    fn multipart_known_answer_is_frozen_independently_of_the_implementation() {
+        assert_eq!(hex(&digest_parts(b"test/domain/v1", &[b"abc", b"", b"def"])),
+            "ab1b291fe982137e0741dc711096200882e40d9cd32fd5a07b6177d7493b9078");
+    }
+
+    #[test]
+    fn multipart_framing_binds_domain_boundaries_empty_parts_count_and_order() {
+        assert_ne!(digest_parts(b"ab", &[b"c"]), digest_parts(b"a", &[b"bc"]));
+        assert_ne!(digest_parts(b"d", &[b"ab", b"c"]), digest_parts(b"d", &[b"a", b"bc"]));
+        assert_ne!(digest_parts(b"d", &[]), digest_parts(b"d", &[b""]));
+        assert_ne!(digest_parts(b"d", &[b"a", b"b"]), digest_parts(b"d", &[b"b", b"a"]));
+        assert_ne!(digest_parts(b"d", &[b"a"]), digest_parts(b"d", &[b"a", b""]));
+    }
+
+    #[test]
+    fn mixed_fixed_arrays_and_vecs_use_the_same_slice_api_as_the_daemon_calls() {
+        let nonce = [7_u8; 32];
+        let counter = 9_u64;
+        let root = b"root".to_vec();
+        let a = digest_parts(b"d", &[&nonce, &counter.to_be_bytes()]);
+        assert_eq!(a, digest_parts(b"d", &[nonce.as_slice(), counter.to_be_bytes().as_slice()]));
+        let b = digest_parts(b"d", &[&root, &counter.to_be_bytes()]);
+        assert_eq!(b, digest_parts(b"d", &[root.as_slice(), counter.to_be_bytes().as_slice()]));
     }
 }
