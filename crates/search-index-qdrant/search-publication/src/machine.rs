@@ -7,9 +7,10 @@ use search_point_identity::PointId128;
 use search_projection_planner::{ManifestDiff, ProjectionManifest, diff_manifests};
 
 use crate::{
-    AbandonFence, ClosureReceipt, CompensationReceipt, ControlCommitObservation,
-    PreparedPublication, PublicationError, PublicationGuards, ReadbackVerified,
-    RetiredManifest, SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
+    AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt,
+    ControlCommitObservation, PreparedPublication, PublicationError, PublicationGuards,
+    ReadbackVerified, RestorationReceipt, RetiredManifest, SnapshotPublishReceipt,
+    StageReceipt, VisibleCommitReceipt,
 };
 
 /// Maximum exact points in one publication transaction.
@@ -46,6 +47,8 @@ pub struct DurableIntent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicationTransaction {
     pub prepared: PreparedPublication,
+    /// The actual visible epoch before reservation, which may precede skipped epochs.
+    pub previous_visible_epoch: Epoch,
     pub target_epoch: Epoch,
     pub phase: PublicationPhase,
     pub durable_intent: Option<DurableIntent>,
@@ -54,6 +57,8 @@ pub struct PublicationTransaction {
     pub verified: Option<ReadbackVerified>,
     pub visible_commit: Option<VisibleCommitReceipt>,
     pub snapshot_receipt: Option<SnapshotPublishReceipt>,
+    // Retain the caller's finite bound for recovery of this exact transaction.
+    pub(crate) max_points: usize,
 }
 
 impl PublicationTransaction {
@@ -63,10 +68,14 @@ impl PublicationTransaction {
     }
 }
 
-/// Process-local single-flight coordinator.
-#[derive(Clone, Debug)]
+/// Process-local single-flight coordinator. Deliberately not cloneable.
+///
+/// Its epoch floor is reconstructed from authoritative control history by the
+/// composition owner. It is not another persistent ledger or ownership lease.
+#[derive(Debug)]
 pub struct PublicationCoordinator {
     visible_epoch: Epoch,
+    last_reserved_epoch: Epoch,
     current_manifest: Option<ProjectionManifest>,
     current_manifest_digest: Option<Blake3Digest32>,
     active: Option<PublicationTransaction>,
@@ -74,14 +83,22 @@ pub struct PublicationCoordinator {
 }
 
 impl PublicationCoordinator {
-    /// Creates an empty coordinator at an explicit visible epoch.
+    /// Creates a coordinator from an explicitly resolved control checkpoint.
+    ///
+    /// `last_reserved_epoch` includes aborted/abandoned reservations and must
+    /// come from verified durable history, not be inferred from VisibleEpoch.
+    /// A caller must resolve any outstanding intent before using this constructor.
+    /// Initial empty history supplies zero for both epochs. These inputs are not
+    /// evidence of root ownership, successful recovery or a qualified backend.
     pub fn new(
         visible_epoch: Epoch,
+        last_reserved_epoch: Epoch,
         current_manifest: Option<ProjectionManifest>,
         current_manifest_digest: Option<Blake3Digest32>,
         max_points: usize,
     ) -> Result<Self, PublicationError> {
         if max_points == 0
+            || last_reserved_epoch < visible_epoch
             || current_manifest.is_some() != current_manifest_digest.is_some()
         {
             return Err(PublicationError::InvalidPreparedPublication);
@@ -91,6 +108,7 @@ impl PublicationCoordinator {
         }
         Ok(Self {
             visible_epoch,
+            last_reserved_epoch,
             current_manifest,
             current_manifest_digest,
             active: None,
@@ -103,6 +121,12 @@ impl PublicationCoordinator {
         self.visible_epoch
     }
 
+    /// Highest consumed reservation in this coordinator, including aborted work.
+    #[must_use]
+    pub const fn last_reserved_epoch(&self) -> Epoch {
+        self.last_reserved_epoch
+    }
+
     #[must_use]
     pub const fn active(&self) -> Option<&PublicationTransaction> {
         self.active.as_ref()
@@ -113,7 +137,8 @@ impl PublicationCoordinator {
         self.current_manifest.as_ref()
     }
 
-    /// Reserves the exact next epoch for one prepared transaction.
+    /// Reserves the next unused epoch for one prepared transaction.
+    /// A reservation is never returned to the pool, even after compensation.
     pub fn submit(
         &mut self,
         prepared: PreparedPublication,
@@ -131,11 +156,12 @@ impl PublicationCoordinator {
             return Err(PublicationError::InvalidPreparedPublication);
         }
         let target_epoch = self
-            .visible_epoch
+            .last_reserved_epoch
             .checked_next()
             .map_err(|_| PublicationError::ContractExhausted)?;
         self.active = Some(PublicationTransaction {
             prepared,
+            previous_visible_epoch: self.visible_epoch,
             target_epoch,
             phase: PublicationPhase::Prepared,
             durable_intent: None,
@@ -144,7 +170,9 @@ impl PublicationCoordinator {
             verified: None,
             visible_commit: None,
             snapshot_receipt: None,
+            max_points: self.max_points,
         });
+        self.last_reserved_epoch = target_epoch;
         Ok(target_epoch)
     }
 
@@ -256,6 +284,7 @@ impl PublicationCoordinator {
         let transaction = self.active_mut(PublicationPhase::ReadbackVerified)?;
         if observation.before_visible_epoch != before_visible_epoch
             || observation.after_visible_epoch != transaction.target_epoch
+            || observation.control_generation == 0
         {
             return Err(PublicationError::ControlConflict);
         }
@@ -330,84 +359,103 @@ impl PublicationCoordinator {
 
     /// Completes the transaction and installs the new current manifest.
     pub fn complete(&mut self) -> Result<VisibleCommitReceipt, PublicationError> {
-        let transaction = self
-            .active
-            .take()
-            .ok_or(PublicationError::InvalidTransition)?;
-        if transaction.phase != PublicationPhase::SnapshotPublished {
-            self.active = Some(transaction);
-            return Err(PublicationError::InvalidTransition);
-        }
-        let receipt = transaction
-            .visible_commit
-            .clone()
-            .ok_or(PublicationError::ControlConflict)?;
+        // Validate before taking the sole active slot: an error must not release
+        // serialization or discard the transaction needed by recovery.
+        let receipt = self.active_at(PublicationPhase::SnapshotPublished)?
+            .visible_commit.clone().ok_or(PublicationError::ControlConflict)?;
+        let transaction = self.active.take().ok_or(PublicationError::InvalidTransition)?;
         self.current_manifest = Some(transaction.prepared.new_manifest);
         self.current_manifest_digest = Some(transaction.prepared.new_manifest_digest);
         Ok(receipt)
     }
 
-    /// Begins exact compensation for an unresolved pre-control transaction.
-    pub fn begin_compensation(&mut self) -> Result<Vec<PointId128>, PublicationError> {
-        let transaction = self
-            .active
-            .as_mut()
-            .ok_or(PublicationError::InvalidTransition)?;
-        if !matches!(
-            transaction.phase,
-            PublicationPhase::IntentDurable
-                | PublicationPhase::NewPointsAcknowledged
-                | PublicationPhase::OldPointsClosedAcknowledged
-                | PublicationPhase::ReadbackVerified
-        ) {
+    /// Begins exact compensation and returns both mutation directions.
+    /// Retry while COMPENSATING returns the same complete plan.
+    pub fn begin_compensation_plan(&mut self) -> Result<CompensationPlan, PublicationError> {
+        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
+        if !matches!(transaction.phase,
+            PublicationPhase::IntentDurable | PublicationPhase::NewPointsAcknowledged
+                | PublicationPhase::OldPointsClosedAcknowledged | PublicationPhase::ReadbackVerified
+                | PublicationPhase::Compensating)
+        {
             return Err(PublicationError::InvalidTransition);
         }
-        let ids = entry_ids(&manifest_diff(transaction)?.create);
+        let difference = manifest_diff(transaction)?;
+        let plan = CompensationPlan {
+            transaction_id: transaction.prepared.transaction_id.clone(),
+            target_epoch: transaction.target_epoch,
+            staged_ids: entry_ids(&difference.create),
+            closed_ids: entry_ids(&difference.retire),
+        };
         transaction.phase = PublicationPhase::Compensating;
-        Ok(ids)
+        Ok(plan)
     }
 
-    /// Accepts exact compensation and keeps the reserved epoch consumed.
-    pub fn compensate_exact(
-        &mut self,
-        receipt: CompensationReceipt,
+    /// Compatibility projection for create-only callers. With retired points,
+    /// `compensate_exact` refuses completion; use the full plan and restoration.
+    pub fn begin_compensation(&mut self) -> Result<Vec<PointId128>, PublicationError> {
+        Ok(self.begin_compensation_plan()?.staged_ids)
+    }
+
+    /// Completes compensation only when there were no old closures to restore.
+    pub fn compensate_exact(&mut self, receipt: CompensationReceipt) -> Result<(), PublicationError> {
+        self.finish_compensation(receipt, None)
+    }
+
+    /// Completes both exact staged-point removal and old-state restoration.
+    /// Receipts must come from actual verified adapter readback. A timeout, a
+    /// reference string or a list of IDs alone is not such evidence. When a point
+    /// ID appears in both lists, restoration must follow removal and verify the
+    /// original payload/vector state as well as its prior visibility bounds.
+    pub fn compensate_and_restore(
+        &mut self, receipt: CompensationReceipt, restoration: RestorationReceipt,
+    ) -> Result<(), PublicationError> {
+        self.finish_compensation(receipt, Some(restoration))
+    }
+
+    fn finish_compensation(
+        &mut self, receipt: CompensationReceipt, restoration: Option<RestorationReceipt>,
     ) -> Result<(), PublicationError> {
         let transaction = self.active_mut(PublicationPhase::Compensating)?;
+        let difference = manifest_diff(transaction)?;
         if receipt.transaction_id != transaction.prepared.transaction_id
+            || receipt.target_epoch != transaction.target_epoch
             || !receipt.remaining_ids.is_empty()
-            || receipt.compensated_ids != entry_ids(&manifest_diff(transaction)?.create)
+            || receipt.compensated_ids != entry_ids(&difference.create)
         {
             return Err(PublicationError::CompensationIncomplete);
+        }
+        match restoration {
+            Some(restored) if restored.transaction_id == transaction.prepared.transaction_id
+                && restored.target_epoch == transaction.target_epoch
+                && restored.remaining_ids.is_empty()
+                && restored.restored_ids == entry_ids(&difference.retire) => {}
+            None if difference.retire.is_empty() => {}
+            _ => return Err(PublicationError::CompensationIncomplete),
         }
         transaction.phase = PublicationPhase::Aborted;
         Ok(())
     }
 
-    /// Abandons an exact transaction only after a complete exclusion fence.
+    /// Abandons only with complete membership exclusion, not merely point IDs.
+    /// The control/access owner must verify and persist the fence before calling.
     pub fn abandon(&mut self, fence: &AbandonFence) -> Result<(), PublicationError> {
-        let transaction = self
-            .active
-            .as_mut()
-            .ok_or(PublicationError::InvalidTransition)?;
-        if !matches!(
-            transaction.phase,
-            PublicationPhase::IntentDurable
-                | PublicationPhase::NewPointsAcknowledged
-                | PublicationPhase::OldPointsClosedAcknowledged
-                | PublicationPhase::ReadbackVerified
-                | PublicationPhase::Compensating
-        ) {
+        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
+        if !matches!(transaction.phase,
+            PublicationPhase::IntentDurable | PublicationPhase::NewPointsAcknowledged
+                | PublicationPhase::OldPointsClosedAcknowledged | PublicationPhase::ReadbackVerified
+                | PublicationPhase::Compensating)
+        {
             return Err(PublicationError::InvalidTransition);
         }
-        let affected = manifest_diff(transaction)?
-            .create
-            .into_iter()
-            .chain(manifest_diff(transaction)?.retire)
-            .map(|entry| entry.point_id)
-            .collect::<BTreeSet<_>>();
+        let difference = manifest_diff(transaction)?;
+        let affected = difference.create.iter().chain(&difference.retire);
+        let point_ids = affected.clone().map(|entry| entry.point_id).collect::<BTreeSet<_>>();
+        let memberships = affected.map(|entry| entry.projection_membership_id.clone()).collect::<BTreeSet<_>>();
         if fence.transaction_id != transaction.prepared.transaction_id
             || fence.target_epoch != transaction.target_epoch
-            || fence.excluded_point_ids != affected
+            || fence.excluded_point_ids != point_ids
+            || fence.excluded_projection_memberships != memberships
         {
             return Err(PublicationError::AbandonFenceMissing);
         }
@@ -415,25 +463,17 @@ impl PublicationCoordinator {
         Ok(())
     }
 
-    /// Removes an aborted transaction while preserving the consumed epoch.
+    /// Removes an aborted transaction without advancing visibility or returning
+    /// its reserved epoch to the pool. Durable finalization remains a port effect.
     pub fn finalize_aborted(&mut self) -> Result<(), PublicationError> {
-        let transaction = self
-            .active
-            .as_ref()
-            .ok_or(PublicationError::InvalidTransition)?;
-        if transaction.phase != PublicationPhase::Aborted {
-            return Err(PublicationError::InvalidTransition);
-        }
+        self.active_at(PublicationPhase::Aborted)?;
         self.active = None;
         Ok(())
     }
 
-    /// Permanently blocks later publication until explicit repair.
+    /// Blocks later publication until explicit repair.
     pub fn block_publication(&mut self) -> Result<(), PublicationError> {
-        let transaction = self
-            .active
-            .as_mut()
-            .ok_or(PublicationError::InvalidTransition)?;
+        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
         transaction.phase = PublicationPhase::PublicationBlocked;
         Ok(())
     }
@@ -442,13 +482,8 @@ impl PublicationCoordinator {
         &mut self,
         expected: PublicationPhase,
     ) -> Result<&mut PublicationTransaction, PublicationError> {
-        let transaction = self
-            .active
-            .as_mut()
-            .ok_or(PublicationError::InvalidTransition)?;
-        if transaction.phase != expected {
-            return Err(PublicationError::InvalidTransition);
-        }
+        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
+        if transaction.phase != expected { return Err(PublicationError::InvalidTransition); }
         Ok(transaction)
     }
 
@@ -456,54 +491,41 @@ impl PublicationCoordinator {
         &self,
         expected: PublicationPhase,
     ) -> Result<&PublicationTransaction, PublicationError> {
-        let transaction = self
-            .active
-            .as_ref()
-            .ok_or(PublicationError::InvalidTransition)?;
-        if transaction.phase != expected {
-            return Err(PublicationError::InvalidTransition);
-        }
+        let transaction = self.active.as_ref().ok_or(PublicationError::InvalidTransition)?;
+        if transaction.phase != expected { return Err(PublicationError::InvalidTransition); }
         Ok(transaction)
     }
 }
 
-fn validate_manifest(
+pub(crate) fn validate_manifest(
     manifest: &ProjectionManifest,
     max_points: usize,
 ) -> Result<(), PublicationError> {
     if manifest.canonical_bytes.is_empty() || manifest.entries.len() > max_points {
         return Err(PublicationError::InvalidPreparedPublication);
     }
-    if manifest
-        .entries
-        .windows(2)
-        .any(|pair| pair[0].point_id >= pair[1].point_id)
-    {
+    if manifest.entries.windows(2).any(|pair| pair[0].point_id >= pair[1].point_id) {
         return Err(PublicationError::InvalidPreparedPublication);
     }
     Ok(())
 }
 
-fn manifest_diff(
-    transaction: &PublicationTransaction,
-) -> Result<ManifestDiff, PublicationError> {
+fn manifest_diff(transaction: &PublicationTransaction) -> Result<ManifestDiff, PublicationError> {
     let empty = ProjectionManifest {
         entries: Vec::new(),
         canonical_bytes: b"eliot-search/empty-manifest/v1".to_vec(),
     };
-    let old = transaction
-        .prepared
-        .old_manifest
-        .as_ref()
-        .unwrap_or(&empty);
+    let old = transaction.prepared.old_manifest.as_ref().unwrap_or(&empty);
     diff_manifests(old, &transaction.prepared.new_manifest)
         .map_err(|_| PublicationError::InvalidPreparedPublication)
 }
 
-fn entry_ids(
-    entries: &[search_projection_planner::ProjectionManifestEntry],
-) -> Vec<PointId128> {
-    entries.iter().map(|entry| entry.point_id).collect()
+fn entry_ids(entries: &[search_projection_planner::ProjectionManifestEntry]) -> Vec<PointId128> {
+    // The planner groups changed and removed old entries separately. Sort the
+    // combined exact ID list; never rely on incidental diff grouping for receipts.
+    let mut ids = entries.iter().map(|entry| entry.point_id).collect::<Vec<_>>();
+    ids.sort_unstable();
+    ids
 }
 
 fn verify_transaction_identity(
@@ -511,9 +533,7 @@ fn verify_transaction_identity(
     transaction_id: &OpaqueId,
     target_epoch: Epoch,
 ) -> Result<(), PublicationError> {
-    if transaction_id != &transaction.prepared.transaction_id
-        || target_epoch != transaction.target_epoch
-    {
+    if transaction_id != &transaction.prepared.transaction_id || target_epoch != transaction.target_epoch {
         Err(PublicationError::OperationMismatch)
     } else {
         Ok(())

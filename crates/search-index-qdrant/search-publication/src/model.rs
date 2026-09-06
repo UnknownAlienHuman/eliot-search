@@ -148,25 +148,47 @@ pub struct RetiredManifest {
 }
 
 /// Exclusion fence required before abandoning a publication.
+/// The access/control adapter must verify its durable effective scope before
+/// constructing this value; these fields do not perform retrieval/IDF filtering.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AbandonFence {
     /// Matching transaction identity.
     pub transaction_id: OpaqueId,
     /// Reserved epoch that remains consumed.
     pub target_epoch: Epoch,
-    /// Exact affected point IDs excluded before retrieval and IDF.
+    /// Exact affected point IDs, retained for effect accounting only.
     pub excluded_point_ids: BTreeSet<PointId128>,
-    /// Exact affected membership/partition-set digest.
+    /// Complete affected projection memberships excluded before retrieval and IDF.
+    /// Excluding only `excluded_point_ids` does not establish this wider fence.
+    pub excluded_projection_memberships: BTreeSet<OpaqueId>,
+    /// Exact affected membership/partition-set digest supplied by the scope owner.
     pub excluded_scope_digest: Blake3Digest32,
     /// Durable exclusion receipt.
     pub exclusion_receipt: ReceiptRef,
 }
 
-/// Exact compensation acknowledgement.
+/// Exact compensation plan derived from both sides of the immutable manifest diff.
+/// The adapter removes/excludes staged points and restores the prior validity of
+/// old closed points. It must verify the original bounds, not just ID existence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompensationPlan {
+    /// Matching transaction identity.
+    pub transaction_id: OpaqueId,
+    /// Consumed epoch whose effects are being reversed.
+    pub target_epoch: Epoch,
+    /// Canonically ordered exact new IDs to remove or exclude.
+    pub staged_ids: Vec<PointId128>,
+    /// Canonically ordered exact old IDs whose original validity must be restored.
+    pub closed_ids: Vec<PointId128>,
+}
+
+/// Exact staged-point compensation acknowledgement.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompensationReceipt {
     /// Matching transaction identity.
     pub transaction_id: OpaqueId,
+    /// Exact reservation; a receipt for another epoch cannot finish this attempt.
+    pub target_epoch: Epoch,
     /// Exact staged IDs removed or made invisible.
     pub compensated_ids: Vec<PointId128>,
     /// IDs not verified compensated.
@@ -175,7 +197,25 @@ pub struct CompensationReceipt {
     pub readback_receipt: ReceiptRef,
 }
 
-/// Complete recovery observation for one unresolved publication.
+/// Verified restoration of the exact old point bounds from the prior manifest.
+/// Separate from ClosureReceipt: closing old points is not their restoration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RestorationReceipt {
+    /// Matching transaction identity.
+    pub transaction_id: OpaqueId,
+    /// Exact consumed epoch being compensated.
+    pub target_epoch: Epoch,
+    /// Canonically ordered IDs whose original validity was read back exactly.
+    pub restored_ids: Vec<PointId128>,
+    /// IDs not yet verified restored; any nonempty result blocks completion.
+    pub remaining_ids: Vec<PointId128>,
+    /// Adapter-owned exact restoration readback receipt.
+    pub readback_receipt: ReceiptRef,
+}
+
+/// Recovery observation already bound to this transaction by its producing ports.
+/// IDs nominate observed effects; they do not independently verify payload/vector
+/// bytes, authorize a control commit or prove a complete exclusion scope.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicationRecoveryObservation {
     /// Whether durable intent exists.
@@ -188,21 +228,23 @@ pub struct PublicationRecoveryObservation {
     pub control_visible_epoch: Epoch,
     /// Whether immutable control snapshot publication is complete.
     pub snapshot_published: bool,
-    /// Whether an exclusion fence is already durable.
+    /// Hint only: not sufficient for CommitInvalidationOnly or abandonment.
+    /// The complete typed fence and its authoritative readback remain mandatory.
     pub abandon_fence_durable: bool,
 }
 
-/// Fail-closed recovery action.
+/// Fail-closed recovery action; every write still goes through its normal verified port.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PublicationRecoveryDecision {
-    /// Continue exact staging or closure from durable intent.
+    /// Continue exact staging or closure from durable intent, not commit permission.
     Continue,
     /// Control commit completed; publish/rebuild the immutable snapshot.
     PublishSnapshot,
-    /// Remove or exclude only exact staged IDs.
+    /// Remove/exclude staged IDs and restore exact old bounds using the complete plan.
     CompensateExact,
-    /// Commit invalidation-only after a complete exclusion fence.
+    /// Reserved for a separately verified complete invalidation-only protocol.
+    /// A boolean observation cannot produce this decision.
     CommitInvalidationOnly,
-    /// Contradictory evidence blocks all later publications.
+    /// Contradictory or insufficient evidence blocks later publications.
     PublicationBlocked,
 }

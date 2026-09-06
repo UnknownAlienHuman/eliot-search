@@ -18,9 +18,10 @@ pub use machine::{
     PublicationPhase, PublicationTransaction,
 };
 pub use model::{
-    AbandonFence, ClosureReceipt, CompensationReceipt, ControlCommitObservation,
-    PreparedPublication, PublicationGuards, PublicationRecoveryDecision,
-    PublicationRecoveryObservation, ReadbackVerified, RetiredManifest,
-    SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
+    AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt,
+    ControlCommitObservation, PreparedPublication, PublicationGuards,
+    PublicationRecoveryDecision, PublicationRecoveryObservation, ReadbackVerified,
+    RestorationReceipt, RetiredManifest, SnapshotPublishReceipt, StageReceipt,
+    VisibleCommitReceipt,
 };
 pub use recovery::recover;
