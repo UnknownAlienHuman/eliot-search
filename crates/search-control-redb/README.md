@@ -118,9 +118,24 @@ and content comparisons. Success linearizes at that swap; cancellation arriving 
 or turn it into an unknown storage effect. All required validation precedes reopening admission.
 
 This is a process-local publication fence, not automatic daemon integration. The caller must serialize
-commit/publication with request admission and consult the owning publisher for each admission. An
-already returned Arc or a cloned publisher is a historical view, not a live subscription, grant or
-revocation mechanism. Independent journal writes do not notify arbitrary cached snapshots.
+commit/publication with request admission and consult the owning publisher for each admission.
+`ControlSnapshotPublisher` is deliberately non-Clone. Previously a clone copied `disk.suspended`
+and the admission pointer; suspending the original did not suspend that independently mutable copy.
+It could continue returning `Some(snapshot)` without the required fresh recovery read. Calling the
+copy a historical view did not remove its publication/admission methods.
+
+Clone the immutable `Arc<ControlSnapshot>` returned by `current()`, not its owner. Moving the owner
+preserves its pending fence; reconstructing admission requires the existing verified journal path.
+Already returned Arcs remain historical data, not live subscriptions, grants or revocation mechanisms.
+No new shared publisher state, mutex, storage format or implicit notification mechanism is added.
+Independent journal writes still do not notify arbitrary cached snapshots. This change is not daemon
+integration and does not establish cross-process owner exclusion.
+
+Compatibility: removing the public Clone implementation intentionally rejects callers that duplicate
+the mutable publisher. Existing publication methods and immutable snapshot types are unchanged.
+A compile-fail doctest protects the non-Clone boundary; a real-redb regression fixture covers move,
+suspension, immutable Arc cloning and verified recovery. Both new tests are NOT_RUN without Cargo.
+The doctest requires `cargo +1.98.0 test --locked -p search-control-redb --doc`; `--lib` alone does not run it.
 
 ## Verification and remaining work
 

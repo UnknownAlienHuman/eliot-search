@@ -15,9 +15,15 @@ mod disk;
 /// Process-local immutable snapshot publisher with monotone identity fences.
 ///
 /// A disk-bound publisher accepts updates only from the journal's readback path.
-/// `current()` is an admission view, not authorization: already returned Arcs and
-/// cloned publishers are historical views, not live subscriptions to this owner.
-#[derive(Clone, Debug, Default)]
+/// `current()` returns a cloneable historical Arc, not authorization. The mutable
+/// admission owner is not cloneable: copying it would fork its recovery fence.
+///
+/// ```compile_fail,E0599
+/// use search_control_redb::ControlSnapshotPublisher;
+/// let owner = ControlSnapshotPublisher::new();
+/// let _independent_admission_owner = owner.clone();
+/// ```
+#[derive(Debug, Default)]
 pub struct ControlSnapshotPublisher {
     inner: reference::ControlSnapshotPublisher,
     current_operation: Option<MutationId>,

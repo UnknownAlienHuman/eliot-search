@@ -190,3 +190,23 @@ fn actual_redb_owner_handoff_keeps_data_generation_and_replay_valid() {
     assert_eq!(publisher.current().unwrap().generation, 1);
     journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
 }
+
+#[test]
+fn moving_a_suspended_owner_keeps_the_fence_but_immutable_arcs_remain_cloneable() {
+    let directory = Scratch::new();
+    let mut journal = directory.create(identity());
+    let receipt = journal.transact(mutation(1, 0, b"READY")).unwrap();
+    let mut publisher = ControlSnapshotPublisher::new();
+    journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
+    let historical = Arc::clone(&publisher.current().unwrap());
+    let mut wrong = receipt.clone();
+    wrong.after_generation += 1;
+    assert!(journal.publish_committed_snapshot(&wrong, &mut publisher).is_err());
+    let mut moved = publisher;
+    assert!(moved.requires_recovery());
+    assert!(moved.current().is_none());
+    assert_eq!(historical.generation, 1);
+    journal.recover_snapshot_publication(&mut moved).unwrap();
+    assert!(!moved.requires_recovery());
+    assert_eq!(moved.current().unwrap().as_ref(), historical.as_ref());
+}
