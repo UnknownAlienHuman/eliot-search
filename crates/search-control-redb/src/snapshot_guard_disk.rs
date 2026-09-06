@@ -11,6 +11,11 @@ pub(super) struct DiskPublicationState {
 }
 
 impl ControlSnapshotPublisher {
+    // Read-only diagnostic binding. This does not publish, recover or grant admission.
+    pub(crate) fn diagnostic_disk_identity(&self) -> Option<JournalIdentity> {
+        self.disk.as_ref().map(|state| state.identity)
+    }
+
     pub(crate) fn begin_disk_publication(&mut self, identity: JournalIdentity) -> Result<(), ControlError> {
         identity.validate()?;
         // A foreign/stale owner must not poison another publisher or clear its fence.

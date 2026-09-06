@@ -24,9 +24,11 @@ mod operation;
 mod lifecycle;
 mod snapshot;
 mod quarantine;
+mod diagnostics;
 
 pub use operation::{ControlCallError, ControlInterruption};
 pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};
+pub use diagnostics::{ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState};
 use operation::{Check, Point, Unscoped};
 use codec::{Header, StoredOperation, as_u64, decode_value, encode_value,
     request_fingerprint, validate_mutation};
