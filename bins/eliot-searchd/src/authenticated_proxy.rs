@@ -5,19 +5,19 @@
 //! the child, refuses later requests, and never restarts/replays automatically.
 
 use std::env;
-use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::{Child, ChildStdin, ChildStdout, Command, ExitCode, Stdio};
+use std::process::{Command, ExitCode};
 
 use crate::endpoint::{self, EndpointAction};
 
 #[path = "proxy_exchange.rs"]
 mod exchange;
-use exchange::{ExchangeFence, Reply, forward_reply};
+use exchange::{ExchangeFence, Reply};
 
-const MAX_CHILD_LINE_BYTES: usize = 64 * 1024;
-const MAX_CHILD_RESPONSE_LINES: usize = 1_000_000;
+#[path = "proxy_child.rs"]
+mod child_io;
+use child_io::{ChildIo, ChildLimits};
 const MAX_PROXY_COMMAND_BYTES: usize = 128 * 1024;
 
 /// Intercepts `--serve-loopback-data-root ROOT PORT TOKEN_FILE`.
@@ -68,40 +68,21 @@ fn run_proxy(root: &Path, port: u16, token_file: &Path) -> Result<(), String> {
 }
 
 struct DirectChild {
-    child: Child,
-    input: Option<ChildStdin>,
-    output: BufReader<ChildStdout>,
+    io: ChildIo,
     fence: ExchangeFence,
-    stopped: bool,
 }
 
 impl DirectChild {
     fn spawn(root: &Path) -> Result<Self, String> {
         let executable = env::current_exe()
-            .map_err(|error| format!("LOOPBACK_CURRENT_EXE_ERROR:{error}"))?;
-        let mut child = Command::new(executable)
-            .arg("--serve-data-root").arg(root)
-            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|error| format!("LOOPBACK_DIRECT_CHILD_START_ERROR:{error}"))?;
-        let input = child.stdin.take()
-            .ok_or_else(|| "LOOPBACK_DIRECT_CHILD_STDIN_MISSING".to_owned())?;
-        let output = child.stdout.take()
-            .ok_or_else(|| "LOOPBACK_DIRECT_CHILD_STDOUT_MISSING".to_owned())?;
-        let mut service = Self {
-            child, input: Some(input), output: BufReader::new(output),
-            fence: ExchangeFence::default(), stopped: false,
-        };
-        let ready = read_child_line(&mut service.output)?
-            .ok_or_else(|| "LOOPBACK_DIRECT_CHILD_CLOSED_BEFORE_READY".to_owned())?;
-        if !ready.contains("\"event\":\"data_root_ready\"") {
-            return Err("LOOPBACK_DIRECT_CHILD_NOT_READY".to_owned());
-        }
-        Ok(service)
+            .map_err(|_| "LOOPBACK_CURRENT_EXE_ERROR".to_owned())?;
+        let mut command = Command::new(executable);
+        command.arg("--serve-data-root").arg(root);
+        Ok(Self { io: ChildIo::spawn(command, ChildLimits::DEFAULT)?, fence: ExchangeFence::default() })
     }
 
     fn dispatch(&mut self, command: &str, stream: &mut TcpStream) -> Result<EndpointAction, String> {
-        if self.stopped || self.fence.blocked() {
+        if self.fence.blocked() {
             self.abort();
             return Ok(EndpointAction::Abort);
         }
@@ -111,76 +92,23 @@ impl DirectChild {
             return Err("LOOPBACK_DIRECT_COMMAND_INVALID".to_owned());
         }
         let terminal = Terminal::for_command(command)?;
-        let Some(input) = self.input.as_mut() else {
-            self.abort();
-            return Ok(EndpointAction::Abort);
-        };
-        let output = &mut self.output;
-        let result = self.fence.run(|| {
-            input.write_all(command.as_bytes())
-                .and_then(|()| input.write_all(b"\n"))
-                .and_then(|()| input.flush())
-                .map_err(|_| "LOOPBACK_DIRECT_CHILD_WRITE_ERROR".to_owned())?;
-            forward_reply(
-                || read_child_line(output), stream, |line| terminal.reached(line),
-                terminal == Terminal::Shutdown, MAX_CHILD_RESPONSE_LINES,
-            )
-        });
+        let io = &mut self.io;
+        let result = self.fence.run(|| io.exchange(command, stream, terminal));
         match result {
             Ok(Reply::Complete) => Ok(EndpointAction::Continue),
             Ok(Reply::Rejected) => Err("LOOPBACK_DIRECT_COMMAND_FAILED".to_owned()),
-            Ok(Reply::Shutdown) => {
-                self.stopped = true;
-                self.input.take();
-                Ok(EndpointAction::Shutdown)
-            }
+            // ChildIo returns Shutdown only after actual exit/reaping and pipe
+            // cleanup; the child's STOPPED frame alone cannot release the owner.
+            Ok(Reply::Shutdown) => Ok(EndpointAction::Shutdown),
             Ok(Reply::Fatal) | Err(_) => {
-                // No bounded drain can prove that an incomplete mutation did
-                // not happen. Kill this channel rather than serving old output
-                // to a new client, or issuing the command a second time.
                 self.abort();
-                // The endpoint must neither append request_complete to partial
-                // output nor admit another connection against this dead child.
                 Ok(EndpointAction::Abort)
             }
         }
     }
 
-    fn abort(&mut self) {
-        if self.stopped { return; }
-        // Never write shutdown into a potentially blocked or desynchronized pipe.
-        self.input.take();
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-        self.stopped = true;
-    }
-
-    fn finish(mut self) -> Result<(), String> {
-        self.input.take();
-        let status = self.child.wait()
-            .map_err(|error| format!("LOOPBACK_DIRECT_CHILD_WAIT_ERROR:{error}"))?;
-        self.stopped = true;
-        if status.success() { Ok(()) } else { Err(format!("LOOPBACK_DIRECT_CHILD_EXITED:{status}")) }
-    }
-}
-
-impl Drop for DirectChild {
-    fn drop(&mut self) { self.abort(); }
-}
-
-fn read_child_line(output: &mut BufReader<ChildStdout>) -> Result<Option<String>, String> {
-    let mut bytes = Vec::new();
-    let mut limited = output.by_ref().take((MAX_CHILD_LINE_BYTES + 1) as u64);
-    let read = limited.read_until(b'\n', &mut bytes)
-        .map_err(|_| "LOOPBACK_DIRECT_CHILD_READ_ERROR".to_owned())?;
-    if read == 0 { return Ok(None); }
-    if bytes.len() > MAX_CHILD_LINE_BYTES || !bytes.ends_with(b"\n") {
-        return Err("LOOPBACK_DIRECT_CHILD_FRAME_TOO_LARGE".to_owned());
-    }
-    bytes.pop();
-    if bytes.last() == Some(&b'\r') { bytes.pop(); }
-    String::from_utf8(bytes).map(Some)
-        .map_err(|_| "LOOPBACK_DIRECT_CHILD_FRAME_NOT_UTF8".to_owned())
+    fn abort(&mut self) { self.io.abort(); }
+    fn finish(mut self) -> Result<(), String> { self.io.finish() }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -54,10 +54,15 @@ pub(super) fn forward_reply(
     terminal: impl Fn(&str) -> bool,
     shutdown: bool,
     max_lines: usize,
+    max_bytes: usize,
 ) -> Result<Reply, String> {
+    let mut total_bytes = 0_usize;
     for _ in 0..max_lines {
         let line = read()?
             .ok_or_else(|| "LOOPBACK_DIRECT_CHILD_CLOSED_MID_RESPONSE".to_owned())?;
+        total_bytes = total_bytes.checked_add(line.len()).and_then(|bytes| bytes.checked_add(1))
+            .filter(|bytes| *bytes <= max_bytes)
+            .ok_or_else(|| "LOOPBACK_DIRECT_RESPONSE_BYTES_EXCEEDED".to_owned())?;
         writer.write_all(line.as_bytes())
             .and_then(|()| writer.write_all(b"\n"))
             .and_then(|()| writer.flush())
@@ -97,7 +102,7 @@ mod tests {
         let mut reads = 0;
         let result = fence.run(|| forward_reply(
             || { reads += 1; Ok(old_reply.next().map(str::to_owned)) },
-            &mut Disconnected, |line| line == "complete", false, 10,
+            &mut Disconnected, |line| line == "complete", false, 10, 1024,
         ));
         assert!(result.is_err());
         assert!(fence.blocked());
@@ -126,7 +131,7 @@ mod tests {
         let mut fence = ExchangeFence::default();
         assert_eq!(fence.run(|| forward_reply(
             || Ok(lines.next().map(str::to_owned)), &mut output,
-            |line| line == "complete", false, 10,
+            |line| line == "complete", false, 10, 1024,
         )).unwrap(), Reply::Complete);
         assert!(!fence.blocked());
         assert_eq!(output, b"match\ncomplete\n");
@@ -139,7 +144,7 @@ mod tests {
         let mut output = Vec::new();
         assert_eq!(fence.run(|| forward_reply(
             || Ok(Some("{\"event\":\"error\"}".to_owned())), &mut output,
-            |_| false, false, 1,
+            |_| false, false, 1, 1024,
         )).unwrap(), Reply::Rejected);
         assert!(!fence.blocked());
     }
@@ -150,7 +155,7 @@ mod tests {
             let mut fence = ExchangeFence::default();
             assert!(fence.run(|| forward_reply(
                 || Ok(if eof { None } else { Some("not-terminal".to_owned()) }),
-                &mut Vec::new(), |_| false, false, 2,
+                &mut Vec::new(), |_| false, false, 2, 1024,
             )).is_err());
             assert!(fence.blocked());
         }
@@ -172,7 +177,7 @@ mod tests {
                 let mut reads = 0;
                 assert_eq!(fence.run(|| forward_reply(
                     || { reads += 1; Ok(Some((*line).to_owned())) }, &mut output,
-                    |_| true, shutdown, 3,
+                    |_| true, shutdown, 3, 1024,
                 )).unwrap(), Reply::Fatal);
                 assert_eq!(reads, 1);
                 assert_eq!(output, format!("{line}\n").as_bytes());
@@ -187,9 +192,10 @@ mod tests {
         let line = r#"{"event":"error","error":"SERVICE_HEX_INVALID"}"#;
         let mut fence = ExchangeFence::default();
         assert_eq!(fence.run(|| forward_reply(
-            || Ok(Some(line.to_owned())), &mut Vec::new(), |_| true, false, 1,
+            || Ok(Some(line.to_owned())), &mut Vec::new(), |_| true, false, 1, 1024,
         )).unwrap(), Reply::Rejected);
         assert_eq!(fence.run(|| Ok(Reply::Complete)).unwrap(), Reply::Complete);
         assert!(!fence.blocked());
     }
+
 }
