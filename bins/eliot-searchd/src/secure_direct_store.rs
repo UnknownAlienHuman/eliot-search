@@ -12,7 +12,6 @@
 )]
 
 use core::fmt;
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
@@ -20,6 +19,7 @@ use zeroize::Zeroizing;
 use crate::development::ScanResult;
 use crate::direct_preparation::{scan_prepared, validate_query};
 use crate::plaintext_direct_store as plaintext;
+use plaintext::{RevisionMetadata, verify_revision_identity};
 use crate::revision_protection::RevisionProtector;
 use crate::sha256;
 
@@ -31,7 +31,7 @@ mod revision_writer;
 mod preparation_store;
 
 use storage_io::{
-    legacy_path, load_event_count, load_inventory, protected_path,
+    legacy_path, protected_path,
     read_plaintext_path, read_regular_file, remove_plaintext_after_readback,
 };
 
@@ -45,20 +45,11 @@ const MAX_REVISION_OBJECT_BYTES: usize = 65 * 1024 * 1024;
 const MAX_SEARCH_GAPS: usize = 100_000;
 const MAX_READ_RANGE_BYTES: usize = 8 * 1024 * 1024;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct RevisionMetadata {
-    source_id: String,
-    revision_id: String,
-    content_digest: String,
-    byte_length: u64,
-}
-
 /// DIRECT catalog with a platform-specific prepublication revision writer.
 pub(crate) struct DirectStore {
     root: PathBuf,
     inner: plaintext::DirectStore,
     protector: RevisionProtector,
-    inventory: BTreeMap<String, RevisionMetadata>,
 }
 
 impl fmt::Debug for DirectStore {
@@ -68,7 +59,7 @@ impl fmt::Debug for DirectStore {
             .field("root", &self.root)
             .field("namespace_id", &self.inner.namespace_id())
             .field("protector", &self.protector)
-            .field("revision_count", &self.inventory.len())
+            .field("revision_count", &self.inner.retained_revisions().len())
             .finish()
     }
 }
@@ -84,13 +75,11 @@ impl DirectStore {
         let namespace_id = sha256::decode_digest(&inner.namespace_id())
             .ok_or_else(|| "DIRECT_NAMESPACE_INVALID".to_owned())?;
         let revision_root = canonical_root.join(REVISION_DIRECTORY);
-        let inventory = load_inventory(&canonical_root)?;
         let protector = RevisionProtector::open(namespace_id, &revision_root)?;
         let mut store = Self {
             root: canonical_root,
             inner,
             protector,
-            inventory,
         };
         if store.protector.encrypts_new_objects() {
             store.migrate_referenced_plaintext()?;
@@ -111,7 +100,6 @@ impl DirectStore {
         let indexed = self.inner.index_file_with_writer(path, &mut |_, source, bytes| {
             preparation_store::persist_source(root, protector, &namespace, source, bytes)
         })?;
-        self.refresh_inventory()?;
         Ok(indexed)
     }
 
@@ -126,7 +114,6 @@ impl DirectStore {
         let indexed = self.inner.index_directory_with_writer(directory, &mut |_, source, bytes| {
             preparation_store::persist_source(root, protector, &namespace, source, bytes)
         })?;
-        self.refresh_inventory()?;
         Ok(indexed)
     }
 
@@ -134,16 +121,16 @@ impl DirectStore {
     /// Missing objects may be reconstructed; conflicting immutable objects fail.
     pub(crate) fn prepare_revision(&mut self, revision_id: &str) -> Result<(), String> {
         crate::catalog_presence::require_existing(&self.root)?;
-        let metadata = self.inventory.get(revision_id)
+        self.inner.verify_control()?;
+        let metadata = self.inner.retained_revision(revision_id)
             .ok_or_else(|| "DIRECT_REVISION_NOT_FOUND".to_owned())?;
-        let bytes = Zeroizing::new(self.read_revision_detailed(metadata)?);
-        preparation_store::persist(&self.root, &self.protector, &self.inner.namespace_id(), metadata, &bytes)
+        let bytes = Zeroizing::new(self.read_revision_detailed(&metadata)?);
+        preparation_store::persist(&self.root, &self.protector, &self.inner.namespace_id(), &metadata, &bytes)
     }
 
     /// Retires one source without deleting retained revision objects.
     pub(crate) fn retire_source(&mut self, source_id: &str) -> Result<SourceSummary, String> {
         let summary = self.inner.retire_source(source_id)?;
-        self.refresh_inventory()?;
         Ok(summary)
     }
 
@@ -294,21 +281,12 @@ impl DirectStore {
     pub(crate) fn verify(&self) -> Result<StoreVerification, String> {
         // Verification must not repair missing files by initializing them.
         crate::catalog_presence::require_existing(&self.root)?;
-        let reopened = plaintext::DirectStore::open(&self.root)?;
-        if reopened.namespace_id() != self.inner.namespace_id()
-            || reopened.list_sources() != self.inner.list_sources()
-        {
-            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
-        }
-        let inventory = load_inventory(&self.root)?;
-        if inventory != self.inventory {
-            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
-        }
+        self.inner.verify_control()?;
         let mut total_revision_bytes = 0_u64;
         let mut verified_revisions = 0_usize;
-        for metadata in inventory.values() {
+        for metadata in self.inner.retained_revisions() {
             let bytes = self
-                .read_revision_detailed(metadata)
+                .read_revision_detailed(&metadata)
                 .map_err(|error| format!("DIRECT_REVISION_VERIFY_FAILED:{error}"))?;
             total_revision_bytes = total_revision_bytes
                 .checked_add(
@@ -320,10 +298,10 @@ impl DirectStore {
         }
         let sources = self.inner.list_sources();
         Ok(StoreVerification {
-            source_events: load_event_count(&self.root)?,
+            source_events: self.inner.source_event_count(),
             registered_sources: sources.len(),
             active_sources: sources.iter().filter(|source| source.active).count(),
-            referenced_revisions: inventory.len(),
+            referenced_revisions: self.inner.retained_revisions().len(),
             verified_revisions,
             total_revision_bytes,
         })
@@ -336,9 +314,7 @@ impl DirectStore {
         byte_start: u64,
         byte_end: u64,
     ) -> Result<RevisionSlice, String> {
-        let metadata = self
-            .inventory
-            .get(revision_id)
+        let metadata = self.inner.retained_revision(revision_id)
             .ok_or_else(|| "DIRECT_REVISION_NOT_FOUND".to_owned())?;
         if byte_start >= byte_end || byte_end > metadata.byte_length {
             return Err("DIRECT_REVISION_RANGE_INVALID".to_owned());
@@ -348,7 +324,7 @@ impl DirectStore {
         {
             return Err("DIRECT_REVISION_RANGE_TOO_LARGE".to_owned());
         }
-        let bytes = self.read_revision_detailed(metadata)?;
+        let bytes = self.read_revision_detailed(&metadata)?;
         let start = usize::try_from(byte_start)
             .map_err(|_| "DIRECT_REVISION_RANGE_INVALID".to_owned())?;
         let end = usize::try_from(byte_end)
@@ -362,14 +338,8 @@ impl DirectStore {
         })
     }
 
-    fn refresh_inventory(&mut self) -> Result<(), String> {
-        self.inventory = load_inventory(&self.root)?;
-        Ok(())
-    }
-
     fn migrate_referenced_plaintext(&mut self) -> Result<(), String> {
-        let revisions = self.inventory.values().cloned().collect::<Vec<_>>();
-        for metadata in revisions {
+        for metadata in self.inner.retained_revisions() {
             self.seal_revision(&metadata)?;
         }
         Ok(())
@@ -466,22 +436,4 @@ fn verify_plaintext(metadata: &RevisionMetadata, bytes: &[u8]) -> Result<(), Str
         return Err("DIRECT_REVISION_CONTENT_MISMATCH".to_owned());
     }
     verify_revision_identity(metadata)
-}
-
-fn verify_revision_identity(metadata: &RevisionMetadata) -> Result<(), String> {
-    let content_digest = sha256::decode_digest(&metadata.content_digest)
-        .ok_or_else(|| "DIRECT_REVISION_CONTENT_MISMATCH".to_owned())?;
-    let expected = sha256::hex(&sha256::digest_parts(
-        b"eliot-search/direct-revision-id/v1",
-        &[
-            metadata.source_id.as_bytes(),
-            &content_digest,
-            &metadata.byte_length.to_be_bytes(),
-        ],
-    ));
-    if expected == metadata.revision_id {
-        Ok(())
-    } else {
-        Err("DIRECT_REVISION_ID_MISMATCH".to_owned())
-    }
 }

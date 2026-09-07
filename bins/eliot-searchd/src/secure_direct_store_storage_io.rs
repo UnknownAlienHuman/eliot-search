@@ -1,4 +1,4 @@
-//! Low-level immutable revision-object and control-log I/O.
+//! Low-level immutable revision-object I/O; catalog replay belongs to DirectStore.
 
 #![allow(
     clippy::missing_errors_doc,
@@ -7,7 +7,6 @@
     clippy::too_many_lines
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -17,105 +16,10 @@ use crate::development::MAX_SCAN_INPUT_BYTES;
 use crate::revision_protection::PROTECTED_OBJECT_EXTENSION;
 use crate::sha256;
 
-use super::{RevisionMetadata, verify_plaintext, verify_revision_identity};
+use super::{RevisionMetadata, verify_plaintext};
 
-const CONTROL_DIRECTORY: &str = "control";
 const REVISION_DIRECTORY: &str = "revisions";
-const SOURCE_LOG_FILE: &str = "source-events.log";
-const SOURCE_LOG_HEADER: &str = "ELIOT_SEARCH_SOURCE_EVENTS_V1";
-const ZERO_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
-const MAX_LOG_BYTES: usize = 512 * 1024 * 1024;
-const MAX_LOG_LINE_BYTES: usize = 256 * 1024;
 const MAX_REVISION_OBJECT_BYTES: usize = 65 * 1024 * 1024;
-const MAX_REVISION_OBJECTS: usize = 2_000_000;
-
-pub(super) fn load_inventory(root: &Path) -> Result<BTreeMap<String, RevisionMetadata>, String> {
-    let path = root.join(CONTROL_DIRECTORY).join(SOURCE_LOG_FILE);
-    let text = read_text_file(&path, MAX_LOG_BYTES, "DIRECT_CONTROL_LOG_READ_ERROR")?;
-    let mut lines = text.split_terminator('\n');
-    let header = lines
-        .next()
-        .ok_or_else(|| "DIRECT_CONTROL_LOG_HEADER_MISSING".to_owned())?
-        .trim_end_matches('\r');
-    if header != SOURCE_LOG_HEADER {
-        return Err("DIRECT_CONTROL_LOG_HEADER_INVALID".to_owned());
-    }
-
-    let mut inventory = BTreeMap::new();
-    let mut operations = BTreeSet::new();
-    let mut sequence = 0_u64;
-    let mut previous_digest = ZERO_DIGEST.to_owned();
-    let mut events = 0_usize;
-    for raw in lines {
-        let line = raw.trim_end_matches('\r');
-        if line.is_empty() || line.len() > MAX_LOG_LINE_BYTES {
-            return Err("DIRECT_CONTROL_LOG_EVENT_INVALID".to_owned());
-        }
-        let fields = line.split('\t').collect::<Vec<_>>();
-        if fields.len() != 13 || fields[0] != "V1" {
-            return Err("DIRECT_CONTROL_LOG_EVENT_INVALID".to_owned());
-        }
-        let observed_sequence = fields[1]
-            .parse::<u64>()
-            .map_err(|_| "DIRECT_CONTROL_LOG_SEQUENCE_INVALID".to_owned())?;
-        sequence = sequence
-            .checked_add(1)
-            .ok_or_else(|| "DIRECT_CONTROL_LOG_SEQUENCE_EXHAUSTED".to_owned())?;
-        if observed_sequence != sequence || fields[2] != previous_digest {
-            return Err("DIRECT_CONTROL_LOG_CHAIN_INVALID".to_owned());
-        }
-        for index in [2_usize, 3, 5, 6, 7, 9, 10, 12] {
-            if sha256::decode_digest(fields[index]).is_none() {
-                return Err("DIRECT_CONTROL_LOG_DIGEST_INVALID".to_owned());
-            }
-        }
-        if !matches!(fields[4], "A" | "R")
-            || !matches!(fields[11], "native" | "path-bound")
-            || !operations.insert(fields[3].to_owned())
-        {
-            return Err("DIRECT_CONTROL_LOG_EVENT_INVALID".to_owned());
-        }
-        let calculated = sha256::hex(&sha256::digest(
-            fields[..12].join("\t").as_bytes(),
-        ));
-        if calculated != fields[12] {
-            return Err("DIRECT_CONTROL_LOG_RECORD_DIGEST_INVALID".to_owned());
-        }
-        let byte_length = fields[8]
-            .parse::<u64>()
-            .map_err(|_| "DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned())?;
-        if byte_length > u64::try_from(MAX_SCAN_INPUT_BYTES).unwrap_or(u64::MAX) {
-            return Err("DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned());
-        }
-        let metadata = RevisionMetadata {
-            source_id: fields[5].to_owned(),
-            revision_id: fields[6].to_owned(),
-            content_digest: fields[7].to_owned(),
-            byte_length,
-        };
-        verify_revision_identity(&metadata)?;
-        if let Some(existing) = inventory.insert(metadata.revision_id.clone(), metadata.clone()) {
-            if existing != metadata {
-                return Err("DIRECT_CONTROL_LOG_REVISION_COLLISION".to_owned());
-            }
-        }
-        previous_digest = fields[12].to_owned();
-        events = events.saturating_add(1);
-        if events > MAX_REVISION_OBJECTS {
-            return Err("DIRECT_CONTROL_LOG_EVENT_LIMIT_EXCEEDED".to_owned());
-        }
-    }
-    if !text.ends_with('\n') {
-        return Err("DIRECT_CONTROL_LOG_UNTERMINATED".to_owned());
-    }
-    Ok(inventory)
-}
-
-pub(super) fn load_event_count(root: &Path) -> Result<usize, String> {
-    let path = root.join(CONTROL_DIRECTORY).join(SOURCE_LOG_FILE);
-    let text = read_text_file(&path, MAX_LOG_BYTES, "DIRECT_CONTROL_LOG_READ_ERROR")?;
-    Ok(text.split_terminator('\n').count().saturating_sub(1))
-}
 
 pub(super) fn read_plaintext_path(
     path: &Path,
@@ -157,15 +61,6 @@ pub(super) fn read_regular_file(
         return Err(format!("{error_prefix}:LENGTH_MISMATCH"));
     }
     Ok(bytes)
-}
-
-fn read_text_file(
-    path: &Path,
-    max_bytes: usize,
-    error_prefix: &'static str,
-) -> Result<String, String> {
-    let bytes = read_regular_file(path, max_bytes, error_prefix)?;
-    String::from_utf8(bytes).map_err(|_| format!("{error_prefix}:NOT_UTF8"))
 }
 
 pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), String> {

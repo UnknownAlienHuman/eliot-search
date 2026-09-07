@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File, Metadata, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,6 +17,10 @@ use crate::sha256;
 
 #[path = "direct_store_ingest.rs"]
 mod ingest;
+#[path = "direct_store_catalog.rs"]
+mod catalog;
+use catalog::{load_registry, read_namespace};
+pub(crate) use catalog::{RevisionMetadata, verify_revision_identity};
 
 const CONTROL_DIRECTORY: &str = "control";
 const REVISION_DIRECTORY: &str = "revisions";
@@ -131,7 +135,7 @@ struct RecordDraft {
     identity_strength: IdentityStrength,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct RegistryState {
     last_sequence: u64,
     last_digest: String,
@@ -443,14 +447,8 @@ impl DirectStore {
 
     /// Verifies the log chain and every unique referenced immutable revision.
     pub(crate) fn verify(&self) -> Result<StoreVerification, String> {
-        let log_path = self.root.join(CONTROL_DIRECTORY).join(SOURCE_LOG_FILE);
-        let reloaded = load_registry(&log_path)?;
-        if reloaded.last_sequence != self.registry.last_sequence
-            || reloaded.last_digest != self.registry.last_digest
-            || reloaded.latest != self.registry.latest
-        {
-            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
-        }
+        self.verify_control()?;
+        let reloaded = &self.registry;
         let mut verified_revisions = 0_usize;
         let mut total_revision_bytes = 0_u64;
         for record in reloaded.revisions.values() {
@@ -571,6 +569,9 @@ impl DirectStore {
         if drafts.is_empty() {
             return Ok(Vec::new());
         }
+        // Revalidate after revision-object preparation and before touching the log.
+        // This also fences retirement, which does not traverse the ingest planner.
+        self.verify_control()?;
         if self
             .registry
             .event_count
@@ -643,6 +644,13 @@ impl DirectStore {
             .append(true)
             .open(&log_path)
             .map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
+        let current_bytes = file.metadata()
+            .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?.len();
+        if current_bytes.checked_add(encoded.len() as u64)
+            .is_none_or(|bytes| bytes > MAX_LOG_BYTES)
+        {
+            return Err("DIRECT_CONTROL_LOG_TOO_LARGE".to_owned());
+        }
         file.write_all(encoded.as_bytes())
             .and_then(|()| file.sync_all())
             .map_err(|error| format!("DIRECT_CONTROL_LOG_WRITE_ERROR:{error}"))?;
@@ -692,18 +700,8 @@ impl DirectStore {
         if content_digest != record.content_digest {
             return Err("DIRECT_REVISION_CONTENT_MISMATCH");
         }
-        let expected_revision = sha256::hex(&sha256::digest_parts(
-            b"eliot-search/direct-revision-id/v1",
-            &[
-                record.source_id.as_bytes(),
-                &sha256::decode_digest(&record.content_digest)
-                    .ok_or("DIRECT_REVISION_CONTENT_MISMATCH")?,
-                &record.byte_length.to_be_bytes(),
-            ],
-        ));
-        if expected_revision != record.revision_id {
-            return Err("DIRECT_REVISION_ID_MISMATCH");
-        }
+        verify_revision_identity(&RevisionMetadata::from(record))
+            .map_err(|_| "DIRECT_REVISION_ID_MISMATCH")?;
         Ok(bytes)
     }
 }
@@ -724,13 +722,7 @@ fn summary(record: &SourceRecord) -> SourceSummary {
 fn load_or_create_namespace(root: &Path, control: &Path) -> Result<[u8; 32], String> {
     let path = control.join(NAMESPACE_FILE);
     if path.exists() {
-        ensure_regular_file(&path)?;
-        let mut value = String::new();
-        File::open(&path)
-            .and_then(|mut file| file.take(256).read_to_string(&mut value))
-            .map_err(|error| format!("DIRECT_NAMESPACE_READ_ERROR:{error}"))?;
-        return sha256::decode_digest(value.trim())
-            .ok_or_else(|| "DIRECT_NAMESPACE_INVALID".to_owned());
+        return read_namespace(&path);
     }
 
     let timestamp = SystemTime::now()
@@ -776,114 +768,6 @@ fn initialize_log(path: &Path) -> Result<(), String> {
         .and_then(|()| file.sync_all())
         .map_err(|error| format!("DIRECT_CONTROL_LOG_WRITE_ERROR:{error}"))?;
     Ok(())
-}
-
-fn load_registry(path: &Path) -> Result<RegistryState, String> {
-    ensure_regular_file(path)?;
-    let metadata = fs::metadata(path)
-        .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?;
-    if metadata.len() > MAX_LOG_BYTES {
-        return Err("DIRECT_CONTROL_LOG_TOO_LARGE".to_owned());
-    }
-    let file = File::open(path)
-        .map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
-    let mut reader = BufReader::new(file);
-    let mut header = String::new();
-    reader
-        .read_line(&mut header)
-        .map_err(|error| format!("DIRECT_CONTROL_LOG_READ_ERROR:{error}"))?;
-    if header.trim_end_matches(['\r', '\n']) != SOURCE_LOG_HEADER {
-        return Err("DIRECT_CONTROL_LOG_HEADER_INVALID".to_owned());
-    }
-
-    let mut state = RegistryState {
-        last_digest: ZERO_DIGEST.to_owned(),
-        ..RegistryState::default()
-    };
-    let mut line = String::new();
-    loop {
-        line.clear();
-        let read = reader
-            .read_line(&mut line)
-            .map_err(|error| format!("DIRECT_CONTROL_LOG_READ_ERROR:{error}"))?;
-        if read == 0 {
-            break;
-        }
-        if read > MAX_LOG_LINE_BYTES {
-            return Err("DIRECT_CONTROL_LOG_LINE_TOO_LARGE".to_owned());
-        }
-        let trimmed = line.trim_end_matches(['\r', '\n']);
-        if trimmed.is_empty() {
-            return Err("DIRECT_CONTROL_LOG_EMPTY_EVENT".to_owned());
-        }
-        let fields = trimmed.split('\t').collect::<Vec<_>>();
-        if fields.len() != 13 || fields[0] != "V1" {
-            return Err("DIRECT_CONTROL_LOG_EVENT_INVALID".to_owned());
-        }
-        let sequence = fields[1]
-            .parse::<u64>()
-            .map_err(|_| "DIRECT_CONTROL_LOG_SEQUENCE_INVALID".to_owned())?;
-        let expected_sequence = state
-            .last_sequence
-            .checked_add(1)
-            .ok_or_else(|| "DIRECT_SOURCE_SEQUENCE_EXHAUSTED".to_owned())?;
-        if sequence != expected_sequence || fields[2] != state.last_digest {
-            return Err("DIRECT_CONTROL_LOG_CHAIN_INVALID".to_owned());
-        }
-        for index in [2_usize, 3, 5, 6, 7, 9, 10, 12] {
-            validate_digest_text(fields[index], "DIRECT_CONTROL_LOG_DIGEST_INVALID")?;
-        }
-        let state_value = SourceState::parse(fields[4])
-            .ok_or_else(|| "DIRECT_CONTROL_LOG_STATE_INVALID".to_owned())?;
-        let byte_length = fields[8]
-            .parse::<u64>()
-            .map_err(|_| "DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned())?;
-        let identity_strength = IdentityStrength::parse(fields[11])
-            .ok_or_else(|| "DIRECT_CONTROL_LOG_IDENTITY_INVALID".to_owned())?;
-        let canonical = fields[..12].join("\t");
-        let record_digest = sha256::hex(&sha256::digest(canonical.as_bytes()));
-        if record_digest != fields[12] {
-            return Err("DIRECT_CONTROL_LOG_RECORD_DIGEST_INVALID".to_owned());
-        }
-        if state.operations.contains_key(fields[3]) {
-            return Err("DIRECT_CONTROL_LOG_OPERATION_DUPLICATE".to_owned());
-        }
-        let record = SourceRecord {
-            sequence,
-            previous_digest: fields[2].to_owned(),
-            operation_id: fields[3].to_owned(),
-            state: state_value,
-            source_id: fields[5].to_owned(),
-            revision_id: fields[6].to_owned(),
-            content_digest: fields[7].to_owned(),
-            byte_length,
-            file_identity_digest: fields[9].to_owned(),
-            path_digest: fields[10].to_owned(),
-            identity_strength,
-            record_digest: fields[12].to_owned(),
-        };
-        if let Some(previous) = state.latest.get(&record.source_id) {
-            if previous.file_identity_digest != record.file_identity_digest {
-                return Err("DIRECT_CONTROL_LOG_SOURCE_COLLISION".to_owned());
-            }
-        }
-        state.operations.insert(
-            record.operation_id.clone(),
-            record.record_digest.clone(),
-        );
-        state
-            .revisions
-            .entry(record.revision_id.clone())
-            .or_insert_with(|| record.clone());
-        state.latest.insert(record.source_id.clone(), record.clone());
-        state.last_sequence = sequence;
-        state.last_digest = record.record_digest;
-        state.event_count = state.event_count.saturating_add(1);
-        if state.event_count > MAX_SOURCE_EVENTS {
-            return Err("DIRECT_SOURCE_EVENT_LIMIT_EXCEEDED".to_owned());
-        }
-    }
-    Ok(state)
 }
 
 fn read_file_snapshot(
