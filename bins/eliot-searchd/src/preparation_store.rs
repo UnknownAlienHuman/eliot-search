@@ -93,16 +93,7 @@ pub(super) fn load(
         .map_err(|_| "DIRECT_PREPARATION_UNAVAILABLE")?;
     let saved = read_regular_file(&reference_path, REF_BYTES, "DIRECT_PREPARATION_REFERENCE_READ_FAILED")
         .map_err(|_| "DIRECT_PREPARATION_UNAVAILABLE")?;
-    if saved.len() != REF_BYTES || &saved[..8] != REF_MAGIC || saved[8..40] != key
-        || saved[80] != u8::from(protector.encrypts_new_objects())
-    {
-        return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
-    }
-    let digest: [u8; 32] = saved[40..72].try_into().map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?;
-    let length = u64::from_be_bytes(saved[72..80].try_into().map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?);
-    if length <= BINDING_BYTES as u64 || length > MAX_MANIFEST_BYTES as u64 {
-        return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
-    }
+    let (digest, length) = decode_reference(&saved, &key, protector)?;
     let id = object_id(&binding, protector, &digest);
     let object_shard = objects.join(&id[..2]);
     ensure_directory(&object_shard).map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID")?;
@@ -113,6 +104,126 @@ pub(super) fn load(
         return Err("DIRECT_PREPARATION_BINDING_MISMATCH");
     }
     Ok(Zeroizing::new(manifest[BINDING_BYTES..].to_vec()))
+}
+
+/// One reference/object observation; payloads never escape into migration output.
+pub(super) struct PreparationEvidence {
+    pub(super) present: bool,
+    pub(super) stored_bytes: u64,
+    pub(super) json: String,
+}
+
+/// Recompute the exact profile layout only during explicit migration inspection.
+/// Shared reference/envelope decoders are also used by normal query readback.
+/// Absence is an explicit missing derivative; malformed or contradictory state is an error.
+pub(super) fn inspect(
+    root: &Path, protector: &RevisionProtector, namespace: &str,
+    metadata: &RevisionMetadata, source: &[u8], deadline: Instant,
+) -> Result<PreparationEvidence, String> {
+    let check = || if Instant::now() >= deadline {
+        Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+    } else { Ok(()) };
+    check()?;
+    verify_plaintext(metadata, source)?;
+    let binding = binding(namespace, metadata)?;
+    let key = lookup_key(&binding, protector);
+    let hex = sha256::hex(&key);
+    let missing = || PreparationEvidence {
+        present: false, stored_bytes: 0,
+        json: format!(concat!(
+            "{{\"status\":\"missing_reference\",\"reference_key_sha256\":\"{}\",",
+            "\"record_verified\":false,\"layout_available\":false}}"
+        ), hex),
+    };
+    // Do not translate permission/type errors into absence, follow a dangling
+    // symlink, create a directory, or reconstruct a missing object here.
+    ensure_directory(root)?;
+    let base = root.join("preparation");
+    let refs = base.join("refs");
+    let shard = refs.join(&hex[..2]);
+    for path in [&base, &refs, &shard] {
+        check()?;
+        match fs::symlink_metadata(path) {
+            Ok(_) => ensure_directory(path)?,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(missing()),
+            Err(_) => return Err("DIRECT_PREPARATION_REFERENCE_READ_FAILED".to_owned()),
+        }
+    }
+    let ref_path = shard.join(format!("{hex}.ref"));
+    match fs::symlink_metadata(&ref_path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(missing()),
+        Err(_) => return Err("DIRECT_PREPARATION_REFERENCE_READ_FAILED".to_owned()),
+    }
+    let saved = read_regular_file(&ref_path, REF_BYTES, "DIRECT_PREPARATION_REFERENCE_READ_FAILED")?;
+    let (digest, length) = decode_reference(&saved, &key, protector).map_err(str::to_owned)?;
+    let id = object_id(&binding, protector, &digest);
+    let objects = base.join("objects");
+    ensure_directory(&objects)?;
+    let object_shard = objects.join(&id[..2]);
+    ensure_directory(&object_shard)?;
+    let object_path = object_shard.join(format!("{id}.{}", extension(protector)));
+    check()?;
+    let encoded = Zeroizing::new(read_regular_file(
+        &object_path, MAX_OBJECT_BYTES, "DIRECT_PREPARATION_OBJECT_READ_FAILED",
+    )?);
+    let raw_digest = sha256::digest(&encoded);
+    let raw_length = encoded.len() as u64;
+    let manifest = decode_object(&encoded, protector, &id, digest, length)?;
+    drop(encoded);
+    if manifest.get(..BINDING_BYTES) != Some(binding.as_slice()) {
+        return Err("DIRECT_PREPARATION_BINDING_MISMATCH".to_owned());
+    }
+    check()?;
+    let expected = Zeroizing::new(encode_preparation(source).map_err(str::to_owned)?);
+    if manifest.get(BINDING_BYTES..) != Some(expected.as_slice()) {
+        return Err("DIRECT_PREPARATION_DERIVATION_MISMATCH".to_owned());
+    }
+    let gap = preparation_gap(&expected).map_err(str::to_owned)?;
+    drop(expected);
+    drop(manifest);
+    // The fingerprints describe the same decoded object/reference, not another
+    // path read substituted after validation. The importer must still revalidate
+    // at cutover; this is not an atomic snapshot of the entire filesystem.
+    check()?;
+    let reread = Zeroizing::new(read_regular_file(
+        &object_path, MAX_OBJECT_BYTES, "DIRECT_PREPARATION_OBJECT_READ_FAILED",
+    )?);
+    if reread.len() as u64 != raw_length || sha256::digest(&reread) != raw_digest
+        || read_regular_file(&ref_path, REF_BYTES, "DIRECT_PREPARATION_REFERENCE_READ_FAILED")? != saved
+    {
+        return Err("DIRECT_MIGRATION_PREPARATION_CHANGED".to_owned());
+    }
+    check()?;
+    Ok(PreparationEvidence {
+        present: true, stored_bytes: raw_length + REF_BYTES as u64,
+        json: format!(concat!(
+            "{{\"status\":\"verified_record\",\"reference_key_sha256\":\"{}\",",
+            "\"reference_file_sha256\":\"{}\",\"reference_bytes\":{},",
+            "\"object_id\":\"{}\",\"object_format\":\"{}\",",
+            "\"manifest_sha256\":\"{}\",\"manifest_bytes\":{},",
+            "\"encoded_sha256\":\"{}\",\"encoded_bytes\":{},",
+            "\"record_verified\":true,\"layout_available\":{},\"preparation_gap\":{}}}"
+        ), hex, sha256::hex(&sha256::digest(&saved)), REF_BYTES, id, extension(protector),
+            sha256::hex(&digest), length, sha256::hex(&raw_digest), raw_length,
+            gap.is_none(), gap.map_or_else(|| "null".to_owned(), crate::service_output::json_string)),
+    })
+}
+
+fn decode_reference(
+    saved: &[u8], key: &[u8; 32], protector: &RevisionProtector,
+) -> Result<([u8; 32], u64), &'static str> {
+    if saved.len() != REF_BYTES || &saved[..8] != REF_MAGIC || saved[8..40] != key[..]
+        || saved[80] != u8::from(protector.encrypts_new_objects())
+    {
+        return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
+    }
+    let digest = saved[40..72].try_into().map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?;
+    let length = u64::from_be_bytes(saved[72..80].try_into().map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?);
+    if length <= BINDING_BYTES as u64 || length > MAX_MANIFEST_BYTES as u64 {
+        return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
+    }
+    Ok((digest, length))
 }
 
 fn binding(namespace: &str, metadata: &RevisionMetadata) -> Result<[u8; BINDING_BYTES], String> {
@@ -148,8 +259,14 @@ fn read_object(
     path: &Path, protector: &RevisionProtector, id: &str, digest: [u8; 32], length: u64,
 ) -> Result<Zeroizing<Vec<u8>>, String> {
     let encoded = Zeroizing::new(read_regular_file(path, MAX_OBJECT_BYTES, "DIRECT_PREPARATION_OBJECT_READ_FAILED")?);
+    decode_object(&encoded, protector, id, digest, length)
+}
+
+fn decode_object(
+    encoded: &[u8], protector: &RevisionProtector, id: &str, digest: [u8; 32], length: u64,
+) -> Result<Zeroizing<Vec<u8>>, String> {
     let decoded = Zeroizing::new(if protector.encrypts_new_objects() {
-        protector.unprotect(&encoded, id, &sha256::hex(&digest), length)?
+        protector.unprotect(encoded, id, &sha256::hex(&digest), length)?
     } else { encoded.to_vec() });
     if decoded.len() as u64 != length || sha256::digest(&decoded) != digest {
         return Err("DIRECT_PREPARATION_CONTENT_MISMATCH".to_owned());

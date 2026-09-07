@@ -10,6 +10,8 @@ use zeroize::Zeroizing;
 
 #[path = "control_migration_directories.rs"]
 mod directories;
+#[path = "control_migration_orphans.rs"]
+mod orphans;
 
 use super::{DirectStore, RevisionMetadata, MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY,
     legacy_path, protected_path, read_regular_file, verify_plaintext, verify_revision_identity};
@@ -52,16 +54,16 @@ impl RevisionReadback {
             + self.protected.as_ref().map_or(0, |value| value.encoded_bytes)
     }
 
-    fn json(&self, revision: &RevisionMetadata) -> String {
+    fn json(&self, revision: &RevisionMetadata, preparation: &str) -> String {
         format!(
             concat!(
                 "{{\"source_id\":{},\"legacy_revision_id\":{},\"content_sha256\":{},",
                 "\"byte_length\":{},\"plaintext_object\":{},\"protected_object\":{},",
-                "\"content_verified\":true}}"
+                "\"content_verified\":true,\"preparation\":{}}}"
             ),
             json_string(&revision.source_id), json_string(&revision.revision_id),
             json_string(&revision.content_digest), revision.byte_length,
-            ObjectEvidence::json(self.plaintext.as_ref()), ObjectEvidence::json(self.protected.as_ref()),
+            ObjectEvidence::json(self.plaintext.as_ref()), ObjectEvidence::json(self.protected.as_ref()), preparation,
         )
     }
 }
@@ -74,8 +76,8 @@ struct Cursor {
 
 impl Cursor {
     fn parse(value: &str) -> Result<Self, String> {
-        // r1.<checkpoint hex>.<last revision hex>; reject before byte slicing.
-        if value.len() != 132 || !value.is_ascii() || !value.starts_with("r1.")
+        // r2.<checkpoint hex>.<last revision hex>; reject before byte slicing.
+        if value.len() != 132 || !value.is_ascii() || !value.starts_with("r2.")
             || value.as_bytes()[67] != b'.'
         {
             return Err("DIRECT_MIGRATION_REVISION_CURSOR_INVALID".to_owned());
@@ -107,12 +109,17 @@ impl DirectStore {
     /// This is not an atomic filesystem snapshot or a complete canonical import:
     /// an importer must revalidate these object fingerprints before cutover.
     pub(crate) fn inspect_migration_revisions(&self, cursor: Option<&str>) -> Result<String, String> {
+        // The same administrative command has an explicit physical-orphan mode.
+        // Subsequent o1 bookmarks keep that mode; an ordinary r2 page never mixes it.
+        if cursor == Some("orphans") || cursor.is_some_and(|value| value.starts_with("o1.")) {
+            return self.inspect_migration_orphans(cursor.filter(|value| *value != "orphans"));
+        }
         let deadline = Instant::now().checked_add(DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
         let cursor = cursor.map(Cursor::parse).transpose()?;
         let snapshot = self.inner.verify_migration_snapshot(deadline)?;
-        let checkpoint = sha256::digest_parts(b"eliot-search/control-migration-revision-cursor/v1", &[
-            &snapshot, self.protector.backend_name().as_bytes(),
+        let checkpoint = sha256::digest_parts(b"eliot-search/control-migration-revision-cursor/v2", &[
+            &snapshot, self.protector.backend_name().as_bytes(), &crate::direct_preparation::profile_digest(),
         ]);
         if cursor.as_ref().is_some_and(|value| value.checkpoint != checkpoint
             || self.inner.retained_revision(&value.after).is_none())
@@ -125,11 +132,12 @@ impl DirectStore {
         let mut last = after.unwrap_or("").to_owned();
         let (mut source_bytes, mut stored_bytes) = (0_u64, 0_u64);
         let (mut plaintext_objects, mut protected_objects) = (0_usize, 0_usize);
+        let (mut preparation_records, mut preparation_missing) = (0_usize, 0_usize);
         while let Some(metadata) = pending.peek() {
             check_deadline(Some(deadline))?;
             // Reserve room for both possible encodings before the next read.
             // Actual encoded bytes come from readback, never source-log lengths.
-            let object_ceiling = metadata.byte_length.checked_add(MAX_REVISION_OBJECT_BYTES as u64)
+            let object_ceiling = metadata.byte_length.checked_add(2 * MAX_REVISION_OBJECT_BYTES as u64 + 81)
                 .ok_or_else(|| "DIRECT_MIGRATION_BYTES_EXCEEDED".to_owned())?;
             if entries.len() == MAX_PAGE_REVISIONS
                 || source_bytes.checked_add(metadata.byte_length)
@@ -142,11 +150,16 @@ impl DirectStore {
             }
             let metadata = pending.next().ok_or_else(|| "DIRECT_MIGRATION_NO_PROGRESS".to_owned())?;
             let observed = self.read_revision_objects(&metadata, Some(deadline))?;
+            let preparation = super::preparation_store::inspect(
+                &self.root, &self.protector, &self.namespace_id(), &metadata, &observed.bytes, deadline,
+            )?;
             source_bytes += metadata.byte_length;
-            stored_bytes += observed.stored_bytes();
+            stored_bytes += observed.stored_bytes() + preparation.stored_bytes;
+            preparation_records += usize::from(preparation.present);
+            preparation_missing += usize::from(!preparation.present);
             plaintext_objects += usize::from(observed.plaintext.is_some());
             protected_objects += usize::from(observed.protected.is_some());
-            entries.push(observed.json(&metadata));
+            entries.push(observed.json(&metadata, &preparation.json));
             last = metadata.revision_id;
             // No revision body survives into the next iteration or output frame.
         }
@@ -155,29 +168,32 @@ impl DirectStore {
             return Err("DIRECT_MIGRATION_REVISION_CURSOR_STALE".to_owned());
         }
         let body = entries.join(",");
-        let page_digest = sha256::digest_parts(b"eliot-search/control-migration-revision-page/v1", &[
+        let page_digest = sha256::digest_parts(b"eliot-search/control-migration-revision-page/v2", &[
             &checkpoint, after.unwrap_or("").as_bytes(), last.as_bytes(), body.as_bytes(),
         ]);
         let next_cursor = if exhausted { "null".to_owned() }
-            else { json_string(&format!("r1.{}.{last}", sha256::hex(&checkpoint))) };
+            else { json_string(&format!("r2.{}.{last}", sha256::hex(&checkpoint))) };
         let output = format!(
             concat!(
-                "{{\"event\":\"control_migration_revisions\",\"schema\":\"legacy-revision-readback-v1\",",
-                "\"scope\":\"referenced_revision_objects_only\",\"namespace_id\":{},",
+                "{{\"event\":\"control_migration_revisions\",\"schema\":\"legacy-revision-readback-v2\",",
+                "\"scope\":\"referenced_revisions_and_current_preparation\",\"namespace_id\":{},",
                 "\"catalog_snapshot_sha256\":\"{}\",\"backend\":{},",
                 "\"referenced_revision_ids\":{},\"after_revision\":{},\"last_revision\":{},",
                 "\"page_revisions\":{},\"source_bytes\":{},\"stored_bytes\":{},",
                 "\"plaintext_objects\":{},\"protected_objects\":{},\"entries\":[{}],",
                 "\"page_sha256\":\"{}\",\"next_cursor\":{},\"exhausted\":{},",
                 "\"read_only\":true,\"page_payloads_verified\":true,",
-                "\"orphans_enumerated\":false,\"derived_preparation_verified\":false,",
+                "\"orphans_enumerated\":false,\"derived_preparation_verified\":{},",
+                "\"preparation_records_verified\":{},\"preparation_missing\":{},\"preparation_profile_sha256\":\"{}\",",
+                "\"cutover_revalidation_required\":true,",
                 "\"canonical_mapping_complete\":false}}"
             ),
             json_string(&self.namespace_id()), sha256::hex(&snapshot), json_string(self.protector.backend_name()),
             self.inner.retained_revisions().len(), after.map_or_else(|| "null".to_owned(), json_string),
             if last.is_empty() { "null".to_owned() } else { json_string(&last) },
             entries.len(), source_bytes, stored_bytes, plaintext_objects, protected_objects, body,
-            sha256::hex(&page_digest), next_cursor, exhausted,
+            sha256::hex(&page_digest), next_cursor, exhausted, preparation_missing == 0,
+            preparation_records, preparation_missing, sha256::hex(&crate::direct_preparation::profile_digest()),
         );
         if output.len() > MAX_PAGE_BYTES { return Err("DIRECT_MIGRATION_PAGE_TOO_LARGE".to_owned()); }
         check_deadline(Some(deadline))?;
