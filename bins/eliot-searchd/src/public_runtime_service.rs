@@ -110,7 +110,7 @@ fn run_service(root: &Path) -> Result<(), String> {
                 &mut store,
                 &mut continuations,
                 &mut handles,
-                guard.canonical_root(),
+                &guard,
                 &mut storage,
                 (output, attempt),
             )
@@ -134,11 +134,12 @@ fn execute_command(
     store: &mut DirectStore,
     continuations: &mut ContinuationCatalog,
     handles: &mut ResultHandleCatalog,
-    canonical_root: &Path,
+    owner: &DataRootGuard,
     storage: &mut StorageSecurityStatus,
     operation: (&mut impl std::io::Write, &mut MutationAttempt),
 ) -> Result<ServiceControl, String> {
     let (writer, attempt) = operation;
+    let canonical_root = owner.canonical_root();
     let fields = command.split('\t').collect::<Vec<_>>();
     let Some(name) = fields.first().copied() else {
         return Err("SERVICE_COMMAND_EMPTY".to_owned());
@@ -239,7 +240,7 @@ fn execute_command(
             write_line(writer, &page)?;
         }
         ("control-migration-directories", [_] | [_, _]) => {
-            let page = store.inspect_migration_directories(fields.get(1).copied())?;
+            let page = store.inspect_migration_directories(owner, fields.get(1).copied())?;
             write_line(writer, &page)?;
         }
         ("prepare-root", [_] | [_, _]) => {

@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use super::{DirectStore, DEADLINE, MAX_PAGE_BYTES, check_deadline};
+use crate::development::DataRootGuard;
 use crate::directory_manifest::{migration_manifest, migration_manifest_files, path_identity_bytes};
 use crate::service_output::json_string;
 use crate::{sha256, source_roots};
@@ -58,12 +59,26 @@ impl DirectStore {
     /// Emits registration plus a bounded page from every extant manifest generation.
     /// Both complete metadata sweeps and source replays share one cooperative deadline.
     /// Startup migration is not made side-effect-free by this already-open-store read.
-    pub(crate) fn inspect_migration_directories(&self, cursor: Option<&str>) -> Result<String, String> {
+    /// The borrowed live owner binds the root and its admitted registration throughout.
+    pub(crate) fn inspect_migration_directories(
+        &self, owner: &DataRootGuard, cursor: Option<&str>,
+    ) -> Result<String, String> {
         let deadline = Instant::now().checked_add(DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
         let cursor = cursor.map(Cursor::parse).transpose()?;
+        if owner.canonical_root() != self.root.as_path() {
+            return Err("DIRECT_MIGRATION_ROOT_OWNER_MISMATCH".to_owned());
+        }
+        let admitted = owner.source_roots().views().map_err(|error| error.code().to_owned())?;
         let catalog = self.inner.verify_migration_snapshot(deadline)?;
         let roots = source_roots::migration_input(&self.root).map_err(|error| error.code().to_owned())?;
+        // A valid replacement or deleted registration file is not a new admitted
+        // root set. Compare locators only: cached availability is not live authority.
+        if !roots.paths.iter().map(|path| path.as_path()).eq(
+            admitted.iter().map(|view| std::path::Path::new(&view.path)),
+        ) {
+            return Err("DIRECT_MIGRATION_ROOT_STATE_CHANGED".to_owned());
+        }
         let root_ids = roots.paths.iter().map(|path| {
             let bytes = path_identity_bytes(path);
             (sha256::hex(&sha256::digest(&bytes)), sha256::hex(&sha256::digest_parts(
