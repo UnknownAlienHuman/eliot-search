@@ -13,7 +13,7 @@ use crate::endpoint::{self, EndpointAction};
 
 #[path = "proxy_exchange.rs"]
 mod exchange;
-use exchange::{ExchangeFence, Reply};
+use exchange::{ExchangeFence, Reply, event_name};
 
 #[path = "proxy_child.rs"]
 mod child_io;
@@ -128,14 +128,16 @@ impl Terminal {
         })
     }
     fn reached(self, line: &str) -> bool {
-        match self {
-            Self::Single => true,
-            Self::DirectoryIndex => line.contains("\"event\":\"directory_index_complete\""),
-            Self::StreamingSearch => line.contains("\"event\":\"corpus_search_complete\""),
-            Self::SearchPage => line.contains("\"event\":\"search_page_complete\""),
-            Self::SourceList => line.contains("\"event\":\"source_list_complete\""),
-            Self::Shutdown => line.contains("\"event\":\"data_root_stopped\""),
-        }
+        let event = event_name(line);
+        let expected = match self {
+            Self::Single => return event.is_some(),
+            Self::DirectoryIndex => "directory_index_complete",
+            Self::StreamingSearch => "corpus_search_complete",
+            Self::SearchPage => "search_page_complete",
+            Self::SourceList => "source_list_complete",
+            Self::Shutdown => "data_root_stopped",
+        };
+        event == Some(expected)
     }
 }
 

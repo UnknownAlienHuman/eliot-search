@@ -39,6 +39,23 @@ impl ExchangeFence {
     }
 }
 
+// Recognize the fixed event-first header emitted by our own child. A nested
+// event field or a payload substring is not a terminal/rejection signal. This
+// is not a general JSON validator or the canonical provider envelope parser.
+pub(super) fn event_name(line: &str) -> Option<&str> {
+    let (event, tail) = line.strip_prefix("{\"event\":\"")?.split_once('"')?;
+    if event.is_empty() || !event.bytes().all(|byte| {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'
+    }) {
+        return None;
+    }
+    if tail == "}" || (tail.starts_with(',') && line.ends_with('}')) {
+        Some(event)
+    } else {
+        None
+    }
+}
+
 // This is the closed wire shape of our own child, not a general JSON parser.
 const FATAL_CHILD_FRAMES: &[&str] = &[
     r#"{"event":"error","error":"SERVICE_MUTATION_OUTCOME_UNKNOWN"}"#,
@@ -72,7 +89,7 @@ pub(super) fn forward_reply(
         // child; do not mistake it for a recoverable command validation error.
         if FATAL_CHILD_FRAMES.contains(&line.as_str()) { return Ok(Reply::Fatal); }
         // An ordinary command rejection is a complete frame, not channel loss.
-        if line.contains("\"event\":\"error\"") {
+        if event_name(&line) == Some("error") {
             return Ok(Reply::Rejected);
         }
         if terminal(&line) {

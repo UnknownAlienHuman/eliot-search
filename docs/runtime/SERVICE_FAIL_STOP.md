@@ -25,8 +25,31 @@ retains the clean-stop event.
 This is a process-local fail-stop barrier, not an atomic source-log transaction,
 a persistent quarantine marker or a repair command. Restart must reopen and
 verify storage; no rollback, automatic replay or torn-log repair is claimed.
-General operation deadlines, durable recovery and redb cutover remain separate
-unfinished work. The bounded reader is not a timeout for a silent client.
+Durable recovery and redb cutover remain unfinished. The raw stdio line reader
+itself is not a timeout for a silent client.
+
+## Loopback child and event boundaries
+
+The existing `proxy_child::ChildIo` owns one child and one pipe worker. Its default
+startup budget is 30 seconds; one 120-second request budget covers pipe writes,
+response forwarding and shutdown exit/join. Cleanup has a separate five-second
+budget. Channels have capacity one, frames remain limited to 64 KiB and aggregate
+normal responses to 64 MiB. Progress does not reset the request deadline.
+The child's exact shutdown frames are deferred until successful process exit.
+OS termination failure is not proof of clean release; native containment and
+canonical provider integration still have separate obligations.
+
+The proxy now recognizes completion and ordinary errors through the child's
+fixed event-first header, not substring searches anywhere in the line. A nested
+`event` field or payload substring is not treated as the control signal.
+Single-frame responses also require a recognizable event. This checks the
+private producer's header shape, not the complete JSON grammar or a canonical
+provider request ID. Full provider envelopes remain T19 work. Exact fatal service
+frames still retain the exchange fence.
+
+The unreferenced `owned_service.rs` alternative stdio implementation is removed.
+`entry.rs` continues to use `public_runtime_service`; the existing bounded child
+owner is preserved rather than replaced by another process controller.
 
 ## Targets and verification
 
@@ -36,8 +59,8 @@ targets. Six sealed prototypes and two snapshot programs are retained as explici
 functions are not executed by the Rust test harness. This supersedes the proposed
 runnable-example patch in `docs/execution/2026-09-05/T02_TARGET_ISOLATION.patch`:
 runnable examples would still permit the conflicting legacy root owners.
-No source or regression suite is deleted; all-target checking still sees them.
-The full durable owner and capability extraction work remains unfinished.
+All eight retained harness targets and their regression suites remain available
+in all-target checking. Full durable ownership and capability extraction remain unfinished.
 
 ```sh
 cargo +1.98.0 check --workspace --all-targets --all-features --locked
@@ -45,8 +68,7 @@ cargo +1.98.0 test --locked -p eliot-searchd --bin eliot-searchd --test service_
 cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-sealed-recover
 ```
 
-Seven session unit tests, four primary-process regressions and two manifest
-invariant tests cover the new boundaries. Process tests use disposable roots;
-the catalog-loss fixture restores its own saved log explicitly. No fault switch
-is added to the product. Rust compilation and test execution were unavailable
-in the authoring environment; these commands are required, not passing evidence.
+Existing session and primary-process regressions are retained. Process fixtures
+use disposable roots; the catalog-loss fixture restores its saved log explicitly.
+No compiler or native execution result is supplied for this increment; source
+changes do not imply T06 or product acceptance.
