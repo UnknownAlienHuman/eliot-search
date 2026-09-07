@@ -226,6 +226,16 @@ fn execute_command(
             refresh_storage(storage, canonical_root)?;
             emit_source_list(writer, store, storage)?;
         }
+        ("prepare-revision", [_, revision_id]) => {
+            crate::preparation_composition::validate_revision(revision_id)?;
+            attempt.arm();
+            // Backfill can remove a search gap without changing any source
+            // event. Source-fence equality alone cannot validate older pages.
+            let invalidated = invalidate_search_state(continuations, handles);
+            store.prepare_revision(revision_id)?;
+            refresh_storage(storage, canonical_root)?;
+            crate::preparation_composition::emit_prepared(writer, revision_id, invalidated)?;
+        }
         ("index-file", [_, path_hex]) => {
             let path = decode_path(path_hex)?;
             attempt.arm();
