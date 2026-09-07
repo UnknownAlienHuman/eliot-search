@@ -2,6 +2,9 @@
 
 use crate::{SourceLineSpan, UnitizationError, UnitizationLimits};
 
+#[path = "layout_manifest.rs"]
+mod manifest;
+
 /// A range into one exact materialized text, not a source or revision identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UnitSpan {

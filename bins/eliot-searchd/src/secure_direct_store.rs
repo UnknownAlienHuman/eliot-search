@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 
 use crate::development::ScanResult;
-use crate::direct_preparation::{prepare_and_scan, validate_query};
+use crate::direct_preparation::{scan_prepared, validate_query};
 use crate::plaintext_direct_store as plaintext;
 use crate::revision_protection::RevisionProtector;
 use crate::sha256;
@@ -27,6 +27,8 @@ use crate::sha256;
 mod storage_io;
 #[path = "secure_revision_writer.rs"]
 mod revision_writer;
+#[path = "preparation_store.rs"]
+mod preparation_store;
 
 use storage_io::{
     legacy_path, load_event_count, load_inventory, protected_path,
@@ -101,37 +103,41 @@ impl DirectStore {
         self.inner.namespace_id()
     }
 
-    /// Verifies stored revision bytes before making the source revision visible.
+    /// Revision bytes and saved preparation both precede source publication.
     pub(crate) fn index_file(&mut self, path: &Path) -> Result<IndexedSource, String> {
-        let indexed = if self.protector.encrypts_new_objects() {
-            let root = &self.root;
-            let protector = &self.protector;
-            self.inner.index_file_with_writer(path, &mut |_, source, bytes| {
-                revision_writer::persist_before_publication(root, protector, source, bytes)
-            })?
-        } else {
-            self.inner.index_file(path)?
-        };
+        let namespace = self.inner.namespace_id();
+        let root = &self.root;
+        let protector = &self.protector;
+        let indexed = self.inner.index_file_with_writer(path, &mut |_, source, bytes| {
+            preparation_store::persist_source(root, protector, &namespace, source, bytes)
+        })?;
         self.refresh_inventory()?;
         Ok(indexed)
     }
 
-    /// Protects and verifies every batch object before publishing source events.
+    /// Every batch member crosses the same revision/preparation barrier.
     pub(crate) fn index_directory(
         &mut self,
         directory: &Path,
     ) -> Result<Vec<IndexedSource>, String> {
-        let indexed = if self.protector.encrypts_new_objects() {
-            let root = &self.root;
-            let protector = &self.protector;
-            self.inner.index_directory_with_writer(directory, &mut |_, source, bytes| {
-                revision_writer::persist_before_publication(root, protector, source, bytes)
-            })?
-        } else {
-            self.inner.index_directory(directory)?
-        };
+        let namespace = self.inner.namespace_id();
+        let root = &self.root;
+        let protector = &self.protector;
+        let indexed = self.inner.index_directory_with_writer(directory, &mut |_, source, bytes| {
+            preparation_store::persist_source(root, protector, &namespace, source, bytes)
+        })?;
         self.refresh_inventory()?;
         Ok(indexed)
+    }
+
+    /// Explicitly prepares a retained revision without rereading a current path.
+    /// Missing objects may be reconstructed; conflicting immutable objects fail.
+    pub(crate) fn prepare_revision(&mut self, revision_id: &str) -> Result<(), String> {
+        crate::catalog_presence::require_existing(&self.root)?;
+        let metadata = self.inventory.get(revision_id)
+            .ok_or_else(|| "DIRECT_REVISION_NOT_FOUND".to_owned())?;
+        let bytes = Zeroizing::new(self.read_revision_detailed(metadata)?);
+        preparation_store::persist(&self.root, &self.protector, &self.inner.namespace_id(), metadata, &bytes)
     }
 
     /// Retires one source without deleting retained revision objects.
@@ -146,14 +152,15 @@ impl DirectStore {
         self.inner.list_sources()
     }
 
-    /// Searches active protected revisions after exact decrypt/readback and
-    /// shared UTF-8 materialization/unitization. Preparation gaps stay explicit.
+    /// Searches verified revisions using saved profile-bound preparation.
+    /// Missing or invalid preparation is an explicit gap, never a write-on-query.
     pub(crate) fn search(
         &self,
         query: &str,
         ascii_insensitive: bool,
     ) -> Result<StoreSearchResult, String> {
         validate_query(query).map_err(str::to_owned)?;
+        let namespace = self.inner.namespace_id();
         let active = self
             .inner
             .list_sources()
@@ -213,7 +220,9 @@ impl DirectStore {
             let ScanResult {
                 matches: source_matches,
                 coverage,
-            } = match prepare_and_scan(text, query, ascii_insensitive) {
+            } = match preparation_store::load(&self.root, &self.protector, &namespace, &metadata)
+                .and_then(|saved| scan_prepared(&text, &saved, query, ascii_insensitive))
+            {
                 Ok(result) => result,
                 Err(reason) => {
                     complete = false;

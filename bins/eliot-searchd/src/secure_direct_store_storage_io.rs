@@ -169,7 +169,8 @@ fn read_text_file(
 }
 
 pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    if bytes.is_empty() || bytes.len() > MAX_REVISION_OBJECT_BYTES {
+    // Empty bytes are valid for an exact retained empty-file revision.
+    if bytes.len() > MAX_REVISION_OBJECT_BYTES {
         return Err("DIRECT_REVISION_PROTECTED_SIZE_INVALID".to_owned());
     }
     let parent = path
@@ -275,7 +276,7 @@ fn revision_object_path(
         .join(format!("{revision_id}.{extension}")))
 }
 
-fn ensure_directory(path: &Path) -> Result<(), String> {
+pub(super) fn ensure_directory(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| format!("DIRECT_DIRECTORY_METADATA_ERROR:{error}"))?;
     if metadata.file_type().is_symlink() || is_reparse(&metadata) || !metadata.is_dir() {
@@ -284,7 +285,7 @@ fn ensure_directory(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_child_directory(path: &Path) -> Result<(), String> {
+pub(super) fn ensure_child_directory(path: &Path) -> Result<(), String> {
     if !path.exists() {
         fs::create_dir(path)
             .map_err(|error| format!("DIRECT_DIRECTORY_CREATE_ERROR:{error}"))?;
@@ -314,14 +315,14 @@ fn is_reparse(_metadata: &Metadata) -> bool {
 }
 
 #[cfg(unix)]
-fn sync_directory(path: &Path) -> Result<(), String> {
+pub(super) fn sync_directory(path: &Path) -> Result<(), String> {
     File::open(path)
         .and_then(|file| file.sync_all())
         .map_err(|error| format!("DIRECT_DIRECTORY_SYNC_ERROR:{error}"))
 }
 
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<(), String> {
+pub(super) fn sync_directory(_path: &Path) -> Result<(), String> {
     Ok(())
 }
 

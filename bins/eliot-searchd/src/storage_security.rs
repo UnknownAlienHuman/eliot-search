@@ -1,10 +1,8 @@
 //! Evidence-based revision-storage security status.
 //!
-//! The status is computed from the verified control-log reference set and a
-//! complete bounded revision-directory inventory. A platform capability alone
-//! never raises `encrypted_at_rest`: every referenced revision must have one
-//! protected object, and no plaintext, temporary, unexpected, or malformed
-//! protected object may remain anywhere below the revision root.
+//! The status is computed from the control-log reference set and bounded storage
+//! inventories. Preparation bodies are included in the at-rest layout check;
+//! ciphertext presence is not proof of successful decryption or source admission.
 
 use std::fs::{self, File, Metadata};
 use std::io::Read;
@@ -50,7 +48,8 @@ impl StorageSecurityStatus {
             && inventory.plaintext_objects == 0
             && inventory.temporary_objects == 0
             && inventory.unexpected_objects == 0
-            && malformed_protected_objects == 0;
+            && malformed_protected_objects == 0
+            && preparation_is_protected(root)?;
         Ok(Self {
             backend: if cfg!(windows) {
                 "windows-dpapi-credential-manager-v1"
@@ -166,6 +165,60 @@ fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
         }
     }
     Ok(malformed)
+}
+
+/// Inspect both current and orphan preparation entries. A plaintext development
+/// artifact carried to Windows must not disappear from the encryption claim.
+/// Reference bytes are technical hashes/lengths only; body authenticity is checked
+/// by the owning preparation reader, not inferred from this inventory header.
+fn preparation_is_protected(root: &Path) -> Result<bool, String> {
+    let base = root.join("preparation");
+    match fs::symlink_metadata(&base) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+        Err(_) => return Err("DIRECT_PREPARATION_STATUS_READ_FAILED".to_owned()),
+        Ok(_) => ensure_directory(&base)?,
+    }
+    for entry in fs::read_dir(&base).map_err(preparation_status_error)? {
+        let name = entry.map_err(preparation_status_error)?.file_name();
+        if !matches!(name.to_str(), Some("refs" | "objects")) { return Ok(false); }
+    }
+    let mut observed = 0_usize;
+    for (directory, suffix, magic) in [("refs", ".ref", *b"ELSPRF01"), ("objects", ".dpapi", *b"ELSRV2\0\0")] {
+        let directory_path = base.join(directory);
+        ensure_directory(&directory_path)?;
+        let mut shards = 0;
+        for shard in fs::read_dir(&directory_path).map_err(preparation_status_error)? {
+            let shard = shard.map_err(preparation_status_error)?;
+            shards += 1;
+            let name = shard.file_name();
+            let Some(shard_name) = name.to_str() else { return Ok(false); };
+            if shards > 256 || !valid_shard_name(shard_name) { return Ok(false); }
+            ensure_directory(&shard.path())?;
+            for entry in fs::read_dir(shard.path()).map_err(preparation_status_error)? {
+                let entry = entry.map_err(preparation_status_error)?;
+                observed += 1;
+                if observed > MAX_REVISION_OBJECTS {
+                    return Err("DIRECT_PREPARATION_STATUS_LIMIT_EXCEEDED".to_owned());
+                }
+                let name = entry.file_name();
+                let Some(id) = name.to_str().and_then(|name| name.strip_suffix(suffix)) else { return Ok(false); };
+                if sha256::decode_digest(id).is_none() || !id.starts_with(shard_name) { return Ok(false); }
+                let metadata = fs::symlink_metadata(entry.path()).map_err(preparation_status_error)?;
+                if !metadata.is_file() || metadata.file_type().is_symlink() || is_reparse(&metadata)
+                    || (directory == "refs" && metadata.len() != 81)
+                    || metadata.len() > 65 * 1024 * 1024
+                { return Ok(false); }
+                let mut prefix = [0; 8];
+                File::open(entry.path()).and_then(|mut file| file.read_exact(&mut prefix))
+                    .map_err(preparation_status_error)?;
+                if prefix != magic { return Ok(false); }
+            }
+        }
+    }
+    Ok(true)
+}
+fn preparation_status_error(_: std::io::Error) -> String {
+    "DIRECT_PREPARATION_STATUS_READ_FAILED".to_owned()
 }
 
 fn valid_shard_name(value: &str) -> bool {

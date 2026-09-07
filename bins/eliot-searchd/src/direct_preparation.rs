@@ -1,98 +1,137 @@
-//! Composition of shared preparation and literal execution after DIRECT readback.
-//!
-//! The caller retains its actual source/revision identity and SHA-256 binding.
-//! No BLAKE3 digest, revision sequence or durable receipt is fabricated here.
-//! Preparation is deterministic and memory-only; no second persistent index exists.
+//! DIRECT preparation is built during ingestion; search consumes its saved layout.
+//! The storage envelope binds the actual namespace/revision/SHA-256 identities.
 
 use search_exact::literal::{self, LiteralLimits};
-use search_materializer::{MaterializationLimits, materialize_utf8};
-use search_unitizer::{SourceLineSpan, UnitizationLimits, unitize_text};
+use search_materializer::{LineSpan, MaterializationError, MaterializationLimits, materialize_utf8};
+use search_unitizer::{SourceLineSpan, UnitSpan, UnitizationError, UnitizationLimits};
+#[cfg(test)]
+use search_unitizer::unitize_text;
 
-use crate::development::{
-    MAX_SCAN_INPUT_BYTES, MAX_SCAN_MATCHES, MAX_SCAN_QUERY_BYTES,
-    ScanCoverage, ScanMatch, ScanResult,
-};
+use crate::development::{MAX_SCAN_INPUT_BYTES, MAX_SCAN_MATCHES, MAX_SCAN_QUERY_BYTES,
+    ScanCoverage, ScanMatch, ScanResult};
+use crate::sha256;
 
+pub(crate) const MAX_LAYOUT_BYTES: usize = 64 * 1024 * 1024 - 512;
 const MATERIALIZATION: MaterializationLimits = MaterializationLimits {
-    max_input_bytes: MAX_SCAN_INPUT_BYTES,
-    max_output_bytes: MAX_SCAN_INPUT_BYTES,
-    max_lines: 1_000_000,
+    max_input_bytes: MAX_SCAN_INPUT_BYTES, max_output_bytes: MAX_SCAN_INPUT_BYTES, max_lines: 1_000_000,
 };
 const UNITIZATION: UnitizationLimits = UnitizationLimits {
-    max_input_bytes: MAX_SCAN_INPUT_BYTES,
-    preferred_unit_bytes: 16 * 1024,
-    max_unit_bytes: 64 * 1024,
-    max_lines: 1_000_000,
-    max_units: 1_000_000,
+    max_input_bytes: MAX_SCAN_INPUT_BYTES, preferred_unit_bytes: 16 * 1024,
+    max_unit_bytes: 64 * 1024, max_lines: 1_000_000, max_units: 1_000_000,
 };
 const LITERAL: LiteralLimits = LiteralLimits {
-    max_query_bytes: MAX_SCAN_QUERY_BYTES,
-    max_input_bytes: MAX_SCAN_INPUT_BYTES,
-    max_chunks: 1_000_000,
-    max_matches: MAX_SCAN_MATCHES,
+    max_query_bytes: MAX_SCAN_QUERY_BYTES, max_input_bytes: MAX_SCAN_INPUT_BYTES,
+    max_chunks: 1_000_000, max_matches: MAX_SCAN_MATCHES,
 };
 
-pub(crate) fn validate_query(query: &str) -> Result<(), &'static str> {
-    if query.is_empty() {
-        return Err("DIRECT_QUERY_EMPTY");
+/// Bind every preparation algorithm/limit, not query options, into the disk key.
+pub(crate) fn profile_digest() -> [u8; 32] {
+    let mut settings = Vec::new();
+    for value in [MATERIALIZATION.max_input_bytes, MATERIALIZATION.max_output_bytes,
+        MATERIALIZATION.max_lines, UNITIZATION.max_input_bytes, UNITIZATION.preferred_unit_bytes,
+        UNITIZATION.max_unit_bytes, UNITIZATION.max_lines, UNITIZATION.max_units, MAX_LAYOUT_BYTES]
+    {
+        settings.extend_from_slice(&(value as u64).to_be_bytes());
     }
+    sha256::digest_parts(b"eliot-search/direct-preparation-profile/v1", &[
+        b"utf8-exact;no-normalization;crlf-cr-lf;nul-denied;controls-ceil-1pct-min4/v1",
+        UnitizationLimits::LAYOUT_FORMAT.as_bytes(), &settings,
+    ])
+}
+
+pub(crate) fn validate_query(query: &str) -> Result<(), &'static str> {
+    if query.is_empty() { return Err("DIRECT_QUERY_EMPTY"); }
     literal::validate_query(query, LITERAL).map_err(|error| error.code())
 }
 
-pub(crate) fn prepare_and_scan(
-    verified_text: String,
-    query: &str,
-    ascii_insensitive: bool,
-) -> Result<ScanResult, &'static str> {
-    validate_query(query)?;
-    scan_with_limits(verified_text, query, ascii_insensitive, MATERIALIZATION, UNITIZATION, LITERAL)
+/// Canonical layout or a closed deterministic preparation gap, never source text.
+/// Storage failures are not encoded as content outcomes.
+pub(crate) fn encode_preparation(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
+    // Keep the existing DIRECT precedence for invalid UTF-8 versus binary policy.
+    if std::str::from_utf8(bytes).is_err() { return Ok(vec![1]); }
+    let prepared = match materialize_utf8(bytes.to_vec(), MATERIALIZATION) {
+        Ok(value) => value,
+        Err(MaterializationError::BinaryContent) => return Ok(vec![2]),
+        Err(MaterializationError::TooManyLines) => return Ok(vec![3]),
+        Err(error) => return Err(error.code()),
+    };
+    let encoded = match UNITIZATION.encode_layout(prepared.text(), &line_spans(prepared.lines()), MAX_LAYOUT_BYTES) {
+        Ok(value) => value,
+        Err(UnitizationError::TooManyUnits) => return Ok(vec![4]),
+        Err(UnitizationError::InputTooLarge) => return Ok(vec![5]),
+        Err(error) => return Err(error.code()),
+    };
+    let mut output = Vec::with_capacity(encoded.len() + 1);
+    output.push(0);
+    output.extend_from_slice(&encoded);
+    Ok(output)
 }
 
-fn scan_with_limits(
-    text: String,
-    query: &str,
-    ascii_insensitive: bool,
-    materialization: MaterializationLimits,
-    unitization: UnitizationLimits,
-    literal: LiteralLimits,
+/// Search verified bytes using the saved exact layout. No preparation/storage write.
+pub(crate) fn scan_prepared(
+    text: &str, encoded: &[u8], query: &str, ascii_insensitive: bool,
 ) -> Result<ScanResult, &'static str> {
-    let prepared = materialize_utf8(text.into_bytes(), materialization)
+    validate_query(query)?;
+    let (&status, layout) = encoded.split_first().ok_or("DIRECT_PREPARATION_INVALID")?;
+    if status != 0 {
+        if !layout.is_empty() { return Err("DIRECT_PREPARATION_INVALID"); }
+        return Err(match status {
+            1 => "DIRECT_REVISION_NOT_UTF8", 2 => "MATERIALIZATION_BINARY_CONTENT",
+            3 => "MATERIALIZATION_TOO_MANY_LINES", 4 => "UNITIZATION_TOO_MANY_UNITS",
+            5 => "DIRECT_PREPARATION_LAYOUT_TOO_LARGE", _ => "DIRECT_PREPARATION_INVALID",
+        });
+    }
+    let (lines, units) = UNITIZATION.decode_layout(text, layout, MAX_LAYOUT_BYTES)
         .map_err(|error| error.code())?;
-    let lines = prepared.lines().iter().map(|line| SourceLineSpan {
-        line_index: line.line_index,
-        source_start: line.source_start,
-        source_end: line.source_end,
-        content_end: line.content_end,
-    }).collect::<Vec<_>>();
-    let units = unitize_text(prepared.text(), &lines, unitization)
-        .map_err(|error| error.code())?;
-    let chunks = units.iter().map(|unit| {
-        prepared.text().get(unit.source_start..unit.source_end)
-            .ok_or("DIRECT_PREPARATION_COORDINATE_INVALID")
-    }).collect::<Result<Vec<_>, _>>()?;
-    let result = literal::scan_chunks(&chunks, query, ascii_insensitive, literal)
-        .map_err(|error| error.code())?;
+    scan_layout(text, &lines, &units, query, ascii_insensitive, LITERAL)
+}
+
+fn line_spans(lines: &[LineSpan]) -> Vec<SourceLineSpan> {
+    lines.iter().map(|line| SourceLineSpan {
+        line_index: line.line_index, source_start: line.source_start,
+        source_end: line.source_end, content_end: line.content_end,
+    }).collect()
+}
+
+fn scan_layout(
+    text: &str, lines: &[SourceLineSpan], units: &[UnitSpan], query: &str,
+    ascii_insensitive: bool, limits: LiteralLimits,
+) -> Result<ScanResult, &'static str> {
+    let chunks = units.iter().map(|unit| text.get(unit.source_start..unit.source_end)
+        .ok_or("DIRECT_PREPARATION_COORDINATE_INVALID")).collect::<Result<Vec<_>, _>>()?;
+    let result = literal::scan_chunks(&chunks, query, ascii_insensitive, limits).map_err(|error| error.code())?;
     let complete = result.complete();
     let matches = result.matches.into_iter().map(|range| {
         let start = u64::try_from(range.start).map_err(|_| "DIRECT_PREPARATION_COORDINATE_INVALID")?;
-        let index = prepared.lines().partition_point(|line| line.source_end <= start);
-        let line = prepared.lines().get(index).ok_or("DIRECT_PREPARATION_COORDINATE_INVALID")?;
+        let line = lines.get(lines.partition_point(|line| line.source_end <= start))
+            .ok_or("DIRECT_PREPARATION_COORDINATE_INVALID")?;
         let line_start = usize::try_from(line.source_start).map_err(|_| "DIRECT_PREPARATION_COORDINATE_INVALID")?;
         Ok(ScanMatch {
-            byte_start: range.start,
-            byte_end: range.end,
+            byte_start: range.start, byte_end: range.end,
             line: usize::try_from(line.line_index).map_err(|_| "DIRECT_PREPARATION_COORDINATE_INVALID")?,
             column_bytes: range.start.checked_sub(line_start).ok_or("DIRECT_PREPARATION_COORDINATE_INVALID")?,
         })
     }).collect::<Result<Vec<_>, &'static str>>()?;
-    Ok(ScanResult {
-        matches,
-        coverage: ScanCoverage {
-            input_bytes: result.input_bytes,
-            complete,
-            match_limit_reached: result.match_limit_reached,
-        },
-    })
+    Ok(ScanResult { matches, coverage: ScanCoverage {
+        input_bytes: result.input_bytes, complete, match_limit_reached: result.match_limit_reached,
+    } })
+}
+
+// Preserve the existing pure regression entrypoint; product queries use scan_prepared.
+#[cfg(test)]
+pub(crate) fn prepare_and_scan(text: String, query: &str, insensitive: bool) -> Result<ScanResult, &'static str> {
+    validate_query(query)?;
+    scan_with_limits(text, query, insensitive, MATERIALIZATION, UNITIZATION, LITERAL)
+}
+#[cfg(test)]
+fn scan_with_limits(
+    text: String, query: &str, insensitive: bool, materialization: MaterializationLimits,
+    unitization: UnitizationLimits, literal: LiteralLimits,
+) -> Result<ScanResult, &'static str> {
+    let prepared = materialize_utf8(text.into_bytes(), materialization).map_err(|error| error.code())?;
+    let lines = line_spans(prepared.lines());
+    let units = unitize_text(prepared.text(), &lines, unitization).map_err(|error| error.code())?;
+    scan_layout(prepared.text(), &lines, &units, query, insensitive, literal)
 }
 
 #[cfg(test)]

@@ -41,6 +41,11 @@ fn catalog_files(root: &Path) -> Result<(bool, bool), String> {
 }
 
 fn require_fresh_payload_state(root: &Path) -> Result<(), String> {
+    // Even an empty preparation directory proves earlier storage activity.
+    // Do not mint a new namespace after losing both catalog files.
+    if metadata(&root.join("preparation"))?.is_some() {
+        return Err("DIRECT_RESIDUAL_CORPUS_RECOVERY_REQUIRED".to_owned());
+    }
     let revisions = root.join("revisions");
     if let Some(value) = metadata(&revisions)? {
         if !safe_directory(&value) {

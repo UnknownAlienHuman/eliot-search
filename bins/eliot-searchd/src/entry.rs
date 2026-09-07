@@ -22,6 +22,7 @@ mod directory_manifest;
 mod endpoint;
 mod maintenance;
 mod maintenance_guard;
+mod preparation_composition;
 mod protocol_io;
 mod public_runtime_service;
 mod result_handles;
@@ -40,7 +41,8 @@ mod protected_ingest_tests;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let result = authenticated_proxy::maybe_run()
+    let result = preparation_composition::maybe_run()
+        .or_else(authenticated_proxy::maybe_run)
         .or_else(public_runtime_service::maybe_run)
         .or_else(secure_commands::maybe_run)
         .unwrap_or_else(app::run_main);
@@ -61,7 +63,10 @@ fn main() -> ExitCode {
                 "  eliot-searchd --unregister-source-root ROOT DIRECTORY\n",
                 "  eliot-searchd --sync-source-roots ROOT\n",
                 "Registration controls explicit observation, not access grants or purge.\n",
-                "Unregistering does not revoke already retained revisions.\n"
+                "Unregistering does not revoke already retained revisions.\n",
+                "\nRETAINED REVISION PREPARATION:\n",
+                "  eliot-searchd --prepare-revision ROOT REVISION_ID\n",
+                "Build missing preparation from retained bytes; search never rebuilds it.\n"
             )
         );
     }

@@ -1,4 +1,4 @@
-//! Protected revision bytes must exist and decrypt exactly before catalog publication.
+//! Revision bytes must exist and verify exactly before catalog publication.
 
 use std::fs;
 use std::io;
@@ -23,6 +23,17 @@ pub(super) fn persist_before_publication(
         content_digest: source.content_digest.clone(),
         byte_length: source.byte_length,
     };
+    if !protector.encrypts_new_objects() {
+        // The explicit non-Windows development profile uses the same immutable
+        // publication primitive, including empty retained revisions.
+        verify_plaintext(&metadata, plaintext)?;
+        let path = legacy_path(root, &metadata.revision_id)?;
+        persist_immutable_object(&path, plaintext)?;
+        let observed = Zeroizing::new(read_regular_file(
+            &path, MAX_REVISION_OBJECT_BYTES, "DIRECT_REVISION_READ_ERROR",
+        )?);
+        return verify_plaintext(&metadata, &observed);
+    }
     // Referenced legacy objects are migrated when the store opens. An orphan
     // plaintext object from an earlier failed ingestion is not such a migration:
     // do not silently keep it beside a newly published protected revision.

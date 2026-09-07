@@ -11,10 +11,19 @@ snapshot programs are now test-harness targets, not installable product binaries
 or runnable examples. Their source and regression tests remain in all-target checks.
 The snapshot/BM25 experiment is not an alternative product index.
 
-The primary DIRECT runtime retains and verifies source revisions, then uses the
-shared UTF-8 materializer, unitizer and cross-unit literal matcher. Windows writes
-protect and verify new revisions before source publication. Existing SHA-256
-identities are not relabeled as BLAKE3 or replaced by fabricated receipts.
+The primary DIRECT runtime retains and verifies source revisions. File/directory
+ingestion uses the shared materializer/unitizer and saves a profile-bound line/unit
+layout before publishing source metadata. Search reopens that preparation and uses
+the cross-unit literal matcher without rebuilding or writing it. Windows protects
+both revisions and preparation bodies using the existing DPAPI protector. Existing
+SHA-256 identities are not relabeled as BLAKE3 or replaced by fabricated receipts.
+
+Old roots require explicit preparation or reindexing; missing preparation is a
+source gap, not an empty successful search. Use retained bytes with:
+
+```text
+eliot-searchd --prepare-revision ROOT REVISION_ID
+```
 
 Persistent root registration is connected. Missing catalog state with retained
 objects is rejected rather than recreated as an empty corpus. A damaged proxy
@@ -23,12 +32,12 @@ an uncertain mutation or failed response, discards handles and refuses queued
 commands; invalid or oversized frames also terminate the session.
 
 The main unfinished integrations are **primary control-state migration to redb,
-durable canonical preparation manifests, and the real Qdrant data plane**.
+full canonical source/residency/preparation contracts, and the real Qdrant data plane**.
 `PersistentControlJournal` already performs real redb I/O, but the primary source
 catalog has not switched to it. The Qdrant bridge remains an in-memory model.
-Preparation is currently recomputed at query time. Native Windows security,
-full ownership/currentness/access/lifecycle behavior and release qualification
-still require the corresponding task implementations and executed tests.
+The saved DIRECT layout is not full canonical UnitManifest/H5 qualification.
+Native Windows security, full ownership/currentness/access/lifecycle behavior and
+release qualification still require their corresponding implementation and evidence.
 
 ## Build and tests
 
