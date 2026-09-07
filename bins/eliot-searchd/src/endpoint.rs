@@ -24,12 +24,14 @@ const IO_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) enum EndpointAction {
     Continue,
     Shutdown,
+    /// Unusable handler/output channel; close listener without any further reply.
+    Abort,
 }
 
 pub(crate) fn serve_loopback<F>(
     port: u16,
     token_file: &Path,
-    mut handler: F,
+    handler: F,
 ) -> Result<(), String>
 where
     F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
@@ -48,6 +50,14 @@ where
         local,
     );
 
+    serve_listener(listener, token_verifier, handler)
+}
+
+fn serve_listener<F>(listener: TcpListener, token_verifier: Sha256Digest, mut handler: F)
+    -> Result<(), String>
+where
+    F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+{
     let mut connection_sequence = 0_u64;
     for incoming in listener.incoming() {
         let mut stream = match incoming {
@@ -81,6 +91,9 @@ where
         ) {
             Ok(EndpointAction::Continue) => {}
             Ok(EndpointAction::Shutdown) => return Ok(()),
+            // Not a per-client validation failure: the sole child is no longer
+            // reusable. Dropping the listener also refuses queued/new clients.
+            Ok(EndpointAction::Abort) => return Err("ENDPOINT_HANDLER_ABORTED".to_owned()),
             Err(error) => {
                 eprintln!(
                     "{{\"error\":\"{}\",\"connection_sequence\":{}}}",
@@ -158,37 +171,32 @@ where
         )
         .map_err(|error| format!("ENDPOINT_WRITE_ERROR:{error}"))?;
         let outcome = handler(&command, &mut stream);
-        match outcome {
-            Ok(action) => {
-                write_line(
-                    &mut stream,
-                    &format!(
-                        "{{\"event\":\"request_complete\",\"sequence\":{request_sequence},\"ok\":true}}"
-                    ),
-                )
-                .map_err(|error| format!("ENDPOINT_WRITE_ERROR:{error}"))?;
-                request_sequence = request_sequence
-                    .checked_add(1)
-                    .ok_or_else(|| "ENDPOINT_REQUEST_SEQUENCE_EXHAUSTED".to_owned())?;
-                if action == EndpointAction::Shutdown {
-                    return Ok(EndpointAction::Shutdown);
-                }
-            }
-            Err(error) => {
-                write_line(
-                    &mut stream,
-                    &format!(
-                        "{{\"event\":\"request_complete\",\"sequence\":{request_sequence},\"ok\":false,\"error\":\"{}\"}}",
-                        sanitize_code(&error),
-                    ),
-                )
-                .map_err(|write_error| format!("ENDPOINT_WRITE_ERROR:{write_error}"))?;
-                request_sequence = request_sequence
-                    .checked_add(1)
+        match complete_request(&mut stream, outcome, request_sequence) {
+            EndpointAction::Continue => {
+                request_sequence = request_sequence.checked_add(1)
                     .ok_or_else(|| "ENDPOINT_REQUEST_SEQUENCE_EXHAUSTED".to_owned())?;
             }
+            action => return Ok(action),
         }
     }
+}
+
+/// No suffix may follow a failed handler exchange: a partial JSON frame may
+/// already be on the socket. Failure of the outer acknowledgement is also a
+/// post-dispatch failure, even if the child's own terminal frame was complete.
+fn complete_request(
+    writer: &mut impl Write,
+    outcome: Result<EndpointAction, String>,
+    sequence: u64,
+) -> EndpointAction {
+    let (action, status) = match outcome {
+        Ok(EndpointAction::Abort) => return EndpointAction::Abort,
+        Ok(action) => (action, "\"ok\":true".to_owned()),
+        Err(error) => (EndpointAction::Continue,
+            format!("\"ok\":false,\"error\":\"{}\"", sanitize_code(&error))),
+    };
+    let frame = format!("{{\"event\":\"request_complete\",\"sequence\":{sequence},{status}}}");
+    if write_line(writer, &frame).is_err() { EndpointAction::Abort } else { action }
 }
 
 fn read_token_verifier(path: &Path) -> Result<Sha256Digest, String> {
@@ -309,7 +317,7 @@ fn read_bounded_line(
         .map_err(|_| "ENDPOINT_FRAME_INVALID_UTF8".to_owned())
 }
 
-fn write_line(stream: &mut TcpStream, value: &str) -> io::Result<()> {
+fn write_line(stream: &mut impl Write, value: &str) -> io::Result<()> {
     stream.write_all(value.as_bytes())?;
     stream.write_all(b"\n")?;
     stream.flush()
@@ -332,5 +340,97 @@ fn sanitize_code(error: &str) -> String {
         "ENDPOINT_ERROR".to_owned()
     } else {
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abort_does_not_append_a_terminal_to_partial_output() {
+        let mut output = b"{\"partial\":".to_vec();
+        let prior = output.clone();
+        assert_eq!(complete_request(&mut output, Ok(EndpointAction::Abort), 3), EndpointAction::Abort);
+        assert_eq!(output, prior);
+    }
+
+    #[test]
+    fn complete_rejection_and_shutdown_keep_the_existing_wire_shape() {
+        for (outcome, action, fields) in [
+            (Ok(EndpointAction::Continue), EndpointAction::Continue, r#""ok":true"#),
+            (Ok(EndpointAction::Shutdown), EndpointAction::Shutdown, r#""ok":true"#),
+            (Err("SERVICE_HEX_INVALID:private detail".to_owned()), EndpointAction::Continue,
+                r#""ok":false,"error":"SERVICE_HEX_INVALID""#),
+        ] {
+            let mut output = Vec::new();
+            assert_eq!(complete_request(&mut output, outcome, 7), action);
+            assert_eq!(output, format!("{{\"event\":\"request_complete\",\"sequence\":7,{fields}}}\n").as_bytes());
+        }
+    }
+
+    struct FailingOutput { bytes: Vec<u8>, calls: usize, fail_flush: bool }
+    impl Write for FailingOutput {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.calls += 1;
+            if !self.fail_flush && self.calls == 2 { return Err(io::ErrorKind::BrokenPipe.into()); }
+            let count = if self.fail_flush { bytes.len() } else { bytes.len().min(5) };
+            self.bytes.extend_from_slice(&bytes[..count]);
+            Ok(count)
+        }
+        fn flush(&mut self) -> io::Result<()> { Err(io::ErrorKind::BrokenPipe.into()) }
+    }
+
+    #[test]
+    fn outer_ack_write_or_flush_failure_aborts_even_after_a_complete_child_reply() {
+        for fail_flush in [false, true] {
+            for outcome in [Ok(EndpointAction::Continue), Ok(EndpointAction::Shutdown), Err("REJECTED".to_owned())] {
+                let mut writer = FailingOutput { bytes: Vec::new(), calls: 0, fail_flush };
+                assert_eq!(complete_request(&mut writer, outcome, 0), EndpointAction::Abort);
+                assert_eq!(writer.calls, 2); // One prefix + failure, or a frame + LF then failed flush.
+                if !fail_flush { assert_eq!(writer.bytes, b"{\"eve"); }
+            }
+        }
+    }
+
+    #[test]
+    fn fatal_handler_drops_listener_and_never_dispatches_the_next_queued_command() {
+        use std::net::Shutdown;
+        use std::sync::mpsc;
+        use std::thread;
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let verifier = digest_bytes(b"disposable non-secret endpoint fixture token");
+        let (done, result) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let mut calls = 0;
+            let status = serve_listener(listener, verifier, |_, stream| {
+                calls += 1;
+                stream.write_all(b"{\"partial\":").map_err(|_| "FIXTURE_WRITE_FAILED".to_owned())?;
+                Ok(EndpointAction::Abort)
+            });
+            let _ = done.send((status, calls));
+        });
+        let timeout = Duration::from_secs(5);
+        let mut client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        client.set_write_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        let challenge = read_bounded_line(&mut reader, MAX_AUTH_LINE_BYTES).unwrap().unwrap();
+        let challenge = Sha256Digest::from_hex(challenge.strip_prefix("CHALLENGE\t").unwrap()).unwrap();
+        write_line(&mut client, &format!("AUTH\t{}", derive_response(verifier, challenge).hex())).unwrap();
+        let ready = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        assert!(ready.contains("\"event\":\"authenticated\""));
+        client.write_all(b"first\nsecond\nshutdown\n").unwrap();
+        client.shutdown(Shutdown::Write).unwrap();
+        let mut output = String::new();
+        let read = Read::take(&mut reader, 4096).read_to_string(&mut output);
+        assert!(read.is_ok() || read.is_err_and(|error| error.kind() == io::ErrorKind::ConnectionReset));
+        let (status, calls) = result.recv_timeout(timeout).expect("bounded listener exit");
+        server.join().unwrap();
+        assert_eq!(status, Err("ENDPOINT_HANDLER_ABORTED".to_owned()));
+        assert_eq!(calls, 1);
+        assert_eq!(output, "{\"event\":\"request_started\",\"sequence\":0}\n{\"partial\":");
+        assert!(TcpStream::connect_timeout(&address, timeout).is_err());
     }
 }

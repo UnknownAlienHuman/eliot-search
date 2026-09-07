@@ -7,6 +7,8 @@ pub(super) enum Reply {
     Complete,
     Rejected,
     Shutdown,
+    /// The child reported a terminal service failure, not a reusable rejection.
+    Fatal,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -30,12 +32,21 @@ impl ExchangeFence {
         }
         self.blocked = true;
         let reply = exchange()?;
-        if reply != Reply::Shutdown {
+        if matches!(reply, Reply::Complete | Reply::Rejected) {
             self.blocked = false;
         }
         Ok(reply)
     }
 }
+
+// This is the closed wire shape of our own child, not a general JSON parser.
+const FATAL_CHILD_FRAMES: &[&str] = &[
+    r#"{"event":"error","error":"SERVICE_MUTATION_OUTCOME_UNKNOWN"}"#,
+    r#"{"event":"error","error":"SERVICE_COMMAND_LIMIT_INVALID"}"#,
+    r#"{"event":"error","error":"SERVICE_COMMAND_TOO_LARGE"}"#,
+    r#"{"event":"error","error":"SERVICE_COMMAND_NOT_UTF8"}"#,
+    r#"{"event":"error","error":"SERVICE_READ_ERROR"}"#,
+];
 
 pub(super) fn forward_reply(
     mut read: impl FnMut() -> Result<Option<String>, String>,
@@ -51,6 +62,10 @@ pub(super) fn forward_reply(
             .and_then(|()| writer.write_all(b"\n"))
             .and_then(|()| writer.flush())
             .map_err(|_| "LOOPBACK_PROXY_WRITE_ERROR".to_owned())?;
+        // Exact canonical frames emitted by service_session's fail-stop paths.
+        // A completely transmitted OUTCOME_UNKNOWN is still terminal for this
+        // child; do not mistake it for a recoverable command validation error.
+        if FATAL_CHILD_FRAMES.contains(&line.as_str()) { return Ok(Reply::Fatal); }
         // An ordinary command rejection is a complete frame, not channel loss.
         if line.contains("\"event\":\"error\"") {
             return Ok(Reply::Rejected);
@@ -146,5 +161,35 @@ mod tests {
         let mut fence = ExchangeFence::default();
         assert_eq!(fence.run(|| Ok(Reply::Shutdown)).unwrap(), Reply::Shutdown);
         assert!(fence.blocked());
+    }
+
+    #[test]
+    fn child_fatal_frames_are_forwarded_once_but_never_release_the_exchange() {
+        for line in FATAL_CHILD_FRAMES {
+            for shutdown in [false, true] {
+                let mut fence = ExchangeFence::default();
+                let mut output = Vec::new();
+                let mut reads = 0;
+                assert_eq!(fence.run(|| forward_reply(
+                    || { reads += 1; Ok(Some((*line).to_owned())) }, &mut output,
+                    |_| true, shutdown, 3,
+                )).unwrap(), Reply::Fatal);
+                assert_eq!(reads, 1);
+                assert_eq!(output, format!("{line}\n").as_bytes());
+                assert!(fence.blocked());
+                assert!(fence.run(|| panic!("a fatal child must never receive another command")).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_child_validation_error_remains_reusable() {
+        let line = r#"{"event":"error","error":"SERVICE_HEX_INVALID"}"#;
+        let mut fence = ExchangeFence::default();
+        assert_eq!(fence.run(|| forward_reply(
+            || Ok(Some(line.to_owned())), &mut Vec::new(), |_| true, false, 1,
+        )).unwrap(), Reply::Rejected);
+        assert_eq!(fence.run(|| Ok(Reply::Complete)).unwrap(), Reply::Complete);
+        assert!(!fence.blocked());
     }
 }

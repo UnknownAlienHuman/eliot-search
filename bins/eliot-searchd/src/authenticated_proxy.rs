@@ -102,7 +102,8 @@ impl DirectChild {
 
     fn dispatch(&mut self, command: &str, stream: &mut TcpStream) -> Result<EndpointAction, String> {
         if self.stopped || self.fence.blocked() {
-            return Err("LOOPBACK_DIRECT_CHANNEL_REQUIRES_RESTART".to_owned());
+            self.abort();
+            return Ok(EndpointAction::Abort);
         }
         if command.is_empty() || command.len() > MAX_PROXY_COMMAND_BYTES
             || command.contains('\n') || command.contains('\r')
@@ -110,8 +111,10 @@ impl DirectChild {
             return Err("LOOPBACK_DIRECT_COMMAND_INVALID".to_owned());
         }
         let terminal = Terminal::for_command(command)?;
-        let input = self.input.as_mut()
-            .ok_or_else(|| "LOOPBACK_DIRECT_CHILD_STDIN_MISSING".to_owned())?;
+        let Some(input) = self.input.as_mut() else {
+            self.abort();
+            return Ok(EndpointAction::Abort);
+        };
         let output = &mut self.output;
         let result = self.fence.run(|| {
             input.write_all(command.as_bytes())
@@ -131,12 +134,14 @@ impl DirectChild {
                 self.input.take();
                 Ok(EndpointAction::Shutdown)
             }
-            Err(_) => {
+            Ok(Reply::Fatal) | Err(_) => {
                 // No bounded drain can prove that an incomplete mutation did
                 // not happen. Kill this channel rather than serving old output
                 // to a new client, or issuing the command a second time.
                 self.abort();
-                Err("LOOPBACK_DIRECT_OUTCOME_UNKNOWN_CHANNEL_CLOSED".to_owned())
+                // The endpoint must neither append request_complete to partial
+                // output nor admit another connection against this dead child.
+                Ok(EndpointAction::Abort)
             }
         }
     }
