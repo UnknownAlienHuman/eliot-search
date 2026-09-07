@@ -226,6 +226,10 @@ fn execute_command(
             refresh_storage(storage, canonical_root)?;
             emit_source_list(writer, store, storage)?;
         }
+        ("control-migration-revisions", [_] | [_, _]) => {
+            let page = store.inspect_migration_revisions(fields.get(1).copied())?;
+            write_line(writer, &page)?;
+        }
         ("control-migration-page", [_] | [_, _]) => {
             // This read-only source-history input uses the already-held owner;
             // it never opens a new catalog or arms a mutation attempt.

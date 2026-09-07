@@ -29,6 +29,8 @@ mod storage_io;
 mod revision_writer;
 #[path = "preparation_store.rs"]
 mod preparation_store;
+#[path = "control_migration_objects.rs"]
+mod migration_objects;
 pub(crate) use preparation_store::{PreparationBatch, PreparationCursor};
 
 use storage_io::{
@@ -373,40 +375,7 @@ impl DirectStore {
             .map_err(|error| classify_revision_error(&error))
     }
 
-    fn read_revision_detailed(
-        &self,
-        metadata: &RevisionMetadata,
-    ) -> Result<Vec<u8>, String> {
-        verify_revision_identity(metadata)?;
-        let protected = protected_path(&self.root, &metadata.revision_id)?;
-        let plaintext = legacy_path(&self.root, &metadata.revision_id)?;
-        let bytes = if protected.exists() {
-            let object = read_regular_file(
-                &protected,
-                MAX_REVISION_OBJECT_BYTES,
-                "DIRECT_REVISION_PROTECTED_READ_ERROR",
-            )?;
-            self.protector.unprotect(
-                &object,
-                &metadata.revision_id,
-                &metadata.content_digest,
-                metadata.byte_length,
-            )?
-        } else if plaintext.exists() {
-            #[cfg(windows)]
-            {
-                return Err("DIRECT_REVISION_PROTECTION_INCOMPLETE".to_owned());
-            }
-            #[cfg(not(windows))]
-            {
-                read_plaintext_path(&plaintext, metadata)?
-            }
-        } else {
-            return Err("DIRECT_REVISION_MISSING".to_owned());
-        };
-        verify_plaintext(metadata, &bytes)?;
-        Ok(bytes)
-    }
+
 }
 
 fn classify_revision_error(error: &str) -> &'static str {

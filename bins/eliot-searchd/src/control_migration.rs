@@ -53,6 +53,33 @@ impl Cursor {
 }
 
 impl DirectStore {
+    /// Verify the migration-grade source chain against this owner's admitted
+    /// state. Object pages use the same logical snapshot identity as event pages.
+    /// The supplied deadline spans both replays and all intervening object I/O.
+    pub(crate) fn verify_migration_snapshot(&self, deadline: Instant) -> Result<[u8; 32], String> {
+        if Instant::now() >= deadline {
+            return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
+        }
+        let control = self.root.join(CONTROL_DIRECTORY);
+        let namespace = read_namespace(&control.join(NAMESPACE_FILE))?;
+        if namespace != self.namespace_id {
+            return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
+        }
+        let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
+            if Instant::now() >= deadline {
+                return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
+            }
+            validate_legacy_event(&namespace, record, previous)
+        })?;
+        if state != self.registry || read_namespace(&control.join(NAMESPACE_FILE))? != namespace {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
+        if Instant::now() >= deadline {
+            return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
+        }
+        Ok(snapshot_digest(&namespace, state.last_sequence, &state.last_digest))
+    }
+
     /// Inspect disk history under the caller's existing exclusive owner guard.
     /// `expected_namespace` is taken from the admitted live store, never a client.
     /// Returned JSON is one bounded event-first frame for the existing transport.
@@ -105,9 +132,7 @@ impl DirectStore {
         // The replay validator also checks the same opened file's length and
         // metadata before/after reading. This digest denotes its logical chain,
         // not a byte-for-byte file hash (LF/CRLF framing is not conflated with it).
-        let snapshot = sha256::digest_parts(b"eliot-search/control-migration-snapshot/v1", &[
-            &namespace, &state.last_sequence.to_be_bytes(), state.last_digest.as_bytes(),
-        ]);
+        let snapshot = snapshot_digest(&namespace, state.last_sequence, &state.last_digest);
         if !cursor_found || cursor.as_ref().is_some_and(|value| value.snapshot != snapshot) {
             return Err("DIRECT_MIGRATION_CURSOR_STALE".to_owned());
         }
@@ -144,6 +169,12 @@ impl DirectStore {
         }
         Ok(output)
     }
+}
+
+fn snapshot_digest(namespace: &[u8; 32], sequence: u64, last_digest: &str) -> [u8; 32] {
+    sha256::digest_parts(b"eliot-search/control-migration-snapshot/v1", &[
+        namespace, &sequence.to_be_bytes(), last_digest.as_bytes(),
+    ])
 }
 
 fn validate_legacy_event(
