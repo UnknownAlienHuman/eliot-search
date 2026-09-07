@@ -238,6 +238,10 @@ fn execute_command(
             )?;
             write_line(writer, &page)?;
         }
+        ("control-migration-directories", [_] | [_, _]) => {
+            let page = store.inspect_migration_directories(fields.get(1).copied())?;
+            write_line(writer, &page)?;
+        }
         ("prepare-root", [_] | [_, _]) => {
             let cursor = fields.get(1).map(|value| PreparationCursor::parse(value)).transpose()?;
             store.validate_preparation_cursor(cursor.as_ref())?;

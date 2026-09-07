@@ -8,6 +8,9 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
+#[path = "control_migration_directories.rs"]
+mod directories;
+
 use super::{DirectStore, RevisionMetadata, MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY,
     legacy_path, protected_path, read_regular_file, verify_plaintext, verify_revision_identity};
 use super::storage_io::ensure_directory;

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use crate::direct_store::{DirectStore, IndexedSource};
 use crate::sha256;
@@ -171,8 +171,8 @@ pub(crate) fn verify_directory_manifests(
     validate_digest(namespace_id, "DIRECT_MANIFEST_NAMESPACE_INVALID")?;
     let canonical_root = fs::canonicalize(data_root)
         .map_err(|error| format!("DIRECT_MANIFEST_ROOT_ERROR:{error}"))?;
-    let root = manifest_root(&canonical_root)?;
-    let files = manifest_files(&root)?;
+    let files = existing_manifest_root(&canonical_root)?
+        .map(|root| manifest_files(&root)).transpose()?.unwrap_or_default();
     let mut current = BTreeMap::<String, DirectoryManifest>::new();
     let mut generations = BTreeMap::<(String, u64), String>::new();
     let mut highest_generation = 0_u64;
@@ -392,27 +392,37 @@ fn load_latest_manifest(
 }
 
 fn load_manifest_file(path: &Path) -> Result<DirectoryManifest, String> {
+    load_manifest_input(path, MAX_MANIFEST_BYTES).map(|(manifest, _)| manifest)
+}
+
+/// Shared parser and exact-file observation used by verification and migration.
+fn load_manifest_input(path: &Path, max_bytes: usize) -> Result<(DirectoryManifest, String), String> {
     ensure_regular_file(path)?;
-    let metadata = fs::metadata(path)
-        .map_err(|error| format!("DIRECT_MANIFEST_METADATA_ERROR:{error}"))?;
-    if metadata.len() > u64::try_from(MAX_MANIFEST_BYTES).unwrap_or(u64::MAX) {
-        return Err("DIRECT_MANIFEST_TOO_LARGE".to_owned());
+    let mut file = File::open(path)
+        .map_err(|_| "DIRECT_MANIFEST_READ_ERROR".to_owned())?;
+    let before = file.metadata().map_err(|_| "DIRECT_MANIFEST_METADATA_ERROR".to_owned())?;
+    if !before.is_file() || is_reparse(&before) {
+        return Err("DIRECT_MANIFEST_FILE_INVALID".to_owned());
     }
+    let max_bytes = max_bytes.min(MAX_MANIFEST_BYTES);
+    if before.len() > max_bytes as u64 { return Err("DIRECT_MANIFEST_TOO_LARGE".to_owned()); }
     let mut text = String::new();
-    File::open(path)
-        .and_then(|file| {
-            file.take(u64::try_from(MAX_MANIFEST_BYTES + 1).unwrap_or(u64::MAX))
-                .read_to_string(&mut text)
-        })
-        .map_err(|error| format!("DIRECT_MANIFEST_READ_ERROR:{error}"))?;
-    if text.len() > MAX_MANIFEST_BYTES || !text.ends_with('\n') {
+    (&mut file).take(max_bytes as u64 + 1).read_to_string(&mut text)
+        .map_err(|_| "DIRECT_MANIFEST_READ_ERROR".to_owned())?;
+    let after = file.metadata().map_err(|_| "DIRECT_MANIFEST_METADATA_ERROR".to_owned())?;
+    if text.len() > max_bytes || !text.ends_with('\n') {
         return Err("DIRECT_MANIFEST_TRUNCATED".to_owned());
+    }
+    if text.len() as u64 != before.len() || before.len() != after.len()
+        || before.modified().ok() != after.modified().ok()
+    {
+        return Err("DIRECT_MANIFEST_CHANGED_DURING_READ".to_owned());
     }
     let mut lines = text.split_terminator('\n');
     let header = lines
         .next()
         .ok_or_else(|| "DIRECT_MANIFEST_HEADER_MISSING".to_owned())?;
-    let header_fields = header.split('\t').collect::<Vec<_>>();
+    let header_fields = header.splitn(6, '\t').collect::<Vec<_>>();
     if header_fields.len() != 5 || header_fields[0] != MANIFEST_HEADER {
         return Err("DIRECT_MANIFEST_HEADER_INVALID".to_owned());
     }
@@ -434,7 +444,7 @@ fn load_manifest_file(path: &Path) -> Result<DirectoryManifest, String> {
         if line.is_empty() || line.len() > MAX_MANIFEST_LINE_BYTES {
             return Err("DIRECT_MANIFEST_LINE_INVALID".to_owned());
         }
-        let fields = line.split('\t').collect::<Vec<_>>();
+        let fields = line.splitn(5, '\t').collect::<Vec<_>>();
         if fields.len() != 4 || fields[0] != "V1" {
             return Err("DIRECT_MANIFEST_LINE_INVALID".to_owned());
         }
@@ -461,7 +471,32 @@ fn load_manifest_file(path: &Path) -> Result<DirectoryManifest, String> {
         return Err("DIRECT_MANIFEST_DIGEST_MISMATCH".to_owned());
     }
     validate_filename(path, &manifest)?;
-    Ok(manifest)
+    Ok((manifest, text))
+}
+
+/// Exact raw-file SHA is distinct from the logical manifest digest.
+/// Reject noncanonical legacy encodings rather than rewriting them during import.
+pub(crate) fn migration_manifest(
+    path: &Path, remaining_bytes: usize,
+) -> Result<(DirectoryManifest, [u8; 32], usize), String> {
+    let (manifest, text) = load_manifest_input(path, remaining_bytes)?;
+    if encode_manifest(&manifest)? != text {
+        return Err("DIRECT_MIGRATION_MANIFEST_ENCODING_UNSUPPORTED".to_owned());
+    }
+    let digest = sha256::digest(text.as_bytes());
+    Ok((manifest, digest, text.len()))
+}
+
+fn existing_manifest_root(data_root: &Path) -> Result<Option<PathBuf>, String> {
+    ensure_directory(data_root)?;
+    let control = data_root.join(CONTROL_DIRECTORY);
+    ensure_directory(&control)?;
+    let root = control.join(MANIFEST_DIRECTORY);
+    match fs::symlink_metadata(&root) {
+        Ok(_) => { ensure_directory(&root)?; Ok(Some(root)) }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err("DIRECT_MANIFEST_DIRECTORY_READ_ERROR".to_owned()),
+    }
 }
 
 fn manifest_root(data_root: &Path) -> Result<PathBuf, String> {
@@ -478,31 +513,48 @@ fn manifest_root(data_root: &Path) -> Result<PathBuf, String> {
 }
 
 fn manifest_files(root: &Path) -> Result<Vec<PathBuf>, String> {
+    list_manifest_files(root, MAX_MANIFEST_FILES, false, None)
+}
+
+/// Migration never creates a missing directory or silently drops unfinished writes.
+pub(crate) fn migration_manifest_files(
+    data_root: &Path, maximum: usize, deadline: Instant,
+) -> Result<(bool, Vec<PathBuf>), String> {
+    match existing_manifest_root(data_root)? {
+        Some(root) => Ok((true, list_manifest_files(&root, maximum, true, Some(deadline))?)),
+        None => Ok((false, Vec::new())),
+    }
+}
+
+fn list_manifest_files(
+    root: &Path, maximum: usize, reject_pending: bool, deadline: Option<Instant>,
+) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
-    let mut entries = fs::read_dir(root)
-        .map_err(|error| format!("DIRECT_MANIFEST_DIRECTORY_READ_ERROR:{error}"))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("DIRECT_MANIFEST_DIRECTORY_READ_ERROR:{error}"))?;
-    entries.sort_by_key(|entry| entry.file_name());
-    for entry in entries {
-        if files.len() >= MAX_MANIFEST_FILES {
+    let entries = fs::read_dir(root)
+        .map_err(|_| "DIRECT_MANIFEST_DIRECTORY_READ_ERROR".to_owned())?;
+    for (index, entry) in entries.enumerate() {
+        if deadline.is_some_and(|limit| Instant::now() >= limit) {
+            return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
+        }
+        // Count every directory entry, including temporary files, before allocation.
+        if index >= maximum.min(MAX_MANIFEST_FILES) {
             return Err("DIRECT_MANIFEST_FILE_LIMIT_EXCEEDED".to_owned());
         }
+        let entry = entry.map_err(|_| "DIRECT_MANIFEST_DIRECTORY_READ_ERROR".to_owned())?;
         let path = entry.path();
-        let metadata = fs::symlink_metadata(&path)
-            .map_err(|error| format!("DIRECT_MANIFEST_METADATA_ERROR:{error}"))?;
-        if metadata.file_type().is_symlink() || is_reparse(&metadata) {
-            return Err("DIRECT_MANIFEST_LINK_DENIED".to_owned());
-        }
-        let name = entry.file_name().to_string_lossy().into_owned();
+        ensure_regular_file(&path)?;
+        let name = entry.file_name();
+        let name = name.to_str().ok_or_else(|| "DIRECT_MANIFEST_FILENAME_INVALID".to_owned())?;
         if name.starts_with('.') && name.ends_with(".tmp") {
+            if reject_pending { return Err("DIRECT_MIGRATION_MANIFEST_PENDING".to_owned()); }
             continue;
         }
-        if !metadata.is_file() || !name.ends_with(".manifest") {
+        if !name.ends_with(".manifest") {
             return Err("DIRECT_MANIFEST_UNEXPECTED_OBJECT".to_owned());
         }
         files.push(path);
     }
+    files.sort();
     Ok(files)
 }
 
@@ -561,13 +613,13 @@ fn ensure_regular_file(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(unix)]
-fn path_identity_bytes(path: &Path) -> Vec<u8> {
+pub(crate) fn path_identity_bytes(path: &Path) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;
     path.as_os_str().as_bytes().to_vec()
 }
 
 #[cfg(windows)]
-fn path_identity_bytes(path: &Path) -> Vec<u8> {
+pub(crate) fn path_identity_bytes(path: &Path) -> Vec<u8> {
     use std::os::windows::ffi::OsStrExt;
     path.as_os_str()
         .encode_wide()
@@ -576,7 +628,7 @@ fn path_identity_bytes(path: &Path) -> Vec<u8> {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn path_identity_bytes(path: &Path) -> Vec<u8> {
+pub(crate) fn path_identity_bytes(path: &Path) -> Vec<u8> {
     path.to_string_lossy().as_bytes().to_vec()
 }
 

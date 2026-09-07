@@ -6,7 +6,7 @@
 //! Root registration, directory manifests, payload verification and canonical
 //! H5 mapping are separate migration inputs, not implied by this source page.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use super::{
@@ -57,6 +57,17 @@ impl DirectStore {
     /// state. Object pages use the same logical snapshot identity as event pages.
     /// The supplied deadline spans both replays and all intervening object I/O.
     pub(crate) fn verify_migration_snapshot(&self, deadline: Instant) -> Result<[u8; 32], String> {
+        self.verify_migration_bindings(&[], deadline)
+    }
+
+    /// Verify a bounded set of source/revision/path tuples against actual activation
+    /// events. Historical paths are not replaced with the current source summary.
+    pub(crate) fn verify_migration_bindings(
+        &self, bindings: &[(String, String, String)], deadline: Instant,
+    ) -> Result<[u8; 32], String> {
+        if bindings.len() > PAGE_EVENTS { return Err("DIRECT_MIGRATION_BINDING_LIMIT".to_owned()); }
+        let mut missing = bindings.iter().map(|(source, revision, path)|
+            (source.as_str(), revision.as_str(), path.as_str())).collect::<BTreeSet<_>>();
         if Instant::now() >= deadline {
             return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
         }
@@ -69,8 +80,13 @@ impl DirectStore {
             if Instant::now() >= deadline {
                 return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
             }
-            validate_legacy_event(&namespace, record, previous)
+            validate_legacy_event(&namespace, record, previous)?;
+            if record.state == SourceState::Active {
+                missing.remove(&(record.source_id.as_str(), record.revision_id.as_str(), record.path_digest.as_str()));
+            }
+            Ok(())
         })?;
+        if !missing.is_empty() { return Err("DIRECT_MIGRATION_MANIFEST_SOURCE_UNBOUND".to_owned()); }
         if state != self.registry || read_namespace(&control.join(NAMESPACE_FILE))? != namespace {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }

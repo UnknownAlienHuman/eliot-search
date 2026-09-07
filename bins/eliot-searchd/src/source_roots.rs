@@ -315,10 +315,15 @@ fn path_text(path: &Path) -> Result<&str, SourceRootError> {
 }
 
 fn load_configured_paths(path: &Path) -> Result<Vec<PathBuf>, SourceRootError> {
+    read_configured_bytes(path)?.as_deref().map(decode_configured_paths)
+        .transpose().map(Option::unwrap_or_default)
+}
+
+fn read_configured_bytes(path: &Path) -> Result<Option<Vec<u8>>, SourceRootError> {
     reject_symlink(path)?;
     let mut file = match File::open(path) {
         Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(SourceRootError::ConfigIo(error)),
     };
     let metadata = file.metadata().map_err(SourceRootError::ConfigIo)?;
@@ -333,7 +338,17 @@ fn load_configured_paths(path: &Path) -> Result<Vec<PathBuf>, SourceRootError> {
     if bytes.len() > MAX_SOURCE_ROOT_FILE_BYTES {
         return Err(SourceRootError::ConfigTooLarge);
     }
-    let text = std::str::from_utf8(&bytes).map_err(|_| SourceRootError::ConfigNotUtf8)?;
+    let after = file.metadata().map_err(SourceRootError::ConfigIo)?;
+    if bytes.len() as u64 != metadata.len() || metadata.len() != after.len()
+        || metadata.modified().ok() != after.modified().ok()
+    {
+        return Err(SourceRootError::CatalogCorrupt);
+    }
+    Ok(Some(bytes))
+}
+
+fn decode_configured_paths(bytes: &[u8]) -> Result<Vec<PathBuf>, SourceRootError> {
+    let text = std::str::from_utf8(bytes).map_err(|_| SourceRootError::ConfigNotUtf8)?;
     if !text.ends_with('\n') {
         return Err(SourceRootError::CatalogCorrupt);
     }
@@ -526,6 +541,42 @@ impl std::error::Error for SourceRootError {
             _ => None,
         }
     }
+}
+
+/// Exact persisted registration input. No current-path probes, recovery or new owner.
+/// Paths are retained internally for a future importer; diagnostics must redact them.
+#[derive(Eq, PartialEq)]
+pub(crate) struct RootMigrationInput {
+    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) file_bytes: Option<Vec<u8>>,
+}
+
+/// Reads registration without invoking load_owned/load or recovering .tmp/.bak files.
+/// Absence is explicit and is not proof that no registration existed previously.
+pub(crate) fn migration_input(data_root: &Path) -> Result<RootMigrationInput, SourceRootError> {
+    reject_symlink(data_root)?;
+    let canonical = fs::canonicalize(data_root).map_err(SourceRootError::RootIo)?;
+    let control = canonical.join("control");
+    reject_symlink(&control)?;
+    if !fs::symlink_metadata(&control).map_err(SourceRootError::ConfigIo)?.is_dir()
+        || fs::canonicalize(&control).map_err(SourceRootError::ConfigIo)? != control
+    {
+        return Err(SourceRootError::InvalidConfigPath);
+    }
+    let path = control.join("source-roots.v1");
+    for pending in [path.with_extension("tmp"), path.with_extension("bak")] {
+        match fs::symlink_metadata(pending) {
+            Ok(_) => return Err(SourceRootError::UpdateOutcomeUnknown),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(SourceRootError::ConfigIo(error)),
+        }
+    }
+    let file_bytes = read_configured_bytes(&path)?;
+    let mut paths = file_bytes.as_deref().map(decode_configured_paths)
+        .transpose()?.unwrap_or_default();
+    canonicalize_configured_set(&mut paths)?;
+    for path in &paths { ensure_outside_data_root(path, &canonical)?; }
+    Ok(RootMigrationInput { paths, file_bytes })
 }
 
 #[cfg(test)]
