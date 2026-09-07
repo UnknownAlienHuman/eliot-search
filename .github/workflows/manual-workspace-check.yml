@@ -1,6 +1,8 @@
 name: Manual workspace check
 
 # Explicit dispatch only. This workflow never generates or commits product code.
+# core_tests=false is a compile check, not T04 acceptance.
+# Full acceptance also requires both platforms and independent exact-head review.
 on:
   workflow_dispatch:
     inputs:
@@ -13,7 +15,7 @@ on:
           - ubuntu-24.04
           - windows-2025
       core_tests:
-        description: Also execute control, preparation and primary-runtime regression tests
+        description: Also run all workspace tests, doctests, formatting, strict Clippy and rustdoc
         required: true
         default: false
         type: boolean
@@ -31,36 +33,121 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout the exact dispatched revision
+        id: checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Verify exact clean checkout
+        id: baseline
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD
+          git hash-object Cargo.lock
       - name: Install the repository toolchain
+        id: toolchain
         shell: bash
         run: |
           set -euo pipefail
           rustup toolchain install 1.98.0 --profile minimal --no-self-update
           rustc +1.98.0 -Vv
           cargo +1.98.0 -V
+      - name: Install exact formatting and lint components
+        id: components
+        if: ${{ !cancelled() && inputs.core_tests && steps.toolchain.outcome == 'success' }}
+        shell: bash
+        run: rustup component add --toolchain 1.98.0 rustfmt clippy
       - name: Check complete workspace once
+        id: workspace_check
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         shell: bash
-        run: cargo +1.98.0 check --workspace --all-targets --all-features --locked
-      - name: Execute control and preparation regression tests
-        if: ${{ inputs.core_tests }}
+        run: |
+          set +e
+          cargo +1.98.0 check --workspace --all-targets --all-features --locked
+          status=$?
+          printf 'exit_code=%s\n' "$status" >> "$GITHUB_OUTPUT" || exit 1
+          exit "$status"
+      - name: Execute every workspace test target
+        id: workspace_tests
+        if: ${{ !cancelled() && inputs.core_tests && steps.toolchain.outcome == 'success' }}
         shell: bash
-        run: cargo +1.98.0 test --locked -p search-control-redb -p search-materializer -p search-unitizer -p search-exact --lib
-      - name: Execute package-native adapter regressions
-        if: ${{ inputs.core_tests }}
+        run: |
+          set +e
+          cargo +1.98.0 test --workspace --all-targets --all-features --locked --no-fail-fast
+          status=$?
+          printf 'exit_code=%s\n' "$status" >> "$GITHUB_OUTPUT" || exit 1
+          exit "$status"
+      - name: Execute workspace doctests including compile-fail contracts
+        id: doctests
+        if: ${{ !cancelled() && inputs.core_tests && steps.toolchain.outcome == 'success' }}
         shell: bash
-        run: cargo +1.98.0 test --locked -p eliot-searchd --lib --test stable_native_identity_api
-      - name: Execute primary-runtime and process regression tests
-        if: ${{ inputs.core_tests }}
+        run: |
+          set +e
+          cargo +1.98.0 test --workspace --doc --all-features --locked --no-fail-fast
+          status=$?
+          printf 'exit_code=%s\n' "$status" >> "$GITHUB_OUTPUT" || exit 1
+          exit "$status"
+      - name: Check formatting without rewriting files
+        id: formatting
+        if: ${{ !cancelled() && inputs.core_tests && steps.components.outcome == 'success' }}
         shell: bash
-        run: cargo +1.98.0 test --locked -p eliot-searchd --bin eliot-searchd --test persistent_roots_process --test direct_preparation_process --test catalog_loss_process --test service_failure_process --test product_targets
-      - name: Execute retained legacy test harnesses
-        if: ${{ inputs.core_tests }}
+        run: |
+          set +e
+          cargo +1.98.0 fmt --all -- --check
+          status=$?
+          printf 'exit_code=%s\n' "$status" >> "$GITHUB_OUTPUT" || exit 1
+          exit "$status"
+      - name: Run strict Clippy without blanket suppression
+        id: clippy
+        if: ${{ !cancelled() && inputs.core_tests && steps.components.outcome == 'success' }}
+        shell: bash
+        run: |
+          set +e
+          cargo +1.98.0 clippy --workspace --all-targets --all-features --locked -- -D warnings
+          status=$?
+          printf 'exit_code=%s\n' "$status" >> "$GITHUB_OUTPUT" || exit 1
+          exit "$status"
+      - name: Build strict workspace documentation
+        id: rustdoc
+        if: ${{ !cancelled() && inputs.core_tests && steps.toolchain.outcome == 'success' }}
+        shell: bash
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          set +e
+          cargo +1.98.0 doc --workspace --all-features --no-deps --locked
+          status=$?
+          printf 'exit_code=%s\n' "$status" >> "$GITHUB_OUTPUT" || exit 1
+          exit "$status"
+      - name: Refuse tracked source or lockfile changes during verification
+        id: unchanged
+        if: ${{ always() && steps.baseline.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
-          cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-snapshotd --test eliot-search-sealed-authority --test eliot-search-sealed-catalog --test eliot-search-sealed-direct --test eliot-search-sealed-recover --test eliot-search-sealed-store --test eliot-search-sealed-transaction
-          cargo +1.98.0 test --locked -p eliot-search --test eliot-search-snapshot
+          git diff --exit-code
+          git diff --cached --exit-code
+          git hash-object Cargo.lock
+      - name: Record scope and raw command outcomes
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHECKED_SHA: ${{ github.sha }}
+          CHECKED_RUNNER: ${{ inputs.runner }}
+          FULL_CHECKS: ${{ inputs.core_tests }}
+          CHECKS: ${{ toJSON(steps) }}
+        run: |
+          set -euo pipefail
+          {
+            printf '## Manual verification\n\n'
+            printf 'SHA: `%s`  \nRunner: `%s`  \nFull checks requested: `%s`\n\n' "$CHECKED_SHA" "$CHECKED_RUNNER" "$FULL_CHECKS"
+            printf '```json\n%s\n```\n\n' "$CHECKS"
+            printf 'Raw test names/counts are in each test-step log. Skipped or zero-test checks are not acceptance evidence.\n'
+            printf 'This single lane does not issue T04, native Windows, Qdrant or independent-review acceptance.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
