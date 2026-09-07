@@ -6,6 +6,9 @@
 
 use std::io::{BufRead, BufReader, Read};
 
+#[path = "control_migration.rs"]
+mod migration;
+
 use super::{
     CONTROL_DIRECTORY, DirectStore, File, IdentityStrength, MAX_LOG_BYTES,
     MAX_LOG_LINE_BYTES, MAX_SCAN_INPUT_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
@@ -116,6 +119,15 @@ pub(crate) fn verify_revision_identity(metadata: &RevisionMetadata) -> Result<()
 }
 
 pub(super) fn load_registry(path: &Path) -> Result<RegistryState, String> {
+    replay_registry(path, |_, _| Ok(()))
+}
+
+/// A read-only migration observer shares the full ordinary replay validator.
+/// Observed entries remain provisional until this function returns successfully.
+fn replay_registry(
+    path: &Path,
+    mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
+) -> Result<RegistryState, String> {
     ensure_regular_file(path)?;
     let file = File::open(path)
         .map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
@@ -208,6 +220,7 @@ pub(super) fn load_registry(path: &Path) -> Result<RegistryState, String> {
                 return Err("DIRECT_CONTROL_LOG_REVISION_COLLISION".to_owned());
             }
         }
+        observe(&record, state.latest.get(&record.source_id))?;
         state.operations.insert(record.operation_id.clone(), record.record_digest.clone());
         state.revisions.entry(record.revision_id.clone()).or_insert_with(|| record.clone());
         state.last_sequence = sequence;

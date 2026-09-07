@@ -226,6 +226,14 @@ fn execute_command(
             refresh_storage(storage, canonical_root)?;
             emit_source_list(writer, store, storage)?;
         }
+        ("control-migration-page", [_] | [_, _]) => {
+            // This read-only source-history input uses the already-held owner;
+            // it never opens a new catalog or arms a mutation attempt.
+            let page = crate::plaintext_direct_store::DirectStore::inspect_control_history(
+                canonical_root, &store.namespace_id(), fields.get(1).copied(),
+            )?;
+            write_line(writer, &page)?;
+        }
         ("prepare-root", [_] | [_, _]) => {
             let cursor = fields.get(1).map(|value| PreparationCursor::parse(value)).transpose()?;
             store.validate_preparation_cursor(cursor.as_ref())?;
