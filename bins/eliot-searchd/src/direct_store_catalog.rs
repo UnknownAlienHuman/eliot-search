@@ -40,6 +40,24 @@ impl DirectStore {
         self.registry.revisions.values().map(RevisionMetadata::from)
     }
 
+    /// Ordered continuation over the same inventory, without cloning or rescanning its prefix.
+    pub(crate) fn retained_revisions_after(
+        &self, after: Option<&str>,
+    ) -> impl Iterator<Item = RevisionMetadata> + '_ {
+        use std::ops::Bound::{Excluded, Unbounded};
+        let lower = after.map_or(Unbounded, |value| Excluded(value.to_owned()));
+        self.registry.revisions.range::<String, _>((lower, Unbounded))
+            .map(|(_, record)| RevisionMetadata::from(record))
+    }
+
+    /// Snapshot identity for resumable preparation, not an authorization receipt.
+    pub(crate) fn preparation_catalog_digest(&self) -> [u8; 32] {
+        sha256::digest_parts(b"eliot-search/direct-preparation-catalog/v1", &[
+            &self.namespace_id, &self.registry.last_sequence.to_be_bytes(),
+            self.registry.last_digest.as_bytes(),
+        ])
+    }
+
     pub(crate) fn retained_revision(&self, revision_id: &str) -> Option<RevisionMetadata> {
         self.registry.revisions.get(revision_id).map(RevisionMetadata::from)
     }

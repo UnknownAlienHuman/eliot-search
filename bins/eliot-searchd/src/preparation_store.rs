@@ -5,12 +5,13 @@
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
 use super::{IndexedSource, RevisionMetadata, RevisionProtector, verify_plaintext};
 use super::storage_io::{ensure_child_directory, ensure_directory, persist_immutable_object,
     read_regular_file, sync_directory};
-use crate::direct_preparation::{MAX_LAYOUT_BYTES, encode_preparation, profile_digest};
+use crate::direct_preparation::{MAX_LAYOUT_BYTES, encode_preparation, preparation_gap, profile_digest};
 use crate::sha256;
 
 const MAGIC: &[u8; 8] = b"ELSPRP01";
@@ -29,7 +30,7 @@ pub(super) fn persist_source(
         source_id: source.source_id.clone(), revision_id: source.revision_id.clone(),
         content_digest: source.content_digest.clone(), byte_length: source.byte_length,
     };
-    persist(root, protector, namespace, &metadata, bytes)
+    persist(root, protector, namespace, &metadata, bytes).map(|_| ())
 }
 
 /// Object publication and exact readback precede its reference, which in turn
@@ -37,11 +38,12 @@ pub(super) fn persist_source(
 pub(super) fn persist(
     root: &Path, protector: &RevisionProtector, namespace: &str,
     metadata: &RevisionMetadata, source: &[u8],
-) -> Result<(), String> {
+) -> Result<Option<&'static str>, String> {
     verify_plaintext(metadata, source)?;
     let binding = binding(namespace, metadata)?;
     let mut manifest = Zeroizing::new(binding.to_vec());
     manifest.extend_from_slice(&encode_preparation(source).map_err(str::to_owned)?);
+    let gap = preparation_gap(&manifest[BINDING_BYTES..]).map_err(str::to_owned)?;
     if manifest.len() > MAX_MANIFEST_BYTES { return Err("DIRECT_PREPARATION_TOO_LARGE".to_owned()); }
     let digest = sha256::digest(&manifest);
     let key = lookup_key(&binding, protector);
@@ -77,7 +79,7 @@ pub(super) fn persist(
     }
     persist_immutable_object(&reference_path, &expected_ref)?;
     // Reference readback is performed by persist_immutable_object itself.
-    Ok(())
+    Ok(gap)
 }
 
 /// Exact, bounded, read-only lookup. The returned body is tied to the caller's
@@ -168,4 +170,122 @@ fn directories(root: &Path, key: &[u8; 32], create: bool) -> Result<(PathBuf, Pa
         } else { ensure_directory(path)?; }
     }
     Ok((shard.join(format!("{hex}.ref")), objects))
+}
+
+
+const MAX_BATCH_REVISIONS: usize = 64;
+const MAX_BATCH_SOURCE_BYTES: u64 = 256 * 1024 * 1024;
+const BATCH_SLICE: Duration = Duration::from_secs(10);
+
+/// Stateless admin bookmark, never a bearer token or proof of the processed prefix.
+/// Bound to the complete source-event history, preparation profile and storage backend.
+pub(crate) struct PreparationCursor {
+    checkpoint: [u8; 32],
+    after: String,
+}
+
+impl PreparationCursor {
+    pub(crate) fn parse(value: &str) -> Result<Self, String> {
+        // v1.<64 lowercase hex>.<64 lowercase hex>; ASCII validated before slicing.
+        if value.len() != 132 || !value.is_ascii() || !value.starts_with("v1.")
+            || value.as_bytes()[67] != b'.'
+        {
+            return Err("DIRECT_PREPARATION_CURSOR_INVALID".to_owned());
+        }
+        let checkpoint = sha256::decode_digest(&value[3..67])
+            .ok_or_else(|| "DIRECT_PREPARATION_CURSOR_INVALID".to_owned())?;
+        let after = &value[68..];
+        if sha256::hex(&checkpoint) != value[3..67]
+            || sha256::decode_digest(after).is_none()
+            || after.bytes().any(|byte| byte.is_ascii_uppercase())
+        {
+            return Err("DIRECT_PREPARATION_CURSOR_INVALID".to_owned());
+        }
+        Ok(Self { checkpoint, after: after.to_owned() })
+    }
+}
+
+/// One bounded suffix batch. Exhaustion is not a complete-corpus search proof.
+pub(crate) struct PreparationBatch {
+    pub(crate) stored: usize,
+    pub(crate) layouts: usize,
+    pub(crate) source_bytes: u64,
+    pub(crate) gaps: Vec<(String, &'static str)>,
+    pub(crate) next_cursor: Option<String>,
+}
+
+impl super::DirectStore {
+    fn preparation_checkpoint(&self) -> [u8; 32] {
+        sha256::digest_parts(b"eliot-search/direct-preparation-cursor/v1", &[
+            &self.inner.preparation_catalog_digest(), &profile_digest(),
+            self.protector.backend_name().as_bytes(),
+        ])
+    }
+
+    /// Cheap pre-dispatch validation against the owner's admitted catalog snapshot.
+    /// The batch also rereads control state before its first possible object write.
+    pub(crate) fn validate_preparation_cursor(
+        &self, cursor: Option<&PreparationCursor>,
+    ) -> Result<(), String> {
+        if let Some(cursor) = cursor {
+            if cursor.checkpoint != self.preparation_checkpoint()
+                || self.inner.retained_revision(&cursor.after).is_none()
+            {
+                return Err("DIRECT_PREPARATION_CURSOR_STALE".to_owned());
+            }
+        }
+        Ok(())
+    }
+
+    /// Explicit restart-safe backfill of retained revisions, including retired history.
+    /// Each object keeps the existing immutable commit/readback boundary. This is
+    /// not one atomic corpus transaction: on failure, retry the last accepted cursor.
+    /// No file enumeration, source-path read, source event or query-time repair occurs.
+    pub(crate) fn prepare_root(
+        &mut self, cursor: Option<&PreparationCursor>,
+    ) -> Result<PreparationBatch, String> {
+        crate::catalog_presence::require_existing(&self.root)?;
+        self.inner.verify_control()?;
+        self.validate_preparation_cursor(cursor)?;
+        let checkpoint = self.preparation_checkpoint();
+        let namespace = self.inner.namespace_id();
+        let mut pending = self.inner.retained_revisions_after(
+            cursor.map(|value| value.after.as_str()),
+        ).peekable();
+        let mut batch = PreparationBatch {
+            stored: 0, layouts: 0, source_bytes: 0, gaps: Vec::new(), next_cursor: None,
+        };
+        let started = Instant::now();
+        let mut last = None;
+        while let Some(metadata) = pending.peek() {
+            if batch.stored >= MAX_BATCH_REVISIONS
+                || batch.source_bytes.checked_add(metadata.byte_length)
+                    .is_none_or(|bytes| bytes > MAX_BATCH_SOURCE_BYTES)
+                || (batch.stored > 0 && started.elapsed() >= BATCH_SLICE)
+            {
+                break;
+            }
+            let metadata = pending.next().ok_or_else(|| "DIRECT_PREPARATION_NO_PROGRESS".to_owned())?;
+            // Only one revision's bytes/layouts are retained at a time. The time
+            // slice is cooperative between objects; it cannot interrupt OS I/O.
+            let bytes = Zeroizing::new(self.read_revision_detailed(&metadata)?);
+            let gap = persist(&self.root, &self.protector, &namespace, &metadata, &bytes)?;
+            batch.source_bytes += metadata.byte_length; // checked against the ceiling above
+            batch.stored += 1;
+            if let Some(reason) = gap {
+                batch.gaps.push((metadata.revision_id.clone(), reason));
+            } else {
+                batch.layouts += 1;
+            }
+            last = Some(metadata.revision_id);
+        }
+        if pending.peek().is_some() {
+            let last = last.ok_or_else(|| "DIRECT_PREPARATION_NO_PROGRESS".to_owned())?;
+            batch.next_cursor = Some(format!("v1.{}.{last}", sha256::hex(&checkpoint)));
+        }
+        // A torn/stale catalog cannot produce an acknowledged continuation after
+        // successful object writes. They remain immutable and safe to re-inspect.
+        self.inner.verify_control()?;
+        Ok(batch)
+    }
 }

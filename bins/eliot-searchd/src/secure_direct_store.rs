@@ -29,6 +29,7 @@ mod storage_io;
 mod revision_writer;
 #[path = "preparation_store.rs"]
 mod preparation_store;
+pub(crate) use preparation_store::{PreparationBatch, PreparationCursor};
 
 use storage_io::{
     legacy_path, protected_path,
@@ -119,7 +120,7 @@ impl DirectStore {
 
     /// Explicitly prepares a retained revision without rereading a current path.
     /// Missing objects may be reconstructed; conflicting immutable objects fail.
-    pub(crate) fn prepare_revision(&mut self, revision_id: &str) -> Result<(), String> {
+    pub(crate) fn prepare_revision(&mut self, revision_id: &str) -> Result<Option<&'static str>, String> {
         crate::catalog_presence::require_existing(&self.root)?;
         self.inner.verify_control()?;
         let metadata = self.inner.retained_revision(revision_id)

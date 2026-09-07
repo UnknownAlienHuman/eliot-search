@@ -72,18 +72,25 @@ pub(crate) fn scan_prepared(
     text: &str, encoded: &[u8], query: &str, ascii_insensitive: bool,
 ) -> Result<ScanResult, &'static str> {
     validate_query(query)?;
-    let (&status, layout) = encoded.split_first().ok_or("DIRECT_PREPARATION_INVALID")?;
-    if status != 0 {
-        if !layout.is_empty() { return Err("DIRECT_PREPARATION_INVALID"); }
-        return Err(match status {
-            1 => "DIRECT_REVISION_NOT_UTF8", 2 => "MATERIALIZATION_BINARY_CONTENT",
-            3 => "MATERIALIZATION_TOO_MANY_LINES", 4 => "UNITIZATION_TOO_MANY_UNITS",
-            5 => "DIRECT_PREPARATION_LAYOUT_TOO_LARGE", _ => "DIRECT_PREPARATION_INVALID",
-        });
-    }
+    if let Some(reason) = preparation_gap(encoded)? { return Err(reason); }
+    let layout = encoded.get(1..).ok_or("DIRECT_PREPARATION_INVALID")?;
     let (lines, units) = UNITIZATION.decode_layout(text, layout, MAX_LAYOUT_BYTES)
         .map_err(|error| error.code())?;
     scan_layout(text, &lines, &units, query, ascii_insensitive, LITERAL)
+}
+
+/// Decode only the outcome framing; source/layout validation remains mandatory for reads.
+/// Reused by storage acknowledgements so a saved unsupported input is not reported as a layout.
+pub(crate) fn preparation_gap(encoded: &[u8]) -> Result<Option<&'static str>, &'static str> {
+    match encoded {
+        [0, layout @ ..] if !layout.is_empty() => Ok(None),
+        [1] => Ok(Some("DIRECT_REVISION_NOT_UTF8")),
+        [2] => Ok(Some("MATERIALIZATION_BINARY_CONTENT")),
+        [3] => Ok(Some("MATERIALIZATION_TOO_MANY_LINES")),
+        [4] => Ok(Some("UNITIZATION_TOO_MANY_UNITS")),
+        [5] => Ok(Some("DIRECT_PREPARATION_LAYOUT_TOO_LARGE")),
+        _ => Err("DIRECT_PREPARATION_INVALID"),
+    }
 }
 
 fn line_spans(lines: &[LineSpan]) -> Vec<SourceLineSpan> {

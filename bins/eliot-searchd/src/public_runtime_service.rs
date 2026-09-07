@@ -14,7 +14,7 @@ use crate::continuation::{
     ContinuationCatalog, ContinuationError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
 };
 use crate::development::{DataRootGuard, Health, MAX_SCAN_QUERY_BYTES};
-use crate::direct_store::DirectStore;
+use crate::direct_store::{DirectStore, PreparationCursor};
 use crate::directory_manifest::{sync_directory, verify_directory_manifests};
 use crate::maintenance_guard::guarded_collect_orphan_revisions;
 use crate::result_handles::{
@@ -226,25 +226,32 @@ fn execute_command(
             refresh_storage(storage, canonical_root)?;
             emit_source_list(writer, store, storage)?;
         }
+        ("prepare-root", [_] | [_, _]) => {
+            let cursor = fields.get(1).map(|value| PreparationCursor::parse(value)).transpose()?;
+            store.validate_preparation_cursor(cursor.as_ref())?;
+            attempt.arm();
+            let invalidated = invalidate_search_state(continuations, handles);
+            let batch = store.prepare_root(cursor.as_ref())?;
+            refresh_storage(storage, canonical_root)?;
+            crate::preparation_composition::emit_batch(writer, &batch, invalidated)?;
+        }
         ("prepare-revision", [_, revision_id]) => {
             crate::preparation_composition::validate_revision(revision_id)?;
             attempt.arm();
             // Backfill can remove a search gap without changing any source
             // event. Source-fence equality alone cannot validate older pages.
             let invalidated = invalidate_search_state(continuations, handles);
-            store.prepare_revision(revision_id)?;
+            let gap = store.prepare_revision(revision_id)?;
             refresh_storage(storage, canonical_root)?;
-            crate::preparation_composition::emit_prepared(writer, revision_id, invalidated)?;
+            crate::preparation_composition::emit_prepared(writer, revision_id, invalidated, gap)?;
         }
         ("index-file", [_, path_hex]) => {
             let path = decode_path(path_hex)?;
             attempt.arm();
+            // Unchanged source bytes may still acquire previously missing preparation.
+            let (invalidated_continuations, invalidated_handles) =
+                invalidate_search_state(continuations, handles);
             let indexed = store.index_file(&path)?;
-            let (invalidated_continuations, invalidated_handles) = if indexed.changed {
-                invalidate_search_state(continuations, handles)
-            } else {
-                (0, 0)
-            };
             refresh_storage(storage, canonical_root)?;
             emit_indexed_source(
                 writer,
@@ -257,13 +264,10 @@ fn execute_command(
         ("index-directory", [_, path_hex]) => {
             let directory = decode_path(path_hex)?;
             attempt.arm();
+            let (invalidated_continuations, invalidated_handles) =
+                invalidate_search_state(continuations, handles);
             let indexed = store.index_directory(&directory)?;
             let changed = indexed.iter().filter(|source| source.changed).count();
-            let (invalidated_continuations, invalidated_handles) = if changed == 0 {
-                (0, 0)
-            } else {
-                invalidate_search_state(continuations, handles)
-            };
             refresh_storage(storage, canonical_root)?;
             for source in &indexed {
                 emit_indexed_source(writer, source, 0, 0, storage)?;
@@ -291,13 +295,9 @@ fn execute_command(
         ("sync-directory", [_, path_hex]) => {
             let directory = decode_path(path_hex)?;
             attempt.arm();
-            let result = sync_directory(store, canonical_root, &directory)?;
             let (invalidated_continuations, invalidated_handles) =
-                if result.changed_sources == 0 && result.retired_sources == 0 {
-                    (0, 0)
-                } else {
-                    invalidate_search_state(continuations, handles)
-                };
+                invalidate_search_state(continuations, handles);
+            let result = sync_directory(store, canonical_root, &directory)?;
             store.verify()?;
             let manifests = verify_directory_manifests(
                 canonical_root,

@@ -66,7 +66,10 @@ fn main() -> ExitCode {
                 "Unregistering does not revoke already retained revisions.\n",
                 "\nRETAINED REVISION PREPARATION:\n",
                 "  eliot-searchd --prepare-revision ROOT REVISION_ID\n",
-                "Build missing preparation from retained bytes; search never rebuilds it.\n"
+                "  eliot-searchd --prepare-root ROOT [CURSOR]\n",
+                "Build missing preparation from retained bytes; search never rebuilds it.\n",
+                "prepare-root handles a bounded batch; pass next_cursor until exhausted=true.\n",
+                "Changed catalog/profile invalidates the cursor; restart without it. Gaps stay explicit.\n"
             )
         );
     }
