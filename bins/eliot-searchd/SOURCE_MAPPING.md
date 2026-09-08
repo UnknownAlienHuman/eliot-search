@@ -8,8 +8,9 @@ control-migration-plan<TAB>TARGET_NAMESPACE_UUID
 
 `<TAB>` is one literal tab. The target must be an explicit, non-nil canonical UUID.
 It names the proposed imported namespace, not an existing native identity. This command
-writes the reusable mapping artifact and a populated **inactive redb source-map database**.
-It does not activate that database or replace the working control journal.
+writes the reusable mapping artifact, verified content-digest manifest and a populated
+**inactive redb source-map database**. It does not activate that database or replace the
+working control journal.
 
 ## Offline source-preserving entry
 
@@ -29,18 +30,20 @@ requirement: no replacement lock file or owner record is created. The lock locat
 file identity is rechecked before and after work on Windows/Unix, and no normal owner-marker
 cleanup runs. This is process exclusion, not a namespace cutover or power-loss qualification.
 
-Only existing namespace/source-history records are opened, through the same full replay and
-mapping compiler. Root registration is read without recovery and compared again before the
-reply. Pending registration updates, missing catalog files and malformed history fail without
-repair. No normal DirectStore initializer, credential operation, plaintext-to-protected migration,
-current-source read or revision/preparation writer is invoked. Only the explicitly selected
-output directory receives a temporary/published mapping artifact; filesystem read-access metadata
-is not claimed immutable. An interrupted command can leave a reusable draft in that output.
+Existing namespace/source-history records use the same full replay and mapping compiler.
+Retained revision objects are then read and verified; current source paths are never reopened.
+Root registration is read without recovery and compared again before the reply. Pending
+registration updates, missing catalog files and malformed history fail without repair.
+No normal DirectStore initializer, credential creation, plaintext-to-protected conversion,
+current-source read or revision/preparation writer is invoked. Windows protected objects use
+only their existing namespace credential; a missing key is never created to satisfy an import.
+Only the explicitly selected output directory receives temporary/published artifacts;
+filesystem read-access metadata is not claimed immutable. Interrupted work can leave an inert draft.
 
-The source-map bytes, IDs, profile and fingerprint are identical to the live-service mode for
-the same target and history. Existing files are not replaced, and a lost output acknowledgement
-can be retried. This entry maps source history only; it does not verify or import payloads, and
-the other inventory commands retain their existing already-open-service prerequisites.
+Source-map bytes, IDs, profile and fingerprint are identical to live-service mode for the
+same target and history. Existing files are not replaced, and lost output acknowledgement
+can be retried. The planner verifies payload digests but does not copy payloads into redb.
+Other inventory commands retain their existing already-open-service prerequisites.
 
 ## Mapping
 
@@ -94,6 +97,57 @@ artifact, never an implicitly accepted import. Post-dispatch service failures us
 mutation-outcome-unknown handling. The offline command exits on failure; lost output confirmation
 is `DIRECT_MIGRATION_PLAN_ACK_OUTCOME_UNKNOWN`. The plan is not read by normal search.
 
+## Canonical content-digest manifest
+
+Both planner entrypoints also produce `<chain>.source-content.v1`. Its header binds the
+explicit target namespace, original namespace, exact catalog snapshot, source-map record chain,
+content profile and expected retained-object count. Each ordered `source_content_readback` row
+contains the legacy source/revision IDs, original SHA-256, byte length and newly computed
+`content_blake3`. The footer accounts for all objects and bytes. These are content-object facts,
+not extra revision occurrences: multiple mapped occurrences may reference one retained object.
+
+The existing revision reader validates identity, length and SHA-256 before BLAKE3 sees the bytes.
+The digest is ordinary unkeyed BLAKE3-256 over exact bytes, including empty/binary content; no
+UTF-8 conversion, normalization or materialization is involved. The writer retains at most one
+revision body at a time and updates the zeroizing BLAKE3 hasher in 256 KiB chunks with deadline
+checks. Each body is bounded by the existing 64 MiB source limit.
+
+A second complete pass reopens the retained objects, recomputes every digest and compares the
+exact manifest bytes and final counts before no-clobber publication and final-file readback.
+The same 120-second budget spans source mapping, both content passes and redb staging. A missing
+or contradictory revision rejects the command; the output never claims a skipped object verified.
+Published inert artifacts from earlier steps can survive failure and be verified/reused on retry.
+
+Explicit migration may inspect an old plaintext `.bin` on Windows without generating a key or
+rewriting the source. Ordinary DIRECT serving still requires protected Windows objects. If a
+protected copy exists, it must decrypt with the original credential and agree with any plaintext
+copy; an invalid protected copy never falls back. This is one shared reader with explicit policy,
+not a second content decoder or an alternative serving route.
+
+`content_manifest_locator` uses `plan_location`; `content_manifest_chain_sha256` uses the same
+explicit record-chain scheme described above, not raw-file SHA-256 or a BLAKE3 tree over the
+manifest. The header's distinct schema/profile prevents confusing it with source mapping.
+`content_blake3_verified=true` acknowledges both content passes, not stability/residency admission.
+The inactive redb schema and source-map v1 bytes remain unchanged. A future canonical importer
+must consume this manifest with its exact source-plan binding; it is not silently inserted as
+active H5 state or accepted as a namespace-cutover receipt.
+
+### Hash implementation pin
+
+Composition uses `blake3 = 1.8.2`, default features disabled, with `std`, `pure`, `zeroize`.
+This is an explicit implementation pin, not a latest-version or qualification claim. Upstream
+`BLAKE3-team/BLAKE3` tag `1.8.2`, `Cargo.toml`, `build.rs`, and `src/lib.rs` define this profile:
+`pure` selects Rust hashing implementations, and `zeroize` covers the hasher state. No mmap,
+Rayon, C/assembly hashing implementation, helper process or Python runtime is enabled.
+The Rust `cc` crate remains an upstream build-script dependency; it is not a runtime dependency.
+
+Checksums/dependency requirements were read from the corresponding `rust-lang/crates.io-index`
+entries. New lock entries are `blake3 1.8.2`, `arrayref 0.3.9`, `arrayvec 0.7.6`,
+`constant_time_eq 0.3.1`, `cc 1.1.12`, `shlex 1.3.0`; existing packages are not upgraded.
+BLAKE3 registry checksum: `3888aaa89e4b2a40fca9848e400f6a658a5a3978de7be858e209cafa8be9a4a0`.
+The lockfile delta was prepared from those exact entries; Cargo resolution and execution have
+not been run here. Internal package dependencies and external artifact qualification are unchanged.
+
 ## Inactive redb source-map import
 
 Both existing entrypoints also produce `<digest>.source-map.v1.redb` beside the text plan.
@@ -130,11 +184,13 @@ current-workspace proof or product-readiness result. Rust execution remains unve
 
 ## Remaining import inputs
 
-The mapping draft cannot construct a complete `SourceRevision`: migration still needs
-actual BLAKE3 readback, an import observation/stability receipt, explicit residency policy,
-root/workspace/membership associations and the namespace owner-cutover protocol. Legacy
-observation times are unknown, not replaced with fabricated historical timestamps. Root
-registration and filenames cannot supply missing admission or access authority.
+The mapping draft alone cannot construct a complete `SourceRevision`. The content manifest now
+supplies actual BLAKE3 readback, but canonical import still needs an import observation/stability
+receipt, explicit residency policy, root/workspace/membership associations and the namespace
+owner-cutover protocol. Legacy observation times are unknown, not replaced with fabricated
+historical timestamps. Root registration and filenames cannot supply missing admission or access
+authority. The older source-map v1 footer lists its missing inputs; the separately bound content
+manifest supplies its content-digest input without changing that format.
 
 See `docs/contracts/p00/SOURCE_GRAPH.md` for the normative graph. This draft neither accepts
 T10 nor implements T11 cutover. Compilation and execution of these paths are unverified.

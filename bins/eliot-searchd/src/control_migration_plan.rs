@@ -15,6 +15,8 @@ use crate::development::DataRootGuard;
 
 #[path = "control_migration_redb.rs"]
 mod redb_import;
+#[path = "control_migration_content.rs"]
+mod content_readback;
 
 const MAX_PLAN_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ROW_BYTES: usize = 8 * 1024;
@@ -77,15 +79,16 @@ impl DirectStore {
         let directory = control.join("migration-plans");
         ensure_child_directory(&directory)?;
         sync_directory(&control)?;
-        Self::stage_mapping_artifact(&self.inner, target, &directory, "control/migration-plans/", deadline)
+        Self::stage_mapping_artifact(&self.inner, &self.root, target, &directory, "control/migration-plans/", deadline)
     }
 
-    /// Shared artifact writer for the live owner and the offline source-preserving
-    /// entrypoint. The caller holds the ordinary root lock and supplies an existing
-    /// output directory. No source store is opened and no credential is resolved.
+    /// Shared artifact writer for the live owner and offline entrypoint. The caller
+    /// holds source_root's ordinary lock and opened source from that exact root.
+    /// No source store is initialized. Payload readback resolves existing Windows
+    /// credentials only; no credential or source object is created or converted.
     /// A returned locator is relative to the explicitly named location scope.
     pub(crate) fn stage_mapping_artifact(
-        source: &crate::plaintext_direct_store::DirectStore,
+        source: &crate::plaintext_direct_store::DirectStore, source_root: &Path,
         target: SourceNamespaceId, directory: &Path, locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<String, String> {
@@ -155,6 +158,7 @@ impl DirectStore {
         }
         staging.remove()?;
         sync_directory(directory)?;
+        let content = content_readback::stage(source, source_root, target, digest, directory, deadline)?;
         let (database_name, database_reused) = redb_import::store(
             source, target, directory, digest, summary.import_counts(), deadline,
         )?;
@@ -170,11 +174,15 @@ impl DirectStore {
             "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
             "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
             "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
+            "\"content_manifest_locator\":{},\"content_manifest_chain_sha256\":\"{}\",",
+            "\"content_objects_verified\":{},\"content_bytes_verified\":{},\"content_blake3_verified\":true,",
             "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"
         ), target, sha256::hex(&header.catalog_snapshot), json_string(&format!("{locator_prefix}{name}")),
             sha256::hex(&digest), bytes, reused, summary.events, summary.sources, summary.occurrences,
             summary.path_only_events, summary.retirements, location,
-            json_string(&format!("{locator_prefix}{database_name}")), database_reused))
+            json_string(&format!("{locator_prefix}{database_name}")), database_reused,
+            json_string(&format!("{locator_prefix}{}", content.name)), sha256::hex(&content.chain),
+            content.records, content.source_bytes))
     }
 }
 

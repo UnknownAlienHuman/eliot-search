@@ -1,6 +1,6 @@
 //! Offline source-map staging without normal daemon startup or source-state writes.
 //! Uses the normal owner's existing lock file; no competing ownership mechanism,
-//! credential loading, root recovery, revision migration or query service is started.
+//! credential creation, root recovery, revision conversion or query service is started.
 
 use std::fs::{self, File, Metadata, OpenOptions, TryLockError};
 use std::path::Path;
@@ -42,7 +42,7 @@ pub(crate) fn maybe_run() -> Option<ExitCode> {
             }
             let response = plaintext_direct_store::DirectStore::with_existing_mapping_source(
                 root, deadline, |source| {
-                    DirectStore::stage_mapping_artifact(source, target, &output, "", deadline)
+                    DirectStore::stage_mapping_artifact(source, root, target, &output, "", deadline)
                 },
             )?;
             if source_roots::migration_input(root).map_err(|error| error.code().to_owned())? != registration {

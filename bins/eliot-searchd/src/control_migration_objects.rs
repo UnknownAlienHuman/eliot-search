@@ -18,6 +18,7 @@ mod source_plan;
 use super::{DirectStore, RevisionMetadata, MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY,
     legacy_path, protected_path, read_regular_file, verify_plaintext, verify_revision_identity};
 use super::storage_io::ensure_directory;
+use crate::revision_protection::RevisionProtector;
 use crate::{development::MAX_SCAN_INPUT_BYTES, service_output::json_string, sha256};
 
 const MAX_PAGE_REVISIONS: usize = 16;
@@ -209,45 +210,63 @@ impl DirectStore {
     fn read_revision_objects(
         &self, metadata: &RevisionMetadata, deadline: Option<Instant>,
     ) -> Result<RevisionReadback, String> {
-        check_deadline(deadline)?;
-        verify_revision_identity(metadata)?;
-        if metadata.byte_length > MAX_SCAN_INPUT_BYTES as u64 {
-            return Err("DIRECT_REVISION_LENGTH_MISMATCH".to_owned());
-        }
-        ensure_directory(&self.root)?;
-        let revisions = self.root.join(REVISION_DIRECTORY);
-        ensure_directory(&revisions)?;
-        ensure_directory(&revisions.join(&metadata.revision_id[..2]))?;
-        let protected_path = protected_path(&self.root, &metadata.revision_id)?;
-        let plaintext_path = legacy_path(&self.root, &metadata.revision_id)?;
-        let encoded = read_optional(&protected_path, MAX_REVISION_OBJECT_BYTES)?;
-        let protected = encoded.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
-        let mut protected_bytes = if let Some(encoded) = encoded.as_ref() {
-            check_deadline(deadline)?;
-            Some(Zeroizing::new(self.protector.unprotect(
-                encoded, &metadata.revision_id, &metadata.content_digest, metadata.byte_length,
-            )?))
-        } else { None };
-        drop(encoded);
-        check_deadline(deadline)?;
-        let plaintext_bytes = read_optional(&plaintext_path, MAX_SCAN_INPUT_BYTES)?;
-        if let Some(bytes) = plaintext_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
-        let plaintext = plaintext_bytes.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
-        if let Some(bytes) = protected_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
-        if let (Some(protected), Some(plaintext)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref()) {
-            if protected.as_slice() != plaintext.as_slice() {
-                return Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned());
-            }
-        }
-        let bytes = match (protected_bytes.take(), plaintext_bytes) {
-            (Some(bytes), _) => bytes,
-            (None, Some(bytes)) if !cfg!(windows) => bytes,
-            (None, Some(_)) => return Err("DIRECT_REVISION_PROTECTION_INCOMPLETE".to_owned()),
-            (None, None) => return Err("DIRECT_REVISION_MISSING".to_owned()),
-        };
-        check_deadline(deadline)?;
-        Ok(RevisionReadback { bytes, plaintext, protected })
+        read_revision_objects_at(&self.root, Some(&self.protector), metadata, cfg!(windows), deadline)
     }
+}
+
+/// Explicit legacy import can read a verified plaintext object on Windows without
+/// creating a credential or converting the source. Normal serving retains its
+/// protected-only Windows floor. A present protected copy is never ignored.
+fn read_import_revision(
+    root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
+    deadline: Instant,
+) -> Result<Zeroizing<Vec<u8>>, String> {
+    read_revision_objects_at(root, protector, metadata, false, Some(deadline)).map(|readback| readback.bytes)
+}
+
+fn read_revision_objects_at(
+    root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
+    require_protected: bool, deadline: Option<Instant>,
+) -> Result<RevisionReadback, String> {
+    check_deadline(deadline)?;
+    verify_revision_identity(metadata)?;
+    if metadata.byte_length > MAX_SCAN_INPUT_BYTES as u64 {
+        return Err("DIRECT_REVISION_LENGTH_MISMATCH".to_owned());
+    }
+    ensure_directory(root)?;
+    let revisions = root.join(REVISION_DIRECTORY);
+    ensure_directory(&revisions)?;
+    ensure_directory(&revisions.join(&metadata.revision_id[..2]))?;
+    let protected_path = protected_path(root, &metadata.revision_id)?;
+    let plaintext_path = legacy_path(root, &metadata.revision_id)?;
+    let encoded = read_optional(&protected_path, MAX_REVISION_OBJECT_BYTES)?;
+    let protected = encoded.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
+    let mut protected_bytes = if let Some(encoded) = encoded.as_ref() {
+        check_deadline(deadline)?;
+        let protector = protector.ok_or_else(|| "DIRECT_REVISION_KEY_UNAVAILABLE".to_owned())?;
+        Some(Zeroizing::new(protector.unprotect(
+            encoded, &metadata.revision_id, &metadata.content_digest, metadata.byte_length,
+        )?))
+    } else { None };
+    drop(encoded);
+    check_deadline(deadline)?;
+    let plaintext_bytes = read_optional(&plaintext_path, MAX_SCAN_INPUT_BYTES)?;
+    if let Some(bytes) = plaintext_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
+    let plaintext = plaintext_bytes.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
+    if let Some(bytes) = protected_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
+    if let (Some(protected), Some(plaintext)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref()) {
+        if protected.as_slice() != plaintext.as_slice() {
+            return Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned());
+        }
+    }
+    let bytes = match (protected_bytes.take(), plaintext_bytes) {
+        (Some(bytes), _) => bytes,
+        (None, Some(bytes)) if !require_protected => bytes,
+        (None, Some(_)) => return Err("DIRECT_REVISION_PROTECTION_INCOMPLETE".to_owned()),
+        (None, None) => return Err("DIRECT_REVISION_MISSING".to_owned()),
+    };
+    check_deadline(deadline)?;
+    Ok(RevisionReadback { bytes, plaintext, protected })
 }
 
 fn read_optional(path: &Path, maximum: usize) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
