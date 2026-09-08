@@ -114,6 +114,10 @@ impl DirectStore {
         if cursor == Some("orphans") || cursor.is_some_and(|value| value.starts_with("o1.")) {
             return self.inspect_migration_orphans(cursor.filter(|value| *value != "orphans"));
         }
+        // All physical preparation files, including unresolved old-profile residue.
+        if cursor == Some("preparation-files") || cursor.is_some_and(|value| value.starts_with("p1.")) {
+            return self.inspect_migration_preparation_files(cursor.filter(|value| *value != "preparation-files"));
+        }
         let deadline = Instant::now().checked_add(DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
         let cursor = cursor.map(Cursor::parse).transpose()?;

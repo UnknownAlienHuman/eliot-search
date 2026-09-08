@@ -2,6 +2,9 @@
 //! The existing DirectStore owner and revision protector own this adapter too.
 //! No query path creates files, repairs missing objects or changes source metadata.
 
+#[path = "control_migration_preparation.rs"]
+mod migration_inventory;
+
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -213,8 +216,20 @@ pub(super) fn inspect(
 fn decode_reference(
     saved: &[u8], key: &[u8; 32], protector: &RevisionProtector,
 ) -> Result<([u8; 32], u64), &'static str> {
+    let (digest, length, protected) = decode_reference_fields(saved, key)?;
+    if protected != protector.encrypts_new_objects() {
+        return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
+    }
+    Ok((digest, length))
+}
+
+/// Shared wire validation, independent of the currently active protection backend.
+/// Used to account for old-profile references without treating them as admitted data.
+fn decode_reference_fields(
+    saved: &[u8], key: &[u8; 32],
+) -> Result<([u8; 32], u64, bool), &'static str> {
     if saved.len() != REF_BYTES || &saved[..8] != REF_MAGIC || saved[8..40] != key[..]
-        || saved[80] != u8::from(protector.encrypts_new_objects())
+        || saved[80] > 1
     {
         return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
     }
@@ -223,7 +238,7 @@ fn decode_reference(
     if length <= BINDING_BYTES as u64 || length > MAX_MANIFEST_BYTES as u64 {
         return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
     }
-    Ok((digest, length))
+    Ok((digest, length, saved[80] == 1))
 }
 
 fn binding(namespace: &str, metadata: &RevisionMetadata) -> Result<[u8; BINDING_BYTES], String> {
