@@ -1,6 +1,7 @@
 //! Inactive, typed source-mapping imports. This file format is deliberately not
 //! a ControlJournal: it carries no live owner, admission, visibility or H5 receipt.
-//! The caller owns both input exclusion and the exclusively created output file.
+//! The caller owns input exclusion and the admitted output file. Resuming an
+//! incomplete target verifies its entire committed prefix before appending rows.
 
 use std::fs::File;
 use std::time::Instant;
@@ -164,13 +165,16 @@ impl SourceImportCounts {
 }
 
 /// Transactional staging writer. It cannot publish an active control snapshot.
-/// Errors after dispatch block further use; drop it and re-inspect/rebuild the target.
+/// Errors after dispatch block further use; drop it and resume by exact readback.
 pub struct SourceMappingImport {
+    // Drop a retained read transaction before its native database owner.
+    prefix: Option<PrefixReadback>,
     database: Database,
     binding: SourceImportBinding,
     counts: SourceImportCounts,
     pending: Vec<SourceImportRow>,
     blocked: bool,
+    sealed: bool,
 }
 
 impl SourceMappingImport {
@@ -200,7 +204,25 @@ impl SourceMappingImport {
             check(deadline)
         })();
         init.map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        Ok(Self { database, binding, counts: SourceImportCounts::default(), pending: Vec::with_capacity(BATCH_ROWS), blocked: false })
+        Ok(Self { prefix: None, database, binding, counts: SourceImportCounts::default(),
+            pending: Vec::with_capacity(BATCH_ROWS), blocked: false, sealed: false })
+    }
+
+    /// Reopen an existing target for the same complete source/target/plan binding.
+    /// Native redb recovery may run, but no application transaction is dispatched.
+    /// Feed the compiler again from event one: `push` compares the committed prefix
+    /// and all its source/occurrence indices before accepting any new suffix row.
+    /// A sealed target can be verified this way but is never reopened for writes.
+    /// Empty, partial-schema, foreign and contradictory targets fail without repair.
+    pub fn resume(file: File, binding: SourceImportBinding, deadline: Instant) -> Result<Self, ControlError> {
+        let (database, prefix, sealed) = open_import(file, binding, deadline)?;
+        let counts = prefix.expected;
+        let prefix = if counts.events == 0 {
+            prefix.finish(deadline)?;
+            None
+        } else { Some(prefix) };
+        Ok(Self { prefix, database, binding, counts, pending: Vec::with_capacity(BATCH_ROWS),
+            blocked: false, sealed })
     }
 
     /// Append one exact mapping event; at most 256 rows are buffered. A batch
@@ -208,6 +230,18 @@ impl SourceMappingImport {
     pub fn push(&mut self, row: SourceImportRow, deadline: Instant) -> Result<(), ControlError> {
         check(deadline)?;
         if self.blocked { return Err(ControlError::StoreQuarantined); }
+        if let Some(prefix) = self.prefix.as_mut() {
+            // A rejected comparison cannot later turn into successful resume on
+            // this handle. Existing rows are never overwritten or counted twice.
+            self.blocked = true;
+            prefix.compare(&row, deadline)?;
+            if prefix.compared.events == prefix.expected.events {
+                self.prefix.take().ok_or(ControlError::MigrationUnverified)?.finish(deadline)?;
+            }
+            self.blocked = false;
+            return Ok(());
+        }
+        if self.sealed { return Err(ControlError::TransactionConflict); }
         row.encode()?;
         if row.sequence != self.counts.events + self.pending.len() as u64 + 1 || row.sequence > self.binding.events {
             return Err(ControlError::TransactionConflict);
@@ -221,7 +255,13 @@ impl SourceMappingImport {
     /// The temporary database still requires independent exact-row readback before publication.
     /// This marker completes source mapping only, never canonical H5 or owner cutover.
     pub fn finish(mut self, expected: SourceImportCounts, deadline: Instant) -> Result<(), ControlError> {
+        check(deadline)?;
+        if self.blocked { return Err(ControlError::StoreQuarantined); }
+        if self.prefix.is_some() { return Err(ControlError::MigrationUnverified); }
         validate_counts(expected, self.binding)?;
+        if self.sealed {
+            return if self.counts == expected { Ok(()) } else { Err(ControlError::MigrationUnverified) };
+        }
         self.flush(deadline)?;
         if self.counts != expected || expected.events != self.binding.events || expected.sources != self.binding.sources
             || expected.events != expected.occurrences + expected.retained_events + expected.retirements
@@ -248,6 +288,7 @@ impl SourceMappingImport {
     fn flush(&mut self, deadline: Instant) -> Result<(), ControlError> {
         check(deadline)?;
         if self.blocked { return Err(ControlError::StoreQuarantined); }
+        if self.prefix.is_some() || self.sealed { return Err(ControlError::MigrationUnverified); }
         if self.pending.is_empty() { return Ok(()); }
         let binding = self.binding.encode()?;
         self.blocked = true;
@@ -310,61 +351,56 @@ impl SourceMappingImport {
 /// One reopened, coherent redb read transaction for exact compiler-to-target comparison.
 /// It neither writes records nor exposes active-source or query admission operations.
 pub struct SourceMappingReadback {
-    read: ReadTransaction,
+    prefix: PrefixReadback,
     _database: Database,
-    expected: SourceImportCounts,
-    compared: u64,
 }
 
 impl SourceMappingReadback {
-    /// Open an existing nonempty staging database with the exact expected binding and
-    /// terminal accounting. Incomplete imports are not accepted. Native redb recovery
-    /// may update the staging file; this is not read-only inspection of the source root.
+    /// Open only a sealed existing target with the exact full binding and counts.
+    /// Native redb recovery may update the target, never the source catalog.
     pub fn open(file: File, binding: SourceImportBinding, expected: SourceImportCounts, deadline: Instant) -> Result<Self, ControlError> {
         check(deadline)?;
-        let encoded = binding.encode()?;
         validate_counts(expected, binding)?;
-        check_file(&file, false)?;
-        // redb 2.6 uses create_file for an already-admitted nonempty File too.
-        // check_file above forbids initializing a missing/empty target here.
-        let database = Database::builder().set_cache_size(8 * 1024 * 1024).create_file(file)
-            .map_err(|_| ControlError::StoreUnavailable)?;
-        let read = database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        let names = read.list_tables().map_err(|_| ControlError::StoreCorrupt)?
-            .take(5).map(|table| table.name().to_owned()).collect::<std::collections::BTreeSet<_>>();
-        let required = [META.name(), EVENTS.name(), SOURCES.name(), REVISIONS.name()]
-            .into_iter().map(str::to_owned).collect::<std::collections::BTreeSet<_>>();
-        if names != required || read.list_multimap_tables().map_err(|_| ControlError::StoreCorrupt)?.next().is_some() {
-            return Err(ControlError::SchemaMismatch);
-        }
-        {
-            let meta = read.open_table(META).map_err(|_| ControlError::StoreCorrupt)?;
-            if meta.len().map_err(|_| ControlError::StoreCorrupt)? != 2
-                || meta.get("binding").map_err(|_| ControlError::StoreCorrupt)?.is_none_or(|v| v.value() != encoded)
-                || meta.get("progress").map_err(|_| ControlError::StoreCorrupt)?.is_none_or(|v| v.value() != expected.encode(true))
-                || read.open_table(EVENTS).map_err(|_| ControlError::StoreCorrupt)?.len().map_err(|_| ControlError::StoreCorrupt)? != expected.events
-                || read.open_table(SOURCES).map_err(|_| ControlError::StoreCorrupt)?.len().map_err(|_| ControlError::StoreCorrupt)? != expected.sources
-                || read.open_table(REVISIONS).map_err(|_| ControlError::StoreCorrupt)?.len().map_err(|_| ControlError::StoreCorrupt)? != expected.occurrences
-                || expected.events != binding.events || expected.sources != binding.sources
-                || expected.events != expected.occurrences + expected.retained_events + expected.retirements
-            { return Err(ControlError::StoreCorrupt); }
-        }
-        check(deadline)?;
-        Ok(Self { read, _database: database, expected, compared: 0 })
+        let (database, prefix, sealed) = open_import(file, binding, deadline)?;
+        if !sealed || prefix.expected != expected { return Err(ControlError::MigrationUnverified); }
+        Ok(Self { prefix, _database: database })
     }
 
-    /// Compare the next compiler-generated row and its source/occurrence index entries.
-    /// Processing every expected row proves that no skipped, extra or altered row hides in the target.
+    /// Compare the next compiler row using the same checks as interrupted-import resume.
     pub fn compare(&mut self, row: &SourceImportRow, deadline: Instant) -> Result<(), ControlError> {
+        self.prefix.compare(row, deadline)
+    }
+
+    /// A complete readback requires all rows and all five accounting dimensions.
+    pub fn finish(self, deadline: Instant) -> Result<(), ControlError> {
+        self.prefix.finish(deadline)
+    }
+}
+
+/// The read transaction pins one committed prefix until every row is checked.
+/// Its memory footprint does not grow with the number of sources or events.
+struct PrefixReadback {
+    read: ReadTransaction,
+    expected: SourceImportCounts,
+    compared: SourceImportCounts,
+}
+
+impl PrefixReadback {
+    fn compare(&mut self, row: &SourceImportRow, deadline: Instant) -> Result<(), ControlError> {
         check(deadline)?;
-        if row.sequence != self.compared + 1 || row.sequence > self.expected.events { return Err(ControlError::TransactionConflict); }
+        if row.sequence != self.compared.events + 1 || row.sequence > self.expected.events {
+            return Err(ControlError::TransactionConflict);
+        }
         let events = self.read.open_table(EVENTS).map_err(|_| ControlError::StoreCorrupt)?;
         let value = events.get(row.sequence).map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?;
         if value.value() != row.encode()? { return Err(ControlError::StoreCorrupt); }
         let sources = self.read.open_table(SOURCES).map_err(|_| ControlError::StoreCorrupt)?;
         let head = sources.get(row.source.as_bytes().as_slice()).map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?.value();
         let last = events.get(head).map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?;
-        if head < row.sequence || last.value().get(..16) != Some(row.source.as_bytes().as_slice()) { return Err(ControlError::StoreCorrupt); }
+        if head < row.sequence || head > self.expected.events
+            || last.value().get(..16) != Some(row.source.as_bytes().as_slice()) {
+            return Err(ControlError::StoreCorrupt);
+        }
         let revisions = self.read.open_table(REVISIONS).map_err(|_| ControlError::StoreCorrupt)?;
         let first = revisions.get(row.revision.as_bytes().as_slice()).map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?.value();
         let opening = events.get(first).map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?;
@@ -373,16 +409,67 @@ impl SourceMappingReadback {
             || opening.value().get(16..32) != Some(row.revision.as_bytes().as_slice())
             || opening.value().get(81).is_none_or(|flags| *flags & 2 == 0)
         { return Err(ControlError::StoreCorrupt); }
-        self.compared += 1;
-        check(deadline)
-    }
-
-    /// Complete exact-row readback. A prefix, even with a valid database header, fails.
-    pub fn finish(self, deadline: Instant) -> Result<(), ControlError> {
         check(deadline)?;
-        if self.compared != self.expected.events { return Err(ControlError::MigrationUnverified); }
+        self.compared.add(row);
         Ok(())
     }
+
+    fn finish(self, deadline: Instant) -> Result<(), ControlError> {
+        check(deadline)?;
+        if self.compared != self.expected { return Err(ControlError::MigrationUnverified); }
+        Ok(())
+    }
+}
+
+/// Shared reopen path: an incomplete header is inspectable for resume, not complete.
+/// No absent table/header is created and no progress counter is inferred from row count.
+fn open_import(file: File, binding: SourceImportBinding, deadline: Instant)
+    -> Result<(Database, PrefixReadback, bool), ControlError> {
+    check(deadline)?;
+    let encoded = binding.encode()?;
+    check_file(&file, false)?;
+    let database = Database::builder().set_cache_size(8 * 1024 * 1024).create_file(file)
+        .map_err(|_| ControlError::StoreUnavailable)?;
+    check(deadline)?;
+    let read = database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
+    let names = read.list_tables().map_err(|_| ControlError::StoreCorrupt)?
+        .take(5).map(|table| table.name().to_owned()).collect::<std::collections::BTreeSet<_>>();
+    let required = [META.name(), EVENTS.name(), SOURCES.name(), REVISIONS.name()]
+        .into_iter().map(str::to_owned).collect::<std::collections::BTreeSet<_>>();
+    if names != required || read.list_multimap_tables().map_err(|_| ControlError::StoreCorrupt)?.next().is_some() {
+        return Err(ControlError::SchemaMismatch);
+    }
+    let (counts, sealed) = {
+        let meta = read.open_table(META).map_err(|_| ControlError::StoreCorrupt)?;
+        if meta.len().map_err(|_| ControlError::StoreCorrupt)? != 2
+            || meta.get("binding").map_err(|_| ControlError::StoreCorrupt)?.is_none_or(|v| v.value() != encoded)
+        { return Err(ControlError::StoreCorrupt); }
+        let progress = meta.get("progress").map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?;
+        decode_progress(progress.value(), binding)?
+    };
+    if read.open_table(EVENTS).map_err(|_| ControlError::StoreCorrupt)?.len().map_err(|_| ControlError::StoreCorrupt)? != counts.events
+        || read.open_table(SOURCES).map_err(|_| ControlError::StoreCorrupt)?.len().map_err(|_| ControlError::StoreCorrupt)? != counts.sources
+        || read.open_table(REVISIONS).map_err(|_| ControlError::StoreCorrupt)?.len().map_err(|_| ControlError::StoreCorrupt)? != counts.occurrences
+    { return Err(ControlError::StoreCorrupt); }
+    check(deadline)?;
+    Ok((database, PrefixReadback { read, expected: counts, compared: SourceImportCounts::default() }, sealed))
+}
+
+fn decode_progress(bytes: &[u8], binding: SourceImportBinding) -> Result<(SourceImportCounts, bool), ControlError> {
+    if bytes.len() != 41 || bytes[0] > 1 { return Err(ControlError::StoreCorrupt); }
+    let counts = SourceImportCounts {
+        events: number(bytes, 1)?, sources: number(bytes, 9)?, occurrences: number(bytes, 17)?,
+        retained_events: number(bytes, 25)?, retirements: number(bytes, 33)?,
+    };
+    let sealed = bytes[0] == 1;
+    if counts.events > binding.events || counts.sources > binding.sources
+        || counts.sources > counts.occurrences || counts.occurrences > counts.events
+        || (counts.events == 0) != (counts.sources == 0)
+        || counts.occurrences.checked_add(counts.retained_events)
+            .and_then(|n| n.checked_add(counts.retirements)) != Some(counts.events)
+        || (sealed && validate_counts(counts, binding).is_err())
+    { return Err(ControlError::StoreCorrupt); }
+    Ok((counts, sealed))
 }
 
 fn validate_counts(value: SourceImportCounts, binding: SourceImportBinding) -> Result<(), ControlError> {

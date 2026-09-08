@@ -171,10 +171,23 @@ binary row and every source/occurrence index entry against the verified source h
 one coherent read transaction. A prefix, surplus row, wrong index, different target/profile,
 foreign plan or incomplete marker fails. The final no-clobber publication is checked again.
 Existing completed targets are verified and reused; conflicting targets are never replaced.
-A failed import can leave its already published text plan. Retrying fills in the missing
-sidecar, or verifies an existing completed one. Partial temporary targets are not resumed
-as accepted progress: they are discarded/rebuilt, and process death may leave temporary residue.
-Native redb recovery may modify the staging target, never the source root in offline mode.
+A failed import retains `.<digest>.source-map.v1.redb.pending` in the same output directory.
+Repeating the same command and target resumes this exact pending database. The existing
+41-byte progress record and table cardinalities bound its committed prefix; neither filenames
+nor a caller-supplied offset establish progress. The compiler starts again at event one and
+compares every committed row and source/occurrence index in one read transaction. All five
+accounting totals must agree before the first suffix write. Verified prefix rows are not rewritten;
+new rows retain the existing 256-row atomic batch boundary. Uncommitted in-memory rows are replayed.
+
+A target sealed before interruption is fully compared but receives no new application writes.
+Missing/invalid schema, empty files, corrupt progress, changed bindings, or contradictory rows fail
+without deletion, overwrite or automatic rebuild. Failed initialization can therefore require explicit
+recovery. Changed source history produces a different pending name; old state is not silently reused.
+After complete final readback, successful publication removes the pending name. An interruption after
+publication can leave both names; a valid final target remains authoritative only for this inert artifact.
+Old random-name temporary files are not guessed or adopted. Native redb recovery may modify the staging
+target, never the source root in offline mode. The bounded full source replays and final readback remain
+required; resume saves committed writes, not the verification cost or its cooperative deadline.
 
 `source_mapping_imported_to_redb=true` and `staged_database_verified=true` describe this
 source-mapping scope only. `redb_imported=false`, `active_control_imported=false` and

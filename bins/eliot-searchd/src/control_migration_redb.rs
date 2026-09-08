@@ -9,7 +9,7 @@ use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{SourceImportBinding, SourceImportCounts,
     SourceMappingImport, SourceMappingReadback};
 
-use super::{PlanDigest, StagingFile, check_deadline, ensure_directory, regular, sha256, sync_directory};
+use super::{PlanDigest, check_deadline, ensure_directory, regular, sha256, sync_directory};
 use crate::plaintext_direct_store::DirectStore;
 
 /// The caller retains source exclusion and has already verified the text plan.
@@ -32,10 +32,28 @@ pub(super) fn store(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Err("DIRECT_MIGRATION_IMPORT_OPEN_FAILED".to_owned()),
     }
-    let mut staging = StagingFile::create(directory)?;
-    let file = staging.file.take().ok_or_else(|| "DIRECT_MIGRATION_PLAN_CLOSED".to_owned())?;
-    let mut writer = SourceMappingImport::create(file, binding, deadline).map_err(|e| e.code().to_owned())?;
+    // A deterministic pending locator lets an interrupted invocation find the
+    // same transactionally committed prefix. It is not a usable/final artifact.
+    // Keep it on every error, including unknown native commit outcomes. Never
+    // truncate, replace, or guess completion from the filename or file length.
+    let pending_path = directory.join(format!(".{name}.pending"));
+    let mut writer = match OpenOptions::new().read(true).write(true).create_new(true).open(&pending_path) {
+        Ok(file) => {
+            let writer = SourceMappingImport::create(file, binding, deadline)
+                .map_err(|e| e.code().to_owned())?;
+            sync_directory(directory)?;
+            writer
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            SourceMappingImport::resume(open_existing(&pending_path)?, binding, deadline)
+                .map_err(|e| e.code().to_owned())?
+        }
+        Err(_) => return Err("DIRECT_MIGRATION_IMPORT_CREATE_FAILED".to_owned()),
+    };
     let mut hash = PlanDigest::new();
+    // Replay from event one even on resume: the adapter compares every already
+    // committed row and index before dispatching the first new batch. Neither
+    // the caller nor a cursor can skip verification of the persisted prefix.
     let summary = source.compile_source_mapping_with_rows(target, deadline,
         |encoded| hash.push(encoded),
         |row| writer.push(row, deadline).map_err(|e| e.code().to_owned()),
@@ -45,9 +63,9 @@ pub(super) fn store(
     }
     // Consume/drop the native writer before reopening or publishing its file.
     writer.finish(expected, deadline).map_err(|e| e.code().to_owned())?;
-    verify(source, &staging.path, binding, expected, deadline)?;
+    verify(source, &pending_path, binding, expected, deadline)?;
     check_deadline(Some(deadline))?;
-    let reused = match fs::hard_link(&staging.path, &final_path) {
+    let reused = match fs::hard_link(&pending_path, &final_path) {
         Ok(()) => false,
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
         Err(_) => return Err("DIRECT_MIGRATION_IMPORT_PUBLISH_OUTCOME_UNKNOWN".to_owned()),
@@ -56,7 +74,9 @@ pub(super) fn store(
     // A competing existing target must match too. The final name never grants
     // integrity, complete accounting, or permission to activate the imported namespace.
     verify(source, &final_path, binding, expected, deadline)?;
-    staging.remove()?;
+    // All native handles are closed and the final target has passed exact readback.
+    // A failure before here deliberately retains pending progress for the next call.
+    fs::remove_file(&pending_path).map_err(|_| "DIRECT_MIGRATION_IMPORT_CLEANUP_FAILED".to_owned())?;
     sync_directory(directory)?;
     check_deadline(Some(deadline))?;
     Ok((name, reused))
