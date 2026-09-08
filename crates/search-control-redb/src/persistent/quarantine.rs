@@ -73,7 +73,7 @@ impl PersistentControlJournal {
             .map_err(|error| budget.failure(error, Some(request.operation_id())).for_recovery())
     }
 
-    fn quarantine_checked(
+    pub(super) fn quarantine_checked(
         &mut self,
         request: &ControlQuarantineRequest,
         publisher: &mut ControlSnapshotPublisher,

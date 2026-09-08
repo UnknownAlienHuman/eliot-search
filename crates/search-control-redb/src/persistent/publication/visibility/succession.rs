@@ -68,7 +68,9 @@ impl PublicationSuccessor {
     #[must_use]
     pub const fn intent(&self) -> &PublicationIntent { &self.next }
 
-    fn command(&self, limits: JournalLimits) -> Result<ConditionalControlMutation, ControlError> {
+    pub(in crate::persistent) const fn port_operation_id(&self) -> MutationId { self.operation_id }
+
+    pub(in crate::persistent) fn command(&self, limits: JournalLimits) -> Result<ConditionalControlMutation, ControlError> {
         let intent_key = key(super::super::KEY, limits)?;
         let writes = vec![ControlWrite {
             key: intent_key.clone(), value: intent_codec::encode(&self.next, limits)?,
@@ -131,7 +133,7 @@ impl PersistentControlJournal {
         } else { error }, Some(request.operation_id)).for_recovery())
     }
 
-    pub(in crate::persistent::publication::visibility) fn reserve_successor_checked(
+    pub(in crate::persistent) fn reserve_successor_checked(
         &mut self,
         request: &PublicationSuccessor,
         publisher: &ControlSnapshotPublisher,

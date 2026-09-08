@@ -28,6 +28,13 @@ const MANIFESTS: &[u8] = b"projection_memberships/manifest/v1/";
 const SHADOWS: &[u8] = b"shadow_fences/publication/v1/";
 const RETIRED: &[u8] = b"publication_receipts/retired/v1/";
 
+// Ordinary shared-port writes and deletes cannot manufacture visibility or
+// bypass manifest/shadow/receipt guards. Typed commands use these same keys.
+pub(super) fn port_reserved_key(key: &[u8]) -> bool {
+    key == STATE || [RECEIPTS, MANIFESTS, SHADOWS, RETIRED].iter()
+        .any(|prefix| key.starts_with(prefix))
+}
+
 /// Committed route and authoritative publication-generation guards.
 /// The source/access owners must update their counters in the same control
 /// transaction as the changes they protect. This record does not observe sources.
@@ -136,11 +143,17 @@ impl VisibleEpochCommit {
         Ok(result)
     }
 
+    pub(in crate::persistent) const fn port_operation_id(&self) -> MutationId { self.operation_id }
+
+    pub(in crate::persistent) fn port_prior_matches(&self, receipt: &ControlCommitReceipt) -> bool {
+        same_commit(&self.prior_commit, receipt)
+    }
+
     fn validate(&self, limits: JournalLimits) -> Result<(), ControlError> {
         validation::validate_request(self, limits)
     }
 
-    fn command(&self, limits: JournalLimits, check: &dyn Check) -> Result<ConditionalControlMutation, ControlError> {
+    pub(in crate::persistent) fn command(&self, limits: JournalLimits, check: &dyn Check) -> Result<ConditionalControlMutation, ControlError> {
         self.validate(limits)?;
         check.check(Point::Validated)?;
         let mut next = self.previous;
@@ -271,7 +284,7 @@ impl PersistentControlJournal {
         result.map_err(|error| budget.failure(error, None))
     }
 
-    fn commit_visibility_checked(&mut self, request: &VisibleEpochCommit, boundary: Boundary, check: &dyn Check)
+    pub(in crate::persistent) fn commit_visibility_checked(&mut self, request: &VisibleEpochCommit, boundary: Boundary, check: &dyn Check)
         -> Result<ControlCommitReceipt, ControlError> {
         let result = (|| {
             self.ensure_available()?; check.check(Point::Start)?; require_schema(self)?;

@@ -26,7 +26,9 @@ mod snapshot;
 mod quarantine;
 mod diagnostics;
 mod publication;
+mod port;
 
+pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};

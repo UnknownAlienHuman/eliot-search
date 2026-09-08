@@ -114,7 +114,9 @@ impl PublicationIntentUpdate {
     #[must_use]
     pub const fn intent(&self) -> &PublicationIntent { &self.next }
 
-    fn command(&self, limits: JournalLimits) -> Result<ConditionalControlMutation, ControlError> {
+    pub(in crate::persistent) const fn port_operation_id(&self) -> MutationId { self.operation_id }
+
+    pub(in crate::persistent) fn command(&self, limits: JournalLimits) -> Result<ConditionalControlMutation, ControlError> {
         let key = ControlKey::new(KEY.to_vec(), limits)?;
         let expected = match &self.previous {
             Some(value) => ControlRecordCondition::exact(key.clone(), codec::encode(value, limits)?),
@@ -279,7 +281,7 @@ impl PersistentControlJournal {
         Ok(PublicationIntentHead { identity: self.identity, generation: header.generation, intent })
     }
 
-    fn persist_intent_checked(
+    pub(super) fn persist_intent_checked(
         &mut self, update: &PublicationIntentUpdate, boundary: Boundary, check: &dyn Check,
     ) -> Result<ControlCommitReceipt, ControlError> {
         let result = (|| {
@@ -321,6 +323,12 @@ impl PersistentControlJournal {
         }
         result
     }
+}
+
+// The shared port routes these keys through typed publication commands only.
+// Reuse the owning modules' key definitions instead of a second reserved-key list.
+pub(super) fn port_reserved_key(key: &[u8]) -> bool {
+    key == KEY || visibility::port_reserved_key(key)
 }
 
 pub(super) fn unresolved(state: PublicationIntentState) -> bool {

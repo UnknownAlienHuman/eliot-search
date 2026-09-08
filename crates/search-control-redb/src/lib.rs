@@ -13,6 +13,7 @@ pub mod migration;
 
 pub use reference::*;
 pub use persistent::PublicationSuccessor;
+pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use conditions::{ConditionalControlMutation, ControlRecordCondition};
 pub use persistent::{ControlCallError, ControlInterruption, PersistentControlJournal,
     ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest,
