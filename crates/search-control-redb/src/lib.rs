@@ -9,6 +9,7 @@ mod reference;
 mod persistent;
 mod snapshot_guard;
 mod conditions;
+pub mod migration;
 
 pub use reference::*;
 pub use persistent::PublicationSuccessor;

@@ -8,7 +8,8 @@ control-migration-plan<TAB>TARGET_NAMESPACE_UUID
 
 `<TAB>` is one literal tab. The target must be an explicit, non-nil canonical UUID.
 It names the proposed imported namespace, not an existing native identity. This command
-writes a reusable mapping artifact; it does **not** import into redb or switch authority.
+writes the reusable mapping artifact and a populated **inactive redb source-map database**.
+It does not activate that database or replace the working control journal.
 
 ## Offline source-preserving entry
 
@@ -92,6 +93,40 @@ transport deadlines may be shorter. Interrupted work may leave a temporary or co
 artifact, never an implicitly accepted import. Post-dispatch service failures use the existing
 mutation-outcome-unknown handling. The offline command exits on failure; lost output confirmation
 is `DIRECT_MIGRATION_PLAN_ACK_OUTCOME_UNKNOWN`. The plan is not read by normal search.
+
+## Inactive redb source-map import
+
+Both existing entrypoints also produce `<digest>.source-map.v1.redb` beside the text plan.
+`staged_database_locator` uses the same location scope as `plan_locator`. This is a real
+redb 2.6.3 file, built by `search-control-redb::migration`; vendor handles stay inside
+that adapter. Its four `eliot.import.source-map.*.v1` tables contain binding/progress,
+ordered technical event rows, latest-event references by source ID, and first-event
+references by occurrence ID. They have no source bodies, paths, vectors, tokens or policies.
+This schema is intentionally not accepted by `PersistentControlJournal` as an active journal.
+
+The existing compiler delivers typed rows directly to the importer. No JSON is interpreted
+as trusted metadata. Each batch of at most 256 rows atomically commits events, index links
+and progress with immediate durability. Global and per-source predecessors, occurrence
+transitions, duplicate IDs and counts are checked before a completion marker can be stored.
+The adapter admits at most 2,000,000 events and 512 MiB of fixed 371-byte event values;
+these are logical limits, not a byte-exact maximum for the native redb file. Cache is 8 MiB.
+All steps share the caller's cooperative deadline rather than starting a fresh budget.
+
+The temporary target is closed and reopened. A complete compiler replay then compares every
+binary row and every source/occurrence index entry against the verified source history in
+one coherent read transaction. A prefix, surplus row, wrong index, different target/profile,
+foreign plan or incomplete marker fails. The final no-clobber publication is checked again.
+Existing completed targets are verified and reused; conflicting targets are never replaced.
+A failed import can leave its already published text plan. Retrying fills in the missing
+sidecar, or verifies an existing completed one. Partial temporary targets are not resumed
+as accepted progress: they are discarded/rebuilt, and process death may leave temporary residue.
+Native redb recovery may modify the staging target, never the source root in offline mode.
+
+`source_mapping_imported_to_redb=true` and `staged_database_verified=true` describe this
+source-mapping scope only. `redb_imported=false`, `active_control_imported=false` and
+`canonical_records_materialized=false` remain explicit until the complete H5/control import
+exists. Sealing this artifact is not a cutover receipt, security grant, source admission,
+current-workspace proof or product-readiness result. Rust execution remains unverified.
 
 ## Remaining import inputs
 

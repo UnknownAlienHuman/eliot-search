@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Instant;
 
-use search_contracts::{SourceId, SourceNamespaceId, SourceRevisionId};
+use search_contracts::{Sha256Digest32, SourceId, SourceNamespaceId, SourceRevisionId};
+use search_control_redb::migration::{SourceImportBinding, SourceImportCounts, SourceImportRow};
 
 use super::{
     DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, SOURCE_LOG_FILE, SourceRecord,
@@ -30,6 +31,24 @@ pub(crate) struct MappedSourceEvent {
 }
 
 impl MappedSourceEvent {
+    fn import_row(&self, record: &SourceRecord, previous: Option<&SourceRecord>) -> Result<SourceImportRow, String> {
+        let digest = |value: &str| sha256::decode_digest(value).map(Sha256Digest32::from_bytes)
+            .ok_or_else(|| "DIRECT_MIGRATION_MAPPING_DIGEST_INVALID".to_owned());
+        Ok(SourceImportRow {
+            sequence: record.sequence, source: self.source_id, revision: self.revision_id,
+            previous_revision: self.previous_revision_id, occurrence: self.occurrence_sequence,
+            source_event: self.source_event_ordinal, source_bytes: record.byte_length,
+            opens_source: self.opens_source, opens_revision: self.opens_revision, retires_source: self.retires_source,
+            native_identity: record.identity_strength.tag() == "native",
+            operation: digest(&record.operation_id)?, legacy_source: digest(&record.source_id)?,
+            legacy_revision: digest(&record.revision_id)?, content: digest(&record.content_digest)?,
+            file_identity: digest(&record.file_identity_digest)?, path: digest(&record.path_digest)?,
+            event: digest(&record.record_digest)?, previous_event: digest(&record.previous_digest)?,
+            previous_source_event: previous.map(|row| digest(&row.record_digest)).transpose()?
+                .unwrap_or(Sha256Digest32::from_bytes([0; 32])),
+        })
+    }
+
     fn encode(&self, record: &SourceRecord, previous: Option<&SourceRecord>) -> String {
         let predecessor = self.previous_revision_id.map_or_else(
             || "null".to_owned(), |id| format!("\"{id}\""),
@@ -56,6 +75,15 @@ pub(crate) struct SourceMappingHeader {
 }
 
 impl SourceMappingHeader {
+    pub(crate) fn import_binding(self, plan_chain: [u8; 32]) -> SourceImportBinding {
+        SourceImportBinding {
+            target_namespace: self.namespace, legacy_namespace: Sha256Digest32::from_bytes(self.legacy_namespace),
+            catalog_snapshot: Sha256Digest32::from_bytes(self.catalog_snapshot),
+            mapping_profile: Sha256Digest32::from_bytes(sha256::digest(PROFILE)),
+            plan_chain: Sha256Digest32::from_bytes(plan_chain), events: self.expected_events, sources: self.expected_sources,
+        }
+    }
+
     pub(crate) fn encode(self) -> String {
         format!(concat!(
             "{{\"kind\":\"source_mapping_header\",\"schema\":\"eliot.source-mapping.v1\",",
@@ -79,6 +107,11 @@ pub(crate) struct SourceMappingSummary {
 }
 
 impl SourceMappingSummary {
+    pub(crate) fn import_counts(self) -> SourceImportCounts {
+        SourceImportCounts { events: self.events, sources: self.sources, occurrences: self.occurrences,
+            retained_events: self.path_only_events, retirements: self.retirements }
+    }
+
     pub(crate) fn encode(self) -> String {
         format!(concat!(
             "{{\"kind\":\"source_mapping_end\",\"events\":{},\"sources\":{},",
@@ -202,7 +235,25 @@ impl DirectStore {
     /// The callback may only stage provisional bytes; its effects are not accepted before Ok.
     pub(crate) fn compile_source_mapping(
         &self, namespace: SourceNamespaceId, deadline: Instant,
+        emit: impl FnMut(&[u8]) -> Result<(), String>,
+    ) -> Result<SourceMappingSummary, String> {
+        self.compile_source_mapping_inner(namespace, deadline, emit, None)
+    }
+
+    /// Import and exact target readback consume the same typed mappings as the
+    /// textual plan. They never parse arbitrary JSON into supposedly trusted rows.
+    pub(crate) fn compile_source_mapping_with_rows(
+        &self, namespace: SourceNamespaceId, deadline: Instant,
+        emit: impl FnMut(&[u8]) -> Result<(), String>,
+        mut mapped: impl FnMut(SourceImportRow) -> Result<(), String>,
+    ) -> Result<SourceMappingSummary, String> {
+        self.compile_source_mapping_inner(namespace, deadline, emit, Some(&mut mapped))
+    }
+
+    fn compile_source_mapping_inner(
+        &self, namespace: SourceNamespaceId, deadline: Instant,
         mut emit: impl FnMut(&[u8]) -> Result<(), String>,
+        mut imported: Option<&mut dyn FnMut(SourceImportRow) -> Result<(), String>>,
     ) -> Result<SourceMappingSummary, String> {
         let check = || if Instant::now() >= deadline {
             Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
@@ -218,6 +269,7 @@ impl DirectStore {
         let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
             check()?;
             let mapped = mapper.map(record, previous)?;
+            if let Some(imported) = imported.as_mut() { imported(mapped.import_row(record, previous)?)?; }
             emit(mapped.encode(record, previous).as_bytes())
         })?;
         check()?;

@@ -13,6 +13,9 @@ use super::{DirectStore, check_deadline, json_string, sha256};
 use super::super::storage_io::{ensure_child_directory, ensure_directory, sync_directory};
 use crate::development::DataRootGuard;
 
+#[path = "control_migration_redb.rs"]
+mod redb_import;
+
 const MAX_PLAN_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ROW_BYTES: usize = 8 * 1024;
 const PLAN_DEADLINE: Duration = Duration::from_secs(120);
@@ -152,6 +155,9 @@ impl DirectStore {
         }
         staging.remove()?;
         sync_directory(directory)?;
+        let (database_name, database_reused) = redb_import::store(
+            source, target, directory, digest, summary.import_counts(), deadline,
+        )?;
         if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
@@ -162,10 +168,13 @@ impl DirectStore {
             "\"plan_locator\":{},\"plan_chain_sha256\":\"{}\",\"digest_scheme\":\"sha256-record-chain-v1\",\"plan_bytes\":{},\"reused\":{},",
             "\"events\":{},\"sources\":{},\"revision_occurrences\":{},\"retained_revision_events\":{},",
             "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
-            "\"plan_location\":\"{}\",\"redb_imported\":false,\"cutover_authorized\":false}}"
+            "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
+            "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
+            "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"
         ), target, sha256::hex(&header.catalog_snapshot), json_string(&format!("{locator_prefix}{name}")),
             sha256::hex(&digest), bytes, reused, summary.events, summary.sources, summary.occurrences,
-            summary.path_only_events, summary.retirements, location))
+            summary.path_only_events, summary.retirements, location,
+            json_string(&format!("{locator_prefix}{database_name}")), database_reused))
     }
 }
 
