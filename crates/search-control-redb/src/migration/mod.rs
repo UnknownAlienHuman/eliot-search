@@ -11,6 +11,9 @@ use redb::{Database, Durability, ReadTransaction, ReadableTable, ReadableTableMe
 use search_contracts::{Sha256Digest32, SourceId, SourceNamespaceId, SourceRevisionId};
 use crate::ControlError;
 
+mod content;
+pub use content::SourceContentManifest;
+
 const META: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.source-map.meta.v1");
 const EVENTS: TableDefinition<u64, &[u8]> = TableDefinition::new("eliot.import.source-map.events.v1");
 const SOURCES: TableDefinition<&[u8], u64> = TableDefinition::new("eliot.import.source-map.sources.v1");
@@ -172,6 +175,7 @@ pub struct SourceMappingImport {
     database: Database,
     binding: SourceImportBinding,
     counts: SourceImportCounts,
+    content: Option<SourceContentManifest>,
     pending: Vec<SourceImportRow>,
     blocked: bool,
     sealed: bool,
@@ -182,8 +186,24 @@ impl SourceMappingImport {
     /// exclusive source/output ownership. Even failed initialization may leave bytes.
     /// Synchronous redb/OS calls are not interrupted by the cooperative deadline.
     pub fn create(file: File, binding: SourceImportBinding, deadline: Instant) -> Result<Self, ControlError> {
+        Self::create_inner(file, binding, None, deadline)
+    }
+
+    /// Create an inactive target bound to a producer-verified content manifest.
+    /// The extra immutable META record makes old unbound readers reject this
+    /// envelope. The caller publishes it separately, never over a v1 target.
+    pub fn create_with_content(file: File, binding: SourceImportBinding,
+        content: SourceContentManifest, deadline: Instant,
+    ) -> Result<Self, ControlError> {
+        Self::create_inner(file, binding, Some(content), deadline)
+    }
+
+    fn create_inner(file: File, binding: SourceImportBinding,
+        content: Option<SourceContentManifest>, deadline: Instant,
+    ) -> Result<Self, ControlError> {
         check(deadline)?;
         let header = binding.encode()?;
+        let content_bytes = content.map(|value| value.encode(binding)).transpose()?;
         check_file(&file, true)?;
         let database = Database::builder().set_cache_size(8 * 1024 * 1024).create_file(file)
             .map_err(|_| ControlError::CommitOutcomeUnknown)?;
@@ -193,6 +213,9 @@ impl SourceMappingImport {
             {
                 let mut meta = write.open_table(META).map_err(|_| ControlError::StoreCorrupt)?;
                 meta.insert("binding", header.as_slice()).map_err(|_| ControlError::StoreUnavailable)?;
+                if let Some(bytes) = &content_bytes {
+                    meta.insert("content_manifest", bytes.as_slice()).map_err(|_| ControlError::StoreUnavailable)?;
+                }
                 meta.insert("progress", SourceImportCounts::default().encode(false).as_slice())
                     .map_err(|_| ControlError::StoreUnavailable)?;
             }
@@ -204,7 +227,7 @@ impl SourceMappingImport {
             check(deadline)
         })();
         init.map_err(|_| ControlError::CommitOutcomeUnknown)?;
-        Ok(Self { prefix: None, database, binding, counts: SourceImportCounts::default(),
+        Ok(Self { prefix: None, database, binding, counts: SourceImportCounts::default(), content,
             pending: Vec::with_capacity(BATCH_ROWS), blocked: false, sealed: false })
     }
 
@@ -215,13 +238,27 @@ impl SourceMappingImport {
     /// A sealed target can be verified this way but is never reopened for writes.
     /// Empty, partial-schema, foreign and contradictory targets fail without repair.
     pub fn resume(file: File, binding: SourceImportBinding, deadline: Instant) -> Result<Self, ControlError> {
-        let (database, prefix, sealed) = open_import(file, binding, deadline)?;
+        Self::resume_inner(file, binding, None, deadline)
+    }
+
+    /// Resume only the same source mapping AND exact content-manifest binding.
+    /// Neither an old unbound target nor a different content profile is adopted.
+    pub fn resume_with_content(file: File, binding: SourceImportBinding,
+        content: SourceContentManifest, deadline: Instant,
+    ) -> Result<Self, ControlError> {
+        Self::resume_inner(file, binding, Some(content), deadline)
+    }
+
+    fn resume_inner(file: File, binding: SourceImportBinding,
+        content: Option<SourceContentManifest>, deadline: Instant,
+    ) -> Result<Self, ControlError> {
+        let (database, prefix, sealed) = open_import(file, binding, content, deadline)?;
         let counts = prefix.expected;
         let prefix = if counts.events == 0 {
             prefix.finish(deadline)?;
             None
         } else { Some(prefix) };
-        Ok(Self { prefix, database, binding, counts, pending: Vec::with_capacity(BATCH_ROWS),
+        Ok(Self { prefix, database, binding, counts, content, pending: Vec::with_capacity(BATCH_ROWS),
             blocked: false, sealed })
     }
 
@@ -259,6 +296,7 @@ impl SourceMappingImport {
         if self.blocked { return Err(ControlError::StoreQuarantined); }
         if self.prefix.is_some() { return Err(ControlError::MigrationUnverified); }
         validate_counts(expected, self.binding)?;
+        if let Some(content) = self.content { content.validate_counts(expected)?; }
         if self.sealed {
             return if self.counts == expected { Ok(()) } else { Err(ControlError::MigrationUnverified) };
         }
@@ -268,6 +306,7 @@ impl SourceMappingImport {
         { return Err(ControlError::TransactionConflict); }
         check(deadline)?;
         self.blocked = true;
+        let content_bytes = self.content.map(|value| value.encode(self.binding)).transpose()?;
         let seal = (|| {
             let mut write = self.database.begin_write().map_err(|_| ControlError::StoreUnavailable)?;
             write.set_durability(Durability::Immediate);
@@ -276,6 +315,11 @@ impl SourceMappingImport {
                 if meta.get("progress").map_err(|_| ControlError::StoreUnavailable)?
                     .is_none_or(|v| v.value() != self.counts.encode(false))
                 { return Err(ControlError::StoreCorrupt); }
+                let stored_content = meta.get("content_manifest").map_err(|_| ControlError::StoreUnavailable)?;
+                if stored_content.as_ref().map(|value| value.value()) != content_bytes.as_deref() {
+                    return Err(ControlError::IdentityMismatch);
+                }
+                drop(stored_content);
                 meta.insert("progress", self.counts.encode(true).as_slice()).map_err(|_| ControlError::StoreUnavailable)?;
             }
             check(deadline)?;
@@ -291,6 +335,7 @@ impl SourceMappingImport {
         if self.prefix.is_some() || self.sealed { return Err(ControlError::MigrationUnverified); }
         if self.pending.is_empty() { return Ok(()); }
         let binding = self.binding.encode()?;
+        let content_bytes = self.content.map(|value| value.encode(self.binding)).transpose()?;
         self.blocked = true;
         let result = (|| {
             let mut counts = self.counts;
@@ -303,6 +348,11 @@ impl SourceMappingImport {
                     || meta.get("progress").map_err(|_| ControlError::StoreUnavailable)?
                         .is_none_or(|v| v.value() != counts.encode(false))
                 { return Err(ControlError::StoreCorrupt); }
+                let stored_content = meta.get("content_manifest").map_err(|_| ControlError::StoreUnavailable)?;
+                if stored_content.as_ref().map(|value| value.value()) != content_bytes.as_deref() {
+                    return Err(ControlError::IdentityMismatch);
+                }
+                drop(stored_content);
                 let mut events = write.open_table(EVENTS).map_err(|_| ControlError::StoreCorrupt)?;
                 let mut sources = write.open_table(SOURCES).map_err(|_| ControlError::StoreCorrupt)?;
                 let mut revisions = write.open_table(REVISIONS).map_err(|_| ControlError::StoreCorrupt)?;
@@ -359,9 +409,24 @@ impl SourceMappingReadback {
     /// Open only a sealed existing target with the exact full binding and counts.
     /// Native redb recovery may update the target, never the source catalog.
     pub fn open(file: File, binding: SourceImportBinding, expected: SourceImportCounts, deadline: Instant) -> Result<Self, ControlError> {
+        Self::open_inner(file, binding, None, expected, deadline)
+    }
+
+    /// Compare a sealed target that also binds the exact verified content manifest.
+    /// A missing or altered reference cannot be replaced by a successful source-only check.
+    pub fn open_with_content(file: File, binding: SourceImportBinding,
+        content: SourceContentManifest, expected: SourceImportCounts, deadline: Instant,
+    ) -> Result<Self, ControlError> {
+        Self::open_inner(file, binding, Some(content), expected, deadline)
+    }
+
+    fn open_inner(file: File, binding: SourceImportBinding, content: Option<SourceContentManifest>,
+        expected: SourceImportCounts, deadline: Instant,
+    ) -> Result<Self, ControlError> {
         check(deadline)?;
         validate_counts(expected, binding)?;
-        let (database, prefix, sealed) = open_import(file, binding, deadline)?;
+        if let Some(content) = content { content.validate_counts(expected)?; }
+        let (database, prefix, sealed) = open_import(file, binding, content, deadline)?;
         if !sealed || prefix.expected != expected { return Err(ControlError::MigrationUnverified); }
         Ok(Self { prefix, _database: database })
     }
@@ -423,10 +488,11 @@ impl PrefixReadback {
 
 /// Shared reopen path: an incomplete header is inspectable for resume, not complete.
 /// No absent table/header is created and no progress counter is inferred from row count.
-fn open_import(file: File, binding: SourceImportBinding, deadline: Instant)
+fn open_import(file: File, binding: SourceImportBinding, content: Option<SourceContentManifest>, deadline: Instant)
     -> Result<(Database, PrefixReadback, bool), ControlError> {
     check(deadline)?;
     let encoded = binding.encode()?;
+    let content_bytes = content.map(|value| value.encode(binding)).transpose()?;
     check_file(&file, false)?;
     let database = Database::builder().set_cache_size(8 * 1024 * 1024).create_file(file)
         .map_err(|_| ControlError::StoreUnavailable)?;
@@ -441,9 +507,13 @@ fn open_import(file: File, binding: SourceImportBinding, deadline: Instant)
     }
     let (counts, sealed) = {
         let meta = read.open_table(META).map_err(|_| ControlError::StoreCorrupt)?;
-        if meta.len().map_err(|_| ControlError::StoreCorrupt)? != 2
+        if meta.len().map_err(|_| ControlError::StoreCorrupt)? != 2 + u64::from(content.is_some())
             || meta.get("binding").map_err(|_| ControlError::StoreCorrupt)?.is_none_or(|v| v.value() != encoded)
         { return Err(ControlError::StoreCorrupt); }
+        let stored_content = meta.get("content_manifest").map_err(|_| ControlError::StoreCorrupt)?;
+        if stored_content.as_ref().map(|value| value.value()) != content_bytes.as_deref() {
+            return Err(ControlError::IdentityMismatch);
+        }
         let progress = meta.get("progress").map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?;
         decode_progress(progress.value(), binding)?
     };

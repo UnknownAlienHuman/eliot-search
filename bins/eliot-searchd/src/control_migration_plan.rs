@@ -160,7 +160,7 @@ impl DirectStore {
         sync_directory(directory)?;
         let content = content_readback::stage(source, source_root, target, digest, directory, deadline)?;
         let (database_name, database_reused) = redb_import::store(
-            source, target, directory, digest, summary.import_counts(), deadline,
+            source, target, directory, digest, summary.import_counts(), &content, deadline,
         )?;
         if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
@@ -174,6 +174,7 @@ impl DirectStore {
             "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
             "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
             "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
+            "\"staged_database_schema\":\"source-map-content-v2\",\"content_manifest_bound_to_redb\":true,",
             "\"content_manifest_locator\":{},\"content_manifest_chain_sha256\":\"{}\",",
             "\"content_objects_verified\":{},\"content_bytes_verified\":{},\"content_blake3_verified\":true,",
             "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"

@@ -20,6 +20,8 @@ pub(super) struct ContentArtifact {
     pub(super) chain: [u8; 32],
     pub(super) records: u64,
     pub(super) source_bytes: u64,
+    pub(super) encoded_bytes: u64,
+    pub(super) profile: [u8; 32],
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -87,7 +89,8 @@ pub(super) fn stage(
     staging.remove()?;
     sync_directory(directory)?;
     check_deadline(Some(deadline))?;
-    Ok(ContentArtifact { name, chain: digest, records: counts.records, source_bytes: counts.source_bytes })
+    Ok(ContentArtifact { name, chain: digest, records: counts.records, source_bytes: counts.source_bytes,
+        encoded_bytes: length, profile: sha256::digest(PROFILE) })
 }
 
 fn compile(
