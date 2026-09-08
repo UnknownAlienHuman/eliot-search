@@ -74,12 +74,35 @@ impl DirectStore {
         let directory = control.join("migration-plans");
         ensure_child_directory(&directory)?;
         sync_directory(&control)?;
-        let mut staging = StagingFile::create(&directory)?;
+        Self::stage_mapping_artifact(&self.inner, target, &directory, "control/migration-plans/", deadline)
+    }
+
+    /// Shared artifact writer for the live owner and the offline source-preserving
+    /// entrypoint. The caller holds the ordinary root lock and supplies an existing
+    /// output directory. No source store is opened and no credential is resolved.
+    /// A returned locator is relative to the explicitly named location scope.
+    pub(crate) fn stage_mapping_artifact(
+        source: &crate::plaintext_direct_store::DirectStore,
+        target: SourceNamespaceId, directory: &Path, locator_prefix: &'static str,
+        deadline: Instant,
+    ) -> Result<String, String> {
+        let location = match locator_prefix {
+            "" => "explicit_output_directory",
+            "control/migration-plans/" => "data_root",
+            _ => return Err("DIRECT_MIGRATION_OUTPUT_INVALID".to_owned()),
+        };
+        check_deadline(Some(deadline))?;
+        ensure_directory(directory)?;
+        let header = source.source_mapping_header(target)?;
+        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
+        let mut staging = StagingFile::create(directory)?;
         let mut bytes = 0_u64;
         let mut hash = PlanDigest::new();
         let summary = {
             let mut writer = BufWriter::new(staging.file_mut()?);
-            let summary = self.inner.compile_source_mapping(target, deadline, |row| {
+            let summary = source.compile_source_mapping(target, deadline, |row| {
                 check_deadline(Some(deadline))?;
                 bytes = reserve(bytes, row.len())?;
                 writer.write_all(row).map_err(|_| "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned())?;
@@ -97,7 +120,7 @@ impl DirectStore {
         let mut reader = BufReader::new(open_plan(&staging.path, bytes)?);
         let mut compared = 0_u64;
         let mut buffer = [0_u8; MAX_ROW_BYTES];
-        let readback = self.inner.compile_source_mapping(target, deadline, |row| {
+        let readback = source.compile_source_mapping(target, deadline, |row| {
             compared = reserve(compared, row.len())?;
             reader.read_exact(&mut buffer[..row.len()])
                 .map_err(|_| "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned())?;
@@ -123,12 +146,15 @@ impl DirectStore {
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
             Err(_) => return Err("DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN".to_owned()),
         };
-        sync_directory(&directory)?;
+        sync_directory(directory)?;
         if fingerprint(&path, bytes, deadline)? != digest {
             return Err("DIRECT_MIGRATION_PLAN_IMMUTABLE_CONFLICT".to_owned());
         }
         staging.remove()?;
-        sync_directory(&directory)?;
+        sync_directory(directory)?;
+        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
         check_deadline(Some(deadline))?;
         Ok(format!(concat!(
             "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
@@ -136,10 +162,10 @@ impl DirectStore {
             "\"plan_locator\":{},\"plan_chain_sha256\":\"{}\",\"digest_scheme\":\"sha256-record-chain-v1\",\"plan_bytes\":{},\"reused\":{},",
             "\"events\":{},\"sources\":{},\"revision_occurrences\":{},\"retained_revision_events\":{},",
             "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
-            "\"redb_imported\":false,\"cutover_authorized\":false}}"
-        ), target, sha256::hex(&header.catalog_snapshot), json_string(&format!("control/migration-plans/{name}")),
+            "\"plan_location\":\"{}\",\"redb_imported\":false,\"cutover_authorized\":false}}"
+        ), target, sha256::hex(&header.catalog_snapshot), json_string(&format!("{locator_prefix}{name}")),
             sha256::hex(&digest), bytes, reused, summary.events, summary.sources, summary.occurrences,
-            summary.path_only_events, summary.retirements))
+            summary.path_only_events, summary.retirements, location))
     }
 }
 

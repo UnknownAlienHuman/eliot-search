@@ -3,6 +3,7 @@
 //! Content SHA-256, unavailable timestamps, and residency are never relabelled.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::time::Instant;
 
 use search_contracts::{SourceId, SourceNamespaceId, SourceRevisionId};
@@ -229,5 +230,37 @@ impl DirectStore {
         emit(mapper.summary.encode().as_bytes())?;
         check()?;
         Ok(mapper.summary)
+    }
+
+    /// Open only the existing journal as an immutable input to a mapping operation.
+    /// The caller holds the ordinary root lock for this entire callback. Neither
+    /// DirectStore::open nor its initialization/protection/recovery path is invoked.
+    /// The callback borrows the admitted snapshot; no mutable store is returned.
+    pub(crate) fn with_existing_mapping_source<T>(
+        root: &Path, deadline: Instant,
+        inspect: impl FnOnce(&Self) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let check = || if Instant::now() >= deadline {
+            Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+        } else { Ok(()) };
+        check()?;
+        crate::catalog_presence::require_existing(root)?;
+        let control = root.join(CONTROL_DIRECTORY);
+        let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))?;
+        let registry = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
+            check()?;
+            validate_legacy_event(&namespace_id, record, previous)
+        })?;
+        check()?;
+        if read_namespace(&control.join(NAMESPACE_FILE))? != namespace_id {
+            return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
+        }
+        let source = Self { root: root.to_path_buf(), namespace_id, registry };
+        let expected = snapshot_digest(&source.namespace_id, source.registry.last_sequence, &source.registry.last_digest);
+        let result = inspect(&source)?;
+        if source.verify_migration_snapshot(deadline)? != expected {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
+        Ok(result)
     }
 }

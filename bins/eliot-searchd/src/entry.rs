@@ -31,6 +31,7 @@ mod secure_commands;
 mod service_output;
 mod sha256;
 mod source_fence;
+mod source_migration_command;
 mod source_root_commands;
 mod source_roots;
 mod storage_security;
@@ -41,7 +42,8 @@ mod protected_ingest_tests;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let result = preparation_composition::maybe_run()
+    let result = source_migration_command::maybe_run()
+        .or_else(preparation_composition::maybe_run)
         .or_else(authenticated_proxy::maybe_run)
         .or_else(public_runtime_service::maybe_run)
         .or_else(secure_commands::maybe_run)
@@ -69,7 +71,11 @@ fn main() -> ExitCode {
                 "  eliot-searchd --prepare-root ROOT [CURSOR]\n",
                 "Build missing preparation from retained bytes; search never rebuilds it.\n",
                 "prepare-root handles a bounded batch; pass next_cursor until exhausted=true.\n",
-                "Changed catalog/profile invalidates the cursor; restart without it. Gaps stay explicit.\n"
+                "Changed catalog/profile invalidates the cursor; restart without it. Gaps stay explicit.\n",
+                "\nOFFLINE SOURCE-MAPPING PLAN:\n",
+                "  eliot-searchd --plan-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
+                "Requires an existing unowned root and an existing, separate output directory.\n",
+                "Preserves source state; writes a mapping draft only, without redb import or cutover.\n"
             )
         );
     }

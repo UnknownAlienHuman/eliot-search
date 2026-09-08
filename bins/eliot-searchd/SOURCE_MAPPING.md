@@ -10,6 +10,37 @@ control-migration-plan<TAB>TARGET_NAMESPACE_UUID
 It names the proposed imported namespace, not an existing native identity. This command
 writes a reusable mapping artifact; it does **not** import into redb or switch authority.
 
+## Offline source-preserving entry
+
+```text
+eliot-searchd --plan-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY
+```
+
+Both directories must already exist. The output must be outside the data root and every
+registered observation root; neither ancestor nor descendant overlap is allowed. The reply's
+`plan_locator` is relative to `OUTPUT_DIRECTORY` when `plan_location=explicit_output_directory`.
+The live-service reply uses `plan_location=data_root` and the previous root-relative locator.
+
+The offline command runs before ordinary daemon startup. It opens the existing
+`.eliot-search-owner.lock` and holds the same exclusive OS lock throughout inspection and
+publication. An active service blocks the command. A missing lock is an explicit recovery
+requirement: no replacement lock file or owner record is created. The lock locator's native
+file identity is rechecked before and after work on Windows/Unix, and no normal owner-marker
+cleanup runs. This is process exclusion, not a namespace cutover or power-loss qualification.
+
+Only existing namespace/source-history records are opened, through the same full replay and
+mapping compiler. Root registration is read without recovery and compared again before the
+reply. Pending registration updates, missing catalog files and malformed history fail without
+repair. No normal DirectStore initializer, credential operation, plaintext-to-protected migration,
+current-source read or revision/preparation writer is invoked. Only the explicitly selected
+output directory receives a temporary/published mapping artifact; filesystem read-access metadata
+is not claimed immutable. An interrupted command can leave a reusable draft in that output.
+
+The source-map bytes, IDs, profile and fingerprint are identical to the live-service mode for
+the same target and history. Existing files are not replaced, and a lost output acknowledgement
+can be retried. This entry maps source history only; it does not verify or import payloads, and
+the other inventory commands retain their existing already-open-service prerequisites.
+
 ## Mapping
 
 The existing full source-journal replay drives `compile_source_mapping`. Each input event
@@ -43,9 +74,10 @@ The explicit mapping profile and complete logical source-chain snapshot bind its
 
 The writer streams into a create-new temporary file, syncs, recompiles against a second
 complete validated replay and compares every byte and final counts. Only then is the file
-published without replacement under `control/migration-plans/<digest>.source-map.v1`.
-An existing destination must pass fingerprint and length readback. A failed command never
-deletes a published plan. Retrying the same target and unchanged history produces the
+published without replacement as `<digest>.source-map.v1` in the selected output directory
+(`control/migration-plans/` for the live service). An existing destination must pass fingerprint
+and length readback. The source chain is revalidated before acknowledgement. A failed command
+never deletes a published plan. Retrying the same target and unchanged history produces the
 same artifact; older plans do not authorize importing a changed source snapshot.
 
 `plan_chain_sha256` is **not raw-file SHA-256**. Its scheme is `sha256-record-chain-v1`:
@@ -57,8 +89,9 @@ All integers in the hash input are big-endian u64. Original hash helpers are unc
 Limits: 8 KiB per encoded row, 512 MiB per artifact, existing source-event bounds and a
 cooperative 120-second operation deadline. Synchronous filesystem calls are not preempted;
 transport deadlines may be shorter. Interrupted work may leave a temporary or completed
-artifact, never an implicitly accepted import. Post-dispatch failures use the existing
-service mutation-outcome-unknown handling. The plan is not read by normal search.
+artifact, never an implicitly accepted import. Post-dispatch service failures use the existing
+mutation-outcome-unknown handling. The offline command exits on failure; lost output confirmation
+is `DIRECT_MIGRATION_PLAN_ACK_OUTCOME_UNKNOWN`. The plan is not read by normal search.
 
 ## Remaining import inputs
 
@@ -69,4 +102,4 @@ observation times are unknown, not replaced with fabricated historical timestamp
 registration and filenames cannot supply missing admission or access authority.
 
 See `docs/contracts/p00/SOURCE_GRAPH.md` for the normative graph. This draft neither accepts
-T10 nor implements T11 cutover. Compilation and execution of this increment are unverified.
+T10 nor implements T11 cutover. Compilation and execution of these paths are unverified.
