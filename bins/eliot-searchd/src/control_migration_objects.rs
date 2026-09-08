@@ -12,6 +12,8 @@ use zeroize::Zeroizing;
 mod directories;
 #[path = "control_migration_orphans.rs"]
 mod orphans;
+#[path = "control_migration_plan.rs"]
+mod source_plan;
 
 use super::{DirectStore, RevisionMetadata, MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY,
     legacy_path, protected_path, read_regular_file, verify_plaintext, verify_revision_identity};

@@ -227,6 +227,16 @@ fn execute_command(
             refresh_storage(storage, canonical_root)?;
             emit_source_list(writer, store, storage)?;
         }
+        ("control-migration-plan", [_, target_namespace]) => {
+            let target = search_contracts::SourceNamespaceId::parse(target_namespace)
+                .map_err(|_| "DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned())?;
+            if target.as_bytes() == &[0; 16] {
+                return Err("DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned());
+            }
+            attempt.arm();
+            let result = store.stage_source_migration_plan(owner, target)?;
+            write_line(writer, &result)?;
+        }
         ("control-migration-revisions", [_] | [_, _]) => {
             let page = store.inspect_migration_revisions(fields.get(1).copied())?;
             write_line(writer, &page)?;

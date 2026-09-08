@@ -9,6 +9,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
+#[path = "source_migration_mapping.rs"]
+mod mapping;
+
 use super::{
     CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, Path,
     SOURCE_LOG_FILE, SourceRecord, SourceState, ZERO_DIGEST, read_namespace,
