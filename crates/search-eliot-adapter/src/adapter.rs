@@ -44,6 +44,8 @@ impl AdapterProtocolVersion {
 }
 
 /// Finite limits applied before a request enters the adapter ledger.
+// `max_*` fields intentionally mirror the public `max_*()` accessors.
+#[allow(clippy::struct_field_names)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AdapterLimits {
     max_in_flight: NonZeroUsize,
@@ -230,7 +232,7 @@ pub struct EliotAdapter {
 impl EliotAdapter {
     /// Creates an unbound finite adapter.
     #[must_use]
-    pub fn new(limits: AdapterLimits) -> Self {
+    pub const fn new(limits: AdapterLimits) -> Self {
         Self {
             limits,
             state: AdapterSessionState::Unbound,
@@ -288,6 +290,8 @@ impl EliotAdapter {
     ///
     /// Enforces active state, exact binding, supported version, payload and
     /// concurrency bounds, and conflict-free request-ID replay.
+    // Match kept over `map_or`: both payloads are `Copy` and the match stays lazy and readable.
+    #[allow(clippy::option_if_let_else)]
     pub fn admit<P>(&mut self, request: &EliotRequest<P>) -> Result<Admission, AdapterError> {
         if request.version != AdapterProtocolVersion::CURRENT {
             return Err(AdapterError::UnsupportedVersion);
@@ -415,7 +419,7 @@ impl EliotAdapter {
     /// # Errors
     ///
     /// An unbound, closed or quarantined session cannot enter drain.
-    pub fn begin_drain(&mut self) -> Result<(), AdapterError> {
+    pub const fn begin_drain(&mut self) -> Result<(), AdapterError> {
         match self.state {
             AdapterSessionState::Active => {
                 self.state = AdapterSessionState::Draining;
@@ -450,7 +454,7 @@ impl EliotAdapter {
     }
 
     /// Quarantines contradictory state and denies future work.
-    pub fn quarantine(&mut self) {
+    pub const fn quarantine(&mut self) {
         self.state = AdapterSessionState::Quarantined;
     }
 
