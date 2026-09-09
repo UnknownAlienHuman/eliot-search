@@ -33,6 +33,9 @@ pub enum ExportCoverage {
 }
 
 /// Finite export limits applied before accepting an item.
+// `max_` prefix is the repo-wide finite-limits idiom (cf. `LeaseWindow`);
+// field names intentionally mirror the `max_*()` accessors.
+#[allow(clippy::struct_field_names)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExportLimits {
     max_items: NonZeroUsize,
@@ -202,7 +205,7 @@ where
 {
     /// Creates an empty collecting builder.
     #[must_use]
-    pub fn new(request_id: RequestId, limits: ExportLimits, policy: ExportPolicy) -> Self {
+    pub const fn new(request_id: RequestId, limits: ExportLimits, policy: ExportPolicy) -> Self {
         Self {
             request_id,
             limits,
@@ -339,11 +342,11 @@ where
     }
 
     /// Quarantines the builder explicitly.
-    pub fn quarantine(&mut self) {
+    pub const fn quarantine(&mut self) {
         self.state = BuilderState::Quarantined;
     }
 
-    fn require_collecting(&self) -> Result<(), ExportError> {
+    const fn require_collecting(&self) -> Result<(), ExportError> {
         match self.state {
             BuilderState::Collecting => Ok(()),
             BuilderState::Finalized => Err(ExportError::AlreadyFinalized),
