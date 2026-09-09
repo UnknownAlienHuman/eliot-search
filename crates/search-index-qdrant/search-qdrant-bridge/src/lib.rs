@@ -115,6 +115,10 @@ pub struct AuthLeaseEvidence {
 }
 
 /// Executed capability probe results.
+// Each flag is an independent capability gate; bundling them into bitflags or a
+// sub-struct would break the public API (see PR #158 precedent), so the struct
+// form is retained.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CapabilityProbeResults {
     pub authenticated_health: bool,
@@ -159,7 +163,7 @@ pub struct QdrantCapabilityReceipt {
 }
 
 /// Verifies every mandatory Qdrant capability probe.
-pub fn probe_capabilities(
+pub const fn probe_capabilities(
     supervisor: SupervisorReceipt,
     probe_manifest_digest: Blake3Digest32,
     results: CapabilityProbeResults,
@@ -184,6 +188,9 @@ pub struct VectorSchema {
 }
 
 /// Exact collection schema and strict-mode correctness floors.
+// Each boolean is an independent schema floor alongside the maps; bundling them
+// would break the public API (see PR #158 precedent), so the struct form is retained.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CollectionSchema {
     pub named_vectors: BTreeMap<String, VectorSchema>,
@@ -519,6 +526,12 @@ impl QdrantBridge {
     }
 
     /// Sets the exact exclusive upper epoch on explicit point IDs.
+    ///
+    /// # Panics
+    ///
+    /// Never panics on valid input: the first loop returns `PointNotFound`
+    /// before mutation, so the validated point exists under `&mut self` in the
+    /// second loop and the `expect` is an unreachable invariant.
     pub fn close_exact(
         &mut self,
         route: &CollectionRoute,
@@ -793,7 +806,7 @@ fn dot_sparse(left: &[(u32, f32)], right: &[(u32, f32)]) -> f32 {
             Ordering::Less => left_index += 1,
             Ordering::Greater => right_index += 1,
             Ordering::Equal => {
-                score += left[left_index].1 * right[right_index].1;
+                score = left[left_index].1.mul_add(right[right_index].1, score);
                 left_index += 1;
                 right_index += 1;
             }
