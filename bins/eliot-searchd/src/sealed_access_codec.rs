@@ -15,7 +15,7 @@ pub const MAX_ACCESS_IDENTIFIER_BYTES: usize = 128;
 pub const ACCESS_FENCE_FORMAT_VERSION: u16 = 1;
 /// Canonical record magic.
 pub const ACCESS_FENCE_MAGIC: &str = "ELIOT-SEALED-ACCESS-FENCE-V1";
-const FIELD_COUNT: usize = 17;
+const FIELD_COUNT: usize = 18;
 const ZERO_DIGEST_HEX: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -100,6 +100,8 @@ pub struct AccessFenceRecord {
     pub format_version: u16,
     /// Stable fence-chain identity.
     pub fence_id: String,
+    /// Immutable idempotency identity bound at append time.
+    pub mutation_id: String,
     /// Contiguous non-zero record generation.
     pub generation: u64,
     /// Exact predecessor generation, or zero for generation one.
@@ -146,6 +148,7 @@ impl AccessFenceRecord {
         }
         validate_fence_id(&self.fence_id)?;
         for value in [
+            &self.mutation_id,
             &self.source_id,
             &self.source_revision_id,
             &self.catalog_object_id,
@@ -173,9 +176,10 @@ impl AccessFenceRecord {
         self.validate()?;
         Ok(format!(
             concat!(
-                "{ACCESS_FENCE_MAGIC}\n",
+                "{}\n",
                 "format_version={}\n",
                 "fence_id={}\n",
+                "mutation_id={}\n",
                 "generation={}\n",
                 "previous_generation={}\n",
                 "previous_record_sha256={}\n",
@@ -192,8 +196,10 @@ impl AccessFenceRecord {
                 "admitted_owner_epoch={}\n",
                 "owner_root_binding_sha256={}\n"
             ),
+            ACCESS_FENCE_MAGIC,
             self.format_version,
             self.fence_id,
+            self.mutation_id,
             self.generation,
             self.previous_generation,
             self.previous_record_sha256,
@@ -243,6 +249,7 @@ impl AccessFenceRecord {
         let record = Self {
             format_version: parse_u16(&take(&mut fields, "format_version")?)?,
             fence_id: take(&mut fields, "fence_id")?,
+            mutation_id: take(&mut fields, "mutation_id")?,
             generation: parse_u64(&take(&mut fields, "generation")?, false)?,
             previous_generation: parse_u64(
                 &take(&mut fields, "previous_generation")?,

@@ -8,6 +8,7 @@
 use core::fmt;
 use std::path::Path;
 
+use crate::sealed_digest::{DigestError, Sha256Digest};
 use crate::sealed_store::{
     SealReceipt, SealedStoreError, SensitiveBytes, open_sealed, seal_immutable,
 };
@@ -38,6 +39,8 @@ pub enum SealedTransactionError {
     IoFailure,
     /// Exact metadata readback failed.
     ReadbackMismatch,
+    /// Windows CNG SHA-256 failed.
+    Digest(DigestError),
     /// Underlying sealed-store operation failed.
     SealedStore(SealedStoreError),
 }
@@ -57,6 +60,7 @@ impl SealedTransactionError {
             Self::OutcomeUnknown => "SEALED_TRANSACTION_OUTCOME_UNKNOWN",
             Self::IoFailure => "SEALED_TRANSACTION_IO_FAILURE",
             Self::ReadbackMismatch => "SEALED_TRANSACTION_READBACK_MISMATCH",
+            Self::Digest(error) => error.code(),
             Self::SealedStore(error) => error.code(),
         }
     }
@@ -69,6 +73,12 @@ impl fmt::Display for SealedTransactionError {
 }
 
 impl std::error::Error for SealedTransactionError {}
+
+impl From<DigestError> for SealedTransactionError {
+    fn from(error: DigestError) -> Self {
+        Self::Digest(error)
+    }
+}
 
 impl From<SealedStoreError> for SealedTransactionError {
     fn from(error: SealedStoreError) -> Self {
@@ -108,6 +118,8 @@ pub struct SealedTransactionReceipt {
     pub object_id: String,
     /// Exact plaintext byte count.
     pub plaintext_bytes: u64,
+    /// Exact Windows CNG SHA-256 of the sealed plaintext.
+    pub plaintext_sha256: Sha256Digest,
     /// Exact ciphertext byte count.
     pub ciphertext_bytes: u64,
     /// Invocation disposition.
@@ -127,7 +139,9 @@ pub enum TransactionStatus {
     Prepared,
     /// Terminal receipt exists.
     Committed,
-    /// Intent and receipt coexist or metadata is contradictory.
+    /// Receipt exists with a matching intent whose cleanup is pending.
+    CommittedCleanupPending,
+    /// Intent and receipt coexist inconsistently or metadata is contradictory.
     Conflicted,
 }
 
@@ -139,9 +153,39 @@ impl TransactionStatus {
             Self::Absent => "ABSENT",
             Self::Prepared => "PREPARED",
             Self::Committed => "COMMITTED",
+            Self::CommittedCleanupPending => "COMMITTED_CLEANUP_PENDING",
             Self::Conflicted => "CONFLICTED",
         }
     }
+}
+
+/// Exact durable binding observed for one operation identity.
+///
+/// The expected plaintext digest comes from the V2 durable intent/receipt
+/// metadata, never from a live object hash, so a missing object still yields
+/// a verifiable binding and recovery can classify it as missing rather than
+/// conflicting.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransactionBinding {
+    /// Immutable operation identity.
+    pub operation_id: String,
+    /// Immutable sealed object identity.
+    pub object_id: String,
+    /// Exact expected plaintext byte count.
+    pub plaintext_bytes: u64,
+    /// Exact expected Windows CNG SHA-256 of the plaintext.
+    pub plaintext_sha256: Sha256Digest,
+    /// Exact expected ciphertext byte count when a terminal receipt exists.
+    pub ciphertext_bytes: Option<u64>,
+}
+
+/// Content-free inspection of one operation identity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransactionObservation {
+    /// Durable lifecycle state.
+    pub status: TransactionStatus,
+    /// Expected binding when the durable state is exact and unambiguous.
+    pub binding: Option<TransactionBinding>,
 }
 
 /// Creates or exactly reconciles one immutable sealed object.
@@ -162,6 +206,18 @@ pub fn transaction_status(
     platform::transaction_status(data_root, operation_id)
 }
 
+/// Inspects one operation identity and returns its expected durable binding.
+///
+/// The binding carries the V2 expected plaintext digest from durable metadata
+/// so recovery can distinguish a missing object from a conflicting one without
+/// trusting a live object hash.
+pub fn inspect_transaction(
+    data_root: &Path,
+    operation_id: &str,
+) -> Result<TransactionObservation, SealedTransactionError> {
+    platform::inspect_transaction(data_root, operation_id)
+}
+
 fn validate_operation_id(value: &str) -> Result<(), SealedTransactionError> {
     if value.is_empty()
         || value.len() > MAX_OPERATION_ID_BYTES
@@ -179,7 +235,7 @@ fn validate_operation_id(value: &str) -> Result<(), SealedTransactionError> {
 mod platform {
     use super::{
         SealedTransactionError, SealedTransactionReceipt, SensitiveBytes,
-        TransactionStatus,
+        TransactionObservation, TransactionStatus,
     };
     use std::path::Path;
 
@@ -198,15 +254,24 @@ mod platform {
     ) -> Result<TransactionStatus, SealedTransactionError> {
         Err(SealedTransactionError::UnsupportedPlatform)
     }
+
+    pub(super) fn inspect_transaction(
+        _data_root: &Path,
+        _operation_id: &str,
+    ) -> Result<TransactionObservation, SealedTransactionError> {
+        Err(SealedTransactionError::UnsupportedPlatform)
+    }
 }
 
 #[cfg(windows)]
 mod platform {
     use super::{
         PutDisposition, SealReceipt, SealedStoreError, SealedTransactionError,
-        SealedTransactionReceipt, SensitiveBytes, TransactionStatus,
-        open_sealed, seal_immutable, validate_operation_id,
+        SealedTransactionReceipt, SensitiveBytes, TransactionBinding,
+        TransactionObservation, TransactionStatus, open_sealed, seal_immutable,
+        validate_operation_id,
     };
+    use crate::sealed_digest::{Sha256Digest, sha256};
     use std::fs::{self, File, OpenOptions, TryLockError};
     use std::io::{self, Read, Write};
     use std::os::windows::fs::MetadataExt;
@@ -234,6 +299,7 @@ mod platform {
         operation_id: String,
         object_id: String,
         plaintext_bytes: u64,
+        plaintext_sha256: Sha256Digest,
     }
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -241,6 +307,7 @@ mod platform {
         operation_id: String,
         object_id: String,
         plaintext_bytes: u64,
+        plaintext_sha256: Sha256Digest,
         ciphertext_bytes: u64,
     }
 
@@ -253,11 +320,14 @@ mod platform {
         validate_operation_id(operation_id)?;
         let directory = ensure_transaction_directory(data_root, true)?;
         let _lock = acquire_operation_lock(&directory, operation_id)?;
+        // Compute the V2 expected digest before any move of `plaintext`.
+        let expected_digest = sha256(plaintext.expose())?;
         let intent = Intent {
             operation_id: operation_id.to_owned(),
             object_id: object_id.to_owned(),
             plaintext_bytes: u64::try_from(plaintext.len())
                 .map_err(|_| SealedTransactionError::IntentConflict)?,
+            plaintext_sha256: expected_digest,
         };
         let intent_path = metadata_path(&directory, operation_id, "intent");
         let receipt_path = metadata_path(&directory, operation_id, "receipt");
@@ -314,10 +384,14 @@ mod platform {
         } else {
             seal_immutable(data_root, object_id, plaintext)?
         };
+        if seal.plaintext_bytes != intent.plaintext_bytes {
+            return Err(SealedTransactionError::ReadbackMismatch);
+        }
         let receipt = Receipt {
             operation_id: operation_id.to_owned(),
             object_id: object_id.to_owned(),
             plaintext_bytes: seal.plaintext_bytes,
+            plaintext_sha256: expected_digest,
             ciphertext_bytes: seal.ciphertext_bytes,
         };
         write_once(&directory, &receipt_path, encode_receipt(&receipt).as_bytes())?;
@@ -336,21 +410,75 @@ mod platform {
         data_root: &Path,
         operation_id: &str,
     ) -> Result<TransactionStatus, SealedTransactionError> {
+        Ok(inspect_transaction(data_root, operation_id)?.status)
+    }
+
+    pub(super) fn inspect_transaction(
+        data_root: &Path,
+        operation_id: &str,
+    ) -> Result<TransactionObservation, SealedTransactionError> {
         validate_operation_id(operation_id)?;
         let directory = ensure_transaction_directory(data_root, false)?;
-        let intent = metadata_path(&directory, operation_id, "intent");
-        let receipt = metadata_path(&directory, operation_id, "receipt");
-        match (intent.exists(), receipt.exists()) {
-            (false, false) => Ok(TransactionStatus::Absent),
+        let intent_path = metadata_path(&directory, operation_id, "intent");
+        let receipt_path = metadata_path(&directory, operation_id, "receipt");
+        let intent_exists = intent_path.exists();
+        let receipt_exists = receipt_path.exists();
+        match (intent_exists, receipt_exists) {
+            (false, false) => Ok(TransactionObservation {
+                status: TransactionStatus::Absent,
+                binding: None,
+            }),
             (true, false) => {
-                let _ = read_intent(&intent)?;
-                Ok(TransactionStatus::Prepared)
+                let intent = read_intent(&intent_path)?;
+                Ok(TransactionObservation {
+                    status: TransactionStatus::Prepared,
+                    binding: Some(TransactionBinding {
+                        operation_id: intent.operation_id,
+                        object_id: intent.object_id,
+                        plaintext_bytes: intent.plaintext_bytes,
+                        plaintext_sha256: intent.plaintext_sha256,
+                        ciphertext_bytes: None,
+                    }),
+                })
             }
             (false, true) => {
-                let _ = read_receipt(&receipt)?;
-                Ok(TransactionStatus::Committed)
+                let receipt = read_receipt(&receipt_path)?;
+                Ok(TransactionObservation {
+                    status: TransactionStatus::Committed,
+                    binding: Some(TransactionBinding {
+                        operation_id: receipt.operation_id,
+                        object_id: receipt.object_id,
+                        plaintext_bytes: receipt.plaintext_bytes,
+                        plaintext_sha256: receipt.plaintext_sha256,
+                        ciphertext_bytes: Some(receipt.ciphertext_bytes),
+                    }),
+                })
             }
-            (true, true) => Ok(TransactionStatus::Conflicted),
+            (true, true) => {
+                let intent = read_intent(&intent_path)?;
+                let receipt = read_receipt(&receipt_path)?;
+                if intent.operation_id == receipt.operation_id
+                    && intent.object_id == receipt.object_id
+                    && intent.plaintext_bytes == receipt.plaintext_bytes
+                    && intent.plaintext_sha256 == receipt.plaintext_sha256
+                {
+                    Ok(TransactionObservation {
+                        status: TransactionStatus::CommittedCleanupPending,
+                        binding: Some(TransactionBinding {
+                            operation_id: receipt.operation_id,
+                            object_id: receipt.object_id,
+                            plaintext_bytes: receipt.plaintext_bytes,
+                            plaintext_sha256: receipt.plaintext_sha256,
+                            ciphertext_bytes: Some(receipt.ciphertext_bytes),
+                        }),
+                    })
+                } else {
+                    Ok(TransactionObservation {
+                        status: TransactionStatus::Conflicted,
+                        binding: None,
+                    })
+                }
+            }
         }
     }
 
@@ -362,6 +490,7 @@ mod platform {
             operation_id: receipt.operation_id,
             object_id: receipt.object_id,
             plaintext_bytes: receipt.plaintext_bytes,
+            plaintext_sha256: receipt.plaintext_sha256,
             ciphertext_bytes: receipt.ciphertext_bytes,
             disposition,
             sealed_readback_verified: true,
@@ -376,6 +505,7 @@ mod platform {
         if receipt.operation_id != intent.operation_id
             || receipt.object_id != intent.object_id
             || receipt.plaintext_bytes != intent.plaintext_bytes
+            || receipt.plaintext_sha256 != intent.plaintext_sha256
         {
             return Err(SealedTransactionError::ReceiptConflict);
         }
@@ -528,8 +658,11 @@ mod platform {
 
     fn encode_intent(intent: &Intent) -> String {
         format!(
-            "{INTENT_MAGIC}\noperation={}\nobject={}\nplaintext_bytes={}\n",
-            intent.operation_id, intent.object_id, intent.plaintext_bytes
+            "{INTENT_MAGIC}\noperation={}\nobject={}\nplaintext_bytes={}\nplaintext_sha256={}\n",
+            intent.operation_id,
+            intent.object_id,
+            intent.plaintext_bytes,
+            intent.plaintext_sha256.to_hex()
         )
     }
 
@@ -539,13 +672,16 @@ mod platform {
         validate_operation_id(&operation_id)?;
         let object_id = field(&fields, "object")?.to_owned();
         let plaintext_bytes = parse_u64(field(&fields, "plaintext_bytes")?)?;
-        if fields.len() != 3 || plaintext_bytes == 0 {
+        let plaintext_sha256 = Sha256Digest::from_hex(field(&fields, "plaintext_sha256")?)
+            .map_err(|_| SealedTransactionError::IntentConflict)?;
+        if fields.len() != 4 || plaintext_bytes == 0 {
             return Err(SealedTransactionError::IntentConflict);
         }
         Ok(Intent {
             operation_id,
             object_id,
             plaintext_bytes,
+            plaintext_sha256,
         })
     }
 
@@ -553,12 +689,13 @@ mod platform {
         format!(
             concat!(
                 "{}\noperation={}\nobject={}\n",
-                "plaintext_bytes={}\nciphertext_bytes={}\n"
+                "plaintext_bytes={}\nplaintext_sha256={}\nciphertext_bytes={}\n"
             ),
             RECEIPT_MAGIC,
             receipt.operation_id,
             receipt.object_id,
             receipt.plaintext_bytes,
+            receipt.plaintext_sha256.to_hex(),
             receipt.ciphertext_bytes
         )
     }
@@ -569,14 +706,17 @@ mod platform {
         validate_operation_id(&operation_id)?;
         let object_id = field(&fields, "object")?.to_owned();
         let plaintext_bytes = parse_u64(field(&fields, "plaintext_bytes")?)?;
+        let plaintext_sha256 = Sha256Digest::from_hex(field(&fields, "plaintext_sha256")?)
+            .map_err(|_| SealedTransactionError::ReceiptConflict)?;
         let ciphertext_bytes = parse_u64(field(&fields, "ciphertext_bytes")?)?;
-        if fields.len() != 4 || plaintext_bytes == 0 || ciphertext_bytes == 0 {
+        if fields.len() != 5 || plaintext_bytes == 0 || ciphertext_bytes == 0 {
             return Err(SealedTransactionError::ReceiptConflict);
         }
         Ok(Receipt {
             operation_id,
             object_id,
             plaintext_bytes,
+            plaintext_sha256,
             ciphertext_bytes,
         })
     }
@@ -631,20 +771,27 @@ mod platform {
         use super::*;
 
         #[test]
-        fn receipt_encoding_retains_the_exact_legacy_wire_bytes() {
+        fn receipt_encoding_retains_the_exact_v2_wire_bytes() {
+            let digest = Sha256Digest::from_hex(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
             let receipt = Receipt {
                 operation_id: "operation-1".to_owned(),
                 object_id: "object-1".to_owned(),
                 plaintext_bytes: 12,
+                plaintext_sha256: digest,
                 ciphertext_bytes: 256,
             };
             let encoded = encode_receipt(&receipt);
             assert_eq!(encoded, concat!(
                 "ELIOT-SEALED-RECEIPT-V1\noperation=operation-1\nobject=object-1\n",
-                "plaintext_bytes=12\nciphertext_bytes=256\n",
+                "plaintext_bytes=12\n",
+                "plaintext_sha256=0000000000000000000000000000000000000000000000000000000000000000\n",
+                "ciphertext_bytes=256\n",
             ));
             let fields = parse_metadata(&encoded, RECEIPT_MAGIC).unwrap();
-            assert_eq!(fields.len(), 4);
+            assert_eq!(fields.len(), 5);
             assert_eq!(parse_u64(field(&fields, "plaintext_bytes").unwrap()).unwrap(), 12);
         }
     }

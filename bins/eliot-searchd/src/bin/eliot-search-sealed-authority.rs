@@ -387,9 +387,11 @@ fn run() -> Result<(), String> {
                 },
             )?;
             if mutation.state == AccessFenceState::Allow {
+                // Owner/root and recovery are already verified by
+                // `acquire_ready_owner`; catalog reads stay owner-unbound
+                // to match the sealed-catalog harness contract.
                 let _ = verify_revision(
                     data_root,
-                    &owner,
                     &mutation.catalog_object_id,
                     &mutation.source_id,
                     &mutation.source_revision_id,
@@ -446,7 +448,6 @@ fn run() -> Result<(), String> {
             require_expected_fence(&active, &expected)?;
             let receipt = verify_revision(
                 data_root,
-                &owner,
                 expected.catalog_object_id,
                 expected.source_id,
                 expected.source_revision_id,
@@ -508,7 +509,6 @@ fn run() -> Result<(), String> {
             require_expected_fence(&active, &expected)?;
             let revision = read_revision(
                 data_root,
-                &owner,
                 expected.catalog_object_id,
                 expected.source_id,
                 expected.source_revision_id,

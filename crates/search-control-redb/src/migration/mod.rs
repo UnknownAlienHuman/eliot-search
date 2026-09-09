@@ -120,7 +120,11 @@ impl SourceImportRow {
         out.extend_from_slice(self.source.as_bytes());
         out.extend_from_slice(self.revision.as_bytes());
         out.push(u8::from(self.previous_revision.is_some()));
-        out.extend_from_slice(self.previous_revision.as_ref().map_or(&[0; 16], SourceRevisionId::as_bytes));
+        out.extend_from_slice(
+            self.previous_revision
+                .as_ref()
+                .map_or(&[0; 16][..], |revision| revision.as_bytes().as_slice()),
+        );
         for n in [self.occurrence, self.source_event, self.sequence, self.source_bytes] {
             out.extend_from_slice(&n.to_be_bytes());
         }

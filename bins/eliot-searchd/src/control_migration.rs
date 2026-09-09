@@ -69,8 +69,9 @@ impl DirectStore {
         &self, bindings: &[(String, String, String)], deadline: Instant,
     ) -> Result<[u8; 32], String> {
         if bindings.len() > PAGE_EVENTS { return Err("DIRECT_MIGRATION_BINDING_LIMIT".to_owned()); }
-        let mut missing = bindings.iter().map(|(source, revision, path)|
-            (source.as_str(), revision.as_str(), path.as_str())).collect::<BTreeSet<_>>();
+        // Own the pending keys so the replay closure can remove entries borrowed
+        // from `record` without invariant lifetime conflicts (E0521).
+        let mut missing = bindings.iter().cloned().collect::<BTreeSet<_>>();
         if Instant::now() >= deadline {
             return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
         }
@@ -85,7 +86,11 @@ impl DirectStore {
             }
             validate_legacy_event(&namespace, record, previous)?;
             if record.state == SourceState::Active {
-                missing.remove(&(record.source_id.as_str(), record.revision_id.as_str(), record.path_digest.as_str()));
+                missing.remove(&(
+                    record.source_id.clone(),
+                    record.revision_id.clone(),
+                    record.path_digest.clone(),
+                ));
             }
             Ok(())
         })?;
