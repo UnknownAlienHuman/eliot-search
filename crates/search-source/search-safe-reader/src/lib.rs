@@ -409,7 +409,6 @@ pub fn safe_read<B: SafeReadBackend>(
         .ok_or(SafeReadError::ReceiptMissing)?;
     let after_metadata_receipt = after
         .metadata_receipt
-        .clone()
         .ok_or(SafeReadError::ReceiptMissing)?;
 
     Ok(SafeReadResult {
