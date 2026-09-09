@@ -1,7 +1,10 @@
 //! Request bounds and coherent snapshot relationships, before exposure or writes.
-use super::*;
+use super::{Check, ControlError, ControlKey, ControlValue, JournalLimits, JournalReadSnapshot,
+    MANIFESTS, PUBLICATION_VISIBILITY_SCHEMA_VERSION, PublicationIntentState,
+    PublicationVisibilityState, Point, RECEIPTS, RETIRED, ReadTransaction, SHADOWS, STATE,
+    VisibleEpochCommit, codec, id_key, intent_codec, key, operation_from};
 use std::collections::BTreeSet;
-use super::super::super::{Header, META, ReadableTable, map_storage_error, map_table_error};
+use super::super::super::{Header, META, map_storage_error, map_table_error};
 
 pub(super) fn validate_request(request: &VisibleEpochCommit, limits: JournalLimits) -> Result<(), ControlError> {
     if request.intent.state != PublicationIntentState::ReadbackVerified
@@ -88,7 +91,7 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
             // Tie the typed receipt to an actual committed operation in the same
             // read transaction, not only to a caller-populated revision number.
             let meta = read.open_table(META).map_err(map_table_error)?;
-            let header_bytes = meta.get("header").map_err(map_storage_error)?.ok_or(ControlError::StoreCorrupt)?;
+            let header_bytes = meta.get("header").map_err(|error| map_storage_error(&error))?.ok_or(ControlError::StoreCorrupt)?;
             let header = Header::decode(header_bytes.value(), snapshot.identity, limits)?;
             let operation = operation_from(read, receipt.operation_id, &header, limits)?
                 .ok_or(ControlError::StoreCorrupt)?;
@@ -113,7 +116,10 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
             let receipt = receipt.ok_or(ControlError::StoreCorrupt)?;
             let mut expected = receipt.intent;
             expected.state = intent.state;
-            if expected != intent || intent.target_epoch != state.visible_epoch { return Err(ControlError::StoreCorrupt); }
+            // Two separate checks preserve quarantine-on-mismatch: neither a
+            // substituted intent nor a skewed epoch may pass.
+            if expected != intent { return Err(ControlError::StoreCorrupt); }
+            if intent.target_epoch != state.visible_epoch { return Err(ControlError::StoreCorrupt); }
         }
         Some(intent) => {
             if intent.target_epoch <= state.visible_epoch { return Err(ControlError::StoreCorrupt); }

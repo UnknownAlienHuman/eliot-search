@@ -33,7 +33,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -79,10 +79,10 @@ fn transaction_reopens_and_replays_without_writing_again() {
     let request = mutation(1, 0, b"READY");
     let receipt = {
         let mut journal = scratch.create(LIMITS);
-        journal.transact(request.clone()).unwrap()
+        journal.transact(&request).unwrap()
     };
     let mut journal = scratch.open(LIMITS);
-    let replay = journal.transact(request).unwrap();
+    let replay = journal.transact(&request).unwrap();
     assert!(replay.replayed);
     assert_eq!(replay.after_generation, receipt.after_generation);
     assert_eq!(journal.read_snapshot().unwrap().records, vec![(key(b"lifecycle"), value(b"READY"))]);
@@ -93,12 +93,12 @@ fn transaction_reopens_and_replays_without_writing_again() {
 fn same_claimed_digest_cannot_hide_changed_request() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(LIMITS);
-    journal.transact(mutation(1, 0, b"READY")).unwrap();
-    assert_eq!(journal.transact(mutation(1, 0, b"STOPPED")), Err(ControlError::OperationConflict));
-    assert_eq!(journal.transact(mutation(1, 1, b"READY")), Err(ControlError::OperationConflict));
+    journal.transact(&mutation(1, 0, b"READY")).unwrap();
+    assert_eq!(journal.transact(&mutation(1, 0, b"STOPPED")), Err(ControlError::OperationConflict));
+    assert_eq!(journal.transact(&mutation(1, 1, b"READY")), Err(ControlError::OperationConflict));
     let changed_class = ControlMutation::new(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0,
         vec![ControlWrite { key: key(b"lifecycle"), value: ControlValue::new(ControlRecordClass::Identity, b"READY".to_vec(), LIMITS).unwrap() }], vec![]);
-    assert_eq!(journal.transact(changed_class), Err(ControlError::OperationConflict));
+    assert_eq!(journal.transact(&changed_class), Err(ControlError::OperationConflict));
     assert_eq!(journal.read_snapshot().unwrap().generation, 1);
 }
 
@@ -108,11 +108,11 @@ fn canonical_write_order_replays_but_duplicate_keys_fail() {
     let mut journal = scratch.create(LIMITS);
     let writes = vec![ControlWrite { key: key(b"a"), value: value(b"1") }, ControlWrite { key: key(b"b"), value: value(b"2") }];
     let make = |writes| ControlMutation::new(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, writes, vec![]);
-    journal.transact(make(writes.clone())).unwrap();
+    journal.transact(&make(writes.clone())).unwrap();
     let mut reordered = writes.clone();
     reordered.reverse();
-    assert!(journal.transact(make(reordered)).unwrap().replayed);
-    assert_eq!(journal.transact(make(vec![writes[0].clone(), writes[0].clone()])), Err(ControlError::DuplicateMutationKey));
+    assert!(journal.transact(&make(reordered)).unwrap().replayed);
+    assert_eq!(journal.transact(&make(vec![writes[0].clone(), writes[0].clone()])), Err(ControlError::DuplicateMutationKey));
 }
 
 #[test]
@@ -120,12 +120,12 @@ fn stale_generation_and_capacity_failure_leave_no_partial_record_or_receipt() {
     let scratch = Scratch::new();
     let limits = JournalLimits { max_records: 1, ..LIMITS };
     let mut journal = scratch.create(limits);
-    journal.transact(mutation(1, 0, b"READY")).unwrap();
+    journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let before = journal.verify().unwrap();
-    assert_eq!(journal.transact(mutation(2, 0, b"STOPPED")), Err(ControlError::TransactionConflict));
+    assert_eq!(journal.transact(&mutation(2, 0, b"STOPPED")), Err(ControlError::TransactionConflict));
     let request = ControlMutation::new(MutationId([3; 32]), Blake3Digest32::from_bytes([7; 32]), 1,
         vec![ControlWrite { key: key(b"second"), value: value(b"new") }], vec![]);
-    assert_eq!(journal.transact(request.clone()), Err(ControlError::BudgetExceeded));
+    assert_eq!(journal.transact(&request.clone()), Err(ControlError::BudgetExceeded));
     assert!(matches!(journal.recover_transaction(&request).unwrap(), CommitRecoveryDecision::NotCommittedRetrySameOperation));
     assert_eq!(journal.verify().unwrap(), before);
 }
@@ -136,10 +136,10 @@ fn delete_and_insert_are_atomic_and_match_the_reference_model() {
     let mut disk = scratch.create(LIMITS);
     let mut reference = ControlJournal::open_or_create(identity(), LIMITS).unwrap();
     let first = mutation(1, 0, b"READY");
-    assert_eq!(disk.transact(first.clone()).unwrap(), reference.transact(first).unwrap());
+    assert_eq!(disk.transact(&first.clone()).unwrap(), reference.transact(first).unwrap());
     let second = ControlMutation::new(MutationId([2; 32]), Blake3Digest32::from_bytes([8; 32]), 1,
         vec![ControlWrite { key: key(b"route"), value: value(b"DIRECT") }], vec![key(b"lifecycle")]);
-    assert_eq!(disk.transact(second.clone()).unwrap(), reference.transact(second).unwrap());
+    assert_eq!(disk.transact(&second.clone()).unwrap(), reference.transact(second).unwrap());
     assert_eq!(disk.verify().unwrap(), reference.read_snapshot().unwrap());
     let snapshot = disk.control_snapshot().unwrap();
     let expected = rebuild_control_snapshot(reference.read_snapshot().unwrap(), identity(), LIMITS).unwrap();
@@ -151,11 +151,11 @@ fn precommit_failure_rolls_back_and_same_operation_can_retry() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(LIMITS);
     let request = mutation(1, 0, b"READY");
-    assert_eq!(journal.transact_inner(request.clone(), Boundary::BeforeCommit), Err(ControlError::StoreUnavailable));
+    assert_eq!(journal.transact_inner(&request.clone(), Boundary::BeforeCommit), Err(ControlError::StoreUnavailable));
     assert!(!journal.requires_recovery());
     assert_eq!(journal.verify().unwrap().generation, 0);
     assert!(matches!(journal.recover_transaction(&request).unwrap(), CommitRecoveryDecision::NotCommittedRetrySameOperation));
-    assert!(!journal.transact(request).unwrap().replayed);
+    assert!(!journal.transact(&request).unwrap().replayed);
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn lost_acknowledgement_blocks_reads_until_exact_request_recovery() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(LIMITS);
     let request = mutation(1, 0, b"READY");
-    assert_eq!(journal.transact_inner(request.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_inner(&request.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
     assert!(journal.requires_recovery());
     assert_eq!(journal.read_snapshot(), Err(ControlError::StoreQuarantined));
     assert!(matches!(journal.recover_transaction(&mutation(2, 0, b"READY")).unwrap(), CommitRecoveryDecision::ConflictingInput));
@@ -171,7 +171,7 @@ fn lost_acknowledgement_blocks_reads_until_exact_request_recovery() {
     assert!(matches!(journal.recover_transaction(&request).unwrap(), CommitRecoveryDecision::Committed(_)));
     assert!(!journal.requires_recovery());
     assert_eq!(journal.read_snapshot().unwrap().generation, 1);
-    assert!(journal.transact(request).unwrap().replayed);
+    assert!(journal.transact(&request).unwrap().replayed);
 }
 
 #[test]
@@ -179,8 +179,8 @@ fn historical_recovery_does_not_reapply_over_newer_values() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(LIMITS);
     let first = mutation(1, 0, b"READY");
-    journal.transact(first.clone()).unwrap();
-    journal.transact(mutation(2, 1, b"STOPPED")).unwrap();
+    journal.transact(&first.clone()).unwrap();
+    journal.transact(&mutation(2, 1, b"STOPPED")).unwrap();
     assert!(matches!(journal.recover_transaction(&first).unwrap(), CommitRecoveryDecision::Committed(_)));
     assert_eq!(journal.read_snapshot().unwrap().records, vec![(key(b"lifecycle"), value(b"STOPPED"))]);
     assert_eq!(journal.read_snapshot().unwrap().generation, 2);
@@ -190,7 +190,7 @@ fn historical_recovery_does_not_reapply_over_newer_values() {
 fn ten_thousand_reads_change_neither_database_bytes_nor_receipt_count() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(LIMITS);
-    journal.transact(mutation(1, 0, b"READY")).unwrap();
+    journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let before = scratch.bytes();
     let writes = journal.committed_writes();
     for _ in 0..10_000 { assert_eq!(journal.read_snapshot().unwrap().generation, 1); }
@@ -238,7 +238,7 @@ fn corrupt_receipt_and_missing_table_are_not_repaired_into_success() {
     for remove_table in [false, true] {
         let scratch = Scratch::new();
         let mut journal = scratch.create(LIMITS);
-        journal.transact(mutation(1, 0, b"READY")).unwrap();
+        journal.transact(&mutation(1, 0, b"READY")).unwrap();
         let write = journal.database.begin_write().unwrap();
         if remove_table {
             assert!(write.delete_table(OPERATIONS).unwrap());
@@ -277,7 +277,7 @@ fn process_exit_before_and_after_commit_reopens_to_exact_atomic_state() {
         let snapshot = journal.verify().unwrap();
         assert_eq!(snapshot.generation, generation);
         assert_eq!(snapshot.records.len(), usize::from(generation == 1));
-        let replay = journal.transact(mutation(1, 0, b"READY")).unwrap();
+        let replay = journal.transact(&mutation(1, 0, b"READY")).unwrap();
         assert_eq!(replay.replayed, generation == 1);
         assert_eq!(journal.verify().unwrap().generation, 1);
     }
@@ -291,7 +291,7 @@ fn crash_child() {
     let file = OpenOptions::new().read(true).write(true).open(path).unwrap();
     let mut journal = PersistentControlJournal::open(file, identity(), LIMITS).unwrap();
     let boundary = match mode.as_str() { "before" => Boundary::ExitBeforeCommit, "after" => Boundary::ExitAfterCommit, _ => panic!("invalid child mode") };
-    let _ = journal.transact_inner(mutation(1, 0, b"READY"), boundary);
+    let _ = journal.transact_inner(&mutation(1, 0, b"READY"), boundary);
     panic!("fault boundary must terminate without destructors");
 }
 
@@ -301,9 +301,9 @@ fn receipt_capacity_never_discards_replay_protection() {
     let limits = JournalLimits { max_operation_records: 1, ..LIMITS };
     let mut journal = scratch.create(limits);
     let first = mutation(1, 0, b"READY");
-    journal.transact(first.clone()).unwrap();
-    assert_eq!(journal.transact(mutation(2, 1, b"STOPPED")), Err(ControlError::IdempotencyCapacityExceeded));
-    assert!(journal.transact(first).unwrap().replayed);
+    journal.transact(&first.clone()).unwrap();
+    assert_eq!(journal.transact(&mutation(2, 1, b"STOPPED")), Err(ControlError::IdempotencyCapacityExceeded));
+    assert!(journal.transact(&first).unwrap().replayed);
     assert_eq!(journal.verify().unwrap().generation, 1);
 }
 
@@ -327,14 +327,14 @@ fn snapshot_publication_consumes_real_current_receipt_and_recovers_after_restart
         let mut journal = scratch.create(LIMITS);
         assert_eq!(journal.recover_snapshot_publication(&mut publisher).unwrap(), None);
         assert!(publisher.current().is_none());
-        let receipt = journal.transact(mutation(1, 0, b"READY")).unwrap();
+        let receipt = journal.transact(&mutation(1, 0, b"READY")).unwrap();
         let mut forged = receipt.clone();
         forged.changed_keys.clear();
         assert_eq!(journal.publish_committed_snapshot(&forged, &mut publisher), Err(ControlError::SnapshotPublicationFailed));
         assert!(publisher.current().is_none());
         journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
         assert_eq!(publisher.current().unwrap().generation, 1);
-        journal.transact(mutation(2, 1, b"STOPPED")).unwrap();
+        journal.transact(&mutation(2, 1, b"STOPPED")).unwrap();
         assert_eq!(journal.publish_committed_snapshot(&receipt, &mut publisher), Err(ControlError::SnapshotPublicationFailed));
         receipt
     };
@@ -351,12 +351,12 @@ fn owner_handoff_preserves_old_operation_recovery_without_rewriting_data() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(LIMITS);
     let request = mutation(1, 0, b"READY");
-    journal.transact(request.clone()).unwrap();
+    journal.transact(&request).unwrap();
     let next = JournalIdentity { owner_epoch: OwnerEpoch::new(2).unwrap(), ..identity() };
     let mut journal = journal.advance_owner(next).unwrap();
     assert_eq!(journal.identity(), next);
     assert_eq!(journal.verify().unwrap().generation, 1);
-    assert!(journal.transact(request.clone()).unwrap().replayed);
+    assert!(journal.transact(&request).unwrap().replayed);
     let commits = journal.committed_writes();
     let journal = journal.advance_owner(next).unwrap();
     assert_eq!(journal.committed_writes(), commits);

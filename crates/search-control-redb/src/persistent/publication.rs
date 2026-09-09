@@ -28,6 +28,7 @@ mod tests;
 
 /// Explicit adapter schema for typed publication records. Older binaries only
 /// accept schema 1 and therefore cannot silently ignore an unresolved intent.
+///
 /// No in-place schema-1 migration is implemented or implicitly performed.
 pub const PUBLICATION_INTENT_SCHEMA_VERSION: u32 = 2;
 
@@ -36,7 +37,7 @@ const KEY: &[u8] = b"publication_intents/current/v1";
 /// Immutable exact-input update for the durable publication intent.
 ///
 /// The record stores only shared technical fields. Manifest references remain
-/// references, never embedded point sets. This command cannot change VisibleEpoch,
+/// references, never embedded point sets. This command cannot change `VisibleEpoch`,
 /// write publication receipts or claim that a Qdrant effect was verified.
 #[derive(Clone, Eq, PartialEq)]
 pub struct PublicationIntentUpdate {
@@ -71,13 +72,13 @@ impl PublicationIntentUpdate {
         operation_id: MutationId,
         command_digest: Blake3Digest32,
         expected_generation: u64,
-        prepared: PublicationIntent,
+        prepared: &PublicationIntent,
     ) -> Result<Self, ControlError> {
         if prepared.state != PublicationIntentState::Prepared || prepared.target_epoch.get() == 0 {
             return Err(ControlError::InvalidValue);
         }
         let next = search_domain::transition_publication(
-            &prepared, PublicationIntentState::IntentDurable,
+            prepared, PublicationIntentState::IntentDurable,
         ).map_err(|_| ControlError::InvalidValue)?;
         Ok(Self { operation_id, command_digest, expected_generation, previous: None, next })
     }
@@ -92,7 +93,7 @@ impl PublicationIntentUpdate {
     ///
     /// # Errors
     /// Rejects skipped/reversed edges and any visibility/finalization transition.
-    /// CONTROL_COMMITTED, INVALIDATION_ONLY_COMMITTED and RECLAIMABLE require the
+    /// `CONTROL_COMMITTED`, `INVALIDATION_ONLY_COMMITTED` and `RECLAIMABLE` require the
     /// separate guarded VisibleEpoch/finalization path and cannot be set here.
     pub fn advance(
         operation_id: MutationId,
@@ -163,10 +164,10 @@ impl PersistentControlJournal {
         self.read_intent_checked(&budget).map_err(|error| budget.failure(error, None))
     }
 
-    /// Returns the exact recovery-required intent, including a bare ABORTED value.
-    /// BLOCKED and COMPENSATING remain unresolved. CONTROL_COMMITTED resolves
+    /// Returns the exact recovery-required intent, including a bare `ABORTED` value.
+    /// `BLOCKED` and `COMPENSATING` remain unresolved. `CONTROL_COMMITTED` resolves
     /// the durable mutation, not snapshot admission; its commit still needs publication.
-    /// Resolved values are omitted here but retained by read_publication_intent.
+    /// Resolved values are omitted here but retained by `read_publication_intent`.
     ///
     /// # Errors
     /// Missing-after-write, malformed bytes or interruption is not a successful None.
@@ -254,7 +255,7 @@ impl PersistentControlJournal {
         })
     }
 
-    fn require_intent_schema(&self) -> Result<(), ControlError> {
+    const fn require_intent_schema(&self) -> Result<(), ControlError> {
         if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) { Ok(()) }
         else { Err(ControlError::SchemaUnsupported) }
     }
@@ -270,12 +271,9 @@ impl PersistentControlJournal {
             self.snapshot_from_checked(&read, check)?;
         }
         let records = read.open_table(RECORDS).map_err(map_table_error)?;
-        let intent = match records.get(KEY).map_err(map_storage_error)? {
-            Some(raw) => Some(codec::decode(&decode_value(raw.value(), self.limits)?)?),
-            None => {
-                verify_never_written(&read, header.generation, self.limits, check)?;
-                None
-            }
+        let intent = if let Some(raw) = records.get(KEY).map_err(|error| map_storage_error(&error))? { Some(codec::decode(&decode_value(raw.value(), self.limits)?)?) } else {
+            verify_never_written(&read, header.generation, self.limits, check)?;
+            None
         };
         check.check(Point::ReadComplete)?;
         Ok(PublicationIntentHead { identity: self.identity, generation: header.generation, intent })
@@ -310,7 +308,7 @@ impl PersistentControlJournal {
                     }
                 }
                 let table = read.open_table(RECORDS).map_err(map_table_error)?;
-                match table.get(KEY).map_err(map_storage_error)? {
+                match table.get(KEY).map_err(|error| map_storage_error(&error))? {
                     Some(raw) => { codec::decode(&decode_value(raw.value(), self.limits)?)?; }
                     None => verify_never_written(&read, header.generation, self.limits, check)?,
                 }
@@ -331,7 +329,7 @@ pub(super) fn port_reserved_key(key: &[u8]) -> bool {
     key == KEY || visibility::port_reserved_key(key)
 }
 
-pub(super) fn unresolved(state: PublicationIntentState) -> bool {
+pub(super) const fn unresolved(state: PublicationIntentState) -> bool {
     // The stored terminal label alone proves neither two-sided compensation nor
     // effective membership-wide exclusion. Keep ABORTED recovery-visible.
     !matches!(state, PublicationIntentState::ControlCommitted
@@ -344,9 +342,8 @@ pub(super) fn validate_record(key: &ControlKey, value: &ControlValue) -> Result<
 }
 
 pub(super) fn require_resolved(records: &[(ControlKey, ControlValue)]) -> Result<(), ControlError> {
-    if let Ok(index) = records.binary_search_by(|(key, _)| key.as_bytes().cmp(KEY)) {
-        if unresolved(codec::decode(&records[index].1)?.state) { return Err(ControlError::SnapshotRebuildFailed); }
-    }
+    if let Ok(index) = records.binary_search_by(|(key, _)| key.as_bytes().cmp(KEY))
+        && unresolved(codec::decode(&records[index].1)?.state) { return Err(ControlError::SnapshotRebuildFailed); }
     Ok(())
 }
 
@@ -365,10 +362,10 @@ fn verify_never_written(
 ) -> Result<(), ControlError> {
     if generation == 0 { return Ok(()); }
     let operations = read.open_table(OPERATIONS).map_err(map_table_error)?;
-    for (count, row) in operations.iter().map_err(map_storage_error)?.enumerate() {
+    for (count, row) in operations.iter().map_err(|error| map_storage_error(&error))?.enumerate() {
         check.check(Point::ReadOperation)?;
         if count >= limits.max_operation_records { return Err(ControlError::StoreCorrupt); }
-        let (id, bytes) = row.map_err(map_storage_error)?;
+        let (id, bytes) = row.map_err(|error| map_storage_error(&error))?;
         let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
         let operation = StoredOperation::decode(bytes.value(), id, generation, limits)?;
         if operation.receipt.changed_keys.iter().any(|key| key.as_bytes() == KEY) {

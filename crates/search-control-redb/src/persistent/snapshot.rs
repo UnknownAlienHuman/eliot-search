@@ -132,9 +132,9 @@ impl PersistentControlJournal {
             return Ok(None);
         }
         let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
-        for row in table.iter().map_err(map_storage_error)? {
+        for row in table.iter().map_err(|error| map_storage_error(&error))? {
             check.check(Point::ReadOperation)?;
-            let (id, bytes) = row.map_err(map_storage_error)?;
+            let (id, bytes) = row.map_err(|error| map_storage_error(&error))?;
             let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
             let operation = StoredOperation::decode(bytes.value(), id, snapshot.generation, self.limits)?;
             if operation.receipt.after_generation == snapshot.generation {

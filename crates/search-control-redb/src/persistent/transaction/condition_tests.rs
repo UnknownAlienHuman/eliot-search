@@ -38,7 +38,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -100,7 +100,7 @@ fn context(cancelled: bool) -> OperationContext<Cancellation> {
 }
 
 fn apply(journal: &mut PersistentControlJournal, request: ConditionalControlMutation) -> Result<ControlCommitReceipt, ControlError> {
-    journal.transact_conditionally(request, &context(false)).map_err(|error| error.control_error())
+    journal.transact_conditionally(request, &context(false)).map_err(super::super::operation::ControlCallError::control_error)
 }
 fn recover(journal: &mut PersistentControlJournal, request: &ConditionalControlMutation) -> CommitRecoveryDecision {
     journal.recover_conditional_transaction(request, &context(false)).unwrap()
@@ -124,7 +124,7 @@ fn conditional_insert_then_update_is_atomic_and_replay_does_not_recheck_prestate
 fn false_exact_or_absence_precondition_has_no_record_receipt_or_disk_write() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     let before = journal.verify().unwrap();
     let disk = scratch.bytes();
     let writes = journal.committed_writes();
@@ -143,7 +143,7 @@ fn false_exact_or_absence_precondition_has_no_record_receipt_or_disk_write() {
 fn identical_value_bytes_with_a_different_record_class_do_not_match() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"guard", b"READY")).unwrap();
+    journal.transact(&put(1, 0, b"guard", b"READY")).unwrap();
     let wrong_class = ControlValue::new(ControlRecordClass::Identity, b"READY".to_vec(), LIMITS).unwrap();
     let request = command(put(2, 1, b"target", b"new"),
         vec![ControlRecordCondition::exact(key(b"guard"), wrong_class)]);
@@ -155,7 +155,7 @@ fn identical_value_bytes_with_a_different_record_class_do_not_match() {
 fn conditions_can_read_untouched_keys_but_do_not_appear_as_changed_keys() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"guard", b"READY")).unwrap();
+    journal.transact(&put(1, 0, b"guard", b"READY")).unwrap();
     let receipt = apply(&mut journal, command(put(2, 1, b"target", b"new"),
         vec![exact(b"guard", b"READY"), absent(b"denied")])).unwrap();
     assert_eq!(receipt.changed_keys, vec![key(b"target")]);
@@ -166,7 +166,7 @@ fn conditions_can_read_untouched_keys_but_do_not_appear_as_changed_keys() {
 fn guarded_delete_replays_without_requiring_the_deleted_prestate_again() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     let mutation = ControlMutation::new(MutationId([2; 32]), Blake3Digest32::from_bytes([9; 32]), 1,
         vec![], vec![key(b"state")]);
     let request = command(mutation, vec![exact(b"state", b"READY")]);
@@ -179,10 +179,10 @@ fn guarded_delete_replays_without_requiring_the_deleted_prestate_again() {
 fn guard_aba_cannot_bypass_the_global_expected_generation() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"guard", b"A")).unwrap();
+    journal.transact(&put(1, 0, b"guard", b"A")).unwrap();
     let stale = command(put(9, 1, b"target", b"new"), vec![exact(b"guard", b"A")]);
-    journal.transact(put(2, 1, b"guard", b"B")).unwrap();
-    journal.transact(put(3, 2, b"guard", b"A")).unwrap();
+    journal.transact(&put(2, 1, b"guard", b"B")).unwrap();
+    journal.transact(&put(3, 2, b"guard", b"A")).unwrap();
     assert_eq!(apply(&mut journal, stale), Err(ControlError::TransactionConflict));
     assert!(journal.verify().unwrap().get(&key(b"target")).is_none());
 }
@@ -199,7 +199,7 @@ fn changing_adding_or_removing_a_condition_cannot_replay_the_same_operation() {
         assert_eq!(apply(&mut journal, request.clone()), Err(ControlError::OperationConflict));
         assert!(matches!(recover(&mut journal, &request), CommitRecoveryDecision::ConflictingInput));
     }
-    assert_eq!(journal.transact(mutation), Err(ControlError::OperationConflict));
+    assert_eq!(journal.transact(&mutation), Err(ControlError::OperationConflict));
     assert_eq!(journal.verify().unwrap().generation, 1);
 }
 
@@ -211,7 +211,7 @@ fn reordered_conditions_replay_and_empty_conditions_keep_legacy_identity() {
     apply(&mut journal, command(mutation.clone(), vec![absent(b"a"), absent(b"b")])).unwrap();
     assert!(apply(&mut journal, command(mutation, vec![absent(b"b"), absent(b"a")])).unwrap().replayed);
     let legacy = put(2, 1, b"second", b"value");
-    journal.transact(legacy.clone()).unwrap();
+    journal.transact(&legacy.clone()).unwrap();
     assert!(apply(&mut journal, command(legacy.clone(), vec![])).unwrap().replayed);
     assert!(matches!(journal.recover_transaction(&legacy).unwrap(), CommitRecoveryDecision::Committed(_)));
 }
@@ -258,7 +258,7 @@ fn expected_values_and_combined_work_are_bounded_before_database_dispatch() {
 fn conditions_are_checked_again_in_the_actual_write_transaction() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"guard", b"READY")).unwrap();
+    journal.transact(&put(1, 0, b"guard", b"READY")).unwrap();
     let conditions = [exact(b"guard", b"READY")];
     {
         let read = journal.database.begin_read().unwrap();
@@ -340,8 +340,8 @@ fn historical_replay_and_owner_handoff_preserve_the_original_conditional_identit
     let mut journal = scratch.create();
     let request = command(put(1, 0, b"state", b"READY"), vec![absent(b"state"), absent(b"guard")]);
     apply(&mut journal, request.clone()).unwrap();
-    journal.transact(put(2, 1, b"state", b"STOPPED")).unwrap();
-    journal.transact(put(3, 2, b"guard", b"CHANGED")).unwrap();
+    journal.transact(&put(2, 1, b"state", b"STOPPED")).unwrap();
+    journal.transact(&put(3, 2, b"guard", b"CHANGED")).unwrap();
     let next = JournalIdentity { owner_epoch: OwnerEpoch::new(2).unwrap(), ..identity() };
     let mut journal = journal.advance_owner(next).unwrap();
     assert!(apply(&mut journal, request.clone()).unwrap().replayed);
@@ -354,7 +354,7 @@ fn historical_replay_and_owner_handoff_preserve_the_original_conditional_identit
 fn malformed_stored_guard_is_corruption_not_a_normal_precondition_failure() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"guard", b"READY")).unwrap();
+    journal.transact(&put(1, 0, b"guard", b"READY")).unwrap();
     let write = journal.database.begin_write().unwrap();
     {
         let mut table = write.open_table(RECORDS).unwrap();
@@ -371,7 +371,7 @@ fn guard_lookup_cost_is_independent_of_unrelated_record_count() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let writes = (0..128).map(|n| ControlWrite { key: key(format!("unrelated-{n:03}").as_bytes()), value: value(b"value") }).collect();
-    journal.transact(ControlMutation::new(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, writes, vec![])).unwrap();
+    journal.transact(&ControlMutation::new(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, writes, vec![])).unwrap();
     let before_points = journal.work.point_reads.load(Ordering::Relaxed);
     let before_snapshots = journal.work.snapshot_reads.load(Ordering::Relaxed);
     apply(&mut journal, command(put(2, 1, b"target", b"new"),
@@ -428,7 +428,7 @@ fn current_receipt_checks_untouched_conditions_but_not_obsolete_prestate() {
     for recover_only in [false, true] {
         let scratch = Scratch::new();
         let mut journal = scratch.create();
-        journal.transact(put(1, 0, b"guard", b"READY")).unwrap();
+        journal.transact(&put(1, 0, b"guard", b"READY")).unwrap();
         let request = command(put(2, 1, b"target", b"new"), vec![exact(b"guard", b"READY")]);
         apply(&mut journal, request.clone()).unwrap();
         let write = journal.database.begin_write().unwrap();
@@ -451,8 +451,8 @@ fn current_receipt_checks_untouched_conditions_but_not_obsolete_prestate() {
 fn failed_batch_condition_preserves_every_write_and_delete_target() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"a", b"old")).unwrap();
-    journal.transact(put(2, 1, b"b", b"old")).unwrap();
+    journal.transact(&put(1, 0, b"a", b"old")).unwrap();
+    journal.transact(&put(2, 1, b"b", b"old")).unwrap();
     let before = journal.verify().unwrap();
     let mutation = ControlMutation::new(MutationId([3; 32]), Blake3Digest32::from_bytes([9; 32]), 2,
         vec![ControlWrite { key: key(b"a"), value: value(b"new") }], vec![key(b"b")]);

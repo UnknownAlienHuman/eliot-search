@@ -22,7 +22,7 @@ pub(super) struct Header {
 }
 
 impl Header {
-    pub fn empty(identity: JournalIdentity) -> Self {
+    pub const fn empty(identity: JournalIdentity) -> Self {
         Self { identity, generation: 0, records: 0, value_bytes: 0, operations: 0, operation_bytes: 0 }
     }
 
@@ -82,7 +82,7 @@ pub(super) fn as_u64(value: usize) -> Result<u64, ControlError> {
     u64::try_from(value).map_err(|_| ControlError::BudgetExceeded)
 }
 
-pub(super) fn class_tag(class: ControlRecordClass) -> u8 {
+pub(super) const fn class_tag(class: ControlRecordClass) -> u8 {
     match class {
         ControlRecordClass::Identity => 1, ControlRecordClass::Revision => 2,
         ControlRecordClass::State => 3, ControlRecordClass::Receipt => 4,
@@ -232,5 +232,5 @@ impl<'a> Decoder<'a> {
         self.take(N)?.try_into().map_err(|_| ControlError::StoreCorrupt)
     }
     fn u64(&mut self) -> Result<u64, ControlError> { Ok(u64::from_be_bytes(self.fixed()?)) }
-    fn finish(self) -> Result<(), ControlError> { if self.0.is_empty() { Ok(()) } else { Err(ControlError::StoreCorrupt) } }
+    const fn finish(self) -> Result<(), ControlError> { if self.0.is_empty() { Ok(()) } else { Err(ControlError::StoreCorrupt) } }
 }

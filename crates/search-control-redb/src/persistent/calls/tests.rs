@@ -76,7 +76,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the
     /// database; on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares the lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares the lock ownership, so
     /// this reads the same bytes without unlocking or reopening anything.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -145,7 +145,7 @@ fn pre_cancelled_public_calls_touch_no_disk_or_committed_state() {
         assert_eq!(error.operation_id(), None);
     }
     let command = request(1, 0);
-    let error = journal.transact_with_context(command.clone(), &ctx).unwrap_err();
+    let error = journal.transact_with_context(&command, &ctx).unwrap_err();
     assert_eq!(error.control_error(), ControlError::ReadCancelled);
     assert_eq!(error.interruption(), Some(ControlInterruption::Cancelled));
     assert_eq!(error.operation_id(), Some(command.id()));
@@ -166,7 +166,7 @@ fn interruptions_preserve_dispatch_classification_and_require_exact_absence_read
         ] {
             let scratch = Scratch::new();
             let mut journal = scratch.create();
-            journal.transact(ControlMutation::new(
+            journal.transact(&ControlMutation::new(
                 MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0,
                 vec![change(b"a", b"PRIOR"), change(b"gone", b"KEEP")], vec![],
             )).unwrap();
@@ -181,7 +181,7 @@ fn interruptions_preserve_dispatch_classification_and_require_exact_absence_read
                 action: || trigger(why, &cancel, &now, start),
             };
             let command = request(2, 1);
-            let raw = journal.transact_checked(command.clone(), Boundary::Normal, &gate).unwrap_err();
+            let raw = journal.transact_checked(&command.clone(), Boundary::Normal, &gate).unwrap_err();
             let error = budget.failure(raw, Some(command.id()));
             assert_eq!(error.interruption(), Some(why), "{point:?}");
             let dispatched = (point == Point::BeforeWrite && nth == 2)
@@ -206,7 +206,7 @@ fn interruptions_preserve_dispatch_classification_and_require_exact_absence_read
             drop(journal);
             let mut journal = scratch.open();
             assert_eq!(journal.verify().unwrap(), before);
-            assert!(!journal.transact(command).unwrap().replayed);
+            assert!(!journal.transact(&command).unwrap().replayed);
             assert_eq!(journal.verify().unwrap().generation, 2);
         }
     }
@@ -228,7 +228,7 @@ fn after_commit_interruptions_keep_the_exact_pending_request_until_recovery() {
                 action: || trigger(why, &cancel, &now, start),
             };
             let command = request(1, 0);
-            let raw = journal.transact_checked(command.clone(), Boundary::Normal, &gate).unwrap_err();
+            let raw = journal.transact_checked(&command.clone(), Boundary::Normal, &gate).unwrap_err();
             let error = budget.failure(raw, Some(command.id()));
             assert_eq!(error.control_error(), ControlError::CommitOutcomeUnknown);
             assert_eq!(error.kind(), PortErrorKind::OutcomeUnknown);
@@ -237,7 +237,7 @@ fn after_commit_interruptions_keep_the_exact_pending_request_until_recovery() {
             assert!(journal.requires_recovery());
             assert!(!journal.quarantined);
             assert_eq!(journal.read_snapshot(), Err(ControlError::StoreQuarantined));
-            assert_eq!(journal.transact(request(2, 1)), Err(ControlError::StoreQuarantined));
+            assert_eq!(journal.transact(&request(2, 1)), Err(ControlError::StoreQuarantined));
             cancel.set(false);
             let fresh = context(&cancel, 10_000);
             assert!(matches!(
@@ -248,7 +248,7 @@ fn after_commit_interruptions_keep_the_exact_pending_request_until_recovery() {
             let snapshot = journal.verify().unwrap();
             assert_eq!(snapshot.generation, 1);
             assert_eq!(snapshot.records.len(), 2);
-            assert!(journal.transact_with_context(command, &fresh).unwrap().replayed);
+            assert!(journal.transact_with_context(&command, &fresh).unwrap().replayed);
             assert_eq!(journal.verify().unwrap(), snapshot);
         }
     }
@@ -259,7 +259,7 @@ fn public_recovery_cancellation_returns_unknown_and_never_quarantines() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let command = request(1, 0);
-    assert_eq!(journal.transact_inner(command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_inner(&command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
     let pending = journal.pending;
     let cancel = Cancellation::default();
     cancel.set(true);
@@ -280,7 +280,7 @@ fn interrupted_recovery_scans_do_not_clear_pending_or_forge_corruption() {
             let scratch = Scratch::new();
             let mut journal = scratch.create();
             let command = request(1, 0);
-            assert_eq!(journal.transact_inner(command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+            assert_eq!(journal.transact_inner(&command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
             let pending = journal.pending;
             let cancel = Cancellation::default();
             let ctx = context(&cancel, 10);
@@ -308,7 +308,7 @@ fn transient_recovery_failure_is_not_a_structural_corruption_verdict() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let command = request(1, 0);
-    assert_eq!(journal.transact_inner(command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_inner(&command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
     let pending = journal.pending;
     assert_eq!(journal.recover_transaction_checked(&command, &Transient), Err(ControlError::StoreUnavailable));
     assert_eq!(journal.pending, pending);
@@ -321,7 +321,7 @@ fn actual_corruption_during_context_recovery_still_quarantines() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let command = request(1, 0);
-    assert_eq!(journal.transact_inner(command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_inner(&command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
     let write = journal.database.begin_write().unwrap();
     {
         let mut table = write.open_table(RECORDS).unwrap();
@@ -339,7 +339,7 @@ fn cancelled_snapshot_or_full_verification_returns_no_partial_success() {
     for (point, verify) in [(Point::ReadRecord, false), (Point::ReadOperation, true), (Point::ReadComplete, true)] {
         let scratch = Scratch::new();
         let mut journal = scratch.create();
-        journal.transact(request(1, 0)).unwrap();
+        journal.transact(&request(1, 0)).unwrap();
         let before = scratch.bytes();
         let cancel = Cancellation::default();
         let ctx = context(&cancel, 10_000);
@@ -375,18 +375,18 @@ fn historical_replay_cancellation_does_not_restore_old_values_or_create_pending_
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let first = request(1, 0);
-    journal.transact(first.clone()).unwrap();
+    journal.transact(&first.clone()).unwrap();
     let next = ControlMutation::new(MutationId([2; 32]), Blake3Digest32::from_bytes([9; 32]), 1, vec![change(b"a", b"LATER")], vec![]);
-    journal.transact(next).unwrap();
+    journal.transact(&next).unwrap();
     let before = journal.verify().unwrap();
     let cancel = Cancellation::default();
     let ctx = context(&cancel, 10_000);
     let budget = Budget::new(&ctx);
     let gate = At { inner: &budget, point: Point::ReplayComplete, nth: 1, hits: Cell::new(0), action: || cancel.set(true) };
-    assert_eq!(journal.transact_checked(first.clone(), Boundary::Normal, &gate), Err(ControlError::ReadCancelled));
+    assert_eq!(journal.transact_checked(&first.clone(), Boundary::Normal, &gate), Err(ControlError::ReadCancelled));
     assert!(!journal.requires_recovery());
     assert_eq!(journal.verify().unwrap(), before);
-    assert!(journal.transact(first).unwrap().replayed);
+    assert!(journal.transact(&first).unwrap().replayed);
     assert_eq!(journal.verify().unwrap(), before);
 }
 
@@ -402,7 +402,7 @@ fn deadline_is_one_budget_across_planning_and_staging_not_per_phase() {
     let stage = At { inner: &budget, point: Point::StageRecord, nth: 1, hits: Cell::new(0), action: || now.set(now.get() + Duration::from_millis(3)) };
     let plan = At { inner: &stage, point: Point::PlanRecord, nth: 1, hits: Cell::new(0), action: || now.set(now.get() + Duration::from_millis(3)) };
     let command = request(1, 0);
-    assert_eq!(journal.transact_checked(command.clone(), Boundary::Normal, &plan), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_checked(&command.clone(), Boundary::Normal, &plan), Err(ControlError::CommitOutcomeUnknown));
     assert!(stage.hits.get() > 0);
     assert!(plan.hits.get() > 0);
     assert!(journal.requires_recovery());
@@ -444,8 +444,8 @@ fn resource_limit_is_not_mislabeled_as_deadline_expiration() {
 fn typed_vendor_errors_preserve_unavailable_versus_corrupt_without_leaking_text() {
     let error = map_table_error(redb::TableError::Storage(redb::StorageError::Io(std::io::Error::other("private-path-sentinel"))));
     assert_eq!(error, ControlError::StoreUnavailable);
-    assert_eq!(map_storage_error(redb::StorageError::PreviousIo), ControlError::StoreUnavailable);
-    assert_eq!(map_storage_error(redb::StorageError::Corrupted("private bytes".to_owned())), ControlError::StoreCorrupt);
+    assert_eq!(map_storage_error(&redb::StorageError::PreviousIo), ControlError::StoreUnavailable);
+    assert_eq!(map_storage_error(&redb::StorageError::Corrupted("private bytes".to_owned())), ControlError::StoreCorrupt);
     assert_eq!(map_table_error(redb::TableError::TableDoesNotExist("private table".to_owned())), ControlError::SchemaMismatch);
     let cancel = Cancellation::default();
     let ctx = context(&cancel, 10_000);
@@ -462,10 +462,10 @@ fn public_context_methods_agree_with_existing_exact_disk_semantics() {
     let cancel = Cancellation::default();
     let ctx = context(&cancel, 10_000);
     let command = request(1, 0);
-    let committed = journal.transact_with_context(command.clone(), &ctx).unwrap();
+    let committed = journal.transact_with_context(&command.clone(), &ctx).unwrap();
     assert_eq!(committed.after_generation, 1);
     assert_eq!(journal.read_snapshot_with_context(&ctx).unwrap(), journal.verify_with_context(&ctx).unwrap());
-    assert!(journal.transact_with_context(command.clone(), &ctx).unwrap().replayed);
+    assert!(journal.transact_with_context(&command.clone(), &ctx).unwrap().replayed);
     assert!(matches!(journal.recover_transaction_with_context(&command, &ctx).unwrap(), CommitRecoveryDecision::Committed(_)));
     drop(journal);
     assert_eq!(scratch.open().verify().unwrap().generation, 1);
@@ -476,7 +476,7 @@ fn wrong_recovery_request_cannot_clear_an_existing_pending_fence() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let command = request(1, 0);
-    assert_eq!(journal.transact_inner(command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_inner(&command.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
     let pending = journal.pending;
     let cancel = Cancellation::default();
     let ctx = context(&cancel, 10_000);

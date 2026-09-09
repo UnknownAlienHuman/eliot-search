@@ -57,7 +57,7 @@ impl PersistentControlJournal {
     /// or OS operation is not forcibly terminated at the cooperative deadline.
     pub fn transact_with_context<C: CancellationProbe>(
         &mut self,
-        mutation: ControlMutation,
+        mutation: &ControlMutation,
         context: &OperationContext<C>,
     ) -> Result<ControlCommitReceipt, ControlCallError> {
         let budget = Budget::new(context);
@@ -141,7 +141,7 @@ impl PersistentControlJournal {
         check: &dyn Check,
     ) -> Result<ControlCommitReceipt, ControlError> {
         let (mutation, conditions) = command.into_parts();
-        let result = transaction::execute_with_conditions(self, mutation, &conditions, boundary, check);
+        let result = transaction::execute_with_conditions(self, &mutation, &conditions, boundary, check);
         if result.as_ref().err().is_some_and(|error| is_corruption(*error)) {
             self.quarantined = true;
         }

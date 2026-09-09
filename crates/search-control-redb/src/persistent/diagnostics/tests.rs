@@ -4,7 +4,6 @@ use super::*;
 use crate::{CommitRecoveryDecision, ControlKey, ControlMutation, ControlRecordClass,
     ControlValue, ControlWrite, JournalLimits, MutationId};
 use crate::persistent::{Boundary, META, OPERATIONS, RECORDS};
-use redb::ReadableTable;
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId,
     OpaqueRef, OwnerEpoch, RequestId};
 use search_ports::{PackageOpaque, PortErrorKind};
@@ -38,7 +37,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -124,23 +123,23 @@ fn counters_follow_actual_commit_replace_delete_and_not_replay_or_reads() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let mutation = put(1, 0, b"state", b"READY");
-    journal.transact(mutation.clone()).unwrap();
+    journal.transact(&mutation.clone()).unwrap();
     let first = counters(&journal);
     assert_eq!((first.data_generation, first.live_records, first.live_value_bytes), (1, 1, 5));
     assert_eq!(first.operation_records, 1);
     assert!(first.operation_record_bytes > 0);
     assert_eq!(first.acknowledged_mutating_calls, 2);
-    assert!(journal.transact(mutation).unwrap().replayed);
+    assert!(journal.transact(&mutation).unwrap().replayed);
     journal.read_snapshot().unwrap();
     journal.verify().unwrap();
     assert_eq!(counters(&journal), first);
-    journal.transact(put(2, 1, b"state", b"OK")).unwrap();
+    journal.transact(&put(2, 1, b"state", b"OK")).unwrap();
     let second = counters(&journal);
     assert_eq!((second.data_generation, second.live_records, second.live_value_bytes), (2, 1, 2));
     assert!(second.operation_record_bytes > first.operation_record_bytes);
     let delete = ControlMutation::new(MutationId([3; 32]), Blake3Digest32::from_bytes([9; 32]), 2,
         vec![], vec![key(b"state")]);
-    journal.transact(delete).unwrap();
+    journal.transact(&delete).unwrap();
     let third = counters(&journal);
     assert_eq!((third.data_generation, third.live_records, third.live_value_bytes), (3, 0, 0));
     assert_eq!(third.operation_records, 3);
@@ -152,7 +151,7 @@ fn reopen_and_owner_handoff_do_not_reset_durable_data_counts() {
     let scratch = Scratch::new();
     let before = {
         let mut journal = scratch.create();
-        journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+        journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
         counters(&journal)
     };
     let journal = PersistentControlJournal::open(scratch.file(), identity(), LIMITS).unwrap();
@@ -168,7 +167,7 @@ fn lost_ack_health_observes_commit_but_never_resolves_the_pending_mutation() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let mutation = put(1, 0, b"state", b"READY");
-    assert_eq!(journal.transact_inner(mutation.clone(), Boundary::LostAcknowledgement),
+    assert_eq!(journal.transact_inner(&mutation.clone(), Boundary::LostAcknowledgement),
         Err(ControlError::CommitOutcomeUnknown));
     let before = scratch.bytes();
     let observed = health(&journal, None);
@@ -194,11 +193,11 @@ fn health_reports_publisher_alignment_without_publishing_or_clearing_its_fence()
     assert_eq!(health(&journal, Some(&publisher)).snapshot, SnapshotHealthState::Unbound);
     assert_eq!(journal.recover_snapshot_publication(&mut publisher).unwrap(), None);
     assert_eq!(health(&journal, Some(&publisher)).snapshot, SnapshotHealthState::NotPublished);
-    let first = journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    let first = journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     journal.publish_committed_snapshot(&first, &mut publisher).unwrap();
     assert_eq!(health(&journal, Some(&publisher)).snapshot, SnapshotHealthState::GenerationAligned);
     let old_pointer = publisher.current().unwrap();
-    journal.transact(put(2, 1, b"state", b"STOPPED")).unwrap();
+    journal.transact(&put(2, 1, b"state", b"STOPPED")).unwrap();
     assert_eq!(health(&journal, Some(&publisher)).snapshot, SnapshotHealthState::BehindJournal);
     assert!(std::sync::Arc::ptr_eq(&old_pointer, &publisher.current().unwrap()));
     publisher.begin_disk_publication(identity()).unwrap();
@@ -211,7 +210,7 @@ fn health_reports_publisher_alignment_without_publishing_or_clearing_its_fence()
 fn foreign_or_previous_owner_publisher_is_observed_not_poisoned() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    let commit = journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    let commit = journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&commit, &mut publisher).unwrap();
     let old_pointer = publisher.current().unwrap();
@@ -230,7 +229,7 @@ fn foreign_or_previous_owner_publisher_is_observed_not_poisoned() {
 fn a_newer_snapshot_is_not_evidence_that_an_older_journal_was_recovered() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    let commit = journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    let commit = journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&commit, &mut publisher).unwrap();
     // Pure comparison fixture: no database rollback or false native owner claim.
@@ -300,7 +299,7 @@ fn invalid_header_reports_quarantine_required_without_creating_a_hold() {
 fn cardinality_mismatch_cannot_produce_apparently_valid_counters() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     {
         let write = journal.database.begin_write().unwrap();
         {
@@ -321,7 +320,7 @@ fn metadata_readability_does_not_claim_record_or_receipt_body_integrity() {
     for corrupt_receipt in [false, true] {
         let scratch = Scratch::new();
         let mut journal = scratch.create();
-        journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+        journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
         {
             let write = journal.database.begin_write().unwrap();
             if corrupt_receipt {
@@ -368,7 +367,7 @@ impl Check for StopAt {
 fn cancellation_after_observation_preserves_publisher_and_existing_journal_fences() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    let commit = journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    let commit = journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&commit, &mut publisher).unwrap();
     let old_pointer = publisher.current().unwrap();
@@ -409,8 +408,8 @@ fn exhausted_mutation_ledger_does_not_disable_read_only_diagnostics() {
     let scratch = Scratch::new();
     let limits = JournalLimits { max_operation_records: 1, ..LIMITS };
     let mut journal = scratch.create_as(identity(), limits);
-    journal.transact(put(1, 0, b"state", b"READY")).unwrap();
-    assert_eq!(journal.transact(put(2, 1, b"state", b"STOPPED")),
+    journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
+    assert_eq!(journal.transact(&put(2, 1, b"state", b"STOPPED")),
         Err(ControlError::IdempotencyCapacityExceeded));
     assert_eq!(counters(&journal).operation_records, 1);
     assert_eq!(health(&journal, None).state, JournalHealthState::MetadataReadable);
@@ -424,7 +423,7 @@ fn ten_thousand_diagnostics_do_not_scan_values_publish_snapshots_or_write_bytes(
         key: key(format!("fixture-{n:03}").as_bytes()), value: value(b"private-value-sentinel"),
     }).collect();
     let mutation = ControlMutation::new(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, writes, vec![]);
-    let commit = journal.transact(mutation).unwrap();
+    let commit = journal.transact(&mutation).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&commit, &mut publisher).unwrap();
     let pointer = publisher.current().unwrap();
@@ -449,7 +448,7 @@ fn ten_thousand_diagnostics_do_not_scan_values_publish_snapshots_or_write_bytes(
 fn diagnostic_debug_contains_no_record_keys_values_or_paths() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    journal.transact(put(1, 0, b"private-key-sentinel", b"private-value-sentinel")).unwrap();
+    journal.transact(&put(1, 0, b"private-key-sentinel", b"private-value-sentinel")).unwrap();
     let debug = format!("{:?} {:?}", counters(&journal), health(&journal, None));
     assert!(!debug.contains("private-key-sentinel"));
     assert!(!debug.contains("private-value-sentinel"));
@@ -460,7 +459,7 @@ fn diagnostic_debug_contains_no_record_keys_values_or_paths() {
 fn matching_but_unbound_snapshot_is_not_reported_as_disk_published() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    let commit = journal.transact(put(1, 0, b"state", b"READY")).unwrap();
+    let commit = journal.transact(&put(1, 0, b"state", b"READY")).unwrap();
     let mut raw_publisher = ControlSnapshotPublisher::new();
     raw_publisher.publish_snapshot_after_commit(&commit, journal.control_snapshot().unwrap()).unwrap();
     assert_eq!(raw_publisher.current().unwrap().generation, counters(&journal).data_generation);

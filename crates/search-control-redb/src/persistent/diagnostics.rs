@@ -174,7 +174,7 @@ impl PersistentControlJournal {
     }
 }
 
-fn counters_from(header: &Header, acknowledged_mutating_calls: u64) -> JournalWriteCounters {
+const fn counters_from(header: &Header, acknowledged_mutating_calls: u64) -> JournalWriteCounters {
     JournalWriteCounters {
         data_generation: header.generation, live_records: header.records,
         live_value_bytes: header.value_bytes, operation_records: header.operations,
