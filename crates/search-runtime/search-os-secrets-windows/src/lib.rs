@@ -402,13 +402,13 @@ mod windows {
         // is initialized and owned by the caller after successful return.
         let succeeded = unsafe {
             CryptProtectData(
-                &input,
+                &raw const input,
                 null(),
-                &entropy,
+                &raw const entropy,
                 null_mut(),
                 null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,
-                &mut output,
+                &raw mut output,
             )
         };
         if succeeded == 0 {
@@ -445,13 +445,13 @@ mod windows {
         // become caller-owned LocalAlloc allocations only on success.
         let succeeded = unsafe {
             CryptUnprotectData(
-                &input,
-                &mut description,
-                &entropy,
+                &raw const input,
+                &raw mut description,
+                &raw const entropy,
                 null_mut(),
                 null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,
-                &mut output,
+                &raw mut output,
             )
         };
         if succeeded == 0 {
