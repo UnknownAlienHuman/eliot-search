@@ -417,16 +417,16 @@ impl HandleStore {
         }
         let mut invalidated = 0_usize;
         for digest in matching {
-            if let Some(record) = self.records.get_mut(&digest) {
-                if record.state == HandleRecordState::Active {
-                    record.state = HandleRecordState::Invalidated;
-                    record.invalidation_generation = generation;
-                    record.handle_revision = record
-                        .handle_revision
-                        .checked_next()
-                        .map_err(|_| HandleError::InvalidTransition)?;
-                    invalidated = invalidated.saturating_add(1);
-                }
+            if let Some(record) = self.records.get_mut(&digest)
+                && record.state == HandleRecordState::Active
+            {
+                record.state = HandleRecordState::Invalidated;
+                record.invalidation_generation = generation;
+                record.handle_revision = record
+                    .handle_revision
+                    .checked_next()
+                    .map_err(|_| HandleError::InvalidTransition)?;
+                invalidated = invalidated.saturating_add(1);
             }
         }
         Ok(InvalidationReceipt {
@@ -546,10 +546,7 @@ pub fn revalidate(
     }
     let (start, end) = record.target.range();
     let length = end.saturating_sub(start);
-    if context.requested_bytes == 0
-        || context.requested_bytes > length
-        || context.requested_bytes > u64::MAX.min(length)
-    {
+    if context.requested_bytes == 0 || context.requested_bytes > length {
         return Err(HandleError::RangeBudgetExceeded);
     }
     match &record.target {
