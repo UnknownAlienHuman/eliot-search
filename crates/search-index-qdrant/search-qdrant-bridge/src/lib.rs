@@ -114,42 +114,63 @@ pub struct AuthLeaseEvidence {
     pub valid: bool,
 }
 
-/// Executed capability probe results.
-// Each flag is an independent capability gate; bundling them into bitflags or a
-// sub-struct would break the public API (see PR #158 precedent), so the struct
-// form is retained.
-#[allow(clippy::struct_excessive_bools)]
+/// Executed capability probe results, grouped by purpose so each gate struct
+/// stays within the boolean-count lint without changing admission semantics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CapabilityProbeResults {
+pub struct TopologyGates {
     pub authenticated_health: bool,
     pub single_shard: bool,
     pub signed_i64_ranges: bool,
+}
+
+/// Filter-semantics capability gates.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FilterGates {
     pub missing_upper_bound_must_not: bool,
     pub sparse_idf: bool,
     pub independent_idf_corpus: bool,
+}
+
+/// Index and mutation-durability capability gates.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct IndexGates {
     pub strict_mode: bool,
     pub payload_indexes: bool,
     pub wait_for_mutations: bool,
+}
+
+/// Readback and ordering capability gates.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConsistencyGates {
     pub strong_ordering: bool,
     pub exact_count_and_readback: bool,
     pub named_sparse_vectors: bool,
 }
 
+/// Executed capability probe results.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CapabilityProbeResults {
+    pub topology: TopologyGates,
+    pub filters: FilterGates,
+    pub indexes: IndexGates,
+    pub consistency: ConsistencyGates,
+}
+
 impl CapabilityProbeResults {
     #[must_use]
     pub const fn all_required(self) -> bool {
-        self.authenticated_health
-            && self.single_shard
-            && self.signed_i64_ranges
-            && self.missing_upper_bound_must_not
-            && self.sparse_idf
-            && self.independent_idf_corpus
-            && self.strict_mode
-            && self.payload_indexes
-            && self.wait_for_mutations
-            && self.strong_ordering
-            && self.exact_count_and_readback
-            && self.named_sparse_vectors
+        self.topology.authenticated_health
+            && self.topology.single_shard
+            && self.topology.signed_i64_ranges
+            && self.filters.missing_upper_bound_must_not
+            && self.filters.sparse_idf
+            && self.filters.independent_idf_corpus
+            && self.indexes.strict_mode
+            && self.indexes.payload_indexes
+            && self.indexes.wait_for_mutations
+            && self.consistency.strong_ordering
+            && self.consistency.exact_count_and_readback
+            && self.consistency.named_sparse_vectors
     }
 }
 
@@ -187,18 +208,21 @@ pub struct VectorSchema {
     pub idf_enabled: bool,
 }
 
+/// Must-be-true strictness floors for collection admission.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StrictnessFloors {
+    pub strict_mode: bool,
+    pub wait_for_mutations: bool,
+    pub strong_ordering: bool,
+}
+
 /// Exact collection schema and strict-mode correctness floors.
-// Each boolean is an independent schema floor alongside the maps; bundling them
-// would break the public API (see PR #158 precedent), so the struct form is retained.
-#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CollectionSchema {
     pub named_vectors: BTreeMap<String, VectorSchema>,
     pub indexed_payload_fields: BTreeSet<String>,
     pub one_shard: bool,
-    pub strict_mode: bool,
-    pub wait_for_mutations: bool,
-    pub strong_ordering: bool,
+    pub floors: StrictnessFloors,
     pub schema_digest: Blake3Digest32,
 }
 
@@ -215,9 +239,9 @@ impl CollectionSchema {
             return Err(BridgeError::CollectionSchemaMismatch);
         }
         if !self.one_shard
-            || !self.strict_mode
-            || !self.wait_for_mutations
-            || !self.strong_ordering
+            || !self.floors.strict_mode
+            || !self.floors.wait_for_mutations
+            || !self.floors.strong_ordering
         {
             return Err(BridgeError::StrictModeRequired);
         }
@@ -806,6 +830,9 @@ fn dot_sparse(left: &[(u32, f32)], right: &[(u32, f32)]) -> f32 {
             Ordering::Less => left_index += 1,
             Ordering::Greater => right_index += 1,
             Ordering::Equal => {
+                // Single-rounding FMA may differ in the last ulp from a
+                // separate multiply-then-add; ranking stays deterministic via
+                // the point_id tiebreak below.
                 score = left[left_index].1.mul_add(right[right_index].1, score);
                 left_index += 1;
                 right_index += 1;
