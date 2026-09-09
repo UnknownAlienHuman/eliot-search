@@ -583,7 +583,7 @@ impl SecretCatalog {
         self.register_operation(&operation)?;
         let replacement_reference = SecretReference::new(
             current.reference.id.clone(),
-            current.reference.binding.clone(),
+            current.reference.binding,
             replacement_version,
         );
         let pending = PendingRotation {
