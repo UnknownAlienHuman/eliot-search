@@ -306,13 +306,13 @@ impl AdmissionEvidence {
         receipts.push(&self.owner_verification_receipt);
         receipts.push(&self.security_barrier_receipt);
         for receipt in &self.additional_receipts {
-            if receipts.iter().any(|existing| *existing == receipt) {
+            if receipts.contains(&receipt) {
                 return Err(AdmissionError::EvidenceInvalid);
             }
             receipts.push(receipt);
         }
         for (index, receipt) in receipts.iter().enumerate() {
-            if receipts[..index].iter().any(|existing| existing == receipt) {
+            if receipts[..index].contains(receipt) {
                 return Err(AdmissionError::EvidenceInvalid);
             }
         }
