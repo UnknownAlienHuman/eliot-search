@@ -7,7 +7,9 @@ use std::path::Path;
 use std::time::Instant;
 
 use search_contracts::{Sha256Digest32, SourceId, SourceNamespaceId, SourceRevisionId};
-use search_control_redb::migration::{SourceImportBinding, SourceImportCounts, SourceImportRow};
+use search_control_redb::migration::{
+    SourceImportBinding, SourceImportCounts, SourceImportRow, SourceLifecycleFlags,
+};
 
 use super::{
     DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, SOURCE_LOG_FILE, SourceRecord,
@@ -38,8 +40,12 @@ impl MappedSourceEvent {
             sequence: record.sequence, source: self.source_id, revision: self.revision_id,
             previous_revision: self.previous_revision_id, occurrence: self.occurrence_sequence,
             source_event: self.source_event_ordinal, source_bytes: record.byte_length,
-            opens_source: self.opens_source, opens_revision: self.opens_revision, retires_source: self.retires_source,
-            native_identity: record.identity_strength.tag() == "native",
+            lifecycle: SourceLifecycleFlags::new([
+                self.opens_source,
+                self.opens_revision,
+                self.retires_source,
+                record.identity_strength.tag() == "native",
+            ]),
             operation: digest(&record.operation_id)?, legacy_source: digest(&record.source_id)?,
             legacy_revision: digest(&record.revision_id)?, content: digest(&record.content_digest)?,
             file_identity: digest(&record.file_identity_digest)?, path: digest(&record.path_digest)?,
