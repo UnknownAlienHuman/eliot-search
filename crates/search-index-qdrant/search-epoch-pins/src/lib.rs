@@ -425,7 +425,6 @@ impl EpochPinGuard {
     /// Holds the registry lock across the check-and-mutate so the
     /// ownership/kind/TTL validation and expiry write stay atomic; releasing
     /// the guard earlier (or copy-relock) would open a TOCTOU window.
-    #[allow(clippy::significant_drop_tightening)]
     pub fn renew_continuation_pin(
         &mut self,
         now_ms: u64,
@@ -453,6 +452,7 @@ impl EpochPinGuard {
         }
         let previous_expiry_ms = *expires_at_ms;
         *expires_at_ms = new_expiry_ms;
+        drop(inner);
         Ok(PinRenewalReceipt {
             route: self.route,
             epoch: self.epoch,
