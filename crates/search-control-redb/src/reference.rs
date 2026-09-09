@@ -149,7 +149,7 @@ pub struct JournalIdentity {
 
 impl JournalIdentity {
     /// Validates a journal identity.
-    pub fn validate(self) -> Result<Self, ControlError> {
+    pub const fn validate(self) -> Result<Self, ControlError> {
         if self.schema_version == 0 {
             return Err(ControlError::SchemaUnsupported);
         }
@@ -263,13 +263,13 @@ impl ControlValue {
 
     /// Encoded byte length.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Returns whether the value is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 }
@@ -311,7 +311,7 @@ impl ControlMutation {
     /// Creates a mutation. Structural and capacity validation occurs before the
     /// journal stages any state.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         id: MutationId,
         command_digest: Blake3Digest32,
         expected_generation: u64,
@@ -495,7 +495,7 @@ impl ControlJournal {
     /// the staged map into place. On every error, committed state is unchanged.
     pub fn transact(
         &mut self,
-        mutation: ControlMutation,
+        mutation: &ControlMutation,
     ) -> Result<ControlCommitReceipt, ControlError> {
         self.ensure_available()?;
 
@@ -627,7 +627,7 @@ impl ControlJournal {
     }
 
     /// Places the journal in fail-closed quarantine.
-    pub fn quarantine(&mut self, reason: ControlError) -> QuarantineReceipt {
+    pub const fn quarantine(&mut self, reason: ControlError) -> QuarantineReceipt {
         self.quarantine = Some(reason);
         QuarantineReceipt {
             identity: self.identity,
@@ -652,7 +652,7 @@ impl ControlJournal {
         }
     }
 
-    fn ensure_available(&self) -> Result<(), ControlError> {
+    const fn ensure_available(&self) -> Result<(), ControlError> {
         match self.quarantine {
             Some(_) => Err(ControlError::StoreQuarantined),
             None => Ok(()),
@@ -903,7 +903,7 @@ pub struct MigrationMachine {
 
 impl MigrationMachine {
     /// Creates a stable non-zero schema state.
-    pub fn new(version: u32) -> Result<Self, ControlError> {
+    pub const fn new(version: u32) -> Result<Self, ControlError> {
         if version == 0 {
             return Err(ControlError::SchemaUnsupported);
         }

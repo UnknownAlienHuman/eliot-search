@@ -21,12 +21,12 @@ fn reserve_request(journal: &PersistentControlJournal, operation: u8, id: u8) ->
     let head = journal.read_publication_intent(&context(false)).unwrap();
     let visible = journal.read_publication_visibility(&context(false)).unwrap().unwrap();
     PublicationSuccessor::new(MutationId([operation; 32]), digest(), head.generation,
-        head.intent.unwrap(), visible, prepared(visible, id)).unwrap()
+        head.intent.unwrap(), visible, &prepared(visible, id)).unwrap()
 }
 fn reserve(journal: &mut PersistentControlJournal, publisher: &ControlSnapshotPublisher,
     request: &PublicationSuccessor) -> Result<ControlCommitReceipt, ControlError> {
     journal.reserve_next_publication(request, publisher, &context(false))
-        .map_err(|error| error.control_error())
+        .map_err(crate::persistent::operation::ControlCallError::control_error)
 }
 fn finish_next(journal: &mut PersistentControlJournal, publisher: &mut ControlSnapshotPublisher,
     request: &PublicationSuccessor) {
@@ -100,7 +100,7 @@ fn unresolved_aborted_or_invalidation_only_predecessors_cannot_be_replaced() {
         PublicationIntentState::InvalidationOnlyCommitted, PublicationIntentState::Reclaimable] {
         let mut previous = head.intent.clone().unwrap(); previous.state = state;
         assert!(PublicationSuccessor::new(MutationId([10; 32]), digest(), head.generation,
-            previous, visible, prepared(visible, 10)).is_err(), "{state:?}");
+            previous, visible, &prepared(visible, 10)).is_err(), "{state:?}");
     }
 }
 
@@ -120,14 +120,14 @@ fn constructor_rejects_skips_reused_identity_stale_guards_and_overflow() {
             _ => next.target_epoch = visible.visible_epoch,
         }
         assert!(PublicationSuccessor::new(MutationId([10; 32]), digest(), head.generation,
-            previous.clone(), visible, next).is_err());
+            previous.clone(), visible, &next).is_err());
     }
     assert!(PublicationSuccessor::new(MutationId([10; 32]), digest(), u64::MAX,
-        previous.clone(), visible, prepared(visible, 10)).is_err());
+        previous.clone(), visible, &prepared(visible, 10)).is_err());
     let mut exhausted = previous; exhausted.target_epoch = Epoch::new(i64::MAX - 1).unwrap();
     let mut full = visible; full.visible_epoch = exhausted.target_epoch;
     assert!(PublicationSuccessor::new(MutationId([10; 32]), digest(), 7,
-        exhausted, full, prepared(visible, 10)).is_err());
+        exhausted, full, &prepared(visible, 10)).is_err());
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn same_generation_corruption_cannot_use_an_older_published_snapshot() {
     let changed = id_key(MANIFESTS, member(1).as_bytes(), LIMITS).unwrap();
     // Both references encode to the same length; the corruption does not rely
     // on a counter/length mismatch being found first.
-    corrupt_value(&journal, changed, codec::manifest(&reference("bad"), LIMITS).unwrap());
+    corrupt_value(&journal, &changed, &codec::manifest(&reference("bad"), LIMITS).unwrap());
     assert_eq!(reserve(&mut journal, &publisher, &request), Err(ControlError::SnapshotPublicationFailed));
     assert_eq!(journal.read_publication_intent(&context(false)).unwrap().generation, 7);
 }
@@ -309,7 +309,7 @@ fn a_foreign_disk_publisher_or_stale_local_snapshot_cannot_reserve() {
     let before = journal.verify().unwrap();
     assert_eq!(reserve(&mut journal, &foreign_publisher, &request), Err(ControlError::SnapshotPublicationFailed));
     assert_eq!(journal.verify().unwrap(), before);
-    journal.transact(ControlMutation::new(MutationId([40; 32]), digest(), before.generation,
+    journal.transact(&ControlMutation::new(MutationId([40; 32]), digest(), before.generation,
         vec![ControlWrite { key: key(b"technical-marker", LIMITS).unwrap(),
             value: ControlValue::new(ControlRecordClass::State, b"v1".to_vec(), LIMITS).unwrap() }], vec![])).unwrap();
     let current_request = reserve_request(&journal, 10, 10);

@@ -52,7 +52,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -78,7 +78,7 @@ impl Scratch {
     fn ready(&self) -> (PersistentControlJournal, VisibleEpochCommit) {
         let mut journal = self.empty(PUBLICATION_VISIBILITY_SCHEMA_VERSION);
         journal.initialize_publication_visibility(state(), MutationId([1; 32]), digest(), &context(false)).unwrap();
-        journal.transact(ControlMutation::new(MutationId([2; 32]), digest(), 1, vec![
+        journal.transact(&ControlMutation::new(MutationId([2; 32]), digest(), 1, vec![
             ControlWrite { key: id_key(MANIFESTS, member(1).as_bytes(), LIMITS).unwrap(), value: codec::manifest(&reference("old"), LIMITS).unwrap() },
             ControlWrite { key: id_key(SHADOWS, member(1).as_bytes(), LIMITS).unwrap(), value: codec::shadow(&shadow(1), LIMITS).unwrap() },
             ControlWrite { key: id_key(SHADOWS, member(2).as_bytes(), LIMITS).unwrap(), value: codec::shadow(&shadow(2), LIMITS).unwrap() },
@@ -86,7 +86,7 @@ impl Scratch {
         let prepared = PublicationIntent { publication_intent_id: PublicationIntentId::from_bytes([3; 16]),
             target_epoch: Epoch::new(1).unwrap(), prepared_manifest_ref: reference("prepared-manifest-sentinel"),
             owner_source_membership_access_guards: state().guards, state: PublicationIntentState::Prepared };
-        let mut update = PublicationIntentUpdate::begin(MutationId([3; 32]), digest(), 2, prepared).unwrap();
+        let mut update = PublicationIntentUpdate::begin(MutationId([3; 32]), digest(), 2, &prepared).unwrap();
         let mut prior = journal.persist_publication_intent(&update, &context(false)).unwrap();
         for (id, phase) in [(4, PublicationIntentState::NewPointsAcknowledged),
             (5, PublicationIntentState::OldPointsClosedAcknowledged), (6, PublicationIntentState::ReadbackVerified)] {
@@ -105,12 +105,12 @@ fn make_request(prior: ControlCommitReceipt, intent: PublicationIntent) -> Visib
             next_manifest: Some(reference("new")), matching_shadow: Some(shadow(1)) }]).unwrap()
 }
 fn apply(journal: &mut PersistentControlJournal, request: &VisibleEpochCommit) -> Result<ControlCommitReceipt, ControlError> {
-    journal.commit_visible_epoch(request, &context(false)).map_err(|error| error.control_error())
+    journal.commit_visible_epoch(request, &context(false)).map_err(crate::persistent::operation::ControlCallError::control_error)
 }
-fn corrupt_value(journal: &PersistentControlJournal, key: ControlKey, value: ControlValue) {
+fn corrupt_value(journal: &PersistentControlJournal, key: &ControlKey, value: &ControlValue) {
     let write = journal.database.begin_write().unwrap();
     { let mut table = write.open_table(RECORDS).unwrap();
-      let bytes = encode_value(&value); table.insert(key.as_bytes(), bytes.as_slice()).unwrap(); }
+      let bytes = encode_value(value); table.insert(key.as_bytes(), bytes.as_slice()).unwrap(); }
     write.commit().unwrap();
 }
 
@@ -150,7 +150,7 @@ fn all_seven_guard_axes_are_mandatory_and_compared_to_stored_state() {
         }
         // Simulate same-generation contradiction to discriminate guard checks
         // independently from the separate global-generation compare.
-        corrupt_value(&journal, key(STATE, LIMITS).unwrap(), codec::state(&actual, LIMITS).unwrap());
+        corrupt_value(&journal, &key(STATE, LIMITS).unwrap(), &codec::state(&actual, LIMITS).unwrap());
         let before = scratch.bytes();
         assert!(apply(&mut journal, &request).is_err(), "axis {axis}");
         assert_eq!(scratch.bytes(), before);
@@ -163,7 +163,7 @@ fn stale_generation_and_forged_prior_receipt_cannot_finalize_publication() {
     let scratch = Scratch::new(); let (mut journal, request) = scratch.ready();
     let mut forged = request.clone(); forged.prior_commit.command_digest = Blake3Digest32::from_bytes([90; 32]);
     assert_eq!(apply(&mut journal, &forged), Err(ControlError::OperationConflict));
-    journal.transact(ControlMutation::new(MutationId([20; 32]), digest(), 6, vec![ControlWrite {
+    journal.transact(&ControlMutation::new(MutationId([20; 32]), digest(), 6, vec![ControlWrite {
         key: key(b"unrelated", LIMITS).unwrap(), value: ControlValue::new(ControlRecordClass::State, b"fixture".to_vec(), LIMITS).unwrap(),
     }], vec![])).unwrap();
     assert_eq!(apply(&mut journal, &request), Err(ControlError::TransactionConflict));
@@ -260,10 +260,10 @@ fn missing_receipt_or_visibility_and_fake_committed_intent_fail_reopen() {
             apply(&mut journal, &request).unwrap();
             let removed = if kind == 0 { key(STATE, LIMITS).unwrap() }
                 else { id_key(RECEIPTS, request.receipt.publication_receipt_id.as_bytes(), LIMITS).unwrap() };
-            journal.transact(ControlMutation::new(MutationId([21; 32]), digest(), 7, vec![], vec![removed])).unwrap();
+            journal.transact(&ControlMutation::new(MutationId([21; 32]), digest(), 7, vec![], vec![removed])).unwrap();
         } else {
             let mut committed = request.intent.clone(); committed.state = PublicationIntentState::ControlCommitted;
-            corrupt_value(&journal, key(super::super::KEY, LIMITS).unwrap(), intent_codec::encode(&committed, LIMITS).unwrap());
+            corrupt_value(&journal, &key(super::super::KEY, LIMITS).unwrap(), &intent_codec::encode(&committed, LIMITS).unwrap());
         }
         assert!(journal.read_publication_visibility(&context(false)).is_err());
         assert!(journal.load_unresolved_publication(&context(false)).is_err());
@@ -393,7 +393,7 @@ fn an_intent_cannot_reserve_a_skipped_epoch_or_echo_stale_guards() {
             target_epoch: Epoch::new(if bad_epoch { 2 } else { 1 }).unwrap(),
             prepared_manifest_ref: reference("prepared"), owner_source_membership_access_guards: guards,
             state: PublicationIntentState::Prepared };
-        let update = PublicationIntentUpdate::begin(MutationId([2; 32]), digest(), 1, prepared).unwrap();
+        let update = PublicationIntentUpdate::begin(MutationId([2; 32]), digest(), 1, &prepared).unwrap();
         assert_eq!(journal.persist_publication_intent(&update, &context(false)).unwrap_err().control_error(), ControlError::GenerationMismatch);
         assert_eq!(journal.verify().unwrap().generation, 1);
     }

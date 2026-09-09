@@ -87,6 +87,12 @@ impl PersistentControlJournal {
     /// The caller creates the file exclusively and keeps the external owner
     /// guard alive. This method does not replace an existing database. Failure
     /// after initialization may have started requires inspection/reopening.
+    ///
+    /// # Errors
+    /// Returns `SchemaUnsupported`/`BudgetExceeded` for a rejected identity or
+    /// limits preflight, `StoreCorrupt` for a non-empty file, `StoreUnavailable`
+    /// for I/O failure, or `CommitOutcomeUnknown` once native initialization
+    /// may have started.
     pub fn create(file: File, identity: JournalIdentity, limits: JournalLimits) -> Result<Self, ControlError> {
         Self::create_checked(file, identity, limits, &Unscoped)
     }
@@ -97,6 +103,12 @@ impl PersistentControlJournal {
     /// owner uses the explicit `advance_owner` handoff, not a guessed epoch.
     /// redb may recover its own unclean transaction state; this adapter never
     /// invokes forced integrity repair or invents missing application records.
+    ///
+    /// # Errors
+    /// Returns `IdentityMismatch`/`SchemaMismatch`/`SchemaUnsupported` for a
+    /// foreign or unsupported database, `StoreCorrupt` for contradictory
+    /// metadata, `StoreQuarantined` for a durable hold, `StoreUnavailable` for
+    /// I/O failure, or `CommitOutcomeUnknown` after native open may have run.
     pub fn open(file: File, identity: JournalIdentity, limits: JournalLimits) -> Result<Self, ControlError> {
         Self::open_checked(file, identity, limits, &Unscoped)
     }
@@ -108,6 +120,11 @@ impl PersistentControlJournal {
     /// and operation receipts are preserved. An already-current target is an
     /// idempotent readback. On failure this handle is consumed; after a possible
     /// write, inspect the exact prior/intended identities before reopening.
+    ///
+    /// # Errors
+    /// Returns `IdentityMismatch` for a skipped epoch or changed immutable
+    /// binding, `StoreQuarantined` while blocked or pending, `StoreCorrupt` for
+    /// contradictory state, or `CommitOutcomeUnknown` after write dispatch.
     pub fn advance_owner(self, next: JournalIdentity) -> Result<Self, ControlError> {
         self.advance_owner_checked(next, &Unscoped)
     }
@@ -126,17 +143,31 @@ impl PersistentControlJournal {
     pub const fn requires_recovery(&self) -> bool { self.pending.is_some() }
 
     /// Reads a coherent bounded snapshot using a read-only database transaction.
+    ///
+    /// # Errors
+    /// Returns `StoreQuarantined` while blocked, `StoreCorrupt` for
+    /// contradictory records, or `StoreUnavailable` for storage failure.
     pub fn read_snapshot(&self) -> Result<JournalReadSnapshot, ControlError> {
         self.read_snapshot_checked(&Unscoped)
     }
 
     /// Rebuilds the shared immutable snapshot from committed disk state.
+    ///
+    /// # Errors
+    /// Returns `StoreQuarantined` while blocked, `StoreCorrupt` or
+    /// `SnapshotRebuildFailed` for contradictory state, or `StoreUnavailable`
+    /// for storage failure.
     pub fn control_snapshot(&self) -> Result<ControlSnapshot, ControlError> {
         self.control_snapshot_checked(&Unscoped)
     }
 
     /// Publishes only after exact current durable receipt/readback verification.
     /// Failure suspends publisher admission until verified disk recovery.
+    ///
+    /// # Errors
+    /// Returns `StoreQuarantined` or `CommitOutcomeUnknown` while blocked or
+    /// after a possible write, `OperationConflict`/`StoreCorrupt` for a stale
+    /// or contradictory receipt, or `StoreUnavailable` for storage failure.
     pub fn publish_committed_snapshot(
         &self,
         receipt: &ControlCommitReceipt,
@@ -147,6 +178,11 @@ impl PersistentControlJournal {
 
     /// Verifies and republishes current disk state without replaying a mutation.
     /// An empty initialized journal has no commit receipt and returns `None`.
+    ///
+    /// # Errors
+    /// Returns `StoreQuarantined` or `CommitOutcomeUnknown` while blocked or
+    /// after a possible write, `StoreCorrupt` for contradictory state, or
+    /// `StoreUnavailable` for storage failure.
     pub fn recover_snapshot_publication(
         &self,
         publisher: &mut ControlSnapshotPublisher,
@@ -156,6 +192,11 @@ impl PersistentControlJournal {
 
     /// Verifies exact tables, metadata, records and the complete bounded receipt ledger.
     /// This is an application consistency check, not physical-media qualification.
+    ///
+    /// # Errors
+    /// Returns `StoreQuarantined` while blocked, `StoreCorrupt` or
+    /// `SchemaMismatch` for contradictory metadata, or `StoreUnavailable` for
+    /// storage failure.
     pub fn verify(&self) -> Result<JournalReadSnapshot, ControlError> {
         self.verify_checked(&Unscoped)
     }
@@ -167,7 +208,13 @@ impl PersistentControlJournal {
     /// operations until `recover_transaction` resolves the exact request.
     /// Normal mutation planning/readback touches only the command's keys. Full
     /// consistency scans remain explicit and run when the journal is opened.
-    pub fn transact(&mut self, mutation: ControlMutation, ) -> Result<ControlCommitReceipt, ControlError> {
+    ///
+    /// # Errors
+    /// Returns `StoreQuarantined` while blocked, `TransactionConflict` or
+    /// `OperationConflict` for stale or duplicate requests, `BudgetExceeded`
+    /// for bound violations, `StoreCorrupt` for contradictory state, or
+    /// `CommitOutcomeUnknown` after a possible write.
+    pub fn transact(&mut self, mutation: &ControlMutation, ) -> Result<ControlCommitReceipt, ControlError> {
         self.transact_inner(mutation, Boundary::Normal)
     }
 
@@ -175,11 +222,16 @@ impl PersistentControlJournal {
     ///
     /// A historical committed receipt is not a claim that its values remain
     /// current after later transactions. The ledger is not pruned by this adapter.
+    ///
+    /// # Errors
+    /// Returns `StoreQuarantined` while locally blocked, `StoreCorrupt` for a
+    /// contradictory ledger, `StoreUnavailable` for storage failure, or
+    /// `CommitOutcomeUnknown` when inspection itself is interrupted.
     pub fn recover_transaction(&mut self, mutation: &ControlMutation) -> Result<CommitRecoveryDecision, ControlError> {
         self.recover_transaction_checked(mutation, &Unscoped)
     }
 
-    fn ensure_available(&self) -> Result<(), ControlError> {
+    const fn ensure_available(&self) -> Result<(), ControlError> {
         if self.quarantined || self.pending.is_some() { Err(ControlError::StoreQuarantined) } else { Ok(()) }
     }
 
@@ -187,13 +239,13 @@ impl PersistentControlJournal {
         verify_tables(read)?;
         let meta = read.open_table(META).map_err(map_table_error)?;
         quarantine::require_unquarantined(&meta)?;
-        if meta.len().map_err(map_storage_error)? != 1 { return Err(ControlError::StoreCorrupt); }
-        let bytes = meta.get("header").map_err(map_storage_error)?.ok_or(ControlError::StoreCorrupt)?;
+        if meta.len().map_err(|error| map_storage_error(&error))? != 1 { return Err(ControlError::StoreCorrupt); }
+        let bytes = meta.get("header").map_err(|error| map_storage_error(&error))?.ok_or(ControlError::StoreCorrupt)?;
         let header = Header::decode(bytes.value(), self.identity, self.limits)?;
         let records = read.open_table(RECORDS).map_err(map_table_error)?;
         let operations = read.open_table(OPERATIONS).map_err(map_table_error)?;
-        if records.len().map_err(map_storage_error)? != header.records
-            || operations.len().map_err(map_storage_error)? != header.operations
+        if records.len().map_err(|error| map_storage_error(&error))? != header.records
+            || operations.len().map_err(|error| map_storage_error(&error))? != header.operations
         { return Err(ControlError::StoreCorrupt); }
         Ok(header)
     }
@@ -207,9 +259,9 @@ impl PersistentControlJournal {
         let table = read.open_table(RECORDS).map_err(map_table_error)?;
         let mut records = Vec::new();
         let mut total = 0_u64;
-        for row in table.iter().map_err(map_storage_error)? {
+        for row in table.iter().map_err(|error| map_storage_error(&error))? {
             check.check(Point::ReadRecord)?;
-            let (key, value) = row.map_err(map_storage_error)?;
+            let (key, value) = row.map_err(|error| map_storage_error(&error))?;
             if records.len() >= self.limits.max_records || key.value().len() > self.limits.max_key_bytes {
                 return Err(ControlError::StoreCorrupt);
             }
@@ -241,9 +293,9 @@ impl PersistentControlJournal {
         let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
         let mut generations = BTreeSet::new();
         let mut total = 0_u64;
-        for row in table.iter().map_err(map_storage_error)? {
+        for row in table.iter().map_err(|error| map_storage_error(&error))? {
             check.check(Point::ReadOperation)?;
-            let (id, bytes) = row.map_err(map_storage_error)?;
+            let (id, bytes) = row.map_err(|error| map_storage_error(&error))?;
             if generations.len() >= self.limits.max_operation_records { return Err(ControlError::StoreCorrupt); }
             let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
             let operation = StoredOperation::decode(bytes.value(), id, header.generation, self.limits)?;
@@ -258,11 +310,11 @@ impl PersistentControlJournal {
         Ok(snapshot)
     }
 
-    fn transact_inner(&mut self, mutation: ControlMutation, boundary: Boundary) -> Result<ControlCommitReceipt, ControlError> {
+    fn transact_inner(&mut self, mutation: &ControlMutation, boundary: Boundary) -> Result<ControlCommitReceipt, ControlError> {
         self.transact_checked(mutation, boundary, &Unscoped)
     }
 
-    fn transact_checked(&mut self, mutation: ControlMutation, boundary: Boundary, check: &dyn Check) -> Result<ControlCommitReceipt, ControlError> {
+    fn transact_checked(&mut self, mutation: &ControlMutation, boundary: Boundary, check: &dyn Check) -> Result<ControlCommitReceipt, ControlError> {
         let result = transaction::execute(self, mutation, boundary, check);
         if result.as_ref().err().is_some_and(|error| is_corruption(*error)) {
             self.quarantined = true;
@@ -281,28 +333,28 @@ fn validate_identity(identity: JournalIdentity) -> Result<JournalIdentity, Contr
 }
 
 fn verify_tables(read: &ReadTransaction) -> Result<(), ControlError> {
-    let mut names = read.list_tables().map_err(map_storage_error)?
+    let mut names = read.list_tables().map_err(|error| map_storage_error(&error))?
         .take(4).map(|table| table.name().to_owned()).collect::<Vec<_>>();
     names.sort();
     if !names.iter().map(String::as_str).eq(["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1"])
-        || read.list_multimap_tables().map_err(map_storage_error)?.next().is_some()
+        || read.list_multimap_tables().map_err(|error| map_storage_error(&error))?.next().is_some()
     { return Err(ControlError::SchemaMismatch); }
     Ok(())
 }
 
 fn operation_from(read: &ReadTransaction, id: MutationId, header: &Header, limits: JournalLimits) -> Result<Option<StoredOperation>, ControlError> {
     let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
-    table.get(id.0.as_slice()).map_err(map_storage_error)?
+    table.get(id.0.as_slice()).map_err(|error| map_storage_error(&error))?
         .map(|bytes| StoredOperation::decode(bytes.value(), id, header.generation, limits)).transpose()
 }
 
-fn is_corruption(error: ControlError) -> bool {
+const fn is_corruption(error: ControlError) -> bool {
     matches!(error, ControlError::StoreCorrupt | ControlError::IdentityMismatch
         | ControlError::SchemaUnsupported | ControlError::SchemaMismatch
         | ControlError::ForbiddenControlPayload)
 }
 
-fn map_storage_error(error: StorageError) -> ControlError {
+const fn map_storage_error(error: &StorageError) -> ControlError {
     match error {
         StorageError::Corrupted(_) => ControlError::StoreCorrupt,
         StorageError::ValueTooLarge(_) => ControlError::BudgetExceeded,
@@ -312,7 +364,7 @@ fn map_storage_error(error: StorageError) -> ControlError {
 
 fn map_table_error(error: redb::TableError) -> ControlError {
     match error {
-        redb::TableError::Storage(error) => map_storage_error(error),
+        redb::TableError::Storage(error) => map_storage_error(&error),
         redb::TableError::TableTypeMismatch { .. }
         | redb::TableError::TableIsMultimap(_)
         | redb::TableError::TableIsNotMultimap(_)
@@ -331,6 +383,11 @@ enum Boundary {
     #[cfg(test)] ExitAfterCommit,
 }
 impl Boundary {
+    // `Result` is load-bearing: `cfg(test)` fault-injection arms return
+    // `Err` (`StoreUnavailable`/`CommitOutcomeUnknown`) to exercise
+    // `OUTCOME_UNKNOWN` recovery; dropping it would erase those paths.
+    // These arms also call `process::exit`, so the functions cannot be `const`.
+    #[allow(clippy::unnecessary_wraps, clippy::missing_const_for_fn)]
     fn before_commit(self) -> Result<(), ControlError> {
         match self {
             #[cfg(test)] Self::BeforeCommit => Err(ControlError::StoreUnavailable),
@@ -338,6 +395,7 @@ impl Boundary {
             _ => Ok(()),
         }
     }
+    #[allow(clippy::unnecessary_wraps, clippy::missing_const_for_fn)]
     fn after_commit(self) -> Result<(), ControlError> {
         match self {
             #[cfg(test)] Self::LostAcknowledgement => Err(ControlError::CommitOutcomeUnknown),

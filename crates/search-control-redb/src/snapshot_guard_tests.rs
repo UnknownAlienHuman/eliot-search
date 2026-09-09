@@ -37,7 +37,7 @@ fn snapshot(journal: &ControlJournal) -> ControlSnapshot {
 
 fn populated() -> (ControlJournal, ControlCommitReceipt, ControlSnapshotPublisher) {
     let mut journal = model(identity());
-    let receipt = journal.transact(mutation(1, 0, b"READY")).unwrap();
+    let receipt = journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     publisher.publish_snapshot_after_commit(&receipt, snapshot(&journal)).unwrap();
     (journal, receipt, publisher)
@@ -51,7 +51,7 @@ fn unchanged(publisher: &ControlSnapshotPublisher, previous: &Arc<ControlSnapsho
 fn delayed_publication_cannot_roll_back_a_newer_generation() {
     let (mut journal, first, mut publisher) = populated();
     let old = snapshot(&journal);
-    let second = journal.transact(mutation(2, 1, b"STOPPED")).unwrap();
+    let second = journal.transact(&mutation(2, 1, b"STOPPED")).unwrap();
     publisher.publish_snapshot_after_commit(&second, snapshot(&journal)).unwrap();
     let current = publisher.current().unwrap();
     assert_eq!(publisher.publish_snapshot_after_commit(&first, old), Err(ControlError::SnapshotPublicationFailed));
@@ -99,10 +99,10 @@ fn immutable_identity_fields_cannot_be_substituted() {
 fn a_larger_generation_cannot_reinstate_an_older_owner() {
     let next = JournalIdentity { owner_epoch: OwnerEpoch::new(2).unwrap(), ..identity() };
     let mut journal = model(next);
-    let first = journal.transact(mutation(1, 0, b"READY")).unwrap();
+    let first = journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     publisher.publish_snapshot_after_commit(&first, snapshot(&journal)).unwrap();
-    let second = journal.transact(mutation(2, 1, b"STOPPED")).unwrap();
+    let second = journal.transact(&mutation(2, 1, b"STOPPED")).unwrap();
     let mut stale = snapshot(&journal);
     stale.identity = identity();
     let before = publisher.current().unwrap();
@@ -166,8 +166,8 @@ fn actual_redb_publication_rejects_another_root_even_with_a_real_commit() {
     let mut first = first_root.create(identity());
     let second_identity = JournalIdentity { data_root_id: DataRootId::from_bytes([7; 16]), ..identity() };
     let mut second = second_root.create(second_identity);
-    let first_receipt = first.transact(mutation(1, 0, b"READY")).unwrap();
-    let second_receipt = second.transact(mutation(1, 0, b"READY")).unwrap();
+    let first_receipt = first.transact(&mutation(1, 0, b"READY")).unwrap();
+    let second_receipt = second.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     first.publish_committed_snapshot(&first_receipt, &mut publisher).unwrap();
     let current = publisher.current().unwrap();
@@ -180,7 +180,7 @@ fn actual_redb_publication_rejects_another_root_even_with_a_real_commit() {
 fn actual_redb_owner_handoff_keeps_data_generation_and_replay_valid() {
     let directory = Scratch::new();
     let mut journal = directory.create(identity());
-    let receipt = journal.transact(mutation(1, 0, b"READY")).unwrap();
+    let receipt = journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
     let next = JournalIdentity { owner_epoch: OwnerEpoch::new(2).unwrap(), ..identity() };
@@ -195,7 +195,7 @@ fn actual_redb_owner_handoff_keeps_data_generation_and_replay_valid() {
 fn moving_a_suspended_owner_keeps_the_fence_but_immutable_arcs_remain_cloneable() {
     let directory = Scratch::new();
     let mut journal = directory.create(identity());
-    let receipt = journal.transact(mutation(1, 0, b"READY")).unwrap();
+    let receipt = journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
     let historical = Arc::clone(&publisher.current().unwrap());

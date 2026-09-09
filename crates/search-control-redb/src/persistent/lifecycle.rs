@@ -105,7 +105,7 @@ impl PersistentControlJournal {
                 check.check(Point::StageRecord)?;
                 let mut meta = write.open_table(META).map_err(map_table_error)?;
                 let header = Header::empty(identity).encode();
-                meta.insert("header", header.as_slice()).map_err(map_storage_error)?;
+                meta.insert("header", header.as_slice()).map_err(|error| map_storage_error(&error))?;
                 drop(meta);
                 check.check(Point::StageRecord)?;
                 drop(write.open_table(RECORDS).map_err(map_table_error)?);
@@ -179,14 +179,14 @@ impl PersistentControlJournal {
             check.check(Point::StageRecord)?;
             let mut meta = write.open_table(META).map_err(map_table_error)?;
             {
-                let bytes = meta.get("header").map_err(map_storage_error)?
+                let bytes = meta.get("header").map_err(|error| map_storage_error(&error))?
                     .ok_or(ControlError::StoreCorrupt)?;
                 if Header::decode(bytes.value(), self.identity, self.limits)? != before {
                     return Err(ControlError::TransactionConflict);
                 }
             }
             let after = Header { identity: next, ..before }.encode();
-            meta.insert("header", after.as_slice()).map_err(map_storage_error)?;
+            meta.insert("header", after.as_slice()).map_err(|error| map_storage_error(&error))?;
             drop(meta);
             check.check(Point::BeforeCommit)
         })();
@@ -210,7 +210,7 @@ pub(super) fn open_existing_database_checked(
 ) -> Result<Database, ControlError> {
     preflight(&file, identity, limits, false, check)?;
     check.check(Point::BeforeOpen)?;
-    Database::builder().set_cache_size(CACHE_BYTES).create_file(file).map_err(open_error)
+    Database::builder().set_cache_size(CACHE_BYTES).create_file(file).map_err(|error| open_error(&error))
 }
 
 fn preflight(
@@ -230,6 +230,9 @@ fn preflight(
     check.check(Point::Validated)
 }
 
+// Test-only work accounting is constructed here, so this cannot be `const`
+// under `cfg(test)` despite an empty-looking body in other configurations.
+#[allow(clippy::missing_const_for_fn)]
 fn from_database(
     database: Database,
     identity: JournalIdentity,
@@ -251,7 +254,7 @@ fn verify_ready(journal: &PersistentControlJournal, check: &dyn Check) -> Result
     check.check(Point::LifecycleComplete)
 }
 
-fn open_error(error: DatabaseError) -> ControlError {
+const fn open_error(error: &DatabaseError) -> ControlError {
     match error {
         DatabaseError::DatabaseAlreadyOpen => ControlError::StoreUnavailable,
         DatabaseError::UpgradeRequired(_) => ControlError::MigrationUnverified,

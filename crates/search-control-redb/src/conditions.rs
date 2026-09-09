@@ -76,7 +76,7 @@ impl ConditionalControlMutation {
     }
 }
 
-pub(crate) fn validate_conditions(
+pub fn validate_conditions(
     mutation: &ControlMutation,
     conditions: &[ControlRecordCondition],
     limits: JournalLimits,
@@ -105,8 +105,8 @@ pub(crate) fn validate_conditions(
 }
 
 /// Bind preconditions to the actual existing request fingerprint, not to a
-/// caller's declared digest. This private SHA-256 is never a Blake3Digest32.
-pub(crate) fn bind_conditions(
+/// caller's declared digest. This private SHA-256 is never a `Blake3Digest32`.
+pub fn bind_conditions(
     request_sha256: [u8; 32],
     conditions: &[ControlRecordCondition],
     mut checkpoint: impl FnMut() -> Result<(), ControlError>,
@@ -142,7 +142,7 @@ fn length(value: usize) -> Result<[u8; 8], ControlError> {
 
 // Fixed tags belong to this conditional-request preimage, not enum discriminants
 // or a change to the persisted value codec. Do not use Debug/JSON for identity.
-fn class_tag(class: ControlRecordClass) -> u8 {
+const fn class_tag(class: ControlRecordClass) -> u8 {
     match class {
         ControlRecordClass::Identity => 1,
         ControlRecordClass::Revision => 2,

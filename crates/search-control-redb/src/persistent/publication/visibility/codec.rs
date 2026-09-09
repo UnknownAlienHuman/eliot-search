@@ -1,5 +1,8 @@
 //! Strict private codecs for technical refs; no point lists, bodies or JSON identity.
-use super::*;
+use super::{PublicationVisibilityState, JournalLimits, ControlValue, ControlError, ControlRecordClass,
+    CollectionGenerationId, Blake3Digest32, PublicationGuards, PublicationReceiptId, MutationId,
+    PublicationIntent, PublicationReceipt, VisibleEpochCommit, intent_codec, NonZeroRevision,
+    PublicationIntentState, ReceiptRef, PublicationSourceShadow, SourceRevisionId, Epoch};
 use search_contracts::{MAX_OPAQUE_REF_BYTES, OwnerEpoch};
 
 const STATE_MAGIC: &[u8; 8] = b"ELIVIS01";
@@ -27,7 +30,7 @@ pub(super) fn state(state: &PublicationVisibilityState, limits: JournalLimits) -
 }
 
 pub(super) fn read_state(value: &ControlValue) -> Result<PublicationVisibilityState, ControlError> {
-    let mut input = Input::new(value, ControlRecordClass::Revision, STATE_MAGIC)?;
+    let mut input = Input::new(value, ControlRecordClass::Revision, *STATE_MAGIC)?;
     let collection_generation_id = CollectionGenerationId::from_bytes(input.take()?);
     let schema_identity_digest = Blake3Digest32::from_bytes(input.take()?);
     let visible_epoch = input.epoch()?;
@@ -78,7 +81,7 @@ pub(super) fn receipt(request: &VisibleEpochCommit, limits: JournalLimits) -> Re
 }
 
 pub(super) fn read_receipt(value: &ControlValue) -> Result<BoundReceipt, ControlError> {
-    let mut input = Input::new(value, ControlRecordClass::Receipt, RECEIPT_MAGIC)?;
+    let mut input = Input::new(value, ControlRecordClass::Receipt, *RECEIPT_MAGIC)?;
     let operation_id = MutationId(input.take()?);
     let collection_generation_id = CollectionGenerationId::from_bytes(input.take()?);
     let schema_identity_digest = Blake3Digest32::from_bytes(input.take()?);
@@ -103,7 +106,7 @@ pub(super) fn read_receipt(value: &ControlValue) -> Result<BoundReceipt, Control
         || committed_shadow_generation.saturating_sub(intent.owner_source_membership_access_guards.shadow_generation) > 1 {
         return Err(ControlError::StoreCorrupt);
     }
-    Ok(BoundReceipt { operation_id, collection_generation_id, schema_identity_digest, committed_shadow_generation, intent, publication })
+    Ok(BoundReceipt { operation_id, collection_generation_id, schema_identity_digest, intent, committed_shadow_generation, publication })
 }
 
 pub(super) fn manifest(reference_value: &ReceiptRef, limits: JournalLimits) -> Result<ControlValue, ControlError> {
@@ -111,7 +114,7 @@ pub(super) fn manifest(reference_value: &ReceiptRef, limits: JournalLimits) -> R
     ControlValue::new(ControlRecordClass::Snapshot, out, limits)
 }
 pub(super) fn read_manifest(value: &ControlValue) -> Result<ReceiptRef, ControlError> {
-    let mut input = Input::new(value, ControlRecordClass::Snapshot, MANIFEST_MAGIC)?;
+    let mut input = Input::new(value, ControlRecordClass::Snapshot, *MANIFEST_MAGIC)?;
     let reference = input.reference()?; input.finish()?; Ok(reference)
 }
 pub(super) fn shadow(value: &PublicationSourceShadow, limits: JournalLimits) -> Result<ControlValue, ControlError> {
@@ -120,7 +123,7 @@ pub(super) fn shadow(value: &PublicationSourceShadow, limits: JournalLimits) -> 
     ControlValue::new(ControlRecordClass::State, out, limits)
 }
 pub(super) fn read_shadow(value: &ControlValue) -> Result<PublicationSourceShadow, ControlError> {
-    let mut input = Input::new(value, ControlRecordClass::State, SHADOW_MAGIC)?;
+    let mut input = Input::new(value, ControlRecordClass::State, *SHADOW_MAGIC)?;
     let value = PublicationSourceShadow { source_revision_id: SourceRevisionId::from_bytes(input.take()?),
         fence_revision: NonZeroRevision::new(input.u64()?).map_err(|_| ControlError::StoreCorrupt)? };
     input.finish()?; Ok(value)
@@ -135,9 +138,9 @@ fn reference(out: &mut Vec<u8>, value: &ReceiptRef) -> Result<(), ControlError> 
 }
 struct Input<'a>(&'a [u8]);
 impl<'a> Input<'a> {
-    fn new(value: &'a ControlValue, class: ControlRecordClass, magic: &[u8; 8]) -> Result<Self, ControlError> {
+    fn new(value: &'a ControlValue, class: ControlRecordClass, magic: [u8; 8]) -> Result<Self, ControlError> {
         let mut input = Self(value.as_bytes());
-        if value.class() != class || &input.take::<8>()? != magic { return Err(ControlError::StoreCorrupt); }
+        if value.class() != class || input.take::<8>()? != magic { return Err(ControlError::StoreCorrupt); }
         Ok(input)
     }
     fn take<const N: usize>(&mut self) -> Result<[u8; N], ControlError> {
@@ -158,5 +161,5 @@ impl<'a> Input<'a> {
         let value = core::str::from_utf8(self.bytes(MAX_OPAQUE_REF_BYTES)?).map_err(|_| ControlError::StoreCorrupt)?;
         ReceiptRef::new(value).map_err(|_| ControlError::StoreCorrupt)
     }
-    fn finish(self) -> Result<(), ControlError> { if self.0.is_empty() { Ok(()) } else { Err(ControlError::StoreCorrupt) } }
+    const fn finish(self) -> Result<(), ControlError> { if self.0.is_empty() { Ok(()) } else { Err(ControlError::StoreCorrupt) } }
 }

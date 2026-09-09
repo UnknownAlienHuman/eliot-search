@@ -1,5 +1,6 @@
 //! Inactive, typed source-mapping imports. This file format is deliberately not
-//! a ControlJournal: it carries no live owner, admission, visibility or H5 receipt.
+//! a `ControlJournal`: it carries no live owner, admission, visibility or H5 receipt.
+//!
 //! The caller owns input exclusion and the admitted output file. Resuming an
 //! incomplete target verifies its entire committed prefix before appending rows.
 
@@ -61,6 +62,10 @@ impl SourceImportBinding {
 }
 
 /// Fully typed, content-free mapping row. No arbitrary bytes or source text field.
+// Fixed wire layout: the four lifecycle flags are positional bits in one
+// encoded flag byte, so they cannot merge into an enum without breaking
+// fixture idempotency.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceImportRow {
     /// Global order in the verified legacy journal.
@@ -189,6 +194,12 @@ impl SourceMappingImport {
     /// Create only in an explicitly new empty regular file. The caller retains
     /// exclusive source/output ownership. Even failed initialization may leave bytes.
     /// Synchronous redb/OS calls are not interrupted by the cooperative deadline.
+    ///
+    /// # Errors
+    /// Returns `BudgetExceeded` for a rejected binding, `StoreCorrupt` for a
+    /// non-empty file, `StoreUnavailable` for I/O failure, `ReadCancelled` for
+    /// an expired deadline, or `CommitOutcomeUnknown` once native creation may
+    /// have started.
     pub fn create(file: File, binding: SourceImportBinding, deadline: Instant) -> Result<Self, ControlError> {
         Self::create_inner(file, binding, None, deadline)
     }
@@ -196,6 +207,13 @@ impl SourceMappingImport {
     /// Create an inactive target bound to a producer-verified content manifest.
     /// The extra immutable META record makes old unbound readers reject this
     /// envelope. The caller publishes it separately, never over a v1 target.
+    ///
+    /// # Errors
+    /// Returns `BudgetExceeded` for a rejected binding, `IdentityMismatch` for
+    /// a manifest bound to another import, `StoreCorrupt` for a non-empty
+    /// file, `StoreUnavailable` for I/O failure, `ReadCancelled` for an
+    /// expired deadline, or `CommitOutcomeUnknown` once native creation may
+    /// have started.
     pub fn create_with_content(file: File, binding: SourceImportBinding,
         content: SourceContentManifest, deadline: Instant,
     ) -> Result<Self, ControlError> {
@@ -241,12 +259,26 @@ impl SourceMappingImport {
     /// and all its source/occurrence indices before accepting any new suffix row.
     /// A sealed target can be verified this way but is never reopened for writes.
     /// Empty, partial-schema, foreign and contradictory targets fail without repair.
+    ///
+    /// # Errors
+    /// Returns `StoreCorrupt` for an empty, partial or contradictory target,
+    /// `SchemaMismatch` for a foreign table layout, `IdentityMismatch` for a
+    /// foreign binding, `StoreUnavailable` for I/O failure, `ReadCancelled`
+    /// for an expired deadline, or `MigrationUnverified` when the committed
+    /// prefix cannot be adopted.
     pub fn resume(file: File, binding: SourceImportBinding, deadline: Instant) -> Result<Self, ControlError> {
         Self::resume_inner(file, binding, None, deadline)
     }
 
     /// Resume only the same source mapping AND exact content-manifest binding.
     /// Neither an old unbound target nor a different content profile is adopted.
+    ///
+    /// # Errors
+    /// Returns `StoreCorrupt` for an empty, partial or contradictory target,
+    /// `SchemaMismatch` for a foreign table layout, `IdentityMismatch` for a
+    /// foreign binding or manifest, `StoreUnavailable` for I/O failure,
+    /// `ReadCancelled` for an expired deadline, or `MigrationUnverified` when
+    /// the committed prefix cannot be adopted.
     pub fn resume_with_content(file: File, binding: SourceImportBinding,
         content: SourceContentManifest, deadline: Instant,
     ) -> Result<Self, ControlError> {
@@ -268,6 +300,13 @@ impl SourceMappingImport {
 
     /// Append one exact mapping event; at most 256 rows are buffered. A batch
     /// atomically updates rows, source/revision references and progress counters.
+    ///
+    /// # Errors
+    /// Returns `InvalidValue` for a malformed row, `TransactionConflict` for an
+    /// out-of-order or duplicate sequence, `StoreQuarantined` after a rejected
+    /// resume comparison, `MigrationUnverified` while a committed prefix is
+    /// still being compared, `ReadCancelled` for an expired deadline, or
+    /// `CommitOutcomeUnknown` after a possible batch write.
     pub fn push(&mut self, row: SourceImportRow, deadline: Instant) -> Result<(), ControlError> {
         check(deadline)?;
         if self.blocked { return Err(ControlError::StoreQuarantined); }
@@ -295,6 +334,13 @@ impl SourceMappingImport {
     /// Seal only after the source compiler has validated its complete input.
     /// The temporary database still requires independent exact-row readback before publication.
     /// This marker completes source mapping only, never canonical H5 or owner cutover.
+    ///
+    /// # Errors
+    /// Returns `TransactionConflict` for incomplete or surplus counts,
+    /// `MigrationUnverified` while a prefix is uncompared or for a mismatched
+    /// sealed readback, `StoreQuarantined` after a rejected comparison,
+    /// `StoreCorrupt` for a contradictory progress record, `ReadCancelled` for
+    /// an expired deadline, or `CommitOutcomeUnknown` after a possible seal write.
     pub fn finish(mut self, expected: SourceImportCounts, deadline: Instant) -> Result<(), ControlError> {
         check(deadline)?;
         if self.blocked { return Err(ControlError::StoreQuarantined); }
@@ -320,7 +366,7 @@ impl SourceMappingImport {
                     .is_none_or(|v| v.value() != self.counts.encode(false))
                 { return Err(ControlError::StoreCorrupt); }
                 let stored_content = meta.get("content_manifest").map_err(|_| ControlError::StoreUnavailable)?;
-                if stored_content.as_ref().map(|value| value.value()) != content_bytes.as_deref() {
+                if stored_content.as_ref().map(redb::AccessGuard::value) != content_bytes.as_deref() {
                     return Err(ControlError::IdentityMismatch);
                 }
                 drop(stored_content);
@@ -353,7 +399,7 @@ impl SourceMappingImport {
                         .is_none_or(|v| v.value() != counts.encode(false))
                 { return Err(ControlError::StoreCorrupt); }
                 let stored_content = meta.get("content_manifest").map_err(|_| ControlError::StoreUnavailable)?;
-                if stored_content.as_ref().map(|value| value.value()) != content_bytes.as_deref() {
+                if stored_content.as_ref().map(redb::AccessGuard::value) != content_bytes.as_deref() {
                     return Err(ControlError::IdentityMismatch);
                 }
                 drop(stored_content);
@@ -412,12 +458,27 @@ pub struct SourceMappingReadback {
 impl SourceMappingReadback {
     /// Open only a sealed existing target with the exact full binding and counts.
     /// Native redb recovery may update the target, never the source catalog.
+    ///
+    /// # Errors
+    /// Returns `TransactionConflict` for rejected counts, `StoreCorrupt` for a
+    /// contradictory target, `SchemaMismatch` for a foreign table layout,
+    /// `IdentityMismatch` for a foreign binding, `MigrationUnverified` for an
+    /// unsealed or short target, `StoreUnavailable` for I/O failure, or
+    /// `ReadCancelled` for an expired deadline.
     pub fn open(file: File, binding: SourceImportBinding, expected: SourceImportCounts, deadline: Instant) -> Result<Self, ControlError> {
         Self::open_inner(file, binding, None, expected, deadline)
     }
 
     /// Compare a sealed target that also binds the exact verified content manifest.
     /// A missing or altered reference cannot be replaced by a successful source-only check.
+    ///
+    /// # Errors
+    /// Returns `TransactionConflict` for rejected counts, `StoreCorrupt` for a
+    /// contradictory target, `SchemaMismatch` for a foreign table layout,
+    /// `IdentityMismatch` for a foreign binding or manifest,
+    /// `MigrationUnverified` for an unsealed or short target,
+    /// `StoreUnavailable` for I/O failure, or `ReadCancelled` for an expired
+    /// deadline.
     pub fn open_with_content(file: File, binding: SourceImportBinding,
         content: SourceContentManifest, expected: SourceImportCounts, deadline: Instant,
     ) -> Result<Self, ControlError> {
@@ -436,11 +497,19 @@ impl SourceMappingReadback {
     }
 
     /// Compare the next compiler row using the same checks as interrupted-import resume.
+    ///
+    /// # Errors
+    /// Returns `TransactionConflict` for an out-of-order row, `StoreCorrupt`
+    /// for a contradictory stored row, or `ReadCancelled` for an expired deadline.
     pub fn compare(&mut self, row: &SourceImportRow, deadline: Instant) -> Result<(), ControlError> {
         self.prefix.compare(row, deadline)
     }
 
     /// A complete readback requires all rows and all five accounting dimensions.
+    ///
+    /// # Errors
+    /// Returns `MigrationUnverified` for a short readback or `ReadCancelled`
+    /// for an expired deadline.
     pub fn finish(self, deadline: Instant) -> Result<(), ControlError> {
         self.prefix.finish(deadline)
     }
@@ -515,7 +584,7 @@ fn open_import(file: File, binding: SourceImportBinding, content: Option<SourceC
             || meta.get("binding").map_err(|_| ControlError::StoreCorrupt)?.is_none_or(|v| v.value() != encoded)
         { return Err(ControlError::StoreCorrupt); }
         let stored_content = meta.get("content_manifest").map_err(|_| ControlError::StoreCorrupt)?;
-        if stored_content.as_ref().map(|value| value.value()) != content_bytes.as_deref() {
+        if stored_content.as_ref().map(redb::AccessGuard::value) != content_bytes.as_deref() {
             return Err(ControlError::IdentityMismatch);
         }
         let progress = meta.get("progress").map_err(|_| ControlError::StoreCorrupt)?.ok_or(ControlError::StoreCorrupt)?;
@@ -574,7 +643,7 @@ fn validate_successor(previous: &[u8], next: &SourceImportRow) -> Result<(), Con
     if previous.len() != ROW_BYTES { return Err(ControlError::StoreCorrupt); }
     let opens = !next.retires_source && (previous[81] & 4 != 0 || hash_field(previous, 2)? != next.legacy_revision.as_bytes());
     if previous.get(..16) != Some(next.source.as_bytes().as_slice())
-        || next.previous_revision.as_ref().map(SourceRevisionId::as_bytes).map(|v| v.as_slice()) != previous.get(16..32)
+        || next.previous_revision.as_ref().map(SourceRevisionId::as_bytes).map(<[u8; 16]>::as_slice) != previous.get(16..32)
         || next.source_event != number(previous, 57)?.checked_add(1).ok_or(ControlError::GenerationExhausted)?
         || next.occurrence != number(previous, 49)?.checked_add(u64::from(opens)).ok_or(ControlError::GenerationExhausted)?
         || next.opens_revision != opens || (next.retires_source && previous[81] & 4 != 0)

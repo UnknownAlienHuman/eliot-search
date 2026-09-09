@@ -1,7 +1,13 @@
 //! Normal committed-epoch succession through the existing conditional journal.
 //! Aborted, skipped and invalidation-only epochs require separate recovery.
 
-use super::*;
+use super::{MutationId, Blake3Digest32, PublicationIntent, PublicationVisibilityState, fmt,
+    ControlError, PublicationIntentState, JournalLimits, ConditionalControlMutation, key,
+    ControlWrite, intent_codec, ControlRecordCondition, STATE, codec, ControlMutation,
+    PersistentControlJournal, CancellationProbe, OperationContext, ControlCommitReceipt,
+    ControlCallError, Budget, Boundary, CommitRecoveryDecision, Check, Point, require_schema,
+    operation_from, RECEIPTS, PUBLICATION_VISIBILITY_SCHEMA_VERSION, is_corruption,
+    JournalReadSnapshot};
 use crate::ControlSnapshotPublisher;
 
 /// Exact command reserving the next intent after a fully committed publication.
@@ -29,7 +35,7 @@ impl fmt::Debug for PublicationSuccessor {
 }
 
 impl PublicationSuccessor {
-    /// Reserves the exact next epoch of an ordinary CONTROL_COMMITTED intent.
+    /// Reserves the exact next epoch of an ordinary `CONTROL_COMMITTED` intent.
     /// All inputs are revalidated against storage by the executing journal.
     ///
     /// # Errors
@@ -41,7 +47,7 @@ impl PublicationSuccessor {
         expected_generation: u64,
         previous: PublicationIntent,
         visibility: PublicationVisibilityState,
-        prepared: PublicationIntent,
+        prepared: &PublicationIntent,
     ) -> Result<Self, ControlError> {
         expected_generation.checked_add(1).ok_or(ControlError::GenerationExhausted)?;
         let next_epoch = previous.target_epoch.checked_next()
@@ -59,12 +65,12 @@ impl PublicationSuccessor {
             return Err(ControlError::InvalidValue);
         }
         let next = search_domain::transition_publication(
-            &prepared, PublicationIntentState::IntentDurable,
+            prepared, PublicationIntentState::IntentDurable,
         ).map_err(|_| ControlError::InvalidValue)?;
         Ok(Self { operation_id, command_digest, expected_generation, previous, visibility, next })
     }
 
-    /// Exact intent to be made durable, without advancing VisibleEpoch.
+    /// Exact intent to be made durable, without advancing `VisibleEpoch`.
     #[must_use]
     pub const fn intent(&self) -> &PublicationIntent { &self.next }
 
@@ -91,7 +97,7 @@ impl PersistentControlJournal {
     /// The previous visibility, receipt and published snapshot are checked first.
     /// The existing CAS then compares the exact previous intent/visibility and
     /// control generation inside the write transaction. Only the intent changes;
-    /// VisibleEpoch, manifests, shadows and old receipts are retained unchanged.
+    /// `VisibleEpoch`, manifests, shadows and old receipts are retained unchanged.
     ///
     /// # Errors
     /// An unpublished, suspended, foreign or model-backed snapshot cannot permit

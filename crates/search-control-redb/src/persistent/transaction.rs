@@ -18,25 +18,28 @@ use super::{
 
 pub(super) fn execute(
     journal: &mut PersistentControlJournal,
-    mutation: ControlMutation,
+    mutation: &ControlMutation,
     boundary: Boundary,
     check: &dyn Check,
 ) -> Result<ControlCommitReceipt, ControlError> {
     execute_with_conditions(journal, mutation, &[], boundary, check)
 }
 
+// One atomic fence protocol: staging, pending-fence dispatch and exact readback
+// must stay in a single review unit, so this entrypoint keeps its length.
+#[allow(clippy::too_many_lines)]
 pub(super) fn execute_with_conditions(
     journal: &mut PersistentControlJournal,
-    mutation: ControlMutation,
+    mutation: &ControlMutation,
     conditions: &[ControlRecordCondition],
     boundary: Boundary,
     check: &dyn Check,
 ) -> Result<ControlCommitReceipt, ControlError> {
     journal.ensure_available()?;
     check.check(Point::Start)?;
-    let changed_keys = validate_mutation(&mutation, journal.limits)?;
-    validate_conditions(&mutation, conditions, journal.limits, || check.check(Point::PlanRecord))?;
-    let fingerprint = bind_conditions(request_fingerprint(journal.identity, &mutation)?, conditions,
+    let changed_keys = validate_mutation(mutation, journal.limits)?;
+    validate_conditions(mutation, conditions, journal.limits, || check.check(Point::PlanRecord))?;
+    let fingerprint = bind_conditions(request_fingerprint(journal.identity, mutation)?, conditions,
         || check.check(Point::PlanRecord))?;
     check.check(Point::Validated)?;
     let read = journal.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
@@ -46,7 +49,7 @@ pub(super) fn execute_with_conditions(
         if previous.request_sha256 != fingerprint {
             return Err(ControlError::OperationConflict);
         }
-        verify_replay(journal, &read, &before, &previous.receipt, &mutation, &changed_keys, check)?;
+        verify_replay(journal, &read, &before, &previous.receipt, mutation, &changed_keys, check)?;
         if previous.receipt.after_generation == before.generation {
             verify_conditional_poststate(journal, &read, conditions, &changed_keys, check)?;
         }
@@ -64,7 +67,7 @@ pub(super) fn execute_with_conditions(
         let records = read.open_table(RECORDS).map_err(map_table_error)?;
         verify_conditions(journal, &records, conditions, check, Point::PlanRecord)?;
     }
-    let mut after = plan_records(journal, &read, &before, &mutation, &changed_keys, check)?;
+    let mut after = plan_records(journal, &read, &before, mutation, &changed_keys, check)?;
     after.generation = before.generation.checked_add(1)
         .ok_or(ControlError::GenerationExhausted)?;
     after.operations = after.generation;
@@ -92,7 +95,7 @@ pub(super) fn execute_with_conditions(
         check.check(Point::BeforeWrite)?;
         let mut meta = write.open_table(META).map_err(map_table_error)?;
         {
-            let stored = meta.get("header").map_err(map_storage_error)?
+            let stored = meta.get("header").map_err(|error| map_storage_error(&error))?
                 .ok_or(ControlError::StoreCorrupt)?;
             if Header::decode(stored.value(), journal.identity, journal.limits)? != before {
                 return Err(ControlError::TransactionConflict);
@@ -101,7 +104,7 @@ pub(super) fn execute_with_conditions(
         let mut records = write.open_table(RECORDS).map_err(map_table_error)?;
         let mut operations = write.open_table(OPERATIONS).map_err(map_table_error)?;
         if operations.get(mutation.id().0.as_slice())
-            .map_err(map_storage_error)?.is_some()
+            .map_err(|error| map_storage_error(&error))?.is_some()
         {
             return Err(ControlError::OperationConflict);
         }
@@ -112,18 +115,18 @@ pub(super) fn execute_with_conditions(
         verify_conditions(journal, &records, conditions, check, Point::StageRecord)?;
         for key in mutation.deletes() {
             check.check(Point::StageRecord)?;
-            records.remove(key.as_bytes()).map_err(map_storage_error)?;
+            records.remove(key.as_bytes()).map_err(|error| map_storage_error(&error))?;
         }
         for change in mutation.writes() {
             check.check(Point::StageRecord)?;
             let value = encode_value(&change.value);
             records.insert(change.key.as_bytes(), value.as_slice())
-                .map_err(map_storage_error)?;
+                .map_err(|error| map_storage_error(&error))?;
         }
         operations.insert(mutation.id().0.as_slice(), operation_bytes.as_slice())
-            .map_err(map_storage_error)?;
+            .map_err(|error| map_storage_error(&error))?;
         let header = after.encode();
-        meta.insert("header", header.as_slice()).map_err(map_storage_error)?;
+        meta.insert("header", header.as_slice()).map_err(|error| map_storage_error(&error))?;
         boundary.before_commit()?;
         check.check(Point::BeforeCommit)?;
         Ok(())
@@ -154,7 +157,7 @@ pub(super) fn execute_with_conditions(
     if observed_header != after || observed_operation.as_ref() != Some(&operation) {
         return Err(ControlError::CommitOutcomeUnknown);
     }
-    verify_touched(journal, &observed, &mutation, check)
+    verify_touched(journal, &observed, mutation, check)
         .map_err(|_| ControlError::CommitOutcomeUnknown)?;
     verify_conditional_poststate(journal, &observed, conditions, &receipt.changed_keys, check)
         .map_err(|_| ControlError::CommitOutcomeUnknown)?;
@@ -175,7 +178,7 @@ fn verify_conditions(
     for condition in conditions {
         check.check(point)?;
         note_lookup(journal);
-        let observed = records.get(condition.key().as_bytes()).map_err(map_storage_error)?;
+        let observed = records.get(condition.key().as_bytes()).map_err(|error| map_storage_error(&error))?;
         // Bad stored classes/lengths are corruption, not an ordinary failed CAS.
         // At most one temporary value is decoded per lookup.
         let value = observed.map(|bytes| decode_value(bytes.value(), journal.limits)).transpose()?;
@@ -206,7 +209,7 @@ fn plan_records(
     for key in changed_keys {
         check.check(Point::PlanRecord)?;
         note_lookup(journal);
-        if let Some(previous) = table.get(key.as_bytes()).map_err(map_storage_error)? {
+        if let Some(previous) = table.get(key.as_bytes()).map_err(|error| map_storage_error(&error))? {
             // Validate class and size before using the old length. The one
             // temporary decoded value is released on each iteration.
             let value = decode_value(previous.value(), journal.limits)?;
@@ -269,7 +272,7 @@ fn verify_touched(
     for change in mutation.writes() {
         check.check(Point::Readback)?;
         note_lookup(journal);
-        let observed = table.get(change.key.as_bytes()).map_err(map_storage_error)?
+        let observed = table.get(change.key.as_bytes()).map_err(|error| map_storage_error(&error))?
             .ok_or(ControlError::StoreCorrupt)?;
         // Compare exact class and bytes, not just length/hash/header presence.
         let expected = encode_value(&change.value);
@@ -280,7 +283,7 @@ fn verify_touched(
     for key in mutation.deletes() {
         check.check(Point::Readback)?;
         note_lookup(journal);
-        if table.get(key.as_bytes()).map_err(map_storage_error)?.is_some() {
+        if table.get(key.as_bytes()).map_err(|error| map_storage_error(&error))?.is_some() {
             return Err(ControlError::StoreCorrupt);
         }
     }
@@ -289,7 +292,7 @@ fn verify_touched(
 
 /// Conditions on keys not changed by this command must still hold at its
 /// current generation. Changed keys are instead checked against their exact
-/// intended post-state by verify_touched. Never use this for historical replay.
+/// intended post-state by `verify_touched`. Never use this for historical replay.
 pub(super) fn verify_conditional_poststate(
     journal: &PersistentControlJournal,
     read: &ReadTransaction,
@@ -303,7 +306,7 @@ pub(super) fn verify_conditional_poststate(
         check.check(Point::Readback)?;
         if changed_keys.binary_search(condition.key()).is_ok() { continue; }
         note_lookup(journal);
-        let observed = records.get(condition.key().as_bytes()).map_err(map_storage_error)?;
+        let observed = records.get(condition.key().as_bytes()).map_err(|error| map_storage_error(&error))?;
         let value = observed.map(|bytes| decode_value(bytes.value(), journal.limits)).transpose()?;
         if value.as_ref() != condition.expected() { return Err(ControlError::StoreCorrupt); }
     }
@@ -311,9 +314,14 @@ pub(super) fn verify_conditional_poststate(
     Ok(())
 }
 
-fn note_lookup(_journal: &PersistentControlJournal) {
+// Test-only point-read accounting is non-`const`, so this cannot be `const`
+// under `cfg(test)` despite an empty body in other configurations.
+#[allow(clippy::missing_const_for_fn)]
+fn note_lookup(journal: &PersistentControlJournal) {
     #[cfg(test)]
-    _journal.work.point_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    journal.work.point_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    #[cfg(not(test))]
+    let _ = journal;
 }
 
 #[cfg(test)]

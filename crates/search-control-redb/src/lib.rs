@@ -26,6 +26,7 @@ pub use persistent::{ControlCallError, ControlInterruption, PersistentControlJou
 pub use snapshot_guard::ControlSnapshotPublisher;
 
 /// Coherent disk recovery inputs, not permission to serve or resume publication.
+///
 /// Construction is restricted to a verified schema-3 journal read. A retained
 /// ABORTED intent consumes its epoch but does not prove external compensation.
 #[derive(Clone, Eq, PartialEq)]
@@ -48,8 +49,8 @@ impl PublicationRecoveryCheckpoint {
     pub const fn visibility(&self) -> &PublicationVisibilityState { &self.visibility }
     /// Last retained intent, including unresolved and aborted work.
     #[must_use]
-    pub fn intent(&self) -> Option<&search_contracts::PublicationIntent> { self.intent.as_ref() }
-    /// Consumed floor from the retained intent, not guessed from VisibleEpoch.
+    pub const fn intent(&self) -> Option<&search_contracts::PublicationIntent> { self.intent.as_ref() }
+    /// Consumed floor from the retained intent, not guessed from `VisibleEpoch`.
     /// Intent absence is accepted only after checking its never-written history.
     #[must_use]
     pub fn last_reserved_epoch(&self) -> search_contracts::Epoch {

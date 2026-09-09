@@ -5,7 +5,7 @@ use std::fs::File;
 use search_ports::{CancellationProbe, OperationContext};
 use super::{Boundary, Check, ControlCallError, ControlError, ControlSnapshotPublisher,
     Database, Durability, Header, JournalIdentity, JournalLimits, META, MutationId, OPERATIONS,
-    PersistentControlJournal, Point, ReadableTable, ReadableTableMetadata,
+    PersistentControlJournal, Point, ReadableTable,
     is_corruption, lifecycle, map_storage_error, map_table_error};
 use super::operation::Budget;
 
@@ -122,7 +122,7 @@ impl PersistentControlJournal {
                 let operations = write.open_table(OPERATIONS).map_err(map_table_error)?;
                 require_unused_operation_id(&operations, request.operation_id())?;
             }
-            meta.insert(MARKER_KEY, encoded.as_slice()).map_err(map_storage_error)?;
+            meta.insert(MARKER_KEY, encoded.as_slice()).map_err(|error| map_storage_error(&error))?;
             drop(meta);
             boundary.before_commit()?;
             check.check(Point::BeforeCommit)
@@ -154,7 +154,7 @@ impl PersistentControlJournal {
 pub(super) fn require_unquarantined(
     meta: &impl ReadableTable<&'static str, &'static [u8]>,
 ) -> Result<(), ControlError> {
-    if meta.get(MARKER_KEY).map_err(map_storage_error)?.is_some() {
+    if meta.get(MARKER_KEY).map_err(|error| map_storage_error(&error))?.is_some() {
         Err(ControlError::StoreQuarantined)
     } else {
         Ok(())
@@ -162,18 +162,18 @@ pub(super) fn require_unquarantined(
 }
 
 fn read_metadata(
-    meta: &(impl ReadableTable<&'static str, &'static [u8]> + ReadableTableMetadata),
+    meta: &impl ReadableTable<&'static str, &'static [u8]>,
     identity: JournalIdentity,
     limits: JournalLimits,
     check: &dyn Check,
 ) -> Result<(Header, Vec<u8>, Option<Marker>), ControlError> {
     check.check(Point::ReadHeader)?;
-    let raw = meta.get("header").map_err(map_storage_error)?.ok_or(ControlError::StoreCorrupt)?;
+    let raw = meta.get("header").map_err(|error| map_storage_error(&error))?.ok_or(ControlError::StoreCorrupt)?;
     // Decode BEFORE copying: Header::decode requires the exact bounded layout.
     let header = Header::decode(raw.value(), identity, limits)?;
-    let stored = meta.get(MARKER_KEY).map_err(map_storage_error)?;
+    let stored = meta.get(MARKER_KEY).map_err(|error| map_storage_error(&error))?;
     let expected_count = if stored.is_some() { 2 } else { 1 };
-    if meta.len().map_err(map_storage_error)? != expected_count {
+    if meta.len().map_err(|error| map_storage_error(&error))? != expected_count {
         return Err(ControlError::StoreCorrupt);
     }
     let marker = stored.map(|bytes| Marker::decode(bytes.value(), raw.value(), header.generation)).transpose()?;
@@ -185,7 +185,7 @@ fn require_unused_operation_id(
     operations: &impl ReadableTable<&'static [u8], &'static [u8]>,
     id: MutationId,
 ) -> Result<(), ControlError> {
-    if operations.get(id.0.as_slice()).map_err(map_storage_error)?.is_some() {
+    if operations.get(id.0.as_slice()).map_err(|error| map_storage_error(&error))?.is_some() {
         Err(ControlError::OperationConflict)
     } else { Ok(()) }
 }

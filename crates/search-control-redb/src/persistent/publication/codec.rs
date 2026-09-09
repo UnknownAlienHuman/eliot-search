@@ -71,7 +71,7 @@ impl Input<'_> {
     fn counter(&mut self) -> Result<u64, ControlError> { Ok(u64::from_be_bytes(self.take()?)) }
 }
 
-fn state_tag(state: PublicationIntentState) -> u8 {
+const fn state_tag(state: PublicationIntentState) -> u8 {
     match state {
         PublicationIntentState::Prepared => 1,
         PublicationIntentState::IntentDurable => 2,
@@ -87,7 +87,7 @@ fn state_tag(state: PublicationIntentState) -> u8 {
     }
 }
 
-fn decode_state(tag: u8) -> Result<PublicationIntentState, ControlError> {
+const fn decode_state(tag: u8) -> Result<PublicationIntentState, ControlError> {
     match tag {
         1 => Ok(PublicationIntentState::Prepared),
         2 => Ok(PublicationIntentState::IntentDurable),
