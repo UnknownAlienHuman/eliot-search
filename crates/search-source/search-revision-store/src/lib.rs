@@ -603,9 +603,11 @@ impl RevisionStore {
                 ));
                 Ok(RecoveryResult::Applied(receipt))
             }
-            Err(RevisionStoreError::ReadbackMismatch)
-            | Err(RevisionStoreError::EvidenceMissing)
-            | Err(RevisionStoreError::BackendContractViolation) => {
+            Err(
+                RevisionStoreError::ReadbackMismatch
+                | RevisionStoreError::EvidenceMissing
+                | RevisionStoreError::BackendContractViolation,
+            ) => {
                 self.states.insert(
                     key.clone(),
                     RevisionState::Quarantined {
