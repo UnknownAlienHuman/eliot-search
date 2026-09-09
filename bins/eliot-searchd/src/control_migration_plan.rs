@@ -26,6 +26,8 @@ const PLAN_DEADLINE: Duration = Duration::from_secs(120);
 struct StagingFile {
     path: PathBuf,
     file: Option<File>,
+    identity: (u64, u64),
+    cleanup_armed: bool,
 }
 
 impl StagingFile {
@@ -35,7 +37,9 @@ impl StagingFile {
         let path = directory.join(format!(".source-map.{}.{stamp}.tmp", std::process::id()));
         let file = OpenOptions::new().read(true).write(true).create_new(true).open(&path)
             .map_err(|_| "DIRECT_MIGRATION_PLAN_CREATE_FAILED".to_owned())?;
-        Ok(Self { path, file: Some(file) })
+        let identity = redb_import::native_identity(&file)?;
+        redb_import::verify_locator(&file, &path)?;
+        Ok(Self { path, file: Some(file), identity, cleanup_armed: true })
     }
 
     fn file_mut(&mut self) -> Result<&mut File, String> {
@@ -43,15 +47,33 @@ impl StagingFile {
     }
 
     fn remove(mut self) -> Result<(), String> {
+        self.discard_owned()
+    }
+
+    fn discard_owned(&mut self) -> Result<(), String> {
+        // Disarm before any fallible cleanup. Explicit removal and Drop must
+        // never unlink the same locator twice or retry a failed identity check.
+        if !std::mem::replace(&mut self.cleanup_armed, false) { return Ok(()); }
         drop(self.file.take());
+        let invalid = || "DIRECT_MIGRATION_PLAN_CLEANUP_IDENTITY_CHANGED".to_owned();
+        let metadata = match fs::symlink_metadata(&self.path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(_) => return Err(invalid()),
+        };
+        if !regular(&metadata) { return Err(invalid()); }
+        let current = File::open(&self.path).map_err(|_| invalid())?;
+        if redb_import::native_identity(&current)? != self.identity { return Err(invalid()); }
+        redb_import::verify_locator(&current, &self.path)?;
+        drop(current);
         fs::remove_file(&self.path).map_err(|_| "DIRECT_MIGRATION_PLAN_CLEANUP_FAILED".to_owned())
     }
 }
 
 impl Drop for StagingFile {
     fn drop(&mut self) {
-        drop(self.file.take());
-        let _ = fs::remove_file(&self.path);
+        // An ambiguous replacement is retained, not deleted by its old name.
+        let _ = self.discard_owned();
     }
 }
 
@@ -165,6 +187,13 @@ impl DirectStore {
         if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
+        // Source replay and target import can take substantial time. Do not
+        // acknowledge text/content locators only checked before those steps.
+        if fingerprint(&path, bytes, deadline)? != digest
+            || fingerprint(&directory.join(&content.name), content.encoded_bytes, deadline)? != content.chain
+        {
+            return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
+        }
         check_deadline(Some(deadline))?;
         Ok(format!(concat!(
             "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
@@ -203,6 +232,7 @@ fn open_plan(path: &Path, expected: u64) -> Result<File, String> {
     if !regular(&opened) || opened.len() != expected || opened.modified().ok() != before.modified().ok() {
         return Err(invalid());
     }
+    redb_import::verify_locator(&file, path)?;
     Ok(file)
 }
 
@@ -260,5 +290,7 @@ fn fingerprint(path: &Path, length: u64, deadline: Instant) -> Result<[u8; 32], 
     if digest.bytes != length || after.len() != length || before.modified().ok() != after.modified().ok() {
         return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
     }
+    redb_import::verify_locator(reader.get_ref(), path)?;
+    check_deadline(Some(deadline))?;
     Ok(digest.finish())
 }

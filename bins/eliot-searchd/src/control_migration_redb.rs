@@ -239,7 +239,7 @@ impl ImportOutputGuard {
 
 /// Native identity, never an mtime/length substitute. The platform observer is the
 /// existing package-owned Windows boundary; no unsafe or new dependency is added.
-fn native_identity(file: &File) -> Result<(u64, u64), String> {
+pub(super) fn native_identity(file: &File) -> Result<(u64, u64), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     let metadata = file.metadata().map_err(|_| invalid())?;
     if !regular(&metadata) { return Err(invalid()); }
@@ -257,7 +257,7 @@ fn native_identity(file: &File) -> Result<(u64, u64), String> {
     { Err("DIRECT_MIGRATION_LOCK_PLATFORM_UNSUPPORTED".to_owned()) }
 }
 
-fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
+pub(super) fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     ensure_directory(path.parent().ok_or_else(invalid)?)?;
     if !regular(&fs::symlink_metadata(path).map_err(|_| invalid())?) { return Err(invalid()); }
