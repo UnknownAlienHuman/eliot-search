@@ -151,6 +151,9 @@ impl SubjectRequest {
 }
 
 /// Coherent authorization/currentness context for all candidate observations.
+// Each of the six bools is an independent fence mapping to a distinct
+// `SubjectError`; refactoring would break the pub API + FUNCTIONS.md contract.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResolutionContext {
     /// Digest of exact source/workspace/reference view and plan fence.
@@ -285,7 +288,7 @@ pub enum StepIncompleteReason {
 }
 
 impl StepIncompleteReason {
-    fn as_error(self) -> SubjectError {
+    const fn as_error(self) -> SubjectError {
         match self {
             Self::Cancelled => SubjectError::SubjectCancelled,
             Self::Timeout | Self::BudgetExhausted => SubjectError::SubjectBudgetExhausted,
@@ -326,10 +329,11 @@ impl ResolutionStep {
     fn validate_shape(&self) -> Result<(), SubjectError> {
         match self.state {
             ResolutionStepState::Complete if self.omitted_candidates == 0 => Ok(()),
-            ResolutionStepState::Complete => Err(SubjectError::SubjectReportInvalid),
             ResolutionStepState::Incomplete(_) => Ok(()),
             ResolutionStepState::NotApplicable if self.candidates.is_empty() => Ok(()),
-            ResolutionStepState::NotApplicable => Err(SubjectError::SubjectReportInvalid),
+            ResolutionStepState::Complete | ResolutionStepState::NotApplicable => {
+                Err(SubjectError::SubjectReportInvalid)
+            }
         }
     }
 }
@@ -354,7 +358,7 @@ impl SubjectResolutionLimits {
     };
 
     /// Validates finite non-zero dimensions.
-    pub fn validate(self) -> Result<Self, SubjectError> {
+    pub const fn validate(self) -> Result<Self, SubjectError> {
         if self.max_candidates == 0
             || self.max_candidates > MAX_LIST_ITEMS
             || self.max_ambiguity_candidates == 0
@@ -405,6 +409,12 @@ pub enum SubjectResolution {
 }
 
 /// Deterministically resolves a subject without score-based guessing.
+///
+/// # Panics
+///
+/// Never panics on validated inputs; the internal `expect` on a non-empty
+/// hypothesis is an internal invariant upheld via
+/// `collapse_equivalent_occurrences`.
 pub fn resolve_subject(
     request: &SubjectRequest,
     context: &ResolutionContext,
