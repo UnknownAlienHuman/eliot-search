@@ -5,7 +5,9 @@ use super::super::RECORDS;
 use super::super::operation::Unscoped;
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueRef, OwnerEpoch, RequestId};
 use search_ports::{PackageOpaque, PortErrorKind};
-use std::fs::{self, OpenOptions};
+use std::cell::RefCell;
+use std::fs::{self, OpenOptions, File};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -42,19 +44,37 @@ fn context(cancelled: bool) -> OperationContext<Cancel> {
     OperationContext::new(RequestId::from_bytes([9; 16]), 10_000, Cancel(cancelled),
         OpaqueRef::new("budget:quarantine-test").unwrap()).unwrap()
 }
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let path = std::env::temp_dir().join(format!("eliot-quarantine-{}-{stamp}-{}",
             std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
         fs::create_dir(&path).unwrap();
-        Self(path)
+        Self { root: path, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn file(&self) -> File { OpenOptions::new().read(true).write(true).open(self.path()).unwrap() }
     fn create(&self) -> PersistentControlJournal {
         let file = OpenOptions::new().create_new(true).read(true).write(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::create(file, identity(), LIMITS).unwrap()
     }
     fn open(&self) -> Result<PersistentControlJournal, ControlError> {
@@ -65,7 +85,7 @@ impl Scratch {
             request, &context(false)).unwrap()
     }
 }
-impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); } }
 
 // Application bytes, not redb's internal free-page/repair bookkeeping.
 fn application_bytes(journal: &PersistentControlJournal) -> Vec<Vec<u8>> {
@@ -113,7 +133,7 @@ fn exact_repeat_is_read_only_and_conflicting_request_cannot_replace_the_marker()
     let mut publisher = ControlSnapshotPublisher::new();
     let original = request(0);
     let receipt = journal.quarantine_with_context(&original, &mut publisher, &context(false)).unwrap();
-    let disk = fs::read(scratch.path()).unwrap(); let writes = journal.committed_writes();
+    let disk = scratch.bytes(); let writes = journal.committed_writes();
     assert_eq!(journal.quarantine_with_context(&original, &mut publisher, &context(false)).unwrap(), receipt);
     for other in [
         request(1),
@@ -123,17 +143,17 @@ fn exact_repeat_is_read_only_and_conflicting_request_cannot_replace_the_marker()
     ] {
         assert_eq!(journal.quarantine_with_context(&other, &mut publisher, &context(false)).unwrap_err().control_error(), ControlError::OperationConflict);
     }
-    assert_eq!(journal.committed_writes(), writes); assert_eq!(fs::read(scratch.path()).unwrap(), disk);
+    assert_eq!(journal.committed_writes(), writes); assert_eq!(scratch.bytes(), disk);
 }
 
 #[test]
 fn pre_cancelled_request_suspends_admission_but_records_no_durable_hold() {
     let scratch = Scratch::new(); let mut journal = scratch.create();
-    let mut publisher = ControlSnapshotPublisher::new(); let disk = fs::read(scratch.path()).unwrap();
+    let mut publisher = ControlSnapshotPublisher::new(); let disk = scratch.bytes();
     let error = journal.quarantine_with_context(&request(0), &mut publisher, &context(true)).unwrap_err();
     assert_eq!(error.kind(), PortErrorKind::CancelledBeforeSideEffect);
     assert!(publisher.requires_recovery()); assert!(journal.quarantined);
-    assert_eq!(fs::read(scratch.path()).unwrap(), disk);
+    assert_eq!(scratch.bytes(), disk);
     drop(journal); assert_eq!(scratch.recover(&request(0)), None);
 }
 
@@ -243,6 +263,7 @@ fn owner_handoff_cannot_clear_a_durable_hold() {
 fn fixed_marker_does_not_depend_on_live_record_or_receipt_capacity() {
     let scratch = Scratch::new();
     let file = OpenOptions::new().create_new(true).read(true).write(true).open(scratch.path()).unwrap();
+    scratch.keep(&file);
     let limits = JournalLimits { max_records: 1, max_operation_records: 1, ..LIMITS };
     let mut journal = PersistentControlJournal::create(file, identity(), limits).unwrap(); journal.transact(mutation()).unwrap();
     journal.quarantine_with_context(&request(1), &mut ControlSnapshotPublisher::new(), &context(false)).unwrap();

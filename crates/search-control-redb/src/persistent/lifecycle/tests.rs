@@ -6,8 +6,9 @@ use super::super::{ControlInterruption, Unscoped};
 use crate::{ControlKey, ControlMutation, ControlRecordClass, ControlValue, ControlWrite};
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueRef, OwnerEpoch, RequestId};
 use search_ports::{PackageOpaque, PortErrorKind, PortRetryability};
-use std::cell::Cell;
-use std::fs::{self, OpenOptions};
+use std::cell::{Cell, RefCell};
+use std::fs::{self, OpenOptions, File};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -58,22 +59,43 @@ fn request() -> ControlMutation {
     )
 }
 
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let root = std::env::temp_dir().join(format!(
             "eliot-redb-lifecycle-{}-{stamp}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed),
         ));
         fs::create_dir(&root).unwrap();
-        Self(root)
+        Self { root, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn new_file(&self) -> File {
-        OpenOptions::new().read(true).write(true).create_new(true).open(self.path()).unwrap()
+        let file = OpenOptions::new().read(true).write(true).create_new(true).open(self.path()).unwrap();
+        self.keep(&file);
+        file
     }
     fn file(&self) -> File {
-        OpenOptions::new().read(true).write(true).open(self.path()).unwrap()
+        let file = OpenOptions::new().read(true).write(true).open(self.path()).unwrap();
+        self.keep(&file);
+        file
     }
     fn populated(&self) -> PersistentControlJournal {
         let mut journal = PersistentControlJournal::create(self.new_file(), identity(), LIMITS).unwrap();
@@ -85,7 +107,7 @@ impl Scratch {
     }
 }
 impl Drop for Scratch {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); }
 }
 
 struct At<'a, F> {
@@ -179,13 +201,13 @@ fn public_pre_cancelled_calls_preserve_files_and_return_original_operation_ident
     assert_eq!(error.retryability(), PortRetryability::SameIdentity);
     assert_eq!(fs::metadata(scratch.path()).unwrap().len(), 0);
     drop(PersistentControlJournal::create(scratch.file(), identity(), LIMITS).unwrap());
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let error = PersistentControlJournal::open_with_context(
         scratch.file(), identity(), LIMITS, OPERATION, &ctx,
     ).unwrap_err();
     assert_eq!(error.kind(), PortErrorKind::CancelledBeforeSideEffect);
     assert_eq!(error.operation_id(), Some(OPERATION));
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
     let journal = scratch.reopen(identity());
     let error = journal.advance_owner_with_context(successor(), OPERATION, &ctx).unwrap_err();
     assert_eq!(error.kind(), PortErrorKind::CancelledBeforeSideEffect);
@@ -253,12 +275,12 @@ fn completed_initialization_with_lost_acknowledgement_reopens_without_recreation
 fn create_never_replaces_an_existing_populated_journal() {
     let scratch = Scratch::new();
     let before = scratch.populated().verify().unwrap();
-    let bytes = fs::read(scratch.path()).unwrap();
+    let bytes = scratch.bytes();
     assert!(matches!(
         PersistentControlJournal::create_checked(scratch.file(), identity(), LIMITS, &Unscoped),
         Err(ControlError::StoreCorrupt)
     ));
-    assert_eq!(fs::read(scratch.path()).unwrap(), bytes);
+    assert_eq!(scratch.bytes(), bytes);
     assert_eq!(scratch.reopen(identity()).verify().unwrap(), before);
 }
 

@@ -7,8 +7,9 @@ use crate::{ControlJournal, ControlKey, ControlRecordClass, ControlValue, Contro
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueRef,
     OwnerEpoch, RequestId};
 use search_ports::{PackageOpaque, PortErrorKind, PortRetryability};
-use std::cell::Cell;
-use std::fs::{self, OpenOptions};
+use std::cell::{Cell, RefCell};
+use std::fs::{self, OpenOptions, File};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -49,22 +50,41 @@ fn command(id: u8, generation: u64) -> ControlMutation {
             value: ControlValue::new(ControlRecordClass::State, vec![id; 3], LIMITS).unwrap(),
         }], vec![])
 }
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let path = std::env::temp_dir().join(format!("eliot-publish-{}-{stamp}-{}",
             std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
         fs::create_dir(&path).unwrap();
-        Self(path)
+        Self { root: path, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn create(&self, identity: JournalIdentity) -> PersistentControlJournal {
         let file = OpenOptions::new().read(true).write(true).create_new(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::create(file, identity, LIMITS).unwrap()
     }
     fn open(&self) -> PersistentControlJournal {
         let file = OpenOptions::new().read(true).write(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::open(file, identity(), LIMITS).unwrap()
     }
     fn populated(&self) -> (PersistentControlJournal, ControlSnapshotPublisher) {
@@ -76,7 +96,7 @@ impl Scratch {
     }
 }
 impl Drop for Scratch {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); }
 }
 struct At<'a, F> { inner: &'a dyn Check, point: Point, action: F }
 impl<F: Fn()> Check for At<'_, F> {
@@ -95,7 +115,7 @@ fn public_snapshot_methods_agree_and_create_no_durable_writes() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(identity());
     let receipt = journal.transact(command(1, 0)).unwrap();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let commits = journal.committed_writes();
     let cancel = Cancel::default();
     let ctx = context(&cancel, 10_000);
@@ -109,7 +129,7 @@ fn public_snapshot_methods_agree_and_create_no_durable_writes() {
     assert_eq!(recovered, published);
     assert!(!publisher.requires_recovery());
     assert_eq!(journal.committed_writes(), commits);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
 }
 
 #[test]
@@ -118,7 +138,7 @@ fn precancelled_publication_suspends_old_admission_but_does_not_replay_commit() 
     let (mut journal, mut publisher) = scratch.populated();
     let old = publisher.current().unwrap();
     let receipt = journal.transact(command(2, 1)).unwrap();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let commits = journal.committed_writes();
     let cancel = Cancel::default();
     cancel.set(true);
@@ -133,7 +153,7 @@ fn precancelled_publication_suspends_old_admission_but_does_not_replay_commit() 
     journal.recover_snapshot_publication_with_context(&mut publisher, &context(&cancel, 10_000)).unwrap();
     assert_eq!(publisher.current().unwrap().generation, 2);
     assert_eq!(journal.committed_writes(), commits);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
 }
 
 #[test]
@@ -146,7 +166,7 @@ fn cancellation_and_deadline_at_each_publication_phase_keep_admission_closed() {
                 let scratch = Scratch::new();
                 let (mut journal, mut publisher) = scratch.populated();
                 let receipt = journal.transact(command(2, 1)).unwrap();
-                let before = fs::read(scratch.path()).unwrap();
+                let before = scratch.bytes();
                 let cancel = Cancel::default();
                 let ctx = context(&cancel, 10);
                 let start = Instant::now();
@@ -169,7 +189,7 @@ fn cancellation_and_deadline_at_each_publication_phase_keep_admission_closed() {
                 assert!(!journal.requires_recovery());
                 journal.recover_snapshot_publication(&mut publisher).unwrap();
                 assert_eq!(publisher.current().unwrap().generation, 2);
-                assert_eq!(fs::read(scratch.path()).unwrap(), before);
+                assert_eq!(scratch.bytes(), before);
             }
         }
     }
@@ -193,7 +213,7 @@ fn cancelled_standalone_rebuild_never_returns_partial_state() {
 fn empty_recovery_checks_final_deadline_without_fabricating_receipt() {
     let scratch = Scratch::new();
     let journal = scratch.create(identity());
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let mut publisher = ControlSnapshotPublisher::new();
     let cancel = Cancel::default();
     let ctx = context(&cancel, 10);
@@ -207,7 +227,7 @@ fn empty_recovery_checks_final_deadline_without_fabricating_receipt() {
     assert_eq!(journal.recover_snapshot_publication(&mut publisher).unwrap(), None);
     assert!(!publisher.requires_recovery());
     assert!(publisher.current().is_none());
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
 }
 
 #[test]
@@ -413,9 +433,9 @@ fn cancellation_after_the_final_checkpoint_does_not_relabel_a_published_result()
 fn ten_thousand_snapshot_admissions_write_no_database_bytes() {
     let scratch = Scratch::new();
     let (journal, publisher) = scratch.populated();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let writes = journal.committed_writes();
     for _ in 0..10_000 { assert_eq!(publisher.current().unwrap().generation, 1); }
     assert_eq!(journal.committed_writes(), writes);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
 }

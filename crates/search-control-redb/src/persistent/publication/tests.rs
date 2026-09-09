@@ -2,7 +2,9 @@ use super::*;
 use search_contracts::{DataRootId, Epoch, InstallationIncarnationId, OpaqueRef,
     OwnerEpoch, PublicationGuards, PublicationIntentId, ReceiptRef, RequestId};
 use search_ports::PackageOpaque;
+use std::cell::RefCell;
 use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -19,26 +21,44 @@ fn identity() -> JournalIdentity {
         schema_family_digest: Blake3Digest32::from_bytes([4; 32]), schema_version: PUBLICATION_INTENT_SCHEMA_VERSION }
 }
 
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let root = std::env::temp_dir().join(format!("eliot-intent-{}-{stamp}-{}",
             std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
         fs::create_dir(&root).unwrap();
-        Self(root)
+        Self { root, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn file(&self) -> File { OpenOptions::new().read(true).write(true).open(self.path()).unwrap() }
     fn create(&self) -> PersistentControlJournal {
         let file = OpenOptions::new().read(true).write(true).create_new(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::create(file, identity(), LIMITS).unwrap()
     }
     fn reopen(&self) -> PersistentControlJournal {
         PersistentControlJournal::open(self.file(), identity(), LIMITS).unwrap()
     }
 }
-impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); } }
 
 #[derive(Debug)]
 struct Cancel(bool);
@@ -325,10 +345,10 @@ fn unresolved_intent_keeps_snapshot_admission_closed_without_replaying_mutation(
 fn repeated_typed_reads_are_nonmutating_and_diagnostics_redact_manifest_refs() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(); let update = begin(); persist(&mut journal, &update);
-    let disk = fs::read(scratch.path()).unwrap(); let writes = journal.committed_writes();
+    let disk = scratch.bytes(); let writes = journal.committed_writes();
     let head = journal.read_publication_intent(&context(false)).unwrap();
     for _ in 0..10_000 { assert_eq!(journal.read_publication_intent(&context(false)).unwrap(), head); }
-    assert_eq!(fs::read(scratch.path()).unwrap(), disk);
+    assert_eq!(scratch.bytes(), disk);
     assert_eq!(journal.committed_writes(), writes);
     assert!(!format!("{update:?} {head:?}").contains("manifest-sentinel"));
     assert!(journal.load_unresolved_publication(&context(true)).is_err());
@@ -338,15 +358,16 @@ fn repeated_typed_reads_are_nonmutating_and_diagnostics_redact_manifest_refs() {
 fn typed_schema_is_explicit_and_version_one_is_neither_upgraded_nor_quarantined() {
     let scratch = Scratch::new();
     let file = OpenOptions::new().read(true).write(true).create_new(true).open(scratch.path()).unwrap();
+    scratch.keep(&file);
     let legacy = JournalIdentity { schema_version: 1, ..identity() };
     let mut journal = PersistentControlJournal::create(file, legacy, LIMITS).unwrap();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     assert_eq!(journal.persist_publication_intent(&begin(), &context(false)).unwrap_err().control_error(),
         ControlError::SchemaUnsupported);
     assert!(journal.read_publication_intent(&context(false)).is_err());
     assert!(!journal.quarantined);
     assert_eq!(journal.verify().unwrap().generation, 0);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
     drop(journal);
     assert!(PersistentControlJournal::open(scratch.file(), identity(), LIMITS).is_err());
     assert!(PersistentControlJournal::open(scratch.file(), legacy, LIMITS).is_ok());
@@ -404,7 +425,7 @@ fn crash_child() {
 
 #[test]
 fn one_deadline_covers_typed_validation_and_the_existing_transaction_engine() {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
     use std::time::{Duration, Instant};
     let scratch = Scratch::new(); let mut journal = scratch.create();
     let ctx = OperationContext::new(RequestId::from_bytes([1; 16]), 4, Cancel(false),

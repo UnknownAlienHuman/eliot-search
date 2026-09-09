@@ -136,14 +136,14 @@ fn unpublished_suspended_or_model_only_snapshot_cannot_authorize_reservation() {
     let commit = apply(&mut journal, &request).unwrap();
     let successor = reserve_request(&journal, 10, 10);
     let mut publisher = ControlSnapshotPublisher::new();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     assert_eq!(reserve(&mut journal, &publisher, &successor), Err(ControlError::SnapshotPublicationFailed));
     publisher.publish_snapshot_after_commit(&commit, journal.control_snapshot().unwrap()).unwrap();
     assert_eq!(reserve(&mut journal, &publisher, &successor), Err(ControlError::SnapshotPublicationFailed));
     journal.publish_committed_snapshot(&commit, &mut publisher).unwrap();
     publisher.begin_disk_publication(identity()).unwrap();
     assert_eq!(reserve(&mut journal, &publisher, &successor), Err(ControlError::SnapshotPublicationFailed));
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
     journal.recover_snapshot_publication(&mut publisher).unwrap();
     reserve(&mut journal, &publisher, &successor).unwrap();
 }
