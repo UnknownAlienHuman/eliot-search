@@ -93,7 +93,7 @@ fn validate_text(
             return Err(UnitizationError::InvalidUtf8Boundary);
         }
         match bytes.get(content_end..end) {
-            Some(b"") | Some(b"\n") | Some(b"\r") | Some(b"\r\n") => {}
+            Some(b"" | b"\n" | b"\r" | b"\r\n") => {}
             _ => return Err(UnitizationError::InvalidLineEnding),
         }
         cursor = end;
@@ -131,15 +131,13 @@ fn choose_end(
     let start64 = u64::try_from(start).map_err(|_| UnitizationError::OffsetOverflow)?;
     let hard64 = u64::try_from(hard).map_err(|_| UnitizationError::OffsetOverflow)?;
     let after = lines.partition_point(|line| line.source_end <= preferred64);
-    if let Some(line) = after.checked_sub(1).and_then(|index| lines.get(index)) {
-        if line.source_end > start64 {
-            return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
-        }
+    if let Some(line) = after.checked_sub(1).and_then(|index| lines.get(index))
+        && line.source_end > start64
+    {
+        return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
     }
-    if let Some(line) = lines.get(after) {
-        if line.source_end <= hard64 {
-            return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
-        }
+    if let Some(line) = lines.get(after) && line.source_end <= hard64 {
+        return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
     }
     let mut end = preferred;
     while end > start && !text.is_char_boundary(end) { end -= 1; }
