@@ -476,16 +476,14 @@ impl RegistryBatch {
         let mut memberships = BTreeSet::new();
         let mut cutovers = BTreeSet::new();
         for change in &self.changes {
-            if let Some(source) = change.source_target() {
-                if !sources.insert(source.clone()) {
+            if let Some(source) = change.source_target()
+                && !sources.insert(source.clone()) {
                     return Err(RegistryError::DuplicateBatchTarget);
                 }
-            }
-            if let Some(membership) = change.membership_target() {
-                if !memberships.insert(membership.clone()) {
+            if let Some(membership) = change.membership_target()
+                && !memberships.insert(membership.clone()) {
                     return Err(RegistryError::DuplicateBatchTarget);
                 }
-            }
             if let Some(corpus) = change.cutover_target() {
                 if !cutovers.insert(corpus.clone()) {
                     return Err(RegistryError::DuplicateBatchTarget);
@@ -953,11 +951,10 @@ fn apply_cutover(
     if active_generations.get(&cutover.corpus_id).copied() != cutover.expected_generation {
         return Err(RegistryError::CutoverGenerationConflict);
     }
-    if let Some(current) = cutover.expected_generation {
-        if cutover.next_generation <= current {
+    if let Some(current) = cutover.expected_generation
+        && cutover.next_generation <= current {
             return Err(RegistryError::CutoverGenerationConflict);
         }
-    }
     for identity in &inventory {
         let source = sources
             .get(identity)
@@ -985,30 +982,27 @@ fn apply_cutover(
             corpus_id: cutover.corpus_id.clone(),
             source_identity: identity,
         };
-        match memberships.get_mut(&key) {
-            Some(membership) => {
-                membership.generation = cutover.next_generation;
-                membership.lifecycle = MembershipLifecycle::Active;
-                membership.registry_revision = registry_revision;
-                membership.last_receipt = cutover.receipt.clone();
+        if let Some(membership) = memberships.get_mut(&key) {
+            membership.generation = cutover.next_generation;
+            membership.lifecycle = MembershipLifecycle::Active;
+            membership.registry_revision = registry_revision;
+            membership.last_receipt = cutover.receipt.clone();
+        } else {
+            if memberships.len() >= limits.max_memberships {
+                return Err(RegistryError::CapacityExceeded);
             }
-            None => {
-                if memberships.len() >= limits.max_memberships {
-                    return Err(RegistryError::CapacityExceeded);
-                }
-                memberships.insert(
-                    key.clone(),
-                    MembershipRecord {
-                        key,
-                        generation: cutover.next_generation,
-                        membership_revision: NonZeroRevision::new(1)
-                            .map_err(|_| RegistryError::ContractExhausted)?,
-                        lifecycle: MembershipLifecycle::Active,
-                        registry_revision,
-                        last_receipt: cutover.receipt.clone(),
-                    },
-                );
-            }
+            memberships.insert(
+                key.clone(),
+                MembershipRecord {
+                    key,
+                    generation: cutover.next_generation,
+                    membership_revision: NonZeroRevision::new(1)
+                        .map_err(|_| RegistryError::ContractExhausted)?,
+                    lifecycle: MembershipLifecycle::Active,
+                    registry_revision,
+                    last_receipt: cutover.receipt.clone(),
+                },
+            );
         }
     }
     active_generations.insert(cutover.corpus_id.clone(), cutover.next_generation);
