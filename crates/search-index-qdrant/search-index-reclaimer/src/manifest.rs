@@ -82,13 +82,22 @@ pub fn validate_retired_manifest(
     {
         return Err(ReclaimError::InvalidPointSet);
     }
-    if manifest.collection_generation_id != publication.collection_generation_id
-        || manifest.route != publication.route
-        || manifest.retirement_epoch_exclusive != publication.retirement_epoch_exclusive
-        || manifest.manifest_digest != publication.retired_manifest_digest
-        || manifest.publication_receipt_ref != publication.publication_receipt_ref
-        || publication.committed_visible_epoch < manifest.retirement_epoch_exclusive
+    let generation_matches =
+        manifest.collection_generation_id == publication.collection_generation_id;
+    let route_matches = manifest.route == publication.route;
+    let epoch_matches =
+        manifest.retirement_epoch_exclusive == publication.retirement_epoch_exclusive;
+    let digest_matches = manifest.manifest_digest == publication.retired_manifest_digest;
+    let receipt_matches = manifest.publication_receipt_ref == publication.publication_receipt_ref;
+    if !generation_matches
+        || !route_matches
+        || !epoch_matches
+        || !digest_matches
+        || !receipt_matches
     {
+        return Err(ReclaimError::PublicationMismatch);
+    }
+    if publication.committed_visible_epoch < manifest.retirement_epoch_exclusive {
         return Err(ReclaimError::PublicationMismatch);
     }
     Ok(CommittedRetiredManifest(manifest))
