@@ -59,7 +59,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -89,7 +89,7 @@ impl Scratch {
     }
     fn populated(&self) -> (PersistentControlJournal, ControlSnapshotPublisher) {
         let mut journal = self.create(identity());
-        let receipt = journal.transact(command(1, 0)).unwrap();
+        let receipt = journal.transact(&command(1, 0)).unwrap();
         let mut publisher = ControlSnapshotPublisher::new();
         journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
         (journal, publisher)
@@ -114,7 +114,7 @@ fn blocked(publisher: &ControlSnapshotPublisher) {
 fn public_snapshot_methods_agree_and_create_no_durable_writes() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(identity());
-    let receipt = journal.transact(command(1, 0)).unwrap();
+    let receipt = journal.transact(&command(1, 0)).unwrap();
     let before = scratch.bytes();
     let commits = journal.committed_writes();
     let cancel = Cancel::default();
@@ -122,11 +122,11 @@ fn public_snapshot_methods_agree_and_create_no_durable_writes() {
     let state = journal.control_snapshot_with_context(&ctx).unwrap();
     assert_eq!(state, journal.control_snapshot().unwrap());
     let mut publisher = ControlSnapshotPublisher::new();
-    let published = journal.publish_committed_snapshot_with_context(&receipt, &mut publisher, &ctx).unwrap();
-    assert_eq!(published.operation_id, Some(receipt.operation_id));
+    let snapshot_receipt = journal.publish_committed_snapshot_with_context(&receipt, &mut publisher, &ctx).unwrap();
+    assert_eq!(snapshot_receipt.operation_id, Some(receipt.operation_id));
     assert_eq!(publisher.current().unwrap().as_ref(), &state);
     let recovered = journal.recover_snapshot_publication_with_context(&mut publisher, &ctx).unwrap().unwrap();
-    assert_eq!(recovered, published);
+    assert_eq!(recovered, snapshot_receipt);
     assert!(!publisher.requires_recovery());
     assert_eq!(journal.committed_writes(), commits);
     assert_eq!(scratch.bytes(), before);
@@ -137,7 +137,7 @@ fn precancelled_publication_suspends_old_admission_but_does_not_replay_commit() 
     let scratch = Scratch::new();
     let (mut journal, mut publisher) = scratch.populated();
     let old = publisher.current().unwrap();
-    let receipt = journal.transact(command(2, 1)).unwrap();
+    let receipt = journal.transact(&command(2, 1)).unwrap();
     let before = scratch.bytes();
     let commits = journal.committed_writes();
     let cancel = Cancel::default();
@@ -165,7 +165,7 @@ fn cancellation_and_deadline_at_each_publication_phase_keep_admission_closed() {
             {
                 let scratch = Scratch::new();
                 let (mut journal, mut publisher) = scratch.populated();
-                let receipt = journal.transact(command(2, 1)).unwrap();
+                let receipt = journal.transact(&command(2, 1)).unwrap();
                 let before = scratch.bytes();
                 let cancel = Cancel::default();
                 let ctx = context(&cancel, 10);
@@ -235,7 +235,7 @@ fn snapshot_recovery_cannot_resolve_a_pending_mutation() {
     let scratch = Scratch::new();
     let (mut journal, mut publisher) = scratch.populated();
     let pending = command(2, 1);
-    assert_eq!(journal.transact_inner(pending.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_inner(&pending.clone(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
     assert_eq!(journal.recover_snapshot_publication(&mut publisher), Err(ControlError::StoreQuarantined));
     blocked(&publisher);
     assert!(journal.requires_recovery());
@@ -249,7 +249,7 @@ fn snapshot_recovery_cannot_resolve_a_pending_mutation() {
 fn forged_receipts_cannot_set_a_fictional_generation_floor() {
     let scratch = Scratch::new();
     let (mut journal, mut publisher) = scratch.populated();
-    let receipt = journal.transact(command(2, 1)).unwrap();
+    let receipt = journal.transact(&command(2, 1)).unwrap();
     for variant in 0..4 {
         let mut forged = receipt.clone();
         match variant {
@@ -306,8 +306,8 @@ fn observed_later_generation_cannot_be_reset_by_an_empty_historical_file() {
     let historical = Scratch::new();
     let old_database = historical.create(identity()); // Deliberately stale same-identity fixture.
     let (mut journal, mut publisher) = scratch.populated();
-    let old_receipt = journal.transact(command(2, 1)).unwrap();
-    journal.transact(command(3, 2)).unwrap();
+    let old_receipt = journal.transact(&command(2, 1)).unwrap();
+    journal.transact(&command(3, 2)).unwrap();
     assert_eq!(journal.publish_committed_snapshot(&old_receipt, &mut publisher), Err(ControlError::SnapshotPublicationFailed));
     assert_eq!(old_database.recover_snapshot_publication(&mut publisher), Err(ControlError::SnapshotPublicationFailed));
     blocked(&publisher);
@@ -371,7 +371,7 @@ fn transient_read_failure_requires_recovery_not_false_corruption() {
 fn owner_handoff_and_restart_recover_without_mutation_replay() {
     let scratch = Scratch::new();
     let (mut journal, mut publisher) = scratch.populated();
-    journal.transact(command(2, 1)).unwrap();
+    journal.transact(&command(2, 1)).unwrap();
     let cancel = Cancel::default();
     cancel.set(true);
     assert!(journal.recover_snapshot_publication_with_context(&mut publisher, &context(&cancel, 10_000)).is_err());

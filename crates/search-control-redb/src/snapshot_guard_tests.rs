@@ -166,8 +166,8 @@ fn actual_redb_publication_rejects_another_root_even_with_a_real_commit() {
     let mut first = first_root.create(identity());
     let second_identity = JournalIdentity { data_root_id: DataRootId::from_bytes([7; 16]), ..identity() };
     let mut second = second_root.create(second_identity);
-    let first_receipt = first.transact(mutation(1, 0, b"READY")).unwrap();
-    let second_receipt = second.transact(mutation(1, 0, b"READY")).unwrap();
+    let first_receipt = first.transact(&mutation(1, 0, b"READY")).unwrap();
+    let second_receipt = second.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     first.publish_committed_snapshot(&first_receipt, &mut publisher).unwrap();
     let current = publisher.current().unwrap();
@@ -180,7 +180,7 @@ fn actual_redb_publication_rejects_another_root_even_with_a_real_commit() {
 fn actual_redb_owner_handoff_keeps_data_generation_and_replay_valid() {
     let directory = Scratch::new();
     let mut journal = directory.create(identity());
-    let receipt = journal.transact(mutation(1, 0, b"READY")).unwrap();
+    let receipt = journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
     let next = JournalIdentity { owner_epoch: OwnerEpoch::new(2).unwrap(), ..identity() };
@@ -195,7 +195,7 @@ fn actual_redb_owner_handoff_keeps_data_generation_and_replay_valid() {
 fn moving_a_suspended_owner_keeps_the_fence_but_immutable_arcs_remain_cloneable() {
     let directory = Scratch::new();
     let mut journal = directory.create(identity());
-    let receipt = journal.transact(mutation(1, 0, b"READY")).unwrap();
+    let receipt = journal.transact(&mutation(1, 0, b"READY")).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&receipt, &mut publisher).unwrap();
     let historical = Arc::clone(&publisher.current().unwrap());

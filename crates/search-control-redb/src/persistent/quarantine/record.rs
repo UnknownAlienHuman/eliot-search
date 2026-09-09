@@ -31,7 +31,7 @@ impl ControlQuarantineReason {
             Self::AdministrativeHold => 4,
         }
     }
-    fn decode(tag: u8) -> Result<Self, ControlError> {
+    const fn decode(tag: u8) -> Result<Self, ControlError> {
         match tag {
             1 => Ok(Self::IntegrityContradiction),
             2 => Ok(Self::IdentityContradiction),
@@ -43,7 +43,9 @@ impl ControlQuarantineReason {
 }
 
 /// Exact bounded quarantine request. The owner supplies the observed diagnostic
-/// SHA-256, not source content or a relabelled BLAKE3 digest. This command grants
+/// SHA-256, not source content or a relabelled BLAKE3 digest.
+///
+/// This command grants
 /// no ownership and does not authorize repair or removing an existing hold.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct ControlQuarantineRequest {
@@ -135,7 +137,7 @@ impl Marker {
         }
         Ok(marker)
     }
-    pub fn receipt(&self, identity: JournalIdentity) -> ControlQuarantineReceipt {
+    pub const fn receipt(&self, identity: JournalIdentity) -> ControlQuarantineReceipt {
         ControlQuarantineReceipt { identity, request: self.request }
     }
 }

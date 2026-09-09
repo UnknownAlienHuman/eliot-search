@@ -36,6 +36,7 @@ pub(super) fn port_reserved_key(key: &[u8]) -> bool {
 }
 
 /// Committed route and authoritative publication-generation guards.
+///
 /// The source/access owners must update their counters in the same control
 /// transaction as the changes they protect. This record does not observe sources.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -113,8 +114,13 @@ pub struct VisibleEpochCommit {
 }
 impl fmt::Debug for VisibleEpochCommit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("VisibleEpochCommit").field("expected_generation", &self.prior_commit.after_generation)
-            .field("target_epoch", &self.intent.target_epoch).field("changes", &self.changes.len()).finish()
+        f.debug_struct("VisibleEpochCommit").field("operation_id", &"<opaque>")
+            .field("command_digest", &"<opaque>")
+            .field("expected_generation", &self.prior_commit.after_generation)
+            .field("target_epoch", &self.intent.target_epoch)
+            .field("previous", &self.previous)
+            .field("receipt", &"<opaque>")
+            .field("changes", &self.changes.len()).finish()
     }
 }
 
@@ -122,7 +128,7 @@ impl VisibleEpochCommit {
     /// Builds a closed command; runtime validation applies the actual journal limits.
     ///
     /// # Errors
-    /// Requires READBACK_VERIFIED, matching prepared/live guards, exactly the next
+    /// Requires `READBACK_VERIFIED`, matching prepared/live guards, exactly the next
     /// visible epoch and a nonempty distinct membership delta. Epoch skipping,
     /// invalidation-only publication and route replacement have separate protocols.
     #[allow(clippy::too_many_arguments)] // One closed request; each identity remains distinct.
@@ -323,7 +329,7 @@ pub(super) fn validate_initial_intent(snapshot: &JournalReadSnapshot, intent: &P
     Ok(())
 }
 
-fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
+const fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
     if journal.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION { Ok(()) }
     else { Err(ControlError::SchemaUnsupported) }
 }

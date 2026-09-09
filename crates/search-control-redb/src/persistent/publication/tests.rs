@@ -30,7 +30,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -80,7 +80,7 @@ fn prepared() -> PublicationIntent {
         state: PublicationIntentState::Prepared }
 }
 fn begin() -> PublicationIntentUpdate {
-    PublicationIntentUpdate::begin(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, prepared()).unwrap()
+    PublicationIntentUpdate::begin(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, &prepared()).unwrap()
 }
 fn advance(id: u8, generation: u64, previous: &PublicationIntent, state: PublicationIntentState) -> PublicationIntentUpdate {
     PublicationIntentUpdate::advance(MutationId([id; 32]), Blake3Digest32::from_bytes([9; 32]),
@@ -162,7 +162,7 @@ fn exact_replay_has_no_write_and_second_active_intent_cannot_replace_the_first()
     assert_eq!(journal.committed_writes(), writes);
     let mut next = prepared(); next.publication_intent_id = PublicationIntentId::from_bytes([7; 16]);
     next.target_epoch = Epoch::new(2).unwrap();
-    let competing = PublicationIntentUpdate::begin(MutationId([2; 32]), Blake3Digest32::from_bytes([9; 32]), 1, next).unwrap();
+    let competing = PublicationIntentUpdate::begin(MutationId([2; 32]), Blake3Digest32::from_bytes([9; 32]), 1, &next).unwrap();
     assert_eq!(journal.persist_publication_intent(&competing, &context(false)).unwrap_err().control_error(),
         ControlError::GenerationMismatch);
     assert_eq!(journal.read_publication_intent(&context(false)).unwrap().intent.as_ref(), Some(update.intent()));
@@ -231,7 +231,7 @@ fn lost_acknowledgement_recovers_exactly_after_reopen_without_repeating_the_writ
     }
     let mut journal = scratch.reopen();
     let mut other = prepared(); other.prepared_manifest_ref = ReceiptRef::new("receipt:wrong").unwrap();
-    let wrong = PublicationIntentUpdate::begin(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, other).unwrap();
+    let wrong = PublicationIntentUpdate::begin(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 0, &other).unwrap();
     assert!(matches!(journal.recover_publication_intent(&wrong, &context(false)).unwrap(), CommitRecoveryDecision::ConflictingInput));
     assert!(matches!(journal.recover_publication_intent(&update, &context(false)).unwrap(), CommitRecoveryDecision::Committed(_)));
     assert_eq!(journal.committed_writes(), 0);
@@ -289,7 +289,7 @@ fn bare_aborted_record_retains_recovery_fence_and_cannot_be_replaced_as_an_empty
     assert_eq!(journal.load_unresolved_publication(&context(false)).unwrap().as_ref(), Some(abort.intent()));
     assert_eq!(journal.read_publication_intent(&context(false)).unwrap().intent.as_ref(), Some(abort.intent()));
     assert_eq!(journal.control_snapshot(), Err(ControlError::SnapshotRebuildFailed));
-    let next = PublicationIntentUpdate::begin(MutationId([3; 32]), Blake3Digest32::from_bytes([9; 32]), 2, prepared()).unwrap();
+    let next = PublicationIntentUpdate::begin(MutationId([3; 32]), Blake3Digest32::from_bytes([9; 32]), 2, &prepared()).unwrap();
     assert!(journal.persist_publication_intent(&next, &context(false)).is_err());
 }
 
@@ -299,11 +299,11 @@ fn lost_intent_is_corruption_not_no_unresolved_work_or_permission_to_reinitializ
     let mut journal = scratch.create();
     persist(&mut journal, &begin());
     // Simulate a bad lower-level deletion while retaining coherent table counts.
-    journal.transact(ControlMutation::new(MutationId([2; 32]), Blake3Digest32::from_bytes([9; 32]), 1,
+    journal.transact(&ControlMutation::new(MutationId([2; 32]), Blake3Digest32::from_bytes([9; 32]), 1,
         vec![], vec![ControlKey::new(KEY.to_vec(), LIMITS).unwrap()])).unwrap();
     assert_eq!(journal.load_unresolved_publication(&context(false)).unwrap_err().control_error(), ControlError::StoreCorrupt);
     assert_eq!(journal.read_snapshot(), Err(ControlError::StoreCorrupt));
-    let next = PublicationIntentUpdate::begin(MutationId([3; 32]), Blake3Digest32::from_bytes([9; 32]), 2, prepared()).unwrap();
+    let next = PublicationIntentUpdate::begin(MutationId([3; 32]), Blake3Digest32::from_bytes([9; 32]), 2, &prepared()).unwrap();
     assert_eq!(journal.persist_publication_intent(&next, &context(false)).unwrap_err().control_error(), ControlError::StoreCorrupt);
     assert!(journal.quarantined);
 }
@@ -425,7 +425,7 @@ fn crash_child() {
 
 #[test]
 fn one_deadline_covers_typed_validation_and_the_existing_transaction_engine() {
-    use std::cell::{Cell, RefCell};
+    use std::cell::Cell;
     use std::time::{Duration, Instant};
     let scratch = Scratch::new(); let mut journal = scratch.create();
     let ctx = OperationContext::new(RequestId::from_bytes([1; 16]), 4, Cancel(false),

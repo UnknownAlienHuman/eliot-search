@@ -102,6 +102,8 @@ impl fmt::Debug for ControlCallError {
             .field("control", &self.control)
             .field("interruption", &self.interruption)
             .field("operation_id", &self.operation_id.map(|_| "<opaque>"))
+            .field("before_start", &self.before_start)
+            .field("recovery", &self.recovery)
             .finish()
     }
 }
@@ -189,14 +191,12 @@ impl<'a, C: CancellationProbe, F: Fn() -> Instant> Budget<'a, C, F> {
         }
     }
 
-    pub(super) fn interrupted(&self) -> bool { self.stopped.get().is_some() }
+    pub(super) const fn interrupted(&self) -> bool { self.stopped.get().is_some() }
 }
 
 impl<C: CancellationProbe, F: Fn() -> Instant> Check for Budget<'_, C, F> {
     fn check(&self, point: Point) -> Result<(), ControlError> {
-        let stopped = if let Some(stopped) = self.stopped.get() {
-            Some(stopped)
-        } else if self.context.cancellation().is_cancelled() {
+        let stopped = self.stopped.get().map_or_else(|| if self.context.cancellation().is_cancelled() {
             Some((ControlInterruption::Cancelled, point))
         } else {
             // A backwards fake/platform clock is rejected, never a fresh budget.
@@ -204,7 +204,7 @@ impl<C: CancellationProbe, F: Fn() -> Instant> Check for Budget<'_, C, F> {
                 Some(elapsed) if elapsed < self.duration => None,
                 _ => Some((ControlInterruption::DeadlineElapsed, point)),
             }
-        };
+        }, Some);
         self.stopped.set(stopped);
         match stopped {
             None => Ok(()),

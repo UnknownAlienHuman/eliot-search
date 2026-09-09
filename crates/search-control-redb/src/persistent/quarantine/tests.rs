@@ -3,6 +3,7 @@ use super::record::{MARKER_BYTES, Marker};
 use crate::{ControlMutation, ControlRecordClass, ControlValue, ControlWrite};
 use super::super::RECORDS;
 use super::super::operation::Unscoped;
+use redb::ReadableTableMetadata;
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueRef, OwnerEpoch, RequestId};
 use search_ports::{PackageOpaque, PortErrorKind};
 use std::cell::RefCell;
@@ -53,7 +54,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -106,7 +107,7 @@ fn application_bytes(journal: &PersistentControlJournal) -> Vec<Vec<u8>> {
 fn durable_quarantine_blocks_all_normal_paths_and_preserves_application_state() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    let commit = journal.transact(mutation()).unwrap();
+    let commit = journal.transact(&mutation()).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     journal.publish_committed_snapshot(&commit, &mut publisher).unwrap();
     assert!(publisher.current().is_some());
@@ -117,7 +118,7 @@ fn durable_quarantine_blocks_all_normal_paths_and_preserves_application_state() 
     assert_eq!(journal.committed_writes(), writes + 1);
     assert!(publisher.current().is_none()); assert!(publisher.requires_recovery());
     assert_eq!(journal.read_snapshot(), Err(ControlError::StoreQuarantined));
-    assert_eq!(journal.transact(mutation()), Err(ControlError::StoreQuarantined));
+    assert_eq!(journal.transact(&mutation()), Err(ControlError::StoreQuarantined));
     assert_eq!(journal.recover_snapshot_publication(&mut publisher), Err(ControlError::StoreQuarantined));
     assert_eq!(application_bytes(&journal), before);
     drop(journal);
@@ -159,7 +160,7 @@ fn pre_cancelled_request_suspends_admission_but_records_no_durable_hold() {
 
 #[test]
 fn stale_generation_never_records_a_hold_against_another_generation() {
-    let scratch = Scratch::new(); let mut journal = scratch.create(); journal.transact(mutation()).unwrap();
+    let scratch = Scratch::new(); let mut journal = scratch.create(); journal.transact(&mutation()).unwrap();
     let mut publisher = ControlSnapshotPublisher::new();
     let error = journal.quarantine_with_context(&request(0), &mut publisher, &context(false)).unwrap_err();
     assert_eq!(error.control_error(), ControlError::GenerationMismatch);
@@ -170,7 +171,7 @@ fn stale_generation_never_records_a_hold_against_another_generation() {
 #[test]
 fn quarantine_does_not_overwrite_an_unknown_data_mutation_identity() {
     let scratch = Scratch::new(); let mut journal = scratch.create();
-    assert_eq!(journal.transact_inner(mutation(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
+    assert_eq!(journal.transact_inner(&mutation(), Boundary::LostAcknowledgement), Err(ControlError::CommitOutcomeUnknown));
     let pending = journal.pending; assert!(pending.is_some());
     let mut publisher = ControlSnapshotPublisher::new();
     journal.quarantine_with_context(&request(1), &mut publisher, &context(false)).unwrap();
@@ -209,7 +210,7 @@ fn absent_marker_is_not_a_claim_that_application_records_are_sound() {
 
 #[test]
 fn damaged_records_can_be_quarantined_without_repairing_or_deleting_them() {
-    let scratch = Scratch::new(); let mut journal = scratch.create(); journal.transact(mutation()).unwrap();
+    let scratch = Scratch::new(); let mut journal = scratch.create(); journal.transact(&mutation()).unwrap();
     let write = journal.database.begin_write().unwrap();
     {
         let mut table = write.open_table(RECORDS).unwrap();
@@ -265,7 +266,7 @@ fn fixed_marker_does_not_depend_on_live_record_or_receipt_capacity() {
     let file = OpenOptions::new().create_new(true).read(true).write(true).open(scratch.path()).unwrap();
     scratch.keep(&file);
     let limits = JournalLimits { max_records: 1, max_operation_records: 1, ..LIMITS };
-    let mut journal = PersistentControlJournal::create(file, identity(), limits).unwrap(); journal.transact(mutation()).unwrap();
+    let mut journal = PersistentControlJournal::create(file, identity(), limits).unwrap(); journal.transact(&mutation()).unwrap();
     journal.quarantine_with_context(&request(1), &mut ControlSnapshotPublisher::new(), &context(false)).unwrap();
     let read = journal.database.begin_read().unwrap();
     assert_eq!(read.open_table(RECORDS).unwrap().len().unwrap(), 1);
@@ -347,7 +348,7 @@ fn foreign_publisher_cannot_be_poisoned_by_another_journal() {
     let file = OpenOptions::new().create_new(true).read(true).write(true).open(second.path()).unwrap();
     let other_identity = JournalIdentity { data_root_id: DataRootId::from_bytes([99; 16]), ..identity() };
     let mut other = PersistentControlJournal::create(file, other_identity, LIMITS).unwrap();
-    let commit = other.transact(mutation()).unwrap();
+    let commit = other.transact(&mutation()).unwrap();
     let mut publisher = ControlSnapshotPublisher::new(); other.publish_committed_snapshot(&commit, &mut publisher).unwrap();
     assert_eq!(journal.quarantine_with_context(&request(0), &mut publisher, &context(false)).unwrap_err().control_error(), ControlError::IdentityMismatch);
     assert!(!publisher.requires_recovery()); assert!(publisher.current().is_some());
@@ -370,7 +371,7 @@ fn marker_wire_bytes_match_an_independent_sha256_known_answer() {
 #[test]
 fn data_operation_id_cannot_be_reused_for_an_administrative_hold() {
     let scratch = Scratch::new(); let mut journal = scratch.create();
-    let data_command = mutation(); journal.transact(data_command.clone()).unwrap();
+    let data_command = mutation(); journal.transact(&data_command).unwrap();
     let conflicting = ControlQuarantineRequest::new(data_command.id(), 1,
         ControlQuarantineReason::AdministrativeHold, [5; 32]);
     let error = journal.quarantine_with_context(&conflicting, &mut ControlSnapshotPublisher::new(), &context(false)).unwrap_err();

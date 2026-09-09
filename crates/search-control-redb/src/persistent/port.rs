@@ -23,6 +23,7 @@ use super::{Boundary, ControlCallError, ControlQuarantineReceipt, ControlQuarant
 pub type ControlPortError = PortError<ControlError>;
 
 /// Closed command routing; each variant uses its existing semantic validator.
+///
 /// Generic records cannot bypass publication's reserved keys. Initialization,
 /// schema changes and owner succession remain explicit lifecycle operations.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -36,7 +37,7 @@ pub enum ControlPortCommand {
 }
 
 impl ControlPortCommand {
-    fn id(&self) -> MutationId {
+    const fn id(&self) -> MutationId {
         match self {
             Self::Records(command) => command.mutation().id(),
             Self::PublicationIntent(command) => command.port_operation_id(),
@@ -49,10 +50,10 @@ impl ControlPortCommand {
 ///
 /// The complete 32-byte ID is encoded, never truncated, hashed into another ID or
 /// parsed from caller text. Callers retain this value alongside the original command.
-/// RetrySameIdentity is the only declaration supported by this transaction engine.
+/// `RetrySameIdentity` is the only declaration supported by this transaction engine.
 ///
 /// # Errors
-/// Returns InvalidValue if the shared opaque-ID bound rejects the fixed encoding.
+/// Returns `InvalidValue` if the shared opaque-ID bound rejects the fixed encoding.
 pub fn control_mutation_identity(id: MutationId) -> Result<MutationIdentity, ControlError> {
     let text = format!("eliot-control-v1:{}", encode_mutation_hex(&id.0));
     let operation_id = OpaqueId::new(text).map_err(|_| ControlError::InvalidValue)?;

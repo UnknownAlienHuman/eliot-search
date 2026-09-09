@@ -149,7 +149,7 @@ pub struct JournalIdentity {
 
 impl JournalIdentity {
     /// Validates a journal identity.
-    pub fn validate(self) -> Result<Self, ControlError> {
+    pub const fn validate(self) -> Result<Self, ControlError> {
         if self.schema_version == 0 {
             return Err(ControlError::SchemaUnsupported);
         }
@@ -263,13 +263,13 @@ impl ControlValue {
 
     /// Encoded byte length.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Returns whether the value is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 }
@@ -311,7 +311,7 @@ impl ControlMutation {
     /// Creates a mutation. Structural and capacity validation occurs before the
     /// journal stages any state.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         id: MutationId,
         command_digest: Blake3Digest32,
         expected_generation: u64,
@@ -499,8 +499,12 @@ impl ControlJournal {
     ) -> Result<ControlCommitReceipt, ControlError> {
         self.ensure_available()?;
 
-        if let Some(existing) = self.operations.get(&mutation.id) {
-            if existing.command_digest != mutation.command_digest {
+        // Move the owned request apart so the by-value command is genuinely
+        // consumed; `id`/`command_digest` are `Copy` and reused below.
+        let ControlMutation { id, command_digest, expected_generation, writes, deletes } = mutation;
+
+        if let Some(existing) = self.operations.get(&id) {
+            if existing.command_digest != command_digest {
                 return Err(ControlError::OperationConflict);
             }
             let mut receipt = existing.receipt.clone();
@@ -508,30 +512,29 @@ impl ControlJournal {
             return Ok(receipt);
         }
 
-        if mutation.expected_generation != self.generation {
+        if expected_generation != self.generation {
             return Err(ControlError::TransactionConflict);
         }
         if self.operations.len() >= self.limits.max_operation_records {
             return Err(ControlError::IdempotencyCapacityExceeded);
         }
 
-        let item_count = mutation
-            .writes
+        let item_count = writes
             .len()
-            .checked_add(mutation.deletes.len())
+            .checked_add(deletes.len())
             .ok_or(ControlError::BudgetExceeded)?;
         if item_count == 0 || item_count > self.limits.max_mutation_items {
             return Err(ControlError::BudgetExceeded);
         }
 
         let mut touched = BTreeSet::new();
-        for write in &mutation.writes {
+        for write in &writes {
             self.validate_key_value(&write.key, &write.value)?;
             if !touched.insert(write.key.clone()) {
                 return Err(ControlError::DuplicateMutationKey);
             }
         }
-        for key in &mutation.deletes {
+        for key in &deletes {
             self.validate_key(key)?;
             if !touched.insert(key.clone()) {
                 return Err(ControlError::DuplicateMutationKey);
@@ -539,11 +542,11 @@ impl ControlJournal {
         }
 
         let mut staged = self.records.clone();
-        for key in &mutation.deletes {
+        for key in &deletes {
             staged.remove(key);
         }
-        for write in &mutation.writes {
-            staged.insert(write.key.clone(), write.value.clone());
+        for write in writes {
+            staged.insert(write.key, write.value);
         }
         self.validate_staged_records(&staged)?;
 
@@ -552,8 +555,8 @@ impl ControlJournal {
             .checked_add(1)
             .ok_or(ControlError::GenerationExhausted)?;
         let receipt = ControlCommitReceipt {
-            operation_id: mutation.id,
-            command_digest: mutation.command_digest,
+            operation_id: id,
+            command_digest,
             before_generation: self.generation,
             after_generation,
             changed_keys: touched.into_iter().collect(),
@@ -563,9 +566,9 @@ impl ControlJournal {
         self.records = staged;
         self.generation = after_generation;
         self.operations.insert(
-            mutation.id,
+            id,
             OperationRecord {
-                command_digest: mutation.command_digest,
+                command_digest,
                 receipt: receipt.clone(),
             },
         );
@@ -627,7 +630,7 @@ impl ControlJournal {
     }
 
     /// Places the journal in fail-closed quarantine.
-    pub fn quarantine(&mut self, reason: ControlError) -> QuarantineReceipt {
+    pub const fn quarantine(&mut self, reason: ControlError) -> QuarantineReceipt {
         self.quarantine = Some(reason);
         QuarantineReceipt {
             identity: self.identity,
@@ -652,7 +655,7 @@ impl ControlJournal {
         }
     }
 
-    fn ensure_available(&self) -> Result<(), ControlError> {
+    const fn ensure_available(&self) -> Result<(), ControlError> {
         match self.quarantine {
             Some(_) => Err(ControlError::StoreQuarantined),
             None => Ok(()),
@@ -903,7 +906,7 @@ pub struct MigrationMachine {
 
 impl MigrationMachine {
     /// Creates a stable non-zero schema state.
-    pub fn new(version: u32) -> Result<Self, ControlError> {
+    pub const fn new(version: u32) -> Result<Self, ControlError> {
         if version == 0 {
             return Err(ControlError::SchemaUnsupported);
         }

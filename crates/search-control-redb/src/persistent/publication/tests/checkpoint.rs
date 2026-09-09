@@ -17,7 +17,7 @@ fn initialized(scratch: &Scratch) -> PersistentControlJournal {
     journal
 }
 fn first() -> PublicationIntentUpdate {
-    PublicationIntentUpdate::begin(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 1, prepared()).unwrap()
+    PublicationIntentUpdate::begin(MutationId([1; 32]), Blake3Digest32::from_bytes([9; 32]), 1, &prepared()).unwrap()
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn lost_route_or_intent_cannot_reset_the_recovery_floor() {
     for deleted in [KEY, b"collection_route/visibility/v1".as_slice()] {
         let scratch = Scratch::new(); let mut journal = initialized(&scratch);
         persist(&mut journal, &first());
-        journal.transact(ControlMutation::new(MutationId([40; 32]), Blake3Digest32::from_bytes([9; 32]), 2,
+        journal.transact(&ControlMutation::new(MutationId([40; 32]), Blake3Digest32::from_bytes([9; 32]), 2,
             vec![], vec![ControlKey::new(deleted.to_vec(), LIMITS).unwrap()])).unwrap();
         let before = scratch.bytes();
         assert!(journal.read_publication_checkpoint(&context(false)).is_err());

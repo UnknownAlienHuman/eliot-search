@@ -34,10 +34,10 @@ pub struct SourceContentManifest {
 
 impl SourceContentManifest {
     pub(super) fn encode(self, binding: SourceImportBinding) -> Result<Vec<u8>, ControlError> {
-        if self.target_namespace != binding.target_namespace
-            || self.legacy_namespace != binding.legacy_namespace
-            || self.catalog_snapshot != binding.catalog_snapshot
-            || self.source_plan != binding.plan_chain
+        // Tuple comparison preserves quarantine-on-mismatch: every binding
+        // field must match exactly or the manifest is rejected as foreign.
+        if (self.target_namespace, self.legacy_namespace, self.catalog_snapshot, self.source_plan)
+            != (binding.target_namespace, binding.legacy_namespace, binding.catalog_snapshot, binding.plan_chain)
         {
             return Err(ControlError::IdentityMismatch);
         }
@@ -63,7 +63,7 @@ impl SourceContentManifest {
         Ok(bytes)
     }
 
-    pub(super) fn validate_counts(self, counts: SourceImportCounts) -> Result<(), ControlError> {
+    pub(super) const fn validate_counts(self, counts: SourceImportCounts) -> Result<(), ControlError> {
         // A/B/A may reuse an object, but a unique object must have at least one
         // occurrence. Empty files legitimately contribute zero source bytes.
         if self.objects < counts.sources || self.objects > counts.occurrences {

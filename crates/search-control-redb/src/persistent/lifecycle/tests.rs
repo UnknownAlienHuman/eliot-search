@@ -68,7 +68,7 @@ impl Scratch {
     /// Exact database bytes, read through a handle duplicated from the one redb
     /// owns. redb holds an exclusive byte-range lock for the life of the database;
     /// on Windows an unrelated `fs::read` of the same path fails with
-    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// `ERROR_LOCK_VIOLATION`. A duplicated handle shares that lock ownership, so
     /// this reads the same bytes without unlocking, dropping or reopening.
     fn bytes(&self) -> Vec<u8> {
         let mut guard = self.handle.borrow_mut();
@@ -99,7 +99,7 @@ impl Scratch {
     }
     fn populated(&self) -> PersistentControlJournal {
         let mut journal = PersistentControlJournal::create(self.new_file(), identity(), LIMITS).unwrap();
-        journal.transact(request()).unwrap();
+        journal.transact(&request()).unwrap();
         journal
     }
     fn reopen(&self, expected: JournalIdentity) -> PersistentControlJournal {
@@ -168,7 +168,7 @@ fn public_create_open_and_handoff_keep_exact_state_and_do_not_add_operation_rows
     ).unwrap();
     assert_eq!(journal.verify().unwrap().generation, 0);
     assert_eq!(journal.committed_writes(), 1);
-    let receipt = journal.transact(request()).unwrap();
+    let receipt = journal.transact(&request()).unwrap();
     let before = journal.verify().unwrap();
     drop(journal);
     let journal = PersistentControlJournal::open_with_context(
@@ -181,7 +181,7 @@ fn public_create_open_and_handoff_keep_exact_state_and_do_not_add_operation_rows
     assert_eq!(after.records, before.records);
     assert_eq!(after.generation, before.generation);
     assert_eq!(after.identity, successor());
-    let replay = journal.transact(request()).unwrap();
+    let replay = journal.transact(&request()).unwrap();
     assert!(replay.replayed);
     assert_eq!(replay.operation_id, receipt.operation_id);
     assert_eq!(journal.committed_writes(), 1);
@@ -401,7 +401,7 @@ fn committed_handoff_lost_ack_keeps_new_epoch_and_old_mutation_replay() {
             let after = journal.verify().unwrap();
             assert_eq!(after.records, before.records);
             assert_eq!(after.generation, before.generation);
-            assert!(journal.transact(request()).unwrap().replayed);
+            assert!(journal.transact(&request()).unwrap().replayed);
             assert_eq!(journal.committed_writes(), 0);
         }
     }
@@ -440,12 +440,6 @@ fn handoff_rejects_skipped_epoch_or_changed_immutable_identity() {
 
 #[test]
 fn deadline_is_not_reset_between_preflight_open_and_ready_verification() {
-    let scratch = Scratch::new();
-    let cancel = Cancellation::default();
-    let ctx = context(&cancel, 10);
-    let start = Instant::now();
-    let now = Cell::new(start);
-    let budget = Budget::with_clock(&ctx, || now.get());
     struct Advance<'a> { inner: &'a dyn Check, now: &'a Cell<Instant> }
     impl Check for Advance<'_> {
         fn check(&self, point: Point) -> Result<(), ControlError> {
@@ -455,6 +449,12 @@ fn deadline_is_not_reset_between_preflight_open_and_ready_verification() {
             self.inner.check(point)
         }
     }
+    let scratch = Scratch::new();
+    let cancel = Cancellation::default();
+    let ctx = context(&cancel, 10);
+    let start = Instant::now();
+    let now = Cell::new(start);
+    let budget = Budget::with_clock(&ctx, || now.get());
     let gate = Advance { inner: &budget, now: &now };
     let raw = PersistentControlJournal::create_checked(scratch.new_file(), identity(), LIMITS, &gate).unwrap_err();
     let error = budget.failure(raw, Some(OPERATION));
@@ -466,12 +466,12 @@ fn deadline_is_not_reset_between_preflight_open_and_ready_verification() {
 
 #[test]
 fn native_open_error_mapping_distinguishes_corruption_from_uncertain_io() {
-    assert_eq!(open_error(DatabaseError::DatabaseAlreadyOpen), ControlError::StoreUnavailable);
-    assert_eq!(open_error(DatabaseError::UpgradeRequired(0)), ControlError::MigrationUnverified);
-    assert_eq!(open_error(DatabaseError::Storage(redb::StorageError::Corrupted("bad page".to_owned()))), ControlError::StoreCorrupt);
-    assert_eq!(open_error(DatabaseError::Storage(redb::StorageError::Io(std::io::Error::other("private-path")))), ControlError::CommitOutcomeUnknown);
-    assert_eq!(open_error(DatabaseError::Storage(redb::StorageError::PreviousIo)), ControlError::CommitOutcomeUnknown);
-    assert_eq!(open_error(DatabaseError::RepairAborted), ControlError::CommitOutcomeUnknown);
+    assert_eq!(open_error(&DatabaseError::DatabaseAlreadyOpen), ControlError::StoreUnavailable);
+    assert_eq!(open_error(&DatabaseError::UpgradeRequired(0)), ControlError::MigrationUnverified);
+    assert_eq!(open_error(&DatabaseError::Storage(redb::StorageError::Corrupted("bad page".to_owned()))), ControlError::StoreCorrupt);
+    assert_eq!(open_error(&DatabaseError::Storage(redb::StorageError::Io(std::io::Error::other("private-path")))), ControlError::CommitOutcomeUnknown);
+    assert_eq!(open_error(&DatabaseError::Storage(redb::StorageError::PreviousIo)), ControlError::CommitOutcomeUnknown);
+    assert_eq!(open_error(&DatabaseError::RepairAborted), ControlError::CommitOutcomeUnknown);
 }
 
 
@@ -479,7 +479,7 @@ fn native_open_error_mapping_distinguishes_corruption_from_uncertain_io() {
 fn unresolved_mutation_cannot_be_cleared_by_owner_handoff() {
     let scratch = Scratch::new();
     let mut journal = PersistentControlJournal::create(scratch.new_file(), identity(), LIMITS).unwrap();
-    assert_eq!(journal.transact_inner(request(), super::super::Boundary::LostAcknowledgement),
+    assert_eq!(journal.transact_inner(&request(), super::super::Boundary::LostAcknowledgement),
         Err(ControlError::CommitOutcomeUnknown));
     assert!(journal.requires_recovery());
     assert!(matches!(journal.advance_owner_checked(successor(), &Unscoped), Err(ControlError::StoreQuarantined)));
