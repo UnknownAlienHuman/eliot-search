@@ -136,7 +136,7 @@ impl SealedCatalogBinding {
         self.validate()?;
         Ok(format!(
             concat!(
-                "{CATALOG_MAGIC}\n",
+                "{}\n",
                 "catalog_format_version={}\n",
                 "source_id={}\n",
                 "source_revision_id={}\n",
@@ -146,6 +146,7 @@ impl SealedCatalogBinding {
                 "content_plaintext_bytes={}\n",
                 "content_ciphertext_bytes={}\n"
             ),
+            CATALOG_MAGIC,
             self.catalog_format_version,
             self.source_id,
             self.source_revision_id,

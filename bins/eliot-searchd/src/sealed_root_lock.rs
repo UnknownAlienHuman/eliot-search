@@ -101,8 +101,8 @@ mod platform {
 #[cfg(windows)]
 mod platform {
     use super::SealedRootLockError;
-    use std::fs::{self, File, OpenOptions};
-    use std::io::{self, Seek, SeekFrom, Write};
+    use std::fs::{self, File, OpenOptions, TryLockError};
+    use std::io::{Seek, SeekFrom, Write};
     use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -154,12 +154,9 @@ mod platform {
             {
                 return Err(SealedRootLockError::ReparsePointDenied);
             }
-            file.try_lock().map_err(|error| {
-                if error.kind() == io::ErrorKind::WouldBlock {
-                    SealedRootLockError::AlreadyOwned
-                } else {
-                    SealedRootLockError::LockFailure
-                }
+            file.try_lock().map_err(|error| match error {
+                TryLockError::WouldBlock => SealedRootLockError::AlreadyOwned,
+                TryLockError::Error(_) => SealedRootLockError::LockFailure,
             })?;
 
             let started_at_ms = SystemTime::now()

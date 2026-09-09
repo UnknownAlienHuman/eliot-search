@@ -438,7 +438,7 @@ fn load_chain(
     if inventory.len() > MAX_ACCESS_FENCE_GENERATIONS {
         return Err(SealedAccessError::CapacityExceeded);
     }
-    let mut chain = Vec::with_capacity(inventory.len());
+    let mut chain: Vec<LoadedFence> = Vec::with_capacity(inventory.len());
     let mut mutation_ids = BTreeSet::new();
 
     for (index, (generation, object_id)) in inventory.into_iter().enumerate() {

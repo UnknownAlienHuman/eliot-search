@@ -121,7 +121,10 @@ mod platform {
     }
 }
 
+// The exception is confined to the Windows CNG ABI boundary, matching the
+// sealed_store DPAPI precedent. Shared digest validation retains deny.
 #[cfg(windows)]
+#[allow(unsafe_code)]
 mod platform {
     use super::{DigestError, Sha256Digest};
     use core::ffi::c_void;

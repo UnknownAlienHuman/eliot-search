@@ -2,6 +2,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#[path = "../sealed_digest.rs"]
+mod sealed_digest;
 #[path = "../sealed_store.rs"]
 mod sealed_store;
 #[path = "../sealed_transaction.rs"]
