@@ -230,6 +230,7 @@ impl PinRegistry {
         }
         inner.active_route = route;
         inner.visible_epoch = visible_epoch;
+        drop(inner);
         Ok(())
     }
 
@@ -272,6 +273,7 @@ impl PinRegistry {
             epoch: Some(epoch),
             kind,
         })?;
+        drop(inner);
         Ok(EpochPinGuard {
             registry: Arc::downgrade(&self.inner),
             pin_id,
@@ -290,15 +292,15 @@ impl PinRegistry {
     ) -> Result<RoutePinGuard, PinError> {
         let mut inner = self.inner.lock().map_err(|_| PinError::RegistryPoisoned)?;
         let pin_id = inner.insert(PinRecord {
-            owner: owner.clone(),
+            owner,
             route,
             epoch: None,
             kind: PinKind::Route,
         })?;
+        drop(inner);
         Ok(RoutePinGuard {
             registry: Arc::downgrade(&self.inner),
             pin_id,
-            owner,
             route,
             released: false,
         })
@@ -316,6 +318,7 @@ impl PinRegistry {
         for pin_id in &pin_ids {
             inner.remove(*pin_id);
         }
+        drop(inner);
         Ok(PinReleaseReceipt {
             released_pins: pin_ids.len(),
         })
@@ -419,6 +422,10 @@ impl EpochPinGuard {
     }
 
     /// Extends a continuation pin within its original route/epoch and TTL.
+    /// Holds the registry lock across the check-and-mutate so the
+    /// ownership/kind/TTL validation and expiry write stay atomic; releasing
+    /// the guard earlier (or copy-relock) would open a TOCTOU window.
+    #[allow(clippy::significant_drop_tightening)]
     pub fn renew_continuation_pin(
         &mut self,
         now_ms: u64,
@@ -455,6 +462,7 @@ impl EpochPinGuard {
     }
 
     /// Explicitly releases this guard. Drop is an idempotent fallback.
+    #[must_use]
     pub fn release(mut self) -> PinReleaseReceipt {
         let released = release_weak_pin(&self.registry, self.pin_id);
         self.released = true;
@@ -472,7 +480,7 @@ impl fmt::Debug for EpochPinGuard {
             .field("epoch", &self.epoch)
             .field("owner", &"<opaque>")
             .field("released", &self.released)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -489,7 +497,6 @@ impl Drop for EpochPinGuard {
 pub struct RoutePinGuard {
     registry: Weak<Mutex<RegistryInner>>,
     pin_id: u64,
-    owner: OpaqueId,
     route: RouteIdentity,
     released: bool,
 }
@@ -502,6 +509,7 @@ impl RoutePinGuard {
     }
 
     /// Explicitly releases this guard. Drop is an idempotent fallback.
+    #[must_use]
     pub fn release(mut self) -> PinReleaseReceipt {
         let released = release_weak_pin(&self.registry, self.pin_id);
         self.released = true;
@@ -518,7 +526,7 @@ impl fmt::Debug for RoutePinGuard {
             .field("route", &self.route)
             .field("owner", &"<opaque>")
             .field("released", &self.released)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
