@@ -44,13 +44,11 @@ impl AdapterProtocolVersion {
 }
 
 /// Finite limits applied before a request enters the adapter ledger.
-// `max_*` fields intentionally mirror the public `max_*()` accessors.
-#[allow(clippy::struct_field_names)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AdapterLimits {
-    max_in_flight: NonZeroUsize,
-    max_retained_terminal: NonZeroUsize,
-    max_payload_bytes: NonZeroUsize,
+    in_flight_ceiling: NonZeroUsize,
+    terminal_allowance: NonZeroUsize,
+    payload_byte_budget: NonZeroUsize,
 }
 
 impl AdapterLimits {
@@ -65,11 +63,11 @@ impl AdapterLimits {
         max_payload_bytes: usize,
     ) -> Result<Self, AdapterError> {
         Ok(Self {
-            max_in_flight: NonZeroUsize::new(max_in_flight)
+            in_flight_ceiling: NonZeroUsize::new(max_in_flight)
                 .ok_or(AdapterError::InvalidLimits)?,
-            max_retained_terminal: NonZeroUsize::new(max_retained_terminal)
+            terminal_allowance: NonZeroUsize::new(max_retained_terminal)
                 .ok_or(AdapterError::InvalidLimits)?,
-            max_payload_bytes: NonZeroUsize::new(max_payload_bytes)
+            payload_byte_budget: NonZeroUsize::new(max_payload_bytes)
                 .ok_or(AdapterError::InvalidLimits)?,
         })
     }
@@ -77,19 +75,19 @@ impl AdapterLimits {
     /// Maximum requests that may be non-terminal simultaneously.
     #[must_use]
     pub const fn max_in_flight(self) -> usize {
-        self.max_in_flight.get()
+        self.in_flight_ceiling.get()
     }
 
     /// Maximum terminal records retained for replay classification.
     #[must_use]
     pub const fn max_retained_terminal(self) -> usize {
-        self.max_retained_terminal.get()
+        self.terminal_allowance.get()
     }
 
     /// Maximum encoded request payload accepted before dispatch.
     #[must_use]
     pub const fn max_payload_bytes(self) -> usize {
-        self.max_payload_bytes.get()
+        self.payload_byte_budget.get()
     }
 }
 
@@ -290,8 +288,6 @@ impl EliotAdapter {
     ///
     /// Enforces active state, exact binding, supported version, payload and
     /// concurrency bounds, and conflict-free request-ID replay.
-    // Match kept over `map_or`: both payloads are `Copy` and the match stays lazy and readable.
-    #[allow(clippy::option_if_let_else)]
     pub fn admit<P>(&mut self, request: &EliotRequest<P>) -> Result<Admission, AdapterError> {
         if request.version != AdapterProtocolVersion::CURRENT {
             return Err(AdapterError::UnsupportedVersion);
@@ -322,10 +318,7 @@ impl EliotAdapter {
             {
                 return Err(AdapterError::RequestIdentityConflict);
             }
-            return Ok(match existing.terminal {
-                Some(receipt) => Admission::ReplayTerminal(receipt),
-                None => Admission::ReplayInFlight(existing.lifecycle),
-            });
+            return Ok(existing.terminal.map_or(Admission::ReplayInFlight(existing.lifecycle), Admission::ReplayTerminal));
         }
 
         if self.in_flight() >= self.limits.max_in_flight() {
