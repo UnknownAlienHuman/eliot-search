@@ -4,6 +4,7 @@ use search_contracts::CollectionGenerationId;
 
 fn initialized(scratch: &Scratch) -> PersistentControlJournal {
     let file = OpenOptions::new().create_new(true).read(true).write(true).open(scratch.path()).unwrap();
+    scratch.keep(&file);
     let mut journal = PersistentControlJournal::create(file,
         JournalIdentity { schema_version: PUBLICATION_VISIBILITY_SCHEMA_VERSION, ..identity() }, LIMITS).unwrap();
     let state = PublicationVisibilityState {
@@ -24,12 +25,13 @@ fn checkpoint_never_invents_a_route_for_legacy_or_uninitialized_state() {
     for version in [1, 2, 3] {
         let scratch = Scratch::new();
         let file = OpenOptions::new().create_new(true).read(true).write(true).open(scratch.path()).unwrap();
+        scratch.keep(&file);
         let journal = PersistentControlJournal::create(file, JournalIdentity { schema_version: version, ..identity() }, LIMITS).unwrap();
-        let before = fs::read(scratch.path()).unwrap();
+        let before = scratch.bytes();
         let result = journal.read_publication_checkpoint(&context(false));
         if version == 3 { assert_eq!(result.unwrap(), None); }
         else { assert_eq!(result.unwrap_err().control_error(), ControlError::SchemaUnsupported); }
-        assert_eq!(fs::read(scratch.path()).unwrap(), before);
+        assert_eq!(scratch.bytes(), before);
     }
 }
 
@@ -74,9 +76,9 @@ fn lost_route_or_intent_cannot_reset_the_recovery_floor() {
         persist(&mut journal, &first());
         journal.transact(ControlMutation::new(MutationId([40; 32]), Blake3Digest32::from_bytes([9; 32]), 2,
             vec![], vec![ControlKey::new(deleted.to_vec(), LIMITS).unwrap()])).unwrap();
-        let before = fs::read(scratch.path()).unwrap();
+        let before = scratch.bytes();
         assert!(journal.read_publication_checkpoint(&context(false)).is_err());
-        assert_eq!(fs::read(scratch.path()).unwrap(), before);
+        assert_eq!(scratch.bytes(), before);
     }
 }
 
@@ -101,11 +103,11 @@ fn checkpoint_is_read_only_redacted_and_one_snapshot_not_two_separate_observatio
     let scratch = Scratch::new(); let mut journal = initialized(&scratch);
     persist(&mut journal, &first());
     let expected = journal.read_publication_checkpoint(&context(false)).unwrap().unwrap();
-    let bytes = fs::read(scratch.path()).unwrap(); let writes = journal.committed_writes();
+    let bytes = scratch.bytes(); let writes = journal.committed_writes();
     let reads = journal.work.snapshot_reads.load(Ordering::Relaxed);
     for _ in 0..10_000 { assert_eq!(journal.read_publication_checkpoint(&context(false)).unwrap().unwrap(), expected); }
     assert_eq!(journal.work.snapshot_reads.load(Ordering::Relaxed) - reads, 10_000);
-    assert_eq!(journal.committed_writes(), writes); assert_eq!(fs::read(scratch.path()).unwrap(), bytes);
+    assert_eq!(journal.committed_writes(), writes); assert_eq!(scratch.bytes(), bytes);
     assert!(!format!("{expected:?}").contains("manifest-sentinel"));
 }
 

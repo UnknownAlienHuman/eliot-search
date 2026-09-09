@@ -7,7 +7,9 @@ use crate::{
     JournalIdentity, JournalLimits, MutationId,
 };
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId, OwnerEpoch};
-use std::fs::{self, OpenOptions};
+use std::cell::RefCell;
+use std::fs::{self, OpenOptions, File};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,9 +17,26 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static NEXT: AtomicU64 = AtomicU64::new(0);
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let path = std::env::temp_dir().join(format!(
@@ -25,24 +44,24 @@ impl Scratch {
             std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed),
         ));
         fs::create_dir(&path).unwrap();
-        Self(path)
+        Self { root: path, handle: RefCell::new(None) }
     }
 
     fn create(&self, limits: JournalLimits) -> PersistentControlJournal {
         let file = OpenOptions::new().read(true).write(true).create_new(true)
-            .open(self.0.join("control.redb")).unwrap();
+            .open(self.root.join("control.redb")).unwrap();
         PersistentControlJournal::create(file, identity(), limits).unwrap()
     }
 
     fn reopen(&self, limits: JournalLimits) -> PersistentControlJournal {
         let file = OpenOptions::new().read(true).write(true)
-            .open(self.0.join("control.redb")).unwrap();
+            .open(self.root.join("control.redb")).unwrap();
         PersistentControlJournal::open(file, identity(), limits).unwrap()
     }
 }
 
 impl Drop for Scratch {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); }
 }
 
 fn identity() -> JournalIdentity {

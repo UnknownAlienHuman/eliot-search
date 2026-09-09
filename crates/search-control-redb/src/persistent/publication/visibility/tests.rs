@@ -5,7 +5,9 @@ use super::super::super::{JournalIdentity, RECORDS, encode_value, Unscoped};
 use crate::ControlSnapshotPublisher;
 use search_contracts::{DataRootId, InstallationIncarnationId, OpaqueRef, OwnerEpoch, PublicationIntentId, RequestId};
 use search_ports::PackageOpaque;
+use std::cell::RefCell;
 use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -41,17 +43,35 @@ fn member(id: u8) -> ProjectionMembershipId { ProjectionMembershipId::from_bytes
 fn shadow(n: u64) -> PublicationSourceShadow {
     PublicationSourceShadow { source_revision_id: SourceRevisionId::from_bytes([22; 16]), fence_revision: NonZeroRevision::new(n).unwrap() }
 }
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let path = std::env::temp_dir().join(format!("eliot-visible-{}-{stamp}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
-        fs::create_dir(&path).unwrap(); Self(path)
+        fs::create_dir(&path).unwrap(); Self { root: path, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn file(&self) -> File { OpenOptions::new().read(true).write(true).open(self.path()).unwrap() }
     fn empty(&self, version: u32) -> PersistentControlJournal {
         let file = OpenOptions::new().create_new(true).read(true).write(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::create(file, JournalIdentity { schema_version: version, ..identity() }, LIMITS).unwrap()
     }
     fn reopen(&self) -> PersistentControlJournal { PersistentControlJournal::open(self.file(), identity(), LIMITS).unwrap() }
@@ -77,7 +97,7 @@ impl Scratch {
         (journal, request)
     }
 }
-impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); } }
 fn make_request(prior: ControlCommitReceipt, intent: PublicationIntent) -> VisibleEpochCommit {
     VisibleEpochCommit::new(MutationId([7; 32]), digest(), prior, intent, state(), PublicationReceiptId::from_bytes([7; 16]),
         PublicationReadbackEvidence { exact_new_manifest_ref: reference("new-points"), exact_retired_manifest_ref: reference("retired-points"), readback_digest: digest() },
@@ -131,9 +151,9 @@ fn all_seven_guard_axes_are_mandatory_and_compared_to_stored_state() {
         // Simulate same-generation contradiction to discriminate guard checks
         // independently from the separate global-generation compare.
         corrupt_value(&journal, key(STATE, LIMITS).unwrap(), codec::state(&actual, LIMITS).unwrap());
-        let before = fs::read(scratch.path()).unwrap();
+        let before = scratch.bytes();
         assert!(apply(&mut journal, &request).is_err(), "axis {axis}");
-        assert_eq!(fs::read(scratch.path()).unwrap(), before);
+        assert_eq!(scratch.bytes(), before);
         assert_eq!(journal.committed_writes(), 7); // create + six fixture commits only
     }
 }
@@ -287,10 +307,10 @@ fn strict_visibility_codecs_reject_every_truncation_trailing_bytes_and_wrong_cla
 fn schema_three_is_explicit_and_previous_schemas_are_not_rewritten() {
     for version in [1, 2] {
         let scratch = Scratch::new(); let mut journal = scratch.empty(version);
-        let before = fs::read(scratch.path()).unwrap();
+        let before = scratch.bytes();
         assert_eq!(journal.initialize_publication_visibility(state(), MutationId([1; 32]), digest(), &context(false))
             .unwrap_err().control_error(), ControlError::SchemaUnsupported);
-        assert!(!journal.quarantined); assert_eq!(fs::read(scratch.path()).unwrap(), before);
+        assert!(!journal.quarantined); assert_eq!(scratch.bytes(), before);
         assert_eq!(journal.verify().unwrap().generation, 0);
     }
 }
@@ -310,9 +330,9 @@ fn write_budget_and_shadow_counter_exhaustion_do_not_partially_publish() {
 #[test]
 fn visibility_reads_are_nonmutating_and_command_debug_redacts_refs() {
     let scratch = Scratch::new(); let (mut journal, request) = scratch.ready(); apply(&mut journal, &request).unwrap();
-    let before = fs::read(scratch.path()).unwrap(); let writes = journal.committed_writes();
+    let before = scratch.bytes(); let writes = journal.committed_writes();
     for _ in 0..10_000 { assert_eq!(journal.read_publication_visibility(&context(false)).unwrap().unwrap().visible_epoch.get(), 1); }
-    assert_eq!(fs::read(scratch.path()).unwrap(), before); assert_eq!(journal.committed_writes(), writes);
+    assert_eq!(scratch.bytes(), before); assert_eq!(journal.committed_writes(), writes);
     assert!(!format!("{request:?} {:?}", request.changes).contains("cas:"));
 }
 

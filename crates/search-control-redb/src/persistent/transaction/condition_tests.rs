@@ -8,8 +8,9 @@ use crate::persistent::operation::{Budget, Unscoped};
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId,
     OpaqueRef, OwnerEpoch, RequestId};
 use search_ports::{CancellationProbe, OperationContext, PackageOpaque, PortErrorKind, PortRetryability};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -28,19 +29,37 @@ fn identity() -> JournalIdentity {
     }
 }
 
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let path = std::env::temp_dir().join(format!("eliot-control-conditions-{}-{timestamp}-{}",
             std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
         fs::create_dir(&path).unwrap();
-        Self(path)
+        Self { root: path, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn file(&self) -> File { OpenOptions::new().read(true).write(true).open(self.path()).unwrap() }
     fn create(&self) -> PersistentControlJournal {
         let file = OpenOptions::new().create_new(true).read(true).write(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::create(file, identity(), LIMITS).unwrap()
     }
     fn open(&self) -> PersistentControlJournal {
@@ -48,7 +67,7 @@ impl Scratch {
     }
 }
 impl Drop for Scratch {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); }
 }
 
 fn key(bytes: &[u8]) -> ControlKey { ControlKey::new(bytes.to_vec(), LIMITS).unwrap() }
@@ -107,7 +126,7 @@ fn false_exact_or_absence_precondition_has_no_record_receipt_or_disk_write() {
     let mut journal = scratch.create();
     journal.transact(put(1, 0, b"state", b"READY")).unwrap();
     let before = journal.verify().unwrap();
-    let disk = fs::read(scratch.path()).unwrap();
+    let disk = scratch.bytes();
     let writes = journal.committed_writes();
     for condition in [absent(b"state"), exact(b"state", b"WRONG"), exact(b"missing", b"READY")] {
         let request = command(put(2, 1, b"target", b"new"), vec![condition]);
@@ -116,7 +135,7 @@ fn false_exact_or_absence_precondition_has_no_record_receipt_or_disk_write() {
         assert_eq!(journal.verify().unwrap(), before);
         assert_eq!(journal.committed_writes(), writes);
         assert!(!journal.requires_recovery());
-        assert_eq!(fs::read(scratch.path()).unwrap(), disk);
+        assert_eq!(scratch.bytes(), disk);
     }
 }
 

@@ -7,8 +7,9 @@ use super::super::{ControlInterruption, RECORDS, map_storage_error, map_table_er
 use crate::{ControlKey, ControlRecordClass, ControlValue, ControlWrite, JournalIdentity, JournalLimits, MutationId};
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueRef, OwnerEpoch, RequestId};
 use search_ports::{PackageOpaque, PortErrorKind, PortRetryability};
-use std::cell::Cell;
-use std::fs::{self, OpenOptions};
+use std::cell::{Cell, RefCell};
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -47,7 +48,10 @@ fn identity() -> JournalIdentity {
     }
 }
 
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
@@ -55,20 +59,36 @@ impl Scratch {
             "eliot-redb-context-{}-{stamp}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed),
         ));
         fs::create_dir(&root).unwrap();
-        Self(root)
+        Self { root, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
     fn create(&self) -> PersistentControlJournal {
         let file = OpenOptions::new().read(true).write(true).create_new(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::create(file, identity(), LIMITS).unwrap()
     }
     fn open(&self) -> PersistentControlJournal {
         let file = OpenOptions::new().read(true).write(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::open(file, identity(), LIMITS).unwrap()
+    }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the
+    /// database; on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares the lock ownership, so
+    /// this reads the same bytes without unlocking or reopening anything.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
     }
 }
 impl Drop for Scratch {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); }
 }
 
 fn key(bytes: &[u8]) -> ControlKey { ControlKey::new(bytes.to_vec(), LIMITS).unwrap() }
@@ -112,7 +132,7 @@ fn trigger(why: ControlInterruption, cancel: &Cancellation, now: &Cell<Instant>,
 fn pre_cancelled_public_calls_touch_no_disk_or_committed_state() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let cancel = Cancellation::default();
     cancel.set(true);
     let ctx = context(&cancel, 10_000);
@@ -132,7 +152,7 @@ fn pre_cancelled_public_calls_touch_no_disk_or_committed_state() {
     assert_eq!(error.retryability(), PortRetryability::SameIdentity);
     assert!(!journal.requires_recovery());
     assert!(!journal.quarantined);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
     assert_eq!(journal.committed_writes(), 1);
 }
 
@@ -320,7 +340,7 @@ fn cancelled_snapshot_or_full_verification_returns_no_partial_success() {
         let scratch = Scratch::new();
         let mut journal = scratch.create();
         journal.transact(request(1, 0)).unwrap();
-        let before = fs::read(scratch.path()).unwrap();
+        let before = scratch.bytes();
         let cancel = Cancellation::default();
         let ctx = context(&cancel, 10_000);
         let budget = Budget::new(&ctx);
@@ -329,7 +349,7 @@ fn cancelled_snapshot_or_full_verification_returns_no_partial_success() {
         assert_eq!(result, Err(ControlError::ReadCancelled));
         assert!(!journal.quarantined);
         assert!(!journal.requires_recovery());
-        assert_eq!(fs::read(scratch.path()).unwrap(), before);
+        assert_eq!(scratch.bytes(), before);
     }
 }
 

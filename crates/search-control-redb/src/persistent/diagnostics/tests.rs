@@ -8,8 +8,9 @@ use redb::ReadableTable;
 use search_contracts::{Blake3Digest32, DataRootId, InstallationIncarnationId,
     OpaqueRef, OwnerEpoch, RequestId};
 use search_ports::{PackageOpaque, PortErrorKind};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -28,25 +29,43 @@ fn identity() -> JournalIdentity {
     }
 }
 
-struct Scratch(PathBuf);
+struct Scratch {
+    root: PathBuf,
+    handle: RefCell<Option<File>>,
+}
 impl Scratch {
+    fn keep(&self, file: &File) { *self.handle.borrow_mut() = Some(file.try_clone().unwrap()); }
+    /// Exact database bytes, read through a handle duplicated from the one redb
+    /// owns. redb holds an exclusive byte-range lock for the life of the database;
+    /// on Windows an unrelated `fs::read` of the same path fails with
+    /// ERROR_LOCK_VIOLATION. A duplicated handle shares that lock ownership, so
+    /// this reads the same bytes without unlocking, dropping or reopening.
+    fn bytes(&self) -> Vec<u8> {
+        let mut guard = self.handle.borrow_mut();
+        let file = guard.as_mut().expect("scratch file handle");
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let root = std::env::temp_dir().join(format!("eliot-control-health-{}-{stamp}-{}",
             std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
         fs::create_dir(&root).unwrap();
-        Self(root)
+        Self { root, handle: RefCell::new(None) }
     }
-    fn path(&self) -> PathBuf { self.0.join("control.redb") }
+    fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn file(&self) -> File { OpenOptions::new().read(true).write(true).open(self.path()).unwrap() }
     fn create(&self) -> PersistentControlJournal { self.create_as(identity(), LIMITS) }
     fn create_as(&self, id: JournalIdentity, limits: JournalLimits) -> PersistentControlJournal {
         let file = OpenOptions::new().create_new(true).read(true).write(true).open(self.path()).unwrap();
+        self.keep(&file);
         PersistentControlJournal::create(file, id, limits).unwrap()
     }
 }
 impl Drop for Scratch {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); }
 }
 
 #[derive(Debug)]
@@ -151,7 +170,7 @@ fn lost_ack_health_observes_commit_but_never_resolves_the_pending_mutation() {
     let mutation = put(1, 0, b"state", b"READY");
     assert_eq!(journal.transact_inner(mutation.clone(), Boundary::LostAcknowledgement),
         Err(ControlError::CommitOutcomeUnknown));
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let observed = health(&journal, None);
     assert_eq!(observed.state, JournalHealthState::RecoveryRequired);
     assert!(observed.pending_mutation);
@@ -162,7 +181,7 @@ fn lost_ack_health_observes_commit_but_never_resolves_the_pending_mutation() {
     assert!(journal.requires_recovery());
     assert_eq!(journal.write_counters_with_context(&context(false)).unwrap_err().control_error(),
         ControlError::StoreQuarantined);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
     assert!(matches!(journal.recover_transaction(&mutation).unwrap(), CommitRecoveryDecision::Committed(_)));
     assert_eq!(counters(&journal), observed_counts); // recovery is not another write
 }
@@ -241,14 +260,14 @@ fn any_durable_marker_presence_is_reported_as_a_hold_without_decoding_it_as_heal
         let scratch = Scratch::new();
         let journal = scratch.create();
         hold_marker(&journal, marker);
-        let before = fs::read(scratch.path()).unwrap();
+        let before = scratch.bytes();
         let observed = health(&journal, None);
         assert_eq!(observed.state, JournalHealthState::DurablyQuarantined);
         assert_eq!(observed.counters, None);
         assert_eq!(observed.reason, Some(ControlError::StoreQuarantined));
         assert_eq!(observed.snapshot, SnapshotHealthState::BlockedByJournal);
         assert!(!journal.quarantined); // diagnostics did not invent/change local state
-        assert_eq!(fs::read(scratch.path()).unwrap(), before);
+        assert_eq!(scratch.bytes(), before);
         assert_eq!(journal.read_snapshot(), Err(ControlError::StoreQuarantined));
     }
 }
@@ -265,7 +284,7 @@ fn invalid_header_reports_quarantine_required_without_creating_a_hold() {
         }
         write.commit().unwrap();
     }
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let observed = health(&journal, None);
     assert_eq!(observed.state, JournalHealthState::QuarantineRequired);
     assert_eq!(observed.counters, None);
@@ -274,7 +293,7 @@ fn invalid_header_reports_quarantine_required_without_creating_a_hold() {
     let read = journal.database.begin_read().unwrap();
     assert!(read.open_table(META).unwrap().get("quarantine").unwrap().is_none());
     assert!(!journal.quarantined);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
 }
 
 #[test]
@@ -326,7 +345,7 @@ fn metadata_readability_does_not_claim_record_or_receipt_body_integrity() {
 fn pre_cancelled_diagnostics_return_errors_without_partial_observations() {
     let scratch = Scratch::new();
     let journal = scratch.create();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     let ctx = context(true);
     let health_error = journal.journal_health_with_context(None, &ctx).unwrap_err();
     let counter_error = journal.write_counters_with_context(&ctx).unwrap_err();
@@ -334,7 +353,7 @@ fn pre_cancelled_diagnostics_return_errors_without_partial_observations() {
         assert_eq!(error.kind(), PortErrorKind::CancelledBeforeSideEffect);
         assert_eq!(error.operation_id(), None);
     }
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
     assert!(!journal.requires_recovery());
 }
 
@@ -411,7 +430,7 @@ fn ten_thousand_diagnostics_do_not_scan_values_publish_snapshots_or_write_bytes(
     let pointer = publisher.current().unwrap();
     let expected = counters(&journal);
     let expected_health = health(&journal, Some(&publisher));
-    let before_bytes = fs::read(scratch.path()).unwrap();
+    let before_bytes = scratch.bytes();
     let before_scans = journal.work.snapshot_reads.load(Ordering::Relaxed);
     let before_points = journal.work.point_reads.load(Ordering::Relaxed);
     let ctx = context(false);
@@ -421,7 +440,7 @@ fn ten_thousand_diagnostics_do_not_scan_values_publish_snapshots_or_write_bytes(
     }
     assert_eq!(journal.work.snapshot_reads.load(Ordering::Relaxed), before_scans);
     assert_eq!(journal.work.point_reads.load(Ordering::Relaxed), before_points);
-    assert_eq!(fs::read(scratch.path()).unwrap(), before_bytes);
+    assert_eq!(scratch.bytes(), before_bytes);
     assert!(std::sync::Arc::ptr_eq(&pointer, &publisher.current().unwrap()));
     assert!(!publisher.requires_recovery());
 }
@@ -434,7 +453,7 @@ fn diagnostic_debug_contains_no_record_keys_values_or_paths() {
     let debug = format!("{:?} {:?}", counters(&journal), health(&journal, None));
     assert!(!debug.contains("private-key-sentinel"));
     assert!(!debug.contains("private-value-sentinel"));
-    assert!(!debug.contains(scratch.0.to_str().unwrap()));
+    assert!(!debug.contains(scratch.root.to_str().unwrap()));
 }
 
 #[test]
@@ -458,9 +477,9 @@ fn unavailable_inspection_is_an_error_not_a_fabricated_quarantine_diagnosis() {
     }
     let scratch = Scratch::new();
     let journal = scratch.create();
-    let before = fs::read(scratch.path()).unwrap();
+    let before = scratch.bytes();
     assert_eq!(journal.journal_health_checked(None, &Unavailable), Err(ControlError::StoreUnavailable));
     assert_eq!(journal.write_counters_checked(&Unavailable), Err(ControlError::StoreUnavailable));
     assert!(!journal.quarantined && !journal.requires_recovery());
-    assert_eq!(fs::read(scratch.path()).unwrap(), before);
+    assert_eq!(scratch.bytes(), before);
 }
