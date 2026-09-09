@@ -114,15 +114,11 @@ pub fn validate_sparse_profile(
     if !qualification.accepted {
         return Err(SparseError::ProfileUnqualified);
     }
-    // `suspicious_operation_groupings` is a false positive here: `SparseProfile`
-    // stores the active revision as `revision` while `SparseQualification`
-    // echoes it back as `profile_revision`, so `profile.profile_revision`
-    // (as clippy suggests) does not exist.
-    #[allow(clippy::suspicious_operation_groupings)]
-    if qualification.profile_id != profile.profile_id
-        || qualification.profile_revision != profile.revision
-        || qualification.profile_fingerprint != profile.fingerprint
-    {
+    let id_mismatch = qualification.profile_id != profile.profile_id;
+    let revision_mismatch = qualification.profile_revision != profile.revision;
+    let fingerprint_mismatch =
+        qualification.profile_fingerprint != profile.fingerprint;
+    if id_mismatch || revision_mismatch || fingerprint_mismatch {
         return Err(SparseError::QualificationMismatch);
     }
     Ok(AcceptedSparseProfile {

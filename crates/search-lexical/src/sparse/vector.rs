@@ -69,12 +69,11 @@ pub(super) fn weight_document(
                 let average = statistics
                     .ok_or(SparseError::StatisticsRequired)?
                     .average_document_length;
-                // `suboptimal_flops` suggests fused `mul_add` here, but that would
-                // change the rounded BM25 weight bits (fingerprinted via
-                // `value.to_bits`), breaking golden-fixture bit-stability.
-                #[allow(clippy::suboptimal_flops)]
-                let denominator = frequency
-                    + k1 * (1.0 - b + b * (document_length / average));
+                // `mul_add` fuses rounding to a single step, so the BM25 weight
+                // bits may shift by 1 ulp versus separate multiply+add
+                // (feeds `value.to_bits` fingerprint).
+                let denominator =
+                    k1.mul_add(b.mul_add(document_length / average, 1.0 - b), frequency);
                 frequency * (k1 + 1.0) / denominator
             }
         };
