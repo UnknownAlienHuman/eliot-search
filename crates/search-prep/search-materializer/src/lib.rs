@@ -242,7 +242,7 @@ impl MaterializedRevision {
     /// Exact unnormalized UTF-8 text.
     pub fn text(&self) -> &str { &self.text }
     /// Exact UTF-8 bytes.
-    pub fn bytes(&self) -> &[u8] { self.text.as_bytes() }
+    pub const fn bytes(&self) -> &[u8] { self.text.as_bytes() }
     /// Exact output byte length.
     pub const fn len(&self) -> usize { self.text.len() }
     /// Returns whether materialized text is empty.
@@ -280,7 +280,8 @@ impl fmt::Debug for MaterializedText {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.debug_struct("MaterializedText")
             .field("text", &format_args!("<{} UTF-8 bytes>", self.text.len()))
-            .field("line_count", &self.lines.len()).finish()
+            .field("line_count", &self.lines.len())
+            .field("line_endings", &self.line_endings).finish()
     }
 }
 
@@ -326,7 +327,7 @@ pub fn materialize(
     })
 }
 
-fn check_byte_limits(length: usize, limits: MaterializationLimits) -> Result<(), MaterializationError> {
+const fn check_byte_limits(length: usize, limits: MaterializationLimits) -> Result<(), MaterializationError> {
     if length > limits.max_input_bytes { return Err(MaterializationError::InputTooLarge); }
     if length > limits.max_output_bytes { return Err(MaterializationError::OutputTooLarge); }
     Ok(())
