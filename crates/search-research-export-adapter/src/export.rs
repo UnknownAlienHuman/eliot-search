@@ -35,10 +35,10 @@ pub enum ExportCoverage {
 /// Finite export limits applied before accepting an item.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExportLimits {
-    max_items: NonZeroUsize,
-    max_gaps: NonZeroUsize,
-    max_item_bytes: NonZeroUsize,
-    max_total_bytes: NonZeroUsize,
+    item_ceiling: NonZeroUsize,
+    gap_allowance: NonZeroUsize,
+    per_item_bytes: NonZeroUsize,
+    total_byte_budget: NonZeroUsize,
 }
 
 impl ExportLimits {
@@ -55,14 +55,14 @@ impl ExportLimits {
         max_total_bytes: usize,
     ) -> Result<Self, ExportError> {
         let limits = Self {
-            max_items: NonZeroUsize::new(max_items).ok_or(ExportError::InvalidLimits)?,
-            max_gaps: NonZeroUsize::new(max_gaps).ok_or(ExportError::InvalidLimits)?,
-            max_item_bytes: NonZeroUsize::new(max_item_bytes)
+            item_ceiling: NonZeroUsize::new(max_items).ok_or(ExportError::InvalidLimits)?,
+            gap_allowance: NonZeroUsize::new(max_gaps).ok_or(ExportError::InvalidLimits)?,
+            per_item_bytes: NonZeroUsize::new(max_item_bytes)
                 .ok_or(ExportError::InvalidLimits)?,
-            max_total_bytes: NonZeroUsize::new(max_total_bytes)
+            total_byte_budget: NonZeroUsize::new(max_total_bytes)
                 .ok_or(ExportError::InvalidLimits)?,
         };
-        if limits.max_item_bytes > limits.max_total_bytes {
+        if limits.per_item_bytes > limits.total_byte_budget {
             return Err(ExportError::InvalidLimits);
         }
         Ok(limits)
@@ -71,25 +71,25 @@ impl ExportLimits {
     /// Maximum exported evidence items.
     #[must_use]
     pub const fn max_items(self) -> usize {
-        self.max_items.get()
+        self.item_ceiling.get()
     }
 
     /// Maximum explicit gaps.
     #[must_use]
     pub const fn max_gaps(self) -> usize {
-        self.max_gaps.get()
+        self.gap_allowance.get()
     }
 
     /// Maximum encoded bytes for one item.
     #[must_use]
     pub const fn max_item_bytes(self) -> usize {
-        self.max_item_bytes.get()
+        self.per_item_bytes.get()
     }
 
     /// Maximum estimated encoded bytes for the full export.
     #[must_use]
     pub const fn max_total_bytes(self) -> usize {
-        self.max_total_bytes.get()
+        self.total_byte_budget.get()
     }
 }
 
@@ -202,7 +202,7 @@ where
 {
     /// Creates an empty collecting builder.
     #[must_use]
-    pub fn new(request_id: RequestId, limits: ExportLimits, policy: ExportPolicy) -> Self {
+    pub const fn new(request_id: RequestId, limits: ExportLimits, policy: ExportPolicy) -> Self {
         Self {
             request_id,
             limits,
@@ -339,11 +339,11 @@ where
     }
 
     /// Quarantines the builder explicitly.
-    pub fn quarantine(&mut self) {
+    pub const fn quarantine(&mut self) {
         self.state = BuilderState::Quarantined;
     }
 
-    fn require_collecting(&self) -> Result<(), ExportError> {
+    const fn require_collecting(&self) -> Result<(), ExportError> {
         match self.state {
             BuilderState::Collecting => Ok(()),
             BuilderState::Finalized => Err(ExportError::AlreadyFinalized),
