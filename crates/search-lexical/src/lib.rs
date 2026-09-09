@@ -585,19 +585,16 @@ fn emit_candidate(
         original_char_count: u32::try_from(original_char_count)
             .map_err(|_| LexicalError::OffsetOverflow)?,
     });
-    match term_stats.get_mut(&term) {
-        Some((frequency, _, last_position)) => {
-            *frequency = frequency
-                .checked_add(1)
-                .ok_or(LexicalError::OffsetOverflow)?;
-            *last_position = current_position;
+    if let Some((frequency, _, last_position)) = term_stats.get_mut(&term) {
+        *frequency = frequency
+            .checked_add(1)
+            .ok_or(LexicalError::OffsetOverflow)?;
+        *last_position = current_position;
+    } else {
+        if term_stats.len() >= limits.max_unique_terms {
+            return Err(LexicalError::TooManyUniqueTerms);
         }
-        None => {
-            if term_stats.len() >= limits.max_unique_terms {
-                return Err(LexicalError::TooManyUniqueTerms);
-            }
-            term_stats.insert(term, (1, current_position, current_position));
-        }
+        term_stats.insert(term, (1, current_position, current_position));
     }
     Ok(())
 }

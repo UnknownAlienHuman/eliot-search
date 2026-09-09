@@ -69,6 +69,10 @@ pub(super) fn weight_document(
                 let average = statistics
                     .ok_or(SparseError::StatisticsRequired)?
                     .average_document_length;
+                // `suboptimal_flops` suggests fused `mul_add` here, but that would
+                // change the rounded BM25 weight bits (fingerprinted via
+                // `value.to_bits`), breaking golden-fixture bit-stability.
+                #[allow(clippy::suboptimal_flops)]
                 let denominator = frequency
                     + k1 * (1.0 - b + b * (document_length / average));
                 frequency * (k1 + 1.0) / denominator
@@ -107,9 +111,9 @@ pub(super) fn weight_query(
                     .copied()
                     .unwrap_or(0) as f64;
                 let document_count = statistics.document_count as f64;
-                (1.0 + (document_count - document_frequency + 0.5)
+                ((document_count - document_frequency + 0.5)
                     / (document_frequency + 0.5))
-                    .ln()
+                    .ln_1p()
             }
         };
         push_weight(

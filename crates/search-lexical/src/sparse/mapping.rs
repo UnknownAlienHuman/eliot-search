@@ -49,47 +49,44 @@ pub fn map_terms(
 
     for term in &analysis.terms {
         let index = term_index(&term.term, profile.hash_seed, profile.index_space);
-        match by_index.get_mut(&index) {
-            Some(feature) => {
-                if feature.terms.iter().any(|value| value == &term.term) {
-                    return Err(SparseError::FeatureCollision);
-                }
-                if profile.collision_policy == CollisionPolicy::Reject {
-                    return Err(SparseError::FeatureCollision);
-                }
-                if feature.terms.len() >= limits.max_terms_per_index {
-                    return Err(SparseError::CollisionBudgetExceeded);
-                }
-                collision_pairs = collision_pairs
-                    .checked_add(feature.terms.len())
-                    .ok_or(SparseError::CollisionBudgetExceeded)?;
-                if collision_pairs > limits.max_collision_pairs {
-                    return Err(SparseError::CollisionBudgetExceeded);
-                }
-                feature.terms.push(term.term.clone());
-                feature.terms.sort();
-                feature.frequency = feature
-                    .frequency
-                    .checked_add(term.frequency)
-                    .ok_or(SparseError::FeatureBudgetExceeded)?;
-                feature.first_position = feature.first_position.min(term.first_position);
-                feature.last_position = feature.last_position.max(term.last_position);
+        if let Some(feature) = by_index.get_mut(&index) {
+            if feature.terms.iter().any(|value| value == &term.term) {
+                return Err(SparseError::FeatureCollision);
             }
-            None => {
-                if by_index.len() >= limits.max_features {
-                    return Err(SparseError::FeatureBudgetExceeded);
-                }
-                by_index.insert(
+            if profile.collision_policy == CollisionPolicy::Reject {
+                return Err(SparseError::FeatureCollision);
+            }
+            if feature.terms.len() >= limits.max_terms_per_index {
+                return Err(SparseError::CollisionBudgetExceeded);
+            }
+            collision_pairs = collision_pairs
+                .checked_add(feature.terms.len())
+                .ok_or(SparseError::CollisionBudgetExceeded)?;
+            if collision_pairs > limits.max_collision_pairs {
+                return Err(SparseError::CollisionBudgetExceeded);
+            }
+            feature.terms.push(term.term.clone());
+            feature.terms.sort();
+            feature.frequency = feature
+                .frequency
+                .checked_add(term.frequency)
+                .ok_or(SparseError::FeatureBudgetExceeded)?;
+            feature.first_position = feature.first_position.min(term.first_position);
+            feature.last_position = feature.last_position.max(term.last_position);
+        } else {
+            if by_index.len() >= limits.max_features {
+                return Err(SparseError::FeatureBudgetExceeded);
+            }
+            by_index.insert(
+                index,
+                SparseFeature {
                     index,
-                    SparseFeature {
-                        index,
-                        terms: vec![term.term.clone()],
-                        frequency: term.frequency,
-                        first_position: term.first_position,
-                        last_position: term.last_position,
-                    },
-                );
-            }
+                    terms: vec![term.term.clone()],
+                    frequency: term.frequency,
+                    first_position: term.first_position,
+                    last_position: term.last_position,
+                },
+            );
         }
     }
 

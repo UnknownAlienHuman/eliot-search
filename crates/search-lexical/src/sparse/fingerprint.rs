@@ -9,16 +9,6 @@ pub(super) fn fingerprint_bytes(bytes: &[u8]) -> SparseFingerprint {
     SparseFingerprint(finish_lanes(lanes))
 }
 
-pub(super) fn fingerprint_parts<'a>(
-    parts: impl IntoIterator<Item = &'a [u8]>,
-) -> SparseFingerprint {
-    let mut lanes = initial_lanes();
-    for part in parts {
-        mix(&mut lanes, part);
-    }
-    SparseFingerprint(finish_lanes(lanes))
-}
-
 const fn initial_lanes() -> [u64; 4] {
     [
         0xcbf2_9ce4_8422_2325,
