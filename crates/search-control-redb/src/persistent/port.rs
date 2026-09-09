@@ -54,7 +54,7 @@ impl ControlPortCommand {
 /// # Errors
 /// Returns InvalidValue if the shared opaque-ID bound rejects the fixed encoding.
 pub fn control_mutation_identity(id: MutationId) -> Result<MutationIdentity, ControlError> {
-    let text = format!("eliot-control-v1:{}", search_contracts::hex_encode(&id.0));
+    let text = format!("eliot-control-v1:{}", encode_mutation_hex(&id.0));
     let operation_id = OpaqueId::new(text).map_err(|_| ControlError::InvalidValue)?;
     Ok(MutationIdentity::new(operation_id, IdempotencyClass::RetrySameIdentity))
 }
@@ -316,6 +316,19 @@ fn require_identity(id: MutationId, actual: &MutationIdentity) -> Result<(), Con
     if actual.idempotency != IdempotencyClass::RetrySameIdentity { return Err(ControlError::InvalidValue); }
     if control_mutation_identity(id)? != *actual { return Err(ControlError::OperationConflict); }
     Ok(())
+}
+
+/// Lowercase hex of the complete 32-byte mutation ID, never truncated.
+/// Local to this crate so the shared `search-contracts` canonical helpers
+/// stay `pub(crate)`; behavior matches the documented opaque port identity.
+fn encode_mutation_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
 }
 
 fn failure(error: ControlCallError, identity: Option<&MutationIdentity>) -> ControlPortError {
