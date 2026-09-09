@@ -17,7 +17,7 @@
 
 use core::cmp::Ordering;
 use core::fmt;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use search_contracts::{Blake3Digest32, OpaqueId, ProfileId, ReceiptRef};
 
@@ -279,7 +279,7 @@ pub struct ProviderSession {
 impl ProviderSession {
     /// Creates a stopped session around a qualified artifact.
     #[must_use]
-    pub fn new(qualified: QualifiedModelArtifact) -> Self {
+    pub const fn new(qualified: QualifiedModelArtifact) -> Self {
         Self {
             state: ProviderState::Stopped,
             qualified,
@@ -559,7 +559,7 @@ impl ModelProgress {
     }
 
     /// Advances monotonically.
-    pub fn advance(&mut self, completed: usize) -> Result<(), ModelError> {
+    pub const fn advance(&mut self, completed: usize) -> Result<(), ModelError> {
         if self.terminal || completed < self.completed || completed > self.total {
             return Err(ModelError::ProgressInvalid);
         }
@@ -568,7 +568,7 @@ impl ModelProgress {
     }
 
     /// Marks exactly one terminal response.
-    pub fn finish(&mut self, complete: bool) -> Result<(), ModelError> {
+    pub const fn finish(&mut self, complete: bool) -> Result<(), ModelError> {
         if self.terminal || (complete && self.completed != self.total) {
             return Err(ModelError::ProgressInvalid);
         }
