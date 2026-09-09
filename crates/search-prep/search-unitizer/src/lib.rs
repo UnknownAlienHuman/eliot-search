@@ -154,7 +154,7 @@ impl UnitizationInput {
     /// Exact UTF-8 text.
     pub fn text(&self) -> &str { &self.text }
     /// Exact UTF-8 bytes.
-    pub fn bytes(&self) -> &[u8] { self.text.as_bytes() }
+    pub const fn bytes(&self) -> &[u8] { self.text.as_bytes() }
     /// Exact input byte length.
     pub const fn len(&self) -> usize { self.text.len() }
     /// Returns whether the exact input is empty.
@@ -204,7 +204,7 @@ impl TextUnit {
     /// Exact unit UTF-8 text.
     pub fn text(&self) -> &str { &self.text }
     /// Exact unit UTF-8 bytes.
-    pub fn bytes(&self) -> &[u8] { self.text.as_bytes() }
+    pub const fn bytes(&self) -> &[u8] { self.text.as_bytes() }
     /// Exact unit byte length.
     pub const fn len(&self) -> usize { self.text.len() }
     /// Returns whether the unit is empty.

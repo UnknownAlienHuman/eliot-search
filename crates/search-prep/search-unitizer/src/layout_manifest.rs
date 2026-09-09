@@ -118,7 +118,7 @@ impl UnitizationLimits {
     }
 }
 
-fn dimensions(limits: UnitizationLimits) -> [usize; 5] {
+const fn dimensions(limits: UnitizationLimits) -> [usize; 5] {
     [limits.max_input_bytes, limits.preferred_unit_bytes, limits.max_unit_bytes,
         limits.max_lines, limits.max_units]
 }
