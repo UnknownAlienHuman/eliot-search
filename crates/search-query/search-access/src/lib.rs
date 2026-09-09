@@ -182,8 +182,7 @@ pub fn validate_grant(
         return Err(AccessError::GrantBootMismatch);
     }
     if claims.expires_at_ms <= claims.issued_at_ms
-        || context.now_ms < claims.issued_at_ms
-        || context.now_ms >= claims.expires_at_ms
+        || (context.now_ms < claims.issued_at_ms || context.now_ms >= claims.expires_at_ms)
     {
         return Err(AccessError::GrantExpired);
     }
@@ -360,6 +359,11 @@ pub struct SafeRetrievalLeg {
 
 /// Compiles finite safe legs. Without a current overlap proof, each membership
 /// remains in its own independent scoring population.
+///
+/// # Panics
+///
+/// Panics if `overlap_proof` is `None` while grouping holds; this is unreachable
+/// because grouping is derived from `overlap_proof.is_some_and(..)`.
 pub fn compile_safe_legs(
     scope: &AuthorizedScope,
     route: IndexedRouteFence,
