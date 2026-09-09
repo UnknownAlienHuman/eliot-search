@@ -126,10 +126,9 @@ pub enum VectorValue {
 impl VectorValue {
     /// Number of supplied dense values or sparse non-zero entries.
     #[must_use]
-    pub fn stored_values(&self) -> usize {
+    pub const fn stored_values(&self) -> usize {
         match self {
-            Self::Dense(values) => values.len(),
-            Self::Sparse { values, .. } => values.len(),
+            Self::Dense(values) | Self::Sparse { values, .. } => values.len(),
         }
     }
 
