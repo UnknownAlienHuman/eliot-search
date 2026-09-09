@@ -150,10 +150,34 @@ impl SubjectRequest {
     }
 }
 
+/// Disclosure fence: access and purge authorization for resolution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DisclosureFence {
+    /// Current authorization permits disclosure.
+    pub access_permitted: bool,
+    /// No purge barrier covers the request.
+    pub purge_clear: bool,
+}
+
+/// Currency fence: view and owner-generation currentness for resolution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CurrencyFence {
+    /// Source/workspace context remains current.
+    pub view_current: bool,
+    /// Owner generation remains current.
+    pub owner_generation_current: bool,
+}
+
+/// Scope and observation fence for resolution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScopeObservationFence {
+    /// Explicit scope contains at least one authorized source.
+    pub scope_non_empty: bool,
+    /// Observation continuity is sufficient for decisive fall-through.
+    pub observation_complete: bool,
+}
+
 /// Coherent authorization/currentness context for all candidate observations.
-// Each of the six bools is an independent fence mapping to a distinct
-// `SubjectError`; refactoring would break the pub API + FUNCTIONS.md contract.
-#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResolutionContext {
     /// Digest of exact source/workspace/reference view and plan fence.
@@ -162,18 +186,12 @@ pub struct ResolutionContext {
     pub owner_generation_digest: Blake3Digest32,
     /// Digest of current grant/access/live-deny/purge fence.
     pub security_fence_digest: Blake3Digest32,
-    /// Explicit scope contains at least one authorized source.
-    pub scope_non_empty: bool,
-    /// Current authorization permits disclosure.
-    pub access_permitted: bool,
-    /// No purge barrier covers the request.
-    pub purge_clear: bool,
-    /// Source/workspace context remains current.
-    pub view_current: bool,
-    /// Owner generation remains current.
-    pub owner_generation_current: bool,
-    /// Observation continuity is sufficient for decisive fall-through.
-    pub observation_complete: bool,
+    /// Scope and observation fence.
+    pub scope_observation: ScopeObservationFence,
+    /// Disclosure fence.
+    pub disclosure: DisclosureFence,
+    /// Currency fence.
+    pub currency: CurrencyFence,
 }
 
 /// Validates one coherent resolution context.
@@ -182,19 +200,21 @@ pub fn validate_resolution_context(
     context: &ResolutionContext,
 ) -> Result<(), SubjectError> {
     request.validate()?;
-    if !context.scope_non_empty {
+    if !context.scope_observation.scope_non_empty {
         return Err(SubjectError::SubjectScopeEmpty);
     }
-    if !context.access_permitted || !context.purge_clear {
+    if !context.disclosure.access_permitted || !context.disclosure.purge_clear {
         return Err(SubjectError::SubjectAccessRevoked);
     }
-    if request.requested_context_digest != context.context_digest || !context.view_current {
+    if request.requested_context_digest != context.context_digest
+        || !context.currency.view_current
+    {
         return Err(SubjectError::SubjectContextStale);
     }
-    if !context.owner_generation_current {
+    if !context.currency.owner_generation_current {
         return Err(SubjectError::SubjectOwnerGenerationChanged);
     }
-    if !context.observation_complete {
+    if !context.scope_observation.observation_complete {
         return Err(SubjectError::SubjectObservationGap);
     }
     Ok(())
@@ -249,10 +269,16 @@ impl SubjectCandidate {
         {
             return Err(SubjectError::SubjectReportInvalid);
         }
-        if !self.authorized || !context.access_permitted || !context.purge_clear {
+        if !self.authorized
+            || !context.disclosure.access_permitted
+            || !context.disclosure.purge_clear
+        {
             return Err(SubjectError::SubjectAccessRevoked);
         }
-        if !self.current || !context.view_current || !context.owner_generation_current {
+        if !self.current
+            || !context.currency.view_current
+            || !context.currency.owner_generation_current
+        {
             return Err(SubjectError::SubjectContextStale);
         }
         if !self.entity_kind_compatible
@@ -423,7 +449,7 @@ pub fn resolve_subject(
 ) -> Result<SubjectResolution, SubjectError> {
     request.validate()?;
     let limits = limits.validate()?;
-    if !context.scope_non_empty {
+    if !context.scope_observation.scope_non_empty {
         return Ok(SubjectResolution::ScopeEmpty);
     }
     validate_resolution_context(request, context)?;
