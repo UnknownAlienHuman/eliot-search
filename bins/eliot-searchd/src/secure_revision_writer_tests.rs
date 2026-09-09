@@ -45,12 +45,41 @@ fn files(root: &Path) -> Vec<PathBuf> {
     output
 }
 
+/// Exclusive data-root owner lease; guard-written JSON, never source bytes.
+const OWNER_LOCK_FILE_NAME: &str = ".eliot-search-owner.lock";
+
 fn assert_no_plaintext(root: &Path) {
     for path in files(root) {
+        // The guard-held lock file is region-locked on Windows, so reading it
+        // fails with ERROR_LOCK_VIOLATION while the fixture guard is alive.
+        // It carries only the guard's JSON owner record, never source bytes.
+        if path
+            .file_name()
+            .is_some_and(|name| name == OWNER_LOCK_FILE_NAME)
+        {
+            continue;
+        }
         assert!(!path.extension().is_some_and(|extension| extension == "bin"), "{path:?}");
         let bytes = fs::read(&path).unwrap();
         assert!(!bytes.windows(SENTINEL.len()).any(|window| window == SENTINEL), "{path:?}");
     }
+}
+
+/// Counts one exact object kind under the data root. Revision ciphertext and
+/// deterministic preparation objects share the `dpapi` extension on Windows,
+/// so a bare extension count cannot tell orphan reuse from duplication.
+fn count_objects(root: &Path, directory: &str, extension: &str) -> usize {
+    files(root)
+        .iter()
+        .filter(|path| {
+            path.extension().is_some_and(|actual| actual == extension)
+                && path
+                    .strip_prefix(root)
+                    .ok()
+                    .and_then(|relative| relative.components().next())
+                    .is_some_and(|first| first.as_os_str() == directory)
+        })
+        .count()
 }
 
 #[test]
@@ -147,12 +176,14 @@ fn process_exit_after_ciphertext_before_catalog_is_recoverable_without_plaintext
     assert_eq!(store.verify().unwrap().source_events, 0);
     // Retry decrypts and compares the existing orphan ciphertext. It does not
     // compare randomized ciphertext from two separate encryption calls.
+    // The retry also persists the deterministic preparation object (2ec5134),
+    // which shares the `dpapi` extension, so each object kind is counted in
+    // its own directory: the revision orphan must still be exactly one.
     let indexed = store.index_file(&fixture.source).unwrap();
     assert_eq!(store.verify().unwrap().source_events, 1);
     assert_no_plaintext(&fixture.data);
-    assert_eq!(files(&fixture.data).iter().filter(|path| {
-        path.extension().is_some_and(|extension| extension == PROTECTED_OBJECT_EXTENSION)
-    }).count(), 1);
+    assert_eq!(count_objects(&fixture.data, "revisions", PROTECTED_OBJECT_EXTENSION), 1);
+    assert_eq!(count_objects(&fixture.data, "preparation", PROTECTED_OBJECT_EXTENSION), 1);
     assert_eq!(store.read_revision_range(&indexed.revision_id, 0, SENTINEL.len() as u64).unwrap().bytes, SENTINEL);
 }
 
