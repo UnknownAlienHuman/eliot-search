@@ -263,7 +263,7 @@ pub struct EnrichmentBudget {
 
 impl EnrichmentBudget {
     /// Validates non-zero finite limits.
-    pub fn validate(self) -> Result<Self, EnrichError> {
+    pub const fn validate(self) -> Result<Self, EnrichError> {
         let valid = self.max_input_bytes > 0
             && self.max_lines > 0
             && self.max_nodes > 0
@@ -824,11 +824,11 @@ fn node_digest_input(
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ConfigurationPredicate {
     /// `all(...)` conjunction.
-    All(BoundedList<ConfigurationPredicate, MAX_LIST_ITEMS>),
+    All(BoundedList<Self, MAX_LIST_ITEMS>),
     /// `any(...)` disjunction.
-    Any(BoundedList<ConfigurationPredicate, MAX_LIST_ITEMS>),
+    Any(BoundedList<Self, MAX_LIST_ITEMS>),
     /// `not(...)` negation.
-    Not(Box<ConfigurationPredicate>),
+    Not(Box<Self>),
     /// Bare key such as `unix` or `test`.
     Key(String),
     /// Key-value predicate such as `target_os = "windows"`.
@@ -1134,12 +1134,12 @@ pub struct StructuralFact {
 
 /// Classifies one syntax node as evidence without inferring compiler semantics.
 #[must_use]
-pub fn classify_evidence_role(node: &RustSyntaxNode) -> EvidenceRole {
+pub const fn classify_evidence_role(node: &RustSyntaxNode) -> EvidenceRole {
     match node.kind {
         RustSyntaxKind::Test => EvidenceRole::Test,
         RustSyntaxKind::Documentation => EvidenceRole::Documentation,
         RustSyntaxKind::Configuration => EvidenceRole::Configuration,
-        RustSyntaxKind::MacroInvocation => EvidenceRole::Reference,
+        RustSyntaxKind::MacroInvocation | RustSyntaxKind::Unknown => EvidenceRole::Reference,
         RustSyntaxKind::Module
         | RustSyntaxKind::Function
         | RustSyntaxKind::Method
@@ -1149,7 +1149,6 @@ pub fn classify_evidence_role(node: &RustSyntaxNode) -> EvidenceRole {
         | RustSyntaxKind::Constant
         | RustSyntaxKind::Static
         | RustSyntaxKind::MacroDefinition => EvidenceRole::Definition,
-        RustSyntaxKind::Unknown => EvidenceRole::Reference,
     }
 }
 
@@ -1320,10 +1319,10 @@ pub fn extract_structural_relations(
     let mut relations = Vec::new();
     let mut definitions_by_name: BTreeMap<&str, Vec<&StructuralFact>> = BTreeMap::new();
     for fact in facts {
-        if fact.evidence_role == EvidenceRole::Definition {
-            if let Some(name) = fact.name.as_deref() {
-                definitions_by_name.entry(name).or_default().push(fact);
-            }
+        if fact.evidence_role == EvidenceRole::Definition
+            && let Some(name) = fact.name.as_deref()
+        {
+            definitions_by_name.entry(name).or_default().push(fact);
         }
     }
     for fact in facts {
@@ -1345,8 +1344,9 @@ pub fn extract_structural_relations(
         if fact.evidence_role == EvidenceRole::Test {
             pending.push((StructuralRelationKind::TestsSubject, None, None, true));
         }
-        if fact.name.is_some() && fact.evidence_role == EvidenceRole::Reference {
-            let name = fact.name.as_deref().expect("checked");
+        if fact.evidence_role == EvidenceRole::Reference
+            && let Some(name) = fact.name.as_deref()
+        {
             match definitions_by_name.get(name).map(Vec::as_slice) {
                 Some([target]) => pending.push((
                     StructuralRelationKind::ReferencesName,
@@ -1362,15 +1362,16 @@ pub fn extract_structural_relations(
                 )),
             }
         }
-        if fact.evidence_role == EvidenceRole::Definition && fact.name.is_some() {
-            if let Some(parent) = nearest_parent(fact, facts) {
-                pending.push((
-                    StructuralRelationKind::Contains,
-                    Some(fact.fact_digest),
-                    parent.name.clone(),
-                    false,
-                ));
-            }
+        if fact.evidence_role == EvidenceRole::Definition
+            && fact.name.is_some()
+            && let Some(parent) = nearest_parent(fact, facts)
+        {
+            pending.push((
+                StructuralRelationKind::Contains,
+                Some(fact.fact_digest),
+                parent.name.clone(),
+                false,
+            ));
         }
         for (kind, target, unresolved, ambiguous) in pending {
             if relations.len() >= budget.max_relations {
@@ -1648,7 +1649,7 @@ pub fn compare_profile_change(
     EnrichmentProfileChange::ReEnrichAndReproject
 }
 
-fn entity_kind(kind: RustSyntaxKind) -> EntityKind {
+const fn entity_kind(kind: RustSyntaxKind) -> EntityKind {
     match kind {
         RustSyntaxKind::Module => EntityKind::Module,
         RustSyntaxKind::Function => EntityKind::Function,
@@ -1661,8 +1662,7 @@ fn entity_kind(kind: RustSyntaxKind) -> EntityKind {
         RustSyntaxKind::MacroDefinition | RustSyntaxKind::MacroInvocation => EntityKind::Macro,
         RustSyntaxKind::Test => EntityKind::Test,
         RustSyntaxKind::Documentation => EntityKind::Document,
-        RustSyntaxKind::Configuration => EntityKind::Unknown,
-        RustSyntaxKind::Unknown => EntityKind::Unknown,
+        RustSyntaxKind::Configuration | RustSyntaxKind::Unknown => EntityKind::Unknown,
     }
 }
 
