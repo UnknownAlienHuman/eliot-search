@@ -365,7 +365,7 @@ pub enum ExactInput<'a> {
 }
 
 impl<'a> ExactInput<'a> {
-    fn bytes(self) -> &'a [u8] {
+    const fn bytes(self) -> &'a [u8] {
         match self {
             Self::RawBytes(bytes) | Self::StructuralIr(bytes) => bytes,
             Self::DecodedText(text) => text.as_bytes(),
@@ -783,6 +783,24 @@ pub fn compile_exact_scan(
     })
 }
 
+/// Disclosure fence for plan execution: access grant plus purge barrier state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PlanDisclosureFence {
+    /// Current access permits execution.
+    pub access_permitted: bool,
+    /// No purge barrier covers the scope.
+    pub purge_clear: bool,
+}
+
+/// Currency fence for plan execution: observation and profile freshness.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PlanCurrencyFence {
+    /// Observation continuity is sufficient.
+    pub current_observation: bool,
+    /// Predicate profile remains accepted.
+    pub predicate_profile_current: bool,
+}
+
 /// Current state required before reading any denominator item.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PlanLiveState {
@@ -798,14 +816,10 @@ pub struct PlanLiveState {
     pub security_fence_digest: Blake3Digest32,
     /// Current authenticated overlay-set digest.
     pub overlay_digest: Blake3Digest32,
-    /// Current access permits execution.
-    pub access_permitted: bool,
-    /// No purge barrier covers the scope.
-    pub purge_clear: bool,
-    /// Observation continuity is sufficient.
-    pub current_observation: bool,
-    /// Predicate profile remains accepted.
-    pub predicate_profile_current: bool,
+    /// Disclosure fence: access grant plus purge barrier state.
+    pub disclosure: PlanDisclosureFence,
+    /// Currency fence: observation and profile freshness.
+    pub currency: PlanCurrencyFence,
 }
 
 /// Exact permit tying execution to one validated frozen state.
@@ -826,20 +840,20 @@ pub fn validate_plan_before_execution(
     plan: &CompiledExactScan,
     current: PlanLiveState,
 ) -> Result<PlanExecutionPermit, ExactError> {
-    if !current.access_permitted {
+    if !current.disclosure.access_permitted {
         return Err(ExactError::ExactAccessRevoked);
     }
-    if !current.purge_clear {
+    if !current.disclosure.purge_clear {
         return Err(ExactError::ExactPurged);
     }
-    if !current.predicate_profile_current {
+    if !current.currency.predicate_profile_current {
         return Err(ExactError::ExactEngineNotQualified);
     }
     if plan
         .contract
         .completeness_requirements
         .require_current_observation
-        && !current.current_observation
+        && !current.currency.current_observation
     {
         return Err(ExactError::ExactObservationGap);
     }
@@ -892,7 +906,7 @@ pub struct ExactExecutionBudget {
 
 impl ExactExecutionBudget {
     /// Validates non-zero finite limits.
-    pub fn validate(self) -> Result<Self, ExactError> {
+    pub const fn validate(self) -> Result<Self, ExactError> {
         if self.max_items == 0
             || self.max_items > MAX_LIST_ITEMS
             || self.max_bytes == 0
@@ -956,7 +970,7 @@ pub struct ExactItemExecution {
 impl ExactItemExecution {
     /// Returns whether the item completed predicate execution.
     #[must_use]
-    pub fn completed(&self) -> bool {
+    pub const fn completed(&self) -> bool {
         self.failure.is_none()
     }
 }
@@ -974,41 +988,41 @@ pub fn execute_item(
     if readback.revision.revision_id != item.revision.revision_id
         || readback.revision != item.revision
     {
-        return Ok(item_failure(
+        return item_failure(
             item.revision.revision_id,
             ExactItemFailureKind::RevisionUnavailable,
             SearchReasonCodeV1::SourceRevisionUnavailable,
-        )?);
+        );
     }
     if !readback.access_permitted {
-        return Ok(item_failure(
+        return item_failure(
             item.revision.revision_id,
             ExactItemFailureKind::ScopeChanged,
             SearchReasonCodeV1::AccessRevoked,
-        )?);
+        );
     }
     if !readback.purge_clear {
-        return Ok(item_failure(
+        return item_failure(
             item.revision.revision_id,
             ExactItemFailureKind::ScopeChanged,
             SearchReasonCodeV1::Purged,
-        )?);
+        );
     }
     if !readback.current {
-        return Ok(item_failure(
+        return item_failure(
             item.revision.revision_id,
             ExactItemFailureKind::ScopeChanged,
             SearchReasonCodeV1::Stale,
-        )?);
+        );
     }
     if readback.observed_content_digest != item.revision.content_digest
         || u64::try_from(readback.bytes.len()).ok() != Some(item.revision.byte_length)
     {
-        return Ok(item_failure(
+        return item_failure(
             item.revision.revision_id,
             ExactItemFailureKind::RevisionUnavailable,
             SearchReasonCodeV1::ScopeChangedOrRevisionUnavailable,
-        )?);
+        );
     }
 
     let input = match item.input_domain {
@@ -1016,11 +1030,11 @@ pub fn execute_item(
         ExactInputDomain::DecodedText => match core::str::from_utf8(&readback.bytes) {
             Ok(text) => ExactInput::DecodedText(text),
             Err(_) => {
-                return Ok(item_failure(
+                return item_failure(
                     item.revision.revision_id,
                     ExactItemFailureKind::UnsupportedEncoding,
                     SearchReasonCodeV1::Unreadable,
-                )?);
+                );
             }
         },
         ExactInputDomain::StructuralIr => ExactInput::StructuralIr(&readback.bytes),
@@ -1029,25 +1043,25 @@ pub fn execute_item(
     let spans = match execute_predicate(&plan.predicate, input, engine) {
         Ok(spans) => spans,
         Err(ExactError::ExactEncodingUnsupported) => {
-            return Ok(item_failure(
+            return item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::UnsupportedEncoding,
                 SearchReasonCodeV1::Unreadable,
-            )?);
+            );
         }
         Err(ExactError::ExactPredicateLimitExceeded) => {
-            return Ok(item_failure(
+            return item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::PredicateError,
                 SearchReasonCodeV1::ResourceExhausted,
-            )?);
+            );
         }
         Err(_) => {
-            return Ok(item_failure(
+            return item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::PredicateError,
                 SearchReasonCodeV1::IncompleteCoverage,
-            )?);
+            );
         }
     };
 
@@ -1096,7 +1110,7 @@ pub fn execute_exact_scan(
     let mut cancelled = false;
     let mut timed_out = false;
 
-    for item in plan.denominator.items.iter() {
+    for item in &plan.denominator.items {
         if control.is_cancelled() {
             cancelled = true;
             executions.push(item_failure(
