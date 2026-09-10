@@ -2,9 +2,12 @@
 //!
 //! Once a mutation is dispatched, an error cannot prove it had no effects.
 //! Do not consume another command or retry output after a failed exchange.
+//! A persistent quarantine refusal is fatal even without a dispatched attempt
+//! so no queued command can use stale memory while unresolved.
 
 use std::io::{self, BufRead, Write};
 
+use crate::catalog_quarantine;
 use crate::protocol_io::{self, LineError};
 use crate::service_output::write_error;
 
@@ -107,6 +110,13 @@ pub(super) fn serve<R: BufRead, W: Write>(
         match result {
             Ok(ServiceControl::Continue) => {}
             Ok(ServiceControl::Stop) => return Ok(()),
+            Err(error) if catalog_quarantine::is_quarantine_error(&error) => {
+                // Persistent quarantine must terminate the session without
+                // consuming another command, even when no storage effect was
+                // dispatched by this command. Handles are invalidated by the owner.
+                let _ = write_error(&mut output, &error);
+                return Err(error);
+            }
             Err(_) if attempt.dispatched => {
                 // Legacy storage errors are strings, not trustworthy no-effect
                 // receipts. Classify conservatively without inspecting wording.

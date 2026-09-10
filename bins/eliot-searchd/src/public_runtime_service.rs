@@ -10,6 +10,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use crate::catalog_quarantine;
 use crate::continuation::{
     ContinuationCatalog, ContinuationError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
 };
@@ -17,12 +18,10 @@ use crate::development::{DataRootGuard, Health, MAX_SCAN_QUERY_BYTES};
 use crate::direct_store::{DirectStore, PreparationCursor};
 use crate::directory_manifest::{sync_directory, verify_directory_manifests};
 use crate::maintenance_guard::guarded_collect_orphan_revisions;
-use crate::result_handles::{
-    MAX_HANDLE_EXPANSION_BYTES, ResultHandleCatalog, ResultHandleError,
-};
+use crate::result_handles::{MAX_HANDLE_EXPANSION_BYTES, ResultHandleCatalog, ResultHandleError};
 use crate::service_output::{
-    emit_handle_expansion, emit_indexed_source, emit_search_page,
-    emit_streaming_search, json_string, write_line,
+    emit_handle_expansion, emit_indexed_source, emit_search_page, emit_streaming_search,
+    json_string, write_line,
 };
 use crate::sha256;
 use crate::storage_security::StorageSecurityStatus;
@@ -57,12 +56,12 @@ pub fn maybe_run() -> Option<ExitCode> {
 
 fn run_service(root: &Path) -> Result<(), String> {
     let guard = DataRootGuard::acquire(root)?;
+    // Persistent quarantine precedes catalog open and READY. Reopen observes
+    // the marker instead of inventing empty state; no implicit repair follows.
+    catalog_quarantine::check(guard.canonical_root())?;
     let mut store = DirectStore::open(guard.canonical_root())?;
     let verification = store.verify()?;
-    let manifests = verify_directory_manifests(
-        guard.canonical_root(),
-        &store.namespace_id(),
-    )?;
+    let manifests = verify_directory_manifests(guard.canonical_root(), &store.namespace_id())?;
     let mut storage = StorageSecurityStatus::inspect(guard.canonical_root())?;
     let mut continuations = ContinuationCatalog::new(&store.namespace_id());
     let mut handles = ResultHandleCatalog::new(&store.namespace_id());
@@ -153,6 +152,12 @@ fn execute_command(
 ) -> Result<ServiceControl, String> {
     let (writer, attempt) = operation;
     let canonical_root = owner.canonical_root();
+    // While quarantined no query, mutation, GC or READY-adjacent read may use
+    // stale memory. Invalidate handles/continuations before refusing.
+    if let Err(quarantined) = catalog_quarantine::check(canonical_root) {
+        let _ = invalidate_search_state(continuations, handles);
+        return Err(quarantined);
+    }
     let fields = command.split('\t').collect::<Vec<_>>();
     let Some(name) = fields.first().copied() else {
         return Err("SERVICE_COMMAND_EMPTY".to_owned());
@@ -172,10 +177,7 @@ fn execute_command(
             cmd_version(writer)?;
         }
         ("shutdown", [_]) => {
-            write_line(
-                writer,
-                "{\"event\":\"draining\",\"accepted\":true}",
-            )?;
+            write_line(writer, "{\"event\":\"draining\",\"accepted\":true}")?;
             return Ok(ServiceControl::Stop);
         }
         ("verify", [_]) => {
@@ -189,7 +191,9 @@ fn execute_command(
             cmd_list_sources(writer, store, canonical_root, storage)?;
         }
         ("control-migration-plan", [_, target_namespace]) => {
+            catalog_quarantine::arm(canonical_root)?;
             cmd_migration_plan(writer, store, owner, attempt, target_namespace)?;
+            catalog_quarantine::clear(canonical_root)?;
         }
         ("control-migration-revisions", [_] | [_, _]) => {
             let page = store.inspect_migration_revisions(fields.get(1).copied())?;
@@ -199,7 +203,9 @@ fn execute_command(
             // This read-only source-history input uses the already-held owner;
             // it never opens a new catalog or arms a mutation attempt.
             let page = crate::plaintext_direct_store::DirectStore::inspect_control_history(
-                canonical_root, &store.namespace_id(), fields.get(1).copied(),
+                canonical_root,
+                &store.namespace_id(),
+                fields.get(1).copied(),
             )?;
             write_line(writer, &page)?;
         }
@@ -230,36 +236,20 @@ fn execute_mutating_command<W: std::io::Write>(
     fields: &[&str],
     state: &mut CommandState<'_, W>,
 ) -> Result<(), String> {
+    if execute_quarantined_writes(name, fields, state)? {
+        return Ok(());
+    }
     match (name, fields) {
-        ("prepare-root", [_] | [_, _]) => {
-            let cursor = fields.get(1).map(|value| PreparationCursor::parse(value)).transpose()?;
-            state.store.validate_preparation_cursor(cursor.as_ref())?;
-            state.attempt.arm();
-            cmd_prepare_root(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, cursor.as_ref())?;
-        }
-        ("prepare-revision", [_, revision_id]) => {
-            crate::preparation_composition::validate_revision(revision_id)?;
-            state.attempt.arm();
-            cmd_prepare_revision(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, revision_id)?;
-        }
-        ("index-file", [_, path_hex]) => {
-            let path = decode_path(path_hex)?;
-            state.attempt.arm();
-            cmd_index_file(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, &path)?;
-        }
-        ("index-directory", [_, path_hex]) => {
-            let directory = decode_path(path_hex)?;
-            state.attempt.arm();
-            cmd_index_directory(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, &directory)?;
-        }
-        ("sync-directory", [_, path_hex]) => {
-            cmd_sync_directory(state, path_hex)?;
-        }
         ("search", [_, mode, query_hex]) => {
             let query = decode_query(query_hex)?;
             let result = state.store.search(&query, parse_search_mode(mode)?)?;
             refresh_storage(state.storage, state.canonical_root)?;
-            emit_streaming_search(state.writer, &state.store.namespace_id(), &result, state.storage)?;
+            emit_streaming_search(
+                state.writer,
+                &state.store.namespace_id(),
+                &result,
+                state.storage,
+            )?;
         }
         ("search-page", [_, mode, page_size, query_hex]) => {
             cmd_search_page(state, mode, page_size, query_hex)?;
@@ -270,35 +260,16 @@ fn execute_mutating_command<W: std::io::Write>(
         ("expand-handle", [_, token, start, end]) => {
             cmd_expand_handle(state, token, start, end)?;
         }
-        ("retire", [_, source_id]) => {
-            state.attempt.arm();
-            let source = state.store.retire_source(source_id)?;
-            let (invalidated_continuations, invalidated_handles) =
-                invalidate_search_state(state.continuations, state.handles);
-            refresh_storage(state.storage, state.canonical_root)?;
-            write_line(
-                state.writer,
-                &format!(
-                    concat!(
-                        "{{\"event\":\"source_retired\",",
-                        "\"source_id\":\"{}\",\"revision_id\":\"{}\",",
-                        "\"sequence\":{},\"active\":false,",
-                        "\"invalidated_continuations\":{},",
-                        "\"invalidated_handles\":{},\"storage_backend\":{},",
-                        "\"encrypted_at_rest\":{}}}"
-                    ),
-                    source.source_id,
-                    source.revision_id,
-                    source.sequence,
-                    invalidated_continuations,
-                    invalidated_handles,
-                    json_string(state.storage.backend),
-                    state.storage.encrypted_at_rest,
-                ),
-            )?;
-        }
         ("read-revision", [_, revision_id, start, end]) => {
-            cmd_read_revision(state.writer, state.store, state.canonical_root, state.storage, revision_id, start, end)?;
+            cmd_read_revision(
+                state.writer,
+                state.store,
+                state.canonical_root,
+                state.storage,
+                revision_id,
+                start,
+                end,
+            )?;
         }
         ("gc", [_, mode]) => {
             let apply = match *mode {
@@ -307,14 +278,121 @@ fn execute_mutating_command<W: std::io::Write>(
                 _ => return Err("SERVICE_GC_MODE_INVALID".to_owned()),
             };
             state.store.verify()?;
+            let root = state.canonical_root;
             if apply {
+                catalog_quarantine::arm(root)?;
                 state.attempt.arm();
             }
-            cmd_gc(state.writer, state.store, state.canonical_root, state.storage, apply)?;
+            cmd_gc(
+                state.writer,
+                state.store,
+                state.canonical_root,
+                state.storage,
+                apply,
+            )?;
+            if apply {
+                catalog_quarantine::clear(root)?;
+            }
         }
         _ => return Err("SERVICE_COMMAND_INVALID".to_owned()),
     }
     Ok(())
+}
+
+/// Dispatches possibly durable catalog mutations with persistent quarantine.
+///
+/// Each arm precedes storage effects and each clear follows exact readback.
+/// Returns `Ok(true)` when the command was a quarantined write.
+fn execute_quarantined_writes<W: std::io::Write>(
+    name: &str,
+    fields: &[&str],
+    state: &mut CommandState<'_, W>,
+) -> Result<bool, String> {
+    match (name, fields) {
+        ("prepare-root", [_] | [_, _]) => {
+            let cursor = fields
+                .get(1)
+                .map(|value| PreparationCursor::parse(value))
+                .transpose()?;
+            state.store.validate_preparation_cursor(cursor.as_ref())?;
+            let root = state.canonical_root;
+            catalog_quarantine::arm(root)?;
+            state.attempt.arm();
+            cmd_prepare_root(
+                state.writer,
+                state.store,
+                state.continuations,
+                state.handles,
+                state.canonical_root,
+                state.storage,
+                cursor.as_ref(),
+            )?;
+            catalog_quarantine::clear(root)?;
+        }
+        ("prepare-revision", [_, revision_id]) => {
+            crate::preparation_composition::validate_revision(revision_id)?;
+            let root = state.canonical_root;
+            catalog_quarantine::arm(root)?;
+            state.attempt.arm();
+            cmd_prepare_revision(
+                state.writer,
+                state.store,
+                state.continuations,
+                state.handles,
+                state.canonical_root,
+                state.storage,
+                revision_id,
+            )?;
+            catalog_quarantine::clear(root)?;
+        }
+        ("index-file", [_, path_hex]) => {
+            let path = decode_path(path_hex)?;
+            let root = state.canonical_root;
+            catalog_quarantine::arm(root)?;
+            state.attempt.arm();
+            cmd_index_file(
+                state.writer,
+                state.store,
+                state.continuations,
+                state.handles,
+                state.canonical_root,
+                state.storage,
+                &path,
+            )?;
+            catalog_quarantine::clear(root)?;
+        }
+        ("index-directory", [_, path_hex]) => {
+            let directory = decode_path(path_hex)?;
+            let root = state.canonical_root;
+            catalog_quarantine::arm(root)?;
+            state.attempt.arm();
+            cmd_index_directory(
+                state.writer,
+                state.store,
+                state.continuations,
+                state.handles,
+                state.canonical_root,
+                state.storage,
+                &directory,
+            )?;
+            catalog_quarantine::clear(root)?;
+        }
+        ("sync-directory", [_, path_hex]) => {
+            let root = state.canonical_root;
+            catalog_quarantine::arm(root)?;
+            cmd_sync_directory(state, path_hex)?;
+            catalog_quarantine::clear(root)?;
+        }
+        ("retire", [_, source_id]) => {
+            let root = state.canonical_root;
+            catalog_quarantine::arm(root)?;
+            state.attempt.arm();
+            cmd_retire(state, source_id)?;
+            catalog_quarantine::clear(root)?;
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
 }
 
 fn cmd_version(writer: &mut impl std::io::Write) -> Result<(), String> {
@@ -533,10 +611,7 @@ fn cmd_health(
     storage: &mut StorageSecurityStatus,
 ) -> Result<(), String> {
     let verification = store.verify()?;
-    let manifests = verify_directory_manifests(
-        canonical_root,
-        &store.namespace_id(),
-    )?;
+    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
     refresh_storage(storage, canonical_root)?;
     write_line(
         writer,
@@ -571,10 +646,7 @@ fn cmd_verify_manifests(
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
 ) -> Result<(), String> {
-    let manifests = verify_directory_manifests(
-        canonical_root,
-        &store.namespace_id(),
-    )?;
+    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
     refresh_storage(storage, canonical_root)?;
     write_line(
         writer,
@@ -616,10 +688,7 @@ fn cmd_sync_directory<W: std::io::Write>(
         invalidate_search_state(continuations, handles);
     let result = sync_directory(store, canonical_root, &directory)?;
     store.verify()?;
-    let manifests = verify_directory_manifests(
-        canonical_root,
-        &store.namespace_id(),
-    )?;
+    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
     refresh_storage(storage, canonical_root)?;
     write_line(
         writer,
@@ -748,6 +817,36 @@ fn refresh_storage(
 ) -> Result<(), String> {
     *storage = StorageSecurityStatus::inspect(canonical_root)?;
     Ok(())
+}
+
+fn cmd_retire<W: std::io::Write>(
+    state: &mut CommandState<'_, W>,
+    source_id: &str,
+) -> Result<(), String> {
+    let source = state.store.retire_source(source_id)?;
+    let (invalidated_continuations, invalidated_handles) =
+        invalidate_search_state(state.continuations, state.handles);
+    refresh_storage(state.storage, state.canonical_root)?;
+    write_line(
+        state.writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"source_retired\",",
+                "\"source_id\":\"{}\",\"revision_id\":\"{}\",",
+                "\"sequence\":{},\"active\":false,",
+                "\"invalidated_continuations\":{},",
+                "\"invalidated_handles\":{},\"storage_backend\":{},",
+                "\"encrypted_at_rest\":{}}}"
+            ),
+            source.source_id,
+            source.revision_id,
+            source.sequence,
+            invalidated_continuations,
+            invalidated_handles,
+            json_string(state.storage.backend),
+            state.storage.encrypted_at_rest,
+        ),
+    )
 }
 
 fn invalidate_search_state(

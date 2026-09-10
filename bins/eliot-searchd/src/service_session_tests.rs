@@ -116,7 +116,11 @@ impl Write for FailingOutput {
 fn output_failure_is_latched_even_when_dispatch_ignores_it() {
     for (zero, fail_flush) in [(false, false), (true, false), (false, true)] {
         let mut reader = Cursor::new(b"first\nsecond\n");
-        let mut output = FailingOutput { writes: 0, zero, fail_flush };
+        let mut output = FailingOutput {
+            writes: 0,
+            zero,
+            fail_flush,
+        };
         let result = serve(&mut reader, &mut output, 32, |_, writer, _| {
             let _ = writer.write_all(b"prefix");
             let _ = writer.flush();
@@ -132,7 +136,11 @@ fn output_failure_is_latched_even_when_dispatch_ignores_it() {
 #[test]
 fn failed_mutation_output_is_unknown_not_a_clean_shutdown() {
     let mut reader = Cursor::new(b"mutate\nshutdown\n");
-    let mut output = FailingOutput { writes: 0, zero: false, fail_flush: false };
+    let mut output = FailingOutput {
+        writes: 0,
+        zero: false,
+        fail_flush: false,
+    };
     let result = serve(&mut reader, &mut output, 32, |_, writer, attempt| {
         attempt.arm();
         let _ = writer.write_all(b"ack");
@@ -141,4 +149,23 @@ fn failed_mutation_output_is_unknown_not_a_clean_shutdown() {
     assert_eq!(result, Err(MUTATION_UNKNOWN.to_owned()));
     assert_eq!(output.writes, 1);
     assert_eq!(reader.position(), 7);
+}
+
+#[test]
+fn quarantine_refusal_terminates_session_without_consuming_next_command() {
+    let mut reader = Cursor::new(b"search\nhealth\n");
+    let mut output = Vec::new();
+    let result = serve(
+        &mut reader,
+        &mut output,
+        32,
+        |command, _, _| match command {
+            "search" => Err("SERVICE_CATALOG_QUARANTINED".to_owned()),
+            _ => panic!("quarantined session must not dispatch a second command"),
+        },
+    );
+    assert_eq!(result, Err("SERVICE_CATALOG_QUARANTINED".to_owned()));
+    assert_eq!(reader.position(), 7);
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.contains("SERVICE_CATALOG_QUARANTINED"));
 }

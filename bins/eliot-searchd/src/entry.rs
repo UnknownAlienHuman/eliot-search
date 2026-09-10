@@ -11,17 +11,18 @@
 mod app;
 mod authenticated_proxy;
 mod catalog_presence;
+mod catalog_quarantine;
 mod continuation;
 mod development;
 mod direct_preparation;
-#[path = "direct_store.rs"]
-mod plaintext_direct_store;
 #[path = "secure_direct_store.rs"]
 mod direct_store;
 mod directory_manifest;
 mod endpoint;
 mod maintenance;
 mod maintenance_guard;
+#[path = "direct_store.rs"]
+mod plaintext_direct_store;
 mod preparation_composition;
 mod protocol_io;
 mod public_runtime_service;

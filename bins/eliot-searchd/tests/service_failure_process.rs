@@ -1,7 +1,7 @@
 //! Regression tests through the actual primary service, on disposable roots.
 
-use std::fs;
 use std::fmt::Write as _;
+use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
@@ -20,7 +20,10 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Scratch(PathBuf, common::RevisionKeyTreeGuard);
 impl Scratch {
     fn new() -> Self {
-        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let path = std::env::temp_dir().join(format!(
             "eliot-session-{}-{stamp}-{}",
             std::process::id(),
@@ -64,15 +67,24 @@ impl Service {
         let output = thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             let mut first = Vec::new();
-            Read::take(&mut reader, 65_537).read_until(b'\n', &mut first).unwrap();
+            Read::take(&mut reader, 65_537)
+                .read_until(b'\n', &mut first)
+                .unwrap();
             let first = String::from_utf8(first).unwrap();
             let _ = ready_tx.send(first);
             read_output(reader)
         });
         let errors = thread::spawn(move || read_output(stderr));
-        let service = Self { child, input, output: Some(output), errors: Some(errors) };
+        let service = Self {
+            child,
+            input,
+            output: Some(output),
+            errors: Some(errors),
+        };
         // Construct the guard before waiting: a startup timeout kills/reaps it.
-        let ready = ready_rx.recv_timeout(TIMEOUT).expect("bounded service startup");
+        let ready = ready_rx
+            .recv_timeout(TIMEOUT)
+            .expect("bounded service startup");
         assert!(ready.contains("\"event\":\"data_root_ready\""), "{ready}");
         service
     }
@@ -130,7 +142,11 @@ fn path_hex(path: &Path) -> String {
 #[cfg(windows)]
 fn path_hex(path: &Path) -> String {
     use std::os::windows::ffi::OsStrExt;
-    hex(&path.as_os_str().encode_wide().flat_map(u16::to_le_bytes).collect::<Vec<_>>())
+    hex(&path
+        .as_os_str()
+        .encode_wide()
+        .flat_map(u16::to_le_bytes)
+        .collect::<Vec<_>>())
 }
 #[cfg(not(any(unix, windows)))]
 fn path_hex(path: &Path) -> String {
@@ -146,9 +162,8 @@ fn hex(bytes: &[u8]) -> String {
 #[test]
 fn invalid_parameters_before_dispatch_keep_service_usable() {
     let scratch = Scratch::new();
-    let (status, output, errors) = Service::start(&scratch.0).exchange(
-        b"index-file\tzz\nversion\nshutdown\n".to_vec(), false,
-    );
+    let (status, output, errors) =
+        Service::start(&scratch.0).exchange(b"index-file\tzz\nversion\nshutdown\n".to_vec(), false);
     assert!(status.success(), "{output} {errors}");
     assert!(output.contains("SERVICE_HEX_INVALID"));
     assert!(output.contains("\"event\":\"version\""));
@@ -168,19 +183,46 @@ fn failed_catalog_mutation_stops_without_serving_queued_reads() {
     let original = fs::read(&log).unwrap();
     fs::rename(&log, &saved_log).unwrap();
     fs::create_dir(&log).unwrap();
-    let commands = format!("index-file\t{}\nlist-sources\nhealth\nshutdown\n", path_hex(&source));
+    let commands = format!(
+        "index-file\t{}\nlist-sources\nhealth\nshutdown\n",
+        path_hex(&source)
+    );
     let (status, output, errors) = service.exchange(commands.into_bytes(), false);
     assert!(!status.success(), "{output}");
-    assert!(output.contains("SERVICE_MUTATION_OUTCOME_UNKNOWN"), "{output} {errors}");
-    for forbidden in ["source_list_complete", "\"event\":\"health\"", "data_root_stopped", "\"clean\":true"] {
+    assert!(
+        output.contains("SERVICE_MUTATION_OUTCOME_UNKNOWN"),
+        "{output} {errors}"
+    );
+    for forbidden in [
+        "source_list_complete",
+        "\"event\":\"health\"",
+        "data_root_stopped",
+        "\"clean\":true",
+    ] {
         assert!(!output.contains(forbidden), "{output}");
     }
     assert!(log.is_dir());
     assert_eq!(fs::read(&saved_log).unwrap(), original);
+    // Uncertain effects arm a persistent quarantine marker alongside the
+    // process-local fail-stop. It is bounded, exact and survives the failure.
+    let marker = root.join("control/catalog-quarantine.marker");
+    assert!(marker.is_file());
+    assert_eq!(
+        fs::read(&marker).unwrap(),
+        b"ELIOT_SEARCH_CATALOG_QUARANTINE_V1\nreason=SERVICE_MUTATION_OUTCOME_UNKNOWN\n"
+    );
     // Explicit fixture repair, not a repair path in the runtime.
     fs::remove_dir(&log).unwrap();
     fs::rename(saved_log, &log).unwrap();
-    let (status, output, errors) = Service::start(&root).exchange(b"health\nshutdown\n".to_vec(), false);
+    // Log repair alone must not clear the quarantine; explicit marker removal
+    // after exact readback is the only recovery path.
+    assert_eq!(
+        fs::read(&marker).unwrap(),
+        b"ELIOT_SEARCH_CATALOG_QUARANTINE_V1\nreason=SERVICE_MUTATION_OUTCOME_UNKNOWN\n"
+    );
+    fs::remove_file(&marker).unwrap();
+    let (status, output, errors) =
+        Service::start(&root).exchange(b"health\nshutdown\n".to_vec(), false);
     assert!(status.success(), "{output} {errors}");
     assert!(output.contains("\"registered_sources\":0"));
 }
@@ -188,20 +230,26 @@ fn failed_catalog_mutation_stops_without_serving_queued_reads() {
 #[test]
 fn oversized_unterminated_frame_exits_while_client_still_holds_stdin() {
     let scratch = Scratch::new();
-    let (status, output, errors) = Service::start(&scratch.0)
-        .exchange(vec![b'x'; 256 * 1024 + 2], true);
+    let (status, output, errors) =
+        Service::start(&scratch.0).exchange(vec![b'x'; 256 * 1024 + 2], true);
     assert!(!status.success(), "{output}");
-    assert!(output.contains("SERVICE_COMMAND_TOO_LARGE"), "{output} {errors}");
+    assert!(
+        output.contains("SERVICE_COMMAND_TOO_LARGE"),
+        "{output} {errors}"
+    );
     assert!(!output.contains("data_root_stopped"));
 }
 
 #[test]
 fn invalid_utf8_cannot_be_followed_by_a_valid_queued_command() {
     let scratch = Scratch::new();
-    let (status, output, errors) = Service::start(&scratch.0)
-        .exchange(b"\xff\nversion\nshutdown\n".to_vec(), false);
+    let (status, output, errors) =
+        Service::start(&scratch.0).exchange(b"\xff\nversion\nshutdown\n".to_vec(), false);
     assert!(!status.success(), "{output}");
-    assert!(output.contains("SERVICE_COMMAND_NOT_UTF8"), "{output} {errors}");
+    assert!(
+        output.contains("SERVICE_COMMAND_NOT_UTF8"),
+        "{output} {errors}"
+    );
     assert!(!output.contains("\"event\":\"version\""));
     assert!(!output.contains("\"clean\":true"));
 }
