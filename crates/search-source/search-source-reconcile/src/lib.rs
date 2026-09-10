@@ -392,6 +392,15 @@ impl ReconcileOutcome {
 }
 
 /// Produces one fail-closed reconciliation outcome.
+///
+/// # Panics
+///
+/// Never panics on valid inputs. The internal
+/// `.expect("absence was converted into a denial above")` and
+/// `unreachable!("unknown presence quarantined above")` encode checked
+/// invariants established by the denial/quarantine early-returns above them
+/// and fire only if those guards are bypassed or reordered during future
+/// edits; they are not input-dependent failure modes.
 pub fn reconcile_source(
     registered: &RegisteredSource,
     observation: ReconcileObservation,
@@ -502,7 +511,9 @@ fn reconcile_present(
 
     match (current_file, observed_file, path_changed, content_changed) {
         (Some(current), Some(observed), _, _) if current != observed => {
-            if !path_changed {
+            if path_changed {
+                quarantine_as_error(ReconcileQuarantineReason::AmbiguousMoveOrReplacement)
+            } else {
                 Ok(ReconcileAction::RetireAndNominateReplacement {
                     expected_source_revision: registered.source_revision(),
                     path: observed_path.clone(),
@@ -510,8 +521,6 @@ fn reconcile_present(
                     replacement_content_digest: observed_content_digest,
                     replacement_content_bytes: observed_content_bytes,
                 })
-            } else {
-                quarantine_as_error(ReconcileQuarantineReason::AmbiguousMoveOrReplacement)
             }
         }
         (Some(_file), Some(_), false, false) => Ok(ReconcileAction::NoChange),
@@ -539,20 +548,20 @@ fn reconcile_present(
             content_digest: observed_content_digest,
             content_bytes: observed_content_bytes,
         }),
-        (None, Some(file), false, false) | (None, Some(file), false, true) => {
+        (None, Some(file), false, false | true) => {
             Ok(ReconcileAction::BindStableFileIdentity {
                 expected_binding_revision: binding.binding_revision(),
                 next_binding_revision: next_revision(binding.binding_revision())?,
                 stable_file_identity_digest: file,
             })
         }
-        (None, Some(_), true, _) | (Some(_), None, true, _) | (None, None, true, _) => {
+        (None, Some(_) | None, true, _) | (Some(_), None, true, _) => {
             denial_as_error(ReconcileDenialReason::RenameIdentityEvidenceMissing)
         }
-        (Some(_), None, false, true) | (None, None, false, true) => {
+        (Some(_) | None, None, false, true) => {
             denial_as_error(ReconcileDenialReason::ReplacementIdentityEvidenceMissing)
         }
-        (Some(_), None, false, false) | (None, None, false, false) => Ok(ReconcileAction::NoChange),
+        (Some(_) | None, None, false, false) => Ok(ReconcileAction::NoChange),
     }
 }
 
