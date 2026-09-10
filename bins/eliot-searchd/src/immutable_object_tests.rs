@@ -66,13 +66,20 @@ fn racing_publications_never_clobber_the_winning_object() {
 }
 
 #[test]
-fn empty_encoded_object_is_rejected_before_creating_a_file() {
+fn empty_encoded_object_is_retained_as_an_exact_empty_revision() {
+    // Empty retained revisions are valid (see secure_revision_writer: the
+    // non-Windows development profile persists empty revisions, and empty
+    // source files consume zero byte budget). The no-clobber guarantee still
+    // holds: a conflicting non-empty write must not replace the empty object.
     let scratch = Scratch::new();
+    persist_immutable_object(&scratch.object(), &[]).unwrap();
+    assert_eq!(fs::read(scratch.object()).unwrap(), b"");
+    persist_immutable_object(&scratch.object(), &[]).unwrap();
     assert_eq!(
-        persist_immutable_object(&scratch.object(), &[]),
-        Err("DIRECT_REVISION_PROTECTED_SIZE_INVALID".to_owned()),
+        persist_immutable_object(&scratch.object(), b"encoded-object"),
+        Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned()),
     );
-    assert!(!scratch.object().exists());
+    assert_eq!(fs::read(scratch.object()).unwrap(), b"");
 }
 
 #[cfg(unix)]

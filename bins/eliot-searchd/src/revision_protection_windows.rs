@@ -58,6 +58,9 @@ unsafe extern "system" {
     ) -> i32;
     #[link_name = "CredWriteW"]
     fn cred_write_w(credential: *const CredentialW, flags: u32) -> i32;
+    #[cfg(test)]
+    #[link_name = "CredDeleteW"]
+    fn cred_delete_w(target_name: *const u16, credential_type: u32, flags: u32) -> i32;
     #[link_name = "CredFree"]
     fn cred_free(buffer: *mut c_void);
 }
@@ -289,6 +292,78 @@ fn write_credential(
         return Err(format!("DIRECT_REVISION_KEY_WRITE_FAILED:{error}"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn delete_test_credential_for_data_root(data_root: &Path) {
+    let derived = read_test_namespace_hex(data_root);
+    if let Some(namespace_hex) = derived
+        && !delete_test_credential_verified(&namespace_hex)
+    {
+        // Best-effort cleanup exhausted its bounded retries without
+        // verifying the entry gone. Report, never panic: cleanup must
+        // not mask the test result.
+        eprintln!(
+            "ELIOT_TEST_CLEANUP: revision-key credential still present after bounded retries: root={} namespace={namespace_hex}",
+            data_root.display(),
+        );
+    }
+}
+
+/// Delete one namespace credential and verify it is really gone, retrying
+/// across drop-storm vault contention. A full parallel run drops dozens of
+/// fixtures within the same moment, and a lone `CredDelete` can lose to that
+/// contention while reporting success or transient failure either way; the
+/// read-back below is the only signal trusted here. A missing entry is
+/// already gone. Returns true when absence was verified. Every outcome stays
+/// best-effort so cleanup in `Drop` can never mask a test result.
+#[cfg(test)]
+fn delete_test_credential_verified(namespace_hex: &str) -> bool {
+    debug_assert!(is_test_namespace_hex(namespace_hex));
+    let wide = wide(&format!("ELIOT Search/revision-key/{namespace_hex}"));
+    for attempt in 0..8_u32 {
+        unsafe {
+            let _ = cred_delete_w(wide.as_ptr(), CRED_TYPE_GENERIC, 0);
+        }
+        if credential_absent(&wide) {
+            return true;
+        }
+        std::thread::sleep(core::time::Duration::from_millis(
+            10_u64 << attempt.min(5),
+        ));
+    }
+    false
+}
+
+/// True when no credential exists under `target`. Present-but-unreadable
+/// counts as present so the caller retries instead of declaring victory.
+/// Never panics; returned secret bytes are zeroized before release.
+#[cfg(test)]
+fn credential_absent(target: &[u16]) -> bool {
+    match read_credential(target) {
+        Ok(None) => true,
+        Ok(Some(mut secret)) => {
+            super::zeroize(&mut secret);
+            false
+        }
+        Err(_) => false,
+    }
+}
+
+/// Read this data root's namespace hex without creating anything. This reads
+/// the same `control/namespace.id` file that
+/// `plaintext_direct_store::load_or_create_namespace` owns; a missing or
+/// malformed file means there is no credential to delete.
+#[cfg(test)]
+pub(super) fn read_test_namespace_hex(data_root: &Path) -> Option<String> {
+    let bytes = fs::read(data_root.join("control").join("namespace.id")).ok()?;
+    let text = core::str::from_utf8(&bytes).ok()?.trim().to_owned();
+    is_test_namespace_hex(&text).then_some(text)
+}
+
+#[cfg(test)]
+fn is_test_namespace_hex(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 pub(super) fn protect_data(

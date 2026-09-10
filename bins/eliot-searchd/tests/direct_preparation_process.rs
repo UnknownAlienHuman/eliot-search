@@ -9,12 +9,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+// Shared Credential Manager cleanup; each harness uses a subset of it.
+#[allow(dead_code)]
+mod common;
+
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 struct Fixture {
     base: PathBuf,
     data: PathBuf,
     source: PathBuf,
+    guard: common::RevisionKeyGuard,
 }
 impl Fixture {
     fn new() -> Self {
@@ -24,7 +29,8 @@ impl Fixture {
         let data = base.join("data");
         let source = base.join("source.txt");
         fs::create_dir_all(&data).unwrap();
-        Self { base, data, source }
+        let guard = common::RevisionKeyGuard::for_data_root(&data);
+        Self { base, data, source, guard }
     }
 
     fn run(args: &[&str]) -> (ExitStatus, String, String) {
@@ -62,7 +68,11 @@ impl Fixture {
 
     fn index(&self, bytes: &[u8]) -> String {
         fs::write(&self.source, bytes).unwrap();
-        Self::ok(&["--index-file", self.data.to_str().unwrap(), self.source.to_str().unwrap()])
+        let output = Self::ok(&["--index-file", self.data.to_str().unwrap(), self.source.to_str().unwrap()]);
+        // Capture the namespace created by the first open so Drop can delete
+        // this test's revision-key credential.
+        self.guard.refresh();
+        output
     }
 
     fn search(&self, query: &str) -> String {
@@ -70,7 +80,13 @@ impl Fixture {
     }
 }
 impl Drop for Fixture {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.base); }
+    fn drop(&mut self) {
+        // Delete this test's revision-key credential before removing the
+        // directory that holds control/namespace.id. Best-effort, never
+        // panics.
+        self.guard.cleanup();
+        let _ = fs::remove_dir_all(&self.base);
+    }
 }
 
 fn read_output(reader: impl Read) -> String {

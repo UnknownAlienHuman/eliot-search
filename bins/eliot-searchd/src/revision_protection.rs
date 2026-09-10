@@ -316,6 +316,81 @@ fn zeroize(bytes: &mut [u8]) { bytes.zeroize(); }
 #[path = "revision_protection_windows.rs"]
 mod windows;
 
+/// Process-wide serializer for unit tests that touch the revision-key
+/// Credential Manager entries.
+///
+/// The Windows credential vault misbehaves when one process issues
+/// concurrent `CredWrite`/`CredDelete`/`CredRead` calls from several threads:
+/// a delete followed by a read-back can report the entry gone while it is
+/// still present, leaking exactly one entry per full parallel run in roughly
+/// a quarter of runs (single-threaded runs never leak). Every unit test that
+/// opens the revision-protected store must therefore hold the lock returned
+/// by [`lock_unit_vault_for_test`] for its *entire* body — including any
+/// spawned child process wait — so no two such tests overlap in one harness
+/// process. Today that is exactly the `protected_ingest_tests` (2 tests) and
+/// `direct_store::revision_writer::tests` (4 tests, plus its `crash_child`
+/// helper, which is covered by its parent's hold) module set; no other unit
+/// test in this binary opens the protected store.
+///
+/// The lock is poison-tolerant on purpose: these tests include known failure
+/// paths that panic while holding it (the owner-lock regressions), and a
+/// poisoned mutex must never cascade into unrelated test failures.
+#[cfg(test)]
+static UNIT_VAULT_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Hold the unit-vault serializer for a whole test body; see
+/// [`UNIT_VAULT_SERIAL`]. Never panics, even if a previous holder panicked.
+#[cfg(test)]
+pub fn lock_unit_vault_for_test() -> std::sync::MutexGuard<'static, ()> {
+    UNIT_VAULT_SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Drop-based cleanup guard for tests that open the revision-protected store.
+///
+/// Every `DirectStore::open` on a fresh data root creates one
+/// `ELIOT Search/revision-key/<namespace-hex>` Credential Manager entry via
+/// `CredWriteW`. The guard deletes exactly that entry when the test finishes —
+/// on both the pass and the panic paths, because `Drop` runs on unwind — so
+/// entries never accumulate across runs. Cleanup is best-effort and never
+/// panics: a cleanup failure must not mask the test result. Callers must also
+/// hold [`lock_unit_vault_for_test`] for the whole test body.
+#[cfg(test)]
+pub struct TestCredentialGuard {
+    data_root: std::path::PathBuf,
+}
+
+#[cfg(test)]
+impl TestCredentialGuard {
+    /// Guard the credential belonging to `data_root`. Nothing is read or
+    /// deleted until [`Self::cleanup`] runs, so constructing the guard before
+    /// the store is opened is correct.
+    pub(crate) fn for_data_root(data_root: &std::path::Path) -> Self {
+        Self { data_root: data_root.to_owned() }
+    }
+
+    /// Delete the guarded credential, derived from the current
+    /// `control/namespace.id` file. Best-effort: all errors are ignored and
+    /// this never panics. Call at the top of a fixture `Drop`, before the
+    /// temporary directory (and `namespace.id` with it) is removed.
+    pub(crate) fn cleanup(&self) {
+        #[cfg(windows)]
+        {
+            windows::delete_test_credential_for_data_root(&self.data_root);
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = &self.data_root;
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestCredentialGuard {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
+
 #[cfg(test)]
 #[path = "revision_protection_tests.rs"]
 mod tests;

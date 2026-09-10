@@ -8,8 +8,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+// Shared Credential Manager cleanup; each harness uses a subset of it.
+#[allow(dead_code)]
+mod common;
+
 static NEXT: AtomicU64 = AtomicU64::new(0);
-struct Fixture { base: PathBuf, root: PathBuf, source: PathBuf }
+struct Fixture { base: PathBuf, root: PathBuf, source: PathBuf, guard: common::RevisionKeyGuard }
 impl Fixture {
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
@@ -19,7 +23,8 @@ impl Fixture {
         fs::create_dir_all(&root).unwrap();
         let source = base.join("source.txt");
         fs::write(&source, b"irreplaceable historical bytes").unwrap();
-        Self { base, root, source }
+        let guard = common::RevisionKeyGuard::for_data_root(&root);
+        Self { base, root, source, guard }
     }
     fn run(&self, command: &str, extra: &[&Path]) -> (ExitStatus, String) {
         let mut child = Command::new(env!("CARGO_BIN_EXE_eliot-searchd"))
@@ -39,6 +44,10 @@ impl Fixture {
             }
             thread::sleep(Duration::from_millis(10));
         };
+        // Capture the original namespace while control/namespace.id still
+        // exists: later steps of catalog-loss regressions delete that file,
+        // but the credential created by the first open must still be removed.
+        self.guard.refresh();
         (status, format!("{}{}", stdout.join().unwrap(), stderr.join().unwrap()))
     }
     fn index(&self) {
@@ -59,7 +68,15 @@ impl Fixture {
         files
     }
 }
-impl Drop for Fixture { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.base); } }
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        // Delete this test's revision-key credential before removing the
+        // directory that holds control/namespace.id. Best-effort, never
+        // panics.
+        self.guard.cleanup();
+        let _ = fs::remove_dir_all(&self.base);
+    }
+}
 fn drain(reader: impl Read) -> String {
     let mut bytes = Vec::new();
     reader.take(1024 * 1024 + 1).read_to_end(&mut bytes).unwrap();

@@ -9,10 +9,15 @@ use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// Shared Credential Manager cleanup; each harness uses a subset of it.
+#[allow(dead_code)]
+mod common;
+
 struct Sandbox {
     base: PathBuf,
     data: PathBuf,
     source: PathBuf,
+    guard: common::RevisionKeyGuard,
 }
 
 impl Sandbox {
@@ -30,17 +35,22 @@ impl Sandbox {
         let source = base.join("source");
         fs::create_dir(&data).unwrap();
         fs::create_dir(&source).unwrap();
-        Self { base, data, source }
+        let guard = common::RevisionKeyGuard::for_data_root(&data);
+        Self { base, data, source, guard }
     }
 
     fn invoke(&self, command: &str, tail: &[&OsStr]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_eliot-searchd"))
+        let output = Command::new(env!("CARGO_BIN_EXE_eliot-searchd"))
             .arg(command)
             .arg(&self.data)
             .args(tail)
             .stdin(Stdio::null())
             .output()
-            .expect("spawn primary daemon")
+            .expect("spawn primary daemon");
+        // Capture the namespace created by the first open so Drop can delete
+        // this test's revision-key credential.
+        self.guard.refresh();
+        output
     }
 
     fn success(&self, command: &str, tail: &[&OsStr]) -> String {
@@ -67,6 +77,10 @@ impl Sandbox {
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
+        // Delete this test's revision-key credential before removing the
+        // directory that holds control/namespace.id. Best-effort, never
+        // panics.
+        self.guard.cleanup();
         let _ = fs::remove_dir_all(&self.base);
     }
 }

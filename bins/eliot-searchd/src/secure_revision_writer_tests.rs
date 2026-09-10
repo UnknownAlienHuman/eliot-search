@@ -5,6 +5,8 @@ use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
 use crate::plaintext_direct_store;
 use crate::revision_protection::PROTECTED_OBJECT_EXTENSION;
+use crate::revision_protection::TestCredentialGuard;
+use crate::revision_protection::lock_unit_vault_for_test;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,6 +19,7 @@ struct Fixture {
     base: PathBuf,
     data: PathBuf,
     source: PathBuf,
+    credential_guard: TestCredentialGuard,
 }
 impl Fixture {
     fn new() -> Self {
@@ -28,12 +31,20 @@ impl Fixture {
         fs::create_dir_all(&data).unwrap();
         let source = base.join("source.txt");
         fs::write(&source, SENTINEL).unwrap();
-        Self { base, data, source }
+        let credential_guard = TestCredentialGuard::for_data_root(&data);
+        Self { base, data, source, credential_guard }
     }
     fn log(&self) -> Vec<u8> { fs::read(self.data.join("control/source-events.log")).unwrap() }
 }
 impl Drop for Fixture {
-    fn drop(&mut self) { let _ = fs::remove_dir_all(&self.base); }
+    fn drop(&mut self) {
+        // Delete this test's revision-key credential (created by
+        // DirectStore::open; the process-exit regression shares this root
+        // with its crashed child, so one entry covers both) before removing
+        // control/namespace.id. Best-effort, never panics.
+        self.credential_guard.cleanup();
+        let _ = fs::remove_dir_all(&self.base);
+    }
 }
 
 fn files(root: &Path) -> Vec<PathBuf> {
@@ -45,16 +56,48 @@ fn files(root: &Path) -> Vec<PathBuf> {
     output
 }
 
+/// Exclusive data-root owner lease; guard-written JSON, never source bytes.
+const OWNER_LOCK_FILE_NAME: &str = ".eliot-search-owner.lock";
+
 fn assert_no_plaintext(root: &Path) {
     for path in files(root) {
+        // The guard-held lock file is region-locked on Windows, so reading it
+        // fails with ERROR_LOCK_VIOLATION while the fixture guard is alive.
+        // It carries only the guard's JSON owner record, never source bytes.
+        if path
+            .file_name()
+            .is_some_and(|name| name == OWNER_LOCK_FILE_NAME)
+        {
+            continue;
+        }
         assert!(path.extension().is_none_or(|extension| extension != "bin"), "{}", path.display());
         let bytes = fs::read(&path).unwrap();
         assert!(!bytes.windows(SENTINEL.len()).any(|window| window == SENTINEL), "{}", path.display());
     }
 }
 
+/// Counts one exact object kind under the data root. Revision ciphertext and
+/// deterministic preparation objects share the `dpapi` extension on Windows,
+/// so a bare extension count cannot tell orphan reuse from duplication.
+fn count_objects(root: &Path, directory: &str, extension: &str) -> usize {
+    files(root)
+        .iter()
+        .filter(|path| {
+            path.extension().is_some_and(|actual| actual == extension)
+                && path
+                    .strip_prefix(root)
+                    .ok()
+                    .and_then(|relative| relative.components().next())
+                    .is_some_and(|first| first.as_os_str() == directory)
+        })
+        .count()
+}
+
 #[test]
 fn orphan_plaintext_is_not_silently_adopted_beside_new_ciphertext() {
+    // Serialize against the other vault-touching unit tests, including the
+    // spawned crash child below; see revision_protection::UNIT_VAULT_SERIAL.
+    let _vault_serial = lock_unit_vault_for_test();
     let fixture = Fixture::new();
     let guard = DataRootGuard::acquire(&fixture.data).unwrap();
     let mut store = DirectStore::open(guard.canonical_root()).unwrap();
@@ -83,6 +126,9 @@ fn orphan_plaintext_is_not_silently_adopted_beside_new_ciphertext() {
 
 #[test]
 fn corrupt_protected_object_is_not_replaced_by_plaintext_reindexing() {
+    // Serialize against the other vault-touching unit tests; see
+    // revision_protection::UNIT_VAULT_SERIAL.
+    let _vault_serial = lock_unit_vault_for_test();
     let fixture = Fixture::new();
     let guard = DataRootGuard::acquire(&fixture.data).unwrap();
     let mut store = DirectStore::open(guard.canonical_root()).unwrap();
@@ -98,6 +144,9 @@ fn corrupt_protected_object_is_not_replaced_by_plaintext_reindexing() {
 
 #[test]
 fn referenced_plaintext_migration_keeps_the_original_revision_identity() {
+    // Serialize against the other vault-touching unit tests; see
+    // revision_protection::UNIT_VAULT_SERIAL.
+    let _vault_serial = lock_unit_vault_for_test();
     let fixture = Fixture::new();
     let guard = DataRootGuard::acquire(&fixture.data).unwrap();
     let indexed = {
@@ -119,6 +168,10 @@ fn referenced_plaintext_migration_keeps_the_original_revision_identity() {
 
 #[test]
 fn process_exit_after_ciphertext_before_catalog_is_recoverable_without_plaintext() {
+    // Serialize against the other vault-touching unit tests and hold across
+    // the spawned crash child below; see
+    // revision_protection::UNIT_VAULT_SERIAL.
+    let _vault_serial = lock_unit_vault_for_test();
     let fixture = Fixture::new();
     let mut child = Command::new(std::env::current_exe().unwrap())
         .args(["--ignored", "--exact", "direct_store::revision_writer::tests::crash_child", "--nocapture"])
@@ -146,12 +199,14 @@ fn process_exit_after_ciphertext_before_catalog_is_recoverable_without_plaintext
     assert_eq!(store.verify().unwrap().source_events, 0);
     // Retry decrypts and compares the existing orphan ciphertext. It does not
     // compare randomized ciphertext from two separate encryption calls.
+    // The retry also persists the deterministic preparation object (2ec5134),
+    // which shares the `dpapi` extension, so each object kind is counted in
+    // its own directory: the revision orphan must still be exactly one.
     let indexed = store.index_file(&fixture.source).unwrap();
     assert_eq!(store.verify().unwrap().source_events, 1);
     assert_no_plaintext(&fixture.data);
-    assert_eq!(files(&fixture.data).iter().filter(|path| {
-        path.extension().is_some_and(|extension| extension == PROTECTED_OBJECT_EXTENSION)
-    }).count(), 1);
+    assert_eq!(count_objects(&fixture.data, "revisions", PROTECTED_OBJECT_EXTENSION), 1);
+    assert_eq!(count_objects(&fixture.data, "preparation", PROTECTED_OBJECT_EXTENSION), 1);
     assert_eq!(store.read_revision_range(&indexed.revision_id, 0, SENTINEL.len() as u64).unwrap().bytes, SENTINEL);
 }
 

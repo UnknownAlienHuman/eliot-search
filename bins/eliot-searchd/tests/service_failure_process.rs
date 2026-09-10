@@ -10,10 +10,14 @@ use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+// Shared Credential Manager cleanup; each harness uses a subset of it.
+#[allow(dead_code)]
+mod common;
+
 const TIMEOUT: Duration = Duration::from_secs(30);
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
-struct Scratch(PathBuf);
+struct Scratch(PathBuf, common::RevisionKeyTreeGuard);
 impl Scratch {
     fn new() -> Self {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
@@ -23,11 +27,16 @@ impl Scratch {
             NEXT.fetch_add(1, Ordering::Relaxed),
         ));
         fs::create_dir(&path).unwrap();
-        Self(path)
+        let guard = common::RevisionKeyTreeGuard::for_tree(&path);
+        Self(path, guard)
     }
 }
 impl Drop for Scratch {
     fn drop(&mut self) {
+        // Delete this test's revision-key credentials — the service data root
+        // is either this directory itself or one level below it — before
+        // removing the tree. Best-effort, never panics.
+        self.1.cleanup();
         let _ = fs::remove_dir_all(&self.0);
     }
 }

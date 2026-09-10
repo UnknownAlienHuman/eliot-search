@@ -7,12 +7,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
+use crate::revision_protection::TestCredentialGuard;
+use crate::revision_protection::lock_unit_vault_for_test;
 use crate::revision_protection::PROTECTED_OBJECT_EXTENSION;
 use crate::sha256;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
-struct Fixture(PathBuf);
+struct Fixture(PathBuf, TestCredentialGuard);
 
 impl Fixture {
     fn new() -> Self {
@@ -24,7 +26,8 @@ impl Fixture {
         ));
         fs::create_dir_all(base.join("data")).unwrap();
         fs::create_dir(base.join("sources")).unwrap();
-        Self(base)
+        let credential_guard = TestCredentialGuard::for_data_root(&base.join("data"));
+        Self(base, credential_guard)
     }
 
     fn owner(&self) -> DataRootGuard {
@@ -49,6 +52,11 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        // Delete this test's revision-key credential before removing the
+        // directory that holds control/namespace.id. Best-effort, never
+        // panics; the guard field below re-runs the same cleanup as a second
+        // chance once the directory is gone (a no-op).
+        self.1.cleanup();
         let _ = fs::remove_dir_all(&self.0);
     }
 }
@@ -70,6 +78,9 @@ fn block_object(path: &Path) {
 
 #[test]
 fn protection_failure_does_not_publish_or_spill_a_new_plaintext_revision() {
+    // Serialize against the other vault-touching unit tests; see
+    // revision_protection::UNIT_VAULT_SERIAL.
+    let _vault_serial = lock_unit_vault_for_test();
     let fixture = Fixture::new();
     let owner = fixture.owner();
     let mut store = DirectStore::open(owner.canonical_root()).unwrap();
@@ -103,6 +114,9 @@ fn protection_failure_does_not_publish_or_spill_a_new_plaintext_revision() {
 
 #[test]
 fn directory_protection_failure_preserves_the_complete_previous_catalog() {
+    // Serialize against the other vault-touching unit tests; see
+    // revision_protection::UNIT_VAULT_SERIAL.
+    let _vault_serial = lock_unit_vault_for_test();
     let fixture = Fixture::new();
     let owner = fixture.owner();
     let mut store = DirectStore::open(owner.canonical_root()).unwrap();
