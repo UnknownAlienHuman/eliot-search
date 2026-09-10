@@ -7,13 +7,13 @@ qualification_receipt_ref = ""
 reviewer_receipt_ref = ""
 
 [server]
-version = ""
-build_identity = ""
-artifact_path_class = ""
-artifact_sha256 = ""
-artifact_bytes = 0
-source_ref = ""
-source_sha = ""
+version = "1.19.0"
+build_identity = "74f3e85b"
+artifact_path_class = "C:\\Tools\\Qdrant\\<version>\\qdrant.exe (versioned dir, manual pinned install)"
+artifact_sha256 = "369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4"
+artifact_bytes = 84184576
+source_ref = "https://github.com/qdrant/qdrant/releases/download/v1.19.0/qdrant-x86_64-pc-windows-msvc.zip"
+source_sha = "980CB2E1AE771155CF211DA8C0A8A9206B6482BD4EFFDC4DB994D3ADB707B087"
 license_receipt_ref = ""
 target_os = "windows"
 target_arch = "x86_64"
