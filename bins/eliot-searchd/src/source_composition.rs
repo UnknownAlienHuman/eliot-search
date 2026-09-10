@@ -1245,6 +1245,324 @@ pub fn plan_snapshot(
 }
 
 // ---------------------------------------------------------------------------
+// Git source acquisition (T32 remainder, no-execute loose objects)
+// ---------------------------------------------------------------------------
+//
+// Git sources resolve through `search-safe-reader::git` validation over an
+// already admitted repository: loose objects under the admitted `.git`
+// directory, addressed by exact object ID (`objects/aa/bb…`), validated for
+// header, kind, size and structure under finite ceilings. These helpers
+// perform no filesystem I/O, spawn no process, invoke no hook, checkout
+// filter, smudge/clean driver or credential helper, and touch no network.
+// Packed-only objects stay explicit
+// `GIT_OBJECT_PACKED_UNAVAILABLE`; remote-promised objects stay explicit
+// `GIT_OBJECT_REQUIRES_NETWORK`; missing objects stay explicit
+// `GIT_OBJECT_NOT_FOUND`. There is no live-path substitution, no second
+// catalog (the same [`RegistryView`] backs file and git planning) and no
+// path-as-identity (logical paths classify only; durable identity is the
+// admitted repository digest plus the object ID).
+
+/// Statically pinned no-execute invariant for git composition.
+// Staged T32 binding: the daemon binary does not call these helpers yet;
+// the e2e process test proves them. Allow dead in the binary until wiring.
+#[allow(dead_code)]
+pub const GIT_SOURCE_NO_EXECUTE: bool = true;
+
+const _: () = assert!(GIT_SOURCE_NO_EXECUTE);
+
+/// Domain binding a repository digest plus an object ID to stable identity.
+#[allow(dead_code)]
+pub const GIT_STABLE_IDENTITY_DOMAIN: &[u8] = b"eliot-searchd/git-stable-identity/v1";
+
+/// Maximum decompressed git object bytes (mirrors the git kernel ceiling).
+#[allow(dead_code)]
+pub const MAX_GIT_OBJECT_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Maximum bytes in a derived loose-object path token.
+#[allow(dead_code)]
+pub const MAX_GIT_PATH_TOKEN_BYTES: usize = 32_768;
+
+/// Repository digest text is not exactly 64 hexadecimal characters.
+#[allow(dead_code)]
+pub const GIT_SOURCE_REPOSITORY_INVALID: &str = "GIT_SOURCE_REPOSITORY_INVALID";
+
+/// Lineage evidence digest is not exactly 64 hexadecimal characters.
+#[allow(dead_code)]
+pub const GIT_SOURCE_LINEAGE_INVALID: &str = "GIT_SOURCE_LINEAGE_INVALID";
+
+/// Closed git lineage relationship.
+///
+/// The kind plus the evidence digest bind repository, worktree, submodule,
+/// fork and mirror relationships to caller-supplied evidence. Path, remote
+/// URL, repository name and HEAD values are never accepted here and never
+/// participate in identity.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum GitLineageKind {
+    /// Canonical repository object.
+    Repository,
+    /// Linked worktree view of the same repository.
+    Worktree,
+    /// Submodule repository bound by superproject evidence.
+    Submodule,
+    /// Forked repository with distinct lineage evidence.
+    Fork,
+    /// Mirror repository with distinct lineage evidence.
+    Mirror,
+}
+
+impl GitLineageKind {
+    /// Stable wire string.
+    #[allow(dead_code)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Repository => "repository",
+            Self::Worktree => "worktree",
+            Self::Submodule => "submodule",
+            Self::Fork => "fork",
+            Self::Mirror => "mirror",
+        }
+    }
+}
+
+/// Exact lineage binding for one git plan.
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitLineage {
+    /// Closed lineage relationship.
+    pub kind: GitLineageKind,
+    /// Exact 64-hex evidence digest binding the relationship.
+    pub evidence_digest_hex: String,
+}
+
+/// Full canonical plan for one retained git object.
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitPlannedSource {
+    /// Durable source identifier (same domain as file sources).
+    pub source_id: String,
+    /// Revision identifier binding canonical source, content and size.
+    pub revision_id: String,
+    /// Verified admission receipt authorizing retention.
+    pub receipt: ComposedAdmissionReceipt,
+    /// Canonical lowercase object ID hex (40 characters).
+    pub object_id_hex: String,
+    /// Canonical lowercase repository digest hex (64 characters).
+    pub repository_digest_hex: String,
+    /// Validated object kind.
+    pub kind: search_safe_reader::git::GitObjectKind,
+    /// Exact payload length (header excluded).
+    pub payload_len: u64,
+    /// Bound lineage evidence (metadata, never identity).
+    pub lineage: GitLineage,
+    /// Whether stable identity was natively proven (always true here).
+    pub identity_native: bool,
+}
+
+/// Validates an admitted repository digest as exact 64 hexadecimal characters.
+///
+/// # Errors
+///
+/// Returns `GIT_SOURCE_REPOSITORY_INVALID` for malformed or zero digests.
+#[allow(dead_code)]
+pub fn validate_git_repository_hex(value: &str) -> Result<[u8; 32], String> {
+    let raw =
+        sha256::decode_digest(value).ok_or_else(|| GIT_SOURCE_REPOSITORY_INVALID.to_owned())?;
+    if raw == [0_u8; 32] {
+        return Err(GIT_SOURCE_REPOSITORY_INVALID.to_owned());
+    }
+    Ok(raw)
+}
+
+/// Validates an object ID as exactly 40 hexadecimal characters.
+///
+/// # Errors
+///
+/// Returns `GIT_OBJECT_INVALID_ID` for malformed IDs.
+#[allow(dead_code)]
+pub fn validate_git_object_hex(
+    value: &str,
+) -> Result<search_safe_reader::git::GitObjectId, String> {
+    search_safe_reader::git::GitObjectId::parse_hex(value).map_err(|error| error.code().to_owned())
+}
+
+/// Derives the canonical `objects/aa/bb…` loose path for one object ID.
+///
+/// The path is derived from the validated ID bytes alone; no repository
+/// state, branch name or HEAD value participates in addressing.
+///
+/// # Errors
+///
+/// Returns `GIT_OBJECT_INVALID_ID` for malformed IDs and
+/// `GIT_OBJECT_INVALID_LIMITS` when the finite token ceiling is exceeded.
+#[allow(dead_code)]
+pub fn derive_git_loose_path(object_id_hex: &str) -> Result<String, String> {
+    let object_id = validate_git_object_hex(object_id_hex)?;
+    let limits = search_safe_reader::git::GitReadLimits {
+        max_decompressed_bytes: MAX_GIT_OBJECT_BYTES,
+        max_path_token_bytes: MAX_GIT_PATH_TOKEN_BYTES,
+    };
+    let token = object_id
+        .loose_relative_path(limits)
+        .map_err(|error| error.code().to_owned())?;
+    Ok(token.as_str().to_owned())
+}
+
+/// Derives the stable identity digest binding repository plus object.
+///
+/// Paths, remote URLs, names and HEAD values never participate; only the
+/// admitted repository bytes and the exact object ID bytes do.
+///
+/// # Errors
+///
+/// Returns `GIT_SOURCE_REPOSITORY_INVALID` or `GIT_OBJECT_INVALID_ID` for
+/// malformed inputs.
+#[allow(dead_code)]
+pub fn git_stable_identity_hex(repository_hex: &str, object_hex: &str) -> Result<String, String> {
+    let repository = validate_git_repository_hex(repository_hex)?;
+    let object_id = validate_git_object_hex(object_hex)?;
+    Ok(sha256::hex(&sha256::digest_parts(
+        GIT_STABLE_IDENTITY_DOMAIN,
+        &[&repository, object_id.as_bytes()],
+    )))
+}
+
+/// Validates one lineage binding against its evidence digest.
+///
+/// # Errors
+///
+/// Returns `GIT_SOURCE_LINEAGE_INVALID` for malformed or zero evidence.
+#[allow(dead_code)]
+pub fn validate_git_lineage(lineage: &GitLineage) -> Result<(), String> {
+    let raw = sha256::decode_digest(&lineage.evidence_digest_hex)
+        .ok_or_else(|| GIT_SOURCE_LINEAGE_INVALID.to_owned())?;
+    if raw == [0_u8; 32] {
+        return Err(GIT_SOURCE_LINEAGE_INVALID.to_owned());
+    }
+    Ok(())
+}
+
+/// Maps one git kernel failure to its closed content-free reason code.
+#[allow(dead_code)]
+pub const fn git_error_code(error: search_safe_reader::git::GitReadError) -> &'static str {
+    error.code()
+}
+
+#[allow(dead_code)]
+const fn git_read_limits() -> search_safe_reader::git::GitReadLimits {
+    search_safe_reader::git::GitReadLimits {
+        max_decompressed_bytes: MAX_GIT_OBJECT_BYTES,
+        max_path_token_bytes: MAX_GIT_PATH_TOKEN_BYTES,
+    }
+}
+
+/// Plans one git loose object through canonical composition.
+///
+/// Order: validate repository and object IDs, derive the canonical loose
+/// path (ID-derived addressing proof), validate lineage evidence, parse the
+/// decompressed `<type> <size>\0<payload>` object (header, kind, size and
+/// structure), classify the payload under `logical_path_for_admission`,
+/// evaluate, issue, verify and admit against the registry view, resolve the
+/// repository-plus-object stable identity, and derive durable identifiers.
+/// Denied, review-required, unsupported and ambiguous objects never reach
+/// CAS. This function performs no I/O and executes nothing.
+///
+/// `logical_path_for_admission` is a locator for closed classification only;
+/// it never participates in identity. `expected_kind` binds the exact kind
+/// when supplied; `None` accepts any known kind.
+///
+/// # Errors
+///
+/// Returns the exact closed canonical code for every denial: git object
+/// codes (`GIT_OBJECT_*`), lineage and repository codes
+/// (`GIT_SOURCE_*`), admission codes (`SOURCE_ADMISSION_DENIED`,
+/// `SENSITIVE_SOURCE_DENIED`, `SOURCE_TOO_LARGE`, …) and identity codes
+/// (`SOURCE_IDENTITY_*`). Never a fabricated identifier or silent fallback.
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
+pub fn plan_git_snapshot(
+    repository_identity_digest_hex: &str,
+    object_id_hex: &str,
+    expected_kind: Option<search_safe_reader::git::GitObjectKind>,
+    decompressed_object: &[u8],
+    logical_path_for_admission: &Path,
+    lineage: &GitLineage,
+    namespace_hex: &str,
+    policy: &AdmissionPolicy,
+    view: &RegistryView,
+) -> Result<GitPlannedSource, String> {
+    let object_len =
+        u64::try_from(decompressed_object.len()).map_err(|_| "GIT_OBJECT_TOO_LARGE".to_owned())?;
+    if object_len > MAX_GIT_OBJECT_BYTES {
+        return Err("GIT_OBJECT_TOO_LARGE".to_owned());
+    }
+    let repository_bytes = validate_git_repository_hex(repository_identity_digest_hex)?;
+    let object_id = validate_git_object_hex(object_id_hex)?;
+    let _ = derive_git_loose_path(object_id_hex)?;
+    validate_git_lineage(lineage)?;
+    let limits = git_read_limits();
+    let parsed =
+        search_safe_reader::git::parse_loose_object(decompressed_object, limits, expected_kind)
+            .map_err(|error| error.code().to_owned())?;
+    let payload = parsed.payload;
+    let payload_len =
+        u64::try_from(payload.len()).map_err(|_| "GIT_OBJECT_TOO_LARGE".to_owned())?;
+    let observation = build_observation(logical_path_for_admission, payload, policy)?;
+    let decision = evaluate(policy, &observation);
+    let receipt = issue_receipt(policy, &observation, &decision)?;
+    view.admit(&receipt, &observation, policy)?;
+    match decision.outcome() {
+        AdmissionOutcome::Allow => {}
+        AdmissionOutcome::Deny => {
+            if decision
+                .reasons()
+                .any(|reason| *reason == AdmissionReasonCode::DenyEmptySource)
+            {
+                return Err(SOURCE_ADMISSION_DENIED.to_owned());
+            }
+            if decision
+                .reasons()
+                .any(|reason| *reason == AdmissionReasonCode::DenySizeExceeded)
+            {
+                return Err(SOURCE_TOO_LARGE.to_owned());
+            }
+            if decision.reasons().any(|reason| {
+                matches!(
+                    reason,
+                    AdmissionReasonCode::DenySensitiveClass
+                        | AdmissionReasonCode::DenySensitiveCredential
+                )
+            }) {
+                return Err(SENSITIVE_SOURCE_DENIED.to_owned());
+            }
+            return Err(SOURCE_ADMISSION_DENIED.to_owned());
+        }
+        AdmissionOutcome::ReviewRequired => {
+            return Err(SOURCE_ADMISSION_REVIEW_REQUIRED.to_owned());
+        }
+        AdmissionOutcome::Unsupported => {
+            return Err(SOURCE_KIND_UNSUPPORTED.to_owned());
+        }
+    }
+    let stable_hex = git_stable_identity_hex(repository_identity_digest_hex, object_id_hex)?;
+    let resolution = resolve_identity(&stable_hex, "native", &view.prior_candidates())?;
+    let source_id = derive_source_id(namespace_hex, &stable_hex, &resolution)?;
+    let content_hex = sha256::hex(&sha256::digest(payload));
+    let revision_id = derive_revision_id(&source_id, &content_hex, payload_len)?;
+    Ok(GitPlannedSource {
+        source_id,
+        revision_id,
+        receipt,
+        object_id_hex: object_id.hex(),
+        repository_digest_hex: sha256::hex(&repository_bytes),
+        kind: parsed.kind,
+        payload_len,
+        lineage: lineage.clone(),
+        identity_native: true,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Wave2-source cross-checks (compile only with the canonical crates)
 // ---------------------------------------------------------------------------
 
