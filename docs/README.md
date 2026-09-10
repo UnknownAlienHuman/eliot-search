@@ -11,6 +11,7 @@
 | `optional/` | Post-P15 model, document, advanced-scale and candidate-evaluation contracts. |
 | `handoff/` | Package/stage packets, stage-specific read-set resolver, dependency/ownership maps and readiness audits. |
 | `adr/` | Load-bearing implementation/package decisions. |
+| `audit/` | Dated current-head measurement reports. They record build, test and integration facts; they accept nothing and authorize nothing. |
 | `generated/` | Generated schemas/registries/descriptors after P00; never hand-edited. |
 
 The stage-context entry points are:
