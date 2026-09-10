@@ -1325,6 +1325,23 @@ mod tests {
     }
 
     #[test]
+    fn journal_inputs_survive_drain_release_for_cutover_replay() {
+        let scratch = Scratch::new();
+        let mut owner = scratch.establish();
+        let (incarnation, root, epoch) = owner.journal_owner_inputs();
+        owner.begin_drain(DrainReason::Shutdown).unwrap();
+        owner.release_cleanly().unwrap();
+        drop(owner);
+        // A post-restart successor replays an interrupted cutover under the
+        // same installation/root identity with the next monotone epoch.
+        let next = scratch.establish();
+        let (incarnation_next, root_next, epoch_next) = next.journal_owner_inputs();
+        assert_eq!(incarnation, incarnation_next);
+        assert_eq!(root, root_next);
+        assert_eq!(epoch_next.get(), epoch.get() + 1);
+    }
+
+    #[test]
     fn foreign_installation_denies_succession() {
         let first = Scratch::new();
         let _ = first.establish();

@@ -17,6 +17,8 @@ use crate::development::DataRootGuard;
 mod redb_import;
 #[path = "control_migration_content.rs"]
 mod content_readback;
+#[path = "control_migration_cutover.rs"]
+mod cutover;
 
 const MAX_PLAN_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ROW_BYTES: usize = 8 * 1024;
@@ -77,6 +79,31 @@ impl Drop for StagingFile {
     }
 }
 
+/// Typed result of one deterministic staging pass. The JSON report rendered
+/// from it is byte-identical to the historical T10 output; the struct lets the
+/// atomic cutover bind exact chains without reparsing its own receipt.
+pub(super) struct StagedPlan {
+    pub(super) target: SourceNamespaceId,
+    pub(super) catalog_snapshot: [u8; 32],
+    pub(super) plan_name: String,
+    pub(super) plan_chain: [u8; 32],
+    pub(super) plan_bytes: u64,
+    pub(super) plan_reused: bool,
+    pub(super) events: u64,
+    pub(super) sources: u64,
+    pub(super) occurrences: u64,
+    pub(super) path_only_events: u64,
+    pub(super) retirements: u64,
+    pub(super) locator_prefix: &'static str,
+    pub(super) location: &'static str,
+    pub(super) database_name: String,
+    pub(super) database_reused: bool,
+    pub(super) content_name: String,
+    pub(super) content_chain: [u8; 32],
+    pub(super) content_records: u64,
+    pub(super) content_source_bytes: u64,
+}
+
 impl DirectStore {
     /// Store a deterministic, content-free source mapping draft. The explicit UUID
     /// chooses the *import target*, not the original namespace or live NTFS identity.
@@ -112,14 +139,29 @@ impl DirectStore {
     /// No source store is initialized. Payload readback resolves existing Windows
     /// credentials only; no credential or source object is created or converted.
     /// A returned locator is relative to the explicitly named location scope.
+    /// The typed form below carries the same values for the atomic cutover.
     pub(crate) fn stage_mapping_artifact(
         source: &crate::plaintext_direct_store::DirectStore, source_root: &Path,
         target: SourceNamespaceId, directory: &Path, locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<String, String> {
+        let plan = Self::stage_mapping_artifact_typed(
+            source, source_root, target, directory, locator_prefix, deadline,
+        )?;
+        Ok(staged_plan_json(&plan))
+    }
+
+    /// Typed staging pass shared by the verify-only report and the atomic
+    /// cutover. Every byte guarantee of the historical writer holds here; only
+    /// the final JSON rendering moves to [`staged_plan_json`].
+    pub(super) fn stage_mapping_artifact_typed(
+        source: &crate::plaintext_direct_store::DirectStore, source_root: &Path,
+        target: SourceNamespaceId, directory: &Path, locator_prefix: &'static str,
+        deadline: Instant,
+    ) -> Result<StagedPlan, String> {
         let location = match locator_prefix {
             "" => "explicit_output_directory",
-            "control/migration-plans/" => "data_root",
+            "control/migration-plans/" | "control/" => "data_root",
             _ => return Err("DIRECT_MIGRATION_OUTPUT_INVALID".to_owned()),
         };
         check_deadline(Some(deadline))?;
@@ -128,6 +170,10 @@ impl DirectStore {
         if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
+        // A committed cutover freezes the migrated history: restaging the same
+        // target/snapshot reproduces evidence, anything else is superseded and
+        // a torn marker quarantines instead of staging over it silently.
+        cutover::gate_staging_against_marker(source_root, target, header.catalog_snapshot)?;
         let mut staging = StagingFile::create(directory)?;
         let mut bytes = 0_u64;
         let mut hash = PlanDigest::new();
@@ -204,25 +250,53 @@ impl DirectStore {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
         check_deadline(Some(deadline))?;
-        Ok(format!(concat!(
-            "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
-            "\"target_namespace_id\":\"{}\",\"catalog_snapshot_sha256\":\"{}\",",
-            "\"plan_locator\":{},\"plan_chain_sha256\":\"{}\",\"digest_scheme\":\"sha256-record-chain-v1\",\"plan_bytes\":{},\"reused\":{},",
-            "\"events\":{},\"sources\":{},\"revision_occurrences\":{},\"retained_revision_events\":{},",
-            "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
-            "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
-            "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
-            "\"staged_database_schema\":\"source-map-content-v2\",\"content_manifest_bound_to_redb\":true,",
-            "\"content_manifest_locator\":{},\"content_manifest_chain_sha256\":\"{}\",",
-            "\"content_objects_verified\":{},\"content_bytes_verified\":{},\"content_blake3_verified\":true,",
-            "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"
-        ), target, sha256::hex(&header.catalog_snapshot), json_string(&format!("{locator_prefix}{name}")),
-            sha256::hex(&digest), bytes, reused, summary.events, summary.sources, summary.occurrences,
-            summary.path_only_events, summary.retirements, location,
-            json_string(&format!("{locator_prefix}{database_name}")), database_reused,
-            json_string(&format!("{locator_prefix}{}", content.name)), sha256::hex(&content.chain),
-            content.records, content.source_bytes))
+        Ok(StagedPlan {
+            target,
+            catalog_snapshot: header.catalog_snapshot,
+            plan_name: name,
+            plan_chain: digest,
+            plan_bytes: bytes,
+            plan_reused: reused,
+            events: summary.events,
+            sources: summary.sources,
+            occurrences: summary.occurrences,
+            path_only_events: summary.path_only_events,
+            retirements: summary.retirements,
+            locator_prefix,
+            location,
+            database_name,
+            database_reused,
+            content_name: content.name,
+            content_chain: content.chain,
+            content_records: content.records,
+            content_source_bytes: content.source_bytes,
+        })
     }
+}
+
+fn staged_plan_json(plan: &StagedPlan) -> String {
+    format!(concat!(
+        "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
+        "\"target_namespace_id\":\"{}\",\"catalog_snapshot_sha256\":\"{}\",",
+        "\"plan_locator\":{},\"plan_chain_sha256\":\"{}\",\"digest_scheme\":\"sha256-record-chain-v1\",\"plan_bytes\":{},\"reused\":{},",
+        "\"events\":{},\"sources\":{},\"revision_occurrences\":{},\"retained_revision_events\":{},",
+        "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
+        "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
+        "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
+        "\"staged_database_schema\":\"source-map-content-v2\",\"content_manifest_bound_to_redb\":true,",
+        "\"content_manifest_locator\":{},\"content_manifest_chain_sha256\":\"{}\",",
+        "\"content_objects_verified\":{},\"content_bytes_verified\":{},\"content_blake3_verified\":true,",
+        "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"
+    ), plan.target, sha256::hex(&plan.catalog_snapshot),
+        json_string(&format!("{}{}", plan.locator_prefix, plan.plan_name)),
+        sha256::hex(&plan.plan_chain), plan.plan_bytes, plan.plan_reused,
+        plan.events, plan.sources, plan.occurrences,
+        plan.path_only_events, plan.retirements, plan.location,
+        json_string(&format!("{}{}", plan.locator_prefix, plan.database_name)),
+        plan.database_reused,
+        json_string(&format!("{}{}", plan.locator_prefix, plan.content_name)),
+        sha256::hex(&plan.content_chain),
+        plan.content_records, plan.content_source_bytes)
 }
 
 fn reserve(current: u64, next: usize) -> Result<u64, String> {

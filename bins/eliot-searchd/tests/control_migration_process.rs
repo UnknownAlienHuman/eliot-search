@@ -37,7 +37,7 @@ struct Fixture {
     data: PathBuf,
     sources: PathBuf,
     output: PathBuf,
-    _guard: common::RevisionKeyTreeGuard,
+    guard: common::RevisionKeyTreeGuard,
 }
 
 impl Fixture {
@@ -64,11 +64,11 @@ impl Fixture {
             data,
             sources,
             output,
-            _guard: guard,
+            guard,
         }
     }
 
-    fn run(&self, args: &[&str]) -> (ExitStatus, String, String) {
+    fn run(args: &[&str]) -> (ExitStatus, String, String) {
         let mut command = Command::new(env!("CARGO_BIN_EXE_eliot-searchd"));
         for arg in args {
             command.arg(arg);
@@ -84,8 +84,8 @@ impl Fixture {
         (output.status, stdout, stderr)
     }
 
-    fn ok(&self, args: &[&str]) -> String {
-        let (status, stdout, stderr) = self.run(args);
+    fn ok(args: &[&str]) -> String {
+        let (status, stdout, stderr) = Self::run(args);
         assert!(
             status.success(),
             "command {args:?} failed: stdout={stdout} stderr={stderr}"
@@ -97,10 +97,11 @@ impl Fixture {
         // Windows Credential Manager serializes concurrent creators across
         // test binaries; a lone first-open can transiently miss its fresh
         // key under parallel load. Retry only that bounded credential window,
-        // never a real ingest rejection.
+        // never a real ingest rejection. The budget covers the full
+        // 19-target parallel storm with margin.
         let mut last = None;
-        for attempt in 0..8_u32 {
-            let (status, stdout, stderr) = self.run(&[
+        for attempt in 0..16_u32 {
+            let (status, stdout, stderr) = Self::run(&[
                 "--index-file",
                 self.data.to_str().unwrap(),
                 file.to_str().unwrap(),
@@ -111,19 +112,20 @@ impl Fixture {
             let transient = stderr.contains("DIRECT_REVISION_KEY_MISSING")
                 || stderr.contains("DIRECT_REVISION_KEY_WRITE_FAILED")
                 || stderr.contains("DIRECT_REVISION_KEY_OPEN_FAILED");
-            if !transient {
-                panic!(
-                    "command [\"--index-file\", {:?}, {:?}] failed: stdout={stdout} stderr={stderr}",
-                    self.data, file
-                );
-            }
+            assert!(
+                transient,
+                "command [\"--index-file\", {}, {}] failed: stdout={stdout} stderr={stderr}",
+                self.data.display(),
+                file.display()
+            );
             last = Some((stdout, stderr));
-            std::thread::sleep(Duration::from_millis(10_u64 << attempt.min(5)));
+            std::thread::sleep(Duration::from_millis(10_u64 << attempt.min(7)));
         }
         let (stdout, stderr) = last.expect("retry attempted");
         panic!(
-            "command [\"--index-file\", {:?}, {:?}] failed after bounded credential retries: stdout={stdout} stderr={stderr}",
-            self.data, file
+            "command [\"--index-file\", {}, {}] failed after bounded credential retries: stdout={stdout} stderr={stderr}",
+            self.data.display(),
+            file.display()
         );
     }
 
@@ -147,7 +149,7 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        self._guard.cleanup();
+        self.guard.cleanup();
         let _ = fs::remove_dir_all(&self.base);
     }
 }
@@ -200,7 +202,7 @@ fn json_num(output: &str, key: &str) -> u64 {
         .split_once(&needle)
         .unwrap_or_else(|| panic!("numeric field {key} present in {output}"))
         .1;
-    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
     assert!(!digits.is_empty(), "numeric field {key} has digits");
     digits.parse().expect("numeric field parses")
 }
@@ -242,10 +244,8 @@ fn assert_uuid_v8(value: &str, what: &str) {
 /// retirement/reactivation and one pre-registered root with a manifest.
 fn build_golden(fixture: &Fixture) -> (String, Vec<String>) {
     let file_a = fixture.sources.join("note-\u{0451}\u{0436}.txt");
-    let version_a = "h\u{e9}llo\r\nworld-\u{0451}\u{0436}\r\n"
-        .as_bytes()
-        .to_vec();
-    let version_b = "second version\n".as_bytes().to_vec();
+    let version_a = b"h\xc3\xa9llo\r\nworld-\xd1\x91\xd0\xb6\r\n".to_vec();
+    let version_b = b"second version\n".to_vec();
     fs::write(&file_a, &version_a).unwrap();
     let first = fixture.index_file(&file_a);
     let source_id = json_str(&first, "source_id");
@@ -278,7 +278,7 @@ fn build_golden(fixture: &Fixture) -> (String, Vec<String>) {
     let link = fixture.sources.join("second-link.txt");
     fs::hard_link(&file_b, &link).unwrap();
     let log_before = fs::read(fixture.data.join("control/source-events.log")).unwrap();
-    let (status, _stdout, stderr) = fixture.run(&[
+    let (status, _stdout, stderr) = Fixture::run(&[
         "--index-file",
         fixture.data.to_str().unwrap(),
         link.to_str().unwrap(),
@@ -297,7 +297,7 @@ fn build_golden(fixture: &Fixture) -> (String, Vec<String>) {
 
     // Retirement followed by reactivation of the renamed source.
     let renamed_id = json_str(&fourth, "source_id");
-    let retire_out = fixture.ok(&[
+    let retire_out = Fixture::ok(&[
         "--retire-source",
         fixture.data.to_str().unwrap(),
         &renamed_id,
@@ -310,24 +310,24 @@ fn build_golden(fixture: &Fixture) -> (String, Vec<String>) {
     let registered = fixture.sources.join("registered");
     fs::create_dir(&registered).unwrap();
     fs::write(registered.join("leaf.txt"), b"registered leaf\n").unwrap();
-    let reg_out = fixture.ok(&[
+    let reg_out = Fixture::ok(&[
         "--register-source-root",
         fixture.data.to_str().unwrap(),
         registered.to_str().unwrap(),
     ]);
     assert!(reg_out.contains("\"persisted\":true"), "{reg_out}");
-    let sync_out = fixture.ok(&["--sync-source-roots", fixture.data.to_str().unwrap()]);
+    let sync_out = Fixture::ok(&["--sync-source-roots", fixture.data.to_str().unwrap()]);
     assert!(
         sync_out.contains("source_roots_synced") || sync_out.contains("directory_index_complete"),
         "{sync_out}"
     );
 
-    let verify = fixture.ok(&["--verify-root", fixture.data.to_str().unwrap()]);
+    let verify = Fixture::ok(&["--verify-root", fixture.data.to_str().unwrap()]);
     (verify, vec![source_id, renamed_id])
 }
 
 fn plan_once(fixture: &Fixture, target: &str, output: &Path) -> String {
-    fixture.ok(&[
+    Fixture::ok(&[
         "--plan-control-migration",
         fixture.data.to_str().unwrap(),
         target,
@@ -519,7 +519,7 @@ fn dry_run_activates_no_authority_and_preserves_originals() {
     }
     for name in &control_names {
         assert!(
-            !name.ends_with(".redb"),
+            Path::new(name).extension().is_none_or(|ext| ext != "redb"),
             "no live redb activated in data root: {name}"
         );
         assert!(
@@ -547,7 +547,7 @@ fn dry_run_activates_no_authority_and_preserves_originals() {
         "inactive redb staged: {staged:?}"
     );
     // Historical readback still serves the original A bytes after the dry run.
-    let sources = fixture.ok(&["--list-sources", fixture.data.to_str().unwrap()]);
+    let sources = Fixture::ok(&["--list-sources", fixture.data.to_str().unwrap()]);
     assert!(sources.contains("source_list_complete"), "{sources}");
 }
 
@@ -557,7 +557,7 @@ fn truncation_conflicts_and_absent_catalog_are_rejected() {
     let empty = Fixture::new("absent");
     let output = empty.base.join("plan-out");
     fs::create_dir(&output).unwrap();
-    let (status, _stdout, stderr) = empty.run(&[
+    let (status, _stdout, stderr) = Fixture::run(&[
         "--plan-control-migration",
         empty.data.to_str().unwrap(),
         TARGET_A,
@@ -586,7 +586,7 @@ fn truncation_conflicts_and_absent_catalog_are_rejected() {
     fs::write(&log_path, truncated).unwrap();
     let bad_output = fixture.base.join("bad-out");
     fs::create_dir(&bad_output).unwrap();
-    let (status, _stdout, stderr) = fixture.run(&[
+    let (status, _stdout, stderr) = Fixture::run(&[
         "--plan-control-migration",
         fixture.data.to_str().unwrap(),
         TARGET_A,
@@ -602,7 +602,12 @@ fn truncation_conflicts_and_absent_catalog_are_rejected() {
             || fs::read_dir(&bad_output)
                 .unwrap()
                 .filter_map(Result::ok)
-                .all(|e| e.file_name().to_str().is_some_and(|n| n.ends_with(".lock"))),
+                .all(|e| e
+                    .file_name()
+                    .to_str()
+                    .is_some_and(|n| Path::new(n)
+                        .extension()
+                        .is_some_and(|ext| ext == "lock"))),
         "no plan artifact from truncated input"
     );
     // The torn input is preserved for forensics, never repaired into success.
@@ -620,7 +625,7 @@ fn truncation_conflicts_and_absent_catalog_are_rejected() {
     fs::write(&log_path, &conflicted).unwrap();
     let conflict_output = fixture.base.join("conflict-out");
     fs::create_dir(&conflict_output).unwrap();
-    let (status, _stdout, stderr) = fixture.run(&[
+    let (status, _stdout, stderr) = Fixture::run(&[
         "--plan-control-migration",
         fixture.data.to_str().unwrap(),
         TARGET_A,
@@ -802,4 +807,129 @@ fn h5_mapping_never_relabels_digests_sequences_or_paths() {
         assert_hex64(&blake, "content_blake3");
         assert_ne!(sha, blake, "SHA-256 is never relabelled as BLAKE3: {line}");
     }
+}
+
+/// T11 contract: the T10 verify-only output already carries every binding the
+/// atomic cutover commits into its marker (target, snapshot and both chains).
+#[test]
+fn plan_output_binds_all_cutover_inputs() {
+    let fixture = Fixture::new("cutbind");
+    let _ = build_golden(&fixture);
+    let plan = plan_once(&fixture, TARGET_A, &fixture.output);
+    assert!(
+        plan.contains(&format!("\"target_namespace_id\":\"{TARGET_A}\"")),
+        "{plan}"
+    );
+    assert_hex64(&json_str(&plan, "catalog_snapshot_sha256"), "catalog_snapshot_sha256");
+    assert_hex64(&json_str(&plan, "plan_chain_sha256"), "plan_chain_sha256");
+    assert_hex64(
+        &json_str(&plan, "content_manifest_chain_sha256"),
+        "content_manifest_chain_sha256",
+    );
+    let locator = json_str(&plan, "staged_database_locator");
+    assert!(locator.ends_with(".source-map.v2.redb"), "{locator}");
+    assert!(
+        plan.contains("\"staged_database_schema\":\"source-map-content-v2\""),
+        "{plan}"
+    );
+    assert!(plan.contains("\"cutover_authorized\":false"), "{plan}");
+    assert!(plan.contains("\"active_control_imported\":false"), "{plan}");
+    // The staged redb is materialized but inert: no authority is activated.
+    let name = locator.rsplit('/').next().expect("locator tail");
+    assert!(
+        !fs::read(fixture.output.join(name)).expect("staged redb").is_empty(),
+        "staged redb is materialized"
+    );
+}
+
+/// Without an explicit cutover the serving control directory gains no marker
+/// and no live redb, while ordinary requests keep appending the file journal.
+#[test]
+fn file_authority_preserved_without_cutover() {
+    let fixture = Fixture::new("fileauth");
+    let _ = build_golden(&fixture);
+    let plan = plan_once(&fixture, TARGET_A, &fixture.output);
+    let planned_events = json_num(&plan, "events");
+    let control: Vec<String> = fs::read_dir(fixture.data.join("control"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().into_string().unwrap_or_default())
+        .collect();
+    assert!(
+        !control.iter().any(|name| name == "control-cutover.v1"),
+        "no marker without cutover: {control:?}"
+    );
+    assert!(
+        !control.iter().any(|name| std::path::Path::new(name)
+            .extension()
+            .is_some_and(|extension| extension == "redb")),
+        "no live redb without cutover: {control:?}"
+    );
+    // The next ordinary index advances the file journal by exactly one event.
+    let extra = fixture.sources.join("post-plan.txt");
+    fs::write(&extra, b"indexed after the dry run\n").unwrap();
+    fixture.index_file(&extra);
+    let verify = Fixture::ok(&["--verify-root", fixture.data.to_str().unwrap()]);
+    assert_eq!(
+        json_num(&verify, "source_events"),
+        planned_events + 1,
+        "journal still live: {verify}"
+    );
+    let sources = Fixture::ok(&["--list-sources", fixture.data.to_str().unwrap()]);
+    assert!(sources.contains("source_list_complete"), "{sources}");
+}
+
+/// A torn cutover marker fails staging closed and quarantines, while the
+/// preserved legacy history still reads and verifies after explicit recovery.
+#[test]
+fn torn_marker_fails_staging_closed_while_history_reads_survive() {
+    let fixture = Fixture::new("tornmark");
+    let (verify_before, _) = build_golden(&fixture);
+    let before = fixture.snapshot_source_bytes();
+    let marker_path = fixture.data.join("control/control-cutover.v1");
+    fs::write(&marker_path, b"torn-marker-bytes").unwrap();
+    // Pre-wiring history reads do not consult the marker and arm nothing.
+    let output = serve_script(&fixture.data, &["control-migration-page"]);
+    assert!(output.contains("\"event\":\"control_migration_page\""), "{output}");
+    assert!(output.contains("\"read_only\":true"), "{output}");
+    assert!(
+        !fixture.data.join("control/catalog-quarantine.marker").exists(),
+        "reads arm no quarantine"
+    );
+    // Staging over the torn marker is refused with a typed code, preserves
+    // the torn bytes for forensics, stages no artifact and quarantines.
+    let bad_output = fixture.base.join("torn-out");
+    fs::create_dir(&bad_output).unwrap();
+    let (status, _stdout, stderr) = Fixture::run(&[
+        "--plan-control-migration",
+        fixture.data.to_str().unwrap(),
+        TARGET_A,
+        bad_output.to_str().unwrap(),
+    ]);
+    assert!(!status.success(), "torn marker must fail staging");
+    assert!(
+        stderr.contains("DIRECT_MIGRATION_CUTOVER_CORRUPT"),
+        "typed refusal: {stderr}"
+    );
+    assert_eq!(fs::read(&marker_path).unwrap(), b"torn-marker-bytes");
+    assert!(
+        fs::read_dir(&bad_output).unwrap().count() == 0,
+        "no artifact over torn marker"
+    );
+    assert!(
+        fixture.data.join("control/catalog-quarantine.marker").exists(),
+        "quarantine armed"
+    );
+    // The legacy source bytes are otherwise untouched by the refused staging.
+    assert_eq!(before, fixture.snapshot_source_bytes(), "history preserved");
+    // Explicit recovery removes exactly the torn marker and the quarantine
+    // signal; the original catalog then verifies with identical accounting.
+    fs::remove_file(&marker_path).unwrap();
+    fs::remove_file(fixture.data.join("control/catalog-quarantine.marker")).unwrap();
+    let verify = Fixture::ok(&["--verify-root", fixture.data.to_str().unwrap()]);
+    assert_eq!(
+        json_num(&verify, "source_events"),
+        json_num(&verify_before, "source_events"),
+        "identical accounting after recovery"
+    );
 }
