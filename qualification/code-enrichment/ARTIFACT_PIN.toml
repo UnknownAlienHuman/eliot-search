@@ -1,0 +1,59 @@
+schema_version = 1
+project = "eliot-search"
+task = "T35"
+base_commit = "2a728b675a837e84e5993c3a4e27a38495422a0c"
+status = "BASELINE_PINNED_TEST_VECTORS_ONLY"
+
+# No external parser artifact is approved by this document. The enrichment
+# baseline is the built-in no-execute tolerant scanner implemented inside
+# `search-code-enricher` itself. Selecting an external parser
+# (tree-sitter/syn-class grammar, registry version, source checksum, license
+# receipt) requires an integration-owner ticket with executed evidence; this
+# package may not edit Cargo manifests or the lockfile to add one.
+[parser]
+provider = "BUILT_IN_TOLERANT_BASELINE"
+crate_name = "search-code-enricher"
+version = "0.0.0-baseline.1"
+version_kind = "TEST_VECTOR_ONLY"
+source_ref = "crates/search-prep/search-code-enricher/src/lib.rs"
+source_checksum = ""
+license_receipt_ref = ""
+
+[grammar]
+language = "rust"
+version = ""
+source_ref = ""
+source_checksum = ""
+license_receipt_ref = ""
+
+# The profile below is the exact identity used by the T35 qualification
+# tests. It is a test vector, not an approved production pin: digests are
+# fixed byte patterns standing in for future artifact measurements.
+[profile]
+profile_id = "t35-baseline-profile"
+parser_package = "eliot-search-builtin-tolerant-baseline"
+parser_version = "0.0.0-baseline.1"
+profile_digest = "test-vector-07x32"
+node_schema_digest = "test-vector-02x32"
+query_schema_digest = "test-vector-03x32"
+golden_fixture_digest = "test-vector-04x32"
+supported_editions = ["rust2021", "rust2024"]
+malformed_policy = "recover_with_gaps"
+no_execute = true
+
+# No Cargo dependency was added and none may be added by this package.
+# The pin is fixed by this document, not by code.
+[cargo]
+manifest_change = "NONE"
+lockfile_change = "NONE"
+new_dependency = false
+
+[safety]
+executes_cargo = false
+executes_rustc = false
+executes_build_scripts = false
+expands_macros = false
+uses_network = false
+resolves_packages = false
+uses_credential_prompts = false
+claims_compiler_semantics = false

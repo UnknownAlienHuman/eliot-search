@@ -532,7 +532,7 @@ pub fn parse_rust_no_execute(
             if classified
                 .name
                 .as_ref()
-                .is_some_and(|name| name.is_empty() || name.len() > MAX_STRUCTURAL_TEXT_BYTES)
+                .is_none_or(|name| name.is_empty() || name.len() > MAX_STRUCTURAL_TEXT_BYTES)
             {
                 classified.name = None;
                 classified.recovered = true;
@@ -711,13 +711,28 @@ fn classify_line(line: &str, depth: usize, attributes: &[String]) -> Option<Clas
 fn strip_visibility_and_qualifiers(mut line: &str) -> &str {
     loop {
         let trimmed = line.trim_start();
+        // `const` introduces a function item only when it qualifies `fn`;
+        // otherwise it is the constant-item keyword itself and must be kept
+        // so the declaration table can classify it as a constant.
+        if let Some(rest) = trimmed.strip_prefix("const ") {
+            let inner = rest.trim_start();
+            if inner.starts_with("fn ")
+                || inner.starts_with("unsafe ")
+                || inner.starts_with("async ")
+            {
+                line = rest;
+                continue;
+            }
+            return trimmed;
+        }
+        // `static` is never a qualifier; keeping it lets the declaration
+        // table classify static items instead of silently dropping them.
         let prefixes = [
             "pub(crate) ",
             "pub(super) ",
             "pub(self) ",
             "pub ",
             "async ",
-            "const ",
             "unsafe ",
             "extern \"C\" ",
             "extern \"Rust\" ",
@@ -1065,6 +1080,60 @@ fn encode_cfg(value: &ConfigurationPredicate, output: &mut Vec<u8>) -> Result<()
         ConfigurationPredicate::Unknown => output.push(6),
     }
     Ok(())
+}
+
+/// Receipt proving one structural fact reads back exact retained coordinates.
+///
+/// The receipt carries identities and the validated range only; it never
+/// copies source bytes into telemetry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AnchorValidationReceipt {
+    /// Exact source revision that owns the bytes.
+    pub source_revision_ref: SourceRevisionRef,
+    /// Representation identity that owns the coordinate map.
+    pub representation_id: RepresentationId,
+    /// Validated fact digest.
+    pub fact_digest: Blake3Digest32,
+    /// Exact validated representation range.
+    pub range: TextRange,
+    /// Qualified parser profile digest carried by the fact.
+    pub parser_profile_digest: Blake3Digest32,
+}
+
+/// Reopens the exact retained representation for one fact and checks
+/// revision/representation identity plus byte and character-boundary mapping.
+///
+/// A foreign revision/representation identity fails with
+/// [`EnrichError::AnchorMappingFailed`]; an out-of-range or
+/// non-character-boundary range fails with
+/// [`EnrichError::StructuralFactUnmapped`]. Raw-byte exactness is never
+/// fabricated.
+pub fn validate_fact_anchor(
+    fact: &StructuralFact,
+    representation: &RustRepresentation,
+) -> Result<AnchorValidationReceipt, EnrichError> {
+    if fact.source_revision_ref != representation.source_revision_ref
+        || fact.representation_id != representation.representation_id
+    {
+        return Err(EnrichError::AnchorMappingFailed);
+    }
+    fact.range.validate(representation.bytes.len())?;
+    let start =
+        usize::try_from(fact.range.byte_start).map_err(|_| EnrichError::StructuralFactUnmapped)?;
+    let end =
+        usize::try_from(fact.range.byte_end).map_err(|_| EnrichError::StructuralFactUnmapped)?;
+    let slice = representation
+        .bytes
+        .get(start..end)
+        .ok_or(EnrichError::StructuralFactUnmapped)?;
+    core::str::from_utf8(slice).map_err(|_| EnrichError::StructuralFactUnmapped)?;
+    Ok(AnchorValidationReceipt {
+        source_revision_ref: fact.source_revision_ref,
+        representation_id: fact.representation_id,
+        fact_digest: fact.fact_digest,
+        range: fact.range,
+        parser_profile_digest: fact.parser_profile_digest,
+    })
 }
 
 /// Provider assurance that deliberately avoids compiler-truth claims.
