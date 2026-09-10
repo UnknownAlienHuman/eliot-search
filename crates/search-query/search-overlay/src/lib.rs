@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
     AccessPolicyRevision, BindingId, Blake3Digest32, BoundedList, BufferSnapshotId,
-    MAX_LIST_ITEMS, NonZeroRevision, OpaqueId, OpaqueRef, OverlayRevision,
+    MAX_LIST_ITEMS, OpaqueId, OpaqueRef, OverlayRevision,
     PositionEncoding, ProfileId, PurgeFenceRevision, ReceiptRef, SourceId,
     SourceMembershipId, SourceNamespaceId, SourceOwnerGeneration,
     SourceRevisionRef, UtcTimestamp, WorkspaceViewRevisionId,
@@ -151,7 +151,7 @@ impl OverlayLimits {
     };
 
     /// Validates all finite dimensions.
-    pub fn validate(self) -> Result<Self, OverlayError> {
+    pub const fn validate(self) -> Result<Self, OverlayError> {
         let valid = self.max_saved_entries > 0
             && self.max_saved_entries <= MAX_LIST_ITEMS
             && self.max_unsaved_entries > 0
@@ -319,7 +319,7 @@ impl MemoryOnlyBytes {
         &self.0
     }
 
-    fn len(&self) -> usize {
+    const fn len(&self) -> usize {
         self.0.len()
     }
 }
@@ -387,7 +387,7 @@ impl fmt::Debug for UnsavedBufferGuard {
             .field("buffer_version", &self.buffer_version)
             .field("overlay_revision", &self.overlay_revision)
             .field("guard_digest", &"<redacted>")
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -516,20 +516,20 @@ pub enum OverlayViewEntry {
 }
 
 impl OverlayViewEntry {
-    fn binding(&self) -> OverlayBinding {
+    const fn binding(&self) -> OverlayBinding {
         match self {
             Self::Saved { binding, .. } | Self::Unsaved { binding, .. } => *binding,
         }
     }
 
-    fn precedence(&self) -> OverlayPrecedence {
+    const fn precedence(&self) -> OverlayPrecedence {
         match self {
             Self::Saved { .. } => OverlayPrecedence::Saved,
             Self::Unsaved { .. } => OverlayPrecedence::Unsaved,
         }
     }
 
-    fn overlay_revision(&self) -> OverlayRevision {
+    const fn overlay_revision(&self) -> OverlayRevision {
         match self {
             Self::Saved {
                 overlay_revision, ..
@@ -658,13 +658,13 @@ pub enum OverlayCandidate {
 }
 
 impl OverlayCandidate {
-    fn binding(&self) -> OverlayBinding {
+    const fn binding(&self) -> OverlayBinding {
         match self {
             Self::UnsavedMatch { binding, .. } | Self::SavedReference { binding, .. } => *binding,
         }
     }
 
-    fn precedence(&self) -> OverlayPrecedence {
+    const fn precedence(&self) -> OverlayPrecedence {
         match self {
             Self::UnsavedMatch { precedence, .. }
             | Self::SavedReference { precedence, .. } => *precedence,
@@ -859,24 +859,31 @@ impl OverlayStore {
     ) -> Result<UnsavedBufferGuard, OverlayError> {
         live.validate_binding(snapshot.binding)?;
         self.validate_snapshot(&snapshot, &bytes, declared_ttl_millis)?;
-        if self.unsaved.contains_key(&snapshot.binding.source_membership_id) {
+        let membership = snapshot.binding.source_membership_id;
+        if self.unsaved.contains_key(&membership) {
             return Err(OverlayError::UnsavedVersionConflict);
         }
         self.validate_unsaved_capacity(snapshot.binding, bytes.len(), 0)?;
         let overlay_revision = self.next_revision()?;
         let entry = UnsavedEntry {
-            snapshot: snapshot.clone(),
+            snapshot,
             bytes: MemoryOnlyBytes::new(bytes, self.limits.max_unsaved_bytes_per_snapshot)?,
             guard_digest,
             overlay_revision,
         };
         let guard = make_guard(&entry);
-        self.unsaved
-            .insert(snapshot.binding.source_membership_id, entry);
+        self.unsaved.insert(membership, entry);
         Ok(guard)
     }
 
     /// Atomically replaces one unsaved snapshot with a strictly newer version.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the verified current entry is missing from the store. This is
+    /// unreachable while `&mut self` excludes intervening mutation: the entry
+    /// is fetched with `get` and verified with `verify_guard` immediately
+    /// before the replacing `insert`.
     pub fn replace_unsaved_snapshot(
         &mut self,
         guard: &UnsavedBufferGuard,
@@ -907,8 +914,9 @@ impl OverlayStore {
         )?;
         let replaced_snapshot_id = current.snapshot.buffer_snapshot_id;
         let overlay_revision = self.next_revision()?;
+        let membership = next_snapshot.binding.source_membership_id;
         let replacement = UnsavedEntry {
-            snapshot: next_snapshot.clone(),
+            snapshot: next_snapshot,
             bytes: MemoryOnlyBytes::new(
                 next_bytes,
                 self.limits.max_unsaved_bytes_per_snapshot,
@@ -919,7 +927,7 @@ impl OverlayStore {
         let next_guard = make_guard(&replacement);
         let old = self
             .unsaved
-            .insert(next_snapshot.binding.source_membership_id, replacement)
+            .insert(membership, replacement)
             .expect("verified current entry");
         drop(old);
         Ok(OverlayReplacementReceipt {
@@ -1032,18 +1040,20 @@ impl OverlayStore {
         });
         let first = entries.first().map(OverlayViewEntry::binding);
         let (access_policy_revision, purge_fence_revision, workspace_view_revision_id) = first
-            .map(|binding| {
+            .map_or(
                 (
-                    binding.access_policy_revision,
-                    binding.purge_fence_revision,
-                    binding.workspace_view_revision_id,
-                )
-            })
-            .unwrap_or((
-                AccessPolicyRevision::new(0),
-                PurgeFenceRevision::new(0),
-                WorkspaceViewRevisionId::from_bytes([0; 16]),
-            ));
+                    AccessPolicyRevision::new(0),
+                    PurgeFenceRevision::new(0),
+                    WorkspaceViewRevisionId::from_bytes([0; 16]),
+                ),
+                |binding| {
+                    (
+                        binding.access_policy_revision,
+                        binding.purge_fence_revision,
+                        binding.workspace_view_revision_id,
+                    )
+                },
+            );
         let digest_input = snapshot_digest_input(
             self.revision,
             access_policy_revision,
@@ -1280,7 +1290,7 @@ impl OverlayStore {
         if merged.len() > MAX_LIST_ITEMS {
             return Err(OverlayError::OverlayQuotaExceeded);
         }
-        merged.sort_by(|left, right| candidate_input_key(left).cmp(&candidate_input_key(right)));
+        merged.sort_by_key(candidate_input_key);
         bounded(merged)
     }
 
@@ -1580,21 +1590,21 @@ fn find_matches(
     Ok(MatchSearchResult { matches, steps })
 }
 
-fn token_boundary(input: &[u8], position: usize) -> bool {
+const fn token_boundary(input: &[u8], position: usize) -> bool {
     position == 0
         || position == input.len()
         || !input[position.saturating_sub(1)].is_ascii_alphanumeric()
         || !input[position].is_ascii_alphanumeric()
 }
 
-fn candidate_range(candidate: &OverlayCandidate) -> Option<OverlayMatchRange> {
+const fn candidate_range(candidate: &OverlayCandidate) -> Option<OverlayMatchRange> {
     match candidate {
         OverlayCandidate::UnsavedMatch { range, .. } => Some(*range),
         OverlayCandidate::SavedReference { .. } => None,
     }
 }
 
-fn candidate_input_key(
+const fn candidate_input_key(
     candidate: &CandidateInput,
 ) -> (core::cmp::Reverse<OverlayPrecedence>, SourceMembershipId, Blake3Digest32) {
     match candidate {
