@@ -213,10 +213,10 @@ pub fn transition_publication(
 #[cfg(test)]
 mod tests {
     use search_contracts::{
-        Blake3Digest32, Epoch, InstallationIncarnationId, NamespaceOwnershipStatus, NonZeroRevision,
-        OpaqueId, OwnerEpoch, PolicyRevision, PublicationGuards, PublicationIntent,
-        PublicationIntentId, PublicationIntentState, ReceiptRef, SourceNamespaceId, SourceNamespaceOwnership,
-        SourceOwnerGeneration,
+        Blake3Digest32, Epoch, InstallationIncarnationId, NamespaceOwnershipStatus,
+        NonZeroRevision, OpaqueId, OwnerEpoch, PolicyRevision, PublicationGuards,
+        PublicationIntent, PublicationIntentId, PublicationIntentState, ReceiptRef,
+        SourceNamespaceId, SourceNamespaceOwnership, SourceOwnerGeneration,
     };
 
     use super::{
