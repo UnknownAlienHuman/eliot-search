@@ -19,10 +19,9 @@ use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
-    BindingId, Blake3Digest32, BoundedList, ContinuationHandle, ContinuationId,
-    ContinuationRecord, HandleTokenDigest, LifecycleRecordStatus, MAX_LIST_ITEMS,
-    MAX_SET_ITEMS, NonZeroRevision, OpaqueHandleToken, OpaqueId, OpaqueRef,
-    PlanFingerprint, ResultFence, UtcTimestamp,
+    BindingId, Blake3Digest32, BoundedList, ContinuationHandle, ContinuationId, ContinuationRecord,
+    HandleTokenDigest, LifecycleRecordStatus, MAX_LIST_ITEMS, MAX_SET_ITEMS, NonZeroRevision,
+    OpaqueHandleToken, OpaqueId, OpaqueRef, PlanFingerprint, ResultFence, UtcTimestamp,
 };
 
 /// Default maximum continuation lifetime: fifteen minutes.
@@ -133,7 +132,7 @@ impl ContinuationLimits {
     };
 
     /// Validates every finite dimension.
-    pub fn validate(self) -> Result<Self, ContinuationError> {
+    pub const fn validate(self) -> Result<Self, ContinuationError> {
         let valid = self.max_records > 0
             && self.max_records <= MAX_LIST_ITEMS
             && self.max_ephemeral_per_binding > 0
@@ -257,6 +256,39 @@ pub struct CreatedContinuation {
     pub record: ContinuationRecord,
 }
 
+/// Authorization and purge gates for continuation resume.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AuthorizationFence {
+    /// Grant remains active.
+    pub grant_active: bool,
+    /// Security state permits disclosure.
+    pub security_permits: bool,
+    /// No purge barrier covers the continuation.
+    pub purge_clear: bool,
+}
+
+/// Currency gates for continuation resume.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CurrencyFence {
+    /// Source-owner generation remains current.
+    pub owner_generation_current: bool,
+    /// Saved/workspace view remains current.
+    pub view_current: bool,
+    /// Collection route and visible epoch remain current.
+    pub route_current: bool,
+}
+
+/// Continuity gates for continuation resume.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ContinuityFence {
+    /// Projection/profile identity remains current.
+    pub profile_current: bool,
+    /// Durable job remains authorized and present.
+    pub durable_job_active: bool,
+    /// Original process-local pin is present and exact.
+    pub epoch_pin_valid: bool,
+}
+
 /// Current authority and dependency observations used during resume.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LiveContinuationState {
@@ -266,24 +298,12 @@ pub struct LiveContinuationState {
     pub plan_fingerprint: PlanFingerprint,
     /// Current exact result fence.
     pub result_fence: ResultFence,
-    /// Grant remains active.
-    pub grant_active: bool,
-    /// Security state permits disclosure.
-    pub security_permits: bool,
-    /// No purge barrier covers the continuation.
-    pub purge_clear: bool,
-    /// Source-owner generation remains current.
-    pub owner_generation_current: bool,
-    /// Saved/workspace view remains current.
-    pub view_current: bool,
-    /// Collection route and visible epoch remain current.
-    pub route_current: bool,
-    /// Projection/profile identity remains current.
-    pub profile_current: bool,
-    /// Durable job remains authorized and present.
-    pub durable_job_active: bool,
-    /// Original process-local pin is present and exact.
-    pub epoch_pin_valid: bool,
+    /// Authorization and purge gates.
+    pub authorization: AuthorizationFence,
+    /// Currency gates.
+    pub currency: CurrencyFence,
+    /// Continuity gates.
+    pub continuity: ContinuityFence,
 }
 
 /// Permit binding an expansion to one exact process-local record revision.
@@ -465,70 +485,70 @@ struct StoredContinuation {
 }
 
 impl StoredContinuation {
-    fn id(&self) -> ContinuationId {
+    const fn id(&self) -> ContinuationId {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => value.continuation_id,
             ContinuationRecord::DurableReplanCheckpoint(value) => value.continuation_id,
         }
     }
 
-    fn token_digest(&self) -> HandleTokenDigest {
+    const fn token_digest(&self) -> HandleTokenDigest {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => value.token_digest,
             ContinuationRecord::DurableReplanCheckpoint(value) => value.token_digest,
         }
     }
 
-    fn binding_id(&self) -> BindingId {
+    const fn binding_id(&self) -> BindingId {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => value.binding_id,
             ContinuationRecord::DurableReplanCheckpoint(value) => value.binding_id,
         }
     }
 
-    fn plan_fingerprint(&self) -> PlanFingerprint {
+    const fn plan_fingerprint(&self) -> PlanFingerprint {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => value.plan_fingerprint,
             ContinuationRecord::DurableReplanCheckpoint(value) => value.plan_fingerprint,
         }
     }
 
-    fn result_fence(&self) -> &ResultFence {
+    const fn result_fence(&self) -> &ResultFence {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => &value.result_fence,
             ContinuationRecord::DurableReplanCheckpoint(value) => &value.result_fence,
         }
     }
 
-    fn created_at(&self) -> &UtcTimestamp {
+    const fn created_at(&self) -> &UtcTimestamp {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => &value.created_at,
             ContinuationRecord::DurableReplanCheckpoint(value) => &value.created_at,
         }
     }
 
-    fn expires_at(&self) -> &UtcTimestamp {
+    const fn expires_at(&self) -> &UtcTimestamp {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => &value.expires_at,
             ContinuationRecord::DurableReplanCheckpoint(value) => &value.expires_at,
         }
     }
 
-    fn status(&self) -> LifecycleRecordStatus {
+    const fn status(&self) -> LifecycleRecordStatus {
         match &self.record {
             ContinuationRecord::EphemeralWindow(value) => value.status,
             ContinuationRecord::DurableReplanCheckpoint(value) => value.status,
         }
     }
 
-    fn set_status(&mut self, status: LifecycleRecordStatus) {
+    const fn set_status(&mut self, status: LifecycleRecordStatus) {
         match &mut self.record {
             ContinuationRecord::EphemeralWindow(value) => value.status = status,
             ContinuationRecord::DurableReplanCheckpoint(value) => value.status = status,
         }
     }
 
-    fn is_ephemeral(&self) -> bool {
+    const fn is_ephemeral(&self) -> bool {
         matches!(&self.payload, ContinuationPayload::Ephemeral { .. })
     }
 
@@ -559,11 +579,9 @@ impl StoredContinuation {
 
     fn cleanup_effect(&self) -> ContinuationEffect {
         match &self.record {
-            ContinuationRecord::EphemeralWindow(record) => {
-                ContinuationEffect::ReleaseEpochPin {
-                    epoch_pin_ref: record.epoch_pin_ref.clone(),
-                }
-            }
+            ContinuationRecord::EphemeralWindow(record) => ContinuationEffect::ReleaseEpochPin {
+                epoch_pin_ref: record.epoch_pin_ref.clone(),
+            },
             ContinuationRecord::DurableReplanCheckpoint(record) => {
                 ContinuationEffect::DeleteDurableCheckpoint {
                     durable_job_ref: record.durable_job_ref.clone(),
@@ -691,7 +709,7 @@ impl ContinuationStore {
             return Err(ContinuationError::InvalidLimits);
         }
         let stored = self.authorized(credential)?;
-        self.revalidate(stored, live, now)?;
+        Self::revalidate(stored, live, now)?;
         let permit = ContinuationPermit {
             continuation_id: stored.id(),
             record_revision: stored.revision,
@@ -739,7 +757,7 @@ impl ContinuationStore {
     pub fn commit_emission(
         &mut self,
         permit: &ContinuationPermit,
-        emitted: BoundedList<Blake3Digest32, MAX_LIST_ITEMS>,
+        emitted: &BoundedList<Blake3Digest32, MAX_LIST_ITEMS>,
     ) -> Result<EmissionReceipt, ContinuationError> {
         if emitted.is_empty() || emitted.len() > self.limits.max_expansion_items {
             return Err(ContinuationError::InvalidLimits);
@@ -854,10 +872,14 @@ impl ContinuationStore {
     }
 
     /// Expires one deterministic bounded batch.
-    pub fn expire(
-        &mut self,
-        now: &UtcTimestamp,
-    ) -> Result<ExpiryReceipt, ContinuationError> {
+    ///
+    /// # Panics
+    ///
+    /// Panics if a collected record ID is missing from the store. This is
+    /// unreachable while `&mut self` excludes intervening mutation: the IDs
+    /// are collected from `records` immediately before the bounded expiry
+    /// loop performs no insertion or removal.
+    pub fn expire(&mut self, now: &UtcTimestamp) -> Result<ExpiryReceipt, ContinuationError> {
         let mut pending = self
             .records
             .iter()
@@ -887,6 +909,13 @@ impl ContinuationStore {
     }
 
     /// Applies restrictive live limits and expires incompatible active records.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a collected record ID is missing from the store. This is
+    /// unreachable while `&mut self` excludes intervening mutation: the IDs
+    /// are collected from `records` immediately before the bounded expiry
+    /// loop performs no insertion or removal.
     pub fn apply_live_limits(
         &mut self,
         limits: ContinuationLimits,
@@ -1014,7 +1043,6 @@ impl ContinuationStore {
     }
 
     fn revalidate(
-        &self,
         value: &StoredContinuation,
         live: &LiveContinuationState,
         now: &UtcTimestamp,
@@ -1032,26 +1060,26 @@ impl ContinuationStore {
         if value.binding_id() != live.binding_id {
             return Err(ContinuationError::NotAuthorized);
         }
-        if !live.grant_active || !live.security_permits {
+        if !live.authorization.grant_active || !live.authorization.security_permits {
             return Err(ContinuationError::AccessRevoked);
         }
-        if !live.purge_clear {
+        if !live.authorization.purge_clear {
             return Err(ContinuationError::Purged);
         }
         if value.plan_fingerprint() != live.plan_fingerprint
             || value.result_fence() != &live.result_fence
-            || !live.owner_generation_current
-            || !live.view_current
-            || !live.route_current
-            || !live.profile_current
+            || !live.currency.owner_generation_current
+            || !live.currency.view_current
+            || !live.currency.route_current
+            || !live.continuity.profile_current
         {
             return Err(ContinuationError::SnapshotExpired);
         }
         match &value.payload {
-            ContinuationPayload::Ephemeral { .. } if !live.epoch_pin_valid => {
+            ContinuationPayload::Ephemeral { .. } if !live.continuity.epoch_pin_valid => {
                 Err(ContinuationError::EpochPinUnavailable)
             }
-            ContinuationPayload::DurableReplan if !live.durable_job_active => {
+            ContinuationPayload::DurableReplan if !live.continuity.durable_job_active => {
                 Err(ContinuationError::SnapshotExpired)
             }
             _ => Ok(()),
@@ -1064,10 +1092,7 @@ impl ContinuationStore {
         expires_at: &UtcTimestamp,
         ttl_millis: u64,
     ) -> Result<(), ContinuationError> {
-        if ttl_millis == 0
-            || ttl_millis > self.limits.max_ttl_millis
-            || created_at >= expires_at
-        {
+        if ttl_millis == 0 || ttl_millis > self.limits.max_ttl_millis || created_at >= expires_at {
             Err(ContinuationError::InvalidTtl)
         } else {
             Ok(())
@@ -1152,7 +1177,10 @@ impl ContinuationStore {
             return Err(ContinuationError::ResourceExhausted);
         }
         for id in &ids {
-            let value = self.records.get(id).ok_or(ContinuationError::NotAuthorized)?;
+            let value = self
+                .records
+                .get(id)
+                .ok_or(ContinuationError::NotAuthorized)?;
             if value
                 .last_invalidation_generation
                 .is_some_and(|previous| generation < previous)
@@ -1163,7 +1191,10 @@ impl ContinuationStore {
         let mut invalidated = Vec::new();
         let mut effects = Vec::new();
         for id in ids {
-            let value = self.records.get_mut(&id).ok_or(ContinuationError::NotAuthorized)?;
+            let value = self
+                .records
+                .get_mut(&id)
+                .ok_or(ContinuationError::NotAuthorized)?;
             if !value.is_active() || value.last_invalidation_generation == Some(generation) {
                 continue;
             }
@@ -1185,42 +1216,42 @@ impl ContinuationStore {
     }
 }
 
-fn record_id(record: &ContinuationRecord) -> ContinuationId {
+const fn record_id(record: &ContinuationRecord) -> ContinuationId {
     match record {
         ContinuationRecord::EphemeralWindow(value) => value.continuation_id,
         ContinuationRecord::DurableReplanCheckpoint(value) => value.continuation_id,
     }
 }
 
-fn record_token_digest(record: &ContinuationRecord) -> HandleTokenDigest {
+const fn record_token_digest(record: &ContinuationRecord) -> HandleTokenDigest {
     match record {
         ContinuationRecord::EphemeralWindow(value) => value.token_digest,
         ContinuationRecord::DurableReplanCheckpoint(value) => value.token_digest,
     }
 }
 
-fn record_binding(record: &ContinuationRecord) -> BindingId {
+const fn record_binding(record: &ContinuationRecord) -> BindingId {
     match record {
         ContinuationRecord::EphemeralWindow(value) => value.binding_id,
         ContinuationRecord::DurableReplanCheckpoint(value) => value.binding_id,
     }
 }
 
-fn record_created_at(record: &ContinuationRecord) -> &UtcTimestamp {
+const fn record_created_at(record: &ContinuationRecord) -> &UtcTimestamp {
     match record {
         ContinuationRecord::EphemeralWindow(value) => &value.created_at,
         ContinuationRecord::DurableReplanCheckpoint(value) => &value.created_at,
     }
 }
 
-fn record_expires_at(record: &ContinuationRecord) -> &UtcTimestamp {
+const fn record_expires_at(record: &ContinuationRecord) -> &UtcTimestamp {
     match record {
         ContinuationRecord::EphemeralWindow(value) => &value.expires_at,
         ContinuationRecord::DurableReplanCheckpoint(value) => &value.expires_at,
     }
 }
 
-fn record_status(record: &ContinuationRecord) -> LifecycleRecordStatus {
+const fn record_status(record: &ContinuationRecord) -> LifecycleRecordStatus {
     match record {
         ContinuationRecord::EphemeralWindow(value) => value.status,
         ContinuationRecord::DurableReplanCheckpoint(value) => value.status,
@@ -1259,7 +1290,7 @@ fn bounded<T>(values: Vec<T>) -> Result<BoundedList<T, MAX_LIST_ITEMS>, Continua
     BoundedList::new(values).map_err(|_| ContinuationError::ResourceExhausted)
 }
 
-fn terminal_error(reason: Option<InvalidationReason>) -> ContinuationError {
+const fn terminal_error(reason: Option<InvalidationReason>) -> ContinuationError {
     match reason {
         Some(InvalidationReason::AccessRevoked) => ContinuationError::AccessRevoked,
         Some(InvalidationReason::Purged) => ContinuationError::Purged,
