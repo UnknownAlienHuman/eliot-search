@@ -1,10 +1,12 @@
 //! Acknowledgement barrier for abnormal publication completion.
 //! No method here executes a journal/index effect or authenticates a receipt producer.
 
+use super::{
+    Blake3Digest32, DurableIntent, Epoch, OpaqueId, PublicationCoordinator, PublicationError,
+    PublicationGuards, PublicationPhase, ReceiptRef, SnapshotPublishReceipt,
+};
 use core::fmt;
 use search_contracts::CollectionGenerationId;
-use super::{Blake3Digest32, DurableIntent, Epoch, OpaqueId, PublicationCoordinator,
-    PublicationError, PublicationGuards, PublicationPhase, ReceiptRef, SnapshotPublishReceipt};
 
 /// Verified outcome references retained after the exact point/membership checks.
 /// Large point sets stay in the original immutable manifests, not this control input.
@@ -35,6 +37,7 @@ impl fmt::Debug for AbortedPublicationResolution {
 }
 
 /// Exact transient command latched by the sole coordinator before journal dispatch.
+///
 /// Copies may be inspected, but an edited copy cannot replace the latched request.
 /// The journal adapter must validate live guards and record resolution plus consumed
 /// epoch atomically, without changing visibility or clearing unrelated fences.
@@ -60,13 +63,18 @@ pub struct AbortFinalizationRequest {
 impl fmt::Debug for AbortFinalizationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AbortFinalizationRequest")
-            .field("expected_control_generation", &self.expected_control_generation)
+            .field(
+                "expected_control_generation",
+                &self.expected_control_generation,
+            )
             .field("target_epoch", &self.intent.target_epoch)
-            .field("resolution", &self.resolution).finish_non_exhaustive()
+            .field("resolution", &self.resolution)
+            .finish_non_exhaustive()
     }
 }
 
 /// Exact authoritative journal readback, supplied by the owning adapter.
+///
 /// These fields cannot prove I/O occurred: composition must verify the producer
 /// and the complete original request. This is not an adapter-created receipt.
 #[derive(Clone, Eq, PartialEq)]
@@ -92,7 +100,8 @@ impl fmt::Debug for AbortControlCommitObservation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AbortControlCommitObservation")
             .field("control_generation", &self.control_generation)
-            .field("visible_epoch", &self.visible_epoch).finish_non_exhaustive()
+            .field("visible_epoch", &self.visible_epoch)
+            .finish_non_exhaustive()
     }
 }
 
@@ -110,7 +119,8 @@ impl fmt::Debug for AbortFinalizationProgress {
             .field("resolved", &self.resolution.is_some())
             .field("prepared", &self.request.is_some())
             .field("committed", &self.commit.is_some())
-            .field("snapshot_published", &self.snapshot.is_some()).finish()
+            .field("snapshot_published", &self.snapshot.is_some())
+            .finish()
     }
 }
 
@@ -125,37 +135,62 @@ impl PublicationCoordinator {
     /// # Errors
     /// Rejects an unresolved phase, missing outcome/intent, reused operation ID,
     /// regressed guards and exhausted control generation before changing the latch.
-    pub fn prepare_abort_finalization(&mut self, operation_id: OpaqueId,
-        expected_control_generation: u64, current_guards: PublicationGuards,
+    pub fn prepare_abort_finalization(
+        &mut self,
+        operation_id: OpaqueId,
+        expected_control_generation: u64,
+        current_guards: PublicationGuards,
     ) -> Result<AbortFinalizationRequest, PublicationError> {
         let transaction = self.active_at(PublicationPhase::Aborted)?;
-        let intent = transaction.durable_intent.as_ref().ok_or(PublicationError::RecoveryBlocked)?;
-        if operation_id == intent.persist_operation_id { return Err(PublicationError::OperationMismatch); }
-        if expected_control_generation == 0 { return Err(PublicationError::ControlConflict); }
-        expected_control_generation.checked_add(1).ok_or(PublicationError::ContractExhausted)?;
+        let intent = transaction
+            .durable_intent
+            .as_ref()
+            .ok_or(PublicationError::RecoveryBlocked)?;
+        if operation_id == intent.persist_operation_id {
+            return Err(PublicationError::OperationMismatch);
+        }
+        if expected_control_generation == 0 {
+            return Err(PublicationError::ControlConflict);
+        }
+        expected_control_generation
+            .checked_add(1)
+            .ok_or(PublicationError::ContractExhausted)?;
         let old = intent.guards;
         if current_guards.owner_epoch < old.owner_epoch
             || current_guards.source_catalog_generation < old.source_catalog_generation
             || current_guards.membership_generation < old.membership_generation
             || current_guards.access_generation < old.access_generation
             || current_guards.shadow_generation < old.shadow_generation
-            || current_guards.purge_generation < old.purge_generation {
+            || current_guards.purge_generation < old.purge_generation
+        {
             return Err(PublicationError::GuardMismatch);
         }
         if self.visible_epoch != transaction.previous_visible_epoch
-            || self.last_reserved_epoch != transaction.target_epoch {
+            || self.last_reserved_epoch != transaction.target_epoch
+        {
             return Err(PublicationError::EpochMismatch);
         }
         let request = AbortFinalizationRequest {
-            operation_id, expected_control_generation, current_guards,
+            operation_id,
+            expected_control_generation,
+            current_guards,
             collection_generation_id: transaction.prepared.collection_generation_id,
             previous_visible_epoch: transaction.previous_visible_epoch,
-            intent: intent.clone(), preparation_receipt: transaction.prepared.preparation_receipt.clone(),
-            resolution: self.abort_finalization.resolution.clone().ok_or(PublicationError::RecoveryBlocked)?,
+            intent: intent.clone(),
+            preparation_receipt: transaction.prepared.preparation_receipt.clone(),
+            resolution: self
+                .abort_finalization
+                .resolution
+                .clone()
+                .ok_or(PublicationError::RecoveryBlocked)?,
         };
         if let Some(previous) = &self.abort_finalization.request {
-            if previous != &request { return Err(PublicationError::OperationMismatch); }
-        } else { self.abort_finalization.request = Some(request.clone()); }
+            if previous != &request {
+                return Err(PublicationError::OperationMismatch);
+            }
+        } else {
+            self.abort_finalization.request = Some(request.clone());
+        }
         Ok(request)
     }
 
@@ -165,23 +200,42 @@ impl PublicationCoordinator {
     /// # Errors
     /// Rejects changed request, route, epoch floor, guards, generation or conflicting
     /// repeat. Failure preserves all prior evidence and keeps the active slot occupied.
-    pub fn acknowledge_abort_commit(&mut self, observed: AbortControlCommitObservation)
-        -> Result<(), PublicationError> {
+    pub fn acknowledge_abort_commit(
+        &mut self,
+        observed: AbortControlCommitObservation,
+    ) -> Result<(), PublicationError> {
         self.active_at(PublicationPhase::Aborted)?;
-        let request = self.abort_finalization.request.as_ref().ok_or(PublicationError::RecoveryBlocked)?;
-        if &observed.request != request { return Err(PublicationError::OperationMismatch); }
-        if observed.collection_generation_id != request.collection_generation_id
-            || observed.visible_epoch != self.visible_epoch
-            || observed.visible_epoch != request.previous_visible_epoch
-            || observed.last_reserved_epoch != self.last_reserved_epoch
-            || observed.last_reserved_epoch != request.intent.target_epoch
-            || request.expected_control_generation.checked_add(1) != Some(observed.control_generation) {
+        let request = self
+            .abort_finalization
+            .request
+            .as_ref()
+            .ok_or(PublicationError::RecoveryBlocked)?;
+        if &observed.request != request {
+            return Err(PublicationError::OperationMismatch);
+        }
+        let route_matches = observed.collection_generation_id == request.collection_generation_id;
+        let observed_visible = observed.visible_epoch;
+        let coordinator_visible = self.visible_epoch;
+        let latched_previous = request.previous_visible_epoch;
+        let visible_matches =
+            observed_visible == coordinator_visible && observed_visible == latched_previous;
+        let reservation_matches = observed.last_reserved_epoch == self.last_reserved_epoch
+            && observed.last_reserved_epoch == request.intent.target_epoch;
+        let generation_matches =
+            request.expected_control_generation.checked_add(1) == Some(observed.control_generation);
+        if !route_matches || !visible_matches || !reservation_matches || !generation_matches {
             return Err(PublicationError::ControlConflict);
         }
-        if observed.observed_guards != request.current_guards { return Err(PublicationError::GuardMismatch); }
+        if observed.observed_guards != request.current_guards {
+            return Err(PublicationError::GuardMismatch);
+        }
         if let Some(previous) = &self.abort_finalization.commit {
-            if previous != &observed { return Err(PublicationError::OperationMismatch); }
-        } else { self.abort_finalization.commit = Some(observed); }
+            if previous != &observed {
+                return Err(PublicationError::OperationMismatch);
+            }
+        } else {
+            self.abort_finalization.commit = Some(observed);
+        }
         Ok(())
     }
 
@@ -192,18 +246,29 @@ impl PublicationCoordinator {
     /// # Errors
     /// Missing commit, wrong transaction/visibility/generation or a conflicting
     /// snapshot receipt leaves admission blocked and retains the active operation.
-    pub fn publish_abort_snapshot(&mut self, receipt: SnapshotPublishReceipt)
-        -> Result<(), PublicationError> {
+    pub fn publish_abort_snapshot(
+        &mut self,
+        receipt: SnapshotPublishReceipt,
+    ) -> Result<(), PublicationError> {
         self.active_at(PublicationPhase::Aborted)?;
-        let commit = self.abort_finalization.commit.as_ref().ok_or(PublicationError::RecoveryBlocked)?;
+        let commit = self
+            .abort_finalization
+            .commit
+            .as_ref()
+            .ok_or(PublicationError::RecoveryBlocked)?;
         if receipt.transaction_id != commit.request.intent.transaction_id
             || receipt.visible_epoch != commit.visible_epoch
-            || receipt.control_generation != commit.control_generation {
+            || receipt.control_generation != commit.control_generation
+        {
             return Err(PublicationError::SnapshotPublicationFailed);
         }
         if let Some(previous) = &self.abort_finalization.snapshot {
-            if previous != &receipt { return Err(PublicationError::SnapshotPublicationFailed); }
-        } else { self.abort_finalization.snapshot = Some(receipt); }
+            if previous != &receipt {
+                return Err(PublicationError::SnapshotPublicationFailed);
+            }
+        } else {
+            self.abort_finalization.snapshot = Some(receipt);
+        }
         Ok(())
     }
 
@@ -216,8 +281,12 @@ impl PublicationCoordinator {
     /// Missing acknowledgements retain the active slot and all resolution evidence.
     pub fn finalize_aborted(&mut self) -> Result<(), PublicationError> {
         self.active_at(PublicationPhase::Aborted)?;
-        if self.abort_finalization.commit.is_none() { return Err(PublicationError::RecoveryBlocked); }
-        if self.abort_finalization.snapshot.is_none() { return Err(PublicationError::SnapshotPublicationFailed); }
+        if self.abort_finalization.commit.is_none() {
+            return Err(PublicationError::RecoveryBlocked);
+        }
+        if self.abort_finalization.snapshot.is_none() {
+            return Err(PublicationError::SnapshotPublicationFailed);
+        }
         self.active = None;
         self.abort_finalization = AbortFinalizationProgress::default();
         Ok(())

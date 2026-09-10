@@ -68,10 +68,10 @@ impl PublicationCoordinator {
     /// Existing pure stage/closure/readback/commit validators rebuild the accepted
     /// receipt prefix; no external operation is re-executed. Recovery then checks
     /// fresh observed effects. Incomplete effects or changed pre-commit guards
-    /// put the slot in COMPENSATING, preventing forward commit. Bare ABORTED and
-    /// blocked records remain PUBLICATION_BLOCKED, not an empty ready coordinator.
+    /// put the slot in `COMPENSATING`, preventing forward commit. Bare `ABORTED` and
+    /// blocked records remain `PUBLICATION_BLOCKED`, not an empty ready coordinator.
     ///
-    /// Prior SNAPSHOT_PUBLISHED becomes CONTROL_COMMITTED and requires a new
+    /// Prior `SNAPSHOT_PUBLISHED` becomes `CONTROL_COMMITTED` and requires a new
     /// current-process acknowledgement. Live restriction checks remain mandatory
     /// at actual publication/admission; this pure result grants no index access.
     ///
@@ -133,7 +133,10 @@ impl PublicationCoordinator {
         if coordinator.visible_epoch != input.observation.control_visible_epoch {
             return Err(PublicationError::ControlConflict);
         }
-        let active = coordinator.active.as_mut().ok_or(PublicationError::RecoveryBlocked)?;
+        let active = coordinator
+            .active
+            .as_mut()
+            .ok_or(PublicationError::RecoveryBlocked)?;
         match phase {
             PublicationPhase::Aborted | PublicationPhase::PublicationBlocked => {
                 active.phase = PublicationPhase::PublicationBlocked;
@@ -159,13 +162,17 @@ impl PublicationCoordinator {
                 active.phase = PublicationPhase::PublicationBlocked;
                 return Ok((coordinator, PublicationRecoveryDecision::PublicationBlocked));
             }
-            PublicationRecoveryDecision::Continue | PublicationRecoveryDecision::PublishSnapshot => {}
+            PublicationRecoveryDecision::Continue
+            | PublicationRecoveryDecision::PublishSnapshot => {}
         }
         Ok((coordinator, decision))
     }
 }
 
-fn validate_input(input: &PublicationRestoreInput, max_points: usize) -> Result<(), PublicationError> {
+fn validate_input(
+    input: &PublicationRestoreInput,
+    max_points: usize,
+) -> Result<(), PublicationError> {
     if max_points == 0
         || input.prepared.old_manifest.is_some() != input.prepared.old_manifest_digest.is_some()
     {
@@ -175,7 +182,10 @@ fn validate_input(input: &PublicationRestoreInput, max_points: usize) -> Result<
     if let Some(old) = &input.prepared.old_manifest {
         validate_manifest(old, max_points)?;
     }
-    if changed_point_id_is_reused(input.prepared.old_manifest.as_ref(), &input.prepared.new_manifest) {
+    if changed_point_id_is_reused(
+        input.prepared.old_manifest.as_ref(),
+        &input.prepared.new_manifest,
+    ) {
         return Err(PublicationError::InvalidPreparedPublication);
     }
     if input.collection_generation_id != input.prepared.collection_generation_id
@@ -198,13 +208,32 @@ fn validate_input(input: &PublicationRestoreInput, max_points: usize) -> Result<
         return Err(PublicationError::RecoveryBlocked);
     }
     let lengths = [
-        input.observation.staged_ids.len(), input.observation.closed_ids.len(),
-        input.stage_receipt.as_ref().map_or(0, |r| r.staged_ids.len()),
-        input.stage_receipt.as_ref().map_or(0, |r| r.missing_ids.len()),
-        input.stage_receipt.as_ref().map_or(0, |r| r.unexpected_ids.len()),
-        input.closure_receipt.as_ref().map_or(0, |r| r.closed_ids.len()),
-        input.closure_receipt.as_ref().map_or(0, |r| r.missing_ids.len()),
-        input.closure_receipt.as_ref().map_or(0, |r| r.unexpected_ids.len()),
+        input.observation.staged_ids.len(),
+        input.observation.closed_ids.len(),
+        input
+            .stage_receipt
+            .as_ref()
+            .map_or(0, |r| r.staged_ids.len()),
+        input
+            .stage_receipt
+            .as_ref()
+            .map_or(0, |r| r.missing_ids.len()),
+        input
+            .stage_receipt
+            .as_ref()
+            .map_or(0, |r| r.unexpected_ids.len()),
+        input
+            .closure_receipt
+            .as_ref()
+            .map_or(0, |r| r.closed_ids.len()),
+        input
+            .closure_receipt
+            .as_ref()
+            .map_or(0, |r| r.missing_ids.len()),
+        input
+            .closure_receipt
+            .as_ref()
+            .map_or(0, |r| r.unexpected_ids.len()),
     ];
     if lengths.into_iter().any(|length| length > max_points) {
         return Err(PublicationError::BudgetExceeded);
@@ -225,6 +254,8 @@ fn validate_input(input: &PublicationRestoreInput, max_points: usize) -> Result<
         PublicationPhase::Compensating | PublicationPhase::Aborted => matches!(mask, 0 | 1 | 3 | 7),
         PublicationPhase::PublicationBlocked => matches!(mask, 0 | 1 | 3 | 7 | 15),
     };
-    if !valid { return Err(PublicationError::RecoveryBlocked); }
+    if !valid {
+        return Err(PublicationError::RecoveryBlocked);
+    }
     Ok(())
 }

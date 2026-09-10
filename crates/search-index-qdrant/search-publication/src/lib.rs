@@ -15,14 +15,13 @@ mod recovery;
 pub use error::PublicationError;
 pub use machine::{
     AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
-    DEFAULT_MAX_PUBLICATION_POINTS, DurableIntent, PublicationCoordinator,
-    PublicationPhase, PublicationRestoreInput, PublicationTransaction,
+    DEFAULT_MAX_PUBLICATION_POINTS, DurableIntent, PublicationCoordinator, PublicationPhase,
+    PublicationRestoreInput, PublicationTransaction,
 };
 pub use model::{
-    AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt,
-    ControlCommitObservation, PreparedPublication, PublicationGuards,
-    PublicationRecoveryDecision, PublicationRecoveryObservation, ReadbackVerified,
-    RestorationReceipt, RetiredManifest, SnapshotPublishReceipt, StageReceipt,
-    VisibleCommitReceipt,
+    AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt, ControlCommitObservation,
+    PreparedPublication, PublicationGuards, PublicationRecoveryDecision,
+    PublicationRecoveryObservation, ReadbackVerified, RestorationReceipt, RetiredManifest,
+    SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
 };
 pub use recovery::recover;

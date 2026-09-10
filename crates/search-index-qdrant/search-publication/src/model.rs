@@ -2,9 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, ReceiptRef,
-};
+use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, ReceiptRef};
 use search_point_identity::PointId128;
 use search_projection_planner::ProjectionManifest;
 
@@ -148,6 +146,7 @@ pub struct RetiredManifest {
 }
 
 /// Exclusion fence required before abandoning a publication.
+///
 /// The access/control adapter must verify its durable effective scope before
 /// constructing this value; these fields do not perform retrieval/IDF filtering.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -168,6 +167,7 @@ pub struct AbandonFence {
 }
 
 /// Exact compensation plan derived from both sides of the immutable manifest diff.
+///
 /// The adapter removes/excludes staged points and restores the prior validity of
 /// old closed points. It must verify the original bounds, not just ID existence.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -198,7 +198,7 @@ pub struct CompensationReceipt {
 }
 
 /// Verified restoration of the exact old point bounds from the prior manifest.
-/// Separate from ClosureReceipt: closing old points is not their restoration.
+/// Separate from `ClosureReceipt`: closing old points is not their restoration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RestorationReceipt {
     /// Matching transaction identity.
@@ -214,6 +214,7 @@ pub struct RestorationReceipt {
 }
 
 /// Recovery observation already bound to this transaction by its producing ports.
+///
 /// IDs nominate observed effects; they do not independently verify payload/vector
 /// bytes, authorize a control commit or prove a complete exclusion scope.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -228,7 +229,7 @@ pub struct PublicationRecoveryObservation {
     pub control_visible_epoch: Epoch,
     /// Whether immutable control snapshot publication is complete.
     pub snapshot_published: bool,
-    /// Hint only: not sufficient for CommitInvalidationOnly or abandonment.
+    /// Hint only: not sufficient for `CommitInvalidationOnly` or abandonment.
     /// The complete typed fence and its authoritative readback remain mandatory.
     pub abandon_fence_durable: bool,
 }

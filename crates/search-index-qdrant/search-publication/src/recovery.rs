@@ -56,10 +56,26 @@ pub fn recover(
     }
     let difference = diff_manifests(old, &transaction.prepared.new_manifest)
         .map_err(|_| PublicationError::InvalidPreparedPublication)?;
-    let expected_staged = difference.create.iter().map(|entry| entry.point_id).collect::<BTreeSet<_>>();
-    let expected_closed = difference.retire.iter().map(|entry| entry.point_id).collect::<BTreeSet<_>>();
-    let observed_staged = observation.staged_ids.iter().copied().collect::<BTreeSet<_>>();
-    let observed_closed = observation.closed_ids.iter().copied().collect::<BTreeSet<_>>();
+    let expected_staged = difference
+        .create
+        .iter()
+        .map(|entry| entry.point_id)
+        .collect::<BTreeSet<_>>();
+    let expected_closed = difference
+        .retire
+        .iter()
+        .map(|entry| entry.point_id)
+        .collect::<BTreeSet<_>>();
+    let observed_staged = observation
+        .staged_ids
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let observed_closed = observation
+        .closed_ids
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
     if observed_staged.len() != observation.staged_ids.len()
         || observed_closed.len() != observation.closed_ids.len()
         || !observed_staged.is_subset(&expected_staged)
@@ -75,16 +91,12 @@ pub fn recover(
         return Ok(Decision::PublicationBlocked);
     }
     if !observation.intent_durable {
-        return Ok(if transaction.phase == PublicationPhase::Prepared
-            && transaction.durable_intent.is_none()
-            && observation.control_visible_epoch == transaction.previous_visible_epoch
-            && !observation.snapshot_published
-            && observed_staged.is_empty() && observed_closed.is_empty()
-        {
-            Decision::Continue
-        } else {
-            Decision::PublicationBlocked
-        });
+        return Ok(decide_without_durable_intent(
+            transaction,
+            observation,
+            &observed_staged,
+            &observed_closed,
+        ));
     }
     let Some(intent) = &transaction.durable_intent else {
         return Ok(Decision::PublicationBlocked);
@@ -99,49 +111,114 @@ pub fn recover(
     }
     let all_effects = observed_staged == expected_staged && observed_closed == expected_closed;
     if observation.control_visible_epoch == transaction.target_epoch {
-        if !matches!(transaction.phase,
-            PublicationPhase::ControlCommitted | PublicationPhase::SnapshotPublished)
-            || !all_effects
-            || !committed_binding_matches(transaction, &expected_staged, &expected_closed)
-        {
-            return Ok(Decision::PublicationBlocked);
-        }
-        if !observation.snapshot_published { return Ok(Decision::PublishSnapshot); }
-        let Some(snapshot) = &transaction.snapshot_receipt else {
-            return Ok(Decision::PublicationBlocked);
-        };
-        let Some(commit) = &transaction.visible_commit else {
-            return Ok(Decision::PublicationBlocked);
-        };
-        return Ok(if transaction.phase == PublicationPhase::SnapshotPublished
-            && snapshot.transaction_id == commit.transaction_id
-            && snapshot.visible_epoch == commit.visible_epoch
-            && snapshot.control_generation == commit.control_generation
-        {
-            Decision::Continue
-        } else {
-            Decision::PublicationBlocked
-        });
+        return Ok(decide_committed_epoch(
+            transaction,
+            observation,
+            &expected_staged,
+            &expected_closed,
+            all_effects,
+        ));
     }
-    if observation.snapshot_published || matches!(transaction.phase,
-        PublicationPhase::Prepared | PublicationPhase::ControlCommitted
-            | PublicationPhase::SnapshotPublished | PublicationPhase::Aborted
-            | PublicationPhase::PublicationBlocked)
+    Ok(decide_pre_commit(
+        transaction,
+        observation,
+        all_effects,
+        &observed_staged,
+        &observed_closed,
+    ))
+}
+
+fn decide_without_durable_intent(
+    transaction: &PublicationTransaction,
+    observation: &PublicationRecoveryObservation,
+    observed_staged: &BTreeSet<PointId128>,
+    observed_closed: &BTreeSet<PointId128>,
+) -> PublicationRecoveryDecision {
+    use PublicationRecoveryDecision as Decision;
+    if transaction.phase == PublicationPhase::Prepared
+        && transaction.durable_intent.is_none()
+        && observation.control_visible_epoch == transaction.previous_visible_epoch
+        && !observation.snapshot_published
+        && observed_staged.is_empty()
+        && observed_closed.is_empty()
     {
-        return Ok(Decision::PublicationBlocked);
+        Decision::Continue
+    } else {
+        Decision::PublicationBlocked
+    }
+}
+
+fn decide_pre_commit(
+    transaction: &PublicationTransaction,
+    observation: &PublicationRecoveryObservation,
+    all_effects: bool,
+    observed_staged: &BTreeSet<PointId128>,
+    observed_closed: &BTreeSet<PointId128>,
+) -> PublicationRecoveryDecision {
+    use PublicationRecoveryDecision as Decision;
+    if observation.snapshot_published
+        || matches!(
+            transaction.phase,
+            PublicationPhase::Prepared
+                | PublicationPhase::ControlCommitted
+                | PublicationPhase::SnapshotPublished
+                | PublicationPhase::Aborted
+                | PublicationPhase::PublicationBlocked
+        )
+    {
+        return Decision::PublicationBlocked;
     }
     if transaction.phase == PublicationPhase::Compensating {
-        return Ok(Decision::CompensateExact);
+        return Decision::CompensateExact;
     }
-    if all_effects { return Ok(Decision::Continue); }
+    if all_effects {
+        return Decision::Continue;
+    }
     // Old closures also require compensation. Seeing no staged new IDs cannot
     // justify ignoring old points that are still closed at a consumed epoch.
-    if !observed_staged.is_empty() || !observed_closed.is_empty()
+    if !observed_staged.is_empty()
+        || !observed_closed.is_empty()
         || transaction.phase != PublicationPhase::IntentDurable
     {
-        return Ok(Decision::CompensateExact);
+        return Decision::CompensateExact;
     }
-    Ok(Decision::Continue)
+    Decision::Continue
+}
+
+fn decide_committed_epoch(
+    transaction: &PublicationTransaction,
+    observation: &PublicationRecoveryObservation,
+    expected_staged: &BTreeSet<PointId128>,
+    expected_closed: &BTreeSet<PointId128>,
+    all_effects: bool,
+) -> PublicationRecoveryDecision {
+    use PublicationRecoveryDecision as Decision;
+    if !matches!(
+        transaction.phase,
+        PublicationPhase::ControlCommitted | PublicationPhase::SnapshotPublished
+    ) || !all_effects
+        || !committed_binding_matches(transaction, expected_staged, expected_closed)
+    {
+        return Decision::PublicationBlocked;
+    }
+    if !observation.snapshot_published {
+        return Decision::PublishSnapshot;
+    }
+    let Some(snapshot) = &transaction.snapshot_receipt else {
+        return Decision::PublicationBlocked;
+    };
+    let Some(commit) = &transaction.visible_commit else {
+        return Decision::PublicationBlocked;
+    };
+    if transaction.phase == PublicationPhase::SnapshotPublished
+        && snapshot.transaction_id == commit.transaction_id
+        && snapshot.visible_epoch == commit.visible_epoch
+        && snapshot.control_generation == commit.control_generation
+    {
+        Decision::Continue
+    } else {
+        Decision::PublicationBlocked
+    }
 }
 
 fn committed_binding_matches(
@@ -150,24 +227,33 @@ fn committed_binding_matches(
     expected_closed: &BTreeSet<PointId128>,
 ) -> bool {
     let (Some(commit), Some(verified), Some(stage), Some(closure)) = (
-        &transaction.visible_commit, &transaction.verified,
-        &transaction.stage_receipt, &transaction.closure_receipt,
-    ) else { return false; };
+        &transaction.visible_commit,
+        &transaction.verified,
+        &transaction.stage_receipt,
+        &transaction.closure_receipt,
+    ) else {
+        return false;
+    };
     let id = &transaction.prepared.transaction_id;
     commit.transaction_id == *id
         && commit.visible_epoch == transaction.target_epoch
         && commit.visible_manifest_digest == transaction.prepared.new_manifest_digest
         && commit.retired_manifest_digest == verified.retired_manifest_digest
-        && verified.retired_manifest_digest.is_some() == !expected_closed.is_empty()
+        && verified.retired_manifest_digest.is_some() != expected_closed.is_empty()
         && commit.control_generation != 0
-        && verified.transaction_id == *id && verified.target_epoch == transaction.target_epoch
+        && verified.transaction_id == *id
+        && verified.target_epoch == transaction.target_epoch
         && verified.new_manifest_digest == transaction.prepared.new_manifest_digest
         && verified.staged_readback_digest == stage.readback_digest
         && verified.closure_readback_digest == closure.readback_digest
-        && stage.transaction_id == *id && stage.target_epoch == transaction.target_epoch
-        && stage.missing_ids.is_empty() && stage.unexpected_ids.is_empty()
+        && stage.transaction_id == *id
+        && stage.target_epoch == transaction.target_epoch
+        && stage.missing_ids.is_empty()
+        && stage.unexpected_ids.is_empty()
         && stage.staged_ids.iter().eq(expected_staged.iter())
-        && closure.transaction_id == *id && closure.target_epoch == transaction.target_epoch
-        && closure.missing_ids.is_empty() && closure.unexpected_ids.is_empty()
+        && closure.transaction_id == *id
+        && closure.target_epoch == transaction.target_epoch
+        && closure.missing_ids.is_empty()
+        && closure.unexpected_ids.is_empty()
         && closure.closed_ids.iter().eq(expected_closed.iter())
 }

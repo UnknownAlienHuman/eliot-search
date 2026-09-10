@@ -3,11 +3,11 @@
 use search_contracts::{Blake3Digest32, OpaqueId, OwnerEpoch, ReceiptRef};
 use search_publication::{DurableIntent, PublicationGuards};
 
-fn for_coordinator(value: search_contracts::PublicationGuards) -> PublicationGuards {
+const fn for_coordinator(value: search_contracts::PublicationGuards) -> PublicationGuards {
     value
 }
 
-fn for_control(value: PublicationGuards) -> search_contracts::PublicationGuards {
+const fn for_control(value: PublicationGuards) -> search_contracts::PublicationGuards {
     value
 }
 

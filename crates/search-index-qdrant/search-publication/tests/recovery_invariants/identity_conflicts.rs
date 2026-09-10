@@ -33,7 +33,10 @@ fn every_immutable_entry_field_participates_in_collision_rejection() {
             1 => entry.identity_key.source_id = id("other-source"),
             2 => entry.identity_key.source_revision = NonZeroRevision::new(99).unwrap(),
             3 => entry.identity_key.unit_ordinal += 1,
-            4 => { entry.identity_key.source_byte_start = 1; entry.identity_key.source_byte_end = 2; }
+            4 => {
+                entry.identity_key.source_byte_start = 1;
+                entry.identity_key.source_byte_end = 2;
+            }
             5 => entry.identity_key.source_byte_end = 2,
             6 => entry.identity_key.projection_kind = ProjectionKind::ExactMetadata,
             7 => entry.identity_key.projection_fingerprint = digest(99),
@@ -43,8 +46,14 @@ fn every_immutable_entry_field_participates_in_collision_rejection() {
             11 => entry.unit_digest = digest(99),
             12 => entry.reference_digest = digest(99),
             13 => entry.payload_digest = digest(99),
-            14 => { entry.vector_digests.insert("lexical".to_owned(), digest(99)); }
-            _ => { entry.vector_digests.insert("code".to_owned(), digest(98)); }
+            14 => {
+                entry
+                    .vector_digests
+                    .insert("lexical".to_owned(), digest(99));
+            }
+            _ => {
+                entry.vector_digests.insert("code".to_owned(), digest(98));
+            }
         }
         assert_rejected(&old, new);
     }
@@ -53,15 +62,23 @@ fn every_immutable_entry_field_participates_in_collision_rejection() {
 #[test]
 fn vector_names_and_values_cannot_change_under_a_retained_point_id() {
     let mut old = manifest(&[2]);
-    old.entries[0].vector_digests.insert("lexical".to_owned(), digest(7));
+    old.entries[0]
+        .vector_digests
+        .insert("lexical".to_owned(), digest(7));
     for variant in 0..3 {
         let mut new = old.clone();
         match variant {
-            0 => { new.entries[0].vector_digests.insert("lexical".to_owned(), digest(8)); }
+            0 => {
+                new.entries[0]
+                    .vector_digests
+                    .insert("lexical".to_owned(), digest(8));
+            }
             1 => new.entries[0].vector_digests.clear(),
             _ => {
                 new.entries[0].vector_digests.clear();
-                new.entries[0].vector_digests.insert("renamed".to_owned(), digest(7));
+                new.entries[0]
+                    .vector_digests
+                    .insert("renamed".to_owned(), digest(7));
             }
         }
         assert_rejected(&old, new);
@@ -87,7 +104,9 @@ fn exact_retained_points_are_neither_staged_nor_closed() {
     assert_eq!(plan.closed_ids, vec![point(1), point(5)]);
     assert!(!plan.staged_ids.contains(&point(3)));
     assert!(!plan.closed_ids.contains(&point(3)));
-    machine.compensate_and_restore(compensation(&plan), restoration(&plan)).unwrap();
+    machine
+        .compensate_and_restore(compensation(&plan), restoration(&plan))
+        .unwrap();
 }
 
 #[test]
@@ -113,7 +132,10 @@ fn valid_replacement_with_new_ids_reaches_commit_and_snapshot_acknowledgement() 
     let (commit, observed) = visible(&mut machine);
     assert_eq!(observed.staged_ids, vec![point(2)]);
     assert_eq!(observed.closed_ids, vec![point(1)]);
-    assert_eq!(recover(machine.active().unwrap(), &observed).unwrap(), PublicationRecoveryDecision::PublishSnapshot);
+    assert_eq!(
+        recover(machine.active().unwrap(), &observed).unwrap(),
+        PublicationRecoveryDecision::PublishSnapshot
+    );
     machine.publish_control_snapshot(snapshot(&commit)).unwrap();
     machine.complete().unwrap();
     assert_eq!(machine.current_manifest(), Some(&new));
@@ -126,8 +148,17 @@ fn rejecting_a_collision_does_not_prevent_a_corrected_submission() {
     let mut machine = coordinator(&old);
     let mut bad = old.clone();
     bad.entries[0].payload_digest = digest(9);
-    assert!(machine.submit(prepared(Some(old.clone()), bad, "bad")).is_err());
-    assert_eq!(machine.submit(prepared(Some(old), manifest(&[2]), "corrected")).unwrap(), epoch(10));
+    assert!(
+        machine
+            .submit(prepared(Some(old.clone()), bad, "bad"))
+            .is_err()
+    );
+    assert_eq!(
+        machine
+            .submit(prepared(Some(old), manifest(&[2]), "corrected"))
+            .unwrap(),
+        epoch(10)
+    );
     assert_eq!(machine.active().unwrap().transaction_id(), &id("corrected"));
 }
 
@@ -138,7 +169,10 @@ fn conflicting_competitor_does_not_replace_the_active_transaction() {
     let before = machine.active().unwrap().clone();
     let mut bad = old.clone();
     bad.entries[0].unit_digest = digest(99);
-    assert_eq!(machine.submit(prepared(Some(old), bad, "competitor")), Err(PublicationError::PublicationBusy));
+    assert_eq!(
+        machine.submit(prepared(Some(old), bad, "competitor")),
+        Err(PublicationError::PublicationBusy)
+    );
     assert_eq!(machine.active(), Some(&before));
     assert_eq!(machine.last_reserved_epoch(), epoch(1));
 }
@@ -146,7 +180,11 @@ fn conflicting_competitor_does_not_replace_the_active_transaction() {
 #[test]
 fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
     fn subset(mask: u8) -> ProjectionManifest {
-        manifest(&(1_u8..=5).filter(|n| mask & (1_u8 << (*n - 1)) != 0).collect::<Vec<_>>())
+        manifest(
+            &(1_u8..=5)
+                .filter(|n| mask & (1_u8 << (*n - 1)) != 0)
+                .collect::<Vec<_>>(),
+        )
     }
     for old_mask in 0_u8..32 {
         for new_mask in 0_u8..32 {
@@ -154,7 +192,9 @@ fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
                 let old = subset(old_mask);
                 let mut new = subset(new_mask);
                 if changed {
-                    for entry in &mut new.entries { entry.payload_digest = digest(99); }
+                    for entry in &mut new.entries {
+                        entry.payload_digest = digest(99);
+                    }
                 }
                 let overlap = changed && old_mask & new_mask != 0;
                 let mut machine = coordinator(&old);
@@ -165,9 +205,15 @@ fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
                     assert_eq!(machine.last_reserved_epoch(), epoch(9));
                 } else {
                     assert_eq!(result, Ok(epoch(10)));
-                    machine.persist_intent(id("persist"), reference("intent")).unwrap();
+                    machine
+                        .persist_intent(id("persist"), reference("intent"))
+                        .unwrap();
                     let plan = machine.begin_compensation_plan().unwrap();
-                    assert!(plan.staged_ids.iter().all(|id| !plan.closed_ids.contains(id)));
+                    assert!(
+                        plan.staged_ids
+                            .iter()
+                            .all(|id| !plan.closed_ids.contains(id))
+                    );
                 }
             }
         }
@@ -185,17 +231,27 @@ fn legacy_same_id_effects_cannot_authorize_forward_or_snapshot_recovery() {
     legacy.stage_receipt.as_mut().unwrap().staged_ids = vec![point(1)];
     seen.staged_ids = vec![point(1)];
     let original = legacy.clone();
-    for phase in [PublicationPhase::IntentDurable, PublicationPhase::NewPointsAcknowledged,
-        PublicationPhase::OldPointsClosedAcknowledged, PublicationPhase::ReadbackVerified,
-        PublicationPhase::ControlCommitted, PublicationPhase::SnapshotPublished,
-        PublicationPhase::Compensating, PublicationPhase::Aborted, PublicationPhase::PublicationBlocked] {
+    for phase in [
+        PublicationPhase::IntentDurable,
+        PublicationPhase::NewPointsAcknowledged,
+        PublicationPhase::OldPointsClosedAcknowledged,
+        PublicationPhase::ReadbackVerified,
+        PublicationPhase::ControlCommitted,
+        PublicationPhase::SnapshotPublished,
+        PublicationPhase::Compensating,
+        PublicationPhase::Aborted,
+        PublicationPhase::PublicationBlocked,
+    ] {
         legacy.phase = phase;
         for observed_epoch in [legacy.previous_visible_epoch, legacy.target_epoch] {
             for snapshot_published in [false, true] {
                 seen.control_visible_epoch = observed_epoch;
                 seen.snapshot_published = snapshot_published;
                 let before = legacy.clone();
-                assert_eq!(recover(&legacy, &seen).unwrap(), PublicationRecoveryDecision::PublicationBlocked);
+                assert_eq!(
+                    recover(&legacy, &seen).unwrap(),
+                    PublicationRecoveryDecision::PublicationBlocked
+                );
                 assert_eq!(legacy, before);
             }
         }
@@ -209,5 +265,8 @@ fn legacy_collision_is_blocked_even_without_observed_effects() {
     let machine = durable(Some(manifest(&[1])), manifest(&[2]));
     let mut transaction = machine.active().unwrap().clone();
     transaction.prepared.new_manifest.entries[0].point_id = point(1);
-    assert_eq!(recover(&transaction, &observation(&machine)).unwrap(), PublicationRecoveryDecision::PublicationBlocked);
+    assert_eq!(
+        recover(&transaction, &observation(&machine)).unwrap(),
+        PublicationRecoveryDecision::PublicationBlocked
+    );
 }

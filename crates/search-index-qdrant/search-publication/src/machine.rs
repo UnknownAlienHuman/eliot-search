@@ -2,20 +2,21 @@
 
 use std::collections::BTreeSet;
 
-mod restore;
 mod abort;
+mod restore;
+pub use abort::{
+    AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
+};
 pub use restore::PublicationRestoreInput;
-pub use abort::{AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution};
 
 use search_contracts::{Blake3Digest32, Epoch, OpaqueId, ReceiptRef};
 use search_point_identity::PointId128;
 use search_projection_planner::{ManifestDiff, ProjectionManifest, diff_manifests};
 
 use crate::{
-    AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt,
-    ControlCommitObservation, PreparedPublication, PublicationError, PublicationGuards,
-    ReadbackVerified, RestorationReceipt, RetiredManifest, SnapshotPublishReceipt,
-    StageReceipt, VisibleCommitReceipt,
+    AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt, ControlCommitObservation,
+    PreparedPublication, PublicationError, PublicationGuards, ReadbackVerified, RestorationReceipt,
+    RetiredManifest, SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
 };
 
 /// Maximum exact points in one publication transaction.
@@ -92,7 +93,7 @@ impl PublicationCoordinator {
     /// Creates a coordinator from an explicitly resolved control checkpoint.
     ///
     /// `last_reserved_epoch` includes aborted/abandoned reservations and must
-    /// come from verified durable history, not be inferred from VisibleEpoch.
+    /// come from verified durable history, not be inferred from `VisibleEpoch`.
     /// A caller must resolve any outstanding intent before using this constructor.
     /// Initial empty history supplies zero for both epochs. These inputs are not
     /// evidence of root ownership, successful recovery or a qualified backend.
@@ -149,10 +150,7 @@ impl PublicationCoordinator {
     /// A physical point ID shared with the current manifest must retain its full
     /// immutable entry. Changed entries need distinct identities from the point
     /// owner; the coordinator never invents replacement IDs or mutates manifests.
-    pub fn submit(
-        &mut self,
-        prepared: PreparedPublication,
-    ) -> Result<Epoch, PublicationError> {
+    pub fn submit(&mut self, prepared: PreparedPublication) -> Result<Epoch, PublicationError> {
         if self.active.is_some() {
             return Err(PublicationError::PublicationBusy);
         }
@@ -214,10 +212,7 @@ impl PublicationCoordinator {
     }
 
     /// Accepts exact new-point staging and readback.
-    pub fn stage_new_points(
-        &mut self,
-        receipt: StageReceipt,
-    ) -> Result<(), PublicationError> {
+    pub fn stage_new_points(&mut self, receipt: StageReceipt) -> Result<(), PublicationError> {
         let transaction = self.active_mut(PublicationPhase::IntentDurable)?;
         verify_transaction_identity(transaction, &receipt.transaction_id, receipt.target_epoch)?;
         let expected = manifest_diff(transaction)?.create;
@@ -234,10 +229,7 @@ impl PublicationCoordinator {
     }
 
     /// Accepts exact closure of retired point IDs.
-    pub fn close_old_points(
-        &mut self,
-        receipt: ClosureReceipt,
-    ) -> Result<(), PublicationError> {
+    pub fn close_old_points(&mut self, receipt: ClosureReceipt) -> Result<(), PublicationError> {
         let transaction = self.active_mut(PublicationPhase::NewPointsAcknowledged)?;
         verify_transaction_identity(transaction, &receipt.transaction_id, receipt.target_epoch)?;
         let expected = manifest_diff(transaction)?.retire;
@@ -269,9 +261,7 @@ impl PublicationCoordinator {
             .closure_receipt
             .as_ref()
             .ok_or(PublicationError::ClosureReadbackMismatch)?;
-        if stage.readback_digest != staged_digest
-            || closure.readback_digest != closure_digest
-        {
+        if stage.readback_digest != staged_digest || closure.readback_digest != closure_digest {
             return Err(PublicationError::StageReadbackMismatch);
         }
         let has_retired = !manifest_diff(transaction)?.retire.is_empty();
@@ -377,9 +367,15 @@ impl PublicationCoordinator {
     pub fn complete(&mut self) -> Result<VisibleCommitReceipt, PublicationError> {
         // Validate before taking the sole active slot: an error must not release
         // serialization or discard the transaction needed by recovery.
-        let receipt = self.active_at(PublicationPhase::SnapshotPublished)?
-            .visible_commit.clone().ok_or(PublicationError::ControlConflict)?;
-        let transaction = self.active.take().ok_or(PublicationError::InvalidTransition)?;
+        let receipt = self
+            .active_at(PublicationPhase::SnapshotPublished)?
+            .visible_commit
+            .clone()
+            .ok_or(PublicationError::ControlConflict)?;
+        let transaction = self
+            .active
+            .take()
+            .ok_or(PublicationError::InvalidTransition)?;
         self.current_manifest = Some(transaction.prepared.new_manifest);
         self.current_manifest_digest = Some(transaction.prepared.new_manifest_digest);
         Ok(receipt)
@@ -388,12 +384,18 @@ impl PublicationCoordinator {
     /// Begins exact compensation and returns both mutation directions.
     /// Retry while COMPENSATING returns the same complete plan.
     pub fn begin_compensation_plan(&mut self) -> Result<CompensationPlan, PublicationError> {
-        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
-        if !matches!(transaction.phase,
-            PublicationPhase::IntentDurable | PublicationPhase::NewPointsAcknowledged
-                | PublicationPhase::OldPointsClosedAcknowledged | PublicationPhase::ReadbackVerified
-                | PublicationPhase::Compensating)
-        {
+        let transaction = self
+            .active
+            .as_mut()
+            .ok_or(PublicationError::InvalidTransition)?;
+        if !matches!(
+            transaction.phase,
+            PublicationPhase::IntentDurable
+                | PublicationPhase::NewPointsAcknowledged
+                | PublicationPhase::OldPointsClosedAcknowledged
+                | PublicationPhase::ReadbackVerified
+                | PublicationPhase::Compensating
+        ) {
             return Err(PublicationError::InvalidTransition);
         }
         let difference = manifest_diff(transaction)?;
@@ -414,7 +416,10 @@ impl PublicationCoordinator {
     }
 
     /// Completes compensation only when there were no old closures to restore.
-    pub fn compensate_exact(&mut self, receipt: CompensationReceipt) -> Result<(), PublicationError> {
+    pub fn compensate_exact(
+        &mut self,
+        receipt: CompensationReceipt,
+    ) -> Result<(), PublicationError> {
         self.finish_compensation(receipt, None)
     }
 
@@ -424,13 +429,17 @@ impl PublicationCoordinator {
     /// ID appears in both lists, restoration must follow removal and verify the
     /// original payload/vector state as well as its prior visibility bounds.
     pub fn compensate_and_restore(
-        &mut self, receipt: CompensationReceipt, restoration: RestorationReceipt,
+        &mut self,
+        receipt: CompensationReceipt,
+        restoration: RestorationReceipt,
     ) -> Result<(), PublicationError> {
         self.finish_compensation(receipt, Some(restoration))
     }
 
     fn finish_compensation(
-        &mut self, receipt: CompensationReceipt, restoration: Option<RestorationReceipt>,
+        &mut self,
+        receipt: CompensationReceipt,
+        restoration: Option<RestorationReceipt>,
     ) -> Result<(), PublicationError> {
         let transaction = self.active_mut(PublicationPhase::Compensating)?;
         let difference = manifest_diff(transaction)?;
@@ -442,10 +451,11 @@ impl PublicationCoordinator {
             return Err(PublicationError::CompensationIncomplete);
         }
         match &restoration {
-            Some(restored) if restored.transaction_id == transaction.prepared.transaction_id
-                && restored.target_epoch == transaction.target_epoch
-                && restored.remaining_ids.is_empty()
-                && restored.restored_ids == entry_ids(&difference.retire) => {}
+            Some(restored)
+                if restored.transaction_id == transaction.prepared.transaction_id
+                    && restored.target_epoch == transaction.target_epoch
+                    && restored.remaining_ids.is_empty()
+                    && restored.restored_ids == entry_ids(&difference.retire) => {}
             None if difference.retire.is_empty() => {}
             _ => return Err(PublicationError::CompensationIncomplete),
         }
@@ -461,18 +471,29 @@ impl PublicationCoordinator {
     /// Abandons only with complete membership exclusion, not merely point IDs.
     /// The control/access owner must verify and persist the fence before calling.
     pub fn abandon(&mut self, fence: &AbandonFence) -> Result<(), PublicationError> {
-        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
-        if !matches!(transaction.phase,
-            PublicationPhase::IntentDurable | PublicationPhase::NewPointsAcknowledged
-                | PublicationPhase::OldPointsClosedAcknowledged | PublicationPhase::ReadbackVerified
-                | PublicationPhase::Compensating)
-        {
+        let transaction = self
+            .active
+            .as_mut()
+            .ok_or(PublicationError::InvalidTransition)?;
+        if !matches!(
+            transaction.phase,
+            PublicationPhase::IntentDurable
+                | PublicationPhase::NewPointsAcknowledged
+                | PublicationPhase::OldPointsClosedAcknowledged
+                | PublicationPhase::ReadbackVerified
+                | PublicationPhase::Compensating
+        ) {
             return Err(PublicationError::InvalidTransition);
         }
         let difference = manifest_diff(transaction)?;
         let affected = difference.create.iter().chain(&difference.retire);
-        let point_ids = affected.clone().map(|entry| entry.point_id).collect::<BTreeSet<_>>();
-        let memberships = affected.map(|entry| entry.projection_membership_id.clone()).collect::<BTreeSet<_>>();
+        let point_ids = affected
+            .clone()
+            .map(|entry| entry.point_id)
+            .collect::<BTreeSet<_>>();
+        let memberships = affected
+            .map(|entry| entry.projection_membership_id.clone())
+            .collect::<BTreeSet<_>>();
         if fence.transaction_id != transaction.prepared.transaction_id
             || fence.target_epoch != transaction.target_epoch
             || fence.excluded_point_ids != point_ids
@@ -490,7 +511,10 @@ impl PublicationCoordinator {
 
     /// Blocks later publication until explicit repair.
     pub fn block_publication(&mut self) -> Result<(), PublicationError> {
-        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
+        let transaction = self
+            .active
+            .as_mut()
+            .ok_or(PublicationError::InvalidTransition)?;
         transaction.phase = PublicationPhase::PublicationBlocked;
         Ok(())
     }
@@ -499,8 +523,13 @@ impl PublicationCoordinator {
         &mut self,
         expected: PublicationPhase,
     ) -> Result<&mut PublicationTransaction, PublicationError> {
-        let transaction = self.active.as_mut().ok_or(PublicationError::InvalidTransition)?;
-        if transaction.phase != expected { return Err(PublicationError::InvalidTransition); }
+        let transaction = self
+            .active
+            .as_mut()
+            .ok_or(PublicationError::InvalidTransition)?;
+        if transaction.phase != expected {
+            return Err(PublicationError::InvalidTransition);
+        }
         Ok(transaction)
     }
 
@@ -508,20 +537,29 @@ impl PublicationCoordinator {
         &self,
         expected: PublicationPhase,
     ) -> Result<&PublicationTransaction, PublicationError> {
-        let transaction = self.active.as_ref().ok_or(PublicationError::InvalidTransition)?;
-        if transaction.phase != expected { return Err(PublicationError::InvalidTransition); }
+        let transaction = self
+            .active
+            .as_ref()
+            .ok_or(PublicationError::InvalidTransition)?;
+        if transaction.phase != expected {
+            return Err(PublicationError::InvalidTransition);
+        }
         Ok(transaction)
     }
 }
 
-pub(crate) fn validate_manifest(
+pub fn validate_manifest(
     manifest: &ProjectionManifest,
     max_points: usize,
 ) -> Result<(), PublicationError> {
     if manifest.canonical_bytes.is_empty() || manifest.entries.len() > max_points {
         return Err(PublicationError::InvalidPreparedPublication);
     }
-    if manifest.entries.windows(2).any(|pair| pair[0].point_id >= pair[1].point_id) {
+    if manifest
+        .entries
+        .windows(2)
+        .any(|pair| pair[0].point_id >= pair[1].point_id)
+    {
         return Err(PublicationError::InvalidPreparedPublication);
     }
     Ok(())
@@ -530,23 +568,28 @@ pub(crate) fn validate_manifest(
 /// Inputs must already have passed bounded, strictly sorted manifest validation.
 /// A merge walk uses no cloned manifests, maps, ID sets or additional allocation.
 /// Exact retained entries are allowed; even a digest-only change is not retained.
-pub(crate) fn changed_point_id_is_reused(
+pub fn changed_point_id_is_reused(
     old: Option<&ProjectionManifest>,
     new: &ProjectionManifest,
 ) -> bool {
-    let Some(old) = old else { return false; };
+    let Some(old) = old else {
+        return false;
+    };
     let mut previous = old.entries.iter().peekable();
     for proposed in &new.entries {
-        while previous.peek().is_some_and(|entry| entry.point_id < proposed.point_id) {
+        while previous
+            .peek()
+            .is_some_and(|entry| entry.point_id < proposed.point_id)
+        {
             let _ = previous.next();
         }
-        if let Some(existing) = previous.peek() {
-            if existing.point_id == proposed.point_id {
-                if *existing != proposed {
-                    return true;
-                }
-                let _ = previous.next();
+        if let Some(existing) = previous.peek()
+            && existing.point_id == proposed.point_id
+        {
+            if *existing != proposed {
+                return true;
             }
+            let _ = previous.next();
         }
     }
     false
@@ -565,7 +608,10 @@ fn manifest_diff(transaction: &PublicationTransaction) -> Result<ManifestDiff, P
 fn entry_ids(entries: &[search_projection_planner::ProjectionManifestEntry]) -> Vec<PointId128> {
     // The planner groups changed and removed old entries separately. Sort the
     // combined exact ID list; never rely on incidental diff grouping for receipts.
-    let mut ids = entries.iter().map(|entry| entry.point_id).collect::<Vec<_>>();
+    let mut ids = entries
+        .iter()
+        .map(|entry| entry.point_id)
+        .collect::<Vec<_>>();
     ids.sort_unstable();
     ids
 }
@@ -575,7 +621,9 @@ fn verify_transaction_identity(
     transaction_id: &OpaqueId,
     target_epoch: Epoch,
 ) -> Result<(), PublicationError> {
-    if transaction_id != &transaction.prepared.transaction_id || target_epoch != transaction.target_epoch {
+    if transaction_id != &transaction.prepared.transaction_id
+        || target_epoch != transaction.target_epoch
+    {
         Err(PublicationError::OperationMismatch)
     } else {
         Ok(())
