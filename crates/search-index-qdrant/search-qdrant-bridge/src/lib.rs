@@ -26,6 +26,13 @@ use search_contracts::{
 pub mod live;
 /// Exact T22 artifact/client/IDF qualification gate.
 pub mod qualified;
+/// Real T24 data-plane adapter over the pinned `qdrant-client` transport.
+///
+/// The in-memory [`QdrantBridge`] stays as the behavioral test oracle only.
+/// Production data-plane work goes through [`real::RealDataPlane`], which
+/// admits only an executed [`qualified::QualifiedGate`] and never falls back
+/// to the oracle.
+pub mod real;
 
 /// Closed Qdrant bridge failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -53,6 +60,15 @@ pub enum BridgeError {
     UnindexedFilter,
     QueryBudgetExceeded,
     InvalidScore,
+    /// The operation was cancelled before dispatch or between bounded pages.
+    Cancelled,
+    /// The transport failed without a possible external write (reads and
+    /// pre-send connect failures). Mutations that may have committed after
+    /// dispatch report [`BridgeError::MutationOutcomeUnknown`] instead.
+    TransportFailed,
+    /// The server returned a response that does not match the exact expected
+    /// shape (missing identity, payload or vector fields, oversize page).
+    MalformedResponse,
 }
 
 impl BridgeError {
@@ -83,6 +99,9 @@ impl BridgeError {
             Self::UnindexedFilter => "QDRANT_UNINDEXED_FILTER",
             Self::QueryBudgetExceeded => "QDRANT_QUERY_BUDGET_EXCEEDED",
             Self::InvalidScore => "QDRANT_INVALID_SCORE",
+            Self::Cancelled => "QDRANT_OPERATION_CANCELLED",
+            Self::TransportFailed => "QDRANT_TRANSPORT_FAILED",
+            Self::MalformedResponse => "QDRANT_MALFORMED_RESPONSE",
         }
     }
 }
