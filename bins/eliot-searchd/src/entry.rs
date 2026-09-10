@@ -12,6 +12,7 @@ mod app;
 mod authenticated_proxy;
 mod catalog_presence;
 mod catalog_quarantine;
+mod config_composition;
 mod continuation;
 mod development;
 mod direct_preparation;

@@ -102,6 +102,28 @@ fn serve_stdio(health: Health) -> io::Result<()> {
     serve_control(health, &mut io::stdin().lock(), &mut io::stdout().lock())
 }
 
+fn shell_health_effective() -> Result<Health, String> {
+    let effective = crate::config_composition::build_effective_defaults()
+        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let report = crate::config_composition::derive_readiness(
+        &effective,
+        &crate::config_composition::shell_dependencies(),
+        &crate::config_composition::AcceptedReceipts::default(),
+    );
+    Ok(Health::from_readiness(&report))
+}
+
+fn direct_health_effective() -> Result<Health, String> {
+    let effective = crate::config_composition::build_effective_defaults()
+        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let report = crate::config_composition::derive_readiness(
+        &effective,
+        &crate::config_composition::direct_dependencies(),
+        &crate::config_composition::AcceptedReceipts::default(),
+    );
+    Ok(Health::from_readiness(&report))
+}
+
 fn serve_control(
     health: Health,
     input: &mut impl BufRead,
@@ -114,12 +136,16 @@ fn serve_control(
                 "{{\"event\":\"ready\",\"protocol_version\":{},",
                 "\"runtime_owner_ready\":{},",
                 "\"direct_store_ready\":{},",
-                "\"source_backed_search_available\":{}}}"
+                "\"source_backed_search_available\":{},",
+                "\"search_available\":{},",
+                "\"indexed_search_available\":{}}}"
             ),
             PROTOCOL_VERSION,
             health.composition.runtime_owner_ready,
             health.stores.direct_store_ready,
             health.capabilities.source_backed_search_available,
+            health.capabilities.search_available,
+            health.capabilities.indexed_search_available,
         ),
     )?;
 
@@ -329,6 +355,23 @@ fn self_test() -> Result<(), &'static str> {
         return Err("SHUTDOWN_COMMAND_PARSE_FAILED");
     }
     let health = Health::SHELL.json();
+    let effective = crate::config_composition::build_effective_defaults()
+        .map_err(|_| "HEALTH_TRUTHFULNESS_FAILED")?;
+    let report = crate::config_composition::derive_readiness(
+        &effective,
+        &crate::config_composition::shell_dependencies(),
+        &crate::config_composition::AcceptedReceipts::default(),
+    );
+    if report.search_available || report.indexed_search_available {
+        return Err("HEALTH_TRUTHFULNESS_FAILED");
+    }
+    let derived = Health::from_readiness(&report);
+    if derived.capabilities.search_available || derived.capabilities.indexed_search_available {
+        return Err("HEALTH_TRUTHFULNESS_FAILED");
+    }
+    if !derived.json().contains("\"search_available\":false") {
+        return Err("HEALTH_TRUTHFULNESS_FAILED");
+    }
     if !health.contains("\"source_backed_search_available\":false") {
         return Err("HEALTH_TRUTHFULNESS_FAILED");
     }
@@ -371,7 +414,7 @@ fn run() -> Result<(), String> {
         }
         "--health" => {
             require_argument_count(&arguments, 1)?;
-            println!("{}", Health::SHELL.json());
+            println!("{}", shell_health_effective()?.json());
         }
         "--health-data-root" => {
             require_argument_count(&arguments, 2)?;
@@ -392,7 +435,7 @@ fn run() -> Result<(), String> {
         }
         "--stdio" => {
             require_argument_count(&arguments, 1)?;
-            serve_stdio(Health::SHELL)
+            serve_stdio(shell_health_effective()?)
                 .map_err(|error| format!("STDIO_ERROR:{error}"))?;
         }
         "--serve-data-root" => {
@@ -457,7 +500,7 @@ fn cmd_serve_data_root(arguments: &[String]) -> Result<(), String> {
         "{{\"event\":\"data_root_ready\",\"namespace_id\":\"{}\",\"encrypted_at_rest\":false}}",
         store.namespace_id(),
     );
-    serve_stdio(Health::DIRECT_STORE)
+    serve_stdio(direct_health_effective()?)
         .map_err(|error| format!("STDIO_ERROR:{error}"))?;
     // Same guarded close-out as the primary service: drain, release
     // tombstone, then release exclusion after the store is closed.
@@ -525,7 +568,7 @@ fn cmd_health_data_root(arguments: &[String]) -> Result<(), String> {
         verification.registered_sources,
         verification.active_sources,
         verification.verified_revisions,
-        Health::DIRECT_STORE.json(),
+        direct_health_effective()?.json(),
     );
     Ok(())
 }

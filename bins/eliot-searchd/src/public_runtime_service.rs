@@ -74,6 +74,13 @@ fn run_service(root: &Path) -> Result<(), String> {
     // installation incarnation and physical-root identity travel with READY
     // so a successor incarnation is never mistaken for its predecessor.
     let (owner_incarnation, owner_root, _) = guard.journal_owner_inputs();
+    let effective = crate::config_composition::build_effective_defaults()
+        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let readiness = crate::config_composition::derive_readiness(
+        &effective,
+        &crate::config_composition::direct_dependencies(),
+        &crate::config_composition::AcceptedReceipts::default(),
+    );
     write_line(
         &mut writer,
         &format!(
@@ -87,6 +94,8 @@ fn run_service(root: &Path) -> Result<(), String> {
                 "\"installation_incarnation_id\":\"{}\",",
                 "\"data_root_id\":\"{}\",",
                 "\"source_backed_search_available\":true,",
+                "\"search_available\":{},",
+                "\"indexed_search_available\":{},",
                 "\"paged_search_available\":true,",
                 "\"opaque_source_handles_available\":true,",
                 "\"default_page_size\":{},\"max_page_size\":{},",
@@ -102,6 +111,8 @@ fn run_service(root: &Path) -> Result<(), String> {
             guard.recovered_previous_active(),
             owner_incarnation,
             owner_root,
+            readiness.search_available,
+            readiness.indexed_search_available,
             DEFAULT_PAGE_SIZE,
             MAX_PAGE_SIZE,
             MAX_HANDLE_EXPANSION_BYTES,
@@ -642,6 +653,14 @@ fn cmd_health(
     let verification = store.verify()?;
     let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
     refresh_storage(storage, canonical_root)?;
+    let effective = crate::config_composition::build_effective_defaults()
+        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let readiness = crate::config_composition::derive_readiness(
+        &effective,
+        &crate::config_composition::direct_dependencies(),
+        &crate::config_composition::AcceptedReceipts::default(),
+    );
+    let health = Health::from_readiness(&readiness);
     write_line(
         writer,
         &format!(
@@ -662,7 +681,7 @@ fn cmd_health(
             continuations.live_count(),
             continuations.retained_matches(),
             handles.live_count(),
-            Health::DIRECT_STORE.json(),
+            health.json(),
             storage.json(),
             storage.encrypted_at_rest,
         ),
