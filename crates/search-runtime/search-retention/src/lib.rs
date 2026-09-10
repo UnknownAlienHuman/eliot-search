@@ -284,9 +284,14 @@ impl RetentionCatalog {
     }
 
     /// Creates one exact active lease.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the just-inserted lease cannot be read back, which indicates
+    /// an internal map invariant violation.
     pub fn create_lease(
         &mut self,
-        lease_id: OpaqueId,
+        lease_id: &OpaqueId,
         owner_id: OpaqueId,
         target: RetainedObject,
         issued_at_ms: u64,
@@ -296,10 +301,10 @@ impl RetentionCatalog {
     ) -> Result<&RetentionLease, RetentionError> {
         self.validate_interval(issued_at_ms, expires_at_ms)?;
         self.register_operation(&operation)?;
-        if self.leases.contains_key(&lease_id) {
+        if self.leases.contains_key(lease_id) {
             let existing = self
                 .leases
-                .get(&lease_id)
+                .get(lease_id)
                 .ok_or(RetentionError::LeaseNotFound)?;
             if existing.last_operation == operation
                 && existing.owner_id == owner_id
@@ -315,9 +320,9 @@ impl RetentionCatalog {
             return Err(RetentionError::CapacityExceeded);
         }
         self.leases.insert(
-            lease_id.clone(),
+            (*lease_id).clone(),
             RetentionLease {
-                lease_id: lease_id.clone(),
+                lease_id: (*lease_id).clone(),
                 owner_id,
                 target,
                 issued_at_ms,
@@ -328,7 +333,7 @@ impl RetentionCatalog {
                 lease_receipt,
             },
         );
-        Ok(self.leases.get(&lease_id).expect("inserted lease"))
+        Ok(self.leases.get(lease_id).expect("inserted lease"))
     }
 
     /// Renews one active lease strictly forward.
@@ -447,7 +452,7 @@ impl RetentionCatalog {
         })
     }
 
-    fn validate_interval(&self, issued: u64, expires: u64) -> Result<(), RetentionError> {
+    const fn validate_interval(&self, issued: u64, expires: u64) -> Result<(), RetentionError> {
         if expires <= issued || expires.saturating_sub(issued) > self.policy.max_lease_duration_ms {
             Err(RetentionError::InvalidLease)
         } else {
@@ -581,7 +586,6 @@ pub struct PurgeTombstone {
 /// Stateful single-transaction purge coordinator.
 #[derive(Clone, Debug)]
 pub struct PurgeCoordinator {
-    policy: RetentionPolicy,
     phase: PurgePhase,
     manifest: PurgeManifest,
     expected_target_ids: BTreeSet<OpaqueId>,
@@ -614,7 +618,6 @@ impl PurgeCoordinator {
             return Err(RetentionError::InvalidPurgeManifest);
         }
         Ok(Self {
-            policy,
             phase: PurgePhase::Prepared,
             manifest,
             expected_target_ids,
@@ -753,7 +756,7 @@ impl PurgeCoordinator {
     }
 
     /// Marks external mutation outcome unknown without advancing success.
-    pub fn mark_outcome_unknown(&mut self) -> Result<(), RetentionError> {
+    pub const fn mark_outcome_unknown(&mut self) -> Result<(), RetentionError> {
         if matches!(self.phase, PurgePhase::Complete | PurgePhase::Quarantined) {
             return Err(RetentionError::InvalidPurgeTransition);
         }
@@ -762,7 +765,7 @@ impl PurgeCoordinator {
     }
 
     /// Quarantines contradictory purge state.
-    pub fn quarantine(&mut self) {
+    pub const fn quarantine(&mut self) {
         self.phase = PurgePhase::Quarantined;
     }
 
@@ -827,10 +830,9 @@ pub fn reclaim_eligible(
     }
     if let (Some(retired_epoch), Some(minimum_pin)) =
         (object.last_visible_epoch, fence.minimum_pinned_epoch)
+        && minimum_pin <= retired_epoch
     {
-        if minimum_pin <= retired_epoch {
-            return Err(RetentionError::EpochPinActive);
-        }
+        return Err(RetentionError::EpochPinActive);
     }
     Ok(())
 }
@@ -1001,7 +1003,7 @@ impl RestoreCoordinator {
     }
 
     /// Quarantines contradictory restored state.
-    pub fn quarantine(&mut self) {
+    pub const fn quarantine(&mut self) {
         self.phase = RestorePhase::Quarantined;
     }
 
