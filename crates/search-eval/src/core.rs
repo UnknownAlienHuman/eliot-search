@@ -795,7 +795,7 @@ pub fn validate_baseline_descriptor(
     Ok(ValidatedBaseline(descriptor))
 }
 
-fn case_family_tag(value: CaseFamily) -> u64 {
+const fn case_family_tag(value: CaseFamily) -> u64 {
     match value {
         CaseFamily::Locate => 1,
         CaseFamily::FindText => 2,
@@ -818,7 +818,7 @@ fn case_family_tag(value: CaseFamily) -> u64 {
     }
 }
 
-fn metric_direction_tag(value: MetricDirection) -> u64 {
+const fn metric_direction_tag(value: MetricDirection) -> u64 {
     match value {
         MetricDirection::HigherIsBetter => 1,
         MetricDirection::LowerIsBetter => 2,
@@ -826,7 +826,7 @@ fn metric_direction_tag(value: MetricDirection) -> u64 {
     }
 }
 
-fn metric_denominator_tag(value: MetricDenominator) -> u64 {
+const fn metric_denominator_tag(value: MetricDenominator) -> u64 {
     match value {
         MetricDenominator::PerCase => 1,
         MetricDenominator::PerAttempt => 2,
@@ -836,7 +836,7 @@ fn metric_denominator_tag(value: MetricDenominator) -> u64 {
     }
 }
 
-fn missing_policy_tag(value: MissingValuePolicy) -> u64 {
+const fn missing_policy_tag(value: MissingValuePolicy) -> u64 {
     match value {
         MissingValuePolicy::FailRun => 1,
         MissingValuePolicy::CountAsFailure => 2,
