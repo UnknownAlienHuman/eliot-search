@@ -27,6 +27,7 @@ pub(crate) mod owner_composition;
 mod plaintext_direct_store;
 mod preparation_composition;
 mod protocol_io;
+mod provider_composition;
 mod public_runtime_service;
 mod result_handles;
 mod revision_protection;
