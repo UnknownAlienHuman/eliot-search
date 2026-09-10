@@ -17,9 +17,49 @@ use core::fmt;
 use core::num::{NonZeroU32, NonZeroU64};
 
 use search_contracts::{
-    ArtifactDigest, Blake3Digest32, DataRootId, InstallationIncarnationId,
-    OpaqueId, OwnerEpoch, ReceiptRef, Sha256Digest32,
+    ArtifactDigest, Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueId, OwnerEpoch,
+    ReceiptRef, Sha256Digest32,
 };
+
+pub mod containment;
+pub mod identity;
+pub mod launch;
+pub mod owned;
+pub mod secret;
+pub mod sha256;
+
+pub use containment::{
+    ContainmentEvidence, ContainmentMethod, ContainmentReport, LoopbackHost, evaluate_containment,
+    parse_loopback_host,
+};
+pub use identity::{
+    ExecutableExpectation, QUALIFIED_EXE_BYTES, QUALIFIED_EXE_SHA256_HEX, QUALIFIED_QDRANT_VERSION,
+    VERSION_PROBE_ARG, VerifiedExecutable, parse_qdrant_version_output, verify_executable_identity,
+};
+pub use launch::{
+    ArgvSnapshot, CONFIG_FILE_NAME, LaunchPlan, MAX_LAUNCH_TIMEOUT, MIN_LAUNCH_TIMEOUT,
+    PORT_CHECK_TIMEOUT, QDRANT_API_KEY_ENV, QDRANT_CONFIG_ARG, SpawnedChild, VERSION_PROBE_TIMEOUT,
+    build_argv_snapshot, check_loopback_port_free, materialize_config_yaml, spawn_qualified,
+};
+pub use owned::{
+    LaunchReceipt, MAX_PROBE_RESPONSE_BYTES, OwnedChild, PROBE_SOCKET_TIMEOUT,
+    READINESS_POLL_INTERVAL, build_launch_receipt, terminate_bounded, wait_ready,
+};
+pub use secret::{MAX_SECRET_BYTES, SecretMaterial};
+pub use sha256::{hex_lower, sha256_bytes, sha256_file};
+
+/// Best-effort spawn marker shared by launch and owned guards. Reused PIDs
+/// stay fenced by the owned handle plus digest/owner/endpoint identity,
+/// never by this marker alone.
+pub(crate) fn spawn_unix_millis() -> NonZeroU64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|elapsed| elapsed.as_millis())
+        .and_then(|millis| u64::try_from(millis).ok())
+        .and_then(NonZeroU64::new)
+        .unwrap_or(NonZeroU64::MIN)
+}
 
 /// Closed Qdrant-supervisor failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -44,6 +84,10 @@ pub enum SupervisorError {
     ShutdownOutcomeUnknown,
     RestartBudgetExceeded,
     Quarantined,
+    ContainmentUnavailable,
+    ExecutableProbeFailed,
+    EndpointUnavailable,
+    StartFailed,
 }
 
 impl SupervisorError {
@@ -71,6 +115,10 @@ impl SupervisorError {
             Self::ShutdownOutcomeUnknown => "QDRANT_SHUTDOWN_OUTCOME_UNKNOWN",
             Self::RestartBudgetExceeded => "QDRANT_RESTART_BUDGET_EXCEEDED",
             Self::Quarantined => "QDRANT_PROCESS_QUARANTINED",
+            Self::ContainmentUnavailable => "QDRANT_CONTAINMENT_UNAVAILABLE",
+            Self::ExecutableProbeFailed => "QDRANT_EXECUTABLE_PROBE_FAILED",
+            Self::EndpointUnavailable => "QDRANT_ENDPOINT_UNAVAILABLE",
+            Self::StartFailed => "QDRANT_START_FAILED",
         }
     }
 }
@@ -375,6 +423,20 @@ impl QdrantSupervisor {
         Ok(effect)
     }
 
+    /// Abandons a start that never produced a child (identity, containment,
+    /// or spawn refused before any process existed). Returns to `Stopped`
+    /// without consuming restart budget; quarantine is sticky.
+    pub fn abort_start(&mut self) -> Result<(), SupervisorError> {
+        match &self.state {
+            SupervisorState::Starting(_) | SupervisorState::StartupOutcomeUnknown(_) => {
+                self.state = SupervisorState::Stopped;
+                Ok(())
+            }
+            SupervisorState::Quarantined(_) => Err(SupervisorError::Quarantined),
+            _ => Err(SupervisorError::InvalidLifecycleTransition),
+        }
+    }
+
     pub fn mark_startup_unknown(&mut self) -> Result<(), SupervisorError> {
         let SupervisorState::Starting(effect) = &self.state else {
             return Err(SupervisorError::InvalidLifecycleTransition);
@@ -383,13 +445,11 @@ impl QdrantSupervisor {
         Ok(())
     }
 
-    pub fn confirm_ready(
-        &mut self,
-        readiness: &ProcessReadiness,
-    ) -> Result<(), SupervisorError> {
+    pub fn confirm_ready(&mut self, readiness: &ProcessReadiness) -> Result<(), SupervisorError> {
         let effect = match &self.state {
-            SupervisorState::Starting(effect)
-            | SupervisorState::StartupOutcomeUnknown(effect) => effect.clone(),
+            SupervisorState::Starting(effect) | SupervisorState::StartupOutcomeUnknown(effect) => {
+                effect.clone()
+            }
             _ => return Err(SupervisorError::InvalidLifecycleTransition),
         };
         verify_process_identity(&effect, readiness)?;
@@ -418,9 +478,7 @@ impl QdrantSupervisor {
             _ => return Err(SupervisorError::InvalidLifecycleTransition),
         };
         if observation.identity != identity {
-            self.state = SupervisorState::Quarantined(
-                SupervisorError::ProcessIdentityMismatch,
-            );
+            self.state = SupervisorState::Quarantined(SupervisorError::ProcessIdentityMismatch);
             return Ok(RestartDecision::Quarantine);
         }
         if observation.expected_shutdown {
@@ -439,9 +497,7 @@ impl QdrantSupervisor {
         }
         self.restart_count = self.restart_count.saturating_add(1);
         if self.restart_count > config.config.max_restarts_per_window {
-            self.state = SupervisorState::Quarantined(
-                SupervisorError::RestartBudgetExceeded,
-            );
+            self.state = SupervisorState::Quarantined(SupervisorError::RestartBudgetExceeded);
             Ok(RestartDecision::Quarantine)
         } else {
             self.state = SupervisorState::Stopped;
