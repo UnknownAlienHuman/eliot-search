@@ -4,9 +4,8 @@ use crate::ids::{
     AccessPolicyRevision, BindingId, Blake3Digest32, BufferSnapshotId, CollectionGenerationId,
     ContinuationId, Epoch, GrantId, HandleId, HandleTokenDigest, InstallationIncarnationId,
     NonZeroRevision, ObjectResidencyKeyDigest, OwnerEpoch, PlanFingerprint, ProfileId,
-    ProjectionMembershipId,
-    PublicationIntentId, PublicationReceiptId, PurgeFenceRevision, ReceiptRef, SourceNamespaceId,
-    SourceOwnerGeneration, WorkspaceId, WorkspaceViewRevisionId,
+    ProjectionMembershipId, PublicationIntentId, PublicationReceiptId, PurgeFenceRevision,
+    ReceiptRef, SourceNamespaceId, SourceOwnerGeneration, WorkspaceId, WorkspaceViewRevisionId,
 };
 use crate::query::{NativeAnchor, ObservationFreshness};
 use crate::reasons::SearchReasonCodeV1;

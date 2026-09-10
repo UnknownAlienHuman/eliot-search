@@ -1556,3 +1556,214 @@ fn contaminated_candidate_gaps_require_replanning() {
         ContractErrorKind::ContradictoryState
     );
 }
+
+#[test]
+fn vendor_type_dependency_guard() {
+    const MANIFEST: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+    const FORBIDDEN: [&str; 7] = [
+        "tokio", "serde", "uuid", "qdrant", "redb", "reqwest", "hyper",
+    ];
+    assert!(
+        MANIFEST.contains("name = \"search-contracts\""),
+        "vendor guard must read the search-contracts manifest"
+    );
+    let mut section = String::new();
+    let mut dependency_entries: Vec<String> = Vec::new();
+    let mut forbidden_hits: Vec<String> = Vec::new();
+    for raw_line in MANIFEST.lines() {
+        let line = raw_line
+            .split_once('#')
+            .map_or(raw_line, |(head, _)| head)
+            .trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.contains('=') || line.starts_with('[') {
+            let lowered = line.to_lowercase();
+            for forbidden in FORBIDDEN {
+                if lowered.contains(forbidden) {
+                    forbidden_hits.push(format!("{section} :: {line} :: {forbidden}"));
+                }
+            }
+        }
+        if line.starts_with('[') {
+            if let Some(end) = line.find(']') {
+                section = line[..=end].trim().to_lowercase();
+            }
+            continue;
+        }
+        if section.contains("dependencies") && line.contains('=') {
+            dependency_entries.push(format!("{section} :: {line}"));
+        }
+    }
+    assert!(
+        dependency_entries.is_empty(),
+        "search-contracts must stay dependency-free, found: {dependency_entries:?}"
+    );
+    assert!(
+        forbidden_hits.is_empty(),
+        "vendor crate leaked into the search-contracts manifest: {forbidden_hits:?}"
+    );
+}
+
+fn projection_membership_fixture() -> ProjectionMembership {
+    ProjectionMembership {
+        projection_membership_id: ProjectionMembershipId::from_bytes([0x11; 16]),
+        source_membership_id: SourceMembershipId::from_bytes([0x22; 16]),
+        representation_id: RepresentationId::from_bytes([0x33; 16]),
+        access_partition_id: AccessPartitionId::from_bytes([0x44; 16]),
+        scoring_partition_id: ScoringPartitionId::from_bytes([0x55; 16]),
+        projection_schema_id: profile("projection-schema"),
+    }
+}
+
+fn projection_membership_canonical_object(membership: &ProjectionMembership) -> CanonicalValue {
+    CanonicalValue::Object(
+        BoundedMap::from_entries([
+            (
+                CanonicalKey::new_non_empty("projection_membership_id").expect("field"),
+                CanonicalValue::Text(
+                    CanonicalText::new(membership.projection_membership_id.to_string())
+                        .expect("membership id"),
+                ),
+            ),
+            (
+                CanonicalKey::new_non_empty("source_membership_id").expect("field"),
+                CanonicalValue::Text(
+                    CanonicalText::new(membership.source_membership_id.to_string())
+                        .expect("membership id"),
+                ),
+            ),
+            (
+                CanonicalKey::new_non_empty("representation_id").expect("field"),
+                CanonicalValue::Text(
+                    CanonicalText::new(membership.representation_id.to_string())
+                        .expect("representation id"),
+                ),
+            ),
+            (
+                CanonicalKey::new_non_empty("access_partition_id").expect("field"),
+                CanonicalValue::Text(
+                    CanonicalText::new(membership.access_partition_id.to_string())
+                        .expect("partition id"),
+                ),
+            ),
+            (
+                CanonicalKey::new_non_empty("scoring_partition_id").expect("field"),
+                CanonicalValue::Text(
+                    CanonicalText::new(membership.scoring_partition_id.to_string())
+                        .expect("partition id"),
+                ),
+            ),
+            (
+                CanonicalKey::new_non_empty("projection_schema_id").expect("field"),
+                CanonicalValue::Text(
+                    CanonicalText::new(membership.projection_schema_id.to_string())
+                        .expect("schema id"),
+                ),
+            ),
+        ])
+        .expect("membership object"),
+    )
+}
+
+#[test]
+fn membership_array_compile_or_schema_rejection_test() {
+    // Invariant 4: one point carries one `ProjectionMembership`, never an
+    // array. `PackageOpaque` (TYPE_COMPLETIONS.md) is process-local and must
+    // never cross a provider or durable boundary, so the durable record below
+    // carries only contract-owned scalars.
+    let membership = projection_membership_fixture();
+    assert_eq!(
+        membership.projection_membership_id,
+        ProjectionMembershipId::from_bytes([0x11; 16])
+    );
+    assert_eq!(membership.clone(), membership);
+
+    let object = projection_membership_canonical_object(&membership);
+    let encoded = to_canonical_json(&object).expect("membership JSON");
+    let json = core::str::from_utf8(encoded.as_slice()).expect("JSON is UTF-8");
+    assert!(json.starts_with('{'));
+    assert!(!json.starts_with('['));
+    assert_eq!(json.matches("projection_membership_id").count(), 1);
+    assert_eq!(parse_canonical_json(encoded.as_slice()), Ok(object.clone()));
+
+    // The closed reader consumes exactly the six declared fields.
+    let mut reader = ClosedCanonicalObject::from_value(object.clone(), "projection_membership")
+        .expect("membership record");
+    for field in [
+        "projection_membership_id",
+        "source_membership_id",
+        "representation_id",
+        "access_partition_id",
+        "scoring_partition_id",
+        "projection_schema_id",
+    ] {
+        assert!(
+            reader.take_required(field).is_ok(),
+            "missing membership field {field}"
+        );
+    }
+    reader.finish().expect("exact membership fields");
+
+    // The membership id occurs exactly once: a second take fails closed.
+    let mut single = ClosedCanonicalObject::from_value(object.clone(), "projection_membership")
+        .expect("membership record");
+    single
+        .take_required("projection_membership_id")
+        .expect("present field");
+    assert_eq!(
+        single
+            .take_required("projection_membership_id")
+            .expect_err("single membership id")
+            .kind(),
+        ContractErrorKind::MalformedPayload
+    );
+
+    // An array wrapping the same record is valid generic JSON but is not a
+    // membership record: the closed reader rejects it.
+    let array = CanonicalValue::Array(BoundedList::new(vec![object.clone()]).expect("array"));
+    let array_json = to_canonical_json(&array).expect("array JSON");
+    assert!(
+        core::str::from_utf8(array_json.as_slice())
+            .expect("array JSON is UTF-8")
+            .starts_with('[')
+    );
+    let parsed = parse_canonical_json(array_json.as_slice()).expect("generic array JSON");
+    assert_eq!(
+        ClosedCanonicalObject::from_value(parsed, "projection_membership")
+            .expect_err("membership arrays are forbidden")
+            .kind(),
+        ContractErrorKind::InvalidTaggedVariant
+    );
+
+    // A smuggled process-local field cannot cross the durable boundary: the
+    // valid record plus one opaque field fails closed.
+    let CanonicalValue::Object(mut fields) = object else {
+        panic!("membership canonical form is an object");
+    };
+    fields
+        .insert(
+            CanonicalKey::new_non_empty("package_opaque").expect("field"),
+            CanonicalValue::Text(CanonicalText::new("process-local-handle").expect("text")),
+        )
+        .expect("insert");
+    let mut smuggled =
+        ClosedCanonicalObject::from_value(CanonicalValue::Object(fields), "projection_membership")
+            .expect("object shape");
+    for field in [
+        "projection_membership_id",
+        "source_membership_id",
+        "representation_id",
+        "access_partition_id",
+        "scoring_partition_id",
+        "projection_schema_id",
+    ] {
+        smuggled.take_required(field).expect("present field");
+    }
+    let extra = smuggled
+        .finish()
+        .expect_err("opaque field must fail closed");
+    assert_eq!(extra.kind(), ContractErrorKind::UnknownField);
+    assert_eq!(extra.code(), ContractErrorCode::UnknownLoadBearingField);
+}

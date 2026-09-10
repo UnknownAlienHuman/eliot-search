@@ -1,8 +1,8 @@
 //! Shared shape regressions, not proof that live guards were observed.
 
 use search_contracts::{
-    Blake3Digest32, Epoch, OwnerEpoch, PublicationGuards, PublicationIntent,
-    PublicationIntentId, PublicationIntentState, ReceiptRef,
+    Blake3Digest32, Epoch, OwnerEpoch, PublicationGuards, PublicationIntent, PublicationIntentId,
+    PublicationIntentState, ReceiptRef,
 };
 
 fn guards() -> PublicationGuards {
@@ -21,13 +21,34 @@ fn guards() -> PublicationGuards {
 fn every_guard_axis_participates_in_exact_equality() {
     let original = guards();
     let changed = [
-        PublicationGuards { owner_epoch: OwnerEpoch::new(8).unwrap(), ..original },
-        PublicationGuards { source_catalog_generation: 12, ..original },
-        PublicationGuards { membership_generation: 14, ..original },
-        PublicationGuards { access_generation: 18, ..original },
-        PublicationGuards { shadow_generation: 20, ..original },
-        PublicationGuards { purge_generation: 24, ..original },
-        PublicationGuards { profile_digest: Blake3Digest32::from_bytes([30; 32]), ..original },
+        PublicationGuards {
+            owner_epoch: OwnerEpoch::new(8).unwrap(),
+            ..original
+        },
+        PublicationGuards {
+            source_catalog_generation: 12,
+            ..original
+        },
+        PublicationGuards {
+            membership_generation: 14,
+            ..original
+        },
+        PublicationGuards {
+            access_generation: 18,
+            ..original
+        },
+        PublicationGuards {
+            shadow_generation: 20,
+            ..original
+        },
+        PublicationGuards {
+            purge_generation: 24,
+            ..original
+        },
+        PublicationGuards {
+            profile_digest: Blake3Digest32::from_bytes([30; 32]),
+            ..original
+        },
     ];
     for value in changed {
         assert_ne!(value, original);
