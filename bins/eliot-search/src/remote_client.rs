@@ -17,7 +17,7 @@ const MAX_QUERY_BYTES: usize = 64 * 1024;
 const MAX_PATH_BYTES: usize = 32 * 1024;
 
 /// Intercepts `remote ADDRESS TOKEN_FILE COMMAND ...`.
-pub(crate) fn maybe_run() -> Option<ExitCode> {
+pub fn maybe_run() -> Option<ExitCode> {
     let arguments = env::args_os().skip(1).collect::<Vec<_>>();
     if arguments.first().and_then(|value| value.to_str()) != Some("remote") {
         return None;
@@ -47,28 +47,8 @@ fn run(arguments: &[OsString]) -> Result<(), String> {
     endpoint_client::invoke_remote(address, &token_file, &command)
 }
 
-fn translate(command: &str, arguments: &[OsString]) -> Result<String, String> {
+fn translate_search(command: &str, arguments: &[OsString]) -> Result<String, String> {
     match command {
-        "health" | "version" | "verify" | "verify-directory-manifests"
-        | "list-sources" | "shutdown" => {
-            require_count(arguments, 0)?;
-            Ok(command.to_owned())
-        }
-        "gc-dry-run" => {
-            require_count(arguments, 0)?;
-            Ok("gc\tdry-run".to_owned())
-        }
-        "gc-apply" => {
-            require_count(arguments, 0)?;
-            Ok("gc\tapply".to_owned())
-        }
-        "index-file" | "index-directory" | "sync-directory" => {
-            require_count(arguments, 1)?;
-            Ok(format!(
-                "{command}\t{}",
-                encode_path(Path::new(&arguments[0]))?,
-            ))
-        }
         "search" | "search-i" | "search-all" | "search-all-i" => {
             require_count(arguments, 1)?;
             let query = require_utf8(&arguments[0], "REMOTE_QUERY_NOT_UTF8")?;
@@ -104,6 +84,35 @@ fn translate(command: &str, arguments: &[OsString]) -> Result<String, String> {
                 "search-page\t{mode}\t{page_size}\t{}",
                 hex(query.as_bytes()),
             ))
+        }
+        _ => Err("REMOTE_COMMAND_UNSUPPORTED".to_owned()),
+    }
+}
+
+fn translate(command: &str, arguments: &[OsString]) -> Result<String, String> {
+    match command {
+        "health" | "version" | "verify" | "verify-directory-manifests"
+        | "list-sources" | "shutdown" => {
+            require_count(arguments, 0)?;
+            Ok(command.to_owned())
+        }
+        "gc-dry-run" => {
+            require_count(arguments, 0)?;
+            Ok("gc\tdry-run".to_owned())
+        }
+        "gc-apply" => {
+            require_count(arguments, 0)?;
+            Ok("gc\tapply".to_owned())
+        }
+        "index-file" | "index-directory" | "sync-directory" => {
+            require_count(arguments, 1)?;
+            Ok(format!(
+                "{command}\t{}",
+                encode_path(Path::new(&arguments[0]))?,
+            ))
+        }
+        "search" | "search-i" | "search-all" | "search-all-i" | "search-page" | "search-page-i" => {
+            translate_search(command, arguments)
         }
         "continue" => {
             if !(1..=2).contains(&arguments.len()) {
@@ -206,6 +215,9 @@ fn parse_u64(value: &OsStr, error: &str) -> Result<u64, String> {
 }
 
 fn encode_path(path: &Path) -> Result<String, String> {
+    #[cfg(any(unix, windows))]
+    let bytes = native_path_bytes(path);
+    #[cfg(not(any(unix, windows)))]
     let bytes = native_path_bytes(path)?;
     if bytes.is_empty() || bytes.len() > MAX_PATH_BYTES {
         return Err("REMOTE_PATH_INVALID".to_owned());
@@ -214,7 +226,7 @@ fn encode_path(path: &Path) -> Result<String, String> {
 }
 
 #[cfg(windows)]
-fn native_path_bytes(path: &Path) -> Result<Vec<u8>, String> {
+fn native_path_bytes(path: &Path) -> Vec<u8> {
     use std::os::windows::ffi::OsStrExt;
 
     let units = path.as_os_str().encode_wide().collect::<Vec<_>>();
@@ -222,14 +234,14 @@ fn native_path_bytes(path: &Path) -> Result<Vec<u8>, String> {
     for unit in units {
         bytes.extend_from_slice(&unit.to_le_bytes());
     }
-    Ok(bytes)
+    bytes
 }
 
 #[cfg(unix)]
-fn native_path_bytes(path: &Path) -> Result<Vec<u8>, String> {
+fn native_path_bytes(path: &Path) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;
 
-    Ok(path.as_os_str().as_bytes().to_vec())
+    path.as_os_str().as_bytes().to_vec()
 }
 
 #[cfg(not(any(unix, windows)))]

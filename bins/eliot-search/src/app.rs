@@ -8,7 +8,7 @@ use std::process::{Command, ExitCode, Stdio};
 
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-search ",
         env!("CARGO_PKG_VERSION"),
@@ -283,7 +283,7 @@ fn run() -> Result<(), String> {
 }
 
 /// Runs the CLI and maps failures to process status.
-pub(crate) fn run_main() -> ExitCode {
+pub fn run_main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

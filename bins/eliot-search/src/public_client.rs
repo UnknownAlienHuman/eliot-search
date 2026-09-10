@@ -18,7 +18,7 @@ const DEFAULT_PAGE_SIZE: usize = 100;
 const MAX_PAGE_SIZE: usize = 1_000;
 
 /// Intercepts `serve-data-root ROOT [--daemon PATH]` before one-shot forwarding.
-pub(crate) fn maybe_run() -> Option<ExitCode> {
+pub fn maybe_run() -> Option<ExitCode> {
     let arguments = env::args_os().skip(1).collect::<Vec<_>>();
     if arguments.first().and_then(|value| value.to_str()) != Some("serve-data-root") {
         return None;
@@ -135,21 +135,17 @@ fn run_session(daemon: &Path, root: &Path) -> Result<(), String> {
                 if succeeded && translated.terminal == Terminal::SearchPage {
                     latest_continuation =
                         extract_optional_token(&response.terminal_line, "continuation_token")?;
-                    if translated.starts_new_search {
-                        latest_source_handle = response.latest_source_handle;
-                    } else if response.latest_source_handle.is_some() {
+                    if translated.starts_new_search || response.latest_source_handle.is_some() {
                         latest_source_handle = response.latest_source_handle;
                     }
                     if let Some(token) = &latest_continuation {
                         eprintln!(
-                            "{{\"event\":\"client_continuation_ready\",\"token\":\"{}\"}}",
-                            token
+                            "{{\"event\":\"client_continuation_ready\",\"token\":\"{token}\"}}",
                         );
                     }
                     if let Some(handle) = &latest_source_handle {
                         eprintln!(
-                            "{{\"event\":\"client_source_handle_ready\",\"source_handle\":\"{}\"}}",
-                            handle
+                            "{{\"event\":\"client_source_handle_ready\",\"source_handle\":\"{handle}\"}}",
                         );
                     }
                 }
@@ -256,6 +252,146 @@ enum ClientAction {
     Protocol(TranslatedCommand),
 }
 
+fn translate_index_command(verb: &str, remainder: &str) -> Result<TranslatedCommand, String> {
+    match verb {
+        "index-file" => Ok(command(
+            format!(
+                "index-file\t{}",
+                encode_path(Path::new(required_remainder(
+                    remainder,
+                    "INDEX_FILE_PATH_REQUIRED",
+                )?))?,
+            ),
+            Terminal::Single,
+            true,
+            false,
+        )),
+        "index-directory" => Ok(command(
+            format!(
+                "index-directory\t{}",
+                encode_path(Path::new(required_remainder(
+                    remainder,
+                    "INDEX_DIRECTORY_PATH_REQUIRED",
+                )?))?,
+            ),
+            Terminal::DirectoryIndex,
+            true,
+            false,
+        )),
+        "sync-directory" => Ok(command(
+            format!(
+                "sync-directory\t{}",
+                encode_path(Path::new(required_remainder(
+                    remainder,
+                    "SYNC_DIRECTORY_PATH_REQUIRED",
+                )?))?,
+            ),
+            Terminal::Single,
+            true,
+            false,
+        )),
+        _ => Err("CLIENT_SESSION_COMMAND_INVALID".to_owned()),
+    }
+}
+
+fn translate_search_command(verb: &str, remainder: &str) -> Result<TranslatedCommand, String> {
+    match verb {
+        "search" | "search-i" => {
+            let query = required_remainder(remainder, "SEARCH_QUERY_REQUIRED")?;
+            paged_search(verb == "search-i", DEFAULT_PAGE_SIZE, query)
+        }
+        "search-page" | "search-page-i" => {
+            let (page_size, query) = split_page_and_query(remainder)?;
+            paged_search(verb == "search-page-i", page_size, query)
+        }
+        "search-all" | "search-all-i" => {
+            let query = required_remainder(remainder, "SEARCH_QUERY_REQUIRED")?;
+            validate_query(query)?;
+            Ok(command(
+                format!(
+                    "search\t{}\t{}",
+                    if verb == "search-all-i" {
+                        "ascii-insensitive"
+                    } else {
+                        "sensitive"
+                    },
+                    hex(query.as_bytes()),
+                ),
+                Terminal::StreamingSearch,
+                false,
+                false,
+            ))
+        }
+        _ => Err("CLIENT_SESSION_COMMAND_INVALID".to_owned()),
+    }
+}
+
+fn translate_position_command(
+    verb: &str,
+    remainder: &str,
+    latest_continuation: Option<&str>,
+    latest_source_handle: Option<&str>,
+) -> Result<TranslatedCommand, String> {
+    match verb {
+        "next" => {
+            let token = latest_continuation
+                .ok_or_else(|| "NO_ACTIVE_CONTINUATION".to_owned())?;
+            let page_size = if remainder.is_empty() {
+                DEFAULT_PAGE_SIZE
+            } else {
+                parse_page_size(remainder)?
+            };
+            Ok(command(
+                format!("continue\t{token}\t{page_size}"),
+                Terminal::SearchPage,
+                false,
+                false,
+            ))
+        }
+        "continue" => {
+            let fields = remainder.split_whitespace().collect::<Vec<_>>();
+            let (token, page_size) = match fields.as_slice() {
+                [token] => (*token, DEFAULT_PAGE_SIZE),
+                [token, page_size] => (*token, parse_page_size(page_size)?),
+                _ => return Err("CONTINUE_USAGE".to_owned()),
+            };
+            Ok(command(
+                format!("continue\t{token}\t{page_size}"),
+                Terminal::SearchPage,
+                false,
+                false,
+            ))
+        }
+        "expand-last" => {
+            let handle = latest_source_handle
+                .ok_or_else(|| "NO_ACTIVE_SOURCE_HANDLE".to_owned())?;
+            let (start, end) = parse_range(remainder)?;
+            Ok(command(
+                format!("expand-handle\t{handle}\t{start}\t{end}"),
+                Terminal::Single,
+                false,
+                false,
+            ))
+        }
+        "expand-handle" => {
+            let fields = remainder.split_whitespace().collect::<Vec<_>>();
+            if fields.len() != 3 {
+                return Err("EXPAND_HANDLE_USAGE".to_owned());
+            }
+            validate_token(fields[0])?;
+            let start = parse_u64(fields[1], "HANDLE_START_INVALID")?;
+            let end = parse_u64(fields[2], "HANDLE_END_INVALID")?;
+            Ok(command(
+                format!("expand-handle\t{}\t{start}\t{end}", fields[0]),
+                Terminal::Single,
+                false,
+                false,
+            ))
+        }
+        _ => Err("CLIENT_SESSION_COMMAND_INVALID".to_owned()),
+    }
+}
+
 fn translate_command(
     line: &str,
     latest_continuation: Option<&str>,
@@ -285,122 +421,14 @@ fn translate_command(
         ),
         "gc-dry-run" if remainder.is_empty() => single("gc\tdry-run"),
         "gc-apply" if remainder.is_empty() => single("gc\tapply"),
-        "index-file" => command(
-            format!(
-                "index-file\t{}",
-                encode_path(Path::new(required_remainder(
-                    remainder,
-                    "INDEX_FILE_PATH_REQUIRED",
-                )?))?,
-            ),
-            Terminal::Single,
-            true,
-            false,
-        ),
-        "index-directory" => command(
-            format!(
-                "index-directory\t{}",
-                encode_path(Path::new(required_remainder(
-                    remainder,
-                    "INDEX_DIRECTORY_PATH_REQUIRED",
-                )?))?,
-            ),
-            Terminal::DirectoryIndex,
-            true,
-            false,
-        ),
-        "sync-directory" => command(
-            format!(
-                "sync-directory\t{}",
-                encode_path(Path::new(required_remainder(
-                    remainder,
-                    "SYNC_DIRECTORY_PATH_REQUIRED",
-                )?))?,
-            ),
-            Terminal::Single,
-            true,
-            false,
-        ),
-        "search" | "search-i" => {
-            let query = required_remainder(remainder, "SEARCH_QUERY_REQUIRED")?;
-            paged_search(verb == "search-i", DEFAULT_PAGE_SIZE, query)?
+        "index-file" | "index-directory" | "sync-directory" => {
+            translate_index_command(verb, remainder)?
         }
-        "search-page" | "search-page-i" => {
-            let (page_size, query) = split_page_and_query(remainder)?;
-            paged_search(verb == "search-page-i", page_size, query)?
+        "search" | "search-i" | "search-page" | "search-page-i" | "search-all" | "search-all-i" => {
+            translate_search_command(verb, remainder)?
         }
-        "search-all" | "search-all-i" => {
-            let query = required_remainder(remainder, "SEARCH_QUERY_REQUIRED")?;
-            validate_query(query)?;
-            command(
-                format!(
-                    "search\t{}\t{}",
-                    if verb == "search-all-i" {
-                        "ascii-insensitive"
-                    } else {
-                        "sensitive"
-                    },
-                    hex(query.as_bytes()),
-                ),
-                Terminal::StreamingSearch,
-                false,
-                false,
-            )
-        }
-        "next" => {
-            let token = latest_continuation
-                .ok_or_else(|| "NO_ACTIVE_CONTINUATION".to_owned())?;
-            let page_size = if remainder.is_empty() {
-                DEFAULT_PAGE_SIZE
-            } else {
-                parse_page_size(remainder)?
-            };
-            command(
-                format!("continue\t{token}\t{page_size}"),
-                Terminal::SearchPage,
-                false,
-                false,
-            )
-        }
-        "continue" => {
-            let fields = remainder.split_whitespace().collect::<Vec<_>>();
-            let (token, page_size) = match fields.as_slice() {
-                [token] => (*token, DEFAULT_PAGE_SIZE),
-                [token, page_size] => (*token, parse_page_size(page_size)?),
-                _ => return Err("CONTINUE_USAGE".to_owned()),
-            };
-            command(
-                format!("continue\t{token}\t{page_size}"),
-                Terminal::SearchPage,
-                false,
-                false,
-            )
-        }
-        "expand-last" => {
-            let handle = latest_source_handle
-                .ok_or_else(|| "NO_ACTIVE_SOURCE_HANDLE".to_owned())?;
-            let (start, end) = parse_range(remainder)?;
-            command(
-                format!("expand-handle\t{handle}\t{start}\t{end}"),
-                Terminal::Single,
-                false,
-                false,
-            )
-        }
-        "expand-handle" => {
-            let fields = remainder.split_whitespace().collect::<Vec<_>>();
-            if fields.len() != 3 {
-                return Err("EXPAND_HANDLE_USAGE".to_owned());
-            }
-            validate_token(fields[0])?;
-            let start = parse_u64(fields[1], "HANDLE_START_INVALID")?;
-            let end = parse_u64(fields[2], "HANDLE_END_INVALID")?;
-            command(
-                format!("expand-handle\t{}\t{start}\t{end}", fields[0]),
-                Terminal::Single,
-                false,
-                false,
-            )
+        "next" | "continue" | "expand-last" | "expand-handle" => {
+            translate_position_command(verb, remainder, latest_continuation, latest_source_handle)?
         }
         "retire" => {
             let source_id = required_remainder(remainder, "SOURCE_ID_REQUIRED")?;
@@ -504,7 +532,7 @@ fn validate_token(value: &str) -> Result<(), String> {
     }
 }
 
-fn command(
+const fn command(
     protocol: String,
     terminal: Terminal,
     clears_search_state: bool,
@@ -543,10 +571,11 @@ fn extract_optional_token(line: &str, field: &str) -> Result<Option<String>, Str
 }
 
 fn split_verb(value: &str) -> (&str, &str) {
-    match value.find(char::is_whitespace) {
-        Some(index) => (&value[..index], value[index..].trim_start()),
-        None => (value, ""),
-    }
+    value
+        .find(char::is_whitespace)
+        .map_or((value, ""), |index| {
+            (&value[..index], value[index..].trim_start())
+        })
 }
 
 fn required_remainder<'a>(value: &'a str, error: &'static str) -> Result<&'a str, String> {
