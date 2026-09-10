@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use search_contracts::SourceNamespaceId;
 
-use crate::development::DataRootGuard;
+use crate::development::{DataRootGuard, OwnerLockProfile, live_owner_denial};
 use crate::direct_store::DirectStore;
 use crate::plaintext_direct_store;
 use crate::service_output::{json_string, write_line};
@@ -70,8 +70,29 @@ impl DataRootGuard {
     pub(crate) fn with_existing_lock<T>(
         path: &Path, inspect: impl FnOnce(&Path) -> Result<T, String>,
     ) -> Result<T, String> {
+        // Sole qualified borrower: the offline migration command borrows the
+        // primary lock as the migration-output instance (same file, named
+        // borrower, no marker cleanup). Behavior is byte-identical to the
+        // direct borrow.
+        Self::acquire_borrowed(path, OwnerLockProfile::MigrationOutput, inspect)
+    }
+
+    /// Named borrowed-owner adapter: inspects a canonical root under an
+    /// already-existing exclusive OS lock without constructing a guard.
+    ///
+    /// `profile` selects only the lock file name (`Direct` and
+    /// `MigrationOutput` share the primary file; see [`OwnerLockProfile`]).
+    /// The file is never created, truncated, written, synced, removed or
+    /// replaced, and no owner-record cleanup runs on any return or unwind:
+    /// the held `File` owns the OS lock across both locator verifications.
+    /// Missing lock files require explicit recovery, never a new lease.
+    pub(crate) fn acquire_borrowed<T>(
+        path: &Path,
+        profile: OwnerLockProfile,
+        inspect: impl FnOnce(&Path) -> Result<T, String>,
+    ) -> Result<T, String> {
         let root = canonical_directory(path)?;
-        let lock_path = root.join(".eliot-search-owner.lock");
+        let lock_path = profile.lock_path(&root);
         let before = fs::symlink_metadata(&lock_path)
             .map_err(|_| "DATA_ROOT_EXISTING_LOCK_REQUIRED".to_owned())?;
         if !regular(&before) { return Err("DATA_ROOT_LOCK_OBJECT_INVALID".to_owned()); }
@@ -84,7 +105,7 @@ impl DataRootGuard {
         }
         match file.try_lock() {
             Ok(()) => {}
-            Err(TryLockError::WouldBlock) => return Err("DATA_ROOT_ALREADY_OWNED".to_owned()),
+            Err(TryLockError::WouldBlock) => return Err(live_owner_denial(None).to_owned()),
             Err(TryLockError::Error(_)) => return Err("DATA_ROOT_LOCK_ERROR".to_owned()),
         }
         verify_locked_locator(&file, &lock_path)?;
@@ -146,4 +167,157 @@ fn verify_locked_locator(locked: &File, path: &Path) -> Result<(), String> {
     }
     #[cfg(not(any(unix, windows)))]
     { Err("DIRECT_MIGRATION_LOCK_PLATFORM_UNSUPPORTED".to_owned()) }
+}
+
+#[cfg(test)]
+mod borrowed_lock_tests {
+    use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::DataRootGuard;
+    use crate::development::OwnerLockProfile;
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    struct Scratch {
+        base: std::path::PathBuf,
+        data: std::path::PathBuf,
+    }
+
+    impl Scratch {
+        fn fresh() -> Self {
+            let stamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let base = std::env::temp_dir().join(format!(
+                "eliot-borrowed-lock-{}-{stamp}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let data = base.join("data");
+            fs::create_dir_all(&data).unwrap();
+            Self { base, data }
+        }
+
+        /// Establishes a primary owner once so the lock file exists, then
+        /// releases exclusion; the durable lock marker remains.
+        fn with_released_owner(&self) {
+            drop(DataRootGuard::acquire(&self.data).unwrap());
+        }
+
+        fn lock_bytes(&self) -> Vec<u8> {
+            fs::read(self.data.join(OwnerLockProfile::DIRECT_LOCK_FILE)).unwrap()
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.base);
+        }
+    }
+
+    #[test]
+    fn named_borrow_uses_the_primary_lock_file() {
+        assert_eq!(
+            OwnerLockProfile::MigrationOutput.file_name(),
+            OwnerLockProfile::Direct.file_name()
+        );
+        assert_eq!(
+            OwnerLockProfile::Direct.file_name(),
+            ".eliot-search-owner.lock"
+        );
+    }
+
+    #[test]
+    fn missing_lock_file_requires_recovery_without_inventing_a_lease() {
+        let scratch = Scratch::fresh();
+        for profile in [OwnerLockProfile::Direct, OwnerLockProfile::MigrationOutput] {
+            assert_eq!(
+                DataRootGuard::acquire_borrowed(&scratch.data, profile, |_| Ok::<(), String>(())),
+                Err("DATA_ROOT_EXISTING_LOCK_REQUIRED".to_owned())
+            );
+        }
+        assert_eq!(
+            DataRootGuard::with_existing_lock(&scratch.data, |_| Ok::<(), String>(())),
+            Err("DATA_ROOT_EXISTING_LOCK_REQUIRED".to_owned())
+        );
+        // Nothing was invented: no lock file appeared.
+        assert!(
+            !scratch
+                .data
+                .join(OwnerLockProfile::DIRECT_LOCK_FILE)
+                .exists()
+        );
+    }
+
+    #[test]
+    fn held_primary_lock_denies_the_borrow_like_a_second_owner() {
+        let scratch = Scratch::fresh();
+        scratch.with_released_owner();
+        let _live = DataRootGuard::acquire(&scratch.data).unwrap();
+        for profile in [OwnerLockProfile::Direct, OwnerLockProfile::MigrationOutput] {
+            assert_eq!(
+                DataRootGuard::acquire_borrowed(&scratch.data, profile, |_| Ok::<(), String>(())),
+                Err("DATA_ROOT_ALREADY_OWNED".to_owned())
+            );
+        }
+        assert_eq!(
+            DataRootGuard::with_existing_lock(&scratch.data, |_| Ok::<(), String>(())),
+            Err("DATA_ROOT_ALREADY_OWNED".to_owned())
+        );
+    }
+
+    #[test]
+    fn borrow_inspects_without_marker_cleanup_and_reports_values() {
+        let scratch = Scratch::fresh();
+        scratch.with_released_owner();
+        let before = scratch.lock_bytes();
+        let canonical = fs::canonicalize(&scratch.data).unwrap();
+        for profile in [OwnerLockProfile::Direct, OwnerLockProfile::MigrationOutput] {
+            let seen = DataRootGuard::acquire_borrowed(&scratch.data, profile, |root| {
+                assert_eq!(root, canonical);
+                Ok::<_, String>(40 + profile.file_name().len())
+            })
+            .unwrap();
+            assert_eq!(seen, 40 + ".eliot-search-owner.lock".len());
+        }
+        // The compat wrapper observes the same root with the same semantics.
+        let seen = DataRootGuard::with_existing_lock(&scratch.data, |root| {
+            assert_eq!(root, canonical);
+            Ok::<_, String>(7)
+        })
+        .unwrap();
+        assert_eq!(seen, 7);
+        // No marker cleanup: the lock file still exists with identical bytes.
+        assert_eq!(scratch.lock_bytes(), before);
+        // Inspection errors propagate without cleanup either.
+        assert_eq!(
+            DataRootGuard::acquire_borrowed(
+                &scratch.data,
+                OwnerLockProfile::MigrationOutput,
+                |_| Err::<(), _>("INSPECT_DENIED".to_owned())
+            ),
+            Err("INSPECT_DENIED".to_owned())
+        );
+        assert_eq!(scratch.lock_bytes(), before);
+    }
+
+    #[test]
+    fn borrow_rejects_non_directories_before_touching_any_lock() {
+        let scratch = Scratch::fresh();
+        let file = scratch.base.join("file.txt");
+        fs::write(&file, b"bytes").unwrap();
+        assert_eq!(
+            DataRootGuard::acquire_borrowed(&file, OwnerLockProfile::Direct, |_| Ok::<(), String>(
+                ()
+            )),
+            Err("DIRECT_MIGRATION_DIRECTORY_INVALID".to_owned())
+        );
+        assert_eq!(
+            DataRootGuard::with_existing_lock(&file, |_| Ok::<(), String>(())),
+            Err("DIRECT_MIGRATION_DIRECTORY_INVALID".to_owned())
+        );
+    }
 }

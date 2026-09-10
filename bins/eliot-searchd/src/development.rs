@@ -15,7 +15,11 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use search_contracts::{DataRootId, InstallationIncarnationId, OwnerEpoch};
-use search_runtime_owner::DrainReason;
+use search_domain::{
+    AdmissionState, CancellationState, MutationObservation, MutationOutcomeClass, MutationStart,
+    PostconditionState, SafetyState,
+};
+use search_runtime_owner::{DrainReason, OwnerError, OwnerGuard, classify_owner_mutation_boundary};
 
 use crate::owner_composition::{LiveOwner, ShutdownReceipt};
 use crate::sealed_root_lock::SealedRootLease;
@@ -316,6 +320,96 @@ fn map_full_read_error(error: crate::safe_reader_adapter::FullReadError) -> Stri
     }
 }
 
+/// Named OS ownership-primitive profile for one data-root lock file.
+///
+/// Conservative Phase-1 (move-map) adapter vocabulary: the ownership policy
+/// stays in `search-runtime-owner` while the file effect stays a thin
+/// qualified adapter here. Profiles select only the lock file name; OS
+/// exclusion, validation, record and drop semantics stay byte-identical
+/// across instances. The sealed effect remains owned by [`SealedRootLease`]
+/// (Windows co-hold) and is never opened through this profile; the offline
+/// migration borrow reuses the primary lock file under a distinct borrower
+/// name. The migration-output artifact lock (`ImportOutputGuard`,
+/// `DIRECT_MIGRATION_OUTPUT_*` in `control_migration_redb`) is a separate
+/// mechanism with its own empty-file invariant and stays owned there.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OwnerLockProfile {
+    /// Primary live owner: `acquire` and borrowed reads.
+    Direct,
+    /// Sealed co-hold file name; the effect is owned by [`SealedRootLease`].
+    Sealed,
+    /// Offline migration borrower of the primary lock (no marker cleanup).
+    MigrationOutput,
+}
+
+impl OwnerLockProfile {
+    /// Primary live-owner lock file beside the durable owner-state slots.
+    pub(crate) const DIRECT_LOCK_FILE: &'static str = ".eliot-search-owner.lock";
+    /// Sealed co-hold lock file; the authoritative opener is [`SealedRootLease`].
+    pub(crate) const SEALED_LOCK_FILE: &'static str = ".eliot-search-sealed-owner.lock";
+
+    /// Lock file name for this profile. `Direct` and `MigrationOutput` share
+    /// the primary file; `Sealed` names the co-held file for documentation
+    /// and coherence checks only and is never opened here.
+    #[must_use]
+    pub(crate) const fn file_name(self) -> &'static str {
+        match self {
+            Self::Direct | Self::MigrationOutput => Self::DIRECT_LOCK_FILE,
+            Self::Sealed => Self::SEALED_LOCK_FILE,
+        }
+    }
+
+    /// Joins the profile lock file under an already-canonical root.
+    #[must_use]
+    pub(crate) fn lock_path(self, canonical_root: &Path) -> PathBuf {
+        canonical_root.join(self.file_name())
+    }
+}
+
+/// Closed policy denial for a live owner, reusing the owner-policy code.
+///
+/// Takes the policy [`OwnerGuard`] type only to prove the daemon reuses the
+/// declared `search-runtime-owner` vocabulary instead of duplicating it; the
+/// OS exclusion itself stays in this thin adapter and is never duplicated in
+/// the policy crate. `None` is the normal call shape: liveness is the held OS
+/// lock alone, never the presence of a policy guard value.
+#[must_use]
+pub const fn live_owner_denial(_policy: Option<&OwnerGuard>) -> &'static str {
+    OwnerError::DataRootAlreadyOwned.code()
+}
+
+/// Classifies an ambiguous owner-mutation boundary through the shared
+/// owner-policy transition classifier (invariant 18).
+///
+/// A mutation that may have started with an unverified postcondition is
+/// `Unknown` and requires exact readback before any retry. This helper only
+/// names that classification so file-effect sites report their existing
+/// closed codes consistently without duplicating the policy; it changes no
+/// error string (O3 decision deferred).
+#[must_use]
+pub const fn classify_ambiguous_owner_write() -> MutationOutcomeClass {
+    let outcome = classify_owner_mutation_boundary(MutationObservation {
+        mutation_start: MutationStart::MayHaveStarted,
+        postcondition: PostconditionState::Unverified,
+        cancellation: CancellationState::NotCancelled,
+        safety: SafetyState::Consistent,
+        admission: AdmissionState::Admitted,
+    });
+    outcome.class
+}
+
+/// Formats an ambiguous owner-record write failure without relabelling it.
+///
+/// The shared transition classifier (invariant 18) is consulted while the
+/// closed code stays byte-identical in Phase 1 (O3 deferred).
+fn record_write_error(error: &io::Error) -> String {
+    debug_assert_eq!(
+        classify_ambiguous_owner_write(),
+        MutationOutcomeClass::Unknown
+    );
+    format!("DATA_ROOT_OWNER_RECORD_ERROR:{error}")
+}
+
 /// Process-local exclusive owner guard and restored observation registration.
 ///
 /// Exactly one live guard exists per data root. It holds the OS exclusion
@@ -354,7 +448,13 @@ impl DataRootGuard {
             return Err("DATA_ROOT_IDENTITY_AMBIGUOUS".to_owned());
         }
 
-        let lock_path = canonical_root.join(".eliot-search-owner.lock");
+        let lock_path = OwnerLockProfile::Direct.lock_path(&canonical_root);
+        // Phase-1 instance coherence: the sealed profile names the co-held
+        // file while sharing exclusion semantics (debug-only check).
+        debug_assert_eq!(
+            OwnerLockProfile::Sealed.file_name(),
+            OwnerLockProfile::SEALED_LOCK_FILE
+        );
         match fs::symlink_metadata(&lock_path) {
             Ok(metadata) if metadata.file_type().is_symlink()
                 || is_reparse(&metadata) || !metadata.is_file() =>
@@ -380,7 +480,7 @@ impl DataRootGuard {
         }
         match file.try_lock() {
             Ok(()) => {}
-            Err(TryLockError::WouldBlock) => return Err("DATA_ROOT_ALREADY_OWNED".to_owned()),
+            Err(TryLockError::WouldBlock) => return Err(live_owner_denial(None).to_owned()),
             Err(TryLockError::Error(error)) => return Err(format!("DATA_ROOT_LOCK_ERROR:{error}")),
         }
         // Co-hold the sealed exclusion before reopening durable state so the
@@ -416,7 +516,7 @@ impl DataRootGuard {
             .and_then(|()| file.seek(SeekFrom::Start(0)).map(|_| ()))
             .and_then(|()| file.write_all(record.as_bytes()))
             .and_then(|()| file.sync_all())
-            .map_err(|error| format!("DATA_ROOT_OWNER_RECORD_ERROR:{error}"))?;
+            .map_err(|error| record_write_error(&error))?;
 
         Ok(Self {
             sealed,
@@ -685,6 +785,55 @@ mod owner_tests {
         assert_eq!(
             fs::read(scratch.data.join(".eliot-search-owner-state-a.v1")).unwrap(),
             b"corrupt-and-preserved"
+        );
+    }
+
+    #[test]
+    fn lock_profiles_name_the_exact_owner_files_without_new_effects() {
+        use search_domain::MutationOutcomeClass;
+        use search_runtime_owner::OwnerError;
+
+        assert_eq!(
+            OwnerLockProfile::Direct.file_name(),
+            ".eliot-search-owner.lock"
+        );
+        assert_eq!(
+            OwnerLockProfile::MigrationOutput.file_name(),
+            OwnerLockProfile::DIRECT_LOCK_FILE
+        );
+        assert_eq!(
+            OwnerLockProfile::Sealed.file_name(),
+            OwnerLockProfile::SEALED_LOCK_FILE
+        );
+        assert_eq!(
+            OwnerLockProfile::Sealed.file_name(),
+            ".eliot-search-sealed-owner.lock"
+        );
+        // Policy codes are reused, never duplicated: the live-owner denial is
+        // exactly the owner-policy code.
+        assert_eq!(
+            live_owner_denial(None),
+            OwnerError::DataRootAlreadyOwned.code()
+        );
+        assert_eq!(live_owner_denial(None), "DATA_ROOT_ALREADY_OWNED");
+        // The ambiguous-write boundary classifies OUTCOME_UNKNOWN through the
+        // shared transition classifier (invariant 18).
+        assert_eq!(
+            classify_ambiguous_owner_write(),
+            MutationOutcomeClass::Unknown
+        );
+    }
+
+    #[test]
+    fn lock_path_joins_the_named_file_under_a_canonical_root() {
+        let root = Path::new("data-root");
+        assert_eq!(
+            OwnerLockProfile::Direct.lock_path(root),
+            root.join(".eliot-search-owner.lock")
+        );
+        assert_eq!(
+            OwnerLockProfile::MigrationOutput.lock_path(root),
+            OwnerLockProfile::Direct.lock_path(root)
         );
     }
 }
