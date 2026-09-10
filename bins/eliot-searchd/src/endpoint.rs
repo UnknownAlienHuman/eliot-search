@@ -18,7 +18,12 @@ const MIN_TOKEN_BYTES: usize = 32;
 const MAX_AUTH_LINE_BYTES: usize = 256;
 const MAX_COMMAND_LINE_BYTES: usize = 128 * 1024;
 const MAX_COMMANDS_PER_CONNECTION: usize = 4096;
-const IO_TIMEOUT: Duration = Duration::from_secs(30);
+// Silent-client read bound and slow-reader write bound. They share a value
+// but never a meaning: the read timeout is not the socket configuration, and
+// neither is the proxy child request (120s) / startup (30s) / cleanup (5s)
+// deadline owned by `proxy_child::ChildLimits`.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EndpointAction {
@@ -77,8 +82,8 @@ where
             continue;
         }
         stream
-            .set_read_timeout(Some(IO_TIMEOUT))
-            .and_then(|()| stream.set_write_timeout(Some(IO_TIMEOUT)))
+            .set_read_timeout(Some(READ_TIMEOUT))
+            .and_then(|()| stream.set_write_timeout(Some(WRITE_TIMEOUT)))
             .map_err(|error| format!("ENDPOINT_TIMEOUT_CONFIGURATION_ERROR:{error}"))?;
 
         match serve_connection(
@@ -300,7 +305,15 @@ fn read_bounded_line(
     );
     let read = limited
         .read_until(b'\n', &mut bytes)
-        .map_err(|error| format!("ENDPOINT_READ_ERROR:{error}"))?;
+        .map_err(|error| match error.kind() {
+            // A silent client holds the connection open without a frame. This
+            // read timeout is distinct from a socket configuration failure and
+            // from the proxy child request/cleanup deadlines.
+            io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => {
+                "ENDPOINT_READ_TIMEOUT".to_owned()
+            }
+            _ => format!("ENDPOINT_READ_ERROR:{error}"),
+        })?;
     if read == 0 {
         return Ok(None);
     }
@@ -431,5 +444,162 @@ mod tests {
         assert_eq!(calls, 1);
         assert_eq!(output, "{\"event\":\"request_started\",\"sequence\":0}\n{\"partial\":");
         assert!(TcpStream::connect_timeout(&address, timeout).is_err());
+    }
+
+    #[test]
+    fn read_and_write_timeouts_are_finite_declared_bounds() {
+        assert_eq!(READ_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(WRITE_TIMEOUT, Duration::from_secs(30));
+        assert!(!READ_TIMEOUT.is_zero());
+        assert!(!WRITE_TIMEOUT.is_zero());
+    }
+
+    #[test]
+    fn silent_client_read_timeout_is_typed_and_bounded() {
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Instant;
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (ready, accepted) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let _ = ready.send(());
+            stream
+                .set_read_timeout(Some(Duration::from_millis(200)))
+                .unwrap();
+            let mut reader = BufReader::new(stream);
+            let start = Instant::now();
+            let result = read_bounded_line(&mut reader, 1024);
+            (result, start.elapsed())
+        });
+        let client = TcpStream::connect_timeout(&address, Duration::from_secs(5)).unwrap();
+        client
+            .set_write_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        accepted.recv_timeout(Duration::from_secs(5)).unwrap();
+        // Silent client: hold the connection open without any frame.
+        thread::sleep(Duration::from_millis(600));
+        let (result, elapsed) = server.join().unwrap();
+        assert_eq!(result, Err("ENDPOINT_READ_TIMEOUT".to_owned()));
+        assert!(elapsed >= Duration::from_millis(150), "{elapsed:?}");
+        assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+        drop(client);
+    }
+
+    #[test]
+    fn real_socket_disconnect_mid_large_response_then_clean_health_has_no_contamination() {
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Instant;
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let large = vec![b'm'; 512 * 1024];
+        let (done, finished) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let start = Instant::now();
+            let mut outcome: io::Result<()> = Ok(());
+            // Stream a large response in bounded chunks; the client drops
+            // mid-response, so a later write must fail instead of hanging.
+            for chunk in large.chunks(16 * 1024) {
+                if let Err(error) = stream.write_all(chunk) {
+                    outcome = Err(error);
+                    break;
+                }
+            }
+            if outcome.is_ok() {
+                outcome = stream.write_all(b"\n").and_then(|()| stream.flush());
+            }
+            let elapsed = start.elapsed();
+            let _ = done.send(());
+            (outcome, elapsed)
+        });
+        let timeout = Duration::from_secs(5);
+        let client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        let mut prefix = vec![0_u8; 4096];
+        Read::take(&mut reader, 4096)
+            .read_exact(&mut prefix)
+            .unwrap();
+        assert!(prefix.iter().all(|byte| *byte == b'm'));
+        // Disconnect mid-large-response: no further read, drop the socket.
+        drop(reader);
+        drop(client);
+        finished.recv_timeout(timeout).expect("bounded server exit");
+        let (outcome, elapsed) = server.join().unwrap();
+        // The server must observe the disconnect instead of hanging; the exact
+        // kind (reset/broken-pipe/timeout) is platform-specific and not part
+        // of the contract.
+        assert!(
+            outcome.is_err(),
+            "large response to a dropped client must fail"
+        );
+        assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+        // A fresh connection serves clean health with none of the old bytes.
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (ready, health_ready) = mpsc::channel();
+        let health = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_write_timeout(Some(timeout)).unwrap();
+            let _ = ready.send(());
+            write_line(&mut stream, "{\"event\":\"health\",\"ok\":true}")
+        });
+        let client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        health_ready.recv_timeout(timeout).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        let line = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        assert_eq!(line, "{\"event\":\"health\",\"ok\":true}");
+        assert!(!line.contains('m'.to_string().repeat(16).as_str()));
+        health.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn slow_reader_write_is_bounded_by_write_timeout() {
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Instant;
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (done, finished) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_millis(300)))
+                .unwrap();
+            let payload = vec![b's'; 2 * 1024 * 1024];
+            let start = Instant::now();
+            let mut outcome: io::Result<()> = Ok(());
+            for chunk in payload.chunks(64 * 1024) {
+                if let Err(error) = stream.write_all(chunk) {
+                    outcome = Err(error);
+                    break;
+                }
+            }
+            if outcome.is_ok() {
+                outcome = stream.flush();
+            }
+            let elapsed = start.elapsed();
+            let _ = done.send(());
+            (outcome.is_err(), elapsed)
+        });
+        let timeout = Duration::from_secs(5);
+        // Slow reader: connect but never read, so the sender must time out
+        // instead of blocking indefinitely on a full socket buffer.
+        let client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        finished.recv_timeout(timeout).expect("bounded server exit");
+        let (failed, elapsed) = server.join().unwrap();
+        assert!(failed, "a never-reading client must bound the write");
+        assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+        drop(client);
     }
 }

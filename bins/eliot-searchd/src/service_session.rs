@@ -85,6 +85,7 @@ pub(super) fn serve<R: BufRead, W: Write>(
                     LineError::InvalidLimit => "SERVICE_COMMAND_LIMIT_INVALID",
                     LineError::TooLarge => "SERVICE_COMMAND_TOO_LARGE",
                     LineError::InvalidUtf8 => "SERVICE_COMMAND_NOT_UTF8",
+                    LineError::Timeout => "SERVICE_READ_TIMEOUT",
                     LineError::Io(_) => "SERVICE_READ_ERROR",
                 };
                 write_error(writer, code)?;

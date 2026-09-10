@@ -1,5 +1,5 @@
 use super::*;
-use std::io::Cursor;
+use std::io::{BufRead, Cursor};
 
 #[test]
 fn rejected_validation_does_not_poison_a_complete_exchange() {
@@ -168,4 +168,40 @@ fn quarantine_refusal_terminates_session_without_consuming_next_command() {
     assert_eq!(reader.position(), 7);
     let output = String::from_utf8(output).unwrap();
     assert!(output.contains("SERVICE_CATALOG_QUARANTINED"));
+}
+
+struct SilentReader {
+    kind: io::ErrorKind,
+}
+
+impl io::Read for SilentReader {
+    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::from(self.kind))
+    }
+}
+
+impl BufRead for SilentReader {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        Err(io::Error::from(self.kind))
+    }
+    fn consume(&mut self, _: usize) {}
+}
+
+#[test]
+fn silent_client_timeout_is_typed_and_never_dispatched_or_retried() {
+    for (kind, code) in [
+        (io::ErrorKind::TimedOut, "SERVICE_READ_TIMEOUT"),
+        (io::ErrorKind::WouldBlock, "SERVICE_READ_TIMEOUT"),
+        (io::ErrorKind::ConnectionReset, "SERVICE_READ_ERROR"),
+    ] {
+        let mut reader = SilentReader { kind };
+        let mut output = Vec::new();
+        let result = serve(&mut reader, &mut output, 32, |_, _, _| {
+            panic!("a silent-client timeout must never dispatch")
+        });
+        assert_eq!(result, Err(code.to_owned()), "{kind:?}");
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains(code), "{output}");
+        assert!(!output.contains("data_root_stopped"));
+    }
 }

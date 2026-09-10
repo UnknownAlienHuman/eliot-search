@@ -1,4 +1,9 @@
 //! A child stream is reusable only after its entire response is consumed.
+//!
+//! T06 bound (envelopes remain T19): the fence is armed before any command
+//! byte; only a fully consumed response (`Complete`/`Rejected`) releases it.
+//! A disconnect, EOF, oversized frame or line-budget exhaustion leaves the
+//! channel blocked without replay; the next client never receives old stdout.
 
 use std::io::Write;
 
@@ -213,6 +218,123 @@ mod tests {
         )).unwrap(), Reply::Rejected);
         assert_eq!(fence.run(|| Ok(Reply::Complete)).unwrap(), Reply::Complete);
         assert!(!fence.blocked());
+    }
+
+    #[test]
+    fn real_socket_disconnect_mid_large_response_blocks_fence_without_contamination() {
+        use std::io::{BufRead, BufReader};
+        use std::net::{Ipv4Addr, TcpListener, TcpStream};
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+        let timeout = Duration::from_secs(5);
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (done, finished) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut stream = stream;
+            let mut fence = ExchangeFence::default();
+            // Large response (~2 MiB): the client drops after the first line,
+            // so a later forwarded line must fail instead of hanging. The
+            // byte ceiling (8 MiB) is large enough that only the disconnect
+            // can terminate the exchange, not the response limit.
+            let result = fence.run(|| {
+                let mut step: usize = 0;
+                forward_reply(
+                    || {
+                        step += 1;
+                        if step <= 2000 {
+                            Ok(Some(format!("match-{step:04}-{}", "x".repeat(1012))))
+                        } else {
+                            Ok(Some("END".to_owned()))
+                        }
+                    },
+                    &mut stream,
+                    |line| line == "END",
+                    false,
+                    3000,
+                    8 * 1024 * 1024,
+                )
+            });
+            let blocked = fence.blocked();
+            let _ = done.send(());
+            (result, blocked)
+        });
+        let client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        let mut first = String::new();
+        reader.read_line(&mut first).unwrap();
+        assert!(first.starts_with("match-0001-"));
+        // Disconnect mid-large-response: drop without reading the remainder.
+        drop(reader);
+        drop(client);
+        finished
+            .recv_timeout(timeout)
+            .expect("bounded exchange exit");
+        let (result, blocked) = server.join().unwrap();
+        // The disconnect must terminate the exchange with the fence still
+        // armed; no replay is allowed and the remainder is never delivered
+        // to a later client.
+        assert!(
+            result.is_err(),
+            "disconnect mid-response must fail, got {result:?}"
+        );
+        assert!(blocked);
+        // A fresh exchange on a fresh socket serves clean health: no old
+        // `match-*` line is ever forwarded as the new response.
+        let mut fence = ExchangeFence::default();
+        let mut output = Vec::new();
+        let mut fresh = ["{\"event\":\"health\"}", "health-complete"].into_iter();
+        assert_eq!(
+            fence
+                .run(|| forward_reply(
+                    || Ok(fresh.next().map(str::to_owned)),
+                    &mut output,
+                    |line| line == "health-complete",
+                    false,
+                    10,
+                    1024,
+                ))
+                .unwrap(),
+            Reply::Complete
+        );
+        assert!(!fence.blocked());
+        assert_eq!(output, b"{\"event\":\"health\"}\nhealth-complete\n");
+        assert!(!output.windows(6).any(|window| window == b"match-"));
+    }
+
+    #[test]
+    fn slow_reader_failure_leaves_fence_blocked_without_replay() {
+        use std::io;
+        struct SlowReader;
+        impl Write for SlowReader {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Err(io::Error::from(io::ErrorKind::TimedOut))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut fence = ExchangeFence::default();
+        let mut lines = ["match-0000", "match-0001", "complete"].into_iter();
+        let result = fence.run(|| {
+            forward_reply(
+                || Ok(lines.next().map(str::to_owned)),
+                &mut SlowReader,
+                |line| line == "complete",
+                false,
+                10,
+                1024,
+            )
+        });
+        assert!(result.is_err());
+        assert!(fence.blocked());
+        assert_eq!(lines.next(), Some("match-0001"));
     }
 
 }
