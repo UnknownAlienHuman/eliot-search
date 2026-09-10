@@ -47,6 +47,70 @@ unsafe extern "system" {
     fn get_last_error() -> u32;
 }
 
+// Same cross-process vault mutex as `src/revision_protection_windows.rs`:
+// the guard serializes its delete+verify pairs with the daemon's own
+// write traffic so cleanup stops losing to the parallel-run storm.
+// Best-effort only: a busy lock skips the attempt, never panics.
+#[cfg(windows)]
+#[link(name = "Kernel32")]
+unsafe extern "system" {
+    #[link_name = "CreateMutexW"]
+    fn create_mutex_w(
+        security_attributes: *mut core::ffi::c_void,
+        initial_owner: i32,
+        name: *const u16,
+    ) -> *mut core::ffi::c_void;
+    #[link_name = "WaitForSingleObject"]
+    fn wait_for_single_object(
+        handle: *mut core::ffi::c_void,
+        milliseconds: u32,
+    ) -> u32;
+    #[link_name = "ReleaseMutex"]
+    fn release_mutex(handle: *mut core::ffi::c_void) -> i32;
+    #[link_name = "CloseHandle"]
+    fn close_handle(handle: *mut core::ffi::c_void) -> i32;
+}
+
+#[cfg(windows)]
+struct VaultLock(*mut core::ffi::c_void);
+
+#[cfg(windows)]
+impl Drop for VaultLock {
+    fn drop(&mut self) {
+        if self.0.is_null() {
+            return;
+        }
+        unsafe {
+            release_mutex(self.0);
+            close_handle(self.0);
+        }
+    }
+}
+
+/// Acquire the `ELIOT-Search-RevisionVault-v1` named mutex with a bounded
+/// wait. Returns `None` on any failure so callers skip the attempt instead
+/// of blocking cleanup forever. Matches the daemon-side protocol exactly
+/// (same name, same abandoned-is-safe rule: every critical section is one
+/// self-contained vault call with verify-after-delete).
+#[cfg(windows)]
+fn acquire_vault_lock() -> Option<VaultLock> {
+    const NAME: &str = "ELIOT-Search-RevisionVault-v1";
+    const WAIT_MILLIS: u32 = 5_000;
+    let wide: Vec<u16> = NAME.encode_utf16().chain(core::iter::once(0)).collect();
+    let handle = unsafe { create_mutex_w(core::ptr::null_mut(), 0, wide.as_ptr()) };
+    if handle.is_null() {
+        return None;
+    }
+    let status = unsafe { wait_for_single_object(handle, WAIT_MILLIS) };
+    if status == 0 || status == 0x80 {
+        return Some(VaultLock(handle));
+    }
+    unsafe {
+        close_handle(handle);
+    }
+    None
+}
+
 /// Layout mirror of Win32 `CREDENTIALW`, kept in sync with the same struct in
 /// `src/revision_protection_windows.rs`. Only used here to locate and zeroize
 /// the secret blob before release during existence checks.
@@ -117,8 +181,11 @@ fn delete_for_namespace_hex(namespace_hex: &str) -> bool {
         // moment, and a lone CredDelete can lose to that vault contention;
         // the read-back below is the only signal trusted here. A missing
         // entry is already gone. Every outcome stays best-effort so cleanup
-        // in Drop can never mask a test result.
-        for attempt in 0..8_u32 {
+        // in Drop can never mask a test result. The budget covers the whole
+        // 19-target parallel storm with margin. Each attempt serializes on
+        // the cross-process vault mutex shared with the daemon path.
+        for attempt in 0..16_u32 {
+            let _lock = acquire_vault_lock();
             unsafe {
                 let _ = cred_delete_w(wide.as_ptr(), CRED_TYPE_GENERIC, 0);
             }
@@ -126,7 +193,7 @@ fn delete_for_namespace_hex(namespace_hex: &str) -> bool {
                 return true;
             }
             std::thread::sleep(core::time::Duration::from_millis(
-                10_u64 << attempt.min(5),
+                10_u64 << attempt.min(7),
             ));
         }
         false

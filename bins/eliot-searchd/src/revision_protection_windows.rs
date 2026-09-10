@@ -16,6 +16,18 @@ const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
 const ROOT_SECRET_BYTES: usize = 32;
 const MAX_CREDENTIAL_BLOB_BYTES: usize = 5 * 512;
 const MAX_OBJECT_SCAN: usize = 2_000_000;
+/// Cross-process serialization for Credential Manager traffic. Dozens of
+/// parallel test fixtures (plus spawned daemon children) hammer `CredWrite` /
+/// `CredDelete` concurrently, and the vault drops or stalls operations under
+/// that storm. One named mutex makes every revision-key vault sequence
+/// mutually exclusive across processes; waits are bounded and every outcome
+/// stays fail-closed. The name is content-free (no secret, no path).
+const VAULT_MUTEX_NAME: &str = "ELIOT-Search-RevisionVault-v1";
+/// Per-acquisition wait ceiling. Holders only run single vault calls, so a
+/// healthy wait is milliseconds; anything beyond this is fail-closed.
+const VAULT_LOCK_WAIT_MILLIS: u32 = 5_000;
+const WAIT_OBJECT_0: u32 = 0;
+const WAIT_ABANDONED: u32 = 0x0000_0080;
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -95,6 +107,18 @@ unsafe extern "system" {
     fn get_last_error() -> u32;
     #[link_name = "LocalFree"]
     fn local_free(memory: *mut c_void) -> *mut c_void;
+    #[link_name = "CreateMutexW"]
+    fn create_mutex_w(
+        security_attributes: *mut c_void,
+        initial_owner: i32,
+        name: *const u16,
+    ) -> *mut c_void;
+    #[link_name = "WaitForSingleObject"]
+    fn wait_for_single_object(handle: *mut c_void, milliseconds: u32) -> u32;
+    #[link_name = "ReleaseMutex"]
+    fn release_mutex(handle: *mut c_void) -> i32;
+    #[link_name = "CloseHandle"]
+    fn close_handle(handle: *mut c_void) -> i32;
 }
 
 #[link(name = "Bcrypt")]
@@ -130,6 +154,50 @@ impl Drop for CredentialAllocation {
 
 struct LocalAllocation(DataBlob);
 
+/// Held cross-process vault mutex. Released and closed on drop; never
+/// panics. One acquisition covers one short vault sequence only — never
+/// held across retry sleeps (callers acquire per attempt).
+struct VaultLock(*mut c_void);
+
+impl Drop for VaultLock {
+    fn drop(&mut self) {
+        if self.0.is_null() {
+            return;
+        }
+        unsafe {
+            release_mutex(self.0);
+            close_handle(self.0);
+        }
+    }
+}
+
+fn vault_mutex_name_wide() -> Vec<u16> {
+    VAULT_MUTEX_NAME
+        .encode_utf16()
+        .chain(core::iter::once(0))
+        .collect()
+}
+
+/// Acquire the cross-process vault mutex with a bounded wait. `WAIT_ABANDONED`
+/// (previous holder died mid-sequence) is safe to take: every critical
+/// section is a single self-contained vault call with verify-after-write, so
+/// no multi-step invariant can be left half-held.
+fn acquire_vault_lock() -> Result<VaultLock, String> {
+    let name = vault_mutex_name_wide();
+    let handle = unsafe { create_mutex_w(null_mut(), 0, name.as_ptr()) };
+    if handle.is_null() {
+        let error = unsafe { get_last_error() };
+        return Err(format!("DIRECT_REVISION_VAULT_LOCK_FAILED:{error}"));
+    }
+    let status = unsafe { wait_for_single_object(handle, VAULT_LOCK_WAIT_MILLIS) };
+    if status == WAIT_OBJECT_0 || status == WAIT_ABANDONED {
+        return Ok(VaultLock(handle));
+    }
+    unsafe {
+        close_handle(handle);
+    }
+    Err(format!("DIRECT_REVISION_VAULT_BUSY:{status}"))
+}
 impl LocalAllocation {
     fn into_vec(mut self, max_bytes: usize) -> Result<Vec<u8>, String> {
         let length = usize::try_from(self.0.byte_length)
@@ -176,8 +244,28 @@ pub(super) fn load_or_create_root_secret(
         return Ok(secret);
     }
     if contains_protected_objects(revision_root)? {
+        // The key was written by an earlier command but is not visible yet:
+        // under parallel vault load the commit can lag the writer. Re-read
+        // bounded before declaring the revision unrecoverable. Never creates.
+        // Each attempt serializes on the cross-process vault mutex so the
+        // read cannot interleave with a concurrent writer's commit.
+        for attempt in 0..8_u32 {
+            std::thread::sleep(core::time::Duration::from_millis(
+                10_u64 << attempt.min(5),
+            ));
+            let Ok(_lock) = acquire_vault_lock() else {
+                continue;
+            };
+            if let Some(secret) = read_credential(&target)? {
+                return Ok(secret);
+            }
+        }
         return Err("DIRECT_REVISION_KEY_MISSING".to_owned());
     }
+    // Create path: single RNG draw, then a bounded write+verify loop. Only
+    // transient vault outcomes are retried (failed writes, lagging commit
+    // visibility); a content mismatch fails closed immediately and is never
+    // papered over by another attempt.
     let mut secret = [0_u8; ROOT_SECRET_BYTES];
     let status = unsafe {
         bcrypt_gen_random(
@@ -192,30 +280,58 @@ pub(super) fn load_or_create_root_secret(
         super::zeroize(&mut secret);
         return Err(format!("DIRECT_REVISION_RNG_FAILED:{status}"));
     }
-    if let Err(error) = write_credential(&target, &mut secret) {
-        super::zeroize(&mut secret);
-        return Err(error);
-    }
-    let observed = match read_credential(&target) {
-        Ok(Some(observed)) => observed,
-        Ok(None) => {
-            super::zeroize(&mut secret);
-            return Err("DIRECT_REVISION_KEY_WRITE_OUTCOME_UNKNOWN".to_owned());
+    for attempt in 0..8_u32 {
+        if attempt > 0 {
+            std::thread::sleep(core::time::Duration::from_millis(
+                10_u64 << attempt.min(5),
+            ));
         }
-        Err(error) => {
-            super::zeroize(&mut secret);
-            return Err(error);
+        // Serialize the write+verify pair on the cross-process mutex: the
+        // vault drops or stalls concurrent writers, so an unverified write
+        // is retried rather than trusted. A busy lock only skips the
+        // attempt; the bounded loop still fails closed on exhaustion.
+        let Ok(_lock) = acquire_vault_lock() else {
+            continue;
+        };
+        if let Err(error) = write_credential(&target, &mut secret) {
+            if !is_transient_vault_outcome(&error) {
+                super::zeroize(&mut secret);
+                return Err(error);
+            }
+            continue;
         }
-    };
-    if !constant_time_equal(&secret, &observed) {
-        super::zeroize(&mut secret);
-        let mut observed = observed;
-        super::zeroize(&mut observed);
-        return Err("DIRECT_REVISION_KEY_READBACK_MISMATCH".to_owned());
+        match read_credential(&target) {
+            Ok(Some(observed)) => {
+                if !constant_time_equal(&secret, &observed) {
+                    super::zeroize(&mut secret);
+                    let mut observed = observed;
+                    super::zeroize(&mut observed);
+                    return Err("DIRECT_REVISION_KEY_READBACK_MISMATCH".to_owned());
+                }
+                let mut observed = observed;
+                super::zeroize(&mut observed);
+                return Ok(secret);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                if !is_transient_vault_outcome(&error) {
+                    super::zeroize(&mut secret);
+                    return Err(error);
+                }
+            }
+        }
     }
-    let mut observed = observed;
-    super::zeroize(&mut observed);
-    Ok(secret)
+    super::zeroize(&mut secret);
+    Err("DIRECT_REVISION_KEY_WRITE_OUTCOME_UNKNOWN".to_owned())
+}
+
+/// True for vault outcomes that parallel load can cause transiently (busy
+/// writes, lagging commit visibility). Content/shape verdicts are never
+/// transient: retrying those would mask a real defect.
+fn is_transient_vault_outcome(error: &str) -> bool {
+    error.starts_with("DIRECT_REVISION_KEY_WRITE_FAILED")
+        || error == "DIRECT_REVISION_KEY_WRITE_OUTCOME_UNKNOWN"
+        || error.starts_with("DIRECT_REVISION_KEY_READ_FAILED")
 }
 
 fn read_credential(target: &[u16]) -> Result<Option<[u8; 32]>, String> {
@@ -321,7 +437,15 @@ pub(super) fn delete_test_credential_for_data_root(data_root: &Path) {
 fn delete_test_credential_verified(namespace_hex: &str) -> bool {
     debug_assert!(is_test_namespace_hex(namespace_hex));
     let wide = wide(&format!("ELIOT Search/revision-key/{namespace_hex}"));
-    for attempt in 0..8_u32 {
+    for attempt in 0..16_u32 {
+        // Same cross-process serialization as the daemon path: concurrent
+        // drops race the same way concurrent writes do.
+        let Ok(_lock) = acquire_vault_lock() else {
+            std::thread::sleep(core::time::Duration::from_millis(
+                10_u64 << attempt.min(7),
+            ));
+            continue;
+        };
         unsafe {
             let _ = cred_delete_w(wide.as_ptr(), CRED_TYPE_GENERIC, 0);
         }
@@ -329,7 +453,7 @@ fn delete_test_credential_verified(namespace_hex: &str) -> bool {
             return true;
         }
         std::thread::sleep(core::time::Duration::from_millis(
-            10_u64 << attempt.min(5),
+            10_u64 << attempt.min(7),
         ));
     }
     false
