@@ -342,3 +342,6 @@ fn admission_failure(error: ControlError) -> ControlPortError {
         else { PortErrorKind::Quarantined };
     PortError::new(kind, PortRetryability::AfterReadback, DisclosureClass::Redacted, error, None)
 }
+
+#[cfg(test)]
+mod tests;
