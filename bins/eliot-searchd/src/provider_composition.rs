@@ -1600,3 +1600,109 @@ mod tests {
         assert_eq!(again.cancelled_requests(), 0);
     }
 }
+
+// ---------------------------------------------------------------------------
+// T31 roots-section: live current-workspace truth over the daemon owner.
+// ---------------------------------------------------------------------------
+//
+// Live root management never acquires a second data-root owner. Callers pass
+// `&`/`&mut` references to the `SourceRootCatalog` held by the live
+// `DataRootGuard`; this section only evaluates counts/gaps produced by that
+// catalog. Watcher notifications stay hints inside the catalog; only an
+// explicit refresh plus a successful multi-root sync can re-prove
+// currentness. Missing/inaccessible roots are explicit gaps, never empty.
+//
+// Source, workspace and index currentness stay independent: the catalog owns
+// source/workspace truth, this section ANDs it with index truth
+// (`qdrant_available`, always false in this shell until a qualified
+// server/client/artifact/profile set exists) so no current claim escapes
+// across unresolved gaps, an incomplete sync, an empty registration, or an
+// unavailable index.
+
+/// Empty registration blocks a current claim; it is not proof of emptiness.
+pub const ROOTS_EMPTY_BLOCKS_CURRENTNESS: &str = "ROOTS_EMPTY_BLOCKS_CURRENTNESS";
+/// Any unresolved observation gap blocks a current claim.
+pub const ROOTS_GAP_BLOCKS_CURRENTNESS: &str = "ROOTS_GAP_BLOCKS_CURRENTNESS";
+/// A workspace sync that did not cover the current generation blocks proof.
+pub const ROOTS_SYNC_INCOMPLETE_BLOCKS_CURRENTNESS: &str =
+    "ROOTS_SYNC_INCOMPLETE_BLOCKS_CURRENTNESS";
+/// An unavailable index blocks the final proven claim, never the gap accounting.
+pub const ROOTS_INDEX_UNAVAILABLE_BLOCKS_CURRENTNESS: &str =
+    "ROOTS_INDEX_UNAVAILABLE_BLOCKS_CURRENTNESS";
+/// All independent currentness legs hold.
+pub const ROOTS_CURRENT_WORKSPACE_PROVEN: &str = "ROOTS_CURRENT_WORKSPACE_PROVEN";
+
+/// Evaluates the final current-workspace claim from independent legs.
+///
+/// `workspace_current` is the catalog truth (probed active set plus a sync
+/// covering the current generation with zero gaps). `qdrant_available` is
+/// index truth. Every leg must hold; any failure is an explicit fence, never
+/// an empty success.
+#[must_use]
+pub const fn evaluate_current_workspace_proven(
+    configured: usize,
+    gap_count: usize,
+    workspace_current: bool,
+    qdrant_available: bool,
+) -> bool {
+    configured > 0 && gap_count == 0 && workspace_current && qdrant_available
+}
+
+/// Explains why the final proven claim does or does not hold. The order is
+/// fixed: empty, then gaps, then sync coverage, then index. The proven code
+/// is returned only when every leg holds.
+#[must_use]
+pub const fn current_workspace_proven_reason(
+    configured: usize,
+    gap_count: usize,
+    workspace_current: bool,
+    qdrant_available: bool,
+) -> &'static str {
+    if configured == 0 {
+        ROOTS_EMPTY_BLOCKS_CURRENTNESS
+    } else if gap_count > 0 {
+        ROOTS_GAP_BLOCKS_CURRENTNESS
+    } else if !workspace_current {
+        ROOTS_SYNC_INCOMPLETE_BLOCKS_CURRENTNESS
+    } else if !qdrant_available {
+        ROOTS_INDEX_UNAVAILABLE_BLOCKS_CURRENTNESS
+    } else {
+        ROOTS_CURRENT_WORKSPACE_PROVEN
+    }
+}
+
+#[cfg(test)]
+mod roots_tests {
+    use super::*;
+
+    #[test]
+    fn gaps_empty_and_sync_block_proof_in_fixed_order() {
+        assert!(!evaluate_current_workspace_proven(0, 0, true, true));
+        assert_eq!(
+            current_workspace_proven_reason(0, 0, true, true),
+            ROOTS_EMPTY_BLOCKS_CURRENTNESS
+        );
+        assert!(!evaluate_current_workspace_proven(1, 1, true, true));
+        assert_eq!(
+            current_workspace_proven_reason(1, 1, true, true),
+            ROOTS_GAP_BLOCKS_CURRENTNESS
+        );
+        assert!(!evaluate_current_workspace_proven(1, 0, false, true));
+        assert_eq!(
+            current_workspace_proven_reason(1, 0, false, true),
+            ROOTS_SYNC_INCOMPLETE_BLOCKS_CURRENTNESS
+        );
+        // This shell never proves index truth, so even a fully synced
+        // workspace stays unproven instead of over-claiming.
+        assert!(!evaluate_current_workspace_proven(1, 0, true, false));
+        assert_eq!(
+            current_workspace_proven_reason(1, 0, true, false),
+            ROOTS_INDEX_UNAVAILABLE_BLOCKS_CURRENTNESS
+        );
+        assert!(evaluate_current_workspace_proven(2, 0, true, true));
+        assert_eq!(
+            current_workspace_proven_reason(2, 0, true, true),
+            ROOTS_CURRENT_WORKSPACE_PROVEN
+        );
+    }
+}

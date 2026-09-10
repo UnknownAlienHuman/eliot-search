@@ -1,4 +1,12 @@
 //! Local owner-fenced observation-root commands for the primary daemon.
+//!
+//! Every command holds the single live [`DataRootGuard`] for its whole
+//! lifetime. A running daemon that already holds the data-root lock denies a
+//! second acquirer with `DATA_ROOT_ALREADY_OWNED`; the CLI never opens
+//! another owner for a live service. Watcher notifications stay hints inside
+//! [`SourceRootCatalog`]; only an explicit refresh plus a successful
+//! multi-root sync re-proves workspace truth. Missing or replaced roots are
+//! explicit gaps that fail closed instead of reading as empty.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -6,6 +14,7 @@ use std::path::Path;
 use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
 use crate::directory_manifest::sync_directory;
+use crate::source_roots::SourceRootCatalog;
 
 pub fn run(arguments: &[String]) -> Result<(), String> {
     let command = arguments.first().map(String::as_str).unwrap_or_default();
@@ -38,39 +47,86 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
         "--sync-source-roots" => return sync_registered(&mut owner),
         _ => {}
     }
-    let catalog = owner.source_roots();
+    emit_catalog_state(owner.source_roots())
+}
+
+fn emit_catalog_state(catalog: &SourceRootCatalog) -> Result<(), String> {
     for view in catalog.views().map_err(|error| error.code().to_owned())? {
         println!(
             "{{\"event\":\"source_root\",\"position\":{},\"path\":\"{}\",\"state\":\"{}\"}}",
             view.index, escape_json(&view.path), view.state.code(),
         );
     }
+    for gap in catalog.observation_gaps() {
+        println!(
+            "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
+            gap.position, gap.reason.code(), gap.state.code(),
+        );
+    }
+    let truth = catalog.current_workspace_truth();
+    let cursor = catalog.reconciliation_cursor();
+    // Index truth is always unavailable in this shell (no qualified
+    // server/client/artifact/profile set), so the final claim stays false
+    // while remaining derived instead of hard-coded.
+    let proven = crate::provider_composition::evaluate_current_workspace_proven(
+        truth.configured,
+        truth.gap_count,
+        truth.workspace_current,
+        false,
+    );
+    let reason = crate::provider_composition::current_workspace_proven_reason(
+        truth.configured,
+        truth.gap_count,
+        truth.workspace_current,
+        false,
+    );
     println!(
-        "{{\"event\":\"source_roots_complete\",\"configured\":{},\"available\":{},\"unavailable\":{},\"current_workspace_proven\":false}}",
-        catalog.configured_count(), catalog.available_count(), catalog.unavailable_count(),
+        concat!(
+            "{{\"event\":\"source_roots_complete\",\"configured\":{},",
+            "\"available\":{},\"unavailable\":{},\"gaps\":{},",
+            "\"reconciliation_generation\":{},\"watcher_pending\":{},",
+            "\"watcher_overflowed\":{},\"proven_reason\":\"{}\",",
+            "\"current_workspace_proven\":{}}}",
+        ),
+        truth.configured,
+        truth.available,
+        truth.unavailable,
+        truth.gap_count,
+        truth.reconciliation_generation,
+        cursor.pending_hints,
+        cursor.overflowed,
+        reason,
+        proven,
     );
     Ok(())
 }
 
 fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
     owner.source_roots_mut().refresh();
-    let catalog = owner.source_roots();
-    if catalog.configured_count() == 0 {
+    let truth = owner.source_roots().current_workspace_truth();
+    if truth.configured == 0 {
         return Err("SOURCE_ROOTS_EMPTY".to_owned());
     }
-    if catalog.unavailable_count() != 0 {
-        // A missing/inaccessible root is not an empty inventory. Do not retire
-        // its retained sources or begin a partially preflighted multi-root sync.
+    if truth.gap_count != 0 || truth.unavailable != 0 {
+        // A missing/inaccessible root is not an empty inventory. Surface its
+        // explicit gaps, then refuse to retire retained sources or begin a
+        // partially preflighted multi-root sync.
+        for gap in owner.source_roots().observation_gaps() {
+            println!(
+                "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
+                gap.position, gap.reason.code(), gap.state.code(),
+            );
+        }
         return Err("SOURCE_ROOTS_UNAVAILABLE".to_owned());
     }
-    let paths = catalog.available_paths().into_iter()
+    let paths = owner.source_roots().available_paths().into_iter()
         .map(|(index, path)| (index, path.to_path_buf()))
         .collect::<Vec<_>>();
-    let data_root = owner.canonical_root();
-    let mut store = DirectStore::open(data_root)?;
+    let data_root = owner.canonical_root().to_path_buf();
+    let mut store = DirectStore::open(&data_root)?;
     let mut completed = 0_usize;
     for (index, path) in &paths {
-        match sync_directory(&mut store, data_root, path) {
+        match sync_directory(&mut store, &data_root, path) {
             Ok(result) => {
                 completed += 1;
                 println!(
@@ -96,8 +152,37 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
             }
         }
     }
+    // All roots reconciled with zero preflight gaps and zero mid-sync
+    // failures: cover the current generation so workspace truth can advance.
+    // Index truth stays unavailable in this shell, so the final proven claim
+    // remains false while derived. An interrupted sync never reaches here, so
+    // its effects stay explicitly incomplete with no current claim.
+    owner.source_roots_mut().mark_reconciled_synced();
+    let truth = owner.source_roots().current_workspace_truth();
+    let proven = crate::provider_composition::evaluate_current_workspace_proven(
+        truth.configured,
+        truth.gap_count,
+        truth.workspace_current,
+        false,
+    );
+    let reason = crate::provider_composition::current_workspace_proven_reason(
+        truth.configured,
+        truth.gap_count,
+        truth.workspace_current,
+        false,
+    );
     println!(
-        "{{\"event\":\"source_roots_synced\",\"completed_roots\":{completed},\"complete\":true,\"current_workspace_proven\":false,\"qdrant_available\":false}}",
+        concat!(
+            "{{\"event\":\"source_roots_synced\",\"completed_roots\":{},",
+            "\"complete\":true,\"gaps\":{},\"reconciliation_generation\":{},",
+            "\"proven_reason\":\"{}\",\"current_workspace_proven\":{},",
+            "\"qdrant_available\":false}}",
+        ),
+        completed,
+        truth.gap_count,
+        truth.reconciliation_generation,
+        reason,
+        proven,
     );
     Ok(())
 }

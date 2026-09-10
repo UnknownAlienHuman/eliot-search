@@ -12,6 +12,16 @@ use std::path::{Component, Path, PathBuf};
 pub const MAX_SOURCE_ROOTS: usize = 32;
 pub const MAX_SOURCE_ROOT_FILE_BYTES: usize = 64 * 1024;
 pub const MAX_SOURCE_ROOT_PATH_BYTES: usize = 512;
+/// Maximum watcher hints retained in memory. Hints are dirty markers only;
+/// overflow becomes an explicit gap that forces a full refresh, never a silent drop.
+///
+/// Live-daemon bound: one-shot CLI never fills this queue (see
+/// [`SourceRootCatalog::note_watcher_hint`]).
+#[allow(dead_code)]
+pub const MAX_WATCHER_HINTS: usize = 64;
+/// Maximum observation gaps reported in one truth snapshot. One per
+/// configured root plus watcher-overflow and outcome-unknown fences.
+pub const MAX_OBSERVATION_GAPS: usize = 40;
 const HEADER: &str = "# ELIOT Search source roots v1";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -54,6 +64,11 @@ pub struct SourceRootCatalog {
     entries: Vec<SourceRootEntry>,
     excluded_data_root: Option<PathBuf>,
     needs_reopen: bool,
+    watcher_sequence: u64,
+    pending_hints: Vec<WatcherHint>,
+    watcher_overflowed: bool,
+    reconciliation_generation: u64,
+    last_synced_generation: Option<u64>,
 }
 
 impl SourceRootCatalog {
@@ -110,6 +125,11 @@ impl SourceRootCatalog {
             }).collect(),
             excluded_data_root: None,
             needs_reopen: false,
+            watcher_sequence: 0,
+            pending_hints: Vec::new(),
+            watcher_overflowed: false,
+            reconciliation_generation: 0,
+            last_synced_generation: None,
         };
         catalog.refresh();
         if !command_roots.is_empty() {
@@ -134,17 +154,31 @@ impl SourceRootCatalog {
     }
 
     /// Detects each root's transition, including swaps with unchanged totals.
+    /// A watcher hint never changes availability by itself; only this explicit
+    /// refresh reconciles hints into probed states. Consumed hints are drained;
+    /// an overflowed watcher forces a generation bump so currentness is lost
+    /// until the next successful multi-root sync re-proves it.
     pub(crate) fn refresh(&mut self) -> bool {
         if self.needs_reopen {
             return false;
         }
+        let had_overflow = self.watcher_overflowed;
+        let had_hints = !self.pending_hints.is_empty();
         let mut changed = false;
         for entry in &mut self.entries {
             let observed = probe_root(&entry.configured_path);
             changed |= entry.state != observed;
             entry.state = observed;
         }
-        changed
+        self.pending_hints.clear();
+        self.watcher_overflowed = false;
+        if changed || had_overflow || had_hints {
+            self.reconciliation_generation = self.reconciliation_generation.wrapping_add(1);
+            // The active set or its observability moved: a previous sync no
+            // longer proves the current workspace.
+            self.last_synced_generation = None;
+        }
+        changed || had_overflow || had_hints
     }
 
     pub(crate) fn available_paths(&self) -> Vec<(usize, &Path)> {
@@ -169,7 +203,12 @@ impl SourceRootCatalog {
             ensure_outside_data_root(&canonical, data_root)?;
         }
         if let Some(index) = self.entries.iter().position(|entry| entry.configured_path == canonical) {
-            self.entries[index].state = probe_root(&canonical);
+            let observed = probe_root(&canonical);
+            if self.entries[index].state != observed {
+                self.entries[index].state = observed;
+                self.reconciliation_generation = self.reconciliation_generation.wrapping_add(1);
+                self.last_synced_generation = None;
+            }
             return self.view(index);
         }
         if self.entries.len() >= MAX_SOURCE_ROOTS {
@@ -212,6 +251,11 @@ impl SourceRootCatalog {
             return Err(error);
         }
         self.entries = staged;
+        // The registered active set changed: prior sync proof no longer covers
+        // the current workspace. Unregistration is explicit and never revokes
+        // retained revisions, but it still blocks currentness until re-sync.
+        self.reconciliation_generation = self.reconciliation_generation.wrapping_add(1);
+        self.last_synced_generation = None;
         Ok(())
     }
 
@@ -232,6 +276,258 @@ impl SourceRootCatalog {
             state: entry.state,
         })
     }
+
+    /// Records one watcher notification as a hint only. Hints never change
+    /// availability; they only mark the catalog dirty so the next explicit
+    /// [`Self::refresh`] reconciles authoritative probe results. Bounded:
+    /// beyond [`MAX_WATCHER_HINTS`] the catalog keeps an explicit overflow
+    /// fence instead of growing or silently dropping.
+    ///
+    /// Returns `true` when the watcher fence is overflowed after this hint.
+    ///
+    /// Live-daemon only: one-shot CLI processes start with an empty hint
+    /// queue and reconcile via explicit `refresh`, so this entry stays
+    /// unused on the CLI path by construction.
+    #[allow(dead_code)]
+    pub(crate) fn note_watcher_hint(
+        &mut self,
+        position: usize,
+        kind: WatcherHintKind,
+    ) -> Result<bool, SourceRootError> {
+        self.ensure_usable()?;
+        if position >= self.entries.len() {
+            return Err(SourceRootError::RootNotFound);
+        }
+        self.watcher_sequence = self.watcher_sequence.wrapping_add(1);
+        if self.pending_hints.len() >= MAX_WATCHER_HINTS {
+            self.watcher_overflowed = true;
+            return Ok(true);
+        }
+        self.pending_hints.push(WatcherHint {
+            position,
+            kind,
+            sequence: self.watcher_sequence,
+        });
+        Ok(self.watcher_overflowed)
+    }
+
+    /// Drains pending watcher hints for one explicit reconciliation pass.
+    /// The caller must still call [`Self::refresh`]; draining alone proves nothing.
+    ///
+    /// Live-daemon only: see [`Self::note_watcher_hint`].
+    #[allow(dead_code)]
+    pub(crate) fn drain_watcher_hints(&mut self) -> Vec<WatcherHint> {
+        std::mem::take(&mut self.pending_hints)
+    }
+
+    /// Whether the bounded watcher fence overflowed since the last refresh.
+    ///
+    /// Live-daemon only: see [`Self::note_watcher_hint`].
+    #[allow(dead_code)]
+    pub(crate) const fn watcher_overflowed(&self) -> bool {
+        self.watcher_overflowed
+    }
+
+    /// Explicit observation gaps blocking currentness. A missing, replaced,
+    /// unsafe or unverifiable root is a typed gap, never an empty inventory.
+    /// A watcher overflow is its own gap and forces a full refresh. When the
+    /// catalog needs reopening, the single outcome-unknown gap blocks every
+    /// current claim. Bounded by [`MAX_OBSERVATION_GAPS`]; excess is a fence,
+    /// never a silent truncation.
+    pub(crate) fn observation_gaps(&self) -> Vec<ObservationGap> {
+        let mut gaps = Vec::new();
+        if self.needs_reopen {
+            gaps.push(ObservationGap {
+                position: 0,
+                reason: ObservationGapReason::UpdateOutcomeUnknown,
+                state: SourceRootState::Unverifiable,
+            });
+            return gaps;
+        }
+        for (position, entry) in self.entries.iter().enumerate() {
+            let reason = match entry.state {
+                SourceRootState::Available => continue,
+                SourceRootState::Missing => ObservationGapReason::Missing,
+                SourceRootState::NotDirectory => ObservationGapReason::NotDirectory,
+                SourceRootState::Unsafe => ObservationGapReason::Unsafe,
+                SourceRootState::Unverifiable => ObservationGapReason::Unverifiable,
+            };
+            if gaps.len() >= MAX_OBSERVATION_GAPS {
+                break;
+            }
+            gaps.push(ObservationGap {
+                position,
+                reason,
+                state: entry.state,
+            });
+        }
+        if self.watcher_overflowed && gaps.len() < MAX_OBSERVATION_GAPS {
+            gaps.push(ObservationGap {
+                position: self.entries.len(),
+                reason: ObservationGapReason::WatcherOverflow,
+                state: SourceRootState::Unverifiable,
+            });
+        }
+        gaps
+    }
+
+    /// Bounded reconciliation cursor for canonical control-state diagnostics.
+    /// The cursor is a dirty marker, not proof: only [`Self::refresh`] plus a
+    /// successful multi-root [`Self::mark_reconciled_synced`] can re-prove
+    /// currentness.
+    pub(crate) const fn reconciliation_cursor(&self) -> ReconciliationCursor {
+        ReconciliationCursor {
+            generation: self.reconciliation_generation,
+            pending_hints: self.pending_hints.len(),
+            overflowed: self.watcher_overflowed,
+            hint_sequence: self.watcher_sequence,
+            last_synced_generation: self.last_synced_generation,
+        }
+    }
+
+    /// Independent source/workspace currentness snapshot. Source truth is the
+    /// probed active set; workspace truth additionally requires the last
+    /// successful multi-root sync to cover the current reconciliation
+    /// generation. Index truth lives outside this catalog (qualified
+    /// Qdrant/artifacts/routes) and always blocks the final proven claim in
+    /// this shell via the provider roots-section.
+    pub(crate) fn current_workspace_truth(&self) -> CurrentWorkspaceTruth {
+        let gaps = self.observation_gaps();
+        let configured = self.configured_count();
+        let available = self.available_count();
+        let unavailable = self.unavailable_count();
+        let source_current =
+            !self.needs_reopen && configured > 0 && gaps.is_empty() && available == configured;
+        let workspace_current = source_current
+            && self.last_synced_generation == Some(self.reconciliation_generation);
+        CurrentWorkspaceTruth {
+            configured,
+            available,
+            unavailable,
+            gap_count: gaps.len(),
+            reconciliation_generation: self.reconciliation_generation,
+            last_synced_generation: self.last_synced_generation,
+            source_current,
+            workspace_current,
+        }
+    }
+
+    /// Marks the current reconciliation generation as sync-proven. Fails
+    /// closed: with any unresolved gap, no configured root, or a poisoned
+    /// catalog the mark is refused and currentness stays unproven. A later
+    /// `add`/`remove`/`refresh` invalidates the mark via generation bump.
+    pub(crate) fn mark_reconciled_synced(&mut self) -> bool {
+        if self.needs_reopen || self.entries.is_empty() || !self.observation_gaps().is_empty() {
+            return false;
+        }
+        self.last_synced_generation = Some(self.reconciliation_generation);
+        true
+    }
+}
+
+/// Closed watcher-hint kind. Hints are dirty markers only; they carry no
+/// inventory contents and never authorize a current claim.
+///
+/// Live-daemon only: one-shot CLI reconciles via explicit `refresh`, so these
+/// variants stay unused on the CLI path by construction.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WatcherHintKind {
+    Modified,
+    Created,
+    Removed,
+    Rescan,
+    Overflow,
+}
+
+impl WatcherHintKind {
+    /// Stable wire spelling for diagnostics.
+    #[must_use]
+    #[allow(dead_code)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Modified => "modified",
+            Self::Created => "created",
+            Self::Removed => "removed",
+            Self::Rescan => "rescan",
+            Self::Overflow => "overflow",
+        }
+    }
+}
+
+/// One bounded watcher hint: which registered position looked dirty and why.
+/// The sequence orders hints inside one catalog lifetime; it is never
+/// persisted and never proves currency.
+///
+/// Live-daemon only: see [`WatcherHintKind`].
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WatcherHint {
+    pub(crate) position: usize,
+    pub(crate) kind: WatcherHintKind,
+    pub(crate) sequence: u64,
+}
+
+/// Typed observation-gap reason. Every non-available root and every
+/// watcher/poison fence maps to exactly one closed reason.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObservationGapReason {
+    Missing,
+    NotDirectory,
+    Unsafe,
+    Unverifiable,
+    WatcherOverflow,
+    UpdateOutcomeUnknown,
+}
+
+impl ObservationGapReason {
+    /// Stable machine-readable gap code.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Missing => "OBSERVATION_GAP_MISSING",
+            Self::NotDirectory => "OBSERVATION_GAP_NOT_DIRECTORY",
+            Self::Unsafe => "OBSERVATION_GAP_UNSAFE",
+            Self::Unverifiable => "OBSERVATION_GAP_UNVERIFIABLE",
+            Self::WatcherOverflow => "OBSERVATION_GAP_WATCHER_OVERFLOW",
+            Self::UpdateOutcomeUnknown => "OBSERVATION_GAP_UPDATE_OUTCOME_UNKNOWN",
+        }
+    }
+}
+
+/// One explicit observation gap blocking currentness. Positions reference the
+/// sorted registration order; reasons are closed codes without paths or bytes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ObservationGap {
+    pub(crate) position: usize,
+    pub(crate) reason: ObservationGapReason,
+    pub(crate) state: SourceRootState,
+}
+
+/// Bounded reconciliation cursor snapshot for control-state diagnostics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReconciliationCursor {
+    pub(crate) generation: u64,
+    pub(crate) pending_hints: usize,
+    pub(crate) overflowed: bool,
+    pub(crate) hint_sequence: u64,
+    pub(crate) last_synced_generation: Option<u64>,
+}
+
+/// Independent source/workspace truth snapshot. `source_current` covers the
+/// probed active set; `workspace_current` additionally requires a successful
+/// multi-root sync over the current generation. The final proven claim also
+/// needs index/barrier truth from the provider roots-section.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CurrentWorkspaceTruth {
+    pub(crate) configured: usize,
+    pub(crate) available: usize,
+    pub(crate) unavailable: usize,
+    pub(crate) gap_count: usize,
+    pub(crate) reconciliation_generation: u64,
+    pub(crate) last_synced_generation: Option<u64>,
+    pub(crate) source_current: bool,
+    pub(crate) workspace_current: bool,
 }
 
 fn canonicalize_configured_set(paths: &mut Vec<PathBuf>) -> Result<(), SourceRootError> {
@@ -756,5 +1052,107 @@ mod tests {
         let config = sandbox.0.join("config.v1");
         symlink(&target, &config).unwrap();
         assert!(SourceRootCatalog::load(config, &[]).is_err());
+    }
+
+    #[test]
+    fn watcher_hints_are_bounded_and_never_prove_availability() {
+        let sandbox = Sandbox::new();
+        let source = sandbox.directory("source");
+        let mut catalog =
+            SourceRootCatalog::load(sandbox.0.join("roots.v1"), std::slice::from_ref(&source))
+                .unwrap();
+        assert_eq!(WatcherHintKind::Modified.as_str(), "modified");
+        assert_eq!(WatcherHintKind::Created.as_str(), "created");
+        assert_eq!(WatcherHintKind::Removed.as_str(), "removed");
+        assert_eq!(WatcherHintKind::Rescan.as_str(), "rescan");
+        assert_eq!(WatcherHintKind::Overflow.as_str(), "overflow");
+        assert!(!catalog.watcher_overflowed());
+        assert_eq!(catalog.observation_gaps().len(), 0);
+        // Hints alone change nothing observable until an explicit refresh.
+        assert!(!catalog.note_watcher_hint(0, WatcherHintKind::Modified).unwrap());
+        assert!(!catalog.note_watcher_hint(0, WatcherHintKind::Created).unwrap());
+        assert!(!catalog.note_watcher_hint(0, WatcherHintKind::Removed).unwrap());
+        assert!(!catalog.note_watcher_hint(0, WatcherHintKind::Rescan).unwrap());
+        assert_eq!(catalog.available_count(), 1);
+        assert_eq!(catalog.observation_gaps().len(), 0);
+        assert_eq!(catalog.drain_watcher_hints().len(), 4);
+        // Unknown positions fail closed instead of allocating.
+        assert!(matches!(
+            catalog.note_watcher_hint(7, WatcherHintKind::Removed),
+            Err(SourceRootError::RootNotFound)
+        ));
+        // Overflow becomes an explicit gap, never a silent drop or growth.
+        for _ in 0..(MAX_WATCHER_HINTS + 4) {
+            let _ = catalog.note_watcher_hint(0, WatcherHintKind::Modified);
+        }
+        assert!(catalog.watcher_overflowed());
+        assert!(
+            catalog
+                .observation_gaps()
+                .iter()
+                .any(|gap| gap.reason == ObservationGapReason::WatcherOverflow)
+        );
+        assert!(!catalog.current_workspace_truth().source_current);
+        // An explicit refresh reconciles and clears the fence.
+        assert!(catalog.refresh());
+        assert!(!catalog.watcher_overflowed());
+        assert_eq!(catalog.observation_gaps().len(), 0);
+    }
+
+    #[test]
+    fn missing_and_replaced_roots_are_gaps_and_block_sync_proof() {
+        let sandbox = Sandbox::new();
+        let source = sandbox.directory("source");
+        let mut catalog =
+            SourceRootCatalog::load(sandbox.0.join("roots.v1"), std::slice::from_ref(&source))
+                .unwrap();
+        assert!(!catalog.current_workspace_truth().workspace_current);
+        assert!(catalog.mark_reconciled_synced());
+        assert!(catalog.current_workspace_truth().workspace_current);
+        // Missing is retained but gapped; sync proof is refused and invalidated.
+        fs::remove_dir(&source).unwrap();
+        assert!(catalog.refresh());
+        let gaps = catalog.observation_gaps();
+        assert_eq!(gaps.len(), 1);
+        assert_eq!(gaps[0].reason, ObservationGapReason::Missing);
+        assert_eq!(gaps[0].reason.code(), "OBSERVATION_GAP_MISSING");
+        assert!(!catalog.mark_reconciled_synced());
+        assert!(!catalog.current_workspace_truth().workspace_current);
+        assert!(!catalog.current_workspace_truth().source_current);
+        // Replaced-by-file keeps the same gap discipline with its own reason.
+        fs::write(&source, b"not a directory").unwrap();
+        assert!(catalog.refresh());
+        let gaps = catalog.observation_gaps();
+        assert_eq!(gaps.len(), 1);
+        assert_eq!(gaps[0].reason, ObservationGapReason::NotDirectory);
+        // Explicit unregistration clears the gap without revoking history;
+        // an empty catalog still never claims current.
+        catalog.remove(&source).unwrap();
+        assert_eq!(catalog.observation_gaps().len(), 0);
+        assert!(!catalog.mark_reconciled_synced());
+        assert!(!catalog.current_workspace_truth().workspace_current);
+    }
+
+    #[test]
+    fn active_set_mutation_invalidates_sync_proof() {
+        let sandbox = Sandbox::new();
+        let first = sandbox.directory("first");
+        let second = sandbox.directory("second");
+        let mut catalog = SourceRootCatalog::load(
+            sandbox.0.join("roots.v1"),
+            &[first.clone(), second],
+        )
+        .unwrap();
+        assert!(catalog.mark_reconciled_synced());
+        let generation = catalog.reconciliation_cursor().generation;
+        catalog.remove(&first).unwrap();
+        assert_ne!(catalog.reconciliation_cursor().generation, generation);
+        assert!(!catalog.current_workspace_truth().workspace_current);
+        // Re-adding re-proves only after an explicit sync mark with no gaps.
+        let third = sandbox.directory("third");
+        catalog.add(&third).unwrap();
+        assert!(!catalog.current_workspace_truth().workspace_current);
+        assert!(catalog.mark_reconciled_synced());
+        assert!(catalog.current_workspace_truth().workspace_current);
     }
 }
