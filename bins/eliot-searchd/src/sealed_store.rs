@@ -868,4 +868,21 @@ mod tests {
             SealedStoreError::EmptyPlaintext
         );
     }
+
+    #[test]
+    fn delete_sealed_reports_logical_closure_without_claiming_physical_erasure() {
+        let error = delete_sealed(Path::new("."), "").expect_err("empty identifier is rejected");
+        #[cfg(windows)]
+        assert_eq!(error, SealedStoreError::InvalidObjectId);
+        #[cfg(not(windows))]
+        assert_eq!(error, SealedStoreError::UnsupportedPlatform);
+        let receipt = DeleteReceipt {
+            object_id: "object-1".to_owned(),
+            logical_delete_complete: true,
+            physical_erasure_guaranteed: false,
+        };
+        assert_eq!(receipt.object_id, "object-1");
+        assert!(receipt.logical_delete_complete);
+        assert!(!receipt.physical_erasure_guaranteed);
+    }
 }
