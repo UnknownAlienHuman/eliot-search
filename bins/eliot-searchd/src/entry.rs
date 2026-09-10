@@ -49,9 +49,11 @@ mod sealed_store;
 mod sealed_transaction;
 #[allow(dead_code)]
 mod sealed_transaction_guard;
+mod secret_composition;
 mod secure_commands;
 mod service_output;
 mod sha256;
+mod source_composition;
 mod source_fence;
 mod source_migration_command;
 mod source_root_commands;

@@ -1,29 +1,70 @@
 //! Authenticated bounded loopback transport for the development daemon.
 //!
-//! The endpoint binds only an explicit loopback socket. A token is read from one
-//! non-symlink regular file, reduced to SHA-256, and zeroed from the temporary
-//! byte buffer. Each connection receives a unique challenge and proves knowledge
-//! of the token-derived verifier; plaintext token bytes never cross the socket.
+//! `pairing_blake3_v1` replaces the former `sha256_challenge_v1` token-file
+//! challenge: every connection runs a mutual keyed-BLAKE3 ceremony over the
+//! approved `search-provider-protocol` pairing transcripts. The endpoint owns
+//! no secret storage and performs no key derivation beyond the transport
+//! framing — the 32-byte key is supplied per connection by an
+//! [`EndpointKeySource`] (a purpose-bound [`SecretLease`] in the product
+//! path), ceremony material is drawn from a keyed PRF, challenges are
+//! single-use through a bounded [`PairingLedger`], and only 32-byte digests
+//! ever cross the socket.
+//!
+//! The legacy `serve_loopback` file entry remains as an explicit
+//! development-compat shim: the file bytes seed an ephemeral key through a
+//! one-way domain hash and never cross the socket. The product path is
+//! [`serve_loopback_with_source`] with a lease-bound source. No home-grown
+//! hash authentication protocol is defined here: transcripts, the pairing
+//! state machine and fixed-work proof comparison all come from
+//! `search-provider-protocol`, and keyed BLAKE3 is computed with the pinned
+//! `blake3 v1.8.2` dependency.
 
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::sha256::{Sha256Digest, digest_bytes};
+use search_contracts::ProtocolVersion;
+use search_provider_protocol::pairing::{
+    ClientNonce, PairingChallenge, PairingLedger, PairingMachine, PairingTranscript, ProofDigest,
+    SessionId,
+};
+// Reference-client transcript builders and comparison (cfg(test)); the
+// product server path only verifies through `PairingMachine`.
+#[cfg(test)]
+use search_provider_protocol::pairing::{
+    client_proof_transcript, server_proof_transcript, verify_proof,
+};
+
+/// Negotiated loopback-pairing version bound into every proof transcript.
+pub const PAIRING_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
+/// Wire authentication identifier; the legacy `sha256_challenge_v1` is gone.
+pub const PAIRING_AUTHENTICATION_ID: &str = "pairing_blake3_v1";
 
 const MAX_TOKEN_FILE_BYTES: usize = 4096;
 const MIN_TOKEN_BYTES: usize = 32;
+#[cfg(test)]
+const MAX_CHALLENGE_LINE_BYTES: usize = 512;
 const MAX_AUTH_LINE_BYTES: usize = 256;
+#[cfg(test)]
+const MAX_VERIFIED_LINE_BYTES: usize = 256;
 const MAX_COMMAND_LINE_BYTES: usize = 128 * 1024;
 const MAX_COMMANDS_PER_CONNECTION: usize = 4096;
+const MAX_PAIRING_CHALLENGES: usize = 4096;
 // Silent-client read bound and slow-reader write bound. They share a value
 // but never a meaning: the read timeout is not the socket configuration, and
 // neither is the proxy child request (120s) / startup (30s) / cleanup (5s)
 // deadline owned by `proxy_child::ChildLimits`.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
+
+const BINDING_DOMAIN: &[u8] = b"eliot-search/loopback-binding/v1\0";
+const BINDING_ROLE: &[u8] = b"loopback-operator";
+const DEV_KEY_DOMAIN: &[u8] = b"eliot-search/loopback-dev-key/v1\0";
+const SESSION_PRF_DOMAIN: &[u8] = b"eliot-search/loopback-session/v1\0";
+const NONCE_PRF_DOMAIN: &[u8] = b"eliot-search/loopback-client-nonce/v1\0";
+const CHALLENGE_PRF_DOMAIN: &[u8] = b"eliot-search/loopback-challenge/v1\0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EndpointAction {
@@ -33,15 +74,43 @@ pub enum EndpointAction {
     Abort,
 }
 
-pub fn serve_loopback<F>(
-    port: u16,
-    token_file: &Path,
-    handler: F,
-) -> Result<(), String>
+/// Per-connection key supply owned by the secret-owning side.
+///
+/// The key is exposed only for the duration of one callback so proofs are
+/// computed inside the lease window without the key ever crossing the
+/// socket, reaching logs, or escaping by value. A lease-bound
+/// implementation returns `Err` once the lease expires or the reference is
+/// revoked, which fails the connection closed without a challenge.
+pub trait EndpointKeySource {
+    /// Exposes the active 32-byte pairing key for one callback.
+    fn with_endpoint_key<T>(&mut self, use_key: impl FnOnce(&[u8; 32]) -> T) -> Result<T, String>;
+}
+
+/// Development-compat entry: a token file seeds an ephemeral key.
+///
+/// The file bytes are domain-hashed into a 32-byte key, zeroed from the
+/// temporary buffer, and used only through [`serve_loopback_with_source`]
+/// with the identical `pairing_blake3_v1` wire. The product path supplies a
+/// lease-bound [`EndpointKeySource`] instead; no plaintext token byte ever
+/// crosses the socket on either path.
+pub fn serve_loopback<F>(port: u16, token_file: &Path, handler: F) -> Result<(), String>
 where
     F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
 {
-    let token_verifier = read_token_verifier(token_file)?;
+    let mut source = FileKeySource::from_token_file(token_file)?;
+    serve_loopback_with_source(port, &mut source, handler)
+}
+
+/// Lease-bound entry: mutual keyed proofs over pairing transcripts.
+///
+/// `source` is consulted once per connection inside the lease window; the
+/// bounded challenge ledger is shared across all connections of this
+/// listener and fails closed (never evicts) when full.
+pub fn serve_loopback_with_source<F, S>(port: u16, source: &mut S, handler: F) -> Result<(), String>
+where
+    F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+    S: EndpointKeySource,
+{
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
         .map_err(|error| format!("ENDPOINT_BIND_ERROR:{error}"))?;
     let local = listener
@@ -51,23 +120,33 @@ where
         return Err("ENDPOINT_NON_LOOPBACK_BIND_DENIED".to_owned());
     }
     println!(
-        "{{\"event\":\"loopback_ready\",\"address\":\"{local}\",\"protocol_version\":1,\"authentication\":\"sha256_challenge_v1\"}}",
+        "{{\"event\":\"loopback_ready\",\"address\":\"{local}\",\"protocol_version\":1,\"authentication\":\"{PAIRING_AUTHENTICATION_ID}\"}}",
     );
 
-    serve_listener(&listener, token_verifier, handler)
+    let ledger = PairingLedger::new(MAX_PAIRING_CHALLENGES)
+        .map_err(|_| "ENDPOINT_REPLAY_LEDGER_INVALID".to_owned())?;
+    serve_listener(&listener, source, ledger, handler)
 }
 
-fn serve_listener<F>(listener: &TcpListener, token_verifier: Sha256Digest, mut handler: F)
-    -> Result<(), String>
+fn serve_listener<F, S>(
+    listener: &TcpListener,
+    source: &mut S,
+    mut ledger: PairingLedger,
+    mut handler: F,
+) -> Result<(), String>
 where
     F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+    S: EndpointKeySource,
 {
     let mut connection_sequence = 0_u64;
     for incoming in listener.incoming() {
         let mut stream = match incoming {
             Ok(stream) => stream,
             Err(error) => {
-                eprintln!("{{\"error\":\"ENDPOINT_ACCEPT_ERROR\",\"detail_class\":\"{}\"}}", error.kind());
+                eprintln!(
+                    "{{\"error\":\"ENDPOINT_ACCEPT_ERROR\",\"detail_class\":\"{}\"}}",
+                    error.kind()
+                );
                 continue;
             }
         };
@@ -88,9 +167,9 @@ where
 
         match serve_connection(
             stream,
-            peer,
             connection_sequence,
-            token_verifier,
+            source,
+            &mut ledger,
             &mut handler,
         ) {
             Ok(EndpointAction::Continue) => {}
@@ -110,44 +189,18 @@ where
     Ok(())
 }
 
-fn serve_connection<F>(
+fn serve_connection<F, S>(
     mut stream: TcpStream,
-    peer: SocketAddr,
     connection_sequence: u64,
-    token_verifier: Sha256Digest,
+    source: &mut S,
+    ledger: &mut PairingLedger,
     handler: &mut F,
 ) -> Result<EndpointAction, String>
 where
     F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+    S: EndpointKeySource,
 {
-    let challenge = derive_challenge(token_verifier, peer, connection_sequence)?;
-    write_line(&mut stream, &format!("CHALLENGE\t{}", challenge.hex()))
-        .map_err(|error| format!("ENDPOINT_CHALLENGE_WRITE_ERROR:{error}"))?;
-    let read_stream = stream
-        .try_clone()
-        .map_err(|error| format!("ENDPOINT_STREAM_CLONE_ERROR:{error}"))?;
-    let mut reader = BufReader::new(read_stream);
-    let authentication = read_bounded_line(&mut reader, MAX_AUTH_LINE_BYTES)?
-        .ok_or_else(|| "ENDPOINT_AUTHENTICATION_MISSING".to_owned())?;
-    let presented = authentication
-        .strip_prefix("AUTH\t")
-        .ok_or_else(|| "ENDPOINT_AUTHENTICATION_INVALID".to_owned())?;
-    let presented = Sha256Digest::from_hex(presented)
-        .map_err(|_| "ENDPOINT_AUTHENTICATION_INVALID".to_owned())?;
-    let expected = derive_response(token_verifier, challenge);
-    if !constant_time_equal(expected, presented) {
-        let _ = write_line(&mut stream, "{\"error\":\"AUTHENTICATION_FAILED\"}");
-        return Err("ENDPOINT_AUTHENTICATION_FAILED".to_owned());
-    }
-    write_line(
-        &mut stream,
-        concat!(
-            "{\"event\":\"authenticated\",\"protocol_version\":1,",
-            "\"transport\":\"loopback_tcp\",",
-            "\"authentication\":\"sha256_challenge_v1\"}"
-        ),
-    )
-    .map_err(|error| format!("ENDPOINT_READY_WRITE_ERROR:{error}"))?;
+    let mut reader = authenticate_connection(&mut stream, connection_sequence, source, ledger)?;
 
     let mut request_sequence = 0_u64;
     loop {
@@ -157,9 +210,7 @@ where
         if command.is_empty() {
             return Err("ENDPOINT_EMPTY_COMMAND".to_owned());
         }
-        if request_sequence
-            >= u64::try_from(MAX_COMMANDS_PER_CONNECTION).unwrap_or(u64::MAX)
-        {
+        if request_sequence >= u64::try_from(MAX_COMMANDS_PER_CONNECTION).unwrap_or(u64::MAX) {
             write_line(
                 &mut stream,
                 "{\"event\":\"request_complete\",\"ok\":false,\"error\":\"ENDPOINT_REQUEST_LIMIT_EXCEEDED\"}",
@@ -169,15 +220,14 @@ where
         }
         write_line(
             &mut stream,
-            &format!(
-                "{{\"event\":\"request_started\",\"sequence\":{request_sequence}}}"
-            ),
+            &format!("{{\"event\":\"request_started\",\"sequence\":{request_sequence}}}"),
         )
         .map_err(|error| format!("ENDPOINT_WRITE_ERROR:{error}"))?;
         let outcome = handler(&command, &mut stream);
         match complete_request(&mut stream, outcome, request_sequence) {
             EndpointAction::Continue => {
-                request_sequence = request_sequence.checked_add(1)
+                request_sequence = request_sequence
+                    .checked_add(1)
                     .ok_or_else(|| "ENDPOINT_REQUEST_SEQUENCE_EXHAUSTED".to_owned())?;
             }
             action => return Ok(action),
@@ -196,44 +246,461 @@ fn complete_request(
     let (action, status) = match outcome {
         Ok(EndpointAction::Abort) => return EndpointAction::Abort,
         Ok(action) => (action, "\"ok\":true".to_owned()),
-        Err(error) => (EndpointAction::Continue,
-            format!("\"ok\":false,\"error\":\"{}\"", sanitize_code(&error))),
+        Err(error) => (
+            EndpointAction::Continue,
+            format!("\"ok\":false,\"error\":\"{}\"", sanitize_code(&error)),
+        ),
     };
     let frame = format!("{{\"event\":\"request_complete\",\"sequence\":{sequence},{status}}}");
-    if write_line(writer, &frame).is_err() { EndpointAction::Abort } else { action }
+    if write_line(writer, &frame).is_err() {
+        EndpointAction::Abort
+    } else {
+        action
+    }
 }
 
-fn read_token_verifier(path: &Path) -> Result<Sha256Digest, String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| format!("ENDPOINT_TOKEN_METADATA_ERROR:{error}"))?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err("ENDPOINT_TOKEN_FILE_INVALID".to_owned());
+/// Role-bound binding digest for one pairing key.
+///
+/// Must equal `secret_composition::derive_binding_digest` on the same key;
+/// the process test proves that agreement on fixed vectors. The digest binds
+/// the fixed loopback role to the key and travels in the clear; the key
+/// itself never does.
+#[must_use]
+pub fn pairing_binding_digest(key: &[u8; 32]) -> ProofDigest {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(BINDING_DOMAIN);
+    hasher.update(BINDING_ROLE);
+    hasher.update(&[0]);
+    hasher.update(key);
+    ProofDigest::from_bytes(*hasher.finalize().as_bytes())
+}
+
+/// Keyed proof over one exact pairing transcript (secret-owning side only).
+#[must_use]
+pub fn keyed_proof(key: &[u8; 32], transcript: &PairingTranscript) -> ProofDigest {
+    ProofDigest::from_bytes(*blake3::keyed_hash(key, transcript.as_bytes()).as_bytes())
+}
+
+/// Runs the mutual pairing ceremony for one connection and returns the
+/// authenticated command reader.
+///
+/// Key handling matches the module contract: each proof is computed inside
+/// one lease-window callback, challenges are consumed exactly once, and only
+/// digests cross the socket.
+fn authenticate_connection<S>(
+    stream: &mut TcpStream,
+    connection_sequence: u64,
+    source: &mut S,
+    ledger: &mut PairingLedger,
+) -> Result<BufReader<TcpStream>, String>
+where
+    S: EndpointKeySource,
+{
+    // One key callback derives the binding digest, the fresh ceremony
+    // material, the ceremony machine and the expected client proof. The key
+    // never leaves this callback; only digests and opaque nonces do.
+    let prepared = source
+        .with_endpoint_key(|key| {
+            let binding = pairing_binding_digest(key);
+            let (session, nonce, challenge) = derive_ceremony_material(key, connection_sequence)?;
+            let mut machine = PairingMachine::new(PAIRING_PROTOCOL_VERSION, binding);
+            machine
+                .issue_challenge(session, nonce, challenge)
+                .map_err(|_| "ENDPOINT_PAIRING_ISSUE_FAILED".to_owned())?;
+            let transcript = machine
+                .client_transcript()
+                .map_err(|_| "ENDPOINT_PAIRING_TRANSCRIPT_FAILED".to_owned())?;
+            let expected_client = keyed_proof(key, &transcript);
+            Ok::<_, String>((machine, binding, session, nonce, challenge, expected_client))
+        })
+        .map_err(|_| "ENDPOINT_KEY_UNAVAILABLE".to_owned())??;
+    let (mut machine, binding, session, nonce, challenge, expected_client) = prepared;
+
+    // Single-use challenge: an exact replay fails closed here, before any
+    // proof comparison. A full ledger fails closed as well, never evicting.
+    ledger.consume(session, &challenge).map_err(|error| {
+        machine.fail();
+        error.to_string()
+    })?;
+
+    write_line(
+        stream,
+        &encode_challenge(binding, session, &nonce, &challenge),
+    )
+    .map_err(|error| format!("ENDPOINT_CHALLENGE_WRITE_ERROR:{error}"))?;
+    let read_stream = stream
+        .try_clone()
+        .map_err(|error| format!("ENDPOINT_STREAM_CLONE_ERROR:{error}"))?;
+    let mut reader = BufReader::new(read_stream);
+    let authentication = read_bounded_line(&mut reader, MAX_AUTH_LINE_BYTES)?
+        .ok_or_else(|| "ENDPOINT_AUTHENTICATION_MISSING".to_owned())?;
+    let observed = parse_auth_line(&authentication)?;
+    if machine
+        .verify_client_proof(&expected_client, &observed)
+        .is_err()
+    {
+        let _ = write_line(stream, "{\"error\":\"AUTHENTICATION_FAILED\"}");
+        return Err("ENDPOINT_AUTHENTICATION_FAILED".to_owned());
     }
-    if metadata.len() > u64::try_from(MAX_TOKEN_FILE_BYTES).unwrap_or(u64::MAX) {
-        return Err("ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned());
+
+    // Mutual proof: the provider proves the same key over the server-domain
+    // transcript. A second key callback keeps the key inside the lease
+    // window; the machine state already binds the ceremony.
+    let provider_proof = source
+        .with_endpoint_key(|key| {
+            machine
+                .server_transcript()
+                .map(|transcript| keyed_proof(key, &transcript))
+        })
+        .map_err(|_| "ENDPOINT_KEY_UNAVAILABLE".to_owned())?
+        .map_err(|_| "ENDPOINT_PAIRING_TRANSCRIPT_FAILED".to_owned())?;
+    machine
+        .issue_provider_proof(provider_proof)
+        .map_err(|_| "ENDPOINT_PAIRING_PROVIDER_FAILED".to_owned())?;
+    let verified = machine
+        .into_verified()
+        .map_err(|_| "ENDPOINT_PAIRING_PROVIDER_FAILED".to_owned())?;
+    debug_assert_eq!(verified.version(), PAIRING_PROTOCOL_VERSION);
+
+    write_line(
+        stream,
+        &format!(
+            "PAIRING_VERIFIED\tproof={}",
+            hex_encode(verified.provider_proof().as_bytes())
+        ),
+    )
+    .map_err(|error| format!("ENDPOINT_READY_WRITE_ERROR:{error}"))?;
+    write_line(
+        stream,
+        concat!(
+            "{\"event\":\"authenticated\",\"protocol_version\":1,",
+            "\"transport\":\"loopback_tcp\",",
+            "\"authentication\":\"pairing_blake3_v1\"}"
+        ),
+    )
+    .map_err(|error| format!("ENDPOINT_READY_WRITE_ERROR:{error}"))?;
+    Ok(reader)
+}
+
+/// Fresh per-connection ceremony material from a keyed PRF.
+///
+/// Domains separate session, nonce and challenge draws; the connection
+/// sequence and wall-clock nanos make each draw unique per connection. An
+/// all-zero draw (malformed ceremony material) fails the connection closed
+/// instead of retrying without bound.
+fn derive_ceremony_material(
+    key: &[u8; 32],
+    connection_sequence: u64,
+) -> Result<(SessionId, ClientNonce, PairingChallenge), String> {
+    fn draw(key: &[u8; 32], domain: &[u8], sequence: u64, nanos: u128) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new_keyed(key);
+        hasher.update(domain);
+        hasher.update(&sequence.to_be_bytes());
+        hasher.update(&nanos.to_be_bytes());
+        *hasher.finalize().as_bytes()
     }
-    let mut file = File::open(path)
-        .map_err(|error| format!("ENDPOINT_TOKEN_OPEN_ERROR:{error}"))?;
-    let mut bytes = Vec::with_capacity(
-        usize::try_from(metadata.len())
-            .map_err(|_| "ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned())?,
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "ENDPOINT_CLOCK_INVALID".to_owned())?
+        .as_nanos();
+    let session_bytes = draw(key, SESSION_PRF_DOMAIN, connection_sequence, nanos);
+    let nonce_bytes = draw(key, NONCE_PRF_DOMAIN, connection_sequence, nanos);
+    let challenge_bytes = draw(key, CHALLENGE_PRF_DOMAIN, connection_sequence, nanos);
+    let mut session_raw = [0_u8; 16];
+    let mut nonce_raw = [0_u8; 16];
+    session_raw.copy_from_slice(&session_bytes[..16]);
+    nonce_raw.copy_from_slice(&nonce_bytes[..16]);
+    let session =
+        SessionId::from_bytes(session_raw).map_err(|_| "ENDPOINT_ENTROPY_INVALID".to_owned())?;
+    let nonce =
+        ClientNonce::from_bytes(nonce_raw).map_err(|_| "ENDPOINT_ENTROPY_INVALID".to_owned())?;
+    let challenge = PairingChallenge::from_bytes(challenge_bytes)
+        .map_err(|_| "ENDPOINT_ENTROPY_INVALID".to_owned())?;
+    Ok((session, nonce, challenge))
+}
+
+fn encode_challenge(
+    binding: ProofDigest,
+    session: SessionId,
+    nonce: &ClientNonce,
+    challenge: &PairingChallenge,
+) -> String {
+    format!(
+        "PAIRING_CHALLENGE\tv={}.{}\tsession={}\tnonce={}\tchallenge={}\tbinding={}",
+        PAIRING_PROTOCOL_VERSION.major,
+        PAIRING_PROTOCOL_VERSION.minor,
+        hex_encode(session.as_bytes()),
+        hex_encode(nonce.as_bytes()),
+        hex_encode(challenge.as_bytes()),
+        hex_encode(binding.as_bytes()),
+    )
+}
+
+/// Parsed server challenge: version plus ceremony material and binding.
+///
+/// Reference-client helper (`cfg(test)`): the product client lives in
+/// `bins/eliot-search` (T18 client slice); this type proves the wire from the
+/// test side, alongside the unit and process tests below.
+#[cfg(test)]
+pub struct ParsedChallenge {
+    /// Negotiated version stated by the server.
+    pub version: ProtocolVersion,
+    /// Pairing session identifier.
+    pub session: SessionId,
+    /// Client nonce bound into both transcripts.
+    pub nonce: ClientNonce,
+    /// Fresh single-use provider challenge.
+    pub challenge: PairingChallenge,
+    /// Role-bound binding digest for the pairing key.
+    pub binding: ProofDigest,
+}
+
+/// Strict challenge-line parse: exact field count, order, prefixes and
+/// lowercase hex. Anything else fails closed without a proof attempt.
+///
+/// Reference-client helper (`cfg(test)`); see [`ParsedChallenge`].
+#[cfg(test)]
+pub fn parse_challenge_line(line: &str) -> Result<ParsedChallenge, String> {
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() != 6 || parts[0] != "PAIRING_CHALLENGE" {
+        return Err("ENDPOINT_PAIRING_FORMAT_INVALID".to_owned());
+    }
+    let version_text = parts[1]
+        .strip_prefix("v=")
+        .ok_or_else(|| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())?;
+    let (major, minor) = version_text
+        .split_once('.')
+        .ok_or_else(|| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())?;
+    let version = ProtocolVersion {
+        major: major
+            .parse::<u16>()
+            .map_err(|_| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())?,
+        minor: minor
+            .parse::<u16>()
+            .map_err(|_| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())?,
+    };
+    if version != PAIRING_PROTOCOL_VERSION {
+        return Err("ENDPOINT_PAIRING_VERSION_MISMATCH".to_owned());
+    }
+    let session = SessionId::from_bytes(
+        parts[2]
+            .strip_prefix("session=")
+            .ok_or_else(|| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())
+            .and_then(hex_decode_16)?,
+    )
+    .map_err(|_| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())?;
+    let nonce = ClientNonce::from_bytes(
+        parts[3]
+            .strip_prefix("nonce=")
+            .ok_or_else(|| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())
+            .and_then(hex_decode_16)?,
+    )
+    .map_err(|_| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())?;
+    let challenge = PairingChallenge::from_bytes(
+        parts[4]
+            .strip_prefix("challenge=")
+            .ok_or_else(|| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())
+            .and_then(hex_decode_32)?,
+    )
+    .map_err(|_| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())?;
+    let binding = ProofDigest::from_bytes(
+        parts[5]
+            .strip_prefix("binding=")
+            .ok_or_else(|| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())
+            .and_then(hex_decode_32)?,
     );
-    (&mut file)
-        .take(u64::try_from(MAX_TOKEN_FILE_BYTES + 1).unwrap_or(u64::MAX))
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("ENDPOINT_TOKEN_READ_ERROR:{error}"))?;
-    if bytes.len() > MAX_TOKEN_FILE_BYTES {
-        bytes.fill(0);
-        return Err("ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned());
+    Ok(ParsedChallenge {
+        version,
+        session,
+        nonce,
+        challenge,
+        binding,
+    })
+}
+
+fn parse_auth_line(line: &str) -> Result<ProofDigest, String> {
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() != 2 || parts[0] != "PAIRING_AUTH" {
+        return Err("ENDPOINT_AUTHENTICATION_INVALID".to_owned());
     }
-    let (start, end) = trim_ascii_bounds(&bytes);
-    if end.saturating_sub(start) < MIN_TOKEN_BYTES {
-        bytes.fill(0);
-        return Err("ENDPOINT_TOKEN_TOO_SHORT".to_owned());
+    let proof = parts[1]
+        .strip_prefix("proof=")
+        .ok_or_else(|| "ENDPOINT_AUTHENTICATION_INVALID".to_owned())
+        .and_then(hex_decode_32)
+        .map_err(|_| "ENDPOINT_AUTHENTICATION_INVALID".to_owned())?;
+    Ok(ProofDigest::from_bytes(proof))
+}
+
+/// Strict verified-line parse for the mutual provider proof.
+///
+/// Reference-client helper (`cfg(test)`); see [`ParsedChallenge`].
+#[cfg(test)]
+pub fn parse_verified_line(line: &str) -> Result<ProofDigest, String> {
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() != 2 || parts[0] != "PAIRING_VERIFIED" {
+        return Err("ENDPOINT_PAIRING_FORMAT_INVALID".to_owned());
     }
-    let verifier = digest_bytes(&bytes[start..end]);
-    bytes.fill(0);
-    Ok(verifier)
+    parts[1]
+        .strip_prefix("proof=")
+        .ok_or_else(|| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())
+        .and_then(hex_decode_32)
+        .map(ProofDigest::from_bytes)
+        .map_err(|_| "ENDPOINT_PAIRING_FORMAT_INVALID".to_owned())
+}
+
+/// Client-side client-proof computation over the parsed challenge.
+///
+/// Reference-client helper (`cfg(test)`); see [`ParsedChallenge`].
+#[cfg(test)]
+#[must_use]
+pub fn client_proof_for_challenge(key: &[u8; 32], challenge: &ParsedChallenge) -> ProofDigest {
+    keyed_proof(
+        key,
+        &client_proof_transcript(
+            challenge.version,
+            &challenge.binding,
+            challenge.session,
+            &challenge.nonce,
+            &challenge.challenge,
+        ),
+    )
+}
+
+/// Client-side provider-proof verification over the parsed challenge.
+///
+/// Reference-client helper (`cfg(test)`); see [`ParsedChallenge`].
+#[cfg(test)]
+#[must_use]
+pub fn verify_provider_proof(
+    key: &[u8; 32],
+    challenge: &ParsedChallenge,
+    observed: &ProofDigest,
+) -> bool {
+    let expected = keyed_proof(
+        key,
+        &server_proof_transcript(
+            challenge.version,
+            &challenge.binding,
+            challenge.session,
+            &challenge.nonce,
+            &challenge.challenge,
+        ),
+    );
+    verify_proof(&expected, observed)
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0F)]));
+    }
+    output
+}
+
+fn hex_value(byte: u8) -> Result<u8, String> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        _ => Err("ENDPOINT_PAIRING_FORMAT_INVALID".to_owned()),
+    }
+}
+
+/// Reference-client helper (`cfg(test)`); the server path only decodes
+/// 32-byte digests through [`hex_decode_32`].
+#[cfg(test)]
+fn hex_decode_16(text: &str) -> Result<[u8; 16], String> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 32 {
+        return Err("ENDPOINT_PAIRING_FORMAT_INVALID".to_owned());
+    }
+    let mut output = [0_u8; 16];
+    for (index, slot) in output.iter_mut().enumerate() {
+        *slot = (hex_value(bytes[2 * index])? << 4) | hex_value(bytes[2 * index + 1])?;
+    }
+    Ok(output)
+}
+
+fn hex_decode_32(text: &str) -> Result<[u8; 32], String> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 64 {
+        return Err("ENDPOINT_PAIRING_FORMAT_INVALID".to_owned());
+    }
+    let mut output = [0_u8; 32];
+    for (index, slot) in output.iter_mut().enumerate() {
+        *slot = (hex_value(bytes[2 * index])? << 4) | hex_value(bytes[2 * index + 1])?;
+    }
+    Ok(output)
+}
+
+/// Ephemeral development key sourced from a token file (compat shim).
+///
+/// Debug is redacted and the key is zeroed on drop. See [`serve_loopback`].
+struct FileKeySource {
+    key: [u8; 32],
+}
+
+impl core::fmt::Debug for FileKeySource {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter
+            .debug_struct("FileKeySource")
+            .field("key", &"<redacted>")
+            .finish()
+    }
+}
+
+impl Drop for FileKeySource {
+    fn drop(&mut self) {
+        self.key.fill(0);
+    }
+}
+
+impl EndpointKeySource for FileKeySource {
+    fn with_endpoint_key<T>(&mut self, use_key: impl FnOnce(&[u8; 32]) -> T) -> Result<T, String> {
+        Ok(use_key(&self.key))
+    }
+}
+
+impl FileKeySource {
+    fn from_token_file(path: &Path) -> Result<Self, String> {
+        let metadata = fs::symlink_metadata(path)
+            .map_err(|error| format!("ENDPOINT_TOKEN_METADATA_ERROR:{error}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("ENDPOINT_TOKEN_FILE_INVALID".to_owned());
+        }
+        if metadata.len() > u64::try_from(MAX_TOKEN_FILE_BYTES).unwrap_or(u64::MAX) {
+            return Err("ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned());
+        }
+        let mut file =
+            File::open(path).map_err(|error| format!("ENDPOINT_TOKEN_OPEN_ERROR:{error}"))?;
+        let mut bytes = Vec::with_capacity(
+            usize::try_from(metadata.len())
+                .map_err(|_| "ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned())?,
+        );
+        (&mut file)
+            .take(u64::try_from(MAX_TOKEN_FILE_BYTES + 1).unwrap_or(u64::MAX))
+            .read_to_end(&mut bytes)
+            .map_err(|error| format!("ENDPOINT_TOKEN_READ_ERROR:{error}"))?;
+        if bytes.len() > MAX_TOKEN_FILE_BYTES {
+            bytes.fill(0);
+            return Err("ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned());
+        }
+        let (start, end) = trim_ascii_bounds(&bytes);
+        if end.saturating_sub(start) < MIN_TOKEN_BYTES {
+            bytes.fill(0);
+            return Err("ENDPOINT_TOKEN_TOO_SHORT".to_owned());
+        }
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(DEV_KEY_DOMAIN);
+        hasher.update(&bytes[start..end]);
+        bytes.fill(0);
+        let key = *hasher.finalize().as_bytes();
+        if key.iter().all(|byte| *byte == 0) {
+            return Err("ENDPOINT_ENTROPY_INVALID".to_owned());
+        }
+        Ok(Self { key })
+    }
 }
 
 fn trim_ascii_bounds(bytes: &[u8]) -> (usize, usize) {
@@ -248,61 +715,13 @@ fn trim_ascii_bounds(bytes: &[u8]) -> (usize, usize) {
     (start, end)
 }
 
-fn derive_challenge(
-    token_verifier: Sha256Digest,
-    peer: SocketAddr,
-    connection_sequence: u64,
-) -> Result<Sha256Digest, String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "ENDPOINT_CLOCK_INVALID".to_owned())?
-        .as_nanos();
-    let mut input = Vec::new();
-    input.extend_from_slice(b"eliot-search/loopback-challenge/v1\0");
-    input.extend_from_slice(&token_verifier.as_bytes());
-    input.extend_from_slice(&std::process::id().to_be_bytes());
-    input.extend_from_slice(&connection_sequence.to_be_bytes());
-    input.extend_from_slice(&now.to_be_bytes());
-    match peer {
-        SocketAddr::V4(address) => {
-            input.extend_from_slice(&address.ip().octets());
-            input.extend_from_slice(&address.port().to_be_bytes());
-        }
-        SocketAddr::V6(address) => {
-            input.extend_from_slice(&address.ip().octets());
-            input.extend_from_slice(&address.port().to_be_bytes());
-        }
-    }
-    Ok(digest_bytes(&input))
-}
-
-fn derive_response(
-    token_verifier: Sha256Digest,
-    challenge: Sha256Digest,
-) -> Sha256Digest {
-    let mut input = Vec::with_capacity(96);
-    input.extend_from_slice(b"eliot-search/loopback-response/v1\0");
-    input.extend_from_slice(&token_verifier.as_bytes());
-    input.extend_from_slice(&challenge.as_bytes());
-    digest_bytes(&input)
-}
-
-fn constant_time_equal(left: Sha256Digest, right: Sha256Digest) -> bool {
-    let mut difference = 0_u8;
-    for (left, right) in left.as_bytes().iter().zip(right.as_bytes().iter()) {
-        difference |= left ^ right;
-    }
-    difference == 0
-}
-
 fn read_bounded_line(
     reader: &mut BufReader<TcpStream>,
     maximum_bytes: usize,
 ) -> Result<Option<String>, String> {
     let mut bytes = Vec::new();
-    let mut limited = reader.take(
-        u64::try_from(maximum_bytes.saturating_add(1)).unwrap_or(u64::MAX),
-    );
+    let mut limited =
+        reader.take(u64::try_from(maximum_bytes.saturating_add(1)).unwrap_or(u64::MAX));
     let read = limited
         .read_until(b'\n', &mut bytes)
         .map_err(|error| match error.kind() {
@@ -359,48 +778,450 @@ fn sanitize_code(error: &str) -> String {
 mod tests {
     use super::*;
 
+    struct TestKeySource {
+        key: [u8; 32],
+        failures_remaining: usize,
+    }
+
+    impl TestKeySource {
+        fn new(key: [u8; 32]) -> Self {
+            Self {
+                key,
+                failures_remaining: 0,
+            }
+        }
+
+        fn failing_once() -> Self {
+            Self {
+                key: [0xA5; 32],
+                failures_remaining: 1,
+            }
+        }
+    }
+
+    impl Drop for TestKeySource {
+        fn drop(&mut self) {
+            self.key.fill(0);
+        }
+    }
+
+    impl EndpointKeySource for TestKeySource {
+        fn with_endpoint_key<T>(
+            &mut self,
+            use_key: impl FnOnce(&[u8; 32]) -> T,
+        ) -> Result<T, String> {
+            if self.failures_remaining > 0 {
+                self.failures_remaining -= 1;
+                return Err("TEST_KEY_UNAVAILABLE".to_owned());
+            }
+            Ok(use_key(&self.key))
+        }
+    }
+
+    /// Drives one full client handshake against a live listener connection.
+    fn client_handshake(
+        reader: &mut BufReader<TcpStream>,
+        stream: &mut TcpStream,
+        key: &[u8; 32],
+    ) -> Result<ProofDigest, String> {
+        let challenge_line = read_bounded_line(reader, MAX_CHALLENGE_LINE_BYTES)
+            .map_err(|error| format!("TEST_CHALLENGE_READ:{error}"))?
+            .ok_or_else(|| "TEST_CHALLENGE_MISSING".to_owned())?;
+        let challenge =
+            parse_challenge_line(&challenge_line).map_err(|error| format!("TEST_PARSE:{error}"))?;
+        // The honest client re-derives the binding: a tampered binding fails
+        // closed here, before any proof is attempted.
+        if pairing_binding_digest(key) != challenge.binding {
+            return Err("TEST_BINDING_MISMATCH".to_owned());
+        }
+        let proof = client_proof_for_challenge(key, &challenge);
+        write_line(
+            stream,
+            &format!("PAIRING_AUTH\tproof={}", hex_encode(proof.as_bytes())),
+        )
+        .map_err(|error| format!("TEST_AUTH_WRITE:{error}"))?;
+        let verified_line = read_bounded_line(reader, MAX_VERIFIED_LINE_BYTES)
+            .map_err(|error| format!("TEST_VERIFIED_READ:{error}"))?
+            .ok_or_else(|| "TEST_VERIFIED_MISSING".to_owned())?;
+        let provider_proof =
+            parse_verified_line(&verified_line).map_err(|error| format!("TEST_PARSE:{error}"))?;
+        if !verify_provider_proof(key, &challenge, &provider_proof) {
+            return Err("TEST_PROVIDER_PROOF_INVALID".to_owned());
+        }
+        let ready = read_bounded_line(reader, 1024)
+            .map_err(|error| format!("TEST_READY_READ:{error}"))?
+            .ok_or_else(|| "TEST_READY_MISSING".to_owned())?;
+        if !ready.contains("\"event\":\"authenticated\"")
+            || !ready.contains("\"authentication\":\"pairing_blake3_v1\"")
+        {
+            return Err("TEST_READY_INVALID".to_owned());
+        }
+        Ok(provider_proof)
+    }
+
+    /// Listener test handle: bound address, completion channel and thread.
+    type SpawnedListener = (
+        std::net::SocketAddr,
+        std::sync::mpsc::Receiver<(Result<(), String>, usize)>,
+        std::thread::JoinHandle<()>,
+    );
+
+    fn spawn_listener(
+        source: TestKeySource,
+        handler: impl FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String> + Send + 'static,
+    ) -> SpawnedListener {
+        use std::sync::mpsc;
+        let (done, result) = mpsc::channel();
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let mut source = source;
+            let mut calls = 0_usize;
+            let mut handler = handler;
+            let ledger = PairingLedger::new(MAX_PAIRING_CHALLENGES).unwrap();
+            let status = serve_listener(&listener, &mut source, ledger, |command, stream| {
+                calls += 1;
+                handler(command, stream)
+            });
+            let _ = done.send((status, calls));
+        });
+        (address, result, server)
+    }
+
+    #[test]
+    fn binding_digest_is_deterministic_and_role_bound() {
+        let first = pairing_binding_digest(&[0x42; 32]);
+        let second = pairing_binding_digest(&[0x42; 32]);
+        assert_eq!(first, second);
+        assert_ne!(first, pairing_binding_digest(&[0x43; 32]));
+        // Formatting is redacted: no key-derived hex ever reaches logs.
+        assert_eq!(format!("{first:?}"), "ProofDigest(<redacted>)");
+    }
+
+    #[test]
+    fn challenge_line_round_trips_with_strict_parse() {
+        let key = [0x11; 32];
+        let binding = pairing_binding_digest(&key);
+        let (session, nonce, challenge) = derive_ceremony_material(&key, 7).unwrap();
+        let line = encode_challenge(binding, session, &nonce, &challenge);
+        assert!(line.len() < MAX_CHALLENGE_LINE_BYTES);
+        let parsed = parse_challenge_line(&line).unwrap();
+        assert_eq!(parsed.version, PAIRING_PROTOCOL_VERSION);
+        assert_eq!(parsed.session, session);
+        assert_eq!(parsed.nonce, nonce);
+        assert_eq!(parsed.challenge, challenge);
+        assert_eq!(parsed.binding, binding);
+        // Reordered, truncated, uppercased and version-tampered lines fail.
+        let mut reordered = line.clone();
+        reordered = reordered.replacen("session=", "nonce=", 1);
+        assert!(parse_challenge_line(&reordered).is_err());
+        assert!(parse_challenge_line(&line[..line.len() - 1]).is_err());
+        assert!(parse_challenge_line(&line.to_uppercase()).is_err());
+        let tampered = line.replacen("v=1.0", "v=1.1", 1);
+        assert!(matches!(
+            parse_challenge_line(&tampered),
+            Err(error) if error == "ENDPOINT_PAIRING_VERSION_MISMATCH"
+        ));
+    }
+
+    #[test]
+    fn shim_token_file_speaks_the_same_pairing_wire() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        struct Scratch {
+            dir: std::path::PathBuf,
+        }
+        impl Scratch {
+            fn new() -> Self {
+                let stamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos();
+                let dir = std::env::temp_dir().join(format!(
+                    "eliot-endpoint-shim-{}-{stamp}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+                std::fs::create_dir_all(&dir).unwrap();
+                Self { dir }
+            }
+        }
+        impl Drop for Scratch {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.dir);
+            }
+        }
+
+        let scratch = Scratch::new();
+        let token_file = scratch.dir.join("auth.token");
+        // Padded on purpose: the shim trims ASCII bounds before deriving.
+        std::fs::write(&token_file, b" \t dev-shim-test-token-0123456789abcdef \n").unwrap();
+        // The test recomputes the one-way dev derivation to act as the
+        // paired client; the file bytes themselves never cross the socket.
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(DEV_KEY_DOMAIN);
+        hasher.update(b"dev-shim-test-token-0123456789abcdef");
+        let key = *hasher.finalize().as_bytes();
+        // Rejected files stay rejected: symlink and short-token cases fail
+        // before any socket is bound.
+        assert!(FileKeySource::from_token_file(&scratch.dir).is_err());
+
+        let port = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let server = std::thread::spawn(move || {
+            serve_loopback(port, &token_file, |command, stream| {
+                if command == "shutdown" {
+                    Ok(EndpointAction::Shutdown)
+                } else {
+                    write_line(stream, "{\"echo\":true}")
+                        .map_err(|_| "FIXTURE_WRITE_FAILED".to_owned())?;
+                    Ok(EndpointAction::Continue)
+                }
+            })
+        });
+        let timeout = Duration::from_secs(10);
+        let address: std::net::SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
+        let mut client = None;
+        for _ in 0..100 {
+            match TcpStream::connect_timeout(&address, Duration::from_millis(200)) {
+                Ok(stream) => {
+                    client = Some(stream);
+                    break;
+                }
+                Err(_) => std::thread::sleep(Duration::from_millis(20)),
+            }
+        }
+        let mut client = client.expect("shim listener bound");
+        client.set_read_timeout(Some(timeout)).unwrap();
+        client.set_write_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        client_handshake(&mut reader, &mut client, &key).unwrap();
+        write_line(&mut client, "health").unwrap();
+        let started = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        assert!(started.contains("\"event\":\"request_started\""));
+        write_line(&mut client, "shutdown").unwrap();
+        server.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn full_handshake_proves_mutually_then_dispatches() {
+        let key = [0x2A; 32];
+        let (address, result, server) =
+            spawn_listener(TestKeySource::new(key), |command, stream| {
+                write_line(stream, &format!("{{\"echo\":\"{command}\"}}"))
+                    .map_err(|_| "FIXTURE_WRITE_FAILED".to_owned())?;
+                if command == "shutdown" {
+                    Ok(EndpointAction::Shutdown)
+                } else {
+                    Ok(EndpointAction::Continue)
+                }
+            });
+        let timeout = Duration::from_secs(5);
+        let mut client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        client.set_write_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        client_handshake(&mut reader, &mut client, &key).unwrap();
+        write_line(&mut client, "hello").unwrap();
+        let started = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        assert!(started.contains("\"event\":\"request_started\""));
+        let echo = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        assert_eq!(echo, "{\"echo\":\"hello\"}");
+        let complete = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        assert!(complete.contains("\"ok\":true"));
+        write_line(&mut client, "shutdown").unwrap();
+        let _ = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        let _ = read_bounded_line(&mut reader, 4096).unwrap();
+        let _ = read_bounded_line(&mut reader, 4096).unwrap();
+        let (status, calls) = result.recv_timeout(timeout).expect("bounded listener exit");
+        server.join().unwrap();
+        assert_eq!(status, Ok(()));
+        assert_eq!(calls, 2);
+    }
+
+    #[test]
+    fn wrong_key_tampered_proof_and_reused_ledger_entry_fail() {
+        let key = [0x3B; 32];
+        // Wrong key: binding check fails on the client before any proof.
+        let (address, result, server) =
+            spawn_listener(TestKeySource::new(key), |_, _| Ok(EndpointAction::Continue));
+        let timeout = Duration::from_secs(5);
+        let mut client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        client.set_write_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        assert_eq!(
+            client_handshake(&mut reader, &mut client, &[0x3C; 32]),
+            Err("TEST_BINDING_MISMATCH".to_owned())
+        );
+        drop(client);
+        drop(reader);
+        // Tampered proof with the right key: the server rejects.
+        let mut client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        client.set_write_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        let challenge_line = read_bounded_line(&mut reader, MAX_CHALLENGE_LINE_BYTES)
+            .unwrap()
+            .unwrap();
+        let challenge = parse_challenge_line(&challenge_line).unwrap();
+        let mut proof = *client_proof_for_challenge(&key, &challenge).as_bytes();
+        proof[0] ^= 1;
+        write_line(
+            &mut client,
+            &format!("PAIRING_AUTH\tproof={}", hex_encode(&proof)),
+        )
+        .unwrap();
+        let rejection = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
+        assert!(rejection.contains("AUTHENTICATION_FAILED"));
+        drop(client);
+        drop(reader);
+        // Exact ledger reuse is rejected without touching the network.
+        let mut ledger = PairingLedger::new(8).unwrap();
+        let (session, _, challenge) = derive_ceremony_material(&key, 99).unwrap();
+        ledger.consume(session, &challenge).unwrap();
+        assert!(ledger.consume(session, &challenge).is_err());
+        assert!(ledger.contains(session, &challenge));
+        let _ = (result, server);
+    }
+
+    #[test]
+    fn ledger_capacity_fails_closed_without_eviction() {
+        let mut ledger = PairingLedger::new(2).unwrap();
+        let key = [0x55; 32];
+        for sequence in [1_u64, 2] {
+            let (session, _, challenge) = derive_ceremony_material(&key, sequence).unwrap();
+            ledger.consume(session, &challenge).unwrap();
+        }
+        let (session, _, challenge) = derive_ceremony_material(&key, 3).unwrap();
+        assert!(ledger.consume(session, &challenge).is_err());
+        assert_eq!(ledger.len(), 2);
+    }
+
+    #[test]
+    fn key_source_failure_fails_the_connection_without_a_challenge() {
+        // The source fails exactly once (expired lease window), then serves
+        // the shutdown connection so the listener exits cleanly.
+        let source_key = [0xA5; 32];
+        let (address, result, server) =
+            spawn_listener(TestKeySource::failing_once(), |command, _| {
+                if command == "shutdown" {
+                    Ok(EndpointAction::Shutdown)
+                } else {
+                    Ok(EndpointAction::Continue)
+                }
+            });
+        let timeout = Duration::from_secs(5);
+        let client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        // No challenge line is ever written when the key is unavailable: the
+        // server fails the connection closed (clean EOF here).
+        assert_eq!(
+            read_bounded_line(&mut reader, MAX_CHALLENGE_LINE_BYTES).unwrap(),
+            None
+        );
+        drop(client);
+        drop(reader);
+        // The listener is still alive: the retry handshakes cleanly.
+        let mut client = TcpStream::connect_timeout(&address, timeout).unwrap();
+        client.set_read_timeout(Some(timeout)).unwrap();
+        client.set_write_timeout(Some(timeout)).unwrap();
+        let mut reader = BufReader::new(client.try_clone().unwrap());
+        client_handshake(&mut reader, &mut client, &source_key).unwrap();
+        write_line(&mut client, "shutdown").unwrap();
+        let (status, _) = result.recv_timeout(timeout).expect("bounded listener exit");
+        server.join().unwrap();
+        assert_eq!(status, Ok(()));
+    }
+
     #[test]
     fn abort_does_not_append_a_terminal_to_partial_output() {
         let mut output = b"{\"partial\":".to_vec();
         let prior = output.clone();
-        assert_eq!(complete_request(&mut output, Ok(EndpointAction::Abort), 3), EndpointAction::Abort);
+        assert_eq!(
+            complete_request(&mut output, Ok(EndpointAction::Abort), 3),
+            EndpointAction::Abort
+        );
         assert_eq!(output, prior);
     }
 
     #[test]
     fn complete_rejection_and_shutdown_keep_the_existing_wire_shape() {
         for (outcome, action, fields) in [
-            (Ok(EndpointAction::Continue), EndpointAction::Continue, r#""ok":true"#),
-            (Ok(EndpointAction::Shutdown), EndpointAction::Shutdown, r#""ok":true"#),
-            (Err("SERVICE_HEX_INVALID:private detail".to_owned()), EndpointAction::Continue,
-                r#""ok":false,"error":"SERVICE_HEX_INVALID""#),
+            (
+                Ok(EndpointAction::Continue),
+                EndpointAction::Continue,
+                r#""ok":true"#,
+            ),
+            (
+                Ok(EndpointAction::Shutdown),
+                EndpointAction::Shutdown,
+                r#""ok":true"#,
+            ),
+            (
+                Err("SERVICE_HEX_INVALID:private detail".to_owned()),
+                EndpointAction::Continue,
+                r#""ok":false,"error":"SERVICE_HEX_INVALID""#,
+            ),
         ] {
             let mut output = Vec::new();
             assert_eq!(complete_request(&mut output, outcome, 7), action);
-            assert_eq!(output, format!("{{\"event\":\"request_complete\",\"sequence\":7,{fields}}}\n").as_bytes());
+            assert_eq!(
+                output,
+                format!("{{\"event\":\"request_complete\",\"sequence\":7,{fields}}}\n").as_bytes()
+            );
         }
     }
 
-    struct FailingOutput { bytes: Vec<u8>, calls: usize, fail_flush: bool }
+    struct FailingOutput {
+        bytes: Vec<u8>,
+        calls: usize,
+        fail_flush: bool,
+    }
     impl Write for FailingOutput {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
             self.calls += 1;
-            if !self.fail_flush && self.calls == 2 { return Err(io::ErrorKind::BrokenPipe.into()); }
-            let count = if self.fail_flush { bytes.len() } else { bytes.len().min(5) };
+            if !self.fail_flush && self.calls == 2 {
+                return Err(io::ErrorKind::BrokenPipe.into());
+            }
+            let count = if self.fail_flush {
+                bytes.len()
+            } else {
+                bytes.len().min(5)
+            };
             self.bytes.extend_from_slice(&bytes[..count]);
             Ok(count)
         }
-        fn flush(&mut self) -> io::Result<()> { Err(io::ErrorKind::BrokenPipe.into()) }
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::ErrorKind::BrokenPipe.into())
+        }
     }
 
     #[test]
     fn outer_ack_write_or_flush_failure_aborts_even_after_a_complete_child_reply() {
         for fail_flush in [false, true] {
-            for outcome in [Ok(EndpointAction::Continue), Ok(EndpointAction::Shutdown), Err("REJECTED".to_owned())] {
-                let mut writer = FailingOutput { bytes: Vec::new(), calls: 0, fail_flush };
-                assert_eq!(complete_request(&mut writer, outcome, 0), EndpointAction::Abort);
+            for outcome in [
+                Ok(EndpointAction::Continue),
+                Ok(EndpointAction::Shutdown),
+                Err("REJECTED".to_owned()),
+            ] {
+                let mut writer = FailingOutput {
+                    bytes: Vec::new(),
+                    calls: 0,
+                    fail_flush,
+                };
+                assert_eq!(
+                    complete_request(&mut writer, outcome, 0),
+                    EndpointAction::Abort
+                );
                 assert_eq!(writer.calls, 2); // One prefix + failure, or a frame + LF then failed flush.
-                if !fail_flush { assert_eq!(writer.bytes, b"{\"eve"); }
+                if !fail_flush {
+                    assert_eq!(writer.bytes, b"{\"eve");
+                }
             }
         }
     }
@@ -412,13 +1233,17 @@ mod tests {
         use std::thread;
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let address = listener.local_addr().unwrap();
-        let verifier = digest_bytes(b"disposable non-secret endpoint fixture token");
+        let key = [0x6D; 32];
         let (done, result) = mpsc::channel();
         let server = thread::spawn(move || {
             let mut calls = 0;
-            let status = serve_listener(&listener, verifier, |_, stream| {
+            let mut source = TestKeySource::new(key);
+            let ledger = PairingLedger::new(MAX_PAIRING_CHALLENGES).unwrap();
+            let status = serve_listener(&listener, &mut source, ledger, |_, stream| {
                 calls += 1;
-                stream.write_all(b"{\"partial\":").map_err(|_| "FIXTURE_WRITE_FAILED".to_owned())?;
+                stream
+                    .write_all(b"{\"partial\":")
+                    .map_err(|_| "FIXTURE_WRITE_FAILED".to_owned())?;
                 Ok(EndpointAction::Abort)
             });
             let _ = done.send((status, calls));
@@ -428,11 +1253,7 @@ mod tests {
         client.set_read_timeout(Some(timeout)).unwrap();
         client.set_write_timeout(Some(timeout)).unwrap();
         let mut reader = BufReader::new(client.try_clone().unwrap());
-        let challenge = read_bounded_line(&mut reader, MAX_AUTH_LINE_BYTES).unwrap().unwrap();
-        let challenge = Sha256Digest::from_hex(challenge.strip_prefix("CHALLENGE\t").unwrap()).unwrap();
-        write_line(&mut client, &format!("AUTH\t{}", derive_response(verifier, challenge).hex())).unwrap();
-        let ready = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
-        assert!(ready.contains("\"event\":\"authenticated\""));
+        client_handshake(&mut reader, &mut client, &key).unwrap();
         client.write_all(b"first\nsecond\nshutdown\n").unwrap();
         client.shutdown(Shutdown::Write).unwrap();
         let mut output = String::new();
@@ -443,7 +1264,10 @@ mod tests {
         // intentionally not asserted on: the 5s read timeout above guarantees
         // termination, and the equality below proves full delivery.
         let _ = Read::take(&mut reader, 4096).read_to_string(&mut output);
-        assert_eq!(output, "{\"event\":\"request_started\",\"sequence\":0}\n{\"partial\":");
+        assert_eq!(
+            output,
+            "{\"event\":\"request_started\",\"sequence\":0}\n{\"partial\":"
+        );
         let (status, calls) = result.recv_timeout(timeout).expect("bounded listener exit");
         server.join().unwrap();
         assert_eq!(status, Err("ENDPOINT_HANDLER_ABORTED".to_owned()));
