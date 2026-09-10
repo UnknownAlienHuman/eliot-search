@@ -68,7 +68,6 @@ wave2-source = [
     "dep:search-source-admission",
     "dep:search-source-registry",
     "dep:search-source-identity",
-    "dep:search-safe-reader",
     "dep:search-revision-store",
 ]
 wave3-index = [
@@ -128,7 +127,9 @@ search-source-admission = { workspace = true, optional = true }
 search-source-registry = { workspace = true, optional = true }
 search-source-identity = { workspace = true, optional = true }
 search-source-reconcile = { workspace = true, optional = true }
-search-safe-reader = { workspace = true, optional = true }
+# Shared final-handle byte mechanics are mandatory for DIRECT ingestion, not a
+# wave/gate acceptance: primary file reads go through the safe-reader kernel.
+search-safe-reader.workspace = true
 search-revision-store = { workspace = true, optional = true }
 # Shared byte mechanics are mandatory for DIRECT, not a wave/gate acceptance.
 search-materializer.workspace = true

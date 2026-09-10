@@ -58,6 +58,22 @@ unsafe extern "system" {
 }
 
 pub(super) fn observe(file: &File) -> Result<Observation, ObservationError> {
+    let info = file_information(file)?;
+    Ok(Observation {
+        volume_serial: info.volume_serial,
+        file_index: (u64::from(info.index_high) << 32) | u64::from(info.index_low),
+        attributes: info.attributes,
+        length: (u64::from(info.size_high) << 32) | u64::from(info.size_low),
+        creation_time: info.creation.value(),
+        last_write_time: info.write.value(),
+    })
+}
+
+pub(super) fn hardlink_count(file: &File) -> Result<u32, ObservationError> {
+    Ok(file_information(file)?.links)
+}
+
+fn file_information(file: &File) -> Result<FileInformation, ObservationError> {
     let handle = file.as_raw_handle();
     // SAFETY: `file` owns this live handle throughout the synchronous call.
     if unsafe { GetFileType(handle) } != FILE_TYPE_DISK {
@@ -98,12 +114,5 @@ pub(super) fn observe(file: &File) -> Result<Observation, ObservationError> {
     if info.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
         return Err(ObservationError::ReparsePointDenied);
     }
-    Ok(Observation {
-        volume_serial: info.volume_serial,
-        file_index: (u64::from(info.index_high) << 32) | u64::from(info.index_low),
-        attributes: info.attributes,
-        length: (u64::from(info.size_high) << 32) | u64::from(info.size_low),
-        creation_time: info.creation.value(),
-        last_write_time: info.write.value(),
-    })
+    Ok(info)
 }

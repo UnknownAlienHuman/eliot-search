@@ -195,104 +195,85 @@ pub fn read_stdin_bounded() -> Result<String, String> {
     String::from_utf8(bytes).map_err(|_| "SCAN_INPUT_INVALID_UTF8".to_owned())
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct FileObservation {
-    length: u64,
-    modified_nanos: Option<u128>,
-    platform_identity: PlatformFileIdentity,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum PlatformFileIdentity {
-    #[cfg(unix)]
-    Unix { device: u64, inode: u64 },
-    #[cfg(windows)]
-    Windows {
-        volume_serial: u32,
-        file_index: u64,
-    },
-    #[cfg(not(any(unix, windows)))]
-    Portable,
-}
-
-fn observe_file(file: &File) -> Result<FileObservation, String> {
-    let metadata = file
-        .metadata()
-        .map_err(|error| format!("SCAN_FILE_METADATA_ERROR:{error}"))?;
-    if !metadata.is_file() {
-        return Err("SCAN_FILE_NOT_REGULAR".to_owned());
-    }
-    let modified_nanos = metadata
-        .modified()
-        .ok()
-        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_nanos());
-
-    #[cfg(unix)]
-    let platform_identity = {
-        use std::os::unix::fs::MetadataExt;
-        PlatformFileIdentity::Unix {
-            device: metadata.dev(),
-            inode: metadata.ino(),
-        }
-    };
-
-    #[cfg(windows)]
-    let platform_identity = {
-        let observed = eliot_searchd::native_file::observe(file)
-            .map_err(|error| error.code().to_owned())?;
-        PlatformFileIdentity::Windows {
-            volume_serial: observed.volume_serial,
-            file_index: observed.file_index,
-        }
-    };
-
-    #[cfg(not(any(unix, windows)))]
-    let platform_identity = PlatformFileIdentity::Portable;
-
-    Ok(FileObservation {
-        length: metadata.len(),
-        modified_nanos,
-        platform_identity,
-    })
-}
-
-/// Reads one regular non-link file through the same open handle before and
-/// after identity verification.
+/// Reads one regular non-link file through the shared safe-reader kernel.
+///
+/// The platform adapter proves final-object/ancestor containment on the
+/// opened handle under the file's admitted parent directory and the kernel
+/// revalidates the same handle after the read. Bytes are inert copies and
+/// are never executed; failures carry closed codes without paths or raw OS
+/// text.
 pub fn read_file_bounded(path: &Path) -> Result<String, String> {
-    let link_metadata = fs::symlink_metadata(path)
-        .map_err(|error| format!("SCAN_FILE_OPEN_ERROR:{error}"))?;
-    if link_metadata.file_type().is_symlink() || is_reparse(&link_metadata) {
-        return Err("SCAN_FILE_LINK_DENIED".to_owned());
-    }
-    if !link_metadata.is_file() {
-        return Err("SCAN_FILE_NOT_REGULAR".to_owned());
-    }
-
-    let mut file = File::open(path)
-        .map_err(|error| format!("SCAN_FILE_OPEN_ERROR:{error}"))?;
-    let before = observe_file(&file)?;
-    if before.length > u64::try_from(MAX_SCAN_INPUT_BYTES).unwrap_or(u64::MAX) {
-        return Err("SCAN_INPUT_TOO_LARGE".to_owned());
-    }
-    let mut bytes = Vec::with_capacity(
-        usize::try_from(before.length)
-            .map_err(|_| "SCAN_INPUT_TOO_LARGE".to_owned())?,
-    );
-    (&mut file)
-        .take(u64::try_from(MAX_SCAN_INPUT_BYTES + 1).unwrap_or(u64::MAX))
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("SCAN_FILE_READ_ERROR:{error}"))?;
-    if bytes.len() > MAX_SCAN_INPUT_BYTES {
-        return Err("SCAN_INPUT_TOO_LARGE".to_owned());
-    }
-    let after = observe_file(&file)?;
-    if before != after
-        || bytes.len() != usize::try_from(before.length).unwrap_or(usize::MAX)
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|_| "SCAN_FILE_ACCESS_DENIED".to_owned())?
+            .join(path)
+    };
+    let parent = absolute
+        .parent()
+        .ok_or_else(|| "SCAN_FILE_PATH_DENIED".to_owned())?;
+    let full = crate::safe_reader_adapter::read_full_file_via_kernel(
+        &absolute,
+        parent,
+        MAX_SCAN_INPUT_BYTES,
+    )
+    .map_err(map_full_read_error)?;
+    if full.bytes.len() > MAX_SCAN_INPUT_BYTES
+        || u64::try_from(full.bytes.len()).unwrap_or(u64::MAX) != full.source_bytes
     {
         return Err("SCAN_FILE_CHANGED_DURING_READ".to_owned());
     }
-    String::from_utf8(bytes).map_err(|_| "SCAN_INPUT_INVALID_UTF8".to_owned())
+    String::from_utf8(full.bytes).map_err(|_| "SCAN_INPUT_INVALID_UTF8".to_owned())
+}
+
+/// Maps a kernel-verified read failure to the SCAN namespace without paths,
+/// bytes or raw OS error text.
+fn map_full_read_error(error: crate::safe_reader_adapter::FullReadError) -> String {
+    use crate::safe_reader_adapter::{AdapterError, FullReadError};
+    use search_safe_reader::SafeReadError;
+    match error {
+        FullReadError::Adapter(adapter) => match adapter {
+            AdapterError::PathDenied => "SCAN_FILE_PATH_DENIED".to_owned(),
+            AdapterError::LinkDenied | AdapterError::AncestorReparseDenied => {
+                "SCAN_FILE_LINK_DENIED".to_owned()
+            }
+            AdapterError::EscapeDenied => "SCAN_FILE_ESCAPE_DENIED".to_owned(),
+            AdapterError::RootRelocated => "SCAN_FILE_ROOT_RELOCATED".to_owned(),
+            AdapterError::NotRegular => "SCAN_FILE_NOT_REGULAR".to_owned(),
+            AdapterError::FinalObjectInvalid | AdapterError::DeviceDenied => {
+                "SCAN_FILE_FINAL_OBJECT_INVALID".to_owned()
+            }
+            AdapterError::HardlinkDenied => "SCAN_FILE_HARDLINK_DENIED".to_owned(),
+            AdapterError::AccessDenied => "SCAN_FILE_ACCESS_DENIED".to_owned(),
+            AdapterError::TooLarge => "SCAN_INPUT_TOO_LARGE".to_owned(),
+            AdapterError::ReceiptDenied => {
+                "SCAN_FILE_METADATA_ERROR:SAFE_ADAPTER_RECEIPT_DENIED".to_owned()
+            }
+        },
+        FullReadError::Kernel(kernel) => match kernel {
+            SafeReadError::RangeOutsideSource
+            | SafeReadError::EofMismatch
+            | SafeReadError::ReadLengthMismatch
+            | SafeReadError::StableIdentityMismatch
+            | SafeReadError::HandleChangedDuringRead
+            | SafeReadError::BackendFailure => "SCAN_FILE_CHANGED_DURING_READ".to_owned(),
+            SafeReadError::RootIdentityMismatch => "SCAN_FILE_ESCAPE_DENIED".to_owned(),
+            SafeReadError::UnsupportedFileKind => "SCAN_FILE_FINAL_OBJECT_INVALID".to_owned(),
+            SafeReadError::ReparseBoundaryDenied => "SCAN_FILE_LINK_DENIED".to_owned(),
+            SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch => {
+                "SCAN_FILE_ACCESS_DENIED".to_owned()
+            }
+            SafeReadError::SourceSizeInvalid => "SCAN_INPUT_TOO_LARGE".to_owned(),
+            SafeReadError::Cancelled => "SCAN_FILE_READ_CANCELLED".to_owned(),
+            SafeReadError::InvalidLimits
+            | SafeReadError::InvalidPathToken
+            | SafeReadError::InvalidReadLength
+            | SafeReadError::RangeOverflow
+            | SafeReadError::InvalidRetryPolicy
+            | SafeReadError::ReceiptMissing => "SCAN_FILE_READ_INVALID".to_owned(),
+        },
+    }
 }
 
 /// Process-local exclusive owner guard and restored observation registration.

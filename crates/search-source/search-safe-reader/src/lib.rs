@@ -37,6 +37,18 @@ pub const DEFAULT_SAFE_READ_LIMITS: SafeReadLimits = SafeReadLimits {
     max_path_token_bytes: 32_768,
 };
 
+/// Statically pinned no-execute invariant.
+///
+/// This package never spawns a process, loads a hook/filter driver, prompts
+/// for credentials, fetches from a network or evaluates source content as
+/// code. Reads are inert byte copies from an already-open handle.
+pub const SAFE_READ_NO_EXECUTE: bool = true;
+
+const _: () = assert!(SAFE_READ_NO_EXECUTE);
+
+/// Maximum retry attempts accepted by [`SafeRetryPolicy`].
+pub const MAX_SAFE_READ_ATTEMPTS: u8 = 8;
+
 /// Closed content-free safe-read failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SafeReadError {
@@ -74,6 +86,10 @@ pub enum SafeReadError {
     ReceiptMissing,
     /// Platform adapter failed before a safe result existed.
     BackendFailure,
+    /// Cancellation was observed before stable verification completed.
+    Cancelled,
+    /// Retry budget is zero or exceeds its finite ceiling.
+    InvalidRetryPolicy,
 }
 
 impl SafeReadError {
@@ -97,6 +113,8 @@ impl SafeReadError {
             Self::HandleChangedDuringRead => "SAFE_READ_HANDLE_CHANGED",
             Self::ReceiptMissing => "SAFE_READ_RECEIPT_MISSING",
             Self::BackendFailure => "SAFE_READ_BACKEND_FAILURE",
+            Self::Cancelled => "SAFE_READ_CANCELLED",
+            Self::InvalidRetryPolicy => "SAFE_READ_INVALID_RETRY_POLICY",
         }
     }
 }
@@ -164,10 +182,39 @@ impl RelativePathToken {
 
 impl fmt::Debug for RelativePathToken {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Relative tokens name source locations; ordinary diagnostics must
+        // carry only the finite length, never the raw token text.
         formatter
             .debug_tuple("RelativePathToken")
-            .field(&self.0)
+            .field(&format_args!("<{} bytes>", self.0.len()))
             .finish()
+    }
+}
+
+/// Finite retry budget for same-handle reads.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SafeRetryPolicy {
+    max_attempts: u8,
+}
+
+impl SafeRetryPolicy {
+    /// Creates a finite retry budget of `1..=MAX_SAFE_READ_ATTEMPTS` attempts.
+    pub const fn new(max_attempts: u8) -> Result<Self, SafeReadError> {
+        if max_attempts == 0 || max_attempts > MAX_SAFE_READ_ATTEMPTS {
+            Err(SafeReadError::InvalidRetryPolicy)
+        } else {
+            Ok(Self { max_attempts })
+        }
+    }
+
+    /// Exactly one attempt; cancellation still applies.
+    pub const fn single() -> Self {
+        Self { max_attempts: 1 }
+    }
+
+    /// Exact configured attempt count.
+    pub const fn max_attempts(self) -> u8 {
+        self.max_attempts
     }
 }
 
@@ -423,6 +470,116 @@ pub fn safe_read<B: SafeReadBackend>(
     })
 }
 
+/// Opens once, validates, reads and revalidates the same final handle with
+/// cooperative cancellation.
+///
+/// `should_cancel` is polled before open, after the pre-read inspection,
+/// before the byte read and after the byte read. A single observed
+/// cancellation closes the already-open handle (by dropping it with the
+/// backend) and returns [`SafeReadError::Cancelled`] with no byte product.
+pub fn safe_read_with_cancel<B: SafeReadBackend>(
+    backend: &mut B,
+    request: &SafeReadRequest,
+    limits: SafeReadLimits,
+    should_cancel: &mut impl FnMut() -> bool,
+) -> Result<SafeReadResult, SafeReadError> {
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
+    let limits = limits.validate()?;
+    let end = request.range.end(limits)?;
+    let handle = backend
+        .open_final(&FinalHandleOpenRequest {
+            relative_path: request.relative_path.clone(),
+            expected_root_identity_digest: request.expected_root_identity_digest,
+        })
+        .map_err(|error| B::map_backend_error(&error))?;
+    let before = backend
+        .inspect(&handle)
+        .map_err(|error| B::map_backend_error(&error))?;
+    validate_metadata(&before, request, end, limits)?;
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
+
+    let read = backend
+        .read_exact_at(&handle, request.range.offset, request.range.length)
+        .map_err(|error| B::map_backend_error(&error))?;
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
+    if read.bytes.len() != request.range.length {
+        return Err(SafeReadError::ReadLengthMismatch);
+    }
+    let read_receipt = read.read_receipt.ok_or(SafeReadError::ReceiptMissing)?;
+
+    let after = backend
+        .inspect(&handle)
+        .map_err(|error| B::map_backend_error(&error))?;
+    validate_metadata(&after, request, end, limits)?;
+    if before != after {
+        return Err(SafeReadError::HandleChangedDuringRead);
+    }
+    let before_metadata_receipt = before
+        .metadata_receipt
+        .clone()
+        .ok_or(SafeReadError::ReceiptMissing)?;
+    let after_metadata_receipt = after
+        .metadata_receipt
+        .ok_or(SafeReadError::ReceiptMissing)?;
+
+    Ok(SafeReadResult {
+        range: request.range,
+        bytes: read.bytes,
+        stable_file_identity_digest: before.stable_file_identity_digest,
+        source_bytes: before.source_bytes,
+        security_barrier_revision: before.security_barrier_revision,
+        before_metadata_receipt,
+        after_metadata_receipt,
+        read_receipt,
+    })
+}
+
+/// Runs bounded cancelable attempts with a fresh backend (hence a fresh final
+/// handle) per attempt and returns the first stable product.
+///
+/// Only transient same-handle failures are retried: [`SafeReadError::BackendFailure`]
+/// and [`SafeReadError::HandleChangedDuringRead`]. Deterministic validation
+/// denials, receipt defects and cancellation return immediately; cancellation
+/// is never retried. Exhaustion returns the last transient error. Every
+/// attempt handle is closed before the next attempt opens.
+pub fn safe_read_with_retries<B: SafeReadBackend>(
+    make_backend: &mut impl FnMut() -> Result<B, SafeReadError>,
+    request: &SafeReadRequest,
+    limits: SafeReadLimits,
+    policy: SafeRetryPolicy,
+    should_cancel: &mut impl FnMut() -> bool,
+) -> Result<SafeReadResult, SafeReadError> {
+    let mut attempts: u8 = 0;
+    loop {
+        if should_cancel() {
+            return Err(SafeReadError::Cancelled);
+        }
+        if attempts >= policy.max_attempts {
+            return Err(SafeReadError::BackendFailure);
+        }
+        attempts += 1;
+        let mut backend = make_backend()?;
+        match safe_read_with_cancel(&mut backend, request, limits, should_cancel) {
+            Ok(result) => return Ok(result),
+            Err(error) => {
+                let retryable = matches!(
+                    error,
+                    SafeReadError::BackendFailure | SafeReadError::HandleChangedDuringRead
+                ) && attempts < policy.max_attempts;
+                if !retryable {
+                    return Err(error);
+                }
+            }
+        }
+    }
+}
+
 fn validate_metadata(
     metadata: &FinalHandleMetadata,
     request: &SafeReadRequest,
@@ -616,6 +773,28 @@ mod tests {
     }
 
     #[test]
+    fn restricted_security_disposition_is_denied_without_bytes() {
+        let mut denied = backend();
+        denied.before.security_disposition = ReadSecurityDisposition::Restricted;
+        assert_eq!(
+            safe_read(&mut denied, &request(), DEFAULT_SAFE_READ_LIMITS),
+            Err(SafeReadError::SecurityDenied)
+        );
+        let mut quarantined = backend();
+        quarantined.before.security_disposition = ReadSecurityDisposition::Quarantined;
+        assert_eq!(
+            safe_read(&mut quarantined, &request(), DEFAULT_SAFE_READ_LIMITS),
+            Err(SafeReadError::SecurityDenied)
+        );
+        let mut stale = backend();
+        stale.before.security_barrier_revision = NonZeroRevision::new(4).expect("revision");
+        assert_eq!(
+            safe_read(&mut stale, &request(), DEFAULT_SAFE_READ_LIMITS),
+            Err(SafeReadError::SecurityRevisionMismatch)
+        );
+    }
+
+    #[test]
     fn read_range_is_checked_before_adapter_read() {
         let mut request = request();
         request.range = ReadRange {
@@ -666,5 +845,173 @@ mod tests {
         let debug = format!("{result:?}");
         assert!(!debug.contains("bcd"));
         assert!(debug.contains("<3 bytes>"));
+    }
+
+    #[test]
+    fn relative_path_token_debug_is_redacted() {
+        let raw = "src/secret/lib.rs";
+        let token =
+            RelativePathToken::new(raw, DEFAULT_SAFE_READ_LIMITS).expect("path");
+        let debug = format!("{token:?}");
+        assert!(!debug.contains(raw));
+        assert!(!debug.contains("secret"));
+        assert!(debug.contains(&raw.len().to_string()));
+    }
+
+    #[test]
+    fn retry_policy_rejects_non_finite_budgets() {
+        assert_eq!(
+            SafeRetryPolicy::new(0),
+            Err(SafeReadError::InvalidRetryPolicy)
+        );
+        assert_eq!(
+            SafeRetryPolicy::new(9),
+            Err(SafeReadError::InvalidRetryPolicy)
+        );
+        assert_eq!(
+            SafeRetryPolicy::new(1).expect("one").max_attempts(),
+            1
+        );
+        assert_eq!(
+            SafeRetryPolicy::new(8).expect("eight").max_attempts(),
+            8
+        );
+    }
+
+    #[test]
+    fn cancel_before_open_yields_no_product() {
+        let mut backend = backend();
+        let mut cancelled = true;
+        let mut should_cancel = || {
+            let value = cancelled;
+            cancelled = true;
+            value
+        };
+        assert_eq!(
+            safe_read_with_cancel(
+                &mut backend,
+                &request(),
+                DEFAULT_SAFE_READ_LIMITS,
+                &mut should_cancel
+            ),
+            Err(SafeReadError::Cancelled)
+        );
+    }
+
+    #[test]
+    fn cancel_between_inspect_and_read_yields_no_product() {
+        let mut backend = backend();
+        let mut calls = 0_usize;
+        let mut should_cancel = || {
+            calls += 1;
+            calls >= 2
+        };
+        assert_eq!(
+            safe_read_with_cancel(
+                &mut backend,
+                &request(),
+                DEFAULT_SAFE_READ_LIMITS,
+                &mut should_cancel
+            ),
+            Err(SafeReadError::Cancelled)
+        );
+    }
+
+    #[test]
+    fn transient_handle_change_retries_then_succeeds() {
+        use core::cell::Cell;
+        use std::rc::Rc;
+        let attempts = Rc::new(Cell::new(0_usize));
+        let mut make_backend = || -> Result<FakeBackend, SafeReadError> {
+            let attempt = attempts.get();
+            attempts.set(attempt + 1);
+            let mut backend = backend();
+            if attempt == 0 {
+                backend.after.change_token =
+                    OpaqueId::new("change:two").expect("token");
+            }
+            Ok(backend)
+        };
+        let mut never_cancel = || false;
+        let result = safe_read_with_retries(
+            &mut make_backend,
+            &request(),
+            DEFAULT_SAFE_READ_LIMITS,
+            SafeRetryPolicy::new(3).expect("policy"),
+            &mut never_cancel,
+        )
+        .expect("retry succeeds");
+        assert_eq!(result.bytes(), b"bcd");
+        assert_eq!(attempts.get(), 2);
+    }
+
+    #[test]
+    fn retry_exhaustion_returns_the_last_error() {
+        let mut make_backend = || -> Result<FakeBackend, SafeReadError> {
+            let mut backend = backend();
+            backend.after.change_token =
+                OpaqueId::new("change:two").expect("token");
+            Ok(backend)
+        };
+        let mut never_cancel = || false;
+        assert_eq!(
+            safe_read_with_retries(
+                &mut make_backend,
+                &request(),
+                DEFAULT_SAFE_READ_LIMITS,
+                SafeRetryPolicy::new(2).expect("policy"),
+                &mut never_cancel,
+            ),
+            Err(SafeReadError::HandleChangedDuringRead)
+        );
+    }
+
+    #[test]
+    fn deterministic_denial_does_not_retry() {
+        use core::cell::Cell;
+        use std::rc::Rc;
+        let attempts = Rc::new(Cell::new(0_usize));
+        let mut make_backend = || -> Result<FakeBackend, SafeReadError> {
+            attempts.set(attempts.get() + 1);
+            Ok(backend())
+        };
+        let mut request = request();
+        request.expected_stable_file_identity_digest =
+            Blake3Digest32::from_bytes([9; 32]);
+        let mut never_cancel = || false;
+        assert_eq!(
+            safe_read_with_retries(
+                &mut make_backend,
+                &request,
+                DEFAULT_SAFE_READ_LIMITS,
+                SafeRetryPolicy::new(3).expect("policy"),
+                &mut never_cancel,
+            ),
+            Err(SafeReadError::StableIdentityMismatch)
+        );
+        assert_eq!(attempts.get(), 1);
+    }
+
+    #[test]
+    fn cancelled_retry_loop_returns_immediately() {
+        use core::cell::Cell;
+        use std::rc::Rc;
+        let attempts = Rc::new(Cell::new(0_usize));
+        let mut make_backend = || -> Result<FakeBackend, SafeReadError> {
+            attempts.set(attempts.get() + 1);
+            Ok(backend())
+        };
+        let mut should_cancel = || true;
+        assert_eq!(
+            safe_read_with_retries(
+                &mut make_backend,
+                &request(),
+                DEFAULT_SAFE_READ_LIMITS,
+                SafeRetryPolicy::new(3).expect("policy"),
+                &mut should_cancel,
+            ),
+            Err(SafeReadError::Cancelled)
+        );
+        assert_eq!(attempts.get(), 0);
     }
 }

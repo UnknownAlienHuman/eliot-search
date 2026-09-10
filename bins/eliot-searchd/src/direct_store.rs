@@ -8,12 +8,16 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File, Metadata, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Write;
+#[cfg(test)]
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::development::MAX_SCAN_INPUT_BYTES;
-use crate::sha256;
+use crate::safe_reader_adapter::{AdapterError, FullReadError};
+use crate::{safe_reader_adapter, sha256};
+use search_safe_reader::SafeReadError;
 
 #[path = "direct_store_ingest.rs"]
 mod ingest;
@@ -638,127 +642,104 @@ fn read_file_snapshot(
     } else {
         "DIRECT_SOURCE_TOO_LARGE"
     };
-    let initial = fs::symlink_metadata(path)
-        .map_err(|error| format!("DIRECT_SOURCE_OPEN_ERROR:{error}"))?;
-    if initial.file_type().is_symlink() || is_reparse(&initial) {
-        return Err("DIRECT_SOURCE_LINK_DENIED".to_owned());
-    }
-    if !initial.is_file() {
-        return Err("DIRECT_SOURCE_NOT_REGULAR".to_owned());
-    }
-    let canonical_path = fs::canonicalize(path)
-        .map_err(|error| format!("DIRECT_SOURCE_CANONICALIZE_ERROR:{error}"))?;
-    if canonical_path.starts_with(data_root) {
+    // Primary ingestion reads through the shared safe-reader kernel: the
+    // platform adapter proves final-object/ancestor containment on the
+    // opened handle and the kernel revalidates the same handle after the
+    // read. No path-first byte product exists on this path.
+    let absolute = absolutize_source(path)?;
+    let parent = absolute
+        .parent()
+        .ok_or_else(|| "DIRECT_SOURCE_PATH_DENIED".to_owned())?;
+    let full = safe_reader_adapter::read_full_file_via_kernel(&absolute, parent, max_bytes)
+        .map_err(|error| map_full_read_error(error, limit_error))?;
+    if full.canonical_final.starts_with(data_root) {
         return Err("DIRECT_SOURCE_INSIDE_DATA_ROOT".to_owned());
     }
-    let final_metadata = fs::symlink_metadata(&canonical_path)
-        .map_err(|error| format!("DIRECT_SOURCE_OPEN_ERROR:{error}"))?;
-    if final_metadata.file_type().is_symlink()
-        || is_reparse(&final_metadata)
-        || !final_metadata.is_file()
-    {
-        return Err("DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned());
-    }
-
-    let mut file = File::open(&canonical_path)
-        .map_err(|error| format!("DIRECT_SOURCE_OPEN_ERROR:{error}"))?;
-    let before = observe_source_file(&file, &canonical_path)?;
-    if before.byte_length > u64::try_from(max_bytes).unwrap_or(u64::MAX) {
-        return Err(limit_error.to_owned());
-    }
-    let mut bytes = Vec::with_capacity(
-        usize::try_from(before.byte_length)
-            .map_err(|_| limit_error.to_owned())?,
-    );
-    (&mut file)
-        .take(u64::try_from(max_bytes + 1).unwrap_or(u64::MAX))
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("DIRECT_SOURCE_READ_ERROR:{error}"))?;
-    if bytes.len() > max_bytes {
-        return Err(limit_error.to_owned());
-    }
-    let after = observe_source_file(&file, &canonical_path)?;
-    if before != after
-        || bytes.len() != usize::try_from(before.byte_length).unwrap_or(usize::MAX)
+    if full.bytes.len() > max_bytes
+        || u64::try_from(full.bytes.len()).unwrap_or(u64::MAX) != full.source_bytes
     {
         return Err("DIRECT_SOURCE_CHANGED_DURING_READ".to_owned());
     }
-    let path_digest = sha256::hex(&sha256::digest(&path_identity_bytes(&canonical_path)));
-    let content_digest = sha256::hex(&sha256::digest(&bytes));
+    let identity_strength = if full.identity_native {
+        IdentityStrength::Native
+    } else {
+        IdentityStrength::PathBound
+    };
+    let path_digest = sha256::hex(&sha256::digest(&path_identity_bytes(&full.canonical_final)));
+    let content_digest = sha256::hex(&sha256::digest(&full.bytes));
     Ok(FileSnapshot {
         path_digest,
-        file_identity_digest: before.file_identity_digest,
-        identity_strength: before.identity_strength,
-        content_digest,
-        bytes,
-    })
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct SourceFileObservation {
-    byte_length: u64,
-    modified_nanos: Option<u128>,
-    file_identity_digest: String,
-    identity_strength: IdentityStrength,
-}
-
-fn observe_source_file(file: &File, canonical_path: &Path) -> Result<SourceFileObservation, String> {
-    let metadata = file
-        .metadata()
-        .map_err(|error| format!("DIRECT_SOURCE_METADATA_ERROR:{error}"))?;
-    if !metadata.is_file() || is_reparse(&metadata) {
-        return Err("DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned());
-    }
-    let modified_nanos = metadata
-        .modified()
-        .ok()
-        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_nanos());
-    let (identity_material, identity_strength) =
-        platform_file_identity(file, &metadata, canonical_path)?;
-    Ok(SourceFileObservation {
-        byte_length: metadata.len(),
-        modified_nanos,
         file_identity_digest: sha256::hex(&sha256::digest_parts(
             b"eliot-search/direct-file-identity/v1",
-            &[&identity_material],
+            &[&full.identity_material],
         )),
         identity_strength,
+        content_digest,
+        bytes: full.bytes,
     })
 }
 
-#[cfg(unix)]
-fn platform_file_identity(
-    _file: &File,
-    metadata: &Metadata,
-    _path: &Path,
-) -> Result<(Vec<u8>, IdentityStrength), String> {
-    use std::os::unix::fs::MetadataExt;
-    let mut bytes = Vec::with_capacity(16);
-    bytes.extend_from_slice(&metadata.dev().to_be_bytes());
-    bytes.extend_from_slice(&metadata.ino().to_be_bytes());
-    Ok((bytes, IdentityStrength::Native))
+/// Resolves a caller-supplied source locator against the process directory.
+///
+/// Historical callers pass relative CLI paths; the kernel admits absolute
+/// locators only, so relativize here instead of inside the adapter.
+fn absolutize_source(path: &Path) -> Result<PathBuf, String> {
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+    let current = std::env::current_dir().map_err(|_| "DIRECT_SOURCE_ACCESS_DENIED".to_owned())?;
+    Ok(current.join(path))
 }
 
-#[cfg(windows)]
-fn platform_file_identity(
-    file: &File,
-    _metadata: &Metadata,
-    _path: &Path,
-) -> Result<(Vec<u8>, IdentityStrength), String> {
-    let observed = eliot_searchd::native_file::observe(file)
-        .map_err(|error| error.code().to_owned())?;
-    // Preserve the existing NTFS identity encoding without a path-only fallback.
-    Ok((observed.legacy_identity_bytes().to_vec(), IdentityStrength::Native))
-}
-
-#[cfg(not(any(unix, windows)))]
-fn platform_file_identity(
-    _file: &File,
-    _metadata: &Metadata,
-    path: &Path,
-) -> Result<(Vec<u8>, IdentityStrength), String> {
-    Ok((path_identity_bytes(path), IdentityStrength::PathBound))
+/// Maps a kernel-verified read failure to the DIRECT namespace without
+/// paths, bytes or raw OS error text.
+fn map_full_read_error(error: FullReadError, limit_error: &str) -> String {
+    match error {
+        FullReadError::Adapter(adapter) => match adapter {
+            AdapterError::PathDenied => "DIRECT_SOURCE_PATH_DENIED".to_owned(),
+            AdapterError::LinkDenied | AdapterError::AncestorReparseDenied => {
+                "DIRECT_SOURCE_LINK_DENIED".to_owned()
+            }
+            AdapterError::EscapeDenied => "DIRECT_SOURCE_ESCAPE_DENIED".to_owned(),
+            AdapterError::RootRelocated => "DIRECT_SOURCE_ROOT_RELOCATED".to_owned(),
+            AdapterError::NotRegular => "DIRECT_SOURCE_NOT_REGULAR".to_owned(),
+            AdapterError::FinalObjectInvalid | AdapterError::DeviceDenied => {
+                "DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned()
+            }
+            AdapterError::HardlinkDenied => "DIRECT_SOURCE_HARDLINK_DENIED".to_owned(),
+            AdapterError::AccessDenied => "DIRECT_SOURCE_ACCESS_DENIED".to_owned(),
+            AdapterError::TooLarge => limit_error.to_owned(),
+            AdapterError::ReceiptDenied => {
+                "DIRECT_SOURCE_METADATA_ERROR:SAFE_ADAPTER_RECEIPT_DENIED".to_owned()
+            }
+        },
+        FullReadError::Kernel(kernel) => match kernel {
+            SafeReadError::RangeOutsideSource
+            | SafeReadError::EofMismatch
+            | SafeReadError::ReadLengthMismatch
+            | SafeReadError::StableIdentityMismatch
+            | SafeReadError::HandleChangedDuringRead
+            | SafeReadError::BackendFailure => {
+                "DIRECT_SOURCE_CHANGED_DURING_READ".to_owned()
+            }
+            SafeReadError::RootIdentityMismatch => "DIRECT_SOURCE_ESCAPE_DENIED".to_owned(),
+            SafeReadError::UnsupportedFileKind => {
+                "DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned()
+            }
+            SafeReadError::ReparseBoundaryDenied => "DIRECT_SOURCE_LINK_DENIED".to_owned(),
+            SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch => {
+                "DIRECT_SOURCE_ACCESS_DENIED".to_owned()
+            }
+            SafeReadError::SourceSizeInvalid => limit_error.to_owned(),
+            SafeReadError::Cancelled => "DIRECT_SOURCE_READ_CANCELLED".to_owned(),
+            SafeReadError::InvalidLimits
+            | SafeReadError::InvalidPathToken
+            | SafeReadError::InvalidReadLength
+            | SafeReadError::RangeOverflow
+            | SafeReadError::InvalidRetryPolicy
+            | SafeReadError::ReceiptMissing => "DIRECT_SOURCE_READ_INVALID".to_owned(),
+        },
+    }
 }
 
 #[cfg(unix)]

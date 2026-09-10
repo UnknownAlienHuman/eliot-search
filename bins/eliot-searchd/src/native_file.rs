@@ -88,11 +88,26 @@ pub fn observe(file: &File) -> Result<Observation, ObservationError> {
     platform::observe(file)
 }
 
+/// Returns the exact hardlink count of one already-open object.
+///
+/// Used by the final-handle adapter to fail closed on multi-link objects
+/// whose bytes are shared with a foreign domain. Reports no path.
+///
+/// # Errors
+/// Returns a closed failure when the count is unavailable on this target.
+pub fn hardlink_count(file: &File) -> Result<u32, ObservationError> {
+    platform::hardlink_count(file)
+}
+
 #[cfg(not(windows))]
 mod platform {
     use super::{File, Observation, ObservationError};
 
     pub(super) fn observe(_file: &File) -> Result<Observation, ObservationError> {
+        Err(ObservationError::UnsupportedPlatform)
+    }
+
+    pub(super) fn hardlink_count(_file: &File) -> Result<u32, ObservationError> {
         Err(ObservationError::UnsupportedPlatform)
     }
 }
