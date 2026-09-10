@@ -6,11 +6,26 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions,
-    clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::module_name_repetitions,
+    clippy::must_use_candidate,
+    clippy::too_many_lines
+)]
 
 use core::fmt;
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
+
+/// Public entry module: the only cross-package entry for materializer behavior.
+pub mod api;
+mod assurance;
+mod decode;
+mod maps;
+mod normalize;
+mod product;
+mod profile;
+mod provider;
+mod request;
 
 /// Conservative finite materialization limits.
 pub const DEFAULT_MATERIALIZATION_LIMITS: MaterializationLimits = MaterializationLimits {
@@ -44,6 +59,44 @@ pub enum MaterializationError {
     MissingContentDigest,
     /// Required content-free retained-revision receipt is absent.
     MissingRevisionReceipt,
+    /// Materializer profile descriptor is malformed or unsupported.
+    ProfileInvalid,
+    /// Request profile identity is not in the accepted profile set.
+    ProfileMismatch,
+    /// Materialization request is malformed or internally inconsistent.
+    RequestInvalid,
+    /// Exact retained revision cannot be opened from residency.
+    RevisionUnavailable,
+    /// Port-attested content digest differs from the requested revision digest.
+    RevisionDigestMismatch,
+    /// Port-attested residency differs from the requested residency.
+    ResidencyMismatch,
+    /// Declared source kind or transform is not supported by the profile.
+    Unsupported,
+    /// Byte prefix admits several encodings under the declared profile.
+    EncodingAmbiguous,
+    /// Declared encoding is outside the accepted profile set.
+    EncodingUnsupported,
+    /// Bytes are malformed or truncated for the decided encoding.
+    InvalidSequence,
+    /// A lossy transform is required where the profile forbids loss.
+    Loss,
+    /// Coordinate map is malformed, unbounded or inconsistent.
+    CoordinateMapInvalid,
+    /// Loss map is malformed, unbounded or inconsistent with the representation.
+    LossMapInvalid,
+    /// Claimed assurance exceeds what loss evidence allows.
+    AssuranceViolation,
+    /// A finite input/output/map/step budget is exhausted.
+    BudgetExhausted,
+    /// Cooperative cancellation was observed; no complete product exists.
+    Cancelled,
+    /// Unsaved bytes lack an explicit admitted snapshot receipt.
+    UnsavedSnapshotNotAdmitted,
+    /// Optional document provider descriptor is not qualified (P17 gated).
+    ProviderNotQualified,
+    /// Optional document provider output claim contradicts its loss evidence.
+    ProviderOutputInvalid,
 }
 
 impl MaterializationError {
@@ -61,6 +114,25 @@ impl MaterializationError {
             Self::InputLengthMismatch => "MATERIALIZATION_INPUT_LENGTH_MISMATCH",
             Self::MissingContentDigest => "MATERIALIZATION_MISSING_CONTENT_DIGEST",
             Self::MissingRevisionReceipt => "MATERIALIZATION_MISSING_REVISION_RECEIPT",
+            Self::ProfileInvalid => "MATERIALIZER_PROFILE_INVALID",
+            Self::ProfileMismatch => "MATERIALIZER_PROFILE_MISMATCH",
+            Self::RequestInvalid => "MATERIALIZATION_REQUEST_INVALID",
+            Self::RevisionUnavailable => "SOURCE_REVISION_UNAVAILABLE",
+            Self::RevisionDigestMismatch => "SOURCE_REVISION_DIGEST_MISMATCH",
+            Self::ResidencyMismatch => "SOURCE_RESIDENCY_MISMATCH",
+            Self::Unsupported => "MATERIALIZATION_UNSUPPORTED",
+            Self::EncodingAmbiguous => "SOURCE_ENCODING_AMBIGUOUS",
+            Self::EncodingUnsupported => "SOURCE_ENCODING_UNSUPPORTED",
+            Self::InvalidSequence => "MATERIALIZATION_INVALID_SEQUENCE",
+            Self::Loss => "MATERIALIZATION_LOSS",
+            Self::CoordinateMapInvalid => "COORDINATE_MAP_INVALID",
+            Self::LossMapInvalid => "LOSS_MAP_INVALID",
+            Self::AssuranceViolation => "MATERIALIZATION_ASSURANCE_VIOLATION",
+            Self::BudgetExhausted => "MATERIALIZATION_BUDGET_EXHAUSTED",
+            Self::Cancelled => "MATERIALIZATION_CANCELLED",
+            Self::UnsavedSnapshotNotAdmitted => "UNSAVED_SNAPSHOT_NOT_ADMITTED",
+            Self::ProviderNotQualified => "PROVIDER_NOT_QUALIFIED",
+            Self::ProviderOutputInvalid => "PROVIDER_OUTPUT_INVALID",
         }
     }
 }
@@ -118,24 +190,39 @@ impl RetainedRevision {
         bytes: Vec<u8>,
         revision_receipt: Option<ReceiptRef>,
     ) -> Self {
-        Self { source_id, revision, content_digest, byte_count, bytes, revision_receipt }
+        Self {
+            source_id,
+            revision,
+            content_digest,
+            byte_count,
+            bytes,
+            revision_receipt,
+        }
     }
     /// Exact retained bytes.
-    pub fn bytes(&self) -> &[u8] { &self.bytes }
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
     /// Exact retained byte length in memory.
-    pub const fn len(&self) -> usize { self.bytes.len() }
+    pub const fn len(&self) -> usize {
+        self.bytes.len()
+    }
     /// Returns whether the retained revision is empty.
-    pub const fn is_empty(&self) -> bool { self.bytes.is_empty() }
+    pub const fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
 }
 impl fmt::Debug for RetainedRevision {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("RetainedRevision")
+        formatter
+            .debug_struct("RetainedRevision")
             .field("source_id", &self.source_id)
             .field("revision", &self.revision)
             .field("content_digest", &self.content_digest)
             .field("byte_count", &self.byte_count)
             .field("bytes", &format_args!("<{} bytes>", self.bytes.len()))
-            .field("revision_receipt", &self.revision_receipt).finish()
+            .field("revision_receipt", &self.revision_receipt)
+            .finish()
     }
 }
 
@@ -154,7 +241,11 @@ pub enum LineEnding {
 impl LineEnding {
     /// Exact terminator byte length.
     pub const fn byte_len(self) -> u8 {
-        match self { Self::Lf | Self::Cr => 1, Self::CrLf => 2, Self::None => 0 }
+        match self {
+            Self::Lf | Self::Cr => 1,
+            Self::CrLf => 2,
+            Self::None => 0,
+        }
     }
 }
 
@@ -174,9 +265,13 @@ pub struct LineSpan {
 }
 impl LineSpan {
     /// Exact content byte length excluding the terminator.
-    pub const fn content_len(self) -> u64 { self.content_end - self.source_start }
+    pub const fn content_len(self) -> u64 {
+        self.content_end - self.source_start
+    }
     /// Exact full span length including the terminator.
-    pub const fn span_len(self) -> u64 { self.source_end - self.source_start }
+    pub const fn span_len(self) -> u64 {
+        self.source_end - self.source_start
+    }
 }
 
 /// Aggregate exact line-ending evidence.
@@ -195,9 +290,15 @@ impl LineEndingEvidence {
     /// Returns whether more than one terminated line-ending style is present.
     pub const fn is_mixed(self) -> bool {
         let mut styles = 0_u8;
-        if self.lf > 0 { styles += 1; }
-        if self.crlf > 0 { styles += 1; }
-        if self.cr > 0 { styles += 1; }
+        if self.lf > 0 {
+            styles += 1;
+        }
+        if self.crlf > 0 {
+            styles += 1;
+        }
+        if self.cr > 0 {
+            styles += 1;
+        }
         styles > 1
     }
 }
@@ -240,21 +341,33 @@ pub struct MaterializedRevision {
 }
 impl MaterializedRevision {
     /// Exact unnormalized UTF-8 text.
-    pub fn text(&self) -> &str { &self.text }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
     /// Exact UTF-8 bytes.
-    pub const fn bytes(&self) -> &[u8] { self.text.as_bytes() }
+    pub const fn bytes(&self) -> &[u8] {
+        self.text.as_bytes()
+    }
     /// Exact output byte length.
-    pub const fn len(&self) -> usize { self.text.len() }
+    pub const fn len(&self) -> usize {
+        self.text.len()
+    }
     /// Returns whether materialized text is empty.
-    pub const fn is_empty(&self) -> bool { self.text.is_empty() }
+    pub const fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
 }
 impl fmt::Debug for MaterializedRevision {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("MaterializedRevision")
-            .field("source_id", &self.source_id).field("revision", &self.revision)
+        formatter
+            .debug_struct("MaterializedRevision")
+            .field("source_id", &self.source_id)
+            .field("revision", &self.revision)
             .field("content_digest", &self.content_digest)
             .field("text", &format_args!("<{} UTF-8 bytes>", self.text.len()))
-            .field("lines", &self.lines).field("receipt", &self.receipt).finish()
+            .field("lines", &self.lines)
+            .field("receipt", &self.receipt)
+            .finish()
     }
 }
 
@@ -270,18 +383,26 @@ pub struct MaterializedText {
 }
 impl MaterializedText {
     /// Exact text borrowed without copying.
-    pub fn text(&self) -> &str { &self.text }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
     /// Exact immutable line mapping.
-    pub fn lines(&self) -> &[LineSpan] { &self.lines }
+    pub fn lines(&self) -> &[LineSpan] {
+        &self.lines
+    }
     /// Exact line-ending counts.
-    pub const fn line_endings(&self) -> LineEndingEvidence { self.line_endings }
+    pub const fn line_endings(&self) -> LineEndingEvidence {
+        self.line_endings
+    }
 }
 impl fmt::Debug for MaterializedText {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("MaterializedText")
+        formatter
+            .debug_struct("MaterializedText")
             .field("text", &format_args!("<{} UTF-8 bytes>", self.text.len()))
             .field("line_count", &self.lines.len())
-            .field("line_endings", &self.line_endings).finish()
+            .field("line_endings", &self.line_endings)
+            .finish()
     }
 }
 
@@ -298,7 +419,11 @@ pub fn materialize_utf8(
     reject_binary_controls(&bytes)?;
     let text = String::from_utf8(bytes).map_err(|_| MaterializationError::InvalidUtf8)?;
     let (lines, line_endings) = scan_lines(text.as_bytes(), limits)?;
-    Ok(MaterializedText { text, lines, line_endings })
+    Ok(MaterializedText {
+        text,
+        lines,
+        line_endings,
+    })
 }
 
 /// Materializes a receipt-bound retained revision without normalization.
@@ -310,36 +435,74 @@ pub fn materialize(
     limits: MaterializationLimits,
 ) -> Result<MaterializedRevision, MaterializationError> {
     let limits = limits.validate()?;
-    if input.is_empty() { return Err(MaterializationError::EmptyInput); }
+    if input.is_empty() {
+        return Err(MaterializationError::EmptyInput);
+    }
     check_byte_limits(input.len(), limits)?;
     let exact_len = u64::try_from(input.len()).map_err(|_| MaterializationError::OffsetOverflow)?;
-    if input.byte_count != exact_len { return Err(MaterializationError::InputLengthMismatch); }
-    let content_digest = input.content_digest.ok_or(MaterializationError::MissingContentDigest)?;
-    let revision_receipt = input.revision_receipt.ok_or(MaterializationError::MissingRevisionReceipt)?;
-    let MaterializedText { text, lines, line_endings } = materialize_utf8(input.bytes, limits)?;
-    let line_count = u64::try_from(lines.len()).map_err(|_| MaterializationError::OffsetOverflow)?;
+    if input.byte_count != exact_len {
+        return Err(MaterializationError::InputLengthMismatch);
+    }
+    let content_digest = input
+        .content_digest
+        .ok_or(MaterializationError::MissingContentDigest)?;
+    let revision_receipt = input
+        .revision_receipt
+        .ok_or(MaterializationError::MissingRevisionReceipt)?;
+    let MaterializedText {
+        text,
+        lines,
+        line_endings,
+    } = materialize_utf8(input.bytes, limits)?;
+    let line_count =
+        u64::try_from(lines.len()).map_err(|_| MaterializationError::OffsetOverflow)?;
     let receipt = MaterializationReceipt {
-        source_id: input.source_id.clone(), revision: input.revision, content_digest,
-        input_bytes: exact_len, output_bytes: exact_len, line_count, line_endings, revision_receipt,
+        source_id: input.source_id.clone(),
+        revision: input.revision,
+        content_digest,
+        input_bytes: exact_len,
+        output_bytes: exact_len,
+        line_count,
+        line_endings,
+        revision_receipt,
     };
     Ok(MaterializedRevision {
-        source_id: input.source_id, revision: input.revision, content_digest, text, lines, receipt,
+        source_id: input.source_id,
+        revision: input.revision,
+        content_digest,
+        text,
+        lines,
+        receipt,
     })
 }
 
-const fn check_byte_limits(length: usize, limits: MaterializationLimits) -> Result<(), MaterializationError> {
-    if length > limits.max_input_bytes { return Err(MaterializationError::InputTooLarge); }
-    if length > limits.max_output_bytes { return Err(MaterializationError::OutputTooLarge); }
+const fn check_byte_limits(
+    length: usize,
+    limits: MaterializationLimits,
+) -> Result<(), MaterializationError> {
+    if length > limits.max_input_bytes {
+        return Err(MaterializationError::InputTooLarge);
+    }
+    if length > limits.max_output_bytes {
+        return Err(MaterializationError::OutputTooLarge);
+    }
     Ok(())
 }
 
 fn reject_binary_controls(bytes: &[u8]) -> Result<(), MaterializationError> {
-    if bytes.contains(&0) { return Err(MaterializationError::BinaryContent); }
-    let disallowed_controls = bytes.iter()
+    if bytes.contains(&0) {
+        return Err(MaterializationError::BinaryContent);
+    }
+    let disallowed_controls = bytes
+        .iter()
         .filter(|byte| **byte < 0x20 && !matches!(**byte, b'\t' | b'\n' | b'\r' | 0x0c))
         .count();
     let threshold = bytes.len().div_ceil(100).max(4);
-    if disallowed_controls >= threshold { Err(MaterializationError::BinaryContent) } else { Ok(()) }
+    if disallowed_controls >= threshold {
+        Err(MaterializationError::BinaryContent)
+    } else {
+        Ok(())
+    }
 }
 
 fn scan_lines(
@@ -357,15 +520,25 @@ fn scan_lines(
             b'\r' => Some((LineEnding::Cr, 1_usize)),
             _ => None,
         };
-        let Some((ending, terminator_bytes)) = ending else { index += 1; continue; };
-        if lines.len() >= limits.max_lines { return Err(MaterializationError::TooManyLines); }
+        let Some((ending, terminator_bytes)) = ending else {
+            index += 1;
+            continue;
+        };
+        if lines.len() >= limits.max_lines {
+            return Err(MaterializationError::TooManyLines);
+        }
         let content_end = index;
-        let source_end = index.checked_add(terminator_bytes).ok_or(MaterializationError::OffsetOverflow)?;
+        let source_end = index
+            .checked_add(terminator_bytes)
+            .ok_or(MaterializationError::OffsetOverflow)?;
         lines.push(LineSpan {
-            line_index: u64::try_from(lines.len()).map_err(|_| MaterializationError::OffsetOverflow)?,
+            line_index: u64::try_from(lines.len())
+                .map_err(|_| MaterializationError::OffsetOverflow)?,
             source_start: u64::try_from(start).map_err(|_| MaterializationError::OffsetOverflow)?,
-            source_end: u64::try_from(source_end).map_err(|_| MaterializationError::OffsetOverflow)?,
-            content_end: u64::try_from(content_end).map_err(|_| MaterializationError::OffsetOverflow)?,
+            source_end: u64::try_from(source_end)
+                .map_err(|_| MaterializationError::OffsetOverflow)?,
+            content_end: u64::try_from(content_end)
+                .map_err(|_| MaterializationError::OffsetOverflow)?,
             ending,
         });
         match ending {
@@ -378,12 +551,17 @@ fn scan_lines(
         index = source_end;
     }
     if start < bytes.len() {
-        if lines.len() >= limits.max_lines { return Err(MaterializationError::TooManyLines); }
+        if lines.len() >= limits.max_lines {
+            return Err(MaterializationError::TooManyLines);
+        }
         lines.push(LineSpan {
-            line_index: u64::try_from(lines.len()).map_err(|_| MaterializationError::OffsetOverflow)?,
+            line_index: u64::try_from(lines.len())
+                .map_err(|_| MaterializationError::OffsetOverflow)?,
             source_start: u64::try_from(start).map_err(|_| MaterializationError::OffsetOverflow)?,
-            source_end: u64::try_from(bytes.len()).map_err(|_| MaterializationError::OffsetOverflow)?,
-            content_end: u64::try_from(bytes.len()).map_err(|_| MaterializationError::OffsetOverflow)?,
+            source_end: u64::try_from(bytes.len())
+                .map_err(|_| MaterializationError::OffsetOverflow)?,
+            content_end: u64::try_from(bytes.len())
+                .map_err(|_| MaterializationError::OffsetOverflow)?,
             ending: LineEnding::None,
         });
         evidence.unterminated += 1;
@@ -399,22 +577,32 @@ mod tests {
             OpaqueId::new("source:test").expect("source"),
             NonZeroRevision::new(1).expect("revision"),
             Some(Blake3Digest32::from_bytes([1; 32])),
-            u64::try_from(bytes.len()).expect("length"), bytes.to_vec(),
+            u64::try_from(bytes.len()).expect("length"),
+            bytes.to_vec(),
             Some(ReceiptRef::new("receipt:revision").expect("receipt")),
         )
     }
     #[test]
     fn exact_utf8_bytes_are_preserved() {
         let bytes = "alpha\r\nbeta\nγ".as_bytes();
-        let result = materialize(retained(bytes), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
+        let result =
+            materialize(retained(bytes), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
         assert_eq!(result.bytes(), bytes);
         assert_eq!(result.receipt.input_bytes, result.receipt.output_bytes);
     }
     #[test]
     fn line_endings_and_offsets_are_exact() {
-        let result = materialize(retained(b"a\r\nb\nc\rd"), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
+        let result = materialize(retained(b"a\r\nb\nc\rd"), DEFAULT_MATERIALIZATION_LIMITS)
+            .expect("materialize");
         assert_eq!(result.lines.len(), 4);
-        assert_eq!((result.lines[0].source_start, result.lines[0].content_end, result.lines[0].source_end), (0, 1, 3));
+        assert_eq!(
+            (
+                result.lines[0].source_start,
+                result.lines[0].content_end,
+                result.lines[0].source_end
+            ),
+            (0, 1, 3)
+        );
         assert_eq!(result.lines[0].ending, LineEnding::CrLf);
         assert_eq!(result.lines[1].ending, LineEnding::Lf);
         assert_eq!(result.lines[2].ending, LineEnding::Cr);
@@ -423,28 +611,45 @@ mod tests {
     }
     #[test]
     fn final_terminator_does_not_create_phantom_line() {
-        let result = materialize(retained(b"a\n"), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
+        let result =
+            materialize(retained(b"a\n"), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
         assert_eq!(result.lines.len(), 1);
         assert_eq!(result.lines[0].ending, LineEnding::Lf);
         assert_eq!(result.receipt.line_endings.unterminated, 0);
     }
     #[test]
     fn invalid_utf8_is_rejected() {
-        assert_eq!(materialize(retained(&[0xff, 0xfe]), DEFAULT_MATERIALIZATION_LIMITS), Err(MaterializationError::InvalidUtf8));
+        assert_eq!(
+            materialize(retained(&[0xff, 0xfe]), DEFAULT_MATERIALIZATION_LIMITS),
+            Err(MaterializationError::InvalidUtf8)
+        );
     }
     #[test]
     fn nul_content_is_rejected_as_binary() {
-        assert_eq!(materialize(retained(b"a\0b"), DEFAULT_MATERIALIZATION_LIMITS), Err(MaterializationError::BinaryContent));
+        assert_eq!(
+            materialize(retained(b"a\0b"), DEFAULT_MATERIALIZATION_LIMITS),
+            Err(MaterializationError::BinaryContent)
+        );
     }
     #[test]
     fn byte_count_mismatch_is_rejected() {
-        let mut input = retained(b"abc"); input.byte_count = 2;
-        assert_eq!(materialize(input, DEFAULT_MATERIALIZATION_LIMITS), Err(MaterializationError::InputLengthMismatch));
+        let mut input = retained(b"abc");
+        input.byte_count = 2;
+        assert_eq!(
+            materialize(input, DEFAULT_MATERIALIZATION_LIMITS),
+            Err(MaterializationError::InputLengthMismatch)
+        );
     }
     #[test]
     fn line_limit_is_fail_closed() {
-        let limits = MaterializationLimits { max_lines: 1, ..DEFAULT_MATERIALIZATION_LIMITS };
-        assert_eq!(materialize(retained(b"a\nb"), limits), Err(MaterializationError::TooManyLines));
+        let limits = MaterializationLimits {
+            max_lines: 1,
+            ..DEFAULT_MATERIALIZATION_LIMITS
+        };
+        assert_eq!(
+            materialize(retained(b"a\nb"), limits),
+            Err(MaterializationError::TooManyLines)
+        );
     }
     #[test]
     fn debug_output_does_not_dump_source_text() {
@@ -467,14 +672,25 @@ mod tests {
     #[test]
     fn empty_text_does_not_create_a_revision_receipt() {
         let text = materialize_utf8(Vec::new(), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
-        assert!(text.text().is_empty()); assert!(text.lines().is_empty());
-        assert_eq!(materialize(retained(b""), DEFAULT_MATERIALIZATION_LIMITS), Err(MaterializationError::EmptyInput));
+        assert!(text.text().is_empty());
+        assert!(text.lines().is_empty());
+        assert_eq!(
+            materialize(retained(b""), DEFAULT_MATERIALIZATION_LIMITS),
+            Err(MaterializationError::EmptyInput)
+        );
     }
     #[test]
     fn byte_preparation_keeps_finite_limits_and_redacted_debug() {
-        let limits = MaterializationLimits { max_input_bytes: 2, ..DEFAULT_MATERIALIZATION_LIMITS };
-        assert_eq!(materialize_utf8(b"abc".to_vec(), limits), Err(MaterializationError::InputTooLarge));
-        let text = materialize_utf8(b"private-sentinel".to_vec(), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
+        let limits = MaterializationLimits {
+            max_input_bytes: 2,
+            ..DEFAULT_MATERIALIZATION_LIMITS
+        };
+        assert_eq!(
+            materialize_utf8(b"abc".to_vec(), limits),
+            Err(MaterializationError::InputTooLarge)
+        );
+        let text =
+            materialize_utf8(b"private-sentinel".to_vec(), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
         assert!(!format!("{text:?}").contains("private-sentinel"));
     }
 }
