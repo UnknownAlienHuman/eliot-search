@@ -1113,6 +1113,11 @@ pub fn execute_exact_scan(
     for item in &plan.denominator.items {
         if control.is_cancelled() {
             cancelled = true;
+            // The skip is the explicit accounting for this item, so its
+            // captured readback is legitimately unconsumed: discard it here.
+            // Only readbacks for revisions outside the frozen denominator
+            // remain at the end and fail as contradictory.
+            by_revision.remove(&item.revision.revision_id);
             executions.push(item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::Cancelled,
@@ -1122,6 +1127,7 @@ pub fn execute_exact_scan(
         }
         if control.deadline_expired() {
             timed_out = true;
+            by_revision.remove(&item.revision.revision_id);
             executions.push(item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::Timeout,
@@ -1131,6 +1137,7 @@ pub fn execute_exact_scan(
         }
         if executions.len() >= budget.max_items {
             timed_out = true;
+            by_revision.remove(&item.revision.revision_id);
             executions.push(item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::Timeout,
@@ -1151,6 +1158,7 @@ pub fn execute_exact_scan(
             .ok_or(ExactError::ExactBudgetExhausted)?;
         if proposed_bytes > budget.max_bytes {
             timed_out = true;
+            by_revision.remove(&item.revision.revision_id);
             executions.push(item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::Timeout,
@@ -1466,6 +1474,11 @@ pub struct ExactVerificationReceipt {
 }
 
 /// Recomputes item accounting and issues a verification receipt.
+///
+/// Every emitted match must be source-backed by the frozen denominator: its
+/// revision identity and exact revision bytes binding must equal one frozen
+/// item. Matches minted outside the denominator, or with substituted revision
+/// bytes, fail as contradictory instead of entering a receipt.
 pub fn verify_execution_report(
     plan: &CompiledExactScan,
     report: &ExactExecutionReport,
@@ -1483,6 +1496,20 @@ pub fn verify_execution_report(
         .iter()
         .map(|item| item.revision.revision_id)
         .collect::<BTreeSet<_>>();
+    let frozen_revisions = plan
+        .denominator
+        .items
+        .iter()
+        .map(|item| (item.revision.revision_id, item.revision))
+        .collect::<BTreeMap<_, _>>();
+    for exact_match in &report.matched_items {
+        let frozen = frozen_revisions
+            .get(&exact_match.source_revision_ref.revision_id)
+            .ok_or(ExactError::ExactReportInvalid)?;
+        if *frozen != exact_match.source_revision_ref {
+            return Err(ExactError::ExactReportInvalid);
+        }
+    }
     let mut failed = BTreeSet::new();
     for failure in report
         .unreadable_items
