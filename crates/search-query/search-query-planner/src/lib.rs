@@ -14,7 +14,7 @@
 )]
 
 use core::fmt;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use search_access::{
     AccessModality, AuthorizedScope, SafeRetrievalLeg, ValidatedGrant,
@@ -94,13 +94,25 @@ pub fn normalize_recipe(
 
 /// Accepted runtime capability set used only by the server planner.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CapabilitySet {
+pub struct RetrievalCapabilities {
     pub direct: bool,
     pub lexical: bool,
     pub exact: bool,
+}
+
+/// Advanced runtime capabilities used only by the server planner.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AdvancedCapabilities {
     pub structural: bool,
     pub semantic: bool,
     pub rerank: bool,
+}
+
+/// Accepted runtime capability set used only by the server planner.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CapabilitySet {
+    pub retrieval: RetrievalCapabilities,
+    pub advanced: AdvancedCapabilities,
 }
 
 /// One finite plan-leg budget.
@@ -195,7 +207,7 @@ pub fn compile_plan(
         .copied()
         .collect::<BTreeSet<_>>();
 
-    if modalities.direct && capabilities.direct && grant.permits_modality(AccessModality::Direct) {
+    if modalities.retrieval.direct && capabilities.retrieval.direct && grant.permits_modality(AccessModality::Direct) {
         drafts.push(LegDraft {
             kind: LegKind::Direct,
             memberships: all_memberships.clone(),
@@ -204,8 +216,8 @@ pub fn compile_plan(
         });
     }
 
-    if modalities.lexical {
-        if capabilities.lexical && grant.permits_modality(AccessModality::Lexical) {
+    if modalities.retrieval.lexical {
+        if capabilities.retrieval.lexical && grant.permits_modality(AccessModality::Lexical) {
             if safe_index_legs.is_empty() {
                 omitted.insert(OmittedCapability::Lexical);
             } else {
@@ -223,8 +235,8 @@ pub fn compile_plan(
         }
     }
 
-    if modalities.exact {
-        if capabilities.exact && grant.permits_modality(AccessModality::Exact) {
+    if modalities.retrieval.exact {
+        if capabilities.retrieval.exact && grant.permits_modality(AccessModality::Exact) {
             drafts.push(LegDraft {
                 kind: LegKind::Exact,
                 memberships: all_memberships.clone(),
@@ -236,8 +248,8 @@ pub fn compile_plan(
         }
     }
 
-    if modalities.structural {
-        if capabilities.structural && grant.permits_modality(AccessModality::Code) {
+    if modalities.advanced.structural {
+        if capabilities.advanced.structural && grant.permits_modality(AccessModality::Code) {
             drafts.push(LegDraft {
                 kind: LegKind::Structural,
                 memberships: all_memberships.clone(),
@@ -249,8 +261,8 @@ pub fn compile_plan(
         }
     }
 
-    if modalities.semantic {
-        if capabilities.semantic && grant.permits_modality(AccessModality::Semantic) {
+    if modalities.advanced.semantic {
+        if capabilities.advanced.semantic && grant.permits_modality(AccessModality::Semantic) {
             drafts.push(LegDraft {
                 kind: LegKind::Semantic,
                 memberships: all_memberships.clone(),
@@ -262,8 +274,8 @@ pub fn compile_plan(
         }
     }
 
-    if modalities.rerank {
-        if capabilities.rerank {
+    if modalities.advanced.rerank {
+        if capabilities.advanced.rerank {
             drafts.push(LegDraft {
                 kind: LegKind::Rerank,
                 memberships: all_memberships,
@@ -386,7 +398,7 @@ pub enum PlanDriftDecision {
 
 /// Classifies drift without delaying restrictive security changes.
 #[must_use]
-pub fn validate_drift(
+pub const fn validate_drift(
     plan: &CompiledSearchPlan,
     observation: DriftObservation,
 ) -> PlanDriftDecision {
@@ -414,13 +426,23 @@ pub fn validate_drift(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct RecipeModalities {
+struct RetrievalModalities {
     direct: bool,
     lexical: bool,
     exact: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AdvancedModalities {
     structural: bool,
     semantic: bool,
     rerank: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RecipeModalities {
+    retrieval: RetrievalModalities,
+    advanced: AdvancedModalities,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -437,57 +459,77 @@ enum DependencyRole {
     AllPrevious,
 }
 
-fn recipe_modalities(recipe: RecipeIdV1) -> RecipeModalities {
+const fn recipe_modalities(recipe: RecipeIdV1) -> RecipeModalities {
     match recipe {
         RecipeIdV1::Locate | RecipeIdV1::InspectEntity | RecipeIdV1::ExploreEntity => {
             RecipeModalities {
-                direct: true,
-                lexical: true,
-                exact: false,
-                structural: true,
-                semantic: true,
-                rerank: true,
+                retrieval: RetrievalModalities {
+                    direct: true,
+                    lexical: true,
+                    exact: false,
+                },
+                advanced: AdvancedModalities {
+                    structural: true,
+                    semantic: true,
+                    rerank: true,
+                },
             }
         }
         RecipeIdV1::FindText => RecipeModalities {
-            direct: true,
-            lexical: true,
-            exact: true,
-            structural: false,
-            semantic: false,
-            rerank: false,
+            retrieval: RetrievalModalities {
+                direct: true,
+                lexical: true,
+                exact: true,
+            },
+            advanced: AdvancedModalities {
+                structural: false,
+                semantic: false,
+                rerank: false,
+            },
         },
         RecipeIdV1::CompareImplementations => RecipeModalities {
-            direct: true,
-            lexical: true,
-            exact: false,
-            structural: true,
-            semantic: true,
-            rerank: true,
+            retrieval: RetrievalModalities {
+                direct: true,
+                lexical: true,
+                exact: false,
+            },
+            advanced: AdvancedModalities {
+                structural: true,
+                semantic: true,
+                rerank: true,
+            },
         },
         RecipeIdV1::CompileExactScan | RecipeIdV1::ExecuteExactScan => RecipeModalities {
-            direct: false,
-            lexical: false,
-            exact: true,
-            structural: false,
-            semantic: false,
-            rerank: false,
+            retrieval: RetrievalModalities {
+                direct: false,
+                lexical: false,
+                exact: true,
+            },
+            advanced: AdvancedModalities {
+                structural: false,
+                semantic: false,
+                rerank: false,
+            },
         },
         RecipeIdV1::CorpusProfile
         | RecipeIdV1::CorpusDelta
         | RecipeIdV1::Provenance
         | RecipeIdV1::ExpandHandle => RecipeModalities {
-            direct: true,
-            lexical: false,
-            exact: false,
-            structural: false,
-            semantic: false,
-            rerank: false,
+            retrieval: RetrievalModalities {
+                direct: true,
+                lexical: false,
+                exact: false,
+            },
+            advanced: AdvancedModalities {
+                structural: false,
+                semantic: false,
+                rerank: false,
+            },
         },
     }
 }
 
-fn cancellation_boundary(kind: LegKind) -> CancellationBoundary {
+const fn cancellation_boundary(kind: LegKind) -> CancellationBoundary {
     match kind {
         LegKind::Direct | LegKind::Exact => CancellationBoundary::BetweenSourceReads,
         LegKind::Lexical | LegKind::Structural | LegKind::Semantic => {
@@ -497,7 +539,7 @@ fn cancellation_boundary(kind: LegKind) -> CancellationBoundary {
     }
 }
 
-fn validate_recipe_specific_bounds(body: &RecipeBodyV1) -> Result<(), PlanError> {
+const fn validate_recipe_specific_bounds(body: &RecipeBodyV1) -> Result<(), PlanError> {
     match body {
         RecipeBodyV1::ExploreEntity(recipe) if recipe.max_depth == 0 => {
             Err(PlanError::RecipeBodyMismatch)
@@ -512,7 +554,7 @@ fn validate_recipe_specific_bounds(body: &RecipeBodyV1) -> Result<(), PlanError>
     }
 }
 
-fn validate_global_budget(budget: QueryExecutionBudget) -> Result<(), PlanError> {
+const fn validate_global_budget(budget: QueryExecutionBudget) -> Result<(), PlanError> {
     if budget.deadline_ms == 0
         || budget.max_scoring_legs == 0
         || budget.max_prefetch_candidates_per_leg == 0
@@ -573,7 +615,7 @@ fn fingerprint_plan(
     CompiledPlanDigest(digest)
 }
 
-fn leg_kind_tag(kind: LegKind) -> u8 {
+const fn leg_kind_tag(kind: LegKind) -> u8 {
     match kind {
         LegKind::Direct => 1,
         LegKind::Exact => 2,
