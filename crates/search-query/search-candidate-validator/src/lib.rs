@@ -492,13 +492,13 @@ pub enum ValidationOutcome {
 
 /// Complete validation pipeline over one nomination.
 pub fn validate<P: RevisionReadbackPort>(
-    nomination: CandidateNomination,
+    nomination: &CandidateNomination,
     context: &ValidationContext,
     max_read_bytes: u64,
     port: &mut P,
     final_live_security: &LiveSecurityState,
 ) -> ValidationOutcome {
-    match precheck(&nomination, context) {
+    match precheck(nomination, context) {
         ValidationPrecheck::ContaminatedLeg => {
             return ValidationOutcome::ContaminatedLeg(ReplanSignal {
                 leg_id: nomination.leg_id,
@@ -513,7 +513,7 @@ pub fn validate<P: RevisionReadbackPort>(
         }
         ValidationPrecheck::Proceed => {}
     }
-    let result = build_readback_request(&nomination, max_read_bytes)
+    let result = build_readback_request(nomination, max_read_bytes)
         .and_then(|request| reopen_and_verify(&request, port))
         .and_then(|verified| {
             let permit = recheck_before_emission(
@@ -564,7 +564,7 @@ pub enum CoverageChange {
 
 /// Determines whether candidate loss requires refill, replan, or explicit gap.
 #[must_use]
-pub fn material_coverage_change(
+pub const fn material_coverage_change(
     before_validated: usize,
     after_validated: usize,
     target_candidates: usize,
