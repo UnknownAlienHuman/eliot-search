@@ -139,7 +139,7 @@ impl ComparisonLimits {
     };
 
     /// Validates every finite dimension.
-    pub fn validate(self) -> Result<Self, CompareError> {
+    pub const fn validate(self) -> Result<Self, CompareError> {
         let valid = self.max_implementations > 0
             && self.max_implementations <= MAX_LIST_ITEMS
             && self.max_lineages > 0
@@ -269,10 +269,9 @@ pub fn validate_comparison_request(
             if subject == &local_subject.resolved_subject => {}
         SubjectResolution::Ambiguous { .. } => return Err(CompareError::AmbiguousSubject),
         SubjectResolution::ScopeEmpty => return Err(CompareError::ComparisonScopeEmpty),
-        SubjectResolution::NotFound { .. } | SubjectResolution::Incomplete { .. } => {
-            return Err(CompareError::ComparableEvidenceInvalid);
-        }
-        SubjectResolution::Resolved { .. } => {
+        SubjectResolution::NotFound { .. }
+        | SubjectResolution::Incomplete { .. }
+        | SubjectResolution::Resolved { .. } => {
             return Err(CompareError::ComparableEvidenceInvalid);
         }
     }
@@ -314,6 +313,24 @@ pub struct ComparableObservation {
     pub current: bool,
 }
 
+/// Authorization and currency gates for a comparable candidate.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CandidateAccess {
+    /// Current authorization permits this implementation.
+    pub authorized: bool,
+    /// Source/view/owner generation remains current.
+    pub current: bool,
+}
+
+/// Evidence-trust gates for a comparable candidate.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CandidateEvidenceTrust {
+    /// Requested entity kind/signature constraints are compatible.
+    pub entity_kind_and_signature_compatible: bool,
+    /// Exact source revision and handle validation succeeded.
+    pub exact_revision_valid: bool,
+}
+
 /// Candidate implementation plus validation evidence.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComparableCandidate {
@@ -321,16 +338,12 @@ pub struct ComparableCandidate {
     pub implementation: ComparableImplementation,
     /// Digest of the resolved subject hypothesis.
     pub subject_hypothesis_digest: Blake3Digest32,
-    /// Requested entity kind/signature constraints are compatible.
-    pub entity_kind_and_signature_compatible: bool,
+    /// Authorization and currency gates.
+    pub access: CandidateAccess,
+    /// Evidence-trust gates.
+    pub evidence_trust: CandidateEvidenceTrust,
     /// Accepted analogue receipt for weak name/lexical bases.
     pub analogue_receipt_ref: Option<ReceiptRef>,
-    /// Exact source revision and handle validation succeeded.
-    pub exact_revision_valid: bool,
-    /// Current authorization permits this implementation.
-    pub authorized: bool,
-    /// Source/view/owner generation remains current.
-    pub current: bool,
     /// Source-backed observations.
     pub observations: BoundedList<ComparableObservation, MAX_LIST_ITEMS>,
     /// Candidate validation receipts.
@@ -345,10 +358,10 @@ pub fn validate_comparable_implementation(
     limits: ComparisonLimits,
 ) -> Result<(), CompareError> {
     let limits = limits.validate()?;
-    if !candidate.authorized {
+    if !candidate.access.authorized {
         return Err(CompareError::HandleUnavailable);
     }
-    if !candidate.current || !candidate.exact_revision_valid {
+    if !candidate.access.current || !candidate.evidence_trust.exact_revision_valid {
         return Err(CompareError::ComparableEvidenceInvalid);
     }
     if candidate.observations.is_empty()
@@ -369,7 +382,7 @@ pub fn validate_comparable_implementation(
         candidate.implementation.match_basis,
         MatchBasis::ExactName | MatchBasis::Lexical
     ) && candidate.analogue_receipt_ref.is_some();
-    if !candidate.entity_kind_and_signature_compatible
+    if !candidate.evidence_trust.entity_kind_and_signature_compatible
         || (!strong_basis && !admitted_weak_basis)
         || matches!(candidate.implementation.match_basis, MatchBasis::Semantic)
     {
@@ -1519,7 +1532,7 @@ pub fn order_recommended_reading(
 ) -> Result<BoundedList<SearchSourceHandle, MAX_LIST_ITEMS>, CompareError> {
     let limits = limits.validate()?;
     candidates.retain(|candidate| candidate.authorized);
-    candidates.sort_by(|left, right| reading_key(left).cmp(&reading_key(right)));
+    candidates.sort_by_key(reading_key);
     let mut selected = Vec::new();
     let mut lineages = BTreeMap::<RepositoryLineageId, usize>::new();
     let mut sources = BTreeMap::<Blake3Digest32, usize>::new();
@@ -1621,6 +1634,24 @@ pub fn assemble_behavior_set(
     })
 }
 
+/// Access gates for result revalidation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResultAccessFence {
+    /// Current access permits disclosure.
+    pub access_permitted: bool,
+    /// No purge barrier covers the result.
+    pub purge_clear: bool,
+}
+
+/// Currency gates for result revalidation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResultCurrencyFence {
+    /// Observation continuity remains current.
+    pub observation_current: bool,
+    /// Every included handle remains valid.
+    pub handles_valid: bool,
+}
+
 /// Current fence for result revalidation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ComparisonResultFence {
@@ -1640,14 +1671,10 @@ pub struct ComparisonResultFence {
     pub evidence_manifest_digest: Blake3Digest32,
     /// Current portfolio revision.
     pub portfolio_revision: PortfolioRevision,
-    /// Current access permits disclosure.
-    pub access_permitted: bool,
-    /// No purge barrier covers the result.
-    pub purge_clear: bool,
-    /// Observation continuity remains current.
-    pub observation_current: bool,
-    /// Every included handle remains valid.
-    pub handles_valid: bool,
+    /// Current access gates.
+    pub access: ResultAccessFence,
+    /// Current currency gates.
+    pub currency: ResultCurrencyFence,
 }
 
 /// Immutable fence captured when a comparison was assembled.
@@ -1696,8 +1723,8 @@ pub fn revalidate_comparison(
     binding: ComparisonResultBinding,
     current: ComparisonResultFence,
 ) -> ComparisonRevalidation {
-    if !current.access_permitted
-        || !current.purge_clear
+    if !current.access.access_permitted
+        || !current.access.purge_clear
         || current.security_fence_digest != binding.security_fence_digest
     {
         return ComparisonRevalidation::AccessRevoked;
@@ -1710,10 +1737,10 @@ pub fn revalidate_comparison(
     {
         return ComparisonRevalidation::ReferenceScopeChanged;
     }
-    if !current.observation_current {
+    if !current.currency.observation_current {
         return ComparisonRevalidation::ObservationGap;
     }
-    if !current.handles_valid {
+    if !current.currency.handles_valid {
         return ComparisonRevalidation::HandleUnavailable;
     }
     if current.source_view_digest != binding.source_view_digest
