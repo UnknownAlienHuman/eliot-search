@@ -30,6 +30,9 @@ use core::fmt;
 
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
 
+/// Exact no-execute Git loose-object acquisition under an admitted repository.
+pub mod git;
+
 /// Conservative finite reader limits.
 pub const DEFAULT_SAFE_READ_LIMITS: SafeReadLimits = SafeReadLimits {
     max_source_bytes: 8 * 1024 * 1024 * 1024,
