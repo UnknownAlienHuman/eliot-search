@@ -7,7 +7,7 @@ use search_contracts::Blake3Digest32;
 
 /// Incremental domain-separated deterministic fingerprint builder.
 #[derive(Clone, Debug)]
-pub(crate) struct FingerprintBuilder {
+pub struct FingerprintBuilder {
     lanes: [u64; 4],
     bytes_seen: u64,
 }
@@ -66,10 +66,10 @@ impl FingerprintBuilder {
             let snapshot = self.lanes;
             for lane in 0..4 {
                 let next = snapshot[(lane + 1) % 4];
-                self.lanes[lane] ^= next.rotate_left(7 + round + lane as u32);
+                self.lanes[lane] ^= next.rotate_left(7 + round + u32::try_from(lane).unwrap_or(u32::MAX));
                 self.lanes[lane] = self.lanes[lane]
                     .wrapping_mul(0x9e37_79b1_85eb_ca87)
-                    .rotate_left(11 + lane as u32 * 3);
+                    .rotate_left(11 + u32::try_from(lane).unwrap_or(u32::MAX) * 3);
             }
         }
         let mut output = [0_u8; 32];
@@ -81,11 +81,11 @@ impl FingerprintBuilder {
 
     fn mix(&mut self, bytes: &[u8]) {
         for (index, byte) in bytes.iter().copied().enumerate() {
-            let lane = (self.bytes_seen as usize + index) % self.lanes.len();
+            let lane = (usize::try_from(self.bytes_seen).unwrap_or(usize::MAX) + index) % self.lanes.len();
             self.lanes[lane] ^= u64::from(byte);
             self.lanes[lane] = self.lanes[lane]
                 .wrapping_mul(0x0000_0100_0000_01b3)
-                .rotate_left(13 + lane as u32 * 5);
+                .rotate_left(13 + u32::try_from(lane).unwrap_or(u32::MAX) * 5);
         }
         self.bytes_seen = self
             .bytes_seen

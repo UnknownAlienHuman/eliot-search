@@ -35,7 +35,7 @@ pub struct CaseCoverageReport {
 pub fn audit_case_coverage(
     run: &FrozenRunManifest,
     corpus: &ValidatedControlCorpus,
-    baseline_ids: BTreeSet<OpaqueId>,
+    baseline_ids: &BTreeSet<OpaqueId>,
     evidence: &[ValidatedCaseEvidence],
 ) -> Result<CaseCoverageReport, EvalError> {
     if baseline_ids.len() != 3 {
@@ -67,7 +67,7 @@ pub fn audit_case_coverage(
         }
         observed
             .get_mut(&attempt.baseline_id)
-            .expect("baseline validated")
+            .ok_or(EvalError::EvidenceBindingMismatch)?
             .insert(attempt.case_id.clone());
     }
     let measured_cases = observed
@@ -438,10 +438,7 @@ pub fn decide_acceptance(
 ) -> Result<AcceptanceVerdict, EvalError> {
     validate_independent_review(report, policy, review)?;
     let mut reasons = BTreeSet::new();
-    let kind = if !report.complete {
-        reasons.insert(opaque_reason("EVALUATION_INCOMPLETE")?);
-        VerdictKind::Incomplete
-    } else {
+    let kind = if report.complete {
         if !report.hard_blockers.is_empty() {
             reasons.insert(opaque_reason("HARD_BLOCKER_PRESENT")?);
         }
@@ -469,7 +466,7 @@ pub fn decide_acceptance(
             reasons.insert(opaque_reason("NO_REGISTERED_MATERIAL_GAIN")?);
         }
         for delta in report.comparison.metric_deltas.values() {
-            if !delta.threshold_passed || !delta.non_inferior {
+            if !delta.gates.threshold_passed || !delta.gates.non_inferior {
                 reasons.insert(opaque_reason("METRIC_GATE_FAILED")?);
             }
         }
@@ -478,6 +475,9 @@ pub fn decide_acceptance(
         } else {
             VerdictKind::Rejected
         }
+    } else {
+        reasons.insert(opaque_reason("EVALUATION_INCOMPLETE")?);
+        VerdictKind::Incomplete
     };
     if kind == VerdictKind::Accepted && (!report.hard_blockers.is_empty() || !review.approved) {
         return Err(EvalError::ReceiptMismatch);
@@ -559,7 +559,7 @@ pub fn issue_product_pulse_receipt(
     })
 }
 
-fn canonicalize_blockers(blockers: &mut Vec<HardBlocker>) -> Result<(), EvalError> {
+fn canonicalize_blockers(blockers: &mut [HardBlocker]) -> Result<(), EvalError> {
     blockers.sort_by(|left, right| {
         (left.class, &left.check_id, &left.reason).cmp(&(
             right.class,
@@ -581,7 +581,7 @@ fn opaque_reason(value: &str) -> Result<OpaqueId, EvalError> {
     OpaqueId::new(value.to_owned()).map_err(|_| EvalError::ContractExhausted)
 }
 
-fn blocker_class_tag(value: HardBlockerClass) -> u64 {
+const fn blocker_class_tag(value: HardBlockerClass) -> u64 {
     match value {
         HardBlockerClass::Leakage => 1,
         HardBlockerClass::SourceAdmission => 2,
@@ -595,7 +595,7 @@ fn blocker_class_tag(value: HardBlockerClass) -> u64 {
     }
 }
 
-fn verdict_tag(value: VerdictKind) -> u64 {
+const fn verdict_tag(value: VerdictKind) -> u64 {
     match value {
         VerdictKind::Accepted => 1,
         VerdictKind::Rejected => 2,
@@ -604,7 +604,7 @@ fn verdict_tag(value: VerdictKind) -> u64 {
 }
 
 #[allow(dead_code)]
-fn _attempt_status_is_terminal(status: AttemptStatus) -> bool {
+const fn _attempt_status_is_terminal(status: AttemptStatus) -> bool {
     matches!(
         status,
         AttemptStatus::Success

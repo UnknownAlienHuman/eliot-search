@@ -341,7 +341,7 @@ pub struct EvidenceLedger {
 
 impl EvidenceLedger {
     /// Creates a finite attempt ledger.
-    pub fn new(max_attempts: usize) -> Result<Self, EvalError> {
+    pub const fn new(max_attempts: usize) -> Result<Self, EvalError> {
         if max_attempts == 0 {
             return Err(EvalError::InvalidLimits);
         }
@@ -492,15 +492,14 @@ fn validate_samples(
         if sample.tick < started_tick || sample.tick > ended_tick {
             return Err(EvalError::EvidenceStatusInvalid);
         }
-        if let Some(previous) = previous {
-            if sample.tick <= previous.tick
+        if let Some(previous) = previous
+            && (sample.tick <= previous.tick
                 || sample.cpu_millis < previous.cpu_millis
                 || sample.read_bytes < previous.read_bytes
-                || sample.write_bytes < previous.write_bytes
+                || sample.write_bytes < previous.write_bytes)
             {
                 return Err(EvalError::EvidenceStatusInvalid);
             }
-        }
         previous = Some(*sample);
     }
     Ok(())
@@ -544,7 +543,7 @@ fn attempt_fingerprint(
     fingerprint.finish()
 }
 
-fn role_tag(role: BaselineRole) -> u64 {
+const fn role_tag(role: BaselineRole) -> u64 {
     match role {
         BaselineRole::A => 1,
         BaselineRole::B => 2,
@@ -552,7 +551,7 @@ fn role_tag(role: BaselineRole) -> u64 {
     }
 }
 
-fn status_tag(status: AttemptStatus) -> u64 {
+const fn status_tag(status: AttemptStatus) -> u64 {
     match status {
         AttemptStatus::Success => 1,
         AttemptStatus::Partial => 2,

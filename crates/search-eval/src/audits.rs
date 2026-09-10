@@ -395,18 +395,32 @@ pub struct FaultCell {
     pub repetition: u32,
     /// Terminal status.
     pub status: FaultCellStatus,
+    /// Authoritative-readback and replay invariants.
+    pub readback: FaultReadback,
+    /// Publication, identity, and barrier containment invariants.
+    pub containment: FaultContainment,
+    /// Immutable fault evidence.
+    pub evidence_ref: ReceiptRef,
+}
+
+/// Authoritative-readback and replay invariants for one fault cell.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FaultReadback {
     /// Whether authoritative readback resolved possible mutation.
     pub authoritative_readback: bool,
     /// Whether replay remained idempotent.
     pub idempotent_replay: bool,
+}
+
+/// Publication, identity, and barrier containment invariants for one fault cell.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FaultContainment {
     /// Whether visible state linearized at most once.
     pub no_double_publish: bool,
     /// Whether source/root/membership identity remained exact.
     pub no_identity_widening: bool,
     /// Whether restrictive barriers survived restart.
     pub restrictive_barriers_preserved: bool,
-    /// Immutable fault evidence.
-    pub evidence_ref: ReceiptRef,
 }
 
 /// Complete A/B/C fault-recovery matrix.
@@ -427,7 +441,7 @@ pub struct FaultMatrixReport {
 /// Validates every required fault point for every A/B/C identity and repetition.
 pub fn audit_fault_matrix(
     run: &FrozenRunManifest,
-    baseline_ids: BTreeSet<OpaqueId>,
+    baseline_ids: &BTreeSet<OpaqueId>,
     repetitions: u32,
     mut cells: Vec<FaultCell>,
     limits: EvalLimits,
@@ -459,11 +473,11 @@ pub fn audit_fault_matrix(
             return Err(EvalError::EvidenceBindingMismatch);
         }
         let invariant_pass = cell.status == FaultCellStatus::Pass
-            && cell.authoritative_readback
-            && cell.idempotent_replay
-            && cell.no_double_publish
-            && cell.no_identity_widening
-            && cell.restrictive_barriers_preserved;
+            && cell.readback.authoritative_readback
+            && cell.readback.idempotent_replay
+            && cell.containment.no_double_publish
+            && cell.containment.no_identity_widening
+            && cell.containment.restrictive_barriers_preserved;
         if !invariant_pass {
             blockers.push(HardBlocker {
                 class: HardBlockerClass::FaultRecovery,
@@ -482,7 +496,7 @@ pub fn audit_fault_matrix(
         }
     }
     for fault_point in FaultPoint::MANDATORY {
-        for baseline_id in &baseline_ids {
+        for baseline_id in baseline_ids {
             for repetition in 0..repetitions {
                 if !observed.contains(&(fault_point, baseline_id.clone(), repetition)) {
                     return Err(EvalError::FaultMatrixIncomplete);
@@ -497,11 +511,11 @@ pub fn audit_fault_matrix(
         fingerprint.push_text(cell.baseline_id.as_str());
         fingerprint.push_u64(u64::from(cell.repetition));
         fingerprint.push_u64(fault_status_tag(cell.status));
-        fingerprint.push_bool(cell.authoritative_readback);
-        fingerprint.push_bool(cell.idempotent_replay);
-        fingerprint.push_bool(cell.no_double_publish);
-        fingerprint.push_bool(cell.no_identity_widening);
-        fingerprint.push_bool(cell.restrictive_barriers_preserved);
+        fingerprint.push_bool(cell.readback.authoritative_readback);
+        fingerprint.push_bool(cell.readback.idempotent_replay);
+        fingerprint.push_bool(cell.containment.no_double_publish);
+        fingerprint.push_bool(cell.containment.no_identity_widening);
+        fingerprint.push_bool(cell.containment.restrictive_barriers_preserved);
     }
     Ok(FaultMatrixReport {
         run_digest: run.run_digest(),
@@ -759,7 +773,7 @@ fn bounded_reason(value: &str) -> Result<OpaqueId, EvalError> {
     OpaqueId::new(value.to_owned()).map_err(|_| EvalError::ContractExhausted)
 }
 
-fn canary_tag(value: CanaryClass) -> u64 {
+const fn canary_tag(value: CanaryClass) -> u64 {
     match value {
         CanaryClass::SourceContent => 1,
         CanaryClass::QueryText => 2,
@@ -772,7 +786,7 @@ fn canary_tag(value: CanaryClass) -> u64 {
     }
 }
 
-fn surface_tag(value: LeakageSurface) -> u64 {
+const fn surface_tag(value: LeakageSurface) -> u64 {
     match value {
         LeakageSurface::Logs => 1,
         LeakageSurface::ControlStore => 2,
@@ -786,7 +800,7 @@ fn surface_tag(value: LeakageSurface) -> u64 {
     }
 }
 
-fn admission_tag(value: AdmissionScenario) -> u64 {
+const fn admission_tag(value: AdmissionScenario) -> u64 {
     match value {
         AdmissionScenario::UnknownScope => 1,
         AdmissionScenario::SymlinkEscape => 2,
@@ -801,7 +815,7 @@ fn admission_tag(value: AdmissionScenario) -> u64 {
     }
 }
 
-fn fault_tag(value: FaultPoint) -> u64 {
+const fn fault_tag(value: FaultPoint) -> u64 {
     match value {
         FaultPoint::BeforeOwnerAcquire => 1,
         FaultPoint::AfterOwnerLock => 2,
@@ -818,7 +832,7 @@ fn fault_tag(value: FaultPoint) -> u64 {
     }
 }
 
-fn fault_status_tag(value: FaultCellStatus) -> u64 {
+const fn fault_status_tag(value: FaultCellStatus) -> u64 {
     match value {
         FaultCellStatus::Pass => 1,
         FaultCellStatus::Fail => 2,

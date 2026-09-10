@@ -519,14 +519,21 @@ pub struct MetricDelta {
     pub strongest_baseline_value: Option<f64>,
     /// Signed improvement; positive is always better.
     pub improvement: Option<f64>,
+    /// Purpose-grouped acceptance gates.
+    pub gates: MetricGates,
+    /// Whether all three coherent complete metric values were present.
+    pub complete: bool,
+}
+
+/// Purpose-grouped acceptance gates for one metric comparison.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MetricGates {
     /// Whether the absolute candidate threshold passed.
     pub threshold_passed: bool,
     /// Whether maximum preregistered regression was respected.
     pub non_inferior: bool,
     /// Whether preregistered practical effect was reached.
     pub material_gain: bool,
-    /// Whether all three coherent complete metric values were present.
-    pub complete: bool,
 }
 
 /// Complete deterministic A/B/C comparison.
@@ -583,10 +590,10 @@ pub fn compare_abc(
             && b.is_some_and(|value| value.complete && value.value.is_some())
             && c.is_some_and(|value| value.complete && value.value.is_some());
 
-        let baseline_a_value = a.and_then(|value| value.value);
-        let baseline_b_value = b.and_then(|value| value.value);
+        let left_value = a.and_then(|value| value.value);
+        let right_value = b.and_then(|value| value.value);
         let candidate_value = c.and_then(|value| value.value);
-        let strongest_baseline_value = match (baseline_a_value, baseline_b_value) {
+        let strongest_baseline_value = match (left_value, right_value) {
             (Some(left), Some(right)) => {
                 Some(strongest_baseline(definition.direction, left, right))
             }
@@ -617,14 +624,16 @@ pub fn compare_abc(
             rule.metric_id.clone(),
             MetricDelta {
                 metric_id: rule.metric_id.clone(),
-                baseline_a_value,
-                baseline_b_value,
+                baseline_a_value: left_value,
+                baseline_b_value: right_value,
                 candidate_value,
                 strongest_baseline_value,
                 improvement,
-                threshold_passed,
-                non_inferior,
-                material_gain,
+                gates: MetricGates {
+                    threshold_passed,
+                    non_inferior,
+                    material_gain,
+                },
                 complete,
             },
         );
@@ -655,9 +664,9 @@ pub fn compare_abc(
         fingerprint_optional_f64(&mut fingerprint, delta.candidate_value);
         fingerprint_optional_f64(&mut fingerprint, delta.strongest_baseline_value);
         fingerprint_optional_f64(&mut fingerprint, delta.improvement);
-        fingerprint.push_bool(delta.threshold_passed);
-        fingerprint.push_bool(delta.non_inferior);
-        fingerprint.push_bool(delta.material_gain);
+        fingerprint.push_bool(delta.gates.threshold_passed);
+        fingerprint.push_bool(delta.gates.non_inferior);
+        fingerprint.push_bool(delta.gates.material_gain);
         fingerprint.push_bool(delta.complete);
     }
     fingerprint.push_u64(comparison_class_tag(classification));
@@ -673,7 +682,7 @@ pub fn compare_abc(
     })
 }
 
-fn strongest_baseline(direction: MetricDirection, left: f64, right: f64) -> f64 {
+const fn strongest_baseline(direction: MetricDirection, left: f64, right: f64) -> f64 {
     match direction {
         MetricDirection::HigherIsBetter => left.max(right),
         MetricDirection::LowerIsBetter | MetricDirection::ZeroTolerance => left.min(right),
@@ -799,13 +808,10 @@ pub fn evaluate_candidate_slos(
         let metric = report.metrics.get(&definition.metric_id);
         let observed_value = metric.and_then(|metric| metric.value);
         let measured_samples = metric.map_or(0, |metric| metric.measured_count);
-        let status = if metric.is_none_or(|metric| !metric.complete)
-            || observed_value.is_none()
-            || measured_samples < definition.minimum_samples
+        let status = if let Some(observed) = observed_value
+            && metric.is_some_and(|metric| metric.complete)
+            && measured_samples >= definition.minimum_samples
         {
-            SloStatus::Unavailable
-        } else {
-            let observed = observed_value.expect("availability checked");
             let passed = match definition.direction {
                 SloDirection::AtMost => observed <= definition.threshold,
                 SloDirection::AtLeast => observed >= definition.threshold,
@@ -815,6 +821,8 @@ pub fn evaluate_candidate_slos(
             } else {
                 SloStatus::Fail
             }
+        } else {
+            SloStatus::Unavailable
         };
         outcomes.push(SloOutcome {
             slo_id: definition.slo_id,
@@ -1097,7 +1105,7 @@ fn fingerprint_optional_f64(fingerprint: &mut FingerprintBuilder, value: Option<
     }
 }
 
-fn attempt_status_tag(status: AttemptStatus) -> u64 {
+const fn attempt_status_tag(status: AttemptStatus) -> u64 {
     match status {
         AttemptStatus::Success => 1,
         AttemptStatus::Partial => 2,
@@ -1108,7 +1116,7 @@ fn attempt_status_tag(status: AttemptStatus) -> u64 {
     }
 }
 
-fn comparison_class_tag(classification: BaselineComparisonClass) -> u64 {
+const fn comparison_class_tag(classification: BaselineComparisonClass) -> u64 {
     match classification {
         BaselineComparisonClass::Dominates => 1,
         BaselineComparisonClass::Complements => 2,
@@ -1118,14 +1126,14 @@ fn comparison_class_tag(classification: BaselineComparisonClass) -> u64 {
     }
 }
 
-fn slo_direction_tag(direction: SloDirection) -> u64 {
+const fn slo_direction_tag(direction: SloDirection) -> u64 {
     match direction {
         SloDirection::AtMost => 1,
         SloDirection::AtLeast => 2,
     }
 }
 
-fn slo_status_tag(status: SloStatus) -> u64 {
+const fn slo_status_tag(status: SloStatus) -> u64 {
     match status {
         SloStatus::Pass => 1,
         SloStatus::Fail => 2,
@@ -1133,7 +1141,7 @@ fn slo_status_tag(status: SloStatus) -> u64 {
     }
 }
 
-fn resource_lane_tag(lane: ResourceLane) -> u64 {
+const fn resource_lane_tag(lane: ResourceLane) -> u64 {
     match lane {
         ResourceLane::Warmup => 1,
         ResourceLane::Measured => 2,
