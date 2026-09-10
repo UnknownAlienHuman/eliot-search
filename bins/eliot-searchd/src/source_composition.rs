@@ -50,14 +50,10 @@ use crate::sha256;
 // Closed constants and error codes
 // ---------------------------------------------------------------------------
 
-/// Composition receipt schema version (distinct from crate receipt versions).
-pub const COMPOSITION_SCHEMA_VERSION: u32 = 1;
 /// Baseline admission policy revision for primary ingestion.
 pub const BASELINE_POLICY_REVISION: u64 = 1;
 /// Baseline maximum admitted file bytes (16 MiB, per admission contract).
 pub const BASELINE_MAX_FILE_BYTES: u64 = 16_777_216;
-/// Maximum root-relative lookup bytes for one canonical path key.
-pub const MAX_RELATIVE_PATH_BYTES: usize = 4_096;
 /// Maximum file-name bytes inspected by the closed classifier.
 pub const MAX_CLASSIFIER_PATH_BYTES: usize = 4_096;
 /// Maximum reason codes carried by one decision or receipt.
@@ -81,10 +77,6 @@ pub const ADMISSION_RECEIPT_STALE: &str = "ADMISSION_RECEIPT_STALE";
 pub const SOURCE_IDENTITY_AMBIGUOUS: &str = "SOURCE_IDENTITY_AMBIGUOUS";
 /// Stable identity conflicts with a claimed or active binding.
 pub const SOURCE_IDENTITY_CONFLICT: &str = "SOURCE_IDENTITY_CONFLICT";
-/// Canonical path key conflicts with an active binding.
-pub const PATH_BINDING_CONFLICT: &str = "PATH_BINDING_CONFLICT";
-/// Admitted root is unavailable; never an empty source set.
-pub const ADMITTED_ROOT_UNAVAILABLE: &str = "ADMITTED_ROOT_UNAVAILABLE";
 /// Same stable identity maps to multiple durable source IDs.
 pub const SOURCE_IDENTITY_COLLISION: &str = "SOURCE_IDENTITY_COLLISION";
 
@@ -136,7 +128,6 @@ impl SourceClass {
 pub enum SensitivityLevel {
     Public,
     Internal,
-    Confidential,
     SecretCandidate,
     Credential,
     PrivateKey,
@@ -148,7 +139,6 @@ impl SensitivityLevel {
         match self {
             Self::Public => "public",
             Self::Internal => "internal",
-            Self::Confidential => "confidential",
             Self::SecretCandidate => "secret-candidate",
             Self::Credential => "credential",
             Self::PrivateKey => "private-key",
@@ -185,7 +175,6 @@ impl AdmissionOutcome {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum AdmissionReasonCode {
     AllowBaselineSource,
-    AllowExplicitRule,
     DenyCredentialClass,
     DenyPrivateKeyClass,
     DenySensitiveCredential,
@@ -198,15 +187,7 @@ pub enum AdmissionReasonCode {
     DenySensitiveClass,
     DenySizeExceeded,
     DenyEmptySource,
-    DenyRemoteLocation,
-    DenyExplicitRule,
     DenyByDefault,
-    ReviewDetectorUnavailable,
-    ReviewSensitivityUnknown,
-    ReviewMetadataUnavailable,
-    ReviewExplicitRule,
-    UnsupportedSourceKind,
-    UnsupportedExplicitRule,
 }
 
 impl AdmissionReasonCode {
@@ -214,7 +195,6 @@ impl AdmissionReasonCode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::AllowBaselineSource => "ALLOW_BASELINE_SOURCE",
-            Self::AllowExplicitRule => "ALLOW_EXPLICIT_RULE",
             Self::DenyCredentialClass => "DENY_CREDENTIAL_CLASS",
             Self::DenyPrivateKeyClass => "DENY_PRIVATE_KEY_CLASS",
             Self::DenySensitiveCredential => "DENY_SENSITIVE_CREDENTIAL",
@@ -227,15 +207,7 @@ impl AdmissionReasonCode {
             Self::DenySensitiveClass => "DENY_SENSITIVE_CLASS",
             Self::DenySizeExceeded => "DENY_SIZE_EXCEEDED",
             Self::DenyEmptySource => "DENY_EMPTY_SOURCE",
-            Self::DenyRemoteLocation => "DENY_REMOTE_LOCATION",
-            Self::DenyExplicitRule => "DENY_EXPLICIT_RULE",
             Self::DenyByDefault => "DENY_BY_DEFAULT",
-            Self::ReviewDetectorUnavailable => "REVIEW_DETECTOR_UNAVAILABLE",
-            Self::ReviewSensitivityUnknown => "REVIEW_SENSITIVITY_UNKNOWN",
-            Self::ReviewMetadataUnavailable => "REVIEW_METADATA_UNAVAILABLE",
-            Self::ReviewExplicitRule => "REVIEW_EXPLICIT_RULE",
-            Self::UnsupportedSourceKind => "UNSUPPORTED_SOURCE_KIND",
-            Self::UnsupportedExplicitRule => "UNSUPPORTED_EXPLICIT_RULE",
         }
     }
 }
@@ -317,8 +289,7 @@ pub struct AdmissionPolicy {
 impl AdmissionPolicy {
     /// Baseline deny-by-default policy.
     pub fn baseline() -> Self {
-        SourceAdmissionConfig::baseline()
-            .validate()
+        Self::from_config(SourceAdmissionConfig::baseline())
             .expect("baseline admission config is valid")
     }
 
@@ -387,7 +358,6 @@ fn path_components_lower(path: &Path) -> Result<Vec<String>, String> {
             | Component::ParentDir => {
                 // Absolute paths are expected here (kernel locators); parent
                 // escapes never reach this point (adapter denies them).
-                continue;
             }
         }
     }
@@ -418,7 +388,25 @@ fn classify_source(
             }
         })
         .to_ascii_lowercase();
+    if let Some(found) = credential_class(&name, &extension) {
+        return Ok(found);
+    }
+    if let Some(found) = system_cache_build_class(&name, &components, &extension) {
+        return Ok(found);
+    }
+    if let Some(found) = generated_vendor_class(&name, &components, &extension) {
+        return Ok(found);
+    }
+    if let Some(found) = binary_class(&name, &extension) {
+        return Ok(found);
+    }
+    if let Some(found) = secret_candidate_class(&name) {
+        return Ok(found);
+    }
+    Ok(baseline_class(&name, &components, &extension))
+}
 
+fn credential_class(name: &str, extension: &str) -> Option<(SourceClass, SensitivityLevel, bool)> {
     // Unconditional safety denies first: private-key and credential material.
     // These can never be bypassed by an explicit allow flag.
     let credential_name = name == "id_rsa"
@@ -432,7 +420,7 @@ fn classify_source(
         || name == "secret_key"
         || name == "secret-key"
         || matches!(
-            extension.as_str(),
+            extension,
             "pem" | "key" | "pfx" | "p12" | "asc" | "gpg" | "pgp" | "kdbx"
         )
         || name == "credentials.json"
@@ -440,16 +428,23 @@ fn classify_source(
         || name == "secrets.yml"
         || name == "secrets.json"
         || name == "secrets.toml";
-    if credential_name {
-        if matches!(extension.as_str(), "pem" | "key" | "pfx" | "p12")
-            || name.starts_with("id_")
-            || name.contains("private")
-        {
-            return Ok((SourceClass::PrivateKey, SensitivityLevel::PrivateKey, false));
-        }
-        return Ok((SourceClass::Credential, SensitivityLevel::Credential, false));
+    if !credential_name {
+        return None;
     }
+    if matches!(extension, "pem" | "key" | "pfx" | "p12")
+        || name.starts_with("id_")
+        || name.contains("private")
+    {
+        return Some((SourceClass::PrivateKey, SensitivityLevel::PrivateKey, false));
+    }
+    Some((SourceClass::Credential, SensitivityLevel::Credential, false))
+}
 
+fn system_cache_build_class(
+    name: &str,
+    components: &[String],
+    extension: &str,
+) -> Option<(SourceClass, SensitivityLevel, bool)> {
     // System, cache and build-output locations are denied with dedicated
     // reasons so fixtures stay explicit.
     if components.iter().any(|component| {
@@ -460,7 +455,7 @@ fn classify_source(
     }) || name == ".ds_store"
         || name == "thumbs.db"
     {
-        return Ok((SourceClass::System, SensitivityLevel::Internal, false));
+        return Some((SourceClass::System, SensitivityLevel::Internal, false));
     }
     if components.iter().any(|component| {
         matches!(
@@ -468,28 +463,34 @@ fn classify_source(
             "__pycache__" | ".cache" | ".mypy_cache" | ".pytest_cache" | ".venv" | "venv"
         )
     }) {
-        return Ok((SourceClass::Cache, SensitivityLevel::Internal, false));
+        return Some((SourceClass::Cache, SensitivityLevel::Internal, false));
     }
     if components
         .iter()
         .any(|component| matches!(component.as_str(), "target" | "dist" | "build" | "out"))
-        || matches!(extension.as_str(), "o" | "obj" | "class" | "pyc" | "pyo")
+        || matches!(extension, "o" | "obj" | "class" | "pyc" | "pyo")
     {
-        return Ok((SourceClass::BuildOutput, SensitivityLevel::Internal, false));
+        return Some((SourceClass::BuildOutput, SensitivityLevel::Internal, false));
     }
+    None
+}
 
+fn generated_vendor_class(
+    name: &str,
+    components: &[String],
+    extension: &str,
+) -> Option<(SourceClass, SensitivityLevel, bool)> {
     // Generated sources: explicit allow flag gates them.
     if name.contains(".generated.")
         || name.contains("_generated")
         || name.contains("generated_")
         || components.iter().any(|component| component == "generated")
-        || matches!(extension.as_str(), "g.cs" | "pb.go")
+        || matches!(extension, "g.cs" | "pb.go")
         || name.ends_with(".designer.cs")
         || name.ends_with(".min.js")
     {
-        return Ok((SourceClass::Generated, SensitivityLevel::Internal, false));
+        return Some((SourceClass::Generated, SensitivityLevel::Internal, false));
     }
-
     // Vendor sources: explicit allow flag gates them.
     if components.iter().any(|component| {
         matches!(
@@ -497,16 +498,19 @@ fn classify_source(
             "vendor" | "third_party" | "thirdparty" | "node_modules"
         )
     }) {
-        return Ok((SourceClass::Vendor, SensitivityLevel::Internal, false));
+        return Some((SourceClass::Vendor, SensitivityLevel::Internal, false));
     }
+    None
+}
 
+fn binary_class(name: &str, extension: &str) -> Option<(SourceClass, SensitivityLevel, bool)> {
     // Binary sources: extension gates admission. Raw NUL content does NOT
     // gate here: binary `.txt` sources are admitted for downstream gap
     // handling (materializer reports `MATERIALIZATION_BINARY_CONTENT` with
     // `searched_sources=0` instead of an exact negative), preserving the
     // preparation flow. Only known binary extensions deny at admission.
     let binary_hint = matches!(
-        extension.as_str(),
+        extension,
         "exe"
             | "dll"
             | "so"
@@ -523,20 +527,23 @@ fn classify_source(
             | "rar"
             | "pdf"
     );
-    if binary_hint {
-        // A secret-looking binary name is still a binary class denial with a
-        // sensitive ceiling; unconditional credential names already returned.
-        if name.contains("secret")
-            || name.contains("credential")
-            || name.contains("token")
-            || name.contains("password")
-            || name.contains("private")
-        {
-            return Ok((SourceClass::Binary, SensitivityLevel::SecretCandidate, true));
-        }
-        return Ok((SourceClass::Binary, SensitivityLevel::Internal, true));
+    if !binary_hint {
+        return None;
     }
+    // A secret-looking binary name is still a binary class denial with a
+    // sensitive ceiling; unconditional credential names already returned.
+    if name.contains("secret")
+        || name.contains("credential")
+        || name.contains("token")
+        || name.contains("password")
+        || name.contains("private")
+    {
+        return Some((SourceClass::Binary, SensitivityLevel::SecretCandidate, true));
+    }
+    Some((SourceClass::Binary, SensitivityLevel::Internal, true))
+}
 
+fn secret_candidate_class(name: &str) -> Option<(SourceClass, SensitivityLevel, bool)> {
     // Secret-candidate sensitivity for suggestive names without confirmed
     // credential shape. Denied unless an explicit profile permits it; the
     // baseline never silently allows it.
@@ -547,20 +554,27 @@ fn classify_source(
         || name == ".env"
         || name.starts_with(".env.")
     {
-        return Ok((
+        return Some((
             SourceClass::Regular,
             SensitivityLevel::SecretCandidate,
             false,
         ));
     }
     if name.contains("token") && (name.contains("api") || name.contains("auth")) {
-        return Ok((
+        return Some((
             SourceClass::Regular,
             SensitivityLevel::SecretCandidate,
             false,
         ));
     }
+    None
+}
 
+fn baseline_class(
+    name: &str,
+    components: &[String],
+    extension: &str,
+) -> (SourceClass, SensitivityLevel, bool) {
     // Baseline admittable classes: test, documentation, regular.
     if components.iter().any(|component| {
         matches!(
@@ -573,14 +587,14 @@ fn classify_source(
         || name.ends_with("_test.go")
         || name.ends_with(".test.js")
         || name.ends_with(".test.ts")
-        || extension.as_str() == "md"
-        || extension.as_str() == "rst"
+        || extension == "md"
+        || extension == "rst"
         || name.starts_with("readme")
         || name.starts_with("changelog")
         || name.starts_with("license")
     {
-        if extension.as_str() == "md"
-            || extension.as_str() == "rst"
+        if extension == "md"
+            || extension == "rst"
             || name.starts_with("readme")
             || name.starts_with("changelog")
             || name.starts_with("license")
@@ -588,11 +602,11 @@ fn classify_source(
                 .iter()
                 .any(|component| matches!(component.as_str(), "docs" | "documentation"))
         {
-            return Ok((SourceClass::Documentation, SensitivityLevel::Public, false));
+            return (SourceClass::Documentation, SensitivityLevel::Public, false);
         }
-        return Ok((SourceClass::Test, SensitivityLevel::Internal, false));
+        return (SourceClass::Test, SensitivityLevel::Internal, false);
     }
-    Ok((SourceClass::Regular, SensitivityLevel::Internal, false))
+    (SourceClass::Regular, SensitivityLevel::Internal, false)
 }
 
 // ---------------------------------------------------------------------------
@@ -606,23 +620,6 @@ pub struct AdmissionObservation {
     sensitivity: SensitivityLevel,
     byte_size: u64,
     is_binary_hint: bool,
-}
-
-impl AdmissionObservation {
-    /// Source class under evaluation.
-    pub const fn source_class(&self) -> SourceClass {
-        self.source_class
-    }
-
-    /// Maximum sensitivity signal.
-    pub const fn sensitivity(&self) -> SensitivityLevel {
-        self.sensitivity
-    }
-
-    /// Observed byte size.
-    pub const fn byte_size(&self) -> u64 {
-        self.byte_size
-    }
 }
 
 /// Deterministic admission decision with stable ordered reasons.
@@ -646,11 +643,6 @@ impl AdmissionDecision {
     pub fn reasons(&self) -> impl ExactSizeIterator<Item = &AdmissionReasonCode> {
         self.reasons.iter()
     }
-
-    /// Maximum sensitivity class.
-    pub const fn sensitivity(&self) -> SensitivityLevel {
-        self.sensitivity
-    }
 }
 
 /// Immutable composition receipt binding policy, observation and decision.
@@ -666,34 +658,9 @@ pub struct ComposedAdmissionReceipt {
 }
 
 impl ComposedAdmissionReceipt {
-    /// Policy revision bound by this receipt.
-    pub const fn policy_revision(&self) -> u64 {
-        self.policy_revision
-    }
-
-    /// Policy fingerprint bound by this receipt.
-    pub fn policy_fingerprint(&self) -> &str {
-        &self.policy_fingerprint
-    }
-
-    /// Observation digest bound by this receipt.
-    pub fn observation_digest(&self) -> &str {
-        &self.observation_digest
-    }
-
     /// Terminal outcome.
     pub const fn outcome(&self) -> AdmissionOutcome {
         self.outcome
-    }
-
-    /// Ordered reason codes.
-    pub fn reasons(&self) -> impl ExactSizeIterator<Item = &AdmissionReasonCode> {
-        self.reasons.iter()
-    }
-
-    /// Receipt digest binding every identity above.
-    pub fn receipt_digest(&self) -> &str {
-        &self.receipt_digest
     }
 }
 
@@ -739,7 +706,7 @@ pub fn build_observation(
 /// Deny wins over unsupported, which wins over review, which wins over
 /// allow. Silence is never allow.
 pub fn evaluate(policy: &AdmissionPolicy, observation: &AdmissionObservation) -> AdmissionDecision {
-    let fingerprint = policy.fingerprint.clone();
+    let fingerprint = policy.fingerprint().to_owned();
     let digest = observation_digest_for(
         observation.source_class,
         observation.sensitivity,
@@ -787,7 +754,7 @@ pub fn evaluate(policy: &AdmissionPolicy, observation: &AdmissionObservation) ->
     // Size fences apply before any allow.
     if observation.byte_size == 0 {
         deny.insert(AdmissionReasonCode::DenyEmptySource);
-    } else if observation.byte_size > policy.max_file_bytes {
+    } else if observation.byte_size > policy.max_file_bytes() {
         deny.insert(AdmissionReasonCode::DenySizeExceeded);
     }
 
@@ -825,7 +792,7 @@ pub fn evaluate(policy: &AdmissionPolicy, observation: &AdmissionObservation) ->
         outcome,
         reasons,
         sensitivity: observation.sensitivity,
-        policy_revision: policy.revision,
+        policy_revision: policy.revision(),
         policy_fingerprint: fingerprint,
         observation_digest: digest,
     }
@@ -842,14 +809,14 @@ pub fn issue_receipt(
     observation: &AdmissionObservation,
     decision: &AdmissionDecision,
 ) -> Result<ComposedAdmissionReceipt, String> {
-    let fingerprint = policy.fingerprint.clone();
+    let fingerprint = policy.fingerprint().to_owned();
     let digest = observation_digest_for(
         observation.source_class,
         observation.sensitivity,
         observation.byte_size,
         observation.is_binary_hint,
     );
-    if decision.policy_revision != policy.revision
+    if decision.policy_revision != policy.revision()
         || decision.policy_fingerprint != fingerprint
         || decision.observation_digest != digest
     {
@@ -874,7 +841,7 @@ pub fn issue_receipt(
         &parts,
     ));
     Ok(ComposedAdmissionReceipt {
-        policy_revision: policy.revision,
+        policy_revision: policy.revision(),
         policy_fingerprint: fingerprint,
         observation_digest: digest,
         outcome: decision.outcome,
@@ -908,8 +875,8 @@ pub fn verify_receipt(
     if receipt.observation_digest != current_digest {
         return Err(ADMISSION_RECEIPT_MISMATCH.to_owned());
     }
-    if receipt.policy_revision != current_policy.revision
-        || receipt.policy_fingerprint != current_policy.fingerprint
+    if receipt.policy_revision != current_policy.revision()
+        || receipt.policy_fingerprint != current_policy.fingerprint()
     {
         return Err(ADMISSION_RECEIPT_STALE.to_owned());
     }
@@ -948,11 +915,9 @@ pub fn verify_receipt(
 }
 
 // ---------------------------------------------------------------------------
-// Stable identity and canonical path keys (paths are locators, never identity)
+// Stable identity (paths are locators, never identity)
 // ---------------------------------------------------------------------------
 
-/// Legacy DIRECT source-id domain (preserved for migration readback only).
-pub const LEGACY_SOURCE_ID_DOMAIN: &[u8] = b"eliot-search/direct-source-id/v1";
 /// Canonical composition source-id domain.
 ///
 /// Currently identical to the legacy domain so that T11 migration readback
@@ -964,143 +929,6 @@ pub const LEGACY_SOURCE_ID_DOMAIN: &[u8] = b"eliot-search/direct-source-id/v1";
 pub const CANONICAL_SOURCE_ID_DOMAIN: &[u8] = b"eliot-search/direct-source-id/v1";
 /// Revision domain is preserved so revision bindings stay comparable.
 pub const REVISION_ID_DOMAIN: &[u8] = b"eliot-search/direct-revision-id/v1";
-
-/// Versioned canonical path lookup key (lookup evidence only).
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct CanonicalPathKey {
-    /// Hex root digest bound at derive time (never a raw path).
-    pub root_digest_hex: String,
-    /// Validated `/`-separated relative lookup spelling.
-    pub relative_path: String,
-}
-
-/// Validates a `/`-separated relative lookup spelling without touching disk.
-fn validate_relative_lookup(value: &str) -> Result<(), String> {
-    if value.is_empty() || value.len() > MAX_RELATIVE_PATH_BYTES {
-        return Err(PATH_BINDING_CONFLICT.to_owned());
-    }
-    if value.starts_with('/') || value.contains('\\') || value.contains(':') || value.contains('\0')
-    {
-        return Err(PATH_BINDING_CONFLICT.to_owned());
-    }
-    if value
-        .split('/')
-        .any(|part| part.is_empty() || part == "." || part == ".." || is_reserved_device_name(part))
-    {
-        return Err(PATH_BINDING_CONFLICT.to_owned());
-    }
-    Ok(())
-}
-
-fn is_reserved_device_name(component: &str) -> bool {
-    let stem = component
-        .split('.')
-        .next()
-        .unwrap_or_default()
-        .to_ascii_uppercase();
-    matches!(
-        stem.as_str(),
-        "CON"
-            | "PRN"
-            | "AUX"
-            | "NUL"
-            | "COM1"
-            | "COM2"
-            | "COM3"
-            | "COM4"
-            | "COM5"
-            | "COM6"
-            | "COM7"
-            | "COM8"
-            | "COM9"
-            | "LPT1"
-            | "LPT2"
-            | "LPT3"
-            | "LPT4"
-            | "LPT5"
-            | "LPT6"
-            | "LPT7"
-            | "LPT8"
-            | "LPT9"
-    )
-}
-
-/// Derives a versioned lookup key from an admitted root and a candidate path.
-///
-/// Both inputs are canonicalized so verbatim and symlinked spellings compare
-/// on the same base. Text equality is lookup evidence only and never source
-/// identity proof.
-///
-/// # Errors
-///
-/// Returns `ADMITTED_ROOT_UNAVAILABLE` when the root cannot be proven, or
-/// `PATH_BINDING_CONFLICT` for escaping or malformed relative spellings.
-pub fn derive_canonical_path_key(
-    admitted_root_hint: &Path,
-    candidate_path: &Path,
-) -> Result<CanonicalPathKey, String> {
-    use std::fs;
-    let canonical_root =
-        fs::canonicalize(admitted_root_hint).map_err(|_| ADMITTED_ROOT_UNAVAILABLE.to_owned())?;
-    let canonical_final =
-        fs::canonicalize(candidate_path).map_err(|_| ADMITTED_ROOT_UNAVAILABLE.to_owned())?;
-    let relative = canonical_final
-        .strip_prefix(&canonical_root)
-        .map_err(|_| PATH_BINDING_CONFLICT.to_owned())?;
-    if relative.as_os_str().is_empty() {
-        return Err(PATH_BINDING_CONFLICT.to_owned());
-    }
-    let mut parts = Vec::new();
-    for component in relative.components() {
-        match component {
-            Component::Normal(part) => {
-                let text = part
-                    .to_str()
-                    .ok_or_else(|| PATH_BINDING_CONFLICT.to_owned())?;
-                if text.is_empty()
-                    || text == "."
-                    || text == ".."
-                    || text.contains(['\\', ':', '\0'])
-                    || is_reserved_device_name(text)
-                {
-                    return Err(PATH_BINDING_CONFLICT.to_owned());
-                }
-                parts.push(text.to_owned());
-            }
-            _ => return Err(PATH_BINDING_CONFLICT.to_owned()),
-        }
-    }
-    if parts.is_empty() {
-        return Err(PATH_BINDING_CONFLICT.to_owned());
-    }
-    let relative_path = parts.join("/");
-    validate_relative_lookup(&relative_path)?;
-    // Root digest binds the canonical root bytes (locator, not identity).
-    #[cfg(unix)]
-    let root_material = {
-        use std::os::unix::ffi::OsStrExt;
-        canonical_root.as_os_str().as_bytes().to_vec()
-    };
-    #[cfg(windows)]
-    let root_material = {
-        use std::os::windows::ffi::OsStrExt;
-        canonical_root
-            .as_os_str()
-            .encode_wide()
-            .flat_map(u16::to_le_bytes)
-            .collect::<Vec<_>>()
-    };
-    #[cfg(not(any(unix, windows)))]
-    let root_material = canonical_root.to_string_lossy().as_bytes().to_vec();
-    let root_digest_hex = sha256::hex(&sha256::digest_parts(
-        b"eliot-searchd/source-composition-root/v1",
-        &[&root_material],
-    ));
-    Ok(CanonicalPathKey {
-        root_digest_hex,
-        relative_path,
-    })
-}
 
 /// Prior durable source projected from the DIRECT log (no second store).
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1131,10 +959,6 @@ pub enum IdentityResolution {
     CreateNew,
     /// Stable evidence is absent (path-bound fallback); never admitted.
     Ambiguous,
-    /// Claimed or active binding conflicts with stable evidence.
-    Conflict,
-    /// One stable identity maps to multiple durable source IDs.
-    Collision,
 }
 
 /// Resolves one stable file identity against finite prior candidates.
@@ -1185,8 +1009,7 @@ pub fn resolve_identity(
 /// `MatchExisting` reuses the prior durable identifier byte-for-byte
 /// (preserving legacy migration mappings). `CreateNew` derives a canonical
 /// identifier via domain separation over the namespace and stable file
-/// identity. `Ambiguous`, `Conflict` and `Collision` never produce an
-/// identifier.
+/// identity. `Ambiguous` never produces an identifier.
 ///
 /// # Errors
 ///
@@ -1215,28 +1038,7 @@ pub fn derive_source_id(
             )))
         }
         IdentityResolution::Ambiguous => Err(SOURCE_IDENTITY_AMBIGUOUS.to_owned()),
-        IdentityResolution::Conflict => Err(SOURCE_IDENTITY_CONFLICT.to_owned()),
-        IdentityResolution::Collision => Err(SOURCE_IDENTITY_COLLISION.to_owned()),
     }
-}
-
-/// Derives the legacy DIRECT source identifier for migration readback only.
-///
-/// New writes never use this domain; it exists so reviewers can prove that
-/// a prior durable identifier is a legacy binding rather than a fabricated
-/// canonical one.
-pub fn legacy_source_id_for_migration(
-    namespace_hex: &str,
-    file_identity_digest_hex: &str,
-) -> Result<String, String> {
-    let namespace =
-        sha256::decode_digest(namespace_hex).ok_or_else(|| SOURCE_IDENTITY_AMBIGUOUS.to_owned())?;
-    let file_identity = sha256::decode_digest(file_identity_digest_hex)
-        .ok_or_else(|| SOURCE_IDENTITY_AMBIGUOUS.to_owned())?;
-    Ok(sha256::hex(&sha256::digest_parts(
-        LEGACY_SOURCE_ID_DOMAIN,
-        &[&namespace, &file_identity],
-    )))
 }
 
 /// Derives the revision identifier binding canonical source, content and size.
@@ -1301,8 +1103,8 @@ impl RegistryView {
         }
         Ok(Self {
             by_id,
-            policy_revision: policy.revision,
-            policy_fingerprint: policy.fingerprint.clone(),
+            policy_revision: policy.revision(),
+            policy_fingerprint: policy.fingerprint().to_owned(),
         })
     }
 
@@ -1339,7 +1141,7 @@ impl RegistryView {
         {
             return Err(ADMISSION_RECEIPT_STALE.to_owned());
         }
-        match receipt.outcome {
+        match receipt.outcome() {
             AdmissionOutcome::Allow => Ok(()),
             AdmissionOutcome::Deny => Err(SOURCE_ADMISSION_DENIED.to_owned()),
             AdmissionOutcome::ReviewRequired => Err(SOURCE_ADMISSION_REVIEW_REQUIRED.to_owned()),
@@ -1392,22 +1194,22 @@ pub fn plan_snapshot(
     view.admit(&receipt, &observation, policy)?;
     // Size/empty fences are enforced by evaluation above; surface the
     // precise closed code for diagnostics without paths or bytes.
-    match decision.outcome {
+    match decision.outcome() {
         AdmissionOutcome::Allow => {}
         AdmissionOutcome::Deny => {
             if decision
-                .reasons
-                .contains(&AdmissionReasonCode::DenyEmptySource)
+                .reasons()
+                .any(|reason| *reason == AdmissionReasonCode::DenyEmptySource)
             {
                 return Err(SOURCE_ADMISSION_DENIED.to_owned());
             }
             if decision
-                .reasons
-                .contains(&AdmissionReasonCode::DenySizeExceeded)
+                .reasons()
+                .any(|reason| *reason == AdmissionReasonCode::DenySizeExceeded)
             {
                 return Err(SOURCE_TOO_LARGE.to_owned());
             }
-            if decision.reasons.iter().any(|reason| {
+            if decision.reasons().any(|reason| {
                 matches!(
                     reason,
                     AdmissionReasonCode::DenySensitiveClass
@@ -1502,7 +1304,6 @@ mod canonical_cross_checks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn policy() -> AdmissionPolicy {
         AdmissionPolicy::baseline()
@@ -1655,46 +1456,31 @@ mod tests {
             Err(ADMISSION_RECEIPT_STALE.to_owned())
         );
         // Altered reasons fail.
-        let mut altered = receipt.clone();
+        let mut altered = receipt;
         altered.reasons.insert(AdmissionReasonCode::DenyByDefault);
         assert!(verify_receipt(&altered, &policy(), &observation).is_err());
     }
 
     #[test]
-    fn path_key_derivation_denies_escape_without_opening_bytes() {
-        let root = std::env::temp_dir().join(format!(
-            "eliot-source-comp-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        let child = root.join("child.txt");
-        std::fs::write(&child, b"inside").unwrap();
-        let key = derive_canonical_path_key(&root, &child).expect("key");
-        assert_eq!(key.relative_path, "child.txt");
-        assert_eq!(key.root_digest_hex.len(), 64);
-        // Outside root is denied, never an empty view.
-        let outside = std::env::temp_dir().join(format!(
-            "eliot-source-comp-out-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&outside).unwrap();
-        let secret = outside.join("secret.txt");
-        std::fs::write(&secret, b"outside").unwrap();
+    fn path_escape_is_owned_by_the_safe_reader_not_duplicated_here() {
+        // Path-escape and reserved-device enforcement live in
+        // `crate::safe_reader_adapter` (kernel-verified reads) with its own
+        // live process tests. This composition layer never resolves paths to
+        // identity: `resolve_identity` with path-bound strength stays
+        // ambiguous via the live API below.
+        let file_digest = sha256::hex(&sha256::digest(b"stable-material"));
+        let prior = vec![PriorSourceView {
+            source_id: sha256::hex(&sha256::digest(b"existing")),
+            file_identity_digest: file_digest.clone(),
+            path_digest: sha256::hex(&sha256::digest(b"old-path")),
+            revision_id: sha256::hex(&sha256::digest(b"revision")),
+            record_digest: sha256::hex(&sha256::digest(b"record")),
+            is_active: true,
+        }];
         assert_eq!(
-            derive_canonical_path_key(&root, &secret),
-            Err(PATH_BINDING_CONFLICT.to_owned())
+            resolve_identity(&file_digest, "path-bound", &prior).expect("resolution"),
+            IdentityResolution::Ambiguous
         );
-        std::fs::remove_dir_all(&root).unwrap();
-        std::fs::remove_dir_all(&outside).unwrap();
-        let _ = PathBuf::from("unused");
     }
 
     #[test]
@@ -1733,10 +1519,16 @@ mod tests {
         assert_eq!(reused, prior[0].source_id);
         let fresh =
             derive_source_id(&namespace, &unseen, &IdentityResolution::CreateNew).expect("fresh");
-        let legacy = legacy_source_id_for_migration(&namespace, &unseen).expect("legacy");
+        let expected = sha256::hex(&sha256::digest_parts(
+            CANONICAL_SOURCE_ID_DOMAIN,
+            &[
+                &sha256::decode_digest(&namespace).expect("namespace"),
+                &sha256::decode_digest(&unseen).expect("identity"),
+            ],
+        ));
         assert_eq!(
-            fresh, legacy,
-            "canonical domain preserves legacy migration mappings (T11)"
+            fresh, expected,
+            "canonical domain derivation stays stable (T11 migration readback)"
         );
         assert!(derive_source_id(&namespace, &unseen, &IdentityResolution::Ambiguous).is_err());
     }

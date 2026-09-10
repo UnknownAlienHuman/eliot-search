@@ -54,10 +54,6 @@ impl Sha256Digest {
     pub(crate) const fn as_bytes(self) -> [u8; 32] {
         self.0
     }
-
-    pub(crate) fn hex(self) -> String {
-        hex(&self.0)
-    }
 }
 
 pub fn digest_bytes(bytes: &[u8]) -> Sha256Digest {
@@ -208,7 +204,7 @@ mod tests {
              "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
         ] {
             assert_eq!(hex(&digest(input)), expected);
-            assert_eq!(digest_bytes(input).hex(), expected);
+            assert_eq!(hex(&digest_bytes(input).as_bytes()), expected);
             assert_eq!(decode_digest(expected), Some(digest_bytes(input).as_bytes()));
         }
     }

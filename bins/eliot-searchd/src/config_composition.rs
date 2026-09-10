@@ -63,11 +63,11 @@ pub const DIRECT_NOT_READY: &str = "DAEMON_DIRECT_NOT_READY";
 /// Persistent quarantine is armed.
 pub const QUARANTINED_BLOCKER: &str = "DAEMON_QUARANTINED";
 
-fn daemon_limits() -> ConfigLimits {
+const fn daemon_limits() -> ConfigLimits {
     ConfigLimits::W1
 }
 
-fn const_bounds() -> ValueBounds {
+const fn const_bounds() -> ValueBounds {
     ValueBounds {
         max_text_bytes: MAX_CAPTURED_VALUE_BYTES,
         max_list_items: 64,
@@ -134,26 +134,29 @@ fn section_registry_digest(
     blake3_digest(&encoding)
 }
 
-fn make_field(
-    key: &str,
+/// Bounded parameters for one closed registry field.
+struct FieldSpec<'a> {
+    key: &'a str,
     kind: ConfigValueKind,
     default: ConfigValue,
-    allowed: &[ConfigSourceKind],
+    allowed: &'a [ConfigSourceKind],
     reset_allowed: bool,
     floor: SecurityFloor,
     redaction: RedactionPolicy,
-    actions: &[ReconfigurationAction],
-) -> Result<ConfigFieldDescriptor, ConfigError> {
+    actions: &'a [ReconfigurationAction],
+}
+
+fn make_field(spec: FieldSpec<'_>) -> Result<ConfigFieldDescriptor, ConfigError> {
     ConfigFieldDescriptor::new(
-        key_name(key)?,
-        kind,
-        default,
+        key_name(spec.key)?,
+        spec.kind,
+        spec.default,
         const_bounds(),
-        allowed.iter().copied(),
-        reset_allowed,
-        floor,
-        redaction,
-        actions.iter().copied(),
+        spec.allowed.iter().copied(),
+        spec.reset_allowed,
+        spec.floor,
+        spec.redaction,
+        spec.actions.iter().copied(),
     )
 }
 
@@ -164,8 +167,24 @@ fn make_field(
 /// daemon must gate appears at least once: live, barrier, restart,
 /// drain-restart, generation, rebuild, migration, gate, and reject.
 pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
+    register_sections(
+        DAEMON_CONFIG_SCHEMA_VERSION,
+        [
+            instance_section()?,
+            secrets_section()?,
+            control_section()?,
+            admission_section()?,
+            lexical_section()?,
+            query_section()?,
+            optional_section()?,
+        ],
+        daemon_limits(),
+    )
+}
+
+fn instance_section() -> Result<ConfigSectionDescriptor, ConfigError> {
     let revision = NonZeroU64::MIN;
-    let instance = ConfigSectionDescriptor::new(
+    ConfigSectionDescriptor::new(
         section_name("instance")?,
         owner_name("search-runtime-owner")?,
         revision,
@@ -178,34 +197,38 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
         ),
         SecretPolicy::ForbidPlaintext,
         [
-            make_field(
-                "mode",
-                ConfigValueKind::Text,
-                ConfigValue::Text("standalone".to_owned()),
-                &[ConfigSourceKind::File, ConfigSourceKind::Cli],
-                true,
-                SecurityFloor::None,
-                RedactionPolicy::Public,
-                &[ReconfigurationAction::DrainAndRestart],
-            )?,
-            make_field(
-                "data_root",
-                ConfigValueKind::Text,
-                ConfigValue::Absent,
-                &[
+            make_field(FieldSpec {
+                key: "mode",
+                kind: ConfigValueKind::Text,
+                default: ConfigValue::Text("standalone".to_owned()),
+                allowed: &[ConfigSourceKind::File, ConfigSourceKind::Cli],
+                reset_allowed: true,
+                floor: SecurityFloor::None,
+                redaction: RedactionPolicy::Public,
+                actions: &[ReconfigurationAction::DrainAndRestart],
+            })?,
+            make_field(FieldSpec {
+                key: "data_root",
+                kind: ConfigValueKind::Text,
+                default: ConfigValue::Absent,
+                allowed: &[
                     ConfigSourceKind::File,
                     ConfigSourceKind::Environment,
                     ConfigSourceKind::Cli,
                 ],
-                true,
-                SecurityFloor::None,
-                RedactionPolicy::PathDigest,
-                &[ReconfigurationAction::DrainAndRestart],
-            )?,
+                reset_allowed: true,
+                floor: SecurityFloor::None,
+                redaction: RedactionPolicy::PathDigest,
+                actions: &[ReconfigurationAction::DrainAndRestart],
+            })?,
         ],
         daemon_limits(),
-    )?;
-    let secrets = ConfigSectionDescriptor::new(
+    )
+}
+
+fn secrets_section() -> Result<ConfigSectionDescriptor, ConfigError> {
+    let revision = NonZeroU64::MIN;
+    ConfigSectionDescriptor::new(
         section_name("secrets")?,
         owner_name("search-os-secrets")?,
         revision,
@@ -217,19 +240,23 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
             &[("qdrant_api_secret_ref", "secret")],
         ),
         SecretPolicy::OpaqueReferencesOnly,
-        [make_field(
-            "qdrant_api_secret_ref",
-            ConfigValueKind::SecretReference,
-            ConfigValue::Absent,
-            &[ConfigSourceKind::File, ConfigSourceKind::Environment],
-            true,
-            SecurityFloor::None,
-            RedactionPolicy::Secret,
-            &[ReconfigurationAction::RestartDependency],
-        )?],
+        [make_field(FieldSpec {
+            key: "qdrant_api_secret_ref",
+            kind: ConfigValueKind::SecretReference,
+            default: ConfigValue::Absent,
+            allowed: &[ConfigSourceKind::File, ConfigSourceKind::Environment],
+            reset_allowed: true,
+            floor: SecurityFloor::None,
+            redaction: RedactionPolicy::Secret,
+            actions: &[ReconfigurationAction::RestartDependency],
+        })?],
         daemon_limits(),
-    )?;
-    let control = ConfigSectionDescriptor::new(
+    )
+}
+
+fn control_section() -> Result<ConfigSectionDescriptor, ConfigError> {
+    let revision = NonZeroU64::MIN;
+    ConfigSectionDescriptor::new(
         section_name("control")?,
         owner_name("search-control-redb")?,
         revision,
@@ -242,30 +269,34 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
         ),
         SecretPolicy::ForbidPlaintext,
         [
-            make_field(
-                "durability",
-                ConfigValueKind::Text,
-                ConfigValue::Text("fsync_atomic".to_owned()),
-                &[ConfigSourceKind::File],
-                false,
-                SecurityFloor::Fixed,
-                RedactionPolicy::Public,
-                &[ReconfigurationAction::Reject],
-            )?,
-            make_field(
-                "migration_epoch",
-                ConfigValueKind::Integer,
-                ConfigValue::Integer(1),
-                &[ConfigSourceKind::File],
-                false,
-                SecurityFloor::IntegerMinimum(1),
-                RedactionPolicy::Public,
-                &[ReconfigurationAction::MigrateControlSchema],
-            )?,
+            make_field(FieldSpec {
+                key: "durability",
+                kind: ConfigValueKind::Text,
+                default: ConfigValue::Text("fsync_atomic".to_owned()),
+                allowed: &[ConfigSourceKind::File],
+                reset_allowed: false,
+                floor: SecurityFloor::Fixed,
+                redaction: RedactionPolicy::Public,
+                actions: &[ReconfigurationAction::Reject],
+            })?,
+            make_field(FieldSpec {
+                key: "migration_epoch",
+                kind: ConfigValueKind::Integer,
+                default: ConfigValue::Integer(1),
+                allowed: &[ConfigSourceKind::File],
+                reset_allowed: false,
+                floor: SecurityFloor::IntegerMinimum(1),
+                redaction: RedactionPolicy::Public,
+                actions: &[ReconfigurationAction::MigrateControlSchema],
+            })?,
         ],
         daemon_limits(),
-    )?;
-    let admission = ConfigSectionDescriptor::new(
+    )
+}
+
+fn admission_section() -> Result<ConfigSectionDescriptor, ConfigError> {
+    let revision = NonZeroU64::MIN;
+    ConfigSectionDescriptor::new(
         section_name("source_admission")?,
         owner_name("search-source-admission")?,
         revision,
@@ -277,64 +308,76 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
             &[("allow_generated", "boolean")],
         ),
         SecretPolicy::ForbidPlaintext,
-        [make_field(
-            "allow_generated",
-            ConfigValueKind::Boolean,
-            ConfigValue::Boolean(true),
-            &[ConfigSourceKind::File],
-            true,
-            SecurityFloor::BooleanMayOnlyRestrict,
-            RedactionPolicy::Public,
-            &[ReconfigurationAction::SecurityBarrier],
-        )?],
+        [make_field(FieldSpec {
+            key: "allow_generated",
+            kind: ConfigValueKind::Boolean,
+            default: ConfigValue::Boolean(true),
+            allowed: &[ConfigSourceKind::File],
+            reset_allowed: true,
+            floor: SecurityFloor::BooleanMayOnlyRestrict,
+            redaction: RedactionPolicy::Public,
+            actions: &[ReconfigurationAction::SecurityBarrier],
+        })?],
         daemon_limits(),
-    )?;
-    let lexical = ConfigSectionDescriptor::new(
+    )
+}
+
+fn lexical_section() -> Result<ConfigSectionDescriptor, ConfigError> {
+    let revision = NonZeroU64::MIN;
+    ConfigSectionDescriptor::new(
         section_name("lexical")?,
         owner_name("search-lexical")?,
         revision,
         ReloadClass::NewCollectionGeneration,
         section_registry_digest("lexical", "search-lexical", 1, &[("profile_id", "text")]),
         SecretPolicy::ForbidPlaintext,
-        [make_field(
-            "profile_id",
-            ConfigValueKind::Text,
-            ConfigValue::Text("baseline-v1".to_owned()),
-            &[ConfigSourceKind::File],
-            true,
-            SecurityFloor::None,
-            RedactionPolicy::Public,
-            &[
+        [make_field(FieldSpec {
+            key: "profile_id",
+            kind: ConfigValueKind::Text,
+            default: ConfigValue::Text("baseline-v1".to_owned()),
+            allowed: &[ConfigSourceKind::File],
+            reset_allowed: true,
+            floor: SecurityFloor::None,
+            redaction: RedactionPolicy::Public,
+            actions: &[
                 ReconfigurationAction::NewCollectionGeneration,
                 ReconfigurationAction::RebuildProjection,
             ],
-        )?],
+        })?],
         daemon_limits(),
-    )?;
-    let query = ConfigSectionDescriptor::new(
+    )
+}
+
+fn query_section() -> Result<ConfigSectionDescriptor, ConfigError> {
+    let revision = NonZeroU64::MIN;
+    ConfigSectionDescriptor::new(
         section_name("query")?,
         owner_name("search-query-planner")?,
         revision,
         ReloadClass::ApplyLive,
         section_registry_digest("query", "search-query-planner", 1, &[("limit", "integer")]),
         SecretPolicy::ForbidPlaintext,
-        [make_field(
-            "limit",
-            ConfigValueKind::Integer,
-            ConfigValue::Integer(10),
-            &[
+        [make_field(FieldSpec {
+            key: "limit",
+            kind: ConfigValueKind::Integer,
+            default: ConfigValue::Integer(10),
+            allowed: &[
                 ConfigSourceKind::File,
                 ConfigSourceKind::Environment,
                 ConfigSourceKind::Cli,
             ],
-            true,
-            SecurityFloor::None,
-            RedactionPolicy::Public,
-            &[ReconfigurationAction::ApplyLive],
-        )?],
+            reset_allowed: true,
+            floor: SecurityFloor::None,
+            redaction: RedactionPolicy::Public,
+            actions: &[ReconfigurationAction::ApplyLive],
+        })?],
         daemon_limits(),
-    )?;
-    let optional = ConfigSectionDescriptor::new(
+    )
+}
+
+fn optional_section() -> Result<ConfigSectionDescriptor, ConfigError> {
+    let revision = NonZeroU64::MIN;
+    ConfigSectionDescriptor::new(
         section_name("optional_profiles")?,
         owner_name("eliot-searchd")?,
         revision,
@@ -346,23 +389,16 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
             &[("semantic", "boolean")],
         ),
         SecretPolicy::OpaqueReferencesOnly,
-        [make_field(
-            "semantic",
-            ConfigValueKind::Boolean,
-            ConfigValue::Boolean(false),
-            &[ConfigSourceKind::File],
-            true,
-            SecurityFloor::None,
-            RedactionPolicy::Public,
-            &[ReconfigurationAction::GateRequired],
-        )?],
-        daemon_limits(),
-    )?;
-    register_sections(
-        DAEMON_CONFIG_SCHEMA_VERSION,
-        [
-            instance, secrets, control, admission, lexical, query, optional,
-        ],
+        [make_field(FieldSpec {
+            key: "semantic",
+            kind: ConfigValueKind::Boolean,
+            default: ConfigValue::Boolean(false),
+            allowed: &[ConfigSourceKind::File],
+            reset_allowed: true,
+            floor: SecurityFloor::None,
+            redaction: RedactionPolicy::Public,
+            actions: &[ReconfigurationAction::GateRequired],
+        })?],
         daemon_limits(),
     )
 }
@@ -402,10 +438,10 @@ fn infer_value(text: &str) -> Result<DocumentValue, ConfigError> {
     if text == "false" {
         return Ok(DocumentValue::Boolean(false));
     }
-    if let Ok(number) = text.parse::<i64>() {
-        if number.to_string() == text {
-            return Ok(DocumentValue::Integer(number));
-        }
+    if let Ok(number) = text.parse::<i64>()
+        && number.to_string() == text
+    {
+        return Ok(DocumentValue::Integer(number));
     }
     Ok(DocumentValue::Text(text.to_owned()))
 }
@@ -476,7 +512,6 @@ pub fn capture_cli_document(pairs: &[(&str, &str)]) -> Result<Option<ConfigDocum
     if pairs.len() > MAX_CAPTURED_ENTRIES {
         return Err(ConfigError::CapacityExceeded);
     }
-    let mut encoding = Vec::from(b"eliot-searchd/cli/v1\0".as_slice());
     let mut entries = Vec::with_capacity(pairs.len());
     for (dotted, value) in pairs {
         let (section, key) = dotted
@@ -484,24 +519,9 @@ pub fn capture_cli_document(pairs: &[(&str, &str)]) -> Result<Option<ConfigDocum
             .ok_or(ConfigError::InvalidIdentifier)?;
         let path = ConfigKeyPath::new(section_name(section)?, key_name(key)?);
         let operation = infer_operation(value)?;
-        encoding.extend_from_slice(dotted.as_bytes());
-        encoding.push(0);
-        encoding.extend_from_slice(value.as_bytes());
-        encoding.push(0);
         entries.push((path, operation));
     }
-    let source = ConfigSource {
-        kind: ConfigSourceKind::Cli,
-        source_ref: source_ref("captured-cli")?,
-        source_digest: blake3_digest(&encoding),
-    };
-    Ok(Some(ConfigDocument::from_entries(
-        DAEMON_CONFIG_SCHEMA_VERSION,
-        None,
-        source,
-        entries,
-        daemon_limits(),
-    )?))
+    capture_cli_typed_document(entries)
 }
 
 /// Builds the captured CLI layer from already-typed operations. Used when the
@@ -637,7 +657,7 @@ impl EffectiveDaemonConfig {
 
     /// Exact effective fingerprint for persistence and receipts.
     #[must_use]
-    pub fn fingerprint(&self) -> ConfigFingerprint {
+    pub const fn fingerprint(&self) -> ConfigFingerprint {
         self.snapshot.fingerprint()
     }
 
@@ -706,6 +726,257 @@ pub fn build_effective_defaults() -> Result<EffectiveDaemonConfig, ConfigError> 
     )
 }
 
+/// Closed CLI configuration arguments captured without secret disclosure.
+///
+/// `config_file` is the single `--config-file` path when present;
+/// `overrides` are the repeatable `--set section.key=value` pairs in
+/// command-line order, bounded by [`MAX_CAPTURED_ENTRIES`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CliConfigArgs {
+    /// Single `--config-file` path when present.
+    pub config_file: Option<std::path::PathBuf>,
+    /// Repeatable `--set` overrides in command-line order.
+    pub overrides: Vec<(String, String)>,
+}
+
+/// Parses `--config-file <path>` and repeatable `--set <section.key=value>`
+/// from already-split arguments. All other arguments are returned untouched
+/// for subcommand dispatch.
+///
+/// Bounds: at most one `--config-file`; at most [`MAX_CAPTURED_ENTRIES`]
+/// `--set` pairs; each `--set` must contain exactly one `.` before `=`
+/// with non-empty section, key, and value spellings. Failures use closed
+/// `DAEMON_CONFIG_*` codes without echoing values or paths.
+pub fn parse_cli_config_args(args: &[String]) -> Result<(Vec<String>, CliConfigArgs), String> {
+    let mut remaining = Vec::with_capacity(args.len());
+    let mut config_file: Option<std::path::PathBuf> = None;
+    let mut overrides = Vec::new();
+    let mut index = 0;
+    while index < args.len() {
+        let argument = &args[index];
+        if argument == "--config-file" {
+            let value = args.get(index + 1).ok_or_else(|| {
+                "DAEMON_CONFIG_INVALID:missing-config-file-value".to_owned()
+            })?;
+            if value.is_empty() || value.len() > 32 * 1024 {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            if config_file.is_some() {
+                return Err("DAEMON_CONFIG_DUPLICATE".to_owned());
+            }
+            config_file = Some(std::path::PathBuf::from(value));
+            index += 2;
+        } else if argument == "--set" {
+            let value = args.get(index + 1).ok_or_else(|| {
+                "DAEMON_CONFIG_INVALID:missing-set-value".to_owned()
+            })?;
+            if value.is_empty() || value.len() > 4_096 + 1 + 4_096 {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            if overrides.len() >= MAX_CAPTURED_ENTRIES {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            let (dotted, _) = value.split_once('=').ok_or_else(|| {
+                "DAEMON_CONFIG_INVALID".to_owned()
+            })?;
+            if dotted.is_empty() || !dotted.contains('.') {
+                return Err("DAEMON_CONFIG_INVALID".to_owned());
+            }
+            let (section, key) = dotted.split_once('.').ok_or_else(|| {
+                "DAEMON_CONFIG_INVALID".to_owned()
+            })?;
+            if section.is_empty() || key.is_empty() || key.contains('.') || key.contains('=') {
+                return Err("DAEMON_CONFIG_INVALID".to_owned());
+            }
+            let (_, cli_value) = value.split_once('=').ok_or_else(|| {
+                "DAEMON_CONFIG_INVALID".to_owned()
+            })?;
+            if cli_value.is_empty() || cli_value.len() > MAX_CAPTURED_VALUE_BYTES {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            overrides.push((dotted.to_owned(), cli_value.to_owned()));
+            index += 2;
+        } else {
+            remaining.push(argument.clone());
+            index += 1;
+        }
+    }
+    Ok((remaining, CliConfigArgs { config_file, overrides }))
+}
+
+/// Strips global `--config-file`/`--set` flags from `OsString` arguments for
+/// `maybe_run` dispatchers that must preserve non-UTF8 root paths.
+///
+/// Returns the remaining `OsString` arguments for subcommand matching plus
+/// the parsed [`CliConfigArgs`]. Config values must be UTF-8; non-UTF8
+/// config values fail closed without echoing bytes.
+pub fn strip_config_args_os(
+    args: &[std::ffi::OsString],
+) -> Result<(Vec<std::ffi::OsString>, CliConfigArgs), String> {
+    let mut remaining = Vec::with_capacity(args.len());
+    let mut config_file: Option<std::path::PathBuf> = None;
+    let mut overrides = Vec::new();
+    let mut index = 0;
+    while index < args.len() {
+        let is_config_file = args[index].to_str() == Some("--config-file");
+        let is_set = args[index].to_str() == Some("--set");
+        if is_config_file {
+            let value = args.get(index + 1).ok_or_else(|| {
+                "DAEMON_CONFIG_INVALID:missing-config-file-value".to_owned()
+            })?;
+            let text = value.to_str().ok_or_else(|| "DAEMON_CONFIG_INVALID".to_owned())?;
+            if text.is_empty() || text.len() > 32 * 1024 {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            if config_file.is_some() {
+                return Err("DAEMON_CONFIG_DUPLICATE".to_owned());
+            }
+            config_file = Some(std::path::PathBuf::from(value));
+            index += 2;
+        } else if is_set {
+            let value = args.get(index + 1).ok_or_else(|| {
+                "DAEMON_CONFIG_INVALID:missing-set-value".to_owned()
+            })?;
+            let text = value.to_str().ok_or_else(|| "DAEMON_CONFIG_INVALID".to_owned())?;
+            if text.is_empty() || text.len() > 4_096 + 1 + 4_096 {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            if overrides.len() >= MAX_CAPTURED_ENTRIES {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            let (dotted, _) = text
+                .split_once('=')
+                .ok_or_else(|| "DAEMON_CONFIG_INVALID".to_owned())?;
+            if dotted.is_empty() || !dotted.contains('.') {
+                return Err("DAEMON_CONFIG_INVALID".to_owned());
+            }
+            let (section, key) =
+                dotted.split_once('.').ok_or_else(|| "DAEMON_CONFIG_INVALID".to_owned())?;
+            if section.is_empty() || key.is_empty() || key.contains('.') || key.contains('=') {
+                return Err("DAEMON_CONFIG_INVALID".to_owned());
+            }
+            let (_, cli_value) = text
+                .split_once('=')
+                .ok_or_else(|| "DAEMON_CONFIG_INVALID".to_owned())?;
+            if cli_value.is_empty() || cli_value.len() > MAX_CAPTURED_VALUE_BYTES {
+                return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+            }
+            overrides.push((dotted.to_owned(), cli_value.to_owned()));
+            index += 2;
+        } else {
+            remaining.push(args[index].clone());
+            index += 1;
+        }
+    }
+    Ok((remaining, CliConfigArgs { config_file, overrides }))
+}
+
+/// Reads one bounded configuration file without leaking its path.
+///
+/// Refuses symlinks, non-files, and inputs over [`MAX_CAPTURED_FILE_BYTES`]
+/// with closed codes; the path itself never travels into the error.
+pub fn read_config_file_bytes(path: &std::path::Path) -> Result<Vec<u8>, String> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|_| "DAEMON_CONFIG_INVALID".to_owned())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("DAEMON_CONFIG_INVALID".to_owned());
+    }
+    if metadata.len() > MAX_CAPTURED_FILE_BYTES as u64 {
+        return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+    }
+    let bytes = std::fs::read(path).map_err(|_| "DAEMON_CONFIG_INVALID".to_owned())?;
+    if bytes.len() > MAX_CAPTURED_FILE_BYTES {
+        return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+    }
+    Ok(bytes)
+}
+
+/// Captures the process environment layer from `ELIOT_SEARCH__*` variables.
+///
+/// Bounded by [`MAX_CAPTURED_ENTRIES`]; unknown or malformed prefixed keys
+/// fail closed via `capture_environment_document` without echoing values.
+pub fn capture_process_environment() -> Result<Option<ConfigDocument>, ConfigError> {
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for (name, value) in std::env::vars() {
+        if name.starts_with("ELIOT_SEARCH__") {
+            if pairs.len() >= MAX_CAPTURED_ENTRIES {
+                return Err(ConfigError::CapacityExceeded);
+            }
+            if value.len() > MAX_CAPTURED_VALUE_BYTES {
+                return Err(ConfigError::CapacityExceeded);
+            }
+            pairs.push((name, value));
+        }
+        if pairs.len() > MAX_CAPTURED_ENTRIES {
+            return Err(ConfigError::CapacityExceeded);
+        }
+    }
+    if pairs.is_empty() {
+        return Ok(None);
+    }
+    let borrowed: Vec<(&str, &str)> = pairs
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    capture_environment_document(&borrowed)
+}
+
+/// Builds the startup-effective configuration from process inputs.
+///
+/// Order is defaults < file < environment < CLI. The candidate is gated
+/// through [`plan_activation`] and [`try_activate`] with an empty proven
+/// set: a no-op candidate publishes immediately, while any candidate that
+/// needs live/barrier/restart/generation/rebuild/gate receipts fails with
+/// [`ACTIVATION_PARTIAL_REFUSED`] and the caller retains the defaults
+/// snapshot (invariant 16). All failures use closed `DAEMON_CONFIG_*`
+/// codes without raw values or paths.
+pub fn effective_from_process(config: &CliConfigArgs) -> Result<EffectiveDaemonConfig, String> {
+    let current = build_effective_defaults().map_err(|error| {
+        let code = config_code(error);
+        format!("{ACTIVATION_BLOCKED}:{code}:{error}")
+    })?;
+    let file = if let Some(path) = &config.config_file {
+        let bytes = read_config_file_bytes(path)?;
+        let label = "config-file";
+        Some(capture_file_document(&bytes, label).map_err(|error| {
+            let code = config_code(error);
+            format!("{code}:{error}")
+        })?)
+    } else {
+        None
+    };
+    let environment = capture_process_environment().map_err(|error| {
+        let code = config_code(error);
+        format!("{code}:{error}")
+    })?;
+    let cli = if config.overrides.is_empty() {
+        None
+    } else {
+        let borrowed: Vec<(&str, &str)> = config
+            .overrides
+            .iter()
+            .map(|(dotted, value)| (dotted.as_str(), value.as_str()))
+            .collect();
+        capture_cli_document(&borrowed).map_err(|error| {
+            let code = config_code(error);
+            format!("{code}:{error}")
+        })?
+    };
+    let candidate = build_effective(
+        file,
+        environment,
+        cli,
+        DAEMON_DIRECT_PROFILE,
+        DAEMON_DIRECT_PROFILE,
+    )
+    .map_err(|error| {
+        let code = config_code(error);
+        format!("{code}:{error}")
+    })?;
+    let proven = BTreeSet::new();
+    try_activate(&current, candidate, &proven)
+}
+
 /// Plans activation of `candidate` over `current`, preserving every
 /// independent obligation without scalar collapse.
 ///
@@ -743,7 +1014,7 @@ pub fn try_activate(
         return Ok(candidate);
     }
     let plan = plan_activation(current, &candidate).map_err(|error| {
-        let code = config_code(&error);
+        let code = config_code(error);
         if matches!(error, ConfigError::ReconfigurationRejected) {
             ACTIVATION_REJECTED.to_owned()
         } else {
@@ -753,16 +1024,15 @@ pub fn try_activate(
     if plan.is_noop() {
         return Ok(candidate);
     }
-    let missing: Vec<ReceiptKind> = plan
+    let missing_receipt = plan
         .required_receipts
         .iter()
         .copied()
-        .filter(|receipt| !proven.contains(receipt))
-        .collect();
-    if missing.is_empty() {
-        Ok(candidate)
-    } else {
+        .any(|receipt| !proven.contains(&receipt));
+    if missing_receipt {
         Err(ACTIVATION_PARTIAL_REFUSED.to_owned())
+    } else {
+        Ok(candidate)
     }
 }
 
@@ -771,26 +1041,47 @@ pub fn try_activate(
 /// runtime probe, never from `cfg!`, Cargo features, or constants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DependencyState {
+    /// Owner and quarantine fence.
+    pub owner: OwnerFence,
+    /// Verified store fence.
+    pub stores: StoreVerification,
+    /// Live service fence.
+    pub services: ServiceFence,
+}
+
+/// Owner and quarantine fence (at most three bools per fence group).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OwnerFence {
     /// Owner guard is held for the canonical root.
     pub runtime_owner_ready: bool,
+    /// Persistent quarantine marker is armed.
+    pub quarantined: bool,
+}
+
+/// Verified store fence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StoreVerification {
     /// Control journal or redb mapping verified under the owner guard.
     pub control_store_verified: bool,
     /// Direct store opened and verified under the owner guard.
     pub direct_store_verified: bool,
     /// OS secret backend probed live for the current incarnation.
     pub secret_backend_verified: bool,
+}
+
+/// Live service fence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ServiceFence {
     /// Exact qualified Qdrant process and data plane are live.
     pub qdrant_available: bool,
     /// Exact control adapter required for search is constructed.
     pub control_adapter_available: bool,
-    /// Persistent quarantine marker is armed.
-    pub quarantined: bool,
 }
 
 /// Externally accepted receipts. Presence alone never activates a
 /// capability; each flag must be backed by an accepted handoff or gate
 /// receipt. W1 shell readiness leaves every flag false.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AcceptedReceipts {
     /// General search acceptance (indexed or DIRECT query recipe).
     pub search_accepted: bool,
@@ -800,38 +1091,49 @@ pub struct AcceptedReceipts {
     pub optional_gate_accepted: bool,
 }
 
-impl Default for AcceptedReceipts {
-    fn default() -> Self {
-        Self {
-            search_accepted: false,
-            indexed_accepted: false,
-            optional_gate_accepted: false,
-        }
-    }
-}
-
-/// Truthful readiness derived from the effective snapshot, verified
-/// dependencies, and accepted receipts.
+/// Composition readiness fence.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ReadinessReport {
+pub struct CompositionStatus {
     /// Effective configuration is assembled.
     pub configuration_ready: bool,
     /// Owner guard held.
     pub runtime_owner_ready: bool,
     /// Control verified and not quarantined.
     pub control_store_ready: bool,
+}
+
+/// Store readiness fence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoreStatus {
     /// Secret backend probed live, never `cfg!(windows)`.
     pub secret_store_ready: bool,
     /// Shell endpoint exists.
     pub endpoint_ready: bool,
     /// Direct store verified and not quarantined.
     pub direct_store_ready: bool,
+}
+
+/// Capability readiness fence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CapabilityStatus {
     /// DIRECT source-backed search over verified immutable revisions.
     pub source_backed_search_available: bool,
     /// General search only with an accepted receipt; W1 never implies it.
     pub search_available: bool,
     /// Indexed search only with qualified Qdrant, artifacts, and routes.
     pub indexed_search_available: bool,
+}
+
+/// Truthful readiness derived from the effective snapshot, verified
+/// dependencies, and accepted receipts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReadinessReport {
+    /// Composition fence.
+    pub composition: CompositionStatus,
+    /// Store fence.
+    pub stores: StoreStatus,
+    /// Capability fence.
+    pub capabilities: CapabilityStatus,
     /// Closed blocker codes, never paths or secrets.
     pub blockers: Vec<&'static str>,
     /// Effective fingerprint for receipts.
@@ -858,33 +1160,35 @@ fn boolean_field(snapshot: &EffectiveConfigSnapshot, section: &str, key: &str) -
 #[must_use]
 pub fn derive_readiness(
     effective: &EffectiveDaemonConfig,
-    dependencies: &DependencyState,
-    accepted: &AcceptedReceipts,
+    dependencies: DependencyState,
+    accepted: AcceptedReceipts,
 ) -> ReadinessReport {
     let snapshot = effective.snapshot();
-    let control_ready = dependencies.control_store_verified && !dependencies.quarantined;
-    let direct_ready = dependencies.direct_store_verified && !dependencies.quarantined;
+    let control_ready =
+        dependencies.stores.control_store_verified && !dependencies.owner.quarantined;
+    let direct_ready =
+        dependencies.stores.direct_store_verified && !dependencies.owner.quarantined;
     let source_backed = direct_ready && control_ready;
     let optional_semantic =
         boolean_field(snapshot, "optional_profiles", "semantic").unwrap_or(false);
     let optional_blocked = optional_semantic && !accepted.optional_gate_accepted;
     let mut blockers: Vec<&'static str> = Vec::new();
-    if dependencies.quarantined {
+    if dependencies.owner.quarantined {
         blockers.push(QUARANTINED_BLOCKER);
     }
-    if !dependencies.control_store_verified {
+    if !dependencies.stores.control_store_verified {
         blockers.push(CONTROL_NOT_READY);
     }
-    if !dependencies.direct_store_verified {
+    if !dependencies.stores.direct_store_verified {
         blockers.push(DIRECT_NOT_READY);
     }
     if !accepted.search_accepted {
         blockers.push(SEARCH_NOT_ACCEPTED);
     }
-    if !accepted.indexed_accepted || !dependencies.qdrant_available {
+    if !accepted.indexed_accepted || !dependencies.services.qdrant_available {
         blockers.push(INDEXED_NOT_ACCEPTED);
     }
-    if !dependencies.control_adapter_available {
+    if !dependencies.services.control_adapter_available {
         blockers.push(CONTROL_NOT_READY);
     }
     if optional_blocked {
@@ -892,26 +1196,32 @@ pub fn derive_readiness(
     }
     let search_available = accepted.search_accepted
         && source_backed
-        && dependencies.control_adapter_available
+        && dependencies.services.control_adapter_available
         && !optional_blocked
-        && !dependencies.quarantined;
+        && !dependencies.owner.quarantined;
     let indexed_available = accepted.indexed_accepted
         && accepted.search_accepted
         && source_backed
-        && dependencies.qdrant_available
-        && dependencies.control_adapter_available
+        && dependencies.services.qdrant_available
+        && dependencies.services.control_adapter_available
         && !optional_blocked
-        && !dependencies.quarantined;
+        && !dependencies.owner.quarantined;
     ReadinessReport {
-        configuration_ready: true,
-        runtime_owner_ready: dependencies.runtime_owner_ready,
-        control_store_ready: control_ready,
-        secret_store_ready: dependencies.secret_backend_verified,
-        endpoint_ready: true,
-        direct_store_ready: direct_ready,
-        source_backed_search_available: source_backed,
-        search_available,
-        indexed_search_available: indexed_available,
+        composition: CompositionStatus {
+            configuration_ready: true,
+            runtime_owner_ready: dependencies.owner.runtime_owner_ready,
+            control_store_ready: control_ready,
+        },
+        stores: StoreStatus {
+            secret_store_ready: dependencies.stores.secret_backend_verified,
+            endpoint_ready: true,
+            direct_store_ready: direct_ready,
+        },
+        capabilities: CapabilityStatus {
+            source_backed_search_available: source_backed,
+            search_available,
+            indexed_search_available: indexed_available,
+        },
         blockers,
         fingerprint: snapshot.fingerprint(),
     }
@@ -920,7 +1230,7 @@ pub fn derive_readiness(
 /// Maps a pure configuration failure to a closed daemon code without
 /// disclosing values, paths, or secrets.
 #[must_use]
-pub fn config_code(error: &ConfigError) -> &'static str {
+pub const fn config_code(error: ConfigError) -> &'static str {
     match error {
         ConfigError::SecretPlaintextForbidden => "DAEMON_CONFIG_SECRET_PLAINTEXT_FORBIDDEN",
         ConfigError::SecurityFloorViolation => "DAEMON_CONFIG_SECURITY_FLOOR_VIOLATION",
@@ -992,14 +1302,14 @@ pub fn config_status_json(effective: &EffectiveDaemonConfig, report: &ReadinessR
         DAEMON_CONFIG_SCHEMA_VERSION,
         effective.selected_profile(),
         fingerprint_hex,
-        report.configuration_ready,
-        report.runtime_owner_ready,
-        report.control_store_ready,
-        report.secret_store_ready,
-        report.direct_store_ready,
-        report.source_backed_search_available,
-        report.search_available,
-        report.indexed_search_available,
+        report.composition.configuration_ready,
+        report.composition.runtime_owner_ready,
+        report.composition.control_store_ready,
+        report.stores.secret_store_ready,
+        report.stores.direct_store_ready,
+        report.capabilities.source_backed_search_available,
+        report.capabilities.search_available,
+        report.capabilities.indexed_search_available,
         blockers,
         view.entries.len(),
         view.omitted_entries,
@@ -1012,13 +1322,19 @@ pub fn config_status_json(effective: &EffectiveDaemonConfig, report: &ReadinessR
 #[must_use]
 pub const fn shell_dependencies() -> DependencyState {
     DependencyState {
-        runtime_owner_ready: false,
-        control_store_verified: false,
-        direct_store_verified: false,
-        secret_backend_verified: false,
-        qdrant_available: false,
-        control_adapter_available: false,
-        quarantined: false,
+        owner: OwnerFence {
+            runtime_owner_ready: false,
+            quarantined: false,
+        },
+        stores: StoreVerification {
+            control_store_verified: false,
+            direct_store_verified: false,
+            secret_backend_verified: false,
+        },
+        services: ServiceFence {
+            qdrant_available: false,
+            control_adapter_available: false,
+        },
     }
 }
 
@@ -1028,13 +1344,19 @@ pub const fn shell_dependencies() -> DependencyState {
 #[must_use]
 pub const fn direct_dependencies() -> DependencyState {
     DependencyState {
-        runtime_owner_ready: true,
-        control_store_verified: true,
-        direct_store_verified: true,
-        secret_backend_verified: false,
-        qdrant_available: false,
-        control_adapter_available: true,
-        quarantined: false,
+        owner: OwnerFence {
+            runtime_owner_ready: true,
+            quarantined: false,
+        },
+        stores: StoreVerification {
+            control_store_verified: true,
+            direct_store_verified: true,
+            secret_backend_verified: false,
+        },
+        services: ServiceFence {
+            qdrant_available: false,
+            control_adapter_available: true,
+        },
     }
 }
 
@@ -1309,18 +1631,18 @@ mod tests {
     fn w1_readiness_does_not_imply_search_available() {
         let effective = build_effective_defaults().expect("effective");
         let mut dependencies = direct_dependencies();
-        dependencies.secret_backend_verified = true;
-        let report = derive_readiness(&effective, &dependencies, &AcceptedReceipts::default());
-        assert!(report.configuration_ready);
-        assert!(report.runtime_owner_ready);
-        assert!(report.control_store_ready);
-        assert!(report.direct_store_ready);
-        assert!(report.source_backed_search_available);
+        dependencies.stores.secret_backend_verified = true;
+        let report = derive_readiness(&effective, dependencies, AcceptedReceipts::default());
+        assert!(report.composition.configuration_ready);
+        assert!(report.composition.runtime_owner_ready);
+        assert!(report.composition.control_store_ready);
+        assert!(report.stores.direct_store_ready);
+        assert!(report.capabilities.source_backed_search_available);
         assert!(
-            !report.search_available,
+            !report.capabilities.search_available,
             "W1 readiness without an accepted search receipt must not imply search"
         );
-        assert!(!report.indexed_search_available);
+        assert!(!report.capabilities.indexed_search_available);
         assert!(report.blockers.contains(&super::SEARCH_NOT_ACCEPTED));
     }
 
@@ -1334,12 +1656,8 @@ mod tests {
             "direct",
         )
         .expect("flag parses");
-        let report = derive_readiness(
-            &effective,
-            &direct_dependencies(),
-            &AcceptedReceipts::default(),
-        );
-        assert!(!report.search_available);
+        let report = derive_readiness(&effective, direct_dependencies(), AcceptedReceipts::default());
+        assert!(!report.capabilities.search_available);
         assert!(report.blockers.contains(&super::OPTIONAL_GATE_REQUIRED));
         let current = build_effective_defaults().expect("current");
         let plan = plan_activation(&current, &effective).expect("plan");
@@ -1353,17 +1671,13 @@ mod tests {
     #[test]
     fn missing_adapters_yield_truthful_health() {
         let effective = build_effective_defaults().expect("effective");
-        let report = derive_readiness(
-            &effective,
-            &shell_dependencies(),
-            &AcceptedReceipts::default(),
-        );
-        assert!(!report.runtime_owner_ready);
-        assert!(!report.control_store_ready);
-        assert!(!report.direct_store_ready);
-        assert!(!report.source_backed_search_available);
-        assert!(!report.search_available);
-        assert!(!report.secret_store_ready, "never cfg!(windows)");
+        let report = derive_readiness(&effective, shell_dependencies(), AcceptedReceipts::default());
+        assert!(!report.composition.runtime_owner_ready);
+        assert!(!report.composition.control_store_ready);
+        assert!(!report.stores.direct_store_ready);
+        assert!(!report.capabilities.source_backed_search_available);
+        assert!(!report.capabilities.search_available);
+        assert!(!report.stores.secret_store_ready, "never cfg!(windows)");
     }
 
     #[test]
@@ -1413,11 +1727,7 @@ mod tests {
             "direct",
         )
         .expect("effective");
-        let report = derive_readiness(
-            &effective,
-            &direct_dependencies(),
-            &AcceptedReceipts::default(),
-        );
+        let report = derive_readiness(&effective, direct_dependencies(), AcceptedReceipts::default());
         let first = config_status_json(&effective, &report);
         assert!(first.contains("\"read_only\":true"));
         assert!(first.contains("\"search_available\":false"));
@@ -1478,5 +1788,110 @@ mod tests {
             LayerOperation::Set(DocumentValue::StringList(vec!["a".to_owned()])),
         )];
         assert!(super::capture_cli_typed_document(entries).is_err());
+    }
+
+    #[test]
+    fn cli_flags_parse_with_bounds_and_fail_closed() {
+        let args = vec![
+            "--serve-data-root".to_owned(),
+            "/tmp/root".to_owned(),
+            "--config-file".to_owned(),
+            "/tmp/eliot.toml".to_owned(),
+            "--set".to_owned(),
+            "query.limit=40".to_owned(),
+            "--set".to_owned(),
+            "query.limit=41".to_owned(),
+        ];
+        let (remaining, cli) = super::parse_cli_config_args(&args).expect("parse");
+        assert_eq!(remaining, vec!["--serve-data-root", "/tmp/root"]);
+        assert_eq!(
+            cli.config_file,
+            Some(std::path::PathBuf::from("/tmp/eliot.toml"))
+        );
+        assert_eq!(
+            cli.overrides,
+            vec![
+                ("query.limit".to_owned(), "40".to_owned()),
+                ("query.limit".to_owned(), "41".to_owned()),
+            ]
+        );
+        let missing = vec!["--config-file".to_owned()];
+        assert!(super::parse_cli_config_args(&missing).is_err());
+        let bad_set = vec!["--set".to_owned(), "querylimit40".to_owned()];
+        assert!(super::parse_cli_config_args(&bad_set).is_err());
+        let empty_value = vec!["--set".to_owned(), "query.limit=".to_owned()];
+        assert!(super::parse_cli_config_args(&empty_value).is_err());
+        let dup_file = vec![
+            "--config-file".to_owned(),
+            "a.toml".to_owned(),
+            "--config-file".to_owned(),
+            "b.toml".to_owned(),
+        ];
+        assert!(super::parse_cli_config_args(&dup_file).is_err());
+    }
+
+    #[test]
+    fn startup_layers_precede_defaults_file_env_cli() {
+        let file = direct_file("[query]\nlimit = 20\n");
+        let environment = capture_environment_document(&[("ELIOT_SEARCH__QUERY__LIMIT", "30")])
+            .expect("env")
+            .expect("layer");
+        let cli = capture_cli_document(&[("query.limit", "40")])
+            .expect("cli")
+            .expect("layer");
+        let effective =
+            build_effective(Some(file), Some(environment), Some(cli), "direct", "direct")
+                .expect("layered");
+        let section = search_config::ConfigSectionName::new("query", 128).expect("section");
+        let key = search_config::ConfigKeyName::new("limit", 128).expect("key");
+        let field = effective
+            .snapshot()
+            .section(&section)
+            .expect("section")
+            .field(&key)
+            .expect("field");
+        assert_eq!(field.value, search_config::ConfigValue::Integer(40));
+    }
+
+    #[test]
+    fn startup_partial_refuses_and_retains_defaults_without_leaks() {
+        let current = build_effective_defaults().expect("current");
+        let candidate = build_effective(
+            Some(direct_file("[query]\nlimit = 11\n")),
+            None,
+            None,
+            "direct",
+            "direct",
+        )
+        .expect("candidate");
+        assert_ne!(current.fingerprint(), candidate.fingerprint());
+        let retained = try_activate(&current, candidate, &BTreeSet::new());
+        assert_eq!(
+            retained,
+            Err(super::ACTIVATION_PARTIAL_REFUSED.to_owned()),
+            "live obligation without receipt must retain defaults"
+        );
+        let secret_cli = vec!["--set".to_owned(), "secrets.qdrant_api_secret_ref=hunter2".to_owned()];
+        let (_, cli) = super::parse_cli_config_args(&secret_cli).expect("parse");
+        assert_eq!(cli.overrides.len(), 1);
+        let bad_overrides = [("secrets.qdrant_api_secret_ref".to_owned(), "hunter2".to_owned())];
+        let borrowed: Vec<(&str, &str)> = bad_overrides
+            .iter()
+            .map(|(dotted, value)| (dotted.as_str(), value.as_str()))
+            .collect();
+        let layer = capture_cli_document(&borrowed).expect("layer builds");
+        let refused = build_effective(None, None, layer, "direct", "direct");
+        assert!(refused.is_err());
+        let message = format!("{}", refused.expect_err("must fail"));
+        assert!(!message.contains("hunter2"), "secret values must never leak");
+        let file_err = super::read_config_file_bytes(std::path::Path::new(
+            "/definitely/missing/eliot-test-config.toml",
+        ));
+        assert!(file_err.is_err());
+        let file_message = file_err.expect_err("must fail");
+        assert!(
+            !file_message.contains("/definitely/missing"),
+            "paths must never leak"
+        );
     }
 }

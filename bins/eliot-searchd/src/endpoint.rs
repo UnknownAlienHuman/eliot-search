@@ -1,28 +1,22 @@
 //! Authenticated bounded loopback transport for the development daemon.
 //!
-//! `pairing_blake3_v1` replaces the former `sha256_challenge_v1` token-file
-//! challenge: every connection runs a mutual keyed-BLAKE3 ceremony over the
-//! approved `search-provider-protocol` pairing transcripts. The endpoint owns
-//! no secret storage and performs no key derivation beyond the transport
-//! framing — the 32-byte key is supplied per connection by an
-//! [`EndpointKeySource`] (a purpose-bound [`SecretLease`] in the product
-//! path), ceremony material is drawn from a keyed PRF, challenges are
-//! single-use through a bounded [`PairingLedger`], and only 32-byte digests
-//! ever cross the socket.
+//! `pairing_blake3_v1` is the only wire: every connection runs a mutual
+//! keyed-BLAKE3 ceremony over the approved `search-provider-protocol`
+//! pairing transcripts. The endpoint owns no secret storage and performs no
+//! key derivation beyond the transport framing — the 32-byte key is supplied
+//! per connection by an [`EndpointKeySource`] (a purpose-bound
+//! [`SecretLease`] in the product path), ceremony material is drawn from a
+//! keyed PRF, challenges are single-use through a bounded [`PairingLedger`],
+//! and only 32-byte digests ever cross the socket.
 //!
-//! The legacy `serve_loopback` file entry remains as an explicit
-//! development-compat shim: the file bytes seed an ephemeral key through a
-//! one-way domain hash and never cross the socket. The product path is
-//! [`serve_loopback_with_source`] with a lease-bound source. No home-grown
-//! hash authentication protocol is defined here: transcripts, the pairing
-//! state machine and fixed-work proof comparison all come from
-//! `search-provider-protocol`, and keyed BLAKE3 is computed with the pinned
-//! `blake3 v1.8.2` dependency.
+//! The product path is [`serve_loopback_with_source`] with a lease-bound
+//! source. No home-grown hash authentication protocol is defined here:
+//! transcripts, the pairing state machine and fixed-work proof comparison
+//! all come from `search-provider-protocol`, and keyed BLAKE3 is computed
+//! with the pinned `blake3 v1.8.2` dependency.
 
-use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
-use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use search_contracts::ProtocolVersion;
@@ -42,8 +36,6 @@ pub const PAIRING_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1
 /// Wire authentication identifier; the legacy `sha256_challenge_v1` is gone.
 pub const PAIRING_AUTHENTICATION_ID: &str = "pairing_blake3_v1";
 
-const MAX_TOKEN_FILE_BYTES: usize = 4096;
-const MIN_TOKEN_BYTES: usize = 32;
 #[cfg(test)]
 const MAX_CHALLENGE_LINE_BYTES: usize = 512;
 const MAX_AUTH_LINE_BYTES: usize = 256;
@@ -61,7 +53,6 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 const BINDING_DOMAIN: &[u8] = b"eliot-search/loopback-binding/v1\0";
 const BINDING_ROLE: &[u8] = b"loopback-operator";
-const DEV_KEY_DOMAIN: &[u8] = b"eliot-search/loopback-dev-key/v1\0";
 const SESSION_PRF_DOMAIN: &[u8] = b"eliot-search/loopback-session/v1\0";
 const NONCE_PRF_DOMAIN: &[u8] = b"eliot-search/loopback-client-nonce/v1\0";
 const CHALLENGE_PRF_DOMAIN: &[u8] = b"eliot-search/loopback-challenge/v1\0";
@@ -84,21 +75,6 @@ pub enum EndpointAction {
 pub trait EndpointKeySource {
     /// Exposes the active 32-byte pairing key for one callback.
     fn with_endpoint_key<T>(&mut self, use_key: impl FnOnce(&[u8; 32]) -> T) -> Result<T, String>;
-}
-
-/// Development-compat entry: a token file seeds an ephemeral key.
-///
-/// The file bytes are domain-hashed into a 32-byte key, zeroed from the
-/// temporary buffer, and used only through [`serve_loopback_with_source`]
-/// with the identical `pairing_blake3_v1` wire. The product path supplies a
-/// lease-bound [`EndpointKeySource`] instead; no plaintext token byte ever
-/// crosses the socket on either path.
-pub fn serve_loopback<F>(port: u16, token_file: &Path, handler: F) -> Result<(), String>
-where
-    F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
-{
-    let mut source = FileKeySource::from_token_file(token_file)?;
-    serve_loopback_with_source(port, &mut source, handler)
 }
 
 /// Lease-bound entry: mutual keyed proofs over pairing transcripts.
@@ -634,87 +610,6 @@ fn hex_decode_32(text: &str) -> Result<[u8; 32], String> {
     Ok(output)
 }
 
-/// Ephemeral development key sourced from a token file (compat shim).
-///
-/// Debug is redacted and the key is zeroed on drop. See [`serve_loopback`].
-struct FileKeySource {
-    key: [u8; 32],
-}
-
-impl core::fmt::Debug for FileKeySource {
-    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        formatter
-            .debug_struct("FileKeySource")
-            .field("key", &"<redacted>")
-            .finish()
-    }
-}
-
-impl Drop for FileKeySource {
-    fn drop(&mut self) {
-        self.key.fill(0);
-    }
-}
-
-impl EndpointKeySource for FileKeySource {
-    fn with_endpoint_key<T>(&mut self, use_key: impl FnOnce(&[u8; 32]) -> T) -> Result<T, String> {
-        Ok(use_key(&self.key))
-    }
-}
-
-impl FileKeySource {
-    fn from_token_file(path: &Path) -> Result<Self, String> {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|error| format!("ENDPOINT_TOKEN_METADATA_ERROR:{error}"))?;
-        if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err("ENDPOINT_TOKEN_FILE_INVALID".to_owned());
-        }
-        if metadata.len() > u64::try_from(MAX_TOKEN_FILE_BYTES).unwrap_or(u64::MAX) {
-            return Err("ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned());
-        }
-        let mut file =
-            File::open(path).map_err(|error| format!("ENDPOINT_TOKEN_OPEN_ERROR:{error}"))?;
-        let mut bytes = Vec::with_capacity(
-            usize::try_from(metadata.len())
-                .map_err(|_| "ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned())?,
-        );
-        (&mut file)
-            .take(u64::try_from(MAX_TOKEN_FILE_BYTES + 1).unwrap_or(u64::MAX))
-            .read_to_end(&mut bytes)
-            .map_err(|error| format!("ENDPOINT_TOKEN_READ_ERROR:{error}"))?;
-        if bytes.len() > MAX_TOKEN_FILE_BYTES {
-            bytes.fill(0);
-            return Err("ENDPOINT_TOKEN_FILE_TOO_LARGE".to_owned());
-        }
-        let (start, end) = trim_ascii_bounds(&bytes);
-        if end.saturating_sub(start) < MIN_TOKEN_BYTES {
-            bytes.fill(0);
-            return Err("ENDPOINT_TOKEN_TOO_SHORT".to_owned());
-        }
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(DEV_KEY_DOMAIN);
-        hasher.update(&bytes[start..end]);
-        bytes.fill(0);
-        let key = *hasher.finalize().as_bytes();
-        if key.iter().all(|byte| *byte == 0) {
-            return Err("ENDPOINT_ENTROPY_INVALID".to_owned());
-        }
-        Ok(Self { key })
-    }
-}
-
-fn trim_ascii_bounds(bytes: &[u8]) -> (usize, usize) {
-    let start = bytes
-        .iter()
-        .position(|byte| !byte.is_ascii_whitespace())
-        .unwrap_or(bytes.len());
-    let end = bytes
-        .iter()
-        .rposition(|byte| !byte.is_ascii_whitespace())
-        .map_or(start, |index| index + 1);
-    (start, end)
-}
-
 fn read_bounded_line(
     reader: &mut BufReader<TcpStream>,
     maximum_bytes: usize,
@@ -922,88 +817,6 @@ mod tests {
             parse_challenge_line(&tampered),
             Err(error) if error == "ENDPOINT_PAIRING_VERSION_MISMATCH"
         ));
-    }
-
-    #[test]
-    fn shim_token_file_speaks_the_same_pairing_wire() {
-        use std::sync::atomic::{AtomicU64, Ordering};
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        struct Scratch {
-            dir: std::path::PathBuf,
-        }
-        impl Scratch {
-            fn new() -> Self {
-                let stamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos();
-                let dir = std::env::temp_dir().join(format!(
-                    "eliot-endpoint-shim-{}-{stamp}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed)
-                ));
-                std::fs::create_dir_all(&dir).unwrap();
-                Self { dir }
-            }
-        }
-        impl Drop for Scratch {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.dir);
-            }
-        }
-
-        let scratch = Scratch::new();
-        let token_file = scratch.dir.join("auth.token");
-        // Padded on purpose: the shim trims ASCII bounds before deriving.
-        std::fs::write(&token_file, b" \t dev-shim-test-token-0123456789abcdef \n").unwrap();
-        // The test recomputes the one-way dev derivation to act as the
-        // paired client; the file bytes themselves never cross the socket.
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(DEV_KEY_DOMAIN);
-        hasher.update(b"dev-shim-test-token-0123456789abcdef");
-        let key = *hasher.finalize().as_bytes();
-        // Rejected files stay rejected: symlink and short-token cases fail
-        // before any socket is bound.
-        assert!(FileKeySource::from_token_file(&scratch.dir).is_err());
-
-        let port = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port();
-        let server = std::thread::spawn(move || {
-            serve_loopback(port, &token_file, |command, stream| {
-                if command == "shutdown" {
-                    Ok(EndpointAction::Shutdown)
-                } else {
-                    write_line(stream, "{\"echo\":true}")
-                        .map_err(|_| "FIXTURE_WRITE_FAILED".to_owned())?;
-                    Ok(EndpointAction::Continue)
-                }
-            })
-        });
-        let timeout = Duration::from_secs(10);
-        let address: std::net::SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
-        let mut client = None;
-        for _ in 0..100 {
-            match TcpStream::connect_timeout(&address, Duration::from_millis(200)) {
-                Ok(stream) => {
-                    client = Some(stream);
-                    break;
-                }
-                Err(_) => std::thread::sleep(Duration::from_millis(20)),
-            }
-        }
-        let mut client = client.expect("shim listener bound");
-        client.set_read_timeout(Some(timeout)).unwrap();
-        client.set_write_timeout(Some(timeout)).unwrap();
-        let mut reader = BufReader::new(client.try_clone().unwrap());
-        client_handshake(&mut reader, &mut client, &key).unwrap();
-        write_line(&mut client, "health").unwrap();
-        let started = read_bounded_line(&mut reader, 1024).unwrap().unwrap();
-        assert!(started.contains("\"event\":\"request_started\""));
-        write_line(&mut client, "shutdown").unwrap();
-        server.join().unwrap().unwrap();
     }
 
     #[test]

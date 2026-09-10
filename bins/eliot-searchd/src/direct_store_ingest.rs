@@ -150,10 +150,10 @@ impl DirectStore {
         // Previous durable state comes from the coherent view, not from a
         // direct `registry.latest` catalog lookup in the planner.
         let previous = view.get(&source_id);
-        if let Some(ref prior) = previous {
-            if prior.file_identity_digest != snapshot.file_identity_digest {
-                return Err("DIRECT_SOURCE_ID_COLLISION".to_owned());
-            }
+        if let Some(ref prior) = previous
+            && prior.file_identity_digest != snapshot.file_identity_digest
+        {
+            return Err("DIRECT_SOURCE_ID_COLLISION".to_owned());
         }
         let changed = !previous.as_ref().is_some_and(|prior| {
             prior.is_active
@@ -563,8 +563,8 @@ mod tests {
             let mut store = fixture.store();
             let path = fixture.source("notes.txt", b"lineage bytes");
             let indexed = store.index_file(&path).unwrap();
-            first_id = indexed.source_id.clone();
-            first_revision = indexed.revision_id.clone();
+            first_id = indexed.source_id;
+            first_revision = indexed.revision_id;
             assert_eq!(store.list_sources().len(), 1);
         }
         // Reopen replays the same log; membership, occurrences and lineage

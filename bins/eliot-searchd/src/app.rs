@@ -43,10 +43,15 @@ const fn help() -> &'static str {
         "  eliot-searchd --help\n",
         "  eliot-searchd --version\n",
         "  eliot-searchd --health\n",
+        "  eliot-searchd --config-status\n",
         "  eliot-searchd --health-data-root ROOT\n",
         "  eliot-searchd --self-test\n",
         "  eliot-searchd --stdio\n",
         "  eliot-searchd --serve-data-root ROOT\n\n",
+        "CONFIGURATION LAYERS (global, before subcommand):\n",
+        "  eliot-searchd [--config-file PATH] [--set section.key=value]... COMMAND\n",
+        "  Layers apply as defaults < file < environment < CLI; mixed partial\n",
+        "  obligations fail closed with DAEMON_CONFIG_PARTIAL_REFUSED.\n\n",
         "ONE-SHOT SEARCH:\n",
         "  eliot-searchd --scan-stdin QUERY\n",
         "  eliot-searchd --scan-stdin-ascii-insensitive QUERY\n",
@@ -103,25 +108,41 @@ fn serve_stdio(health: Health) -> io::Result<()> {
 }
 
 fn shell_health_effective() -> Result<Health, String> {
-    let effective = crate::config_composition::build_effective_defaults()
-        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let (_, cli) = crate::config_composition::parse_cli_config_args(&args)?;
+    let effective = crate::config_composition::effective_from_process(&cli)?;
     let report = crate::config_composition::derive_readiness(
         &effective,
-        &crate::config_composition::shell_dependencies(),
-        &crate::config_composition::AcceptedReceipts::default(),
+        crate::config_composition::shell_dependencies(),
+        crate::config_composition::AcceptedReceipts::default(),
     );
     Ok(Health::from_readiness(&report))
 }
 
 fn direct_health_effective() -> Result<Health, String> {
-    let effective = crate::config_composition::build_effective_defaults()
-        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let (_, cli) = crate::config_composition::parse_cli_config_args(&args)?;
+    let effective = crate::config_composition::effective_from_process(&cli)?;
     let report = crate::config_composition::derive_readiness(
         &effective,
-        &crate::config_composition::direct_dependencies(),
-        &crate::config_composition::AcceptedReceipts::default(),
+        crate::config_composition::direct_dependencies(),
+        crate::config_composition::AcceptedReceipts::default(),
     );
     Ok(Health::from_readiness(&report))
+}
+
+fn config_status_line() -> Result<String, String> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let (_, cli) = crate::config_composition::parse_cli_config_args(&args)?;
+    let effective = crate::config_composition::effective_from_process(&cli)?;
+    let report = crate::config_composition::derive_readiness(
+        &effective,
+        crate::config_composition::shell_dependencies(),
+        crate::config_composition::AcceptedReceipts::default(),
+    );
+    Ok(crate::config_composition::config_status_json(
+        &effective, &report,
+    ))
 }
 
 fn serve_control(
@@ -359,10 +380,10 @@ fn self_test() -> Result<(), &'static str> {
         .map_err(|_| "HEALTH_TRUTHFULNESS_FAILED")?;
     let report = crate::config_composition::derive_readiness(
         &effective,
-        &crate::config_composition::shell_dependencies(),
-        &crate::config_composition::AcceptedReceipts::default(),
+        crate::config_composition::shell_dependencies(),
+        crate::config_composition::AcceptedReceipts::default(),
     );
-    if report.search_available || report.indexed_search_available {
+    if report.capabilities.search_available || report.capabilities.indexed_search_available {
         return Err("HEALTH_TRUTHFULNESS_FAILED");
     }
     let derived = Health::from_readiness(&report);
@@ -397,7 +418,8 @@ fn require_argument_count(arguments: &[String], expected: usize) -> Result<(), S
 }
 
 fn run() -> Result<(), String> {
-    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    let raw = std::env::args().skip(1).collect::<Vec<_>>();
+    let (arguments, _) = crate::config_composition::parse_cli_config_args(&raw)?;
     let Some(argument) = arguments.first().map(String::as_str) else {
         print!("{}", help());
         return Ok(());
@@ -415,6 +437,10 @@ fn run() -> Result<(), String> {
         "--health" => {
             require_argument_count(&arguments, 1)?;
             println!("{}", shell_health_effective()?.json());
+        }
+        "--config-status" => {
+            require_argument_count(&arguments, 1)?;
+            println!("{}", config_status_line()?);
         }
         "--health-data-root" => {
             require_argument_count(&arguments, 2)?;

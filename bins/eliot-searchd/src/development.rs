@@ -47,14 +47,26 @@ pub struct StoreReadiness {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CapabilityAvailability {
     pub(crate) source_backed_search_available: bool,
-    pub(crate) development_stdin_scan_available: bool,
-    pub(crate) development_file_scan_available: bool,
     /// General search requires an accepted receipt; W1 readiness never
     /// implies it. Composed via `config_composition::derive_readiness`.
     pub(crate) search_available: bool,
     /// Indexed search requires qualified Qdrant, artifacts, and routes plus
     /// accepted receipts; always false without them.
     pub(crate) indexed_search_available: bool,
+}
+
+impl CapabilityAvailability {
+    /// One-shot stdin scans remain available on every daemon state.
+    pub(crate) const fn development_stdin_scan_available(self) -> bool {
+        let _ = self;
+        true
+    }
+
+    /// One-shot file scans remain available on every daemon state.
+    pub(crate) const fn development_file_scan_available(self) -> bool {
+        let _ = self;
+        true
+    }
 }
 
 /// Truthful capability summary for one daemon composition state.
@@ -80,35 +92,6 @@ impl Health {
         },
         capabilities: CapabilityAvailability {
             source_backed_search_available: false,
-            development_stdin_scan_available: true,
-            development_file_scan_available: true,
-            search_available: false,
-            indexed_search_available: false,
-        },
-    };
-
-    /// Owner-fenced persistent DIRECT source store is open and verified.
-    ///
-    /// `secret_store_ready` stays fail-closed `false` here: the live value
-    /// must come from `config_composition::derive_readiness` with a real
-    /// OS-secret probe, never from `cfg!(windows)`. Likewise
-    /// `search_available` and `indexed_search_available` stay `false`
-    /// without accepted receipts; W1/DIRECT readiness never implies search.
-    pub(crate) const DIRECT_STORE: Self = Self {
-        composition: CompositionReadiness {
-            configuration_ready: true,
-            runtime_owner_ready: true,
-            control_store_ready: true,
-        },
-        stores: StoreReadiness {
-            secret_store_ready: false,
-            endpoint_ready: true,
-            direct_store_ready: true,
-        },
-        capabilities: CapabilityAvailability {
-            source_backed_search_available: true,
-            development_stdin_scan_available: true,
-            development_file_scan_available: true,
             search_available: false,
             indexed_search_available: false,
         },
@@ -117,24 +100,24 @@ impl Health {
     /// Derives truthful health from an effective-configuration readiness
     /// report. One-shot development scans remain available; every other
     /// capability comes from the report, never from constants or `cfg!`.
-    pub(crate) fn from_readiness(report: &crate::config_composition::ReadinessReport) -> Self {
+    pub(crate) const fn from_readiness(report: &crate::config_composition::ReadinessReport) -> Self {
         Self {
             composition: CompositionReadiness {
-                configuration_ready: report.configuration_ready,
-                runtime_owner_ready: report.runtime_owner_ready,
-                control_store_ready: report.control_store_ready,
+                configuration_ready: report.composition.configuration_ready,
+                runtime_owner_ready: report.composition.runtime_owner_ready,
+                control_store_ready: report.composition.control_store_ready,
             },
             stores: StoreReadiness {
-                secret_store_ready: report.secret_store_ready,
-                endpoint_ready: report.endpoint_ready,
-                direct_store_ready: report.direct_store_ready,
+                secret_store_ready: report.stores.secret_store_ready,
+                endpoint_ready: report.stores.endpoint_ready,
+                direct_store_ready: report.stores.direct_store_ready,
             },
             capabilities: CapabilityAvailability {
-                source_backed_search_available: report.source_backed_search_available,
-                development_stdin_scan_available: true,
-                development_file_scan_available: true,
-                search_available: report.search_available,
-                indexed_search_available: report.indexed_search_available,
+                source_backed_search_available: report
+                    .capabilities
+                    .source_backed_search_available,
+                search_available: report.capabilities.search_available,
+                indexed_search_available: report.capabilities.indexed_search_available,
             },
         }
     }
@@ -162,8 +145,8 @@ impl Health {
             self.stores.endpoint_ready,
             self.stores.direct_store_ready,
             self.capabilities.source_backed_search_available,
-            self.capabilities.development_stdin_scan_available,
-            self.capabilities.development_file_scan_available,
+            self.capabilities.development_stdin_scan_available(),
+            self.capabilities.development_file_scan_available(),
             self.capabilities.search_available,
             self.capabilities.indexed_search_available,
         )
