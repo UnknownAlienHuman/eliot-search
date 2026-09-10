@@ -594,3 +594,88 @@ fn hex_point(bytes: [u8; 16]) -> String {
     }
     output
 }
+
+#[cfg(test)]
+mod spine_gate_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn gap_reason_codes_are_stable_closed_and_distinct() {
+        let cases = [
+            (ValidationError::RequestMismatch, "VALIDATION_REQUEST_MISMATCH"),
+            (ValidationError::PlanMismatch, "VALIDATION_PLAN_MISMATCH"),
+            (ValidationError::LegContaminated, "VALIDATION_LEG_CONTAMINATED"),
+            (ValidationError::MembershipDenied, "VALIDATION_MEMBERSHIP_DENIED"),
+            (ValidationError::CollectionMismatch, "VALIDATION_COLLECTION_MISMATCH"),
+            (ValidationError::ProfileMismatch, "VALIDATION_PROFILE_MISMATCH"),
+            (ValidationError::EpochInvalid, "VALIDATION_EPOCH_INVALID"),
+            (ValidationError::OverlayShadowed, "VALIDATION_OVERLAY_SHADOWED"),
+            (ValidationError::CandidateBudgetExceeded, "VALIDATION_BUDGET_EXCEEDED"),
+            (ValidationError::RevisionUnavailable, "VALIDATION_REVISION_UNAVAILABLE"),
+            (ValidationError::SourceUnreadable, "VALIDATION_SOURCE_UNREADABLE"),
+            (ValidationError::ReadbackTimeout, "VALIDATION_READBACK_TIMEOUT"),
+            (ValidationError::RevisionMismatch, "VALIDATION_REVISION_MISMATCH"),
+            (ValidationError::RepresentationMismatch, "VALIDATION_REPRESENTATION_MISMATCH"),
+            (ValidationError::UnitMismatch, "VALIDATION_UNIT_MISMATCH"),
+            (ValidationError::ContentDigestMismatch, "VALIDATION_CONTENT_DIGEST_MISMATCH"),
+            (ValidationError::LengthMismatch, "VALIDATION_LENGTH_MISMATCH"),
+            (ValidationError::AnchorOutOfBounds, "VALIDATION_ANCHOR_OUT_OF_BOUNDS"),
+            (ValidationError::ResidencyDenied, "VALIDATION_RESIDENCY_DENIED"),
+            (ValidationError::CoordinateMapMismatch, "VALIDATION_COORDINATE_MAP_MISMATCH"),
+            (ValidationError::AssuranceInsufficient, "VALIDATION_ASSURANCE_INSUFFICIENT"),
+            (ValidationError::DisclosureExceeded, "VALIDATION_DISCLOSURE_EXCEEDED"),
+            (ValidationError::AccessRevoked, "VALIDATION_ACCESS_REVOKED"),
+            (ValidationError::Purged, "VALIDATION_PURGED"),
+            (ValidationError::EmissionFenceStale, "VALIDATION_EMISSION_FENCE_STALE"),
+        ];
+        let mut seen = BTreeSet::new();
+        for (error, code) in cases {
+            assert_eq!(error.code(), code);
+            assert_eq!(error.to_string(), code);
+            assert!(seen.insert(code), "duplicate gap code {code}");
+        }
+    }
+
+    #[test]
+    fn coverage_loss_never_relabels_remaining_topk_as_complete() {
+        // Contamination always forces replan, even when counts look unchanged.
+        assert_eq!(
+            material_coverage_change(5, 5, 5, 10, true),
+            CoverageChange::ReplanRequired
+        );
+        // No loss or target met: unchanged.
+        assert_eq!(
+            material_coverage_change(5, 5, 5, 0, false),
+            CoverageChange::Unchanged
+        );
+        assert_eq!(
+            material_coverage_change(5, 7, 5, 0, false),
+            CoverageChange::Unchanged
+        );
+        // Loss within refill budget: bounded refill, never silent completion.
+        assert_eq!(
+            material_coverage_change(5, 3, 5, 2, false),
+            CoverageChange::RefillWithinBudget
+        );
+        // Loss beyond refill budget: explicit incomplete, never success.
+        assert_eq!(
+            material_coverage_change(5, 3, 5, 1, false),
+            CoverageChange::ExplicitIncomplete
+        );
+        assert_eq!(
+            material_coverage_change(5, 0, 5, 4, false),
+            CoverageChange::ExplicitIncomplete
+        );
+    }
+
+    #[test]
+    fn assurance_floor_is_ordered_so_exact_readback_cannot_weaken() {
+        // `reopen_and_verify` rejects readback below the expected floor via
+        // `Ord`; a derived snippet can never satisfy an exact demand.
+        assert!(CandidateAssurance::Derived < CandidateAssurance::SourceBacked);
+        assert!(CandidateAssurance::SourceBacked < CandidateAssurance::Exact);
+        assert!(CandidateAssurance::Exact >= CandidateAssurance::Exact);
+        assert!(CandidateAssurance::Derived < CandidateAssurance::Exact);
+    }
+}

@@ -15,6 +15,7 @@ use crate::continuation::{
     ContinuationCatalog, ContinuationError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
 };
 use crate::development::{DataRootGuard, Health, MAX_SCAN_QUERY_BYTES};
+use crate::direct_preparation::verify_spine_gate;
 use crate::direct_store::{DirectStore, PreparationCursor};
 use crate::directory_manifest::{sync_directory, verify_directory_manifests};
 use crate::maintenance_guard::guarded_collect_orphan_revisions;
@@ -295,6 +296,10 @@ fn execute_mutating_command<W: std::io::Write>(
         ("search", [_, mode, query_hex]) => {
             let query = decode_query(query_hex)?;
             let result = state.store.search(&query, parse_search_mode(mode)?)?;
+            // Canonical durable DIRECT spine gate (T17): a complete claim is
+            // emitted only over the fully searched admitted denominator with
+            // zero gaps; partial/degraded stays typed incomplete downstream.
+            enforce_spine_gate(&result)?;
             refresh_storage(state.storage, state.canonical_root)?;
             emit_streaming_search(
                 state.writer,
@@ -596,6 +601,9 @@ fn cmd_search_page<W: std::io::Write>(
     let query = decode_query(query_hex)?;
     let page_size = parse_page_size(page_size)?;
     let result = store.search(&query, parse_search_mode(mode)?)?;
+    // Same spine gate as the streaming search path: never page an untruthful
+    // complete claim. Continuations preserve the verified coverage unchanged.
+    enforce_spine_gate(&result)?;
     let page = continuations
         .create_page(store, result, page_size)
         .map_err(continuation_error)?;
@@ -947,6 +955,25 @@ fn invalidate_search_state(
     handles: &mut ResultHandleCatalog,
 ) -> (usize, usize) {
     (continuations.invalidate_all(), handles.invalidate_all())
+}
+
+/// Canonical durable DIRECT spine gate (T17) at the service boundary.
+///
+/// The store already freezes the admitted denominator, verifies each retained
+/// revision, loads stored manifests, executes the bounded literal and
+/// revalidates every match. This check fails closed when a `complete` claim
+/// does not cover every active source with zero gaps, so partial/degraded
+/// outcomes can never be relabelled as success (invariant 15) and a narrowed
+/// denominator can never pass as complete (invariant 6).
+fn enforce_spine_gate(result: &crate::direct_store::StoreSearchResult) -> Result<(), String> {
+    verify_spine_gate(
+        result.active_sources,
+        result.searched_sources,
+        result.gaps.is_empty(),
+        result.complete,
+        result.match_limit_reached,
+    )
+    .map_err(str::to_owned)
 }
 
 fn emit_verification(

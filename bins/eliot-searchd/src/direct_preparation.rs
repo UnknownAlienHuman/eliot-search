@@ -314,6 +314,105 @@ pub fn validate_query(query: &str) -> Result<(), &'static str> {
     literal::validate_query(query, LITERAL).map_err(literal::LiteralError::code)
 }
 
+// ---------------------------------------------------------------------------
+// Canonical durable DIRECT spine gate (T17).
+// ---------------------------------------------------------------------------
+
+/// Entire-query corpus budget across all admitted sources.
+///
+/// Per-file literal limits alone are not a corpus budget: one query must bound
+/// total sources, total retained bytes, total emitted matches and total gap
+/// records. Ceilings are finite and closed; exhaustion yields explicit typed
+/// gaps with `complete = false`, never a narrowed denominator relabelled as
+/// success (invariants 6 and 15).
+#[allow(clippy::struct_field_names)]
+pub struct CorpusBudget {
+    /// Maximum admitted sources attempted by one query.
+    pub max_sources: usize,
+    /// Maximum summed retained bytes attempted by one query.
+    pub max_source_bytes: u64,
+    /// Maximum emitted matches across every source.
+    pub max_matches: usize,
+    /// Maximum recorded gap entries.
+    pub max_gaps: usize,
+}
+
+/// Canonical entire-query budget: 100k sources, 1 GiB retained bytes, 100k
+/// matches and 100k gaps. The match/gap ceilings equal the existing shared
+/// per-query limits so the budget never widens them.
+pub const CANONICAL_CORPUS_BUDGET: CorpusBudget = CorpusBudget {
+    max_sources: 100_000,
+    max_source_bytes: 1_073_741_824,
+    max_matches: MAX_SCAN_MATCHES,
+    max_gaps: 100_000,
+};
+
+/// Gap reason for admitted sources skipped after the match ceiling filled.
+pub const SPINE_GAP_MATCH_LIMIT: &str = "DIRECT_MATCH_LIMIT_REACHED";
+/// Gap reason for admitted sources skipped after the corpus byte/source budget.
+pub const SPINE_GAP_BUDGET_EXHAUSTED: &str = "DIRECT_CORPUS_BUDGET_EXHAUSTED";
+/// Gap reason when a stored match fails source-backed revalidation.
+pub const SPINE_GAP_VALIDATION_FAILED: &str = "DIRECT_MATCH_VALIDATION_FAILED";
+
+/// Service-boundary gate over one corpus-search outcome.
+///
+/// A `complete` claim requires every active source searched, zero gaps and no
+/// match-limit truncation. Any partial/degraded outcome must carry
+/// `complete = false` and remains typed data, never success (invariant 15).
+/// An indexed top-k style narrowing without explicit gaps fails closed
+/// (invariant 6).
+pub const fn verify_spine_gate(
+    active_sources: usize,
+    searched_sources: usize,
+    gaps_empty: bool,
+    complete: bool,
+    match_limit_reached: bool,
+) -> Result<(), &'static str> {
+    if match_limit_reached && complete {
+        return Err("DIRECT_SPINE_GATE_DENOMINATOR_INVALID");
+    }
+    if complete && (!gaps_empty || searched_sources != active_sources) {
+        return Err("DIRECT_SPINE_GATE_DENOMINATOR_INVALID");
+    }
+    Ok(())
+}
+
+/// Revalidates one emitted match against the verified retained revision text.
+///
+/// The bytes were already verified against the retained content digest before
+/// scanning; this step proves the emitted range itself is source-backed: exact
+/// bounds, char boundaries and byte equality with the bounded literal query
+/// (ASCII folding only). A mismatch fails closed as a per-source gap reason
+/// instead of emitting an unproven match. No I/O, no allocation beyond the
+/// returned code, no fallback.
+pub fn validate_source_backed_match(
+    text: &str,
+    query: &str,
+    ascii_insensitive: bool,
+    byte_start: usize,
+    byte_end: usize,
+) -> Result<(), &'static str> {
+    if byte_start >= byte_end || byte_end > text.len() {
+        return Err(SPINE_GAP_VALIDATION_FAILED);
+    }
+    if !text.is_char_boundary(byte_start) || !text.is_char_boundary(byte_end) {
+        return Err(SPINE_GAP_VALIDATION_FAILED);
+    }
+    let Some(slice) = text.get(byte_start..byte_end) else {
+        return Err(SPINE_GAP_VALIDATION_FAILED);
+    };
+    let matched = if ascii_insensitive {
+        slice.len() == query.len() && slice.as_bytes().eq_ignore_ascii_case(query.as_bytes())
+    } else {
+        slice == query
+    };
+    if matched {
+        Ok(())
+    } else {
+        Err(SPINE_GAP_VALIDATION_FAILED)
+    }
+}
+
 /// Canonical layout or a closed deterministic preparation gap, never source text.
 /// Storage failures are not encoded as content outcomes.
 pub fn encode_preparation(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
@@ -681,6 +780,51 @@ mod tests {
             ),
             Err("DIRECT_PREPARATION_BINDING_MISMATCH")
         );
+    }
+
+    #[test]
+    fn spine_gate_accepts_complete_denominator_and_rejects_narrowing() {
+        assert!(verify_spine_gate(3, 3, true, true, false).is_ok());
+        assert!(verify_spine_gate(0, 0, true, true, false).is_ok());
+        // Partial/degraded stays typed incomplete: allowed, never success.
+        assert!(verify_spine_gate(3, 2, false, false, false).is_ok());
+        assert!(verify_spine_gate(3, 2, true, false, true).is_ok());
+        // Complete with gaps, unsearched sources or truncation fails closed.
+        assert_eq!(
+            verify_spine_gate(3, 3, false, true, false),
+            Err("DIRECT_SPINE_GATE_DENOMINATOR_INVALID")
+        );
+        assert_eq!(
+            verify_spine_gate(3, 2, true, true, false),
+            Err("DIRECT_SPINE_GATE_DENOMINATOR_INVALID")
+        );
+        assert_eq!(
+            verify_spine_gate(3, 3, true, true, true),
+            Err("DIRECT_SPINE_GATE_DENOMINATOR_INVALID")
+        );
+    }
+
+    #[test]
+    fn corpus_budget_never_widens_shared_per_query_limits() {
+        const {
+            assert!(CANONICAL_CORPUS_BUDGET.max_sources > 0);
+            assert!(CANONICAL_CORPUS_BUDGET.max_source_bytes > 0);
+        }
+        assert_eq!(CANONICAL_CORPUS_BUDGET.max_matches, MAX_SCAN_MATCHES);
+        assert_eq!(CANONICAL_CORPUS_BUDGET.max_gaps, 100_000);
+    }
+
+    #[test]
+    fn source_backed_match_validation_rejects_unproven_ranges() {
+        assert!(validate_source_backed_match("needle here", "needle", false, 0, 6).is_ok());
+        assert!(validate_source_backed_match("xNEEDLE", "needle", true, 1, 7).is_ok());
+        // Wrong bytes, out-of-bounds, empty and non-char-boundary ranges fail.
+        assert!(validate_source_backed_match("needle here", "needle", false, 1, 7).is_err());
+        assert!(validate_source_backed_match("needle", "needle", false, 0, 7).is_err());
+        assert!(validate_source_backed_match("needle", "needle", false, 0, 0).is_err());
+        assert!(validate_source_backed_match("needle", "needle", false, 2, 2).is_err());
+        assert!(validate_source_backed_match("βγ", "β", false, 0, 1).is_err());
+        assert!(validate_source_backed_match("needle", "NEEDLE", false, 0, 6).is_err());
     }
 
     #[test]

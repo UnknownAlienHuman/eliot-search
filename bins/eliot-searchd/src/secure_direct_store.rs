@@ -17,7 +17,10 @@ use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 
 use crate::development::ScanResult;
-use crate::direct_preparation::{scan_prepared, validate_query};
+use crate::direct_preparation::{
+    CANONICAL_CORPUS_BUDGET, SPINE_GAP_BUDGET_EXHAUSTED, SPINE_GAP_MATCH_LIMIT,
+    SPINE_GAP_VALIDATION_FAILED, scan_prepared, validate_query, validate_source_backed_match,
+};
 use crate::plaintext_direct_store as plaintext;
 use plaintext::{RevisionMetadata, verify_revision_identity};
 use crate::revision_protection::RevisionProtector;
@@ -144,6 +147,17 @@ impl DirectStore {
 
     /// Searches verified revisions using saved profile-bound preparation.
     /// Missing or invalid preparation is an explicit gap, never a write-on-query.
+    ///
+    /// Canonical durable DIRECT spine gate (T17): the admitted registry
+    /// (`list_sources`) freezes the denominator; every item reopens its exact
+    /// verified retained revision, loads its stored representation/unit
+    /// manifest, executes the bounded literal and revalidates each emitted
+    /// range against the verified bytes. Entire-query corpus budget
+    /// ([`CANONICAL_CORPUS_BUDGET`]) bounds sources, bytes, matches and gaps;
+    /// every unattempted remainder is an explicit typed gap so an indexed
+    /// top-k style narrowing can never become a complete claim (invariant 6).
+    /// Partial/degraded outcomes stay typed with `complete = false`, never
+    /// success (invariant 15). The query path performs no durable writes.
     pub(crate) fn search(
         &self,
         query: &str,
@@ -160,15 +174,47 @@ impl DirectStore {
         let mut matches = Vec::new();
         let mut gaps = Vec::new();
         let mut searched_sources = 0_usize;
+        let mut scanned_bytes = 0_u64;
         let mut complete = true;
         let mut match_limit_reached = false;
 
-        for source in &active {
-            if matches.len() >= crate::development::MAX_SCAN_MATCHES {
+        for (index, source) in active.iter().enumerate() {
+            if matches.len() >= CANONICAL_CORPUS_BUDGET.max_matches {
                 complete = false;
                 match_limit_reached = true;
+                Self::push_remaining_gaps(
+                    &active,
+                    index,
+                    SPINE_GAP_MATCH_LIMIT,
+                    &mut gaps,
+                    &mut complete,
+                );
                 break;
             }
+            if index >= CANONICAL_CORPUS_BUDGET.max_sources {
+                Self::push_remaining_gaps(
+                    &active,
+                    index,
+                    SPINE_GAP_BUDGET_EXHAUSTED,
+                    &mut gaps,
+                    &mut complete,
+                );
+                break;
+            }
+            if scanned_bytes
+                .checked_add(source.byte_length)
+                .is_none_or(|total| total > CANONICAL_CORPUS_BUDGET.max_source_bytes)
+            {
+                Self::push_remaining_gaps(
+                    &active,
+                    index,
+                    SPINE_GAP_BUDGET_EXHAUSTED,
+                    &mut gaps,
+                    &mut complete,
+                );
+                break;
+            }
+            scanned_bytes = scanned_bytes.saturating_add(source.byte_length);
             let metadata = RevisionMetadata {
                 source_id: source.source_id.clone(),
                 revision_id: source.revision_id.clone(),
@@ -224,13 +270,44 @@ impl DirectStore {
                     continue;
                 }
             };
+            // Source-backed validation: every emitted range is rechecked against
+            // the verified retained bytes before it can enter evidence fields.
+            // A mismatch becomes an explicit per-source gap, never an unproven
+            // match and never a silent substitution of current-path bytes.
+            let mut validation_failed = false;
+            for item in &source_matches {
+                if validate_source_backed_match(
+                    &text,
+                    query,
+                    ascii_insensitive,
+                    item.byte_start,
+                    item.byte_end,
+                )
+                .is_err()
+                {
+                    validation_failed = true;
+                    break;
+                }
+            }
+            if validation_failed {
+                complete = false;
+                if gaps.len() >= CANONICAL_CORPUS_BUDGET.max_gaps {
+                    break;
+                }
+                gaps.push(StoreGap {
+                    source_id: source.source_id.clone(),
+                    revision_id: source.revision_id.clone(),
+                    reason: SPINE_GAP_VALIDATION_FAILED,
+                });
+                continue;
+            }
             searched_sources = searched_sources.saturating_add(1);
             if !coverage.complete {
                 complete = false;
                 match_limit_reached = coverage.match_limit_reached;
             }
             for item in source_matches {
-                if matches.len() >= crate::development::MAX_SCAN_MATCHES {
+                if matches.len() >= CANONICAL_CORPUS_BUDGET.max_matches {
                     complete = false;
                     match_limit_reached = true;
                     break;
@@ -262,6 +339,13 @@ impl DirectStore {
                 });
             }
             if match_limit_reached {
+                Self::push_remaining_gaps(
+                    &active,
+                    index.saturating_add(1),
+                    SPINE_GAP_MATCH_LIMIT,
+                    &mut gaps,
+                    &mut complete,
+                );
                 break;
             }
         }
@@ -275,6 +359,33 @@ impl DirectStore {
             complete,
             match_limit_reached,
         })
+    }
+
+    /// Records every unattempted admitted source as an explicit typed gap.
+    ///
+    /// The denominator is frozen from the admitted registry; skipping the
+    /// remainder without gaps would narrow it like an indexed top-k view
+    /// (invariant 6). The gap ceiling keeps the record bounded; hitting it
+    /// still leaves `complete = false` so the outcome stays degraded typed
+    /// data, never success (invariant 15). No durable write occurs here.
+    fn push_remaining_gaps(
+        active: &[SourceSummary],
+        from: usize,
+        reason: &'static str,
+        gaps: &mut Vec<StoreGap>,
+        complete: &mut bool,
+    ) {
+        *complete = false;
+        for source in active.iter().skip(from) {
+            if gaps.len() >= CANONICAL_CORPUS_BUDGET.max_gaps.min(MAX_SEARCH_GAPS) {
+                return;
+            }
+            gaps.push(StoreGap {
+                source_id: source.source_id.clone(),
+                revision_id: source.revision_id.clone(),
+                reason,
+            });
+        }
     }
 
     /// Reopens the event log and verifies every referenced revision object.
@@ -403,4 +514,84 @@ fn verify_plaintext(metadata: &RevisionMetadata, bytes: &[u8]) -> Result<(), Str
         return Err("DIRECT_REVISION_CONTENT_MISMATCH".to_owned());
     }
     verify_revision_identity(metadata)
+}
+
+#[cfg(test)]
+mod spine_gate_tests {
+    use super::*;
+    use crate::development::DataRootGuard;
+    use crate::revision_protection::{TestCredentialGuard, lock_unit_vault_for_test};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    fn corpus_snapshot(root: &Path) -> Vec<(PathBuf, u64)> {
+        let mut output = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(directory) = stack.pop() {
+            for entry in fs::read_dir(&directory).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if entry.file_type().unwrap().is_dir() {
+                    stack.push(path);
+                } else if entry.file_type().unwrap().is_file()
+                    && path.strip_prefix(root).is_ok_and(|relative| {
+                        relative.starts_with("control")
+                            || relative.starts_with("revisions")
+                            || relative.starts_with("preparation")
+                    })
+                {
+                    output.push((path, entry.metadata().unwrap().len()));
+                }
+            }
+        }
+        output.sort();
+        output
+    }
+
+    #[test]
+    fn ten_thousand_bounded_queries_cause_no_durable_corpus_writes() {
+        let _vault = lock_unit_vault_for_test();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "eliot-spine-gate-{}-{stamp}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let data = base.join("data");
+        fs::create_dir_all(&data).unwrap();
+        let source = base.join("source.txt");
+        fs::write(&source, b"spine needle stable").unwrap();
+        let credential_guard = TestCredentialGuard::for_data_root(&data);
+        let guard = DataRootGuard::acquire(&data).unwrap();
+        let mut store = DirectStore::open(guard.canonical_root()).unwrap();
+        let indexed = store.index_file(&source).unwrap();
+        assert!(indexed.changed);
+        let first = store.search("needle", false).unwrap();
+        assert_eq!(first.matches.len(), 1);
+        assert!(first.complete);
+        assert!(first.gaps.is_empty());
+        let before = corpus_snapshot(guard.canonical_root());
+        assert!(!before.is_empty());
+        // The query path is read-only: revision/preparation objects are loaded
+        // and verified, never created, repaired or re-published. Qdrant is not
+        // consulted on this path, so its absence cannot block explicit DIRECT.
+        for _ in 0..10_000 {
+            let result = store.search("needle", false).unwrap();
+            assert_eq!(result.matches.len(), 1);
+            assert!(result.complete);
+            assert!(!result.match_limit_reached);
+            assert!(result.gaps.is_empty());
+            assert_eq!(result.searched_sources, 1);
+        }
+        assert_eq!(corpus_snapshot(guard.canonical_root()), before);
+        credential_guard.cleanup();
+        drop(store);
+        drop(guard);
+        let _ = fs::remove_dir_all(&base);
+    }
 }
