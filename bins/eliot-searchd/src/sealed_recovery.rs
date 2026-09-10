@@ -448,3 +448,36 @@ mod platform {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recovery_issue_codes_match_the_stable_contract() {
+        assert_eq!(
+            RecoveryIssueCode::PreparedObjectMissing.as_str(),
+            "PREPARED_OBJECT_MISSING"
+        );
+        assert_eq!(
+            RecoveryIssueCode::CommittedObjectMissing.as_str(),
+            "COMMITTED_OBJECT_MISSING"
+        );
+        assert_eq!(
+            RecoveryIssueCode::TransactionConflict.as_str(),
+            "TRANSACTION_CONFLICT"
+        );
+        assert_eq!(
+            RecoveryIssueCode::PlaintextLengthMismatch.as_str(),
+            "PLAINTEXT_LENGTH_MISMATCH"
+        );
+        assert_eq!(
+            RecoveryIssueCode::CiphertextLengthMismatch.as_str(),
+            "CIPHERTEXT_LENGTH_MISMATCH"
+        );
+        assert_eq!(
+            RecoveryIssueCode::PlaintextDigestMismatch.as_str(),
+            "PLAINTEXT_DIGEST_MISMATCH"
+        );
+    }
+}
