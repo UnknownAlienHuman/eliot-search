@@ -1,5 +1,5 @@
 //! Compile legacy transitions into imported-source and revision-occurrence mappings.
-//! This is a migration draft, not admission, a stability receipt, or a SourceRevision.
+//! This is a migration draft, not admission, a stability receipt, or a `SourceRevision`.
 //! Content SHA-256, unavailable timestamps, and residency are never relabelled.
 
 use std::collections::BTreeMap;
@@ -20,8 +20,8 @@ use super::{
 const PROFILE: &[u8] = b"eliot/source-mapping/v1;imported-object;uuid8-sha256;active-content-change-or-reactivation=new-occurrence;path-only=retain;retirement=retain";
 
 /// Proposed graph edge. Missing canonical evidence is deliberately unrepresentable
-/// here; only the importer with real readback/policy inputs may create a SourceRevision.
-pub(crate) struct MappedSourceEvent {
+/// here; only the importer with real readback/policy inputs may create a `SourceRevision`.
+pub struct MappedSourceEvent {
     pub(crate) source_id: SourceId,
     pub(crate) revision_id: SourceRevisionId,
     pub(crate) occurrence_sequence: u64,
@@ -72,7 +72,7 @@ impl MappedSourceEvent {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) struct SourceMappingHeader {
+pub struct SourceMappingHeader {
     pub(crate) namespace: SourceNamespaceId,
     pub(crate) legacy_namespace: [u8; 32],
     pub(crate) catalog_snapshot: [u8; 32],
@@ -104,7 +104,7 @@ impl SourceMappingHeader {
 }
 
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
-pub(crate) struct SourceMappingSummary {
+pub struct SourceMappingSummary {
     pub(crate) events: u64,
     pub(crate) sources: u64,
     pub(crate) occurrences: u64,
@@ -113,7 +113,7 @@ pub(crate) struct SourceMappingSummary {
 }
 
 impl SourceMappingSummary {
-    pub(crate) fn import_counts(self) -> SourceImportCounts {
+    pub(crate) const fn import_counts(self) -> SourceImportCounts {
         SourceImportCounts { events: self.events, sources: self.sources, occurrences: self.occurrences,
             retained_events: self.path_only_events, retirements: self.retirements }
     }
@@ -274,9 +274,9 @@ impl DirectStore {
         let mut mapper = Mapper::new(header);
         let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
             check()?;
-            let mapped = mapper.map(record, previous)?;
-            if let Some(imported) = imported.as_mut() { imported(mapped.import_row(record, previous)?)?; }
-            emit(mapped.encode(record, previous).as_bytes())
+            let mapped_entry = mapper.map(record, previous)?;
+            if let Some(imported) = imported.as_mut() { imported(mapped_entry.import_row(record, previous)?)?; }
+            emit(mapped_entry.encode(record, previous).as_bytes())
         })?;
         check()?;
         if state != self.registry || read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id
@@ -292,7 +292,7 @@ impl DirectStore {
 
     /// Open only the existing journal as an immutable input to a mapping operation.
     /// The caller holds the ordinary root lock for this entire callback. Neither
-    /// DirectStore::open nor its initialization/protection/recovery path is invoked.
+    /// `DirectStore::open` nor its initialization/protection/recovery path is invoked.
     /// The callback borrows the admitted snapshot; no mutable store is returned.
     pub(crate) fn with_existing_mapping_source<T>(
         root: &Path, deadline: Instant,

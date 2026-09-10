@@ -14,21 +14,21 @@ use crate::sha256;
 use crate::source_fence::digest as source_fence;
 
 /// Maximum simultaneous process-local continuation windows.
-pub(crate) const MAX_CONTINUATIONS: usize = 16;
+pub const MAX_CONTINUATIONS: usize = 16;
 /// Maximum matches retained across all continuation windows.
-pub(crate) const MAX_RETAINED_MATCHES: usize = 25_000;
+pub const MAX_RETAINED_MATCHES: usize = 25_000;
 /// Maximum matches returned by one page.
-pub(crate) const MAX_PAGE_SIZE: usize = 1_000;
+pub const MAX_PAGE_SIZE: usize = 1_000;
 /// Default matches returned by one page.
-pub(crate) const DEFAULT_PAGE_SIZE: usize = 100;
+pub const DEFAULT_PAGE_SIZE: usize = 100;
 /// Maximum source-gap details retained on the first page.
-pub(crate) const MAX_GAP_DETAILS: usize = 256;
+pub const MAX_GAP_DETAILS: usize = 256;
 /// Finite process-local continuation lifetime.
-pub(crate) const CONTINUATION_TTL: Duration = Duration::from_secs(15 * 60);
+pub const CONTINUATION_TTL: Duration = Duration::from_mins(15);
 
 /// Closed continuation-window failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ContinuationError {
+pub enum ContinuationError {
     InvalidPageSize,
     NotFound,
     Expired,
@@ -50,31 +50,43 @@ impl ContinuationError {
     }
 }
 
+/// Search-completeness flags carried by every page from one search execution.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PageCompletion {
+    pub(crate) corpus_complete: bool,
+    pub(crate) match_limit_reached: bool,
+}
+
+/// Window and gap truncation flags carried by every page.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PageTruncation {
+    pub(crate) candidate_window_truncated: bool,
+    pub(crate) gap_details_truncated: bool,
+}
+
 /// Immutable coverage carried by every page from one search execution.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PageCoverage {
+pub struct PageCoverage {
     pub(crate) registered_sources: usize,
     pub(crate) active_sources: usize,
     pub(crate) searched_sources: usize,
-    pub(crate) corpus_complete: bool,
-    pub(crate) match_limit_reached: bool,
+    pub(crate) completion: PageCompletion,
     pub(crate) total_matches: usize,
     pub(crate) retained_matches: usize,
-    pub(crate) candidate_window_truncated: bool,
     pub(crate) gap_count: usize,
-    pub(crate) gap_details_truncated: bool,
+    pub(crate) truncation: PageTruncation,
 }
 
 impl PageCoverage {
     #[must_use]
     pub(crate) const fn complete(&self) -> bool {
-        self.corpus_complete && !self.candidate_window_truncated
+        self.completion.corpus_complete && !self.truncation.candidate_window_truncated
     }
 }
 
 /// One page of deterministic source-backed matches.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SearchPage {
+pub struct SearchPage {
     pub(crate) matches: Vec<StoredMatch>,
     pub(crate) gaps: Vec<StoreGap>,
     pub(crate) coverage: PageCoverage,
@@ -96,7 +108,7 @@ struct ContinuationRecord {
 
 /// Finite process-local continuation catalog for one owner-fenced service.
 #[derive(Debug)]
-pub(crate) struct ContinuationCatalog {
+pub struct ContinuationCatalog {
     session_nonce: [u8; 32],
     next_counter: u64,
     records: BTreeMap<String, ContinuationRecord>,
@@ -171,13 +183,17 @@ impl ContinuationCatalog {
             registered_sources: result.registered_sources,
             active_sources: result.active_sources,
             searched_sources: result.searched_sources,
-            corpus_complete: result.complete,
-            match_limit_reached: result.match_limit_reached,
+            completion: PageCompletion {
+                corpus_complete: result.complete,
+                match_limit_reached: result.match_limit_reached,
+            },
             total_matches,
             retained_matches,
-            candidate_window_truncated,
             gap_count,
-            gap_details_truncated,
+            truncation: PageTruncation {
+                candidate_window_truncated,
+                gap_details_truncated,
+            },
         };
 
         let page_end = retained_matches.min(page_size);
@@ -311,7 +327,7 @@ impl ContinuationCatalog {
     }
 }
 
-fn validate_page_size(page_size: usize) -> Result<(), ContinuationError> {
+const fn validate_page_size(page_size: usize) -> Result<(), ContinuationError> {
     if page_size == 0 || page_size > MAX_PAGE_SIZE {
         Err(ContinuationError::InvalidPageSize)
     } else {

@@ -18,6 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use control_store::{DevelopmentControlStore, SnapshotControl};
 use lexical::{LexicalIndex, LexicalIndexLimits, LexicalSearchResult};
 use snapshot::{SnapshotIndex, SnapshotLimits, SnapshotSearchResult, hex32};
+use std::fmt::Write as _;
 
 const DEFAULT_ADDRESS: &str = "127.0.0.1:39171";
 const MAX_REQUEST_BYTES: usize = 4_096;
@@ -52,6 +53,7 @@ impl OwnerFile {
         let path = runtime_dir.join("owner.lock");
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(path)?;
@@ -272,9 +274,9 @@ fn build_lexical_index(
         snapshot.manifest_path(),
         snapshot.manifest_fingerprint(),
         LexicalIndexLimits::baseline(
-            limits.max_results,
-            limits.max_file_bytes,
-            limits.max_excerpt_chars,
+            limits.results,
+            limits.file_bytes,
+            limits.excerpt_chars,
         ),
     )
 }
@@ -343,27 +345,7 @@ fn handle_connection(
             Ok(false)
         }
         "refresh" => {
-            match SnapshotIndex::capture(data_root, source_roots, limits)
-                .and_then(|new_snapshot| {
-                    build_lexical_index(data_root, &new_snapshot, limits)
-                        .map(|new_lexical| (new_snapshot, new_lexical))
-                }) {
-                Ok((new_snapshot, new_lexical)) => {
-                    if let Err(error) = publish_snapshot_control(control, &new_snapshot) {
-                        write_error(stream, "SNAPSHOT_CONTROL_COMMIT_FAILED", &error.to_string())?;
-                        return Ok(false);
-                    }
-                    *snapshot = new_snapshot;
-                    *lexical = new_lexical;
-                    write_response(
-                        stream,
-                        &render_health(snapshot, lexical, control, true),
-                    )?;
-                }
-                Err(error) => {
-                    write_error(stream, "SNAPSHOT_REFRESH_FAILED", &error.to_string())?;
-                }
-            }
+            handle_refresh(stream, data_root, source_roots, limits, snapshot, lexical, control)?;
             Ok(false)
         }
         "shutdown" => {
@@ -406,8 +388,40 @@ fn handle_connection(
     }
 }
 
-fn decode_query(stream: &mut TcpStream, encoded: &str) -> io::Result<Option<String>> {
-    let query_bytes = match decode_hex(encoded) {
+fn handle_refresh(
+    stream: &mut TcpStream,
+    data_root: &Path,
+    source_roots: &[PathBuf],
+    limits: SnapshotLimits,
+    snapshot: &mut SnapshotIndex,
+    lexical: &mut LexicalIndex,
+    control: &mut DevelopmentControlStore,
+) -> io::Result<()> {
+    match SnapshotIndex::capture(data_root, source_roots, limits)
+        .and_then(|new_snapshot| {
+            build_lexical_index(data_root, &new_snapshot, limits)
+                .map(|new_lexical| (new_snapshot, new_lexical))
+        }) {
+        Ok((new_snapshot, new_lexical)) => {
+            if let Err(error) = publish_snapshot_control(control, &new_snapshot) {
+                write_error(stream, "SNAPSHOT_CONTROL_COMMIT_FAILED", &error.to_string())?;
+                return Ok(());
+            }
+            *snapshot = new_snapshot;
+            *lexical = new_lexical;
+            write_response(
+                stream,
+                &render_health(snapshot, lexical, control, true),
+            )?;
+        }
+        Err(error) => {
+            write_error(stream, "SNAPSHOT_REFRESH_FAILED", &error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn decode_query(stream: &mut TcpStream, encoded: &str) -> io::Result<Option<String>> {    let query_bytes = match decode_hex(encoded) {
         Ok(bytes) => bytes,
         Err(error) => {
             write_error(stream, "INVALID_QUERY", &error.to_string())?;
@@ -418,16 +432,14 @@ fn decode_query(stream: &mut TcpStream, encoded: &str) -> io::Result<Option<Stri
         write_error(stream, "INVALID_QUERY", "query exceeds its finite bounds")?;
         return Ok(None);
     }
-    match String::from_utf8(query_bytes) {
-        Ok(query) => Ok(Some(query)),
-        Err(_) => {
-            write_error(stream, "INVALID_QUERY", "query is not UTF-8")?;
-            Ok(None)
-        }
-    }
+    let Ok(query) = String::from_utf8(query_bytes) else {
+        write_error(stream, "INVALID_QUERY", "query is not UTF-8")?;
+        return Ok(None);
+    };
+    Ok(Some(query))
 }
 
-fn capture_complete(snapshot: &SnapshotIndex) -> bool {
+const fn capture_complete(snapshot: &SnapshotIndex) -> bool {
     let stats = snapshot.stats();
     !stats.truncated && stats.unreadable_files == 0 && stats.unstable_files == 0
 }
@@ -440,7 +452,7 @@ fn publish_snapshot_control(
         .publish_ready(SnapshotControl {
             snapshot_id: snapshot.snapshot_id().to_owned(),
             manifest_fingerprint: hex32(snapshot.manifest_fingerprint()),
-            fingerprint_algorithm: snapshot.fingerprint_algorithm().to_owned(),
+            fingerprint_algorithm: SnapshotIndex::fingerprint_algorithm().to_owned(),
             indexed_files: snapshot.stats().indexed_files,
             total_bytes: snapshot.stats().total_bytes,
             capture_complete: capture_complete(snapshot),
@@ -471,7 +483,7 @@ fn render_health(
         ),
         snapshot.snapshot_id(),
         hex32(snapshot.manifest_fingerprint()),
-        snapshot.fingerprint_algorithm(),
+        SnapshotIndex::fingerprint_algorithm(),
         stats.indexed_files,
         stats.total_bytes,
         capture_complete(snapshot),
@@ -563,12 +575,11 @@ fn render_search_response(query: &str, result: &SnapshotSearchResult) -> String 
         if index != 0 {
             output.push(',');
         }
-        output.push_str(&format!(
-            concat!(
-                "{{\"root\":{},\"path\":\"{}\",",
-                "\"revision_fingerprint\":\"{}\",\"line\":{},",
-                "\"column_bytes\":{},\"byte_start\":{},\"byte_end\":{},",
-                "\"excerpt\":\"{}\"}}"
+        let _ = write!(output, concat!(
+            "{{\"root\":{},\"path\":\"{}\",",
+            "\"revision_fingerprint\":\"{}\",\"line\":{},",
+            "\"column_bytes\":{},\"byte_start\":{},\"byte_end\":{},",
+            "\"excerpt\":\"{}\"}}"
             ),
             item.root_index,
             escape_json(&item.relative_path),
@@ -577,8 +588,7 @@ fn render_search_response(query: &str, result: &SnapshotSearchResult) -> String 
             item.column_bytes,
             item.byte_start,
             item.byte_end,
-            escape_json(&item.excerpt),
-        ));
+            escape_json(&item.excerpt));
     }
     output.push_str("]}");
     output
@@ -616,12 +626,11 @@ fn render_lexical_response(query: &str, result: &LexicalSearchResult) -> String 
         if index != 0 {
             output.push(',');
         }
-        output.push_str(&format!(
-            concat!(
-                "{{\"root\":{},\"path\":\"{}\",",
-                "\"revision_fingerprint\":\"{}\",\"score\":{:.8},",
-                "\"matched_terms\":{},\"line\":{},\"column_bytes\":{},",
-                "\"byte_start\":{},\"excerpt\":\"{}\"}}"
+        let _ = write!(output, concat!(
+            "{{\"root\":{},\"path\":\"{}\",",
+            "\"revision_fingerprint\":\"{}\",\"score\":{:.8},",
+            "\"matched_terms\":{},\"line\":{},\"column_bytes\":{},",
+            "\"byte_start\":{},\"excerpt\":\"{}\"}}"
             ),
             item.root_index,
             escape_json(&item.relative_path),
@@ -631,8 +640,7 @@ fn render_lexical_response(query: &str, result: &LexicalSearchResult) -> String 
             item.line,
             item.column_bytes,
             item.byte_start,
-            escape_json(&item.excerpt),
-        ));
+            escape_json(&item.excerpt));
     }
     output.push_str("]}");
     output
@@ -696,7 +704,10 @@ fn load_or_create_token(path: &Path) -> io::Result<String> {
                 "authentication token must be a small regular file",
             ));
         }
+        #[cfg(unix)]
         restrict_token_permissions(path)?;
+        #[cfg(not(unix))]
+        restrict_token_permissions(path);
         let token = fs::read_to_string(path)?.trim().to_owned();
         validate_token(&token)?;
         return Ok(token);
@@ -712,7 +723,10 @@ fn load_or_create_token(path: &Path) -> io::Result<String> {
     file.write_all(token.as_bytes())?;
     file.write_all(b"\n")?;
     file.sync_all()?;
+    #[cfg(unix)]
     restrict_token_permissions(path)?;
+    #[cfg(not(unix))]
+    restrict_token_permissions(path);
     Ok(token)
 }
 
@@ -764,9 +778,7 @@ fn restrict_token_permissions(path: &Path) -> io::Result<()> {
 }
 
 #[cfg(not(unix))]
-fn restrict_token_permissions(_path: &Path) -> io::Result<()> {
-    Ok(())
-}
+const fn restrict_token_permissions(_path: &Path) {}
 
 fn ensure_loopback(ip: IpAddr) -> io::Result<()> {
     if ip.is_loopback() {
@@ -850,7 +862,7 @@ fn decode_hex(value: &str) -> io::Result<Vec<u8>> {
         ));
     }
     let mut output = Vec::with_capacity(value.len() / 2);
-    for pair in value.as_bytes().chunks_exact(2) {
+    for pair in value.as_bytes().as_chunks::<2>().0 {
         output.push((hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?);
     }
     Ok(output)
@@ -888,7 +900,7 @@ fn escape_json(value: &str) -> String {
             '\r' => output.push_str("\\r"),
             '\t' => output.push_str("\\t"),
             character if character.is_control() => {
-                output.push_str(&format!("\\u{:04x}", u32::from(character)));
+                let _ = write!(output, "\\u{:04x}", u32::from(character));
             }
             character => output.push(character),
         }
@@ -904,11 +916,11 @@ fn parse_options() -> io::Result<Options> {
     let mut token_file: Option<PathBuf> = None;
     let mut source_roots = Vec::new();
     let mut limits = SnapshotLimits {
-        max_files: DEFAULT_MAX_FILES,
-        max_file_bytes: DEFAULT_MAX_FILE_BYTES,
-        max_total_bytes: DEFAULT_MAX_TOTAL_BYTES,
-        max_results: DEFAULT_MAX_RESULTS,
-        max_excerpt_chars: DEFAULT_MAX_EXCERPT_CHARS,
+        files: DEFAULT_MAX_FILES,
+        file_bytes: DEFAULT_MAX_FILE_BYTES,
+        total_bytes: DEFAULT_MAX_TOTAL_BYTES,
+        results: DEFAULT_MAX_RESULTS,
+        excerpt_chars: DEFAULT_MAX_EXCERPT_CHARS,
     };
     let mut self_test = false;
 
@@ -931,31 +943,31 @@ fn parse_options() -> io::Result<Options> {
                 source_roots.push(PathBuf::from(next_value(&mut arguments, "--source-root")?));
             }
             "--max-files" => {
-                limits.max_files = parse_positive_usize(
+                limits.files = parse_positive_usize(
                     &next_value(&mut arguments, "--max-files")?,
                     "--max-files",
                 )?;
             }
             "--max-file-bytes" => {
-                limits.max_file_bytes = parse_positive_u64(
+                limits.file_bytes = parse_positive_u64(
                     &next_value(&mut arguments, "--max-file-bytes")?,
                     "--max-file-bytes",
                 )?;
             }
             "--max-total-bytes" => {
-                limits.max_total_bytes = parse_positive_u64(
+                limits.total_bytes = parse_positive_u64(
                     &next_value(&mut arguments, "--max-total-bytes")?,
                     "--max-total-bytes",
                 )?;
             }
             "--max-results" => {
-                limits.max_results = parse_positive_usize(
+                limits.results = parse_positive_usize(
                     &next_value(&mut arguments, "--max-results")?,
                     "--max-results",
                 )?;
             }
             "--max-excerpt-chars" => {
-                limits.max_excerpt_chars = parse_positive_usize(
+                limits.excerpt_chars = parse_positive_usize(
                     &next_value(&mut arguments, "--max-excerpt-chars")?,
                     "--max-excerpt-chars",
                 )?;
@@ -980,8 +992,8 @@ fn parse_options() -> io::Result<Options> {
 
     ensure_loopback(address.ip())?;
     limits.validate()?;
-    if limits.max_results > MAX_CONFIGURED_RESULTS
-        || limits.max_excerpt_chars > MAX_CONFIGURED_EXCERPT_CHARS
+    if limits.results > MAX_CONFIGURED_RESULTS
+        || limits.excerpt_chars > MAX_CONFIGURED_EXCERPT_CHARS
     {
         return Err(io::Error::new(
             ErrorKind::InvalidInput,

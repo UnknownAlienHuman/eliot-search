@@ -47,9 +47,9 @@ fn files(root: &Path) -> Vec<PathBuf> {
 
 fn assert_no_plaintext(root: &Path) {
     for path in files(root) {
-        assert!(!path.extension().is_some_and(|extension| extension == "bin"), "{path:?}");
+        assert!(path.extension().is_none_or(|extension| extension != "bin"), "{}", path.display());
         let bytes = fs::read(&path).unwrap();
-        assert!(!bytes.windows(SENTINEL.len()).any(|window| window == SENTINEL), "{path:?}");
+        assert!(!bytes.windows(SENTINEL.len()).any(|window| window == SENTINEL), "{}", path.display());
     }
 }
 
@@ -76,7 +76,6 @@ fn orphan_plaintext_is_not_silently_adopted_beside_new_ciphertext() {
         store.inner.index_file_with_writer(&fixture.source, &mut writer),
         Err("DIRECT_NEW_REVISION_PLAINTEXT_PRESENT".to_owned()),
     );
-    drop(writer);
     assert_eq!(fs::read(orphan.unwrap()).unwrap(), SENTINEL);
     assert_eq!(fixture.log(), before);
     assert!(store.list_sources().is_empty());

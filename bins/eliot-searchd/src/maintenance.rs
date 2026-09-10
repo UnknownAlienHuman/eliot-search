@@ -7,7 +7,7 @@
 
 use std::collections::BTreeSet;
 use std::fs::{self, File, Metadata, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crate::sha256;
@@ -23,7 +23,7 @@ const MAX_REVISION_OBJECTS: usize = 2_000_000;
 
 /// Result of explicit torn-tail repair.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct LogRepairResult {
+pub struct LogRepairResult {
     pub(crate) repaired: bool,
     pub(crate) removed_bytes: usize,
     pub(crate) retained_events: usize,
@@ -33,7 +33,7 @@ pub(crate) struct LogRepairResult {
 
 /// Result of exact unreferenced revision collection.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct GarbageCollectionResult {
+pub struct GarbageCollectionResult {
     pub(crate) referenced_revisions: usize,
     pub(crate) scanned_objects: usize,
     pub(crate) plaintext_objects: usize,
@@ -58,14 +58,14 @@ struct LogInventory {
 }
 
 /// Removes only an uncommitted unterminated final event.
-pub(crate) fn repair_control_log(root: &Path) -> Result<LogRepairResult, String> {
+pub fn repair_control_log(root: &Path) -> Result<LogRepairResult, String> {
     let control = root.join(CONTROL_DIRECTORY);
     ensure_directory(&control)?;
     let log_path = control.join(SOURCE_LOG_FILE);
     ensure_regular_file(&log_path)?;
     let mut bytes = Vec::new();
     File::open(&log_path)
-        .and_then(|mut file| {
+        .and_then(|file| {
             file.take(u64::try_from(MAX_LOG_BYTES + 1).unwrap_or(u64::MAX))
                 .read_to_end(&mut bytes)
         })
@@ -97,7 +97,7 @@ pub(crate) fn repair_control_log(root: &Path) -> Result<LogRepairResult, String>
     }
     let inventory = verify_complete_log(&bytes[..prefix_len])?;
 
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .write(true)
         .open(&log_path)
         .map_err(|error| format!("DIRECT_REPAIR_OPEN_ERROR:{error}"))?;
@@ -108,7 +108,10 @@ pub(crate) fn repair_control_log(root: &Path) -> Result<LogRepairResult, String>
     .and_then(|()| file.sync_all())
     .map_err(|error| format!("DIRECT_REPAIR_TRUNCATE_ERROR:{error}"))?;
     drop(file);
+    #[cfg(unix)]
     sync_directory(&control)?;
+    #[cfg(not(unix))]
+    sync_directory(&control);
 
     let mut readback = Vec::new();
     File::open(&log_path)
@@ -127,7 +130,7 @@ pub(crate) fn repair_control_log(root: &Path) -> Result<LogRepairResult, String>
 }
 
 /// Finds and optionally deletes only generated unreferenced revision objects.
-pub(crate) fn collect_orphan_revisions(
+pub fn collect_orphan_revisions(
     root: &Path,
     apply: bool,
 ) -> Result<GarbageCollectionResult, String> {
@@ -139,7 +142,7 @@ pub(crate) fn collect_orphan_revisions(
     ensure_regular_file(&log_path)?;
     let mut log_bytes = Vec::new();
     File::open(&log_path)
-        .and_then(|mut file| {
+        .and_then(|file| {
             file.take(u64::try_from(MAX_LOG_BYTES + 1).unwrap_or(u64::MAX))
                 .read_to_end(&mut log_bytes)
         })
@@ -149,98 +152,8 @@ pub(crate) fn collect_orphan_revisions(
     }
     let inventory = verify_complete_log(&log_bytes)?;
 
-    let mut objects = Vec::new();
-    let mut unexpected_objects = 0_usize;
-    let mut plaintext_objects = 0_usize;
-    let mut protected_objects = 0_usize;
-    let mut temporary_objects = 0_usize;
-    let mut referenced_plaintext_objects = 0_usize;
-    let mut referenced_protected_objects = 0_usize;
-    let mut shard_entries = fs::read_dir(&revisions)
-        .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?;
-    shard_entries.sort_by_key(|entry| entry.file_name());
-    for shard_entry in shard_entries {
-        let shard_path = shard_entry.path();
-        let shard_metadata = fs::symlink_metadata(&shard_path)
-            .map_err(|error| format!("DIRECT_GC_METADATA_ERROR:{error}"))?;
-        let shard_name = shard_entry.file_name();
-        let shard_name = shard_name.to_string_lossy();
-        if shard_metadata.file_type().is_symlink()
-            || is_reparse(&shard_metadata)
-            || !shard_metadata.is_dir()
-            || !valid_shard_name(&shard_name)
-        {
-            unexpected_objects = unexpected_objects.saturating_add(1);
-            continue;
-        }
-        let mut entries = fs::read_dir(&shard_path)
-            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?;
-        entries.sort_by_key(|entry| entry.file_name());
-        for entry in entries {
-            if objects.len() >= MAX_REVISION_OBJECTS {
-                return Err("DIRECT_GC_OBJECT_LIMIT_EXCEEDED".to_owned());
-            }
-            let path = entry.path();
-            let metadata = fs::symlink_metadata(&path)
-                .map_err(|error| format!("DIRECT_GC_METADATA_ERROR:{error}"))?;
-            if metadata.file_type().is_symlink()
-                || is_reparse(&metadata)
-                || !metadata.is_file()
-            {
-                unexpected_objects = unexpected_objects.saturating_add(1);
-                continue;
-            }
-            let name = entry.file_name().to_string_lossy().into_owned();
-            match classify_generated_object(&name) {
-                GeneratedObject::Revision {
-                    revision_id,
-                    format,
-                } => {
-                    if !revision_id.starts_with(shard_name.as_ref()) {
-                        unexpected_objects = unexpected_objects.saturating_add(1);
-                        continue;
-                    }
-                    let referenced = inventory.referenced_revisions.contains(&revision_id);
-                    match format {
-                        RevisionObjectFormat::Plaintext => {
-                            plaintext_objects = plaintext_objects.saturating_add(1);
-                            if referenced {
-                                referenced_plaintext_objects =
-                                    referenced_plaintext_objects.saturating_add(1);
-                            }
-                        }
-                        RevisionObjectFormat::Protected => {
-                            protected_objects = protected_objects.saturating_add(1);
-                            if referenced {
-                                referenced_protected_objects =
-                                    referenced_protected_objects.saturating_add(1);
-                            }
-                        }
-                    }
-                    objects.push(ObjectCandidate {
-                        path,
-                        byte_length: metadata.len(),
-                        referenced,
-                    });
-                }
-                GeneratedObject::Temporary => {
-                    temporary_objects = temporary_objects.saturating_add(1);
-                    objects.push(ObjectCandidate {
-                        path,
-                        byte_length: metadata.len(),
-                        referenced: false,
-                    });
-                }
-                GeneratedObject::Unexpected => {
-                    unexpected_objects = unexpected_objects.saturating_add(1);
-                }
-            }
-        }
-    }
+    let tally = collect_candidates(&revisions, &inventory)?;
+    let objects = tally.objects;
 
     let orphan_objects = objects.iter().filter(|object| !object.referenced).count();
     let orphan_bytes = objects
@@ -277,24 +190,136 @@ pub(crate) fn collect_orphan_revisions(
                 let _ = fs::remove_dir(&path);
             }
         }
+        #[cfg(unix)]
         sync_directory(&revisions)?;
+        #[cfg(not(unix))]
+        sync_directory(&revisions);
     }
 
     Ok(GarbageCollectionResult {
         referenced_revisions: inventory.referenced_revisions.len(),
         scanned_objects: objects.len(),
-        plaintext_objects,
-        protected_objects,
-        temporary_objects,
-        referenced_plaintext_objects,
-        referenced_protected_objects,
+        plaintext_objects: tally.plaintext_objects,
+        protected_objects: tally.protected_objects,
+        temporary_objects: tally.temporary_objects,
+        referenced_plaintext_objects: tally.referenced_plaintext_objects,
+        referenced_protected_objects: tally.referenced_protected_objects,
         orphan_objects,
         orphan_bytes,
         deleted_objects,
         deleted_bytes,
-        unexpected_objects,
+        unexpected_objects: tally.unexpected_objects,
         applied: apply,
     })
+}
+
+#[derive(Clone, Debug, Default)]
+struct ObjectInventory {
+    objects: Vec<ObjectCandidate>,
+    unexpected_objects: usize,
+    plaintext_objects: usize,
+    protected_objects: usize,
+    temporary_objects: usize,
+    referenced_plaintext_objects: usize,
+    referenced_protected_objects: usize,
+}
+
+/// Walks every revision shard and classifies each generated object without
+/// deleting anything.
+fn collect_candidates(
+    revisions: &Path,
+    inventory: &LogInventory,
+) -> Result<ObjectInventory, String> {
+    let mut tally = ObjectInventory::default();
+    let mut shard_entries = fs::read_dir(revisions)
+        .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?;
+    shard_entries.sort_by_key(fs::DirEntry::file_name);
+    for shard_entry in shard_entries {
+        let shard_path = shard_entry.path();
+        let shard_metadata = fs::symlink_metadata(&shard_path)
+            .map_err(|error| format!("DIRECT_GC_METADATA_ERROR:{error}"))?;
+        let shard_name = shard_entry.file_name();
+        let shard_name = shard_name.to_string_lossy();
+        if shard_metadata.file_type().is_symlink()
+            || is_reparse(&shard_metadata)
+            || !shard_metadata.is_dir()
+            || !valid_shard_name(&shard_name)
+        {
+            tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
+            continue;
+        }
+        let mut entries = fs::read_dir(&shard_path)
+            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?;
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        for entry in entries {
+            if tally.objects.len() >= MAX_REVISION_OBJECTS {
+                return Err("DIRECT_GC_OBJECT_LIMIT_EXCEEDED".to_owned());
+            }
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path)
+                .map_err(|error| format!("DIRECT_GC_METADATA_ERROR:{error}"))?;
+            if metadata.file_type().is_symlink()
+                || is_reparse(&metadata)
+                || !metadata.is_file()
+            {
+                tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            match classify_generated_object(&name) {
+                GeneratedObject::Revision {
+                    revision_id,
+                    format,
+                } => {
+                    if !revision_id.starts_with(shard_name.as_ref()) {
+                        tally.unexpected_objects =
+                            tally.unexpected_objects.saturating_add(1);
+                        continue;
+                    }
+                    let referenced = inventory.referenced_revisions.contains(&revision_id);
+                    match format {
+                        RevisionObjectFormat::Plaintext => {
+                            tally.plaintext_objects =
+                                tally.plaintext_objects.saturating_add(1);
+                            if referenced {
+                                tally.referenced_plaintext_objects =
+                                    tally.referenced_plaintext_objects.saturating_add(1);
+                            }
+                        }
+                        RevisionObjectFormat::Protected => {
+                            tally.protected_objects =
+                                tally.protected_objects.saturating_add(1);
+                            if referenced {
+                                tally.referenced_protected_objects =
+                                    tally.referenced_protected_objects.saturating_add(1);
+                            }
+                        }
+                    }
+                    tally.objects.push(ObjectCandidate {
+                        path,
+                        byte_length: metadata.len(),
+                        referenced,
+                    });
+                }
+                GeneratedObject::Temporary => {
+                    tally.temporary_objects = tally.temporary_objects.saturating_add(1);
+                    tally.objects.push(ObjectCandidate {
+                        path,
+                        byte_length: metadata.len(),
+                        referenced: false,
+                    });
+                }
+                GeneratedObject::Unexpected => {
+                    tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
+                }
+            }
+        }
+    }
+    Ok(tally)
 }
 
 #[derive(Clone, Debug)]
@@ -325,16 +350,19 @@ fn classify_generated_object(name: &str) -> GeneratedObject {
         (".bin", RevisionObjectFormat::Plaintext),
         (".dpapi", RevisionObjectFormat::Protected),
     ] {
-        if let Some(revision_id) = name.strip_suffix(suffix) {
-            if sha256::decode_digest(revision_id).is_some() {
-                return GeneratedObject::Revision {
-                    revision_id: revision_id.to_owned(),
-                    format,
-                };
-            }
+        if let Some(revision_id) = name.strip_suffix(suffix)
+            && sha256::decode_digest(revision_id).is_some()
+        {
+            return GeneratedObject::Revision {
+                revision_id: revision_id.to_owned(),
+                format,
+            };
         }
     }
-    if name.starts_with('.') && name.ends_with(".tmp") {
+    if name.starts_with('.')
+        && name.len() >= ".tmp".len()
+        && name.as_bytes()[name.len() - ".tmp".len()..].eq_ignore_ascii_case(b".tmp")
+    {
         let body = &name[1..name.len().saturating_sub(4)];
         if body
             .split('.')
@@ -410,7 +438,7 @@ fn verify_complete_log(bytes: &[u8]) -> Result<LogInventory, String> {
         }
         referenced_revisions.insert(fields[6].to_owned());
         last_sequence = sequence;
-        last_digest = fields[12].to_owned();
+        fields[12].clone_into(&mut last_digest);
         events = events.saturating_add(1);
         if events > MAX_REVISION_OBJECTS {
             return Err("DIRECT_CONTROL_LOG_EVENT_LIMIT_EXCEEDED".to_owned());
@@ -466,6 +494,4 @@ fn sync_directory(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
+const fn sync_directory(_path: &Path) {}

@@ -19,12 +19,6 @@ impl Sha256Digest {
         Self(bytes)
     }
 
-    /// Exact digest bytes.
-    #[must_use]
-    pub const fn as_bytes(self) -> [u8; 32] {
-        self.0
-    }
-
     /// Stable lower-case hexadecimal encoding.
     #[must_use]
     pub fn to_hex(self) -> String {
@@ -43,7 +37,7 @@ impl Sha256Digest {
             return Err(DigestError::InvalidHex);
         }
         let mut output = [0_u8; 32];
-        for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
             output[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
         }
         Ok(Self(output))
@@ -65,6 +59,7 @@ impl fmt::Display for Sha256Digest {
 /// Closed digest adapter failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum DigestError {
+    #[cfg(not(windows))]
     /// Windows CNG is unavailable on the current platform.
     UnsupportedPlatform,
     /// Input length cannot be represented by the CNG call.
@@ -82,6 +77,7 @@ impl DigestError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_DIGEST_UNSUPPORTED_PLATFORM",
             Self::InputTooLarge => "SEALED_DIGEST_INPUT_TOO_LARGE",
             Self::ProviderOpenFailed => "SEALED_DIGEST_PROVIDER_OPEN_FAILED",
@@ -104,7 +100,7 @@ pub fn sha256(bytes: &[u8]) -> Result<Sha256Digest, DigestError> {
     platform::sha256(bytes)
 }
 
-fn hex_nibble(byte: u8) -> Result<u8, DigestError> {
+const fn hex_nibble(byte: u8) -> Result<u8, DigestError> {
     match byte {
         b'0'..=b'9' => Ok(byte - b'0'),
         b'a'..=b'f' => Ok(byte - b'a' + 10),
@@ -177,7 +173,7 @@ mod platform {
             // pointers remain live for the duration of the call.
             let status = unsafe {
                 BCryptOpenAlgorithmProvider(
-                    &mut handle,
+                    &raw mut handle,
                     SHA256_ALGORITHM.as_ptr(),
                     null(),
                     0,

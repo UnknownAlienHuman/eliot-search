@@ -2,7 +2,7 @@
 //!
 //! This binary provides a usable encrypted-at-rest path without overstating the
 //! product boundary. It does not claim source-catalog, owner-epoch, scope, or
-//! retained EvidenceHandle integration.
+//! retained `EvidenceHandle` integration.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -65,7 +65,7 @@ struct SearchResult {
     match_limit_reached: bool,
 }
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-search-sealed-direct\n\n",
         "USAGE:\n",
@@ -314,7 +314,7 @@ fn run() -> Result<(), String> {
             let object_id = utf8_argument(&arguments[3], "SEALED_STORE_OBJECT_ID_INVALID")?;
             let plaintext = SensitiveBytes::new(read_final_file(Path::new(&arguments[4]))?)
                 .map_err(|error| error.code().to_owned())?;
-            let receipt = put_idempotent(data_root, operation_id, object_id, plaintext)
+            let receipt = put_idempotent(data_root, operation_id, object_id, &plaintext)
                 .map_err(|error| error.code().to_owned())?;
             println!(
                 concat!(

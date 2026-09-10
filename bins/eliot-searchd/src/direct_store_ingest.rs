@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use super::{
-    CONTROL_DIRECTORY, DirectStore, IndexedSource, MAX_DIRECTORY_FILES, RecordDraft,
+    CONTROL_DIRECTORY, DirectStore, FileSnapshot, IndexedSource, MAX_DIRECTORY_FILES, RecordDraft,
     SOURCE_LOG_FILE, SourceState, ZERO_DIGEST, collect_regular_files, ensure_directory,
     fs, load_registry, path_identity_bytes, read_file_snapshot, sha256,
 };
@@ -19,7 +19,7 @@ impl DirectStore {
         path: &Path,
         writer: &mut impl FnMut(&Self, &IndexedSource, &[u8]) -> Result<(), String>,
     ) -> Result<IndexedSource, String> {
-        self.index_paths_bounded(vec![path.to_path_buf()], MAX_BATCH_INPUT_BYTES, writer)?
+        self.index_paths_bounded(&[path.to_path_buf()], MAX_BATCH_INPUT_BYTES, writer)?
             .pop()
             .ok_or_else(|| "DIRECT_INDEX_EMPTY_RESULT".to_owned())
     }
@@ -40,12 +40,88 @@ impl DirectStore {
         let mut paths = Vec::new();
         collect_regular_files(&canonical, &self.root, 0, &mut paths)?;
         paths.sort_by_key(|path| path_identity_bytes(path));
-        self.index_paths_bounded(paths, MAX_BATCH_INPUT_BYTES, writer)
+        self.index_paths_bounded(&paths, MAX_BATCH_INPUT_BYTES, writer)
+    }
+
+    /// Validates one retained snapshot and plans its source identity and
+    /// optional catalog draft without invoking any storage adapter.
+    fn plan_snapshot(
+        &self,
+        snapshot: FileSnapshot,
+        seen: &mut BTreeSet<String>,
+    ) -> Result<(FileSnapshot, IndexedSource, Option<RecordDraft>), String> {
+        let file_identity = sha256::decode_digest(&snapshot.file_identity_digest)
+            .ok_or_else(|| "DIRECT_FILE_IDENTITY_INVALID".to_owned())?;
+        let source_id = sha256::hex(&sha256::digest_parts(
+            b"eliot-search/direct-source-id/v1",
+            &[&self.namespace_id, &file_identity],
+        ));
+        if !seen.insert(source_id.clone()) {
+            return Err("DIRECT_DUPLICATE_SOURCE_IN_BATCH".to_owned());
+        }
+        let digest = sha256::decode_digest(&snapshot.content_digest)
+            .ok_or_else(|| "DIRECT_CONTENT_DIGEST_INVALID".to_owned())?;
+        let byte_length = u64::try_from(snapshot.bytes.len())
+            .map_err(|_| "DIRECT_SOURCE_TOO_LARGE".to_owned())?;
+        let revision_id = sha256::hex(&sha256::digest_parts(
+            b"eliot-search/direct-revision-id/v1",
+            &[source_id.as_bytes(), &digest, &byte_length.to_be_bytes()],
+        ));
+        let previous = self.registry.latest.get(&source_id);
+        if previous.is_some_and(|record| {
+            record.file_identity_digest != snapshot.file_identity_digest
+        }) {
+            return Err("DIRECT_SOURCE_ID_COLLISION".to_owned());
+        }
+        let changed = !previous.is_some_and(|record| {
+            record.state == SourceState::Active
+                && record.revision_id == revision_id
+                && record.path_digest == snapshot.path_digest
+        });
+        let source = IndexedSource {
+            source_id,
+            revision_id,
+            content_digest: snapshot.content_digest.clone(),
+            path_digest: snapshot.path_digest.clone(),
+            byte_length,
+            identity_strength: snapshot.identity_strength.tag(),
+            changed,
+        };
+        let draft = if changed {
+            // Returning to an old revision is a new transition, not a replay
+            // of the first transition to those bytes. Bind its predecessor.
+            let predecessor = previous.map_or(ZERO_DIGEST, |record| {
+                record.record_digest.as_str()
+            });
+            let operation_id = sha256::hex(&sha256::digest_parts(
+                b"eliot-search/direct-index-operation/v2",
+                &[
+                    source.source_id.as_bytes(),
+                    source.revision_id.as_bytes(),
+                    source.path_digest.as_bytes(),
+                    predecessor.as_bytes(),
+                ],
+            ));
+            Some(RecordDraft {
+                operation_id,
+                state: SourceState::Active,
+                source_id: source.source_id.clone(),
+                revision_id: source.revision_id.clone(),
+                content_digest: source.content_digest.clone(),
+                byte_length,
+                file_identity_digest: snapshot.file_identity_digest.clone(),
+                path_digest: source.path_digest.clone(),
+                identity_strength: snapshot.identity_strength,
+            })
+        } else {
+            None
+        };
+        Ok((snapshot, source, draft))
     }
 
     fn index_paths_bounded(
         &mut self,
-        paths: Vec<PathBuf>,
+        paths: &[PathBuf],
         max_batch_bytes: usize,
         writer: &mut impl FnMut(&Self, &IndexedSource, &[u8]) -> Result<(), String>,
     ) -> Result<Vec<IndexedSource>, String> {
@@ -67,7 +143,7 @@ impl DirectStore {
         // Every read receives the remaining budget before allocating its buffer.
         let mut snapshots = Vec::with_capacity(paths.len());
         let mut retained_bytes = 0_usize;
-        for path in &paths {
+        for path in paths {
             let remaining = max_batch_bytes
                 .checked_sub(retained_bytes)
                 .ok_or_else(|| "DIRECT_BATCH_BYTES_EXCEEDED".to_owned())?;
@@ -84,73 +160,7 @@ impl DirectStore {
         let mut seen = BTreeSet::new();
         let mut planned = Vec::with_capacity(snapshots.len());
         for snapshot in snapshots {
-            let file_identity = sha256::decode_digest(&snapshot.file_identity_digest)
-                .ok_or_else(|| "DIRECT_FILE_IDENTITY_INVALID".to_owned())?;
-            let source_id = sha256::hex(&sha256::digest_parts(
-                b"eliot-search/direct-source-id/v1",
-                &[&self.namespace_id, &file_identity],
-            ));
-            if !seen.insert(source_id.clone()) {
-                return Err("DIRECT_DUPLICATE_SOURCE_IN_BATCH".to_owned());
-            }
-            let digest = sha256::decode_digest(&snapshot.content_digest)
-                .ok_or_else(|| "DIRECT_CONTENT_DIGEST_INVALID".to_owned())?;
-            let byte_length = u64::try_from(snapshot.bytes.len())
-                .map_err(|_| "DIRECT_SOURCE_TOO_LARGE".to_owned())?;
-            let revision_id = sha256::hex(&sha256::digest_parts(
-                b"eliot-search/direct-revision-id/v1",
-                &[source_id.as_bytes(), &digest, &byte_length.to_be_bytes()],
-            ));
-            let previous = self.registry.latest.get(&source_id);
-            if previous.is_some_and(|record| {
-                record.file_identity_digest != snapshot.file_identity_digest
-            }) {
-                return Err("DIRECT_SOURCE_ID_COLLISION".to_owned());
-            }
-            let changed = !previous.is_some_and(|record| {
-                record.state == SourceState::Active
-                    && record.revision_id == revision_id
-                    && record.path_digest == snapshot.path_digest
-            });
-            let source = IndexedSource {
-                source_id,
-                revision_id,
-                content_digest: snapshot.content_digest.clone(),
-                path_digest: snapshot.path_digest.clone(),
-                byte_length,
-                identity_strength: snapshot.identity_strength.tag(),
-                changed,
-            };
-            let draft = if changed {
-                // Returning to an old revision is a new transition, not a replay
-                // of the first transition to those bytes. Bind its predecessor.
-                let predecessor = previous.map_or(ZERO_DIGEST, |record| {
-                    record.record_digest.as_str()
-                });
-                let operation_id = sha256::hex(&sha256::digest_parts(
-                    b"eliot-search/direct-index-operation/v2",
-                    &[
-                        source.source_id.as_bytes(),
-                        source.revision_id.as_bytes(),
-                        source.path_digest.as_bytes(),
-                        predecessor.as_bytes(),
-                    ],
-                ));
-                Some(RecordDraft {
-                    operation_id,
-                    state: SourceState::Active,
-                    source_id: source.source_id.clone(),
-                    revision_id: source.revision_id.clone(),
-                    content_digest: source.content_digest.clone(),
-                    byte_length,
-                    file_identity_digest: snapshot.file_identity_digest.clone(),
-                    path_digest: source.path_digest.clone(),
-                    identity_strength: snapshot.identity_strength,
-                })
-            } else {
-                None
-            };
-            planned.push((snapshot, source, draft));
+            planned.push(self.plan_snapshot(snapshot, &mut seen)?);
         }
 
         let mut results = Vec::with_capacity(planned.len());
@@ -244,7 +254,7 @@ mod tests {
         let paths = vec![fixture.source("a", b"one"), fixture.source("b", b"two")];
         let before = fixture.log();
         let mut writes = 0;
-        let result = store.index_paths_bounded(paths, 6, &mut |store, source, bytes| {
+        let result = store.index_paths_bounded(&paths, 6, &mut |store, source, bytes| {
             writes += 1;
             assert!(store.list_sources().is_empty());
             assert_eq!(fixture.log(), before);
@@ -265,7 +275,7 @@ mod tests {
         let mut store = fixture.store();
         let paths = vec![fixture.source("a", b"one"), fixture.source("b", b"two")];
         let mut calls = 0;
-        let result = store.index_paths_bounded(paths, 5, &mut |_, _, _| {
+        let result = store.index_paths_bounded(&paths, 5, &mut |_, _, _| {
             calls += 1;
             Ok(())
         });
@@ -325,7 +335,7 @@ mod tests {
         let fixture = Fixture::new();
         let mut store = fixture.store();
         let paths = vec![fixture.source("a", b"x"), fixture.source("empty", b"")];
-        let result = store.index_paths_bounded(paths, 1, &mut plaintext_writer).unwrap();
+        let result = store.index_paths_bounded(&paths, 1, &mut plaintext_writer).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(store.verify().unwrap().total_revision_bytes, 1);
     }

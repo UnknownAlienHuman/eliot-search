@@ -14,6 +14,7 @@ use crate::sealed_store::{MAX_PLAINTEXT_BYTES, SensitiveBytes};
 /// Closed final-handle read failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum FinalFileReadError {
+    #[cfg(not(windows))]
     /// The current platform does not provide the Windows final-handle adapter.
     UnsupportedPlatform,
     /// The requested path could not be opened.
@@ -37,6 +38,7 @@ impl FinalFileReadError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_FILE_READER_UNSUPPORTED_PLATFORM",
             Self::OpenFailed => "SEALED_FILE_READER_OPEN_FAILED",
             Self::NotRegularFile => "SEALED_FILE_READER_NOT_REGULAR",
@@ -57,8 +59,26 @@ impl fmt::Display for FinalFileReadError {
 
 impl std::error::Error for FinalFileReadError {}
 
-/// Content-free same-handle read evidence.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// Timestamp stability observed from the final handle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReadStability {
+    /// Last-write timestamp remained stable during the read.
+    pub last_write_stable: bool,
+    /// Creation timestamp remained stable during the read.
+    pub creation_time_stable: bool,
+}
+
+/// Handle and reparse integrity observed from the final handle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReadIntegrity {
+    /// The same open final handle supplied both observations and all bytes.
+    pub same_handle_verified: bool,
+    /// Reparse attributes were absent before and after reading.
+    pub reparse_free: bool,
+}
+
+/// Content-free receipt for one exact final-handle read.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FinalFileReadReceipt {
     /// Exact byte count read from the final handle.
     pub byte_length: u64,
@@ -66,14 +86,10 @@ pub struct FinalFileReadReceipt {
     pub volume_serial: Option<u32>,
     /// Native stable file index observed from the final handle.
     pub file_index: Option<u64>,
-    /// Last-write timestamp remained stable during the read.
-    pub last_write_stable: bool,
-    /// Creation timestamp remained stable during the read.
-    pub creation_time_stable: bool,
-    /// The same open final handle supplied both observations and all bytes.
-    pub same_handle_verified: bool,
-    /// Reparse attributes were absent before and after reading.
-    pub reparse_free: bool,
+    /// Timestamp stability observed from the final handle.
+    pub stability: ReadStability,
+    /// Handle and reparse integrity observed from the final handle.
+    pub integrity: ReadIntegrity,
 }
 
 /// Bounded plaintext and content-free final-handle evidence.
@@ -114,8 +130,8 @@ mod platform {
 #[cfg(windows)]
 mod platform {
     use super::{
-        FinalFileRead, FinalFileReadError, FinalFileReadReceipt,
-        MAX_PLAINTEXT_BYTES, SensitiveBytes,
+        FinalFileRead, FinalFileReadError, FinalFileReadReceipt, ReadIntegrity,
+        ReadStability, MAX_PLAINTEXT_BYTES, SensitiveBytes,
     };
     use std::fs::{self, File, OpenOptions};
     use std::io::Read;
@@ -198,10 +214,14 @@ mod platform {
                 byte_length: before.length,
                 volume_serial: before.volume_serial,
                 file_index: before.file_index,
-                last_write_stable: true,
-                creation_time_stable: true,
-                same_handle_verified: true,
-                reparse_free: true,
+                stability: ReadStability {
+                    last_write_stable: true,
+                    creation_time_stable: true,
+                },
+                integrity: ReadIntegrity {
+                    same_handle_verified: true,
+                    reparse_free: true,
+                },
             },
         })
     }

@@ -18,7 +18,7 @@ pub fn put_idempotent_verified(
     data_root: &Path,
     operation_id: &str,
     object_id: &str,
-    plaintext: SensitiveBytes,
+    plaintext: &SensitiveBytes,
 ) -> Result<SealedTransactionReceipt, SealedTransactionError> {
     let receipt = put_idempotent(
         data_root,

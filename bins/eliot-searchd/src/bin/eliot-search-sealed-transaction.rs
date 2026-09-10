@@ -16,7 +16,7 @@ use std::process::ExitCode;
 use sealed_store::{MAX_PLAINTEXT_BYTES, SensitiveBytes};
 use sealed_transaction::{put_idempotent, transaction_status};
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-search-sealed-transaction\n\n",
         "USAGE:\n",
@@ -54,11 +54,12 @@ fn run() -> Result<(), String> {
     }
     match command {
         "put" if arguments.len() == 4 => {
+            let plaintext = read_plaintext()?;
             let receipt = put_idempotent(
                 Path::new(&arguments[1]),
                 &arguments[2],
                 &arguments[3],
-                read_plaintext()?,
+                &plaintext,
             )
             .map_err(|error| error.code().to_owned())?;
             println!(

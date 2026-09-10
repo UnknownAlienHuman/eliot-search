@@ -13,15 +13,15 @@ use crate::sha256;
 use crate::source_fence::digest as source_fence;
 
 /// Maximum simultaneous result handles.
-pub(crate) const MAX_RESULT_HANDLES: usize = 50_000;
+pub const MAX_RESULT_HANDLES: usize = 50_000;
 /// Maximum exact bytes returned by one handle expansion.
-pub(crate) const MAX_HANDLE_EXPANSION_BYTES: u64 = 24 * 1024;
+pub const MAX_HANDLE_EXPANSION_BYTES: u64 = 24 * 1024;
 /// Finite process-local handle lifetime.
-pub(crate) const RESULT_HANDLE_TTL: Duration = Duration::from_secs(15 * 60);
+pub const RESULT_HANDLE_TTL: Duration = Duration::from_mins(15);
 
 /// Closed result-handle failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ResultHandleError {
+pub enum ResultHandleError {
     CapacityExceeded,
     TokenExhausted,
     NotFound,
@@ -53,7 +53,7 @@ impl ResultHandleError {
 
 /// Public non-self-describing handle attached to one match.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PublicHandledMatch {
+pub struct PublicHandledMatch {
     pub(crate) source_handle: String,
     pub(crate) evidence_id: String,
     pub(crate) byte_start: usize,
@@ -76,7 +76,7 @@ struct ResultHandleRecord {
 
 /// Exact bounded expansion of one opaque handle.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ResultHandleExpansion {
+pub struct ResultHandleExpansion {
     pub(crate) source_handle: String,
     pub(crate) byte_start: u64,
     pub(crate) byte_end: u64,
@@ -86,7 +86,7 @@ pub(crate) struct ResultHandleExpansion {
 
 /// Finite process-local result-handle catalog for one owner session.
 #[derive(Debug)]
-pub(crate) struct ResultHandleCatalog {
+pub struct ResultHandleCatalog {
     session_nonce: [u8; 32],
     next_counter: u64,
     records: BTreeMap<String, ResultHandleRecord>,

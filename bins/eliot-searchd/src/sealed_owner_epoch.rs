@@ -30,6 +30,7 @@ const ZERO_DIGEST_HEX: &str =
 /// Closed owner-epoch failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum OwnerEpochError {
+    #[cfg(not(windows))]
     /// Windows owner-epoch adapter is unavailable on this platform.
     UnsupportedPlatform,
     /// Historical epoch filename, record, or ordering is malformed.
@@ -59,6 +60,7 @@ impl OwnerEpochError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_OWNER_EPOCH_UNSUPPORTED_PLATFORM",
             Self::ChainInvalid => "SEALED_OWNER_EPOCH_CHAIN_INVALID",
             Self::ChainGap => "SEALED_OWNER_EPOCH_CHAIN_GAP",
@@ -185,9 +187,9 @@ impl OwnerEpochRecord {
             return Err(OwnerEpochError::ChainInvalid);
         }
         let record = Self {
-            format_version: parse_u16(take(&mut fields, "format_version")?)?,
-            epoch: parse_u64(take(&mut fields, "epoch")?)?,
-            previous_epoch: parse_u64(take(&mut fields, "previous_epoch")?)?,
+            format_version: parse_u16(&take(&mut fields, "format_version")?)?,
+            epoch: parse_u64(&take(&mut fields, "epoch")?)?,
+            previous_epoch: parse_u64(&take(&mut fields, "previous_epoch")?)?,
             previous_record_sha256: Sha256Digest::from_hex(&take(
                 &mut fields,
                 "previous_record_sha256",
@@ -238,21 +240,9 @@ impl OwnerEpochGuard {
         self.record_sha256
     }
 
-    /// Immutable sealed epoch object identity.
-    #[must_use]
-    pub fn object_id(&self) -> &str {
-        &self.object_id
-    }
-
-    /// Idempotent epoch transaction identity.
-    #[must_use]
-    pub fn transaction_id(&self) -> &str {
-        &self.transaction_id
-    }
-
     /// Whether the exact OS data-root lock remains held.
     #[must_use]
-    pub fn root_lock_held(&self) -> bool {
+    pub const fn root_lock_held(&self) -> bool {
         self.root_lease.is_held()
     }
 }
@@ -267,6 +257,8 @@ impl fmt::Debug for OwnerEpochGuard {
             .field("object_id", &self.object_id)
             .field("transaction_id", &self.transaction_id)
             .field("root_lock_held", &self.root_lock_held())
+            .field("record", &"<redacted>")
+            .field("root_lease", &"<redacted>")
             .finish()
     }
 }
@@ -297,7 +289,7 @@ fn parse_epoch_object_id(value: &str) -> Result<u64, OwnerEpochError> {
     Ok(epoch)
 }
 
-fn require_epoch_capacity(records: usize) -> Result<(), OwnerEpochError> {
+const fn require_epoch_capacity(records: usize) -> Result<(), OwnerEpochError> {
     if records >= MAX_OWNER_EPOCH_RECORDS {
         Err(OwnerEpochError::EpochExhausted)
     } else {
@@ -312,7 +304,7 @@ fn take(
     fields.remove(key).ok_or(OwnerEpochError::ChainInvalid)
 }
 
-fn parse_u64(value: String) -> Result<u64, OwnerEpochError> {
+fn parse_u64(value: &str) -> Result<u64, OwnerEpochError> {
     if value.starts_with('+') || (value.starts_with('0') && value.len() > 1) {
         return Err(OwnerEpochError::ChainInvalid);
     }
@@ -321,7 +313,7 @@ fn parse_u64(value: String) -> Result<u64, OwnerEpochError> {
         .map_err(|_| OwnerEpochError::ChainInvalid)
 }
 
-fn parse_u16(value: String) -> Result<u16, OwnerEpochError> {
+fn parse_u16(value: &str) -> Result<u16, OwnerEpochError> {
     if value.starts_with('+') || (value.starts_with('0') && value.len() > 1) {
         return Err(OwnerEpochError::ChainInvalid);
     }
@@ -390,10 +382,10 @@ mod platform {
                 || record.previous_epoch != previous_epoch
                 || record.root_binding_sha256 != root_binding
             {
-                return Err(if record.root_binding_sha256 != root_binding {
-                    OwnerEpochError::RootBindingMismatch
-                } else {
+                return Err(if record.root_binding_sha256 == root_binding {
                     OwnerEpochError::PredecessorMismatch
+                } else {
+                    OwnerEpochError::RootBindingMismatch
                 });
             }
             if record.previous_record_sha256 != previous_digest {
@@ -409,7 +401,7 @@ mod platform {
                 data_root,
                 &transaction,
                 epoch_object_id,
-                SensitiveBytes::new(canonical.into_bytes())?,
+                &SensitiveBytes::new(canonical.into_bytes())?,
             )?;
             if receipt.object_id != *epoch_object_id {
                 return Err(OwnerEpochError::ChainInvalid);
@@ -436,7 +428,7 @@ mod platform {
             data_root,
             &transaction_id,
             &object_id,
-            SensitiveBytes::new(encoded.into_bytes())?,
+            &SensitiveBytes::new(encoded.into_bytes())?,
         )?;
         if receipt.object_id != object_id
             || receipt.operation_id != transaction_id
@@ -584,7 +576,7 @@ mod tests {
         ] {
             assert_eq!(parse_epoch_object_id(value), Err(OwnerEpochError::ChainInvalid));
         }
-        assert_eq!(parse_u64("01".to_owned()), Err(OwnerEpochError::ChainInvalid));
+        assert_eq!(parse_u64("01"), Err(OwnerEpochError::ChainInvalid));
     }
 
     #[test]

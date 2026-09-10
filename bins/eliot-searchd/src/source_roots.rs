@@ -9,13 +9,13 @@ use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 
-pub(crate) const MAX_SOURCE_ROOTS: usize = 32;
-pub(crate) const MAX_SOURCE_ROOT_FILE_BYTES: usize = 64 * 1024;
-pub(crate) const MAX_SOURCE_ROOT_PATH_BYTES: usize = 512;
+pub const MAX_SOURCE_ROOTS: usize = 32;
+pub const MAX_SOURCE_ROOT_FILE_BYTES: usize = 64 * 1024;
+pub const MAX_SOURCE_ROOT_PATH_BYTES: usize = 512;
 const HEADER: &str = "# ELIOT Search source roots v1";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) enum SourceRootState {
+pub enum SourceRootState {
     Available,
     Missing,
     NotDirectory,
@@ -42,14 +42,14 @@ struct SourceRootEntry {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SourceRootView {
+pub struct SourceRootView {
     pub(crate) index: usize,
     pub(crate) path: String,
     pub(crate) state: SourceRootState,
 }
 
 #[derive(Debug)]
-pub(crate) struct SourceRootCatalog {
+pub struct SourceRootCatalog {
     config_path: PathBuf,
     entries: Vec<SourceRootEntry>,
     excluded_data_root: Option<PathBuf>,
@@ -68,7 +68,10 @@ impl SourceRootCatalog {
         reject_symlink(&control)?;
         if !control.try_exists().map_err(SourceRootError::ConfigIo)? {
             fs::create_dir(&control).map_err(SourceRootError::ConfigIo)?;
+            #[cfg(unix)]
             sync_directory(&canonical)?;
+            #[cfg(not(unix))]
+            sync_directory(&canonical);
         }
         if !fs::symlink_metadata(&control).map_err(SourceRootError::ConfigIo)?.is_dir()
             || fs::canonicalize(&control).map_err(SourceRootError::ConfigIo)? != control
@@ -115,7 +118,7 @@ impl SourceRootCatalog {
         Ok(catalog)
     }
 
-    pub(crate) fn configured_count(&self) -> usize {
+    pub(crate) const fn configured_count(&self) -> usize {
         self.entries.len()
     }
 
@@ -189,13 +192,12 @@ impl SourceRootCatalog {
     pub(crate) fn remove(&mut self, requested: &Path) -> Result<String, SourceRootError> {
         self.ensure_usable()?;
         let index = self.entries.iter().position(|entry| entry.configured_path == requested);
-        let index = match index {
-            Some(index) => index,
-            None => {
-                let canonical = canonicalize_new_root(requested)?;
-                self.entries.iter().position(|entry| entry.configured_path == canonical)
-                    .ok_or(SourceRootError::RootNotFound)?
-            }
+        let index = if let Some(index) = index {
+            index
+        } else {
+            let canonical = canonicalize_new_root(requested)?;
+            self.entries.iter().position(|entry| entry.configured_path == canonical)
+                .ok_or(SourceRootError::RootNotFound)?
         };
         let removed = path_text(&self.entries[index].configured_path)?.to_owned();
         let mut staged = self.entries.clone();
@@ -213,7 +215,7 @@ impl SourceRootCatalog {
         Ok(())
     }
 
-    fn ensure_usable(&self) -> Result<(), SourceRootError> {
+    const fn ensure_usable(&self) -> Result<(), SourceRootError> {
         if self.needs_reopen {
             Err(SourceRootError::UpdateOutcomeUnknown)
         } else {
@@ -411,12 +413,23 @@ fn persist_entries(path: &Path, entries: &[SourceRootEntry]) -> Result<(), Sourc
     // From this point the previous current path may have moved. Any failure
     // requires reopening/recovery; continuing with old in-memory roots is unsafe.
     fs::rename(&temporary, path).map_err(|_| SourceRootError::UpdateOutcomeUnknown)?;
+    #[cfg(unix)]
     sync_directory(parent).map_err(|_| SourceRootError::UpdateOutcomeUnknown)?;
+    #[cfg(not(unix))]
+    sync_directory(parent);
     if load_configured_paths(path).map_err(|_| SourceRootError::UpdateOutcomeUnknown)? != expected {
         return Err(SourceRootError::UpdateOutcomeUnknown);
     }
     remove_plain_file_if_present(&backup).map_err(|_| SourceRootError::UpdateOutcomeUnknown)?;
-    sync_directory(parent).map_err(|_| SourceRootError::UpdateOutcomeUnknown)
+    #[cfg(unix)]
+    {
+        sync_directory(parent).map_err(|_| SourceRootError::UpdateOutcomeUnknown)
+    }
+    #[cfg(not(unix))]
+    {
+        sync_directory(parent);
+        Ok(())
+    }
 }
 
 fn recover_interrupted_update(path: &Path) -> Result<(), SourceRootError> {
@@ -434,7 +447,10 @@ fn recover_interrupted_update(path: &Path) -> Result<(), SourceRootError> {
     } else if backup_exists {
         load_configured_paths(&backup)?;
         fs::rename(&backup, path).map_err(SourceRootError::ConfigIo)?;
+        #[cfg(unix)]
         sync_directory(path.parent().ok_or(SourceRootError::InvalidConfigPath)?)?;
+        #[cfg(not(unix))]
+        sync_directory(path.parent().ok_or(SourceRootError::InvalidConfigPath)?);
     }
     remove_plain_file_if_present(&temporary)
 }
@@ -479,14 +495,13 @@ fn sync_directory(path: &Path) -> Result<(), SourceRootError> {
 }
 
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<(), SourceRootError> {
+const fn sync_directory(_path: &Path) {
     // Windows power-loss durability needs native qualification; no such receipt
     // is emitted by this observation-registration adapter.
-    Ok(())
 }
 
 #[derive(Debug)]
-pub(crate) enum SourceRootError {
+pub enum SourceRootError {
     RootLimitExceeded,
     RootNotFound,
     RootNotDirectory,
@@ -546,14 +561,14 @@ impl std::error::Error for SourceRootError {
 /// Exact persisted registration input. No current-path probes, recovery or new owner.
 /// Paths are retained internally for a future importer; diagnostics must redact them.
 #[derive(Eq, PartialEq)]
-pub(crate) struct RootMigrationInput {
+pub struct RootMigrationInput {
     pub(crate) paths: Vec<PathBuf>,
     pub(crate) file_bytes: Option<Vec<u8>>,
 }
 
-/// Reads registration without invoking load_owned/load or recovering .tmp/.bak files.
+/// Reads registration without invoking `load_owned/load` or recovering .tmp/.bak files.
 /// Absence is explicit and is not proof that no registration existed previously.
-pub(crate) fn migration_input(data_root: &Path) -> Result<RootMigrationInput, SourceRootError> {
+pub fn migration_input(data_root: &Path) -> Result<RootMigrationInput, SourceRootError> {
     reject_symlink(data_root)?;
     let canonical = fs::canonicalize(data_root).map_err(SourceRootError::RootIo)?;
     let control = canonical.join("control");

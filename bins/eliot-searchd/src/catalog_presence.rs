@@ -10,7 +10,7 @@ use std::path::Path;
 
 /// Initialization is permitted only when neither catalog file nor residual
 /// corpus state exists. One missing catalog file is never a new installation.
-pub(crate) fn check_before_open(root: &Path) -> Result<(), String> {
+pub fn check_before_open(root: &Path) -> Result<(), String> {
     match catalog_files(root)? {
         (true, true) => Ok(()),
         (false, false) => require_fresh_payload_state(root),
@@ -19,7 +19,7 @@ pub(crate) fn check_before_open(root: &Path) -> Result<(), String> {
 }
 
 /// Verification and GC may inspect existing state, but must not initialize it.
-pub(crate) fn require_existing(root: &Path) -> Result<(), String> {
+pub fn require_existing(root: &Path) -> Result<(), String> {
     if catalog_files(root)? == (true, true) {
         Ok(())
     } else {

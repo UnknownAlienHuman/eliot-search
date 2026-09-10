@@ -11,7 +11,7 @@ use crate::development::{MAX_SCAN_INPUT_BYTES, MAX_SCAN_MATCHES, MAX_SCAN_QUERY_
     ScanCoverage, ScanMatch, ScanResult};
 use crate::sha256;
 
-pub(crate) const MAX_LAYOUT_BYTES: usize = 64 * 1024 * 1024 - 512;
+pub const MAX_LAYOUT_BYTES: usize = 64 * 1024 * 1024 - 512;
 const MATERIALIZATION: MaterializationLimits = MaterializationLimits {
     max_input_bytes: MAX_SCAN_INPUT_BYTES, max_output_bytes: MAX_SCAN_INPUT_BYTES, max_lines: 1_000_000,
 };
@@ -25,7 +25,7 @@ const LITERAL: LiteralLimits = LiteralLimits {
 };
 
 /// Bind every preparation algorithm/limit, not query options, into the disk key.
-pub(crate) fn profile_digest() -> [u8; 32] {
+pub fn profile_digest() -> [u8; 32] {
     let mut settings = Vec::new();
     for value in [MATERIALIZATION.max_input_bytes, MATERIALIZATION.max_output_bytes,
         MATERIALIZATION.max_lines, UNITIZATION.max_input_bytes, UNITIZATION.preferred_unit_bytes,
@@ -39,14 +39,14 @@ pub(crate) fn profile_digest() -> [u8; 32] {
     ])
 }
 
-pub(crate) fn validate_query(query: &str) -> Result<(), &'static str> {
+pub fn validate_query(query: &str) -> Result<(), &'static str> {
     if query.is_empty() { return Err("DIRECT_QUERY_EMPTY"); }
-    literal::validate_query(query, LITERAL).map_err(|error| error.code())
+    literal::validate_query(query, LITERAL).map_err(literal::LiteralError::code)
 }
 
 /// Canonical layout or a closed deterministic preparation gap, never source text.
 /// Storage failures are not encoded as content outcomes.
-pub(crate) fn encode_preparation(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
+pub fn encode_preparation(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
     // Keep the existing DIRECT precedence for invalid UTF-8 versus binary policy.
     if std::str::from_utf8(bytes).is_err() { return Ok(vec![1]); }
     let prepared = match materialize_utf8(bytes.to_vec(), MATERIALIZATION) {
@@ -68,20 +68,20 @@ pub(crate) fn encode_preparation(bytes: &[u8]) -> Result<Vec<u8>, &'static str> 
 }
 
 /// Search verified bytes using the saved exact layout. No preparation/storage write.
-pub(crate) fn scan_prepared(
+pub fn scan_prepared(
     text: &str, encoded: &[u8], query: &str, ascii_insensitive: bool,
 ) -> Result<ScanResult, &'static str> {
     validate_query(query)?;
     if let Some(reason) = preparation_gap(encoded)? { return Err(reason); }
     let layout = encoded.get(1..).ok_or("DIRECT_PREPARATION_INVALID")?;
     let (lines, units) = UNITIZATION.decode_layout(text, layout, MAX_LAYOUT_BYTES)
-        .map_err(|error| error.code())?;
+        .map_err(UnitizationError::code)?;
     scan_layout(text, &lines, &units, query, ascii_insensitive, LITERAL)
 }
 
 /// Decode only the outcome framing; source/layout validation remains mandatory for reads.
 /// Reused by storage acknowledgements so a saved unsupported input is not reported as a layout.
-pub(crate) fn preparation_gap(encoded: &[u8]) -> Result<Option<&'static str>, &'static str> {
+pub const fn preparation_gap(encoded: &[u8]) -> Result<Option<&'static str>, &'static str> {
     match encoded {
         [0, layout @ ..] if !layout.is_empty() => Ok(None),
         [1] => Ok(Some("DIRECT_REVISION_NOT_UTF8")),
@@ -106,7 +106,7 @@ fn scan_layout(
 ) -> Result<ScanResult, &'static str> {
     let chunks = units.iter().map(|unit| text.get(unit.source_start..unit.source_end)
         .ok_or("DIRECT_PREPARATION_COORDINATE_INVALID")).collect::<Result<Vec<_>, _>>()?;
-    let result = literal::scan_chunks(&chunks, query, ascii_insensitive, limits).map_err(|error| error.code())?;
+    let result = literal::scan_chunks(&chunks, query, ascii_insensitive, limits).map_err(literal::LiteralError::code)?;
     let complete = result.complete();
     let matches = result.matches.into_iter().map(|range| {
         let start = u64::try_from(range.start).map_err(|_| "DIRECT_PREPARATION_COORDINATE_INVALID")?;
@@ -126,7 +126,7 @@ fn scan_layout(
 
 // Preserve the existing pure regression entrypoint; product queries use scan_prepared.
 #[cfg(test)]
-pub(crate) fn prepare_and_scan(text: String, query: &str, insensitive: bool) -> Result<ScanResult, &'static str> {
+pub fn prepare_and_scan(text: String, query: &str, insensitive: bool) -> Result<ScanResult, &'static str> {
     validate_query(query)?;
     scan_with_limits(text, query, insensitive, MATERIALIZATION, UNITIZATION, LITERAL)
 }
@@ -135,9 +135,9 @@ fn scan_with_limits(
     text: String, query: &str, insensitive: bool, materialization: MaterializationLimits,
     unitization: UnitizationLimits, literal: LiteralLimits,
 ) -> Result<ScanResult, &'static str> {
-    let prepared = materialize_utf8(text.into_bytes(), materialization).map_err(|error| error.code())?;
+    let prepared = materialize_utf8(text.into_bytes(), materialization).map_err(MaterializationError::code)?;
     let lines = line_spans(prepared.lines());
-    let units = unitize_text(prepared.text(), &lines, unitization).map_err(|error| error.code())?;
+    let units = unitize_text(prepared.text(), &lines, unitization).map_err(UnitizationError::code)?;
     scan_layout(prepared.text(), &lines, &units, query, insensitive, literal)
 }
 

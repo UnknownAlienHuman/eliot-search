@@ -5,9 +5,10 @@
 //! text, excerpts, credentials, and unrestricted paths are excluded.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::fmt::Write as _;
 
 const SCHEMA_VERSION: u64 = 1;
 const MAX_STATE_BYTES: usize = 16 * 1024;
@@ -62,7 +63,7 @@ impl Lifecycle {
 
 /// Snapshot fields admitted to technical control state.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SnapshotControl {
+pub struct SnapshotControl {
     pub(crate) snapshot_id: String,
     pub(crate) manifest_fingerprint: String,
     pub(crate) fingerprint_algorithm: String,
@@ -108,38 +109,73 @@ struct ControlState {
     snapshot: Option<SnapshotControl>,
 }
 
+/// Assembles the optional snapshot section after all state lines are parsed.
+fn assemble_snapshot(
+    snapshot_present: bool,
+    snapshot_id: Option<String>,
+    manifest_fingerprint: Option<String>,
+    fingerprint_algorithm: Option<String>,
+    indexed_files: Option<usize>,
+    total_bytes: Option<u64>,
+    capture_complete: Option<bool>,
+) -> Result<Option<SnapshotControl>, String> {
+    if snapshot_present {
+        let snapshot = SnapshotControl {
+            snapshot_id: snapshot_id
+                .ok_or_else(|| "CONTROL_STORE_SNAPSHOT_ID_MISSING".to_owned())?,
+            manifest_fingerprint: manifest_fingerprint.ok_or_else(|| {
+                "CONTROL_STORE_MANIFEST_FINGERPRINT_MISSING".to_owned()
+            })?,
+            fingerprint_algorithm: fingerprint_algorithm.ok_or_else(|| {
+                "CONTROL_STORE_FINGERPRINT_ALGORITHM_MISSING".to_owned()
+            })?,
+            indexed_files: indexed_files
+                .ok_or_else(|| "CONTROL_STORE_INDEXED_FILES_MISSING".to_owned())?,
+            total_bytes: total_bytes
+                .ok_or_else(|| "CONTROL_STORE_TOTAL_BYTES_MISSING".to_owned())?,
+            capture_complete: capture_complete
+                .ok_or_else(|| "CONTROL_STORE_CAPTURE_STATE_MISSING".to_owned())?,
+        };
+        snapshot.validate()?;
+        Ok(Some(snapshot))
+    } else {
+        if snapshot_id.is_some()
+            || manifest_fingerprint.is_some()
+            || fingerprint_algorithm.is_some()
+            || indexed_files.is_some()
+            || total_bytes.is_some()
+            || capture_complete.is_some()
+        {
+            return Err("CONTROL_STORE_SNAPSHOT_FIELDS_UNEXPECTED".to_owned());
+        }
+        Ok(None)
+    }
+}
+
 impl ControlState {
     fn serialize(&self) -> Result<Vec<u8>, String> {
         let mut output = String::new();
         output.push_str("ELIOT_SEARCH_CONTROL_STATE_V1\n");
-        output.push_str(&format!("schema={}\n", self.schema));
-        output.push_str(&format!("generation={}\n", self.generation));
-        output.push_str(&format!("lifecycle={}\n", self.lifecycle.as_str()));
-        output.push_str(&format!("pid={}\n", self.pid));
-        output.push_str(&format!("started_unix_ms={}\n", self.started_unix_ms));
-        output.push_str(&format!(
-            "recovered_previous_active={}\n",
-            self.recovered_previous_active
-        ));
+        let _ = writeln!(output, "schema={}", self.schema);
+        let _ = writeln!(output, "generation={}", self.generation);
+        let _ = writeln!(output, "lifecycle={}", self.lifecycle.as_str());
+        let _ = writeln!(output, "pid={}", self.pid);
+        let _ = writeln!(output, "started_unix_ms={}", self.started_unix_ms);
+        let _ = writeln!(output, "recovered_previous_active={}",
+            self.recovered_previous_active);
         match &self.snapshot {
             Some(snapshot) => {
                 snapshot.validate()?;
                 output.push_str("snapshot_present=true\n");
-                output.push_str(&format!("snapshot_id={}\n", snapshot.snapshot_id));
-                output.push_str(&format!(
-                    "manifest_fingerprint={}\n",
-                    snapshot.manifest_fingerprint
-                ));
-                output.push_str(&format!(
-                    "fingerprint_algorithm={}\n",
-                    snapshot.fingerprint_algorithm
-                ));
-                output.push_str(&format!("indexed_files={}\n", snapshot.indexed_files));
-                output.push_str(&format!("total_bytes={}\n", snapshot.total_bytes));
-                output.push_str(&format!(
-                    "capture_complete={}\n",
-                    snapshot.capture_complete
-                ));
+                let _ = writeln!(output, "snapshot_id={}", snapshot.snapshot_id);
+                let _ = writeln!(output, "manifest_fingerprint={}",
+                    snapshot.manifest_fingerprint);
+                let _ = writeln!(output, "fingerprint_algorithm={}",
+                    snapshot.fingerprint_algorithm);
+                let _ = writeln!(output, "indexed_files={}", snapshot.indexed_files);
+                let _ = writeln!(output, "total_bytes={}", snapshot.total_bytes);
+                let _ = writeln!(output, "capture_complete={}",
+                    snapshot.capture_complete);
             }
             None => output.push_str("snapshot_present=false\n"),
         }
@@ -219,42 +255,16 @@ impl ControlState {
         if schema != SCHEMA_VERSION {
             return Err("CONTROL_STORE_SCHEMA_MISMATCH".to_owned());
         }
-        let snapshot = match snapshot_present
-            .ok_or_else(|| "CONTROL_STORE_SNAPSHOT_FLAG_MISSING".to_owned())?
-        {
-            true => {
-                let snapshot = SnapshotControl {
-                    snapshot_id: snapshot_id
-                        .ok_or_else(|| "CONTROL_STORE_SNAPSHOT_ID_MISSING".to_owned())?,
-                    manifest_fingerprint: manifest_fingerprint.ok_or_else(|| {
-                        "CONTROL_STORE_MANIFEST_FINGERPRINT_MISSING".to_owned()
-                    })?,
-                    fingerprint_algorithm: fingerprint_algorithm.ok_or_else(|| {
-                        "CONTROL_STORE_FINGERPRINT_ALGORITHM_MISSING".to_owned()
-                    })?,
-                    indexed_files: indexed_files
-                        .ok_or_else(|| "CONTROL_STORE_INDEXED_FILES_MISSING".to_owned())?,
-                    total_bytes: total_bytes
-                        .ok_or_else(|| "CONTROL_STORE_TOTAL_BYTES_MISSING".to_owned())?,
-                    capture_complete: capture_complete
-                        .ok_or_else(|| "CONTROL_STORE_CAPTURE_STATE_MISSING".to_owned())?,
-                };
-                snapshot.validate()?;
-                Some(snapshot)
-            }
-            false => {
-                if snapshot_id.is_some()
-                    || manifest_fingerprint.is_some()
-                    || fingerprint_algorithm.is_some()
-                    || indexed_files.is_some()
-                    || total_bytes.is_some()
-                    || capture_complete.is_some()
-                {
-                    return Err("CONTROL_STORE_SNAPSHOT_FIELDS_UNEXPECTED".to_owned());
-                }
-                None
-            }
-        };
+        let snapshot = assemble_snapshot(
+            snapshot_present
+                .ok_or_else(|| "CONTROL_STORE_SNAPSHOT_FLAG_MISSING".to_owned())?,
+            snapshot_id,
+            manifest_fingerprint,
+            fingerprint_algorithm,
+            indexed_files,
+            total_bytes,
+            capture_complete,
+        )?;
         Ok(Self {
             schema,
             generation: generation
@@ -272,7 +282,7 @@ impl ControlState {
 }
 
 /// Alternating-file lifecycle store with exact readback after every write.
-pub(crate) struct DevelopmentControlStore {
+pub struct DevelopmentControlStore {
     directory: PathBuf,
     active_slot: Slot,
     state: ControlState,
@@ -327,11 +337,11 @@ impl DevelopmentControlStore {
         self.advance(Lifecycle::Stopped, self.state.snapshot.clone())
     }
 
-    pub(crate) fn generation(&self) -> u64 {
+    pub(crate) const fn generation(&self) -> u64 {
         self.state.generation
     }
 
-    pub(crate) fn recovered_previous_active(&self) -> bool {
+    pub(crate) const fn recovered_previous_active(&self) -> bool {
         self.state.recovered_previous_active
     }
 
@@ -456,5 +466,5 @@ fn unix_millis() -> Result<u128, String> {
 
 #[allow(dead_code)]
 fn io_error(code: &'static str) -> io::Error {
-    io::Error::new(ErrorKind::Other, code)
+    io::Error::other(code)
 }

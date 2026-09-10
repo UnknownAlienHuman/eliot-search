@@ -8,9 +8,9 @@ use crate::result_handles::{PublicHandledMatch, ResultHandleExpansion};
 use crate::sha256;
 use crate::storage_security::StorageSecurityStatus;
 
-pub(crate) const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+pub const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
-pub(crate) fn emit_indexed_source(
+pub fn emit_indexed_source(
     writer: &mut impl Write,
     source: &IndexedSource,
     invalidated_continuations: usize,
@@ -46,7 +46,7 @@ pub(crate) fn emit_indexed_source(
     )
 }
 
-pub(crate) fn emit_streaming_search(
+pub fn emit_streaming_search(
     writer: &mut impl Write,
     namespace_id: &str,
     result: &StoreSearchResult,
@@ -107,7 +107,7 @@ pub(crate) fn emit_streaming_search(
     )
 }
 
-pub(crate) fn emit_search_page(
+pub fn emit_search_page(
     writer: &mut impl Write,
     page: &SearchPage,
     public_matches: &[PublicHandledMatch],
@@ -184,21 +184,21 @@ pub(crate) fn emit_search_page(
             page.coverage.registered_sources,
             page.coverage.active_sources,
             page.coverage.searched_sources,
-            page.coverage.corpus_complete,
+            page.coverage.completion.corpus_complete,
             page.coverage.complete(),
-            page.coverage.match_limit_reached,
+            page.coverage.completion.match_limit_reached,
             page.coverage.total_matches,
             page.coverage.retained_matches,
-            page.coverage.candidate_window_truncated,
+            page.coverage.truncation.candidate_window_truncated,
             page.coverage.gap_count,
-            page.coverage.gap_details_truncated,
+            page.coverage.truncation.gap_details_truncated,
             json_string(storage.backend),
             storage.encrypted_at_rest,
         ),
     )
 }
 
-pub(crate) fn emit_handle_expansion(
+pub fn emit_handle_expansion(
     writer: &mut impl Write,
     expansion: &ResultHandleExpansion,
     storage: &StorageSecurityStatus,
@@ -282,7 +282,7 @@ fn emit_public_match(
     )
 }
 
-pub(crate) fn write_line(writer: &mut impl Write, value: &str) -> Result<(), String> {
+pub fn write_line(writer: &mut impl Write, value: &str) -> Result<(), String> {
     if value.len() > MAX_RESPONSE_BYTES {
         return Err("SERVICE_RESPONSE_TOO_LARGE".to_owned());
     }
@@ -293,14 +293,14 @@ pub(crate) fn write_line(writer: &mut impl Write, value: &str) -> Result<(), Str
         .map_err(|error| format!("SERVICE_WRITE_ERROR:{error}"))
 }
 
-pub(crate) fn write_error(writer: &mut impl Write, error: &str) -> Result<(), String> {
+pub fn write_error(writer: &mut impl Write, error: &str) -> Result<(), String> {
     write_line(
         writer,
         &format!("{{\"event\":\"error\",\"error\":{}}}", json_string(error)),
     )
 }
 
-pub(crate) fn json_string(value: &str) -> String {
+pub fn json_string(value: &str) -> String {
     let mut output = String::with_capacity(value.len().saturating_add(2));
     output.push('"');
     for character in value.chars() {

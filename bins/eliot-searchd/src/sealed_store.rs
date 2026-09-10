@@ -1,4 +1,4 @@
-//! Windows CurrentUser DPAPI-backed immutable sealed-object storage.
+//! Windows `CurrentUser` DPAPI-backed immutable sealed-object storage.
 //!
 //! This module is a concrete platform adapter. It stores no plaintext on disk,
 //! does not invent cryptography, and never treats logical deletion as proof of
@@ -24,6 +24,7 @@ const HEADER_BYTES: usize = 8 + 2 + 2 + 8 + 8;
 /// Closed sealed-store failure. Display output never contains plaintext or paths.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SealedStoreError {
+    #[cfg(not(windows))]
     /// DPAPI is unavailable on the current platform.
     UnsupportedPlatform,
     /// The opaque object identifier is malformed.
@@ -61,6 +62,7 @@ impl SealedStoreError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_STORE_UNSUPPORTED_PLATFORM",
             Self::InvalidObjectId => "SEALED_STORE_OBJECT_ID_INVALID",
             Self::InvalidDataRoot => "SEALED_STORE_DATA_ROOT_INVALID",
@@ -282,7 +284,7 @@ impl Envelope {
 pub fn seal_immutable(
     data_root: &Path,
     object_id: &str,
-    plaintext: SensitiveBytes,
+    plaintext: &SensitiveBytes,
 ) -> Result<SealReceipt, SealedStoreError> {
     platform::seal_immutable(data_root, object_id, plaintext)
 }
@@ -344,7 +346,7 @@ mod platform {
     pub(super) fn seal_immutable(
         _data_root: &Path,
         _object_id: &str,
-        _plaintext: SensitiveBytes,
+        _plaintext: &SensitiveBytes,
     ) -> Result<SealReceipt, SealedStoreError> {
         Err(SealedStoreError::UnsupportedPlatform)
     }
@@ -436,8 +438,8 @@ mod platform {
     }
 
     impl LocalAllocation {
-        unsafe fn from_blob(
-            blob: DataBlob,
+        const unsafe fn from_blob(
+            blob: &DataBlob,
             wipe_before_free: bool,
         ) -> Result<Self, SealedStoreError> {
             if blob.pb_data.is_null() || blob.cb_data == 0 {
@@ -480,7 +482,7 @@ mod platform {
     pub(super) fn seal_immutable(
         data_root: &Path,
         object_id: &str,
-        plaintext: SensitiveBytes,
+        plaintext: &SensitiveBytes,
     ) -> Result<SealReceipt, SealedStoreError> {
         validate_object_id(object_id)?;
         let directory = ensure_store_directory(data_root, true)?;
@@ -574,7 +576,7 @@ mod platform {
         let directory = ensure_store_directory(data_root, false)?;
         let target = object_path(&directory, object_id);
         validate_regular_non_reparse(&target, false)?;
-        std::fs::remove_file(&target).map_err(map_not_found)?;
+        std::fs::remove_file(&target).map_err(|error| map_not_found(&error))?;
         if target.exists() {
             return Err(SealedStoreError::ReadbackMismatch);
         }
@@ -643,7 +645,7 @@ mod platform {
 
     fn read_envelope(path: &Path) -> Result<Envelope, SealedStoreError> {
         validate_regular_non_reparse(path, false)?;
-        let mut file = File::open(path).map_err(map_not_found)?;
+        let mut file = File::open(path).map_err(|error| map_not_found(&error))?;
         let before = file.metadata().map_err(|_| SealedStoreError::IoFailure)?;
         let before_identity = eliot_searchd::native_file::observe(&file)
             .map_err(|_| SealedStoreError::IoFailure)?;
@@ -749,20 +751,20 @@ mod platform {
         // the call; output ownership is transferred to `LocalAllocation`.
         let succeeded = unsafe {
             CryptProtectData(
-                &mut input,
+                &raw mut input,
                 description.as_ptr(),
-                &mut entropy_blob,
+                &raw mut entropy_blob,
                 null_mut(),
                 null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,
-                &mut output,
+                &raw mut output,
             )
         };
         if succeeded == 0 {
             return Err(SealedStoreError::DpapiFailure);
         }
         // SAFETY: successful DPAPI output is a LocalAlloc allocation.
-        let allocation = unsafe { LocalAllocation::from_blob(output, false)? };
+        let allocation = unsafe { LocalAllocation::from_blob(&output, false)? };
         if allocation.length > MAX_ENVELOPE_BYTES {
             return Err(SealedStoreError::EnvelopeTooLarge);
         }
@@ -788,13 +790,13 @@ mod platform {
         // description allocations are released below with `LocalFree`.
         let succeeded = unsafe {
             CryptUnprotectData(
-                &mut input,
-                &mut description,
-                &mut entropy_blob,
+                &raw mut input,
+                &raw mut description,
+                &raw mut entropy_blob,
                 null_mut(),
                 null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,
-                &mut output,
+                &raw mut output,
             )
         };
         if !description.is_null() {
@@ -808,7 +810,7 @@ mod platform {
         }
         // SAFETY: successful DPAPI output is a LocalAlloc allocation. It is
         // wiped before release because it contains plaintext.
-        let allocation = unsafe { LocalAllocation::from_blob(output, true)? };
+        let allocation = unsafe { LocalAllocation::from_blob(&output, true)? };
         if allocation.length > MAX_PLAINTEXT_BYTES {
             return Err(SealedStoreError::PlaintextTooLarge);
         }
@@ -827,7 +829,7 @@ mod platform {
         })
     }
 
-    fn map_not_found(error: io::Error) -> SealedStoreError {
+    fn map_not_found(error: &io::Error) -> SealedStoreError {
         if error.kind() == io::ErrorKind::NotFound {
             SealedStoreError::ObjectNotFound
         } else {

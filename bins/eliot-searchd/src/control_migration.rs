@@ -1,7 +1,7 @@
 //! Read-only, bounded source-history input for legacy control migration.
 //!
 //! The running service already holds the data-root owner. This operation creates
-//! no DirectStore, redb, source event, preparation object, or recovery receipt.
+//! no `DirectStore`, redb, source event, preparation object, or recovery receipt.
 //! A page is returned only after replay of the complete source chain succeeds.
 //! Root registration, directory manifests, payload verification and canonical
 //! H5 mapping are separate migration inputs, not implied by this source page.

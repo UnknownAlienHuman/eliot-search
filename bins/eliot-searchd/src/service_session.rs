@@ -25,7 +25,7 @@ pub(super) struct MutationAttempt {
 }
 
 impl MutationAttempt {
-    pub(super) fn arm(&mut self) {
+    pub(super) const fn arm(&mut self) {
         self.dispatched = true;
     }
 }

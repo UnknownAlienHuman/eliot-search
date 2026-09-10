@@ -82,7 +82,12 @@ pub(super) fn store(
     } else {
         SourceMappingImport::resume_with_content(file, binding, content_binding, deadline)
     }.map_err(|e| e.code().to_owned())?;
-    if created { sync_directory(directory)?; }
+    if created {
+        #[cfg(unix)]
+        sync_directory(directory)?;
+        #[cfg(not(unix))]
+        sync_directory(directory);
+    }
     let mut hash = PlanDigest::new();
     // Replay from event one even on resume: the adapter compares every already
     // committed row and index before dispatching the first new batch. Neither
@@ -107,7 +112,10 @@ pub(super) fn store(
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
         Err(_) => return Err("DIRECT_MIGRATION_IMPORT_PUBLISH_OUTCOME_UNKNOWN".to_owned()),
     };
+    #[cfg(unix)]
     sync_directory(directory)?;
+    #[cfg(not(unix))]
+    sync_directory(directory);
     // A competing existing target must match too. The final name never grants
     // integrity, complete accounting, or permission to activate the imported namespace.
     let final_file = verify(source, &final_path, binding, content_binding, expected, deadline)?;
@@ -220,7 +228,10 @@ impl ImportOutputGuard {
         guard.verify(deadline)?;
         if created {
             guard.file.sync_all().map_err(|_| "DIRECT_MIGRATION_OUTPUT_LOCK_SYNC_FAILED".to_owned())?;
+            #[cfg(unix)]
             sync_directory(directory)?;
+            #[cfg(not(unix))]
+            sync_directory(directory);
         }
         guard.verify(deadline)?;
         Ok(guard)
@@ -287,7 +298,10 @@ fn cleanup_published_alias(
         drop(pending_file);
         drop(published);
         fs::remove_file(pending).map_err(|_| "DIRECT_MIGRATION_IMPORT_CLEANUP_FAILED".to_owned())?;
+        #[cfg(unix)]
         sync_directory(&guard.directory)?;
+        #[cfg(not(unix))]
+        sync_directory(&guard.directory);
     }
     // Independent pending state is not an alias and is never discarded by this path.
     guard.verify(deadline)

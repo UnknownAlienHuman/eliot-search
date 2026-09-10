@@ -6,7 +6,7 @@ use crate::maintenance::{GarbageCollectionResult, collect_orphan_revisions};
 
 /// Runs a verified preview before destructive GC and refuses deletion when the
 /// revision tree contains any object outside the generated-object grammar.
-pub(crate) fn guarded_collect_orphan_revisions(
+pub fn guarded_collect_orphan_revisions(
     root: &Path,
     apply: bool,
 ) -> Result<GarbageCollectionResult, String> {

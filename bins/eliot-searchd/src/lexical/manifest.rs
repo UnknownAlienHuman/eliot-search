@@ -64,43 +64,12 @@ pub(super) fn load_manifest_documents(
             separator_seen = true;
             continue;
         }
-        let Some((key, value)) = line.split_once('=') else {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "malformed snapshot manifest field",
-            ));
-        };
-        match key {
-            "snapshot_id" => set_once(&mut snapshot_id, value.to_owned())?,
-            "fingerprint_algorithm" => {
-                set_once(&mut fingerprint_algorithm, value.to_owned())?;
-            }
-            "entries" => {
-                set_once(
-                    &mut entry_count,
-                    value.parse::<usize>().map_err(|_| {
-                        io::Error::new(
-                            ErrorKind::InvalidData,
-                            "invalid snapshot manifest entry count",
-                        )
-                    })?,
-                )?;
-            }
-            "source_roots"
-            | "total_bytes"
-            | "capture_truncated"
-            | "skipped_links"
-            | "skipped_policy"
-            | "skipped_binary"
-            | "unreadable_files"
-            | "unstable_files" => {}
-            _ => {
-                return Err(io::Error::new(
-                    ErrorKind::InvalidData,
-                    "unknown snapshot manifest field",
-                ));
-            }
-        }
+        parse_manifest_field(
+            line,
+            &mut snapshot_id,
+            &mut fingerprint_algorithm,
+            &mut entry_count,
+        )?;
     }
     if !separator_seen
         || snapshot_id.as_deref() != Some(expected_snapshot_id)
@@ -128,70 +97,12 @@ pub(super) fn load_manifest_documents(
     let mut documents = Vec::with_capacity(expected_count);
     let mut identities = BTreeSet::new();
     for line in entry_lines {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        if fields.len() != 5 {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "malformed snapshot manifest entry",
-            ));
-        }
-        let root_index = fields[0].parse::<usize>().map_err(|_| {
-            io::Error::new(ErrorKind::InvalidData, "invalid root index")
-        })?;
-        let relative_path_bytes = decode_hex(fields[1])?;
-        if relative_path_bytes.is_empty()
-            || relative_path_bytes.len() > MAX_RELATIVE_PATH_BYTES
-        {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "relative path exceeds its finite bounds",
-            ));
-        }
-        let relative_path = String::from_utf8(relative_path_bytes).map_err(|_| {
-            io::Error::new(ErrorKind::InvalidData, "relative path is not UTF-8")
-        })?;
-        if relative_path.starts_with('/')
-            || relative_path.contains("../")
-            || relative_path.contains("..\\")
-            || relative_path.contains('\0')
-        {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "relative path is not a safe locator",
-            ));
-        }
-        let revision_fingerprint = decode_hex_32(fields[2])?;
-        let byte_length = fields[3].parse::<u64>().map_err(|_| {
-            io::Error::new(ErrorKind::InvalidData, "invalid revision length")
-        })?;
-        let line_count = fields[4].parse::<usize>().map_err(|_| {
-            io::Error::new(ErrorKind::InvalidData, "invalid line count")
-        })?;
-        if byte_length > maximum_file_bytes {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "revision exceeds configured file ceiling",
-            ));
-        }
-        let digest = hex32(revision_fingerprint);
-        let revision_path = revisions_root
-            .join(&digest[..2])
-            .join(format!("{digest}.utf8"));
-        let identity = (root_index, relative_path.clone());
-        if !identities.insert(identity) {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                "snapshot manifest repeats a source locator",
-            ));
-        }
-        documents.push(ManifestDocument {
-            root_index,
-            relative_path,
-            revision_fingerprint,
-            revision_path,
-            byte_length,
-            line_count,
-        });
+        documents.push(parse_manifest_entry(
+            line,
+            &revisions_root,
+            maximum_file_bytes,
+            &mut identities,
+        )?);
     }
     if documents.windows(2).any(|pair| {
         (pair[0].root_index, pair[0].relative_path.as_str())
@@ -203,6 +114,137 @@ pub(super) fn load_manifest_documents(
         ));
     }
     Ok(documents)
+}
+
+/// Counts newline bytes with an explicit loop.
+fn count_newlines(bytes: &[u8]) -> usize {
+    let mut count = 0_usize;
+    for byte in bytes {
+        if *byte == b'\n' {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Parses one `key=value` manifest header field.
+fn parse_manifest_field(
+    line: &str,
+    snapshot_id: &mut Option<String>,
+    fingerprint_algorithm: &mut Option<String>,
+    entry_count: &mut Option<usize>,
+) -> io::Result<()> {
+    let Some((key, value)) = line.split_once('=') else {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "malformed snapshot manifest field",
+        ));
+    };
+    match key {
+        "snapshot_id" => set_once(snapshot_id, value.to_owned())?,
+        "fingerprint_algorithm" => {
+            set_once(fingerprint_algorithm, value.to_owned())?;
+        }
+        "entries" => {
+            set_once(
+                entry_count,
+                value.parse::<usize>().map_err(|_| {
+                    io::Error::new(
+                        ErrorKind::InvalidData,
+                        "invalid snapshot manifest entry count",
+                    )
+                })?,
+            )?;
+        }
+        "source_roots"
+        | "total_bytes"
+        | "capture_truncated"
+        | "skipped_links"
+        | "skipped_policy"
+        | "skipped_binary"
+        | "unreadable_files"
+        | "unstable_files" => {}
+        _ => {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "unknown snapshot manifest field",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Parses one tab-separated manifest entry into its retained document.
+fn parse_manifest_entry(
+    line: &str,
+    revisions_root: &Path,
+    maximum_file_bytes: u64,
+    identities: &mut BTreeSet<(usize, String)>,
+) -> io::Result<ManifestDocument> {
+    let fields = line.split('\t').collect::<Vec<_>>();
+    if fields.len() != 5 {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "malformed snapshot manifest entry",
+        ));
+    }
+    let root_index = fields[0].parse::<usize>().map_err(|_| {
+        io::Error::new(ErrorKind::InvalidData, "invalid root index")
+    })?;
+    let relative_path_bytes = decode_hex(fields[1])?;
+    if relative_path_bytes.is_empty()
+        || relative_path_bytes.len() > MAX_RELATIVE_PATH_BYTES
+    {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "relative path exceeds its finite bounds",
+        ));
+    }
+    let relative_path = String::from_utf8(relative_path_bytes).map_err(|_| {
+        io::Error::new(ErrorKind::InvalidData, "relative path is not UTF-8")
+    })?;
+    if relative_path.starts_with('/')
+        || relative_path.contains("../")
+        || relative_path.contains("..\\")
+        || relative_path.contains('\0')
+    {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "relative path is not a safe locator",
+        ));
+    }
+    let revision_fingerprint = decode_hex_32(fields[2])?;
+    let byte_length = fields[3].parse::<u64>().map_err(|_| {
+        io::Error::new(ErrorKind::InvalidData, "invalid revision length")
+    })?;
+    let line_count = fields[4].parse::<usize>().map_err(|_| {
+        io::Error::new(ErrorKind::InvalidData, "invalid line count")
+    })?;
+    if byte_length > maximum_file_bytes {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "revision exceeds configured file ceiling",
+        ));
+    }
+    let digest = hex32(revision_fingerprint);
+    let revision_path = revisions_root
+        .join(&digest[..2])
+        .join(format!("{digest}.utf8"));
+    let identity = (root_index, relative_path.clone());
+    if !identities.insert(identity) {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "snapshot manifest repeats a source locator",
+        ));
+    }
+    Ok(ManifestDocument {
+        root_index,
+        relative_path,
+        revision_fingerprint,
+        revision_path,
+        byte_length,
+        line_count,
+    })
 }
 
 pub(super) fn read_retained_document(
@@ -224,11 +266,7 @@ pub(super) fn read_retained_document(
     let actual_lines = if text.is_empty() {
         0
     } else {
-        text.as_bytes()
-            .iter()
-            .filter(|byte| **byte == b'\n')
-            .count()
-            .saturating_add(1)
+        count_newlines(text.as_bytes()).saturating_add(1)
     };
     if actual_lines != document.line_count {
         return Err(io::Error::new(
@@ -293,7 +331,7 @@ fn decode_hex(value: &str) -> io::Result<Vec<u8>> {
         ));
     }
     let mut output = Vec::with_capacity(value.len() / 2);
-    for pair in value.as_bytes().chunks_exact(2) {
+    for pair in value.as_bytes().as_chunks::<2>().0 {
         output.push((nibble(pair[0])? << 4) | nibble(pair[1])?);
     }
     Ok(output)
@@ -319,7 +357,7 @@ fn is_link_or_reparse(metadata: &fs::Metadata) -> bool {
     {
         use std::os::windows::fs::MetadataExt;
         const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
     }
     #[cfg(not(windows))]
     {

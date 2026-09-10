@@ -1,4 +1,4 @@
-//! Low-level immutable revision-object I/O; catalog replay belongs to DirectStore.
+//! Low-level immutable revision-object I/O; catalog replay belongs to `DirectStore`.
 
 #![allow(
     clippy::missing_errors_doc,
@@ -50,7 +50,7 @@ pub(super) fn read_regular_file(
             .map_err(|_| format!("{error_prefix}:TOO_LARGE"))?,
     );
     File::open(path)
-        .and_then(|mut file| {
+        .and_then(|file| {
             file.take(u64::try_from(max_bytes + 1).unwrap_or(u64::MAX))
                 .read_to_end(&mut bytes)
         })
@@ -109,7 +109,10 @@ pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), 
         Ok(()) => {
             fs::remove_file(&temporary)
                 .map_err(|error| format!("DIRECT_REVISION_TEMP_CLEANUP_ERROR:{error}"))?;
+            #[cfg(unix)]
             sync_directory(parent)?;
+            #[cfg(not(unix))]
+            sync_directory(parent);
             verify_encoded_object(path, bytes)
         }
         Err(error) => {
@@ -146,7 +149,15 @@ pub(super) fn remove_plaintext_after_readback(path: &Path) -> Result<(), String>
     let parent = path
         .parent()
         .ok_or_else(|| "DIRECT_REVISION_PARENT_MISSING".to_owned())?;
-    sync_directory(parent)
+    #[cfg(unix)]
+    {
+        sync_directory(parent)
+    }
+    #[cfg(not(unix))]
+    {
+        sync_directory(parent);
+        Ok(())
+    }
 }
 
 pub(super) fn legacy_path(root: &Path, revision_id: &str) -> Result<PathBuf, String> {
@@ -217,9 +228,7 @@ pub(super) fn sync_directory(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
-pub(super) fn sync_directory(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
+pub(super) const fn sync_directory(_path: &Path) {}
 
 #[cfg(test)]
 #[path = "immutable_object_tests.rs"]

@@ -222,7 +222,7 @@ fn read_credential(target: &[u16]) -> Result<Option<[u8; 32]>, String> {
             target.as_ptr(),
             CRED_TYPE_GENERIC,
             0,
-            &mut pointer,
+            &raw mut pointer,
         )
     };
     if success == 0 {
@@ -283,7 +283,7 @@ fn write_credential(
         target_alias: null_mut(),
         user_name: user_name.as_mut_ptr(),
     };
-    let success = unsafe { cred_write_w(&credential, 0) };
+    let success = unsafe { cred_write_w(&raw const credential, 0) };
     if success == 0 {
         let error = unsafe { get_last_error() };
         return Err(format!("DIRECT_REVISION_KEY_WRITE_FAILED:{error}"));
@@ -313,13 +313,13 @@ pub(super) fn protect_data(
     };
     let success = unsafe {
         crypt_protect_data(
-            &input_blob,
+            &raw const input_blob,
             null(),
-            &entropy_blob,
+            &raw const entropy_blob,
             null_mut(),
             null_mut(),
             CRYPTPROTECT_UI_FORBIDDEN,
-            &mut output,
+            &raw mut output,
         )
     };
     super::zeroize(&mut entropy_copy);
@@ -352,13 +352,13 @@ pub(super) fn unprotect_data(
     };
     let success = unsafe {
         crypt_unprotect_data(
-            &input_blob,
+            &raw const input_blob,
             null_mut(),
-            &entropy_blob,
+            &raw const entropy_blob,
             null_mut(),
             null_mut(),
             CRYPTPROTECT_UI_FORBIDDEN,
-            &mut output,
+            &raw mut output,
         )
     };
     super::zeroize(&mut entropy_copy);
@@ -436,7 +436,7 @@ fn wide(value: &str) -> Vec<u16> {
 
 impl super::RevisionProtector {
     /// Resolve only the existing namespace credential for explicit migration.
-    /// Missing keys stay missing: no RNG, CredWrite, revision scan or conversion.
+    /// Missing keys stay missing: no RNG, `CredWrite`, revision scan or conversion.
     /// The reader still refuses any protected object without its original key.
     pub(crate) fn open_existing(namespace_id: [u8; 32]) -> Result<Option<Self>, String> {
         let target = wide(&format!("ELIOT Search/revision-key/{}", sha256::hex(&namespace_id)));

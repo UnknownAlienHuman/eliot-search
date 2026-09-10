@@ -24,7 +24,7 @@ const DEADLINE: Duration = Duration::from_secs(30);
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Kind { CurrentReference, UnmappedReference, CurrentTarget, UnmappedObject, Temporary }
 impl Kind {
-    fn tag(self) -> &'static str {
+    const fn tag(self) -> &'static str {
         match self {
             Self::CurrentReference => "current_profile_reference",
             Self::UnmappedReference => "unmapped_profile_or_revision_reference",

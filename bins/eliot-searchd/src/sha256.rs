@@ -1,7 +1,7 @@
 //! SHA-256 byte API shared by the retained snapshot harness and DIRECT runtime.
 //!
 //! Raw hashes retain their standard SHA-256 meaning. Multipart framing is first
-//! specified in docs/runtime/DIRECT_HASH_FORMAT.md; it is not a BLAKE3 digest,
+//! specified in `docs/runtime/DIRECT_HASH_FORMAT.md`; it is not a BLAKE3 digest,
 //! keyed authenticator, or a compatibility claim for an external legacy store.
 
 const INITIAL_STATE: [u32; 8] = [
@@ -37,7 +37,7 @@ const ROUND_CONSTANTS: [u32; 64] = [
 const PARTS_V1: &[u8] = b"eliot-search/sha256-parts/v1\0";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) struct Sha256Digest([u8; 32]);
+pub struct Sha256Digest([u8; 32]);
 
 impl Sha256Digest {
     pub(crate) fn from_hex(value: &str) -> Result<Self, String> {
@@ -45,7 +45,7 @@ impl Sha256Digest {
             return Err("SHA256_HEX_LENGTH_INVALID".to_owned());
         }
         let mut bytes = [0_u8; 32];
-        for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
             bytes[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
         }
         Ok(Self(bytes))
@@ -60,17 +60,13 @@ impl Sha256Digest {
     }
 }
 
-pub(crate) fn digest_bytes(bytes: &[u8]) -> Sha256Digest {
+pub fn digest_bytes(bytes: &[u8]) -> Sha256Digest {
     let mut state = INITIAL_STATE;
-    let mut chunks = bytes.chunks_exact(64);
-    for chunk in &mut chunks {
-        let block: &[u8; 64] = chunk
-            .try_into()
-            .expect("chunks_exact always yields 64-byte blocks");
+    let (blocks, remainder) = bytes.as_chunks::<64>();
+    for block in blocks {
         compress(&mut state, block);
     }
 
-    let remainder = chunks.remainder();
     let bit_length = u64::try_from(bytes.len())
         .unwrap_or(u64::MAX)
         .wrapping_mul(8);
@@ -79,10 +75,7 @@ pub(crate) fn digest_bytes(bytes: &[u8]) -> Sha256Digest {
     tail[remainder.len()] = 0x80;
     let padded_length = if remainder.len() < 56 { 64 } else { 128 };
     tail[padded_length - 8..padded_length].copy_from_slice(&bit_length.to_be_bytes());
-    for block in tail[..padded_length].chunks_exact(64) {
-        let block: &[u8; 64] = block
-            .try_into()
-            .expect("padded SHA-256 tail uses complete blocks");
+    for block in tail[..padded_length].as_chunks::<64>().0 {
         compress(&mut state, block);
     }
 
@@ -95,11 +88,8 @@ pub(crate) fn digest_bytes(bytes: &[u8]) -> Sha256Digest {
 
 fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
     let mut schedule = [0_u32; 64];
-    for (index, word) in block.chunks_exact(4).enumerate() {
-        schedule[index] = u32::from_be_bytes(
-            word.try_into()
-                .expect("four-byte SHA-256 schedule word"),
-        );
+    for (index, word) in block.as_chunks::<4>().0.iter().enumerate() {
+        schedule[index] = u32::from_be_bytes(*word);
     }
     for index in 16..64 {
         let s0 = schedule[index - 15].rotate_right(7)
@@ -114,55 +104,55 @@ fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
             .wrapping_add(s1);
     }
 
-    let mut a = state[0];
-    let mut b = state[1];
-    let mut c = state[2];
-    let mut d = state[3];
-    let mut e = state[4];
-    let mut f = state[5];
-    let mut g = state[6];
-    let mut h = state[7];
+    let mut wa = state[0];
+    let mut wb = state[1];
+    let mut wc = state[2];
+    let mut wd = state[3];
+    let mut we = state[4];
+    let mut wf = state[5];
+    let mut wg = state[6];
+    let mut wh = state[7];
 
     for index in 0..64 {
-        let sum1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-        let choice = (e & f) ^ ((!e) & g);
-        let temp1 = h
+        let sum1 = we.rotate_right(6) ^ we.rotate_right(11) ^ we.rotate_right(25);
+        let choice = (we & wf) ^ ((!we) & wg);
+        let temp1 = wh
             .wrapping_add(sum1)
             .wrapping_add(choice)
             .wrapping_add(ROUND_CONSTANTS[index])
             .wrapping_add(schedule[index]);
-        let sum0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-        let majority = (a & b) ^ (a & c) ^ (b & c);
+        let sum0 = wa.rotate_right(2) ^ wa.rotate_right(13) ^ wa.rotate_right(22);
+        let majority = (wa & wb) ^ (wa & wc) ^ (wb & wc);
         let temp2 = sum0.wrapping_add(majority);
 
-        h = g;
-        g = f;
-        f = e;
-        e = d.wrapping_add(temp1);
-        d = c;
-        c = b;
-        b = a;
-        a = temp1.wrapping_add(temp2);
+        wh = wg;
+        wg = wf;
+        wf = we;
+        we = wd.wrapping_add(temp1);
+        wd = wc;
+        wc = wb;
+        wb = wa;
+        wa = temp1.wrapping_add(temp2);
     }
 
-    state[0] = state[0].wrapping_add(a);
-    state[1] = state[1].wrapping_add(b);
-    state[2] = state[2].wrapping_add(c);
-    state[3] = state[3].wrapping_add(d);
-    state[4] = state[4].wrapping_add(e);
-    state[5] = state[5].wrapping_add(f);
-    state[6] = state[6].wrapping_add(g);
-    state[7] = state[7].wrapping_add(h);
+    state[0] = state[0].wrapping_add(wa);
+    state[1] = state[1].wrapping_add(wb);
+    state[2] = state[2].wrapping_add(wc);
+    state[3] = state[3].wrapping_add(wd);
+    state[4] = state[4].wrapping_add(we);
+    state[5] = state[5].wrapping_add(wf);
+    state[6] = state[6].wrapping_add(wg);
+    state[7] = state[7].wrapping_add(wh);
 }
 
-pub(crate) fn digest(bytes: &[u8]) -> [u8; 32] {
+pub fn digest(bytes: &[u8]) -> [u8; 32] {
     digest_bytes(bytes).as_bytes()
 }
 
-/// First defined multipart profile; see docs/runtime/DIRECT_HASH_FORMAT.md.
+/// First defined multipart profile; see `docs/runtime/DIRECT_HASH_FORMAT.md`.
 /// Concrete slices accept fixed arrays of different lengths without losing bytes.
 /// Callers enforce their source/manifest/input byte ceilings before this pure call.
-pub(crate) fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+pub fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     let mut framed = Vec::new();
     framed.extend_from_slice(PARTS_V1);
     framed.extend_from_slice(&length(domain.len()));
@@ -182,7 +172,7 @@ fn length(value: usize) -> [u8; 8] {
 }
 
 /// Encodes arbitrary bounded bytes, including public revision-range output.
-pub(crate) fn hex(bytes: &[u8]) -> String {
+pub fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::new();
     for &byte in bytes {
@@ -192,7 +182,7 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
     output
 }
 
-pub(crate) fn decode_digest(value: &str) -> Option<[u8; 32]> {
+pub fn decode_digest(value: &str) -> Option<[u8; 32]> {
     Sha256Digest::from_hex(value).ok().map(Sha256Digest::as_bytes)
 }
 
@@ -229,7 +219,7 @@ mod tests {
         assert_eq!(hex(&[0, 15, 16, 255]), "000f10ff");
         let bytes = std::array::from_fn::<_, 32, _>(|index| u8::try_from(index).unwrap());
         assert_eq!(decode_digest(&hex(&bytes).to_uppercase()), Some(bytes));
-        for bad in ["".to_owned(), "00".repeat(31), "00".repeat(33), "gg".repeat(32),
+        for bad in [String::new(), "00".repeat(31), "00".repeat(33), "gg".repeat(32),
             "é".repeat(32), format!(" {}", "00".repeat(32))] {
             assert!(decode_digest(&bad).is_none());
         }

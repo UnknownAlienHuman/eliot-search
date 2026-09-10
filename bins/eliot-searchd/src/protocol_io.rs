@@ -7,7 +7,7 @@ use std::fmt;
 use std::io::{self, BufRead, Read};
 
 #[derive(Debug)]
-pub(crate) enum LineError {
+pub enum LineError {
     InvalidLimit,
     TooLarge,
     InvalidUtf8,
@@ -42,7 +42,7 @@ impl std::error::Error for LineError {
 
 /// Reads at most `max_bytes + 2` bytes, before allocating the complete frame.
 /// A final unterminated frame is accepted, matching the former line protocol.
-pub(crate) fn read_line(
+pub fn read_line(
     input: &mut impl BufRead,
     max_bytes: usize,
 ) -> Result<Option<String>, LineError> {

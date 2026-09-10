@@ -37,7 +37,7 @@ const MAX_PATH_BYTES: usize = 32 * 1024;
 const MAX_DIAGNOSTIC_REVISION_SLICE_BYTES: u64 = 24 * 1024;
 
 /// Intercepts `--serve-data-root ROOT` before one-shot command dispatch.
-pub(crate) fn maybe_run() -> Option<ExitCode> {
+pub fn maybe_run() -> Option<ExitCode> {
     let arguments = env::args_os().skip(1).collect::<Vec<_>>();
     if arguments.first().and_then(|value| value.to_str()) != Some("--serve-data-root") {
         return None;
@@ -116,6 +116,7 @@ fn run_service(root: &Path) -> Result<(), String> {
             )
         },
     );
+    drop(reader);
     if result.is_err() {
         // Invalidate before unwinding the store and finally releasing its owner.
         // No queued command, clean-stop receipt or automatic retry follows.
@@ -127,6 +128,18 @@ fn run_service(root: &Path) -> Result<(), String> {
         "{\"event\":\"data_root_stopped\",\"clean\":true}",
     )?;
     Ok(())
+}
+
+/// Mutable per-command service state shared by multi-step command handlers
+/// so no handler needs more than seven arguments.
+struct CommandState<'a, W: std::io::Write> {
+    writer: &'a mut W,
+    store: &'a mut DirectStore,
+    continuations: &'a mut ContinuationCatalog,
+    handles: &'a mut ResultHandleCatalog,
+    canonical_root: &'a Path,
+    storage: &'a mut StorageSecurityStatus,
+    attempt: &'a mut MutationAttempt,
 }
 
 fn execute_command(
@@ -146,46 +159,18 @@ fn execute_command(
     };
     match (name, fields.as_slice()) {
         ("health", [_]) => {
-            let verification = store.verify()?;
-            let manifests = verify_directory_manifests(
-                canonical_root,
-                &store.namespace_id(),
-            )?;
-            refresh_storage(storage, canonical_root)?;
-            write_line(
+            cmd_health(
                 writer,
-                &format!(
-                    concat!(
-                        "{{\"event\":\"health\",\"namespace_id\":\"{}\",",
-                        "\"registered_sources\":{},\"active_sources\":{},",
-                        "\"verified_revisions\":{},\"directory_manifests\":{},",
-                        "\"live_continuations\":{},",
-                        "\"retained_continuation_matches\":{},",
-                        "\"live_source_handles\":{},\"health\":{},",
-                        "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
-                    ),
-                    store.namespace_id(),
-                    verification.registered_sources,
-                    verification.active_sources,
-                    verification.verified_revisions,
-                    manifests.manifest_files,
-                    continuations.live_count(),
-                    continuations.retained_matches(),
-                    handles.live_count(),
-                    Health::DIRECT_STORE.json(),
-                    storage.json(),
-                    storage.encrypted_at_rest,
-                ),
+                store,
+                continuations,
+                handles,
+                canonical_root,
+                storage,
             )?;
         }
-        ("version", [_]) => write_line(
-            writer,
-            &format!(
-                "{{\"event\":\"version\",\"binary\":\"eliot-searchd\",\"version\":\"{}\",\"protocol_version\":{}}}",
-                env!("CARGO_PKG_VERSION"),
-                PROTOCOL_VERSION,
-            ),
-        )?,
+        ("version", [_]) => {
+            cmd_version(writer)?;
+        }
         ("shutdown", [_]) => {
             write_line(
                 writer,
@@ -198,44 +183,13 @@ fn execute_command(
             emit_verification(writer, store, canonical_root, storage)?;
         }
         ("verify-directory-manifests", [_]) => {
-            let manifests = verify_directory_manifests(
-                canonical_root,
-                &store.namespace_id(),
-            )?;
-            refresh_storage(storage, canonical_root)?;
-            write_line(
-                writer,
-                &format!(
-                    concat!(
-                        "{{\"event\":\"directory_manifests_verified\",",
-                        "\"namespace_id\":\"{}\",\"manifest_files\":{},",
-                        "\"directories\":{},\"current_entries\":{},",
-                        "\"highest_generation\":{},\"source_backed\":true,",
-                        "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
-                    ),
-                    store.namespace_id(),
-                    manifests.manifest_files,
-                    manifests.directories,
-                    manifests.current_entries,
-                    manifests.highest_generation,
-                    json_string(storage.backend),
-                    storage.encrypted_at_rest,
-                ),
-            )?;
+            cmd_verify_manifests(writer, store, canonical_root, storage)?;
         }
         ("list-sources", [_]) => {
-            refresh_storage(storage, canonical_root)?;
-            emit_source_list(writer, store, storage)?;
+            cmd_list_sources(writer, store, canonical_root, storage)?;
         }
         ("control-migration-plan", [_, target_namespace]) => {
-            let target = search_contracts::SourceNamespaceId::parse(target_namespace)
-                .map_err(|_| "DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned())?;
-            if target.as_bytes() == &[0; 16] {
-                return Err("DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned());
-            }
-            attempt.arm();
-            let result = store.stage_source_migration_plan(owner, target)?;
-            write_line(writer, &result)?;
+            cmd_migration_plan(writer, store, owner, attempt, target_namespace)?;
         }
         ("control-migration-revisions", [_] | [_, _]) => {
             let page = store.inspect_migration_revisions(fields.get(1).copied())?;
@@ -253,167 +207,77 @@ fn execute_command(
             let page = store.inspect_migration_directories(owner, fields.get(1).copied())?;
             write_line(writer, &page)?;
         }
+        _ => {
+            let mut state = CommandState {
+                writer,
+                store,
+                continuations,
+                handles,
+                canonical_root,
+                storage,
+                attempt,
+            };
+            execute_mutating_command(name, fields.as_slice(), &mut state)?;
+        }
+    }
+    Ok(ServiceControl::Continue)
+}
+
+/// Dispatches commands that may arm a mutation attempt or invalidate search
+/// state. Read-only commands stay in [`execute_command`].
+fn execute_mutating_command<W: std::io::Write>(
+    name: &str,
+    fields: &[&str],
+    state: &mut CommandState<'_, W>,
+) -> Result<(), String> {
+    match (name, fields) {
         ("prepare-root", [_] | [_, _]) => {
             let cursor = fields.get(1).map(|value| PreparationCursor::parse(value)).transpose()?;
-            store.validate_preparation_cursor(cursor.as_ref())?;
-            attempt.arm();
-            let invalidated = invalidate_search_state(continuations, handles);
-            let batch = store.prepare_root(cursor.as_ref())?;
-            refresh_storage(storage, canonical_root)?;
-            crate::preparation_composition::emit_batch(writer, &batch, invalidated)?;
+            state.store.validate_preparation_cursor(cursor.as_ref())?;
+            state.attempt.arm();
+            cmd_prepare_root(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, cursor.as_ref())?;
         }
         ("prepare-revision", [_, revision_id]) => {
             crate::preparation_composition::validate_revision(revision_id)?;
-            attempt.arm();
-            // Backfill can remove a search gap without changing any source
-            // event. Source-fence equality alone cannot validate older pages.
-            let invalidated = invalidate_search_state(continuations, handles);
-            let gap = store.prepare_revision(revision_id)?;
-            refresh_storage(storage, canonical_root)?;
-            crate::preparation_composition::emit_prepared(writer, revision_id, invalidated, gap)?;
+            state.attempt.arm();
+            cmd_prepare_revision(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, revision_id)?;
         }
         ("index-file", [_, path_hex]) => {
             let path = decode_path(path_hex)?;
-            attempt.arm();
-            // Unchanged source bytes may still acquire previously missing preparation.
-            let (invalidated_continuations, invalidated_handles) =
-                invalidate_search_state(continuations, handles);
-            let indexed = store.index_file(&path)?;
-            refresh_storage(storage, canonical_root)?;
-            emit_indexed_source(
-                writer,
-                &indexed,
-                invalidated_continuations,
-                invalidated_handles,
-                storage,
-            )?;
+            state.attempt.arm();
+            cmd_index_file(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, &path)?;
         }
         ("index-directory", [_, path_hex]) => {
             let directory = decode_path(path_hex)?;
-            attempt.arm();
-            let (invalidated_continuations, invalidated_handles) =
-                invalidate_search_state(continuations, handles);
-            let indexed = store.index_directory(&directory)?;
-            let changed = indexed.iter().filter(|source| source.changed).count();
-            refresh_storage(storage, canonical_root)?;
-            for source in &indexed {
-                emit_indexed_source(writer, source, 0, 0, storage)?;
-            }
-            write_line(
-                writer,
-                &format!(
-                    concat!(
-                        "{{\"event\":\"directory_index_complete\",",
-                        "\"namespace_id\":\"{}\",\"sources\":{},",
-                        "\"changed\":{},\"invalidated_continuations\":{},",
-                        "\"invalidated_handles\":{},\"source_backed\":true,",
-                        "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
-                    ),
-                    store.namespace_id(),
-                    indexed.len(),
-                    changed,
-                    invalidated_continuations,
-                    invalidated_handles,
-                    json_string(storage.backend),
-                    storage.encrypted_at_rest,
-                ),
-            )?;
+            state.attempt.arm();
+            cmd_index_directory(state.writer, state.store, state.continuations, state.handles, state.canonical_root, state.storage, &directory)?;
         }
         ("sync-directory", [_, path_hex]) => {
-            let directory = decode_path(path_hex)?;
-            attempt.arm();
-            let (invalidated_continuations, invalidated_handles) =
-                invalidate_search_state(continuations, handles);
-            let result = sync_directory(store, canonical_root, &directory)?;
-            store.verify()?;
-            let manifests = verify_directory_manifests(
-                canonical_root,
-                &store.namespace_id(),
-            )?;
-            refresh_storage(storage, canonical_root)?;
-            write_line(
-                writer,
-                &format!(
-                    concat!(
-                        "{{\"event\":\"directory_sync_complete\",",
-                        "\"namespace_id\":\"{}\",\"directory_digest\":\"{}\",",
-                        "\"previous_generation\":{},\"generation\":{},",
-                        "\"previous_sources\":{},\"indexed_sources\":{},",
-                        "\"changed_sources\":{},\"missing_sources\":{},",
-                        "\"retired_sources\":{},\"moved_or_rebound_sources\":{},",
-                        "\"manifest_digest\":\"{}\",\"manifest_files\":{},",
-                        "\"invalidated_continuations\":{},",
-                        "\"invalidated_handles\":{},\"source_backed\":true,",
-                        "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
-                    ),
-                    result.namespace_id,
-                    result.directory_digest,
-                    result
-                        .previous_generation
-                        .map_or_else(|| "null".to_owned(), |value| value.to_string()),
-                    result.generation,
-                    result.previous_sources,
-                    result.indexed_sources,
-                    result.changed_sources,
-                    result.missing_sources,
-                    result.retired_sources,
-                    result.moved_or_rebound_sources,
-                    result.manifest_digest,
-                    manifests.manifest_files,
-                    invalidated_continuations,
-                    invalidated_handles,
-                    json_string(storage.backend),
-                    storage.encrypted_at_rest,
-                ),
-            )?;
+            cmd_sync_directory(state, path_hex)?;
         }
         ("search", [_, mode, query_hex]) => {
             let query = decode_query(query_hex)?;
-            let result = store.search(&query, parse_search_mode(mode)?)?;
-            refresh_storage(storage, canonical_root)?;
-            emit_streaming_search(writer, &store.namespace_id(), &result, storage)?;
+            let result = state.store.search(&query, parse_search_mode(mode)?)?;
+            refresh_storage(state.storage, state.canonical_root)?;
+            emit_streaming_search(state.writer, &state.store.namespace_id(), &result, state.storage)?;
         }
         ("search-page", [_, mode, page_size, query_hex]) => {
-            let query = decode_query(query_hex)?;
-            let page_size = parse_page_size(page_size)?;
-            let result = store.search(&query, parse_search_mode(mode)?)?;
-            let page = continuations
-                .create_page(store, result, page_size)
-                .map_err(continuation_error)?;
-            let public = handles
-                .mint_page(store, &page.matches)
-                .map_err(handle_error)?;
-            refresh_storage(storage, canonical_root)?;
-            emit_search_page(writer, &page, &public, storage)?;
+            cmd_search_page(state, mode, page_size, query_hex)?;
         }
         ("continue", [_, token, page_size]) => {
-            let page_size = parse_page_size(page_size)?;
-            let page = continuations
-                .continue_page(store, token, page_size)
-                .map_err(continuation_error)?;
-            let public = handles
-                .mint_page(store, &page.matches)
-                .map_err(handle_error)?;
-            refresh_storage(storage, canonical_root)?;
-            emit_search_page(writer, &page, &public, storage)?;
+            cmd_continue(state, token, page_size)?;
         }
         ("expand-handle", [_, token, start, end]) => {
-            let start = parse_u64(start, "SERVICE_START_OFFSET_INVALID")?;
-            let end = parse_u64(end, "SERVICE_END_OFFSET_INVALID")?;
-            let expansion = handles
-                .expand(store, token, start, end)
-                .map_err(handle_error)?;
-            refresh_storage(storage, canonical_root)?;
-            emit_handle_expansion(writer, &expansion, storage)?;
+            cmd_expand_handle(state, token, start, end)?;
         }
         ("retire", [_, source_id]) => {
-            attempt.arm();
-            let source = store.retire_source(source_id)?;
+            state.attempt.arm();
+            let source = state.store.retire_source(source_id)?;
             let (invalidated_continuations, invalidated_handles) =
-                invalidate_search_state(continuations, handles);
-            refresh_storage(storage, canonical_root)?;
+                invalidate_search_state(state.continuations, state.handles);
+            refresh_storage(state.storage, state.canonical_root)?;
             write_line(
-                writer,
+                state.writer,
                 &format!(
                     concat!(
                         "{{\"event\":\"source_retired\",",
@@ -428,40 +292,13 @@ fn execute_command(
                     source.sequence,
                     invalidated_continuations,
                     invalidated_handles,
-                    json_string(storage.backend),
-                    storage.encrypted_at_rest,
+                    json_string(state.storage.backend),
+                    state.storage.encrypted_at_rest,
                 ),
             )?;
         }
         ("read-revision", [_, revision_id, start, end]) => {
-            let start = parse_u64(start, "SERVICE_START_OFFSET_INVALID")?;
-            let end = parse_u64(end, "SERVICE_END_OFFSET_INVALID")?;
-            if end.saturating_sub(start) > MAX_DIAGNOSTIC_REVISION_SLICE_BYTES {
-                return Err("SERVICE_REVISION_SLICE_TOO_LARGE".to_owned());
-            }
-            let slice = store.read_revision_range(revision_id, start, end)?;
-            refresh_storage(storage, canonical_root)?;
-            write_line(
-                writer,
-                &format!(
-                    concat!(
-                        "{{\"event\":\"revision_slice\",",
-                        "\"revision_id\":\"{}\",\"content_digest\":\"{}\",",
-                        "\"byte_start\":{},\"byte_end\":{},",
-                        "\"encoding\":\"hex\",\"bytes\":\"{}\",",
-                        "\"diagnostic_internal_identifiers\":true,",
-                        "\"source_backed\":true,\"storage_backend\":{},",
-                        "\"encrypted_at_rest\":{}}}"
-                    ),
-                    slice.revision_id,
-                    slice.content_digest,
-                    slice.byte_start,
-                    slice.byte_end,
-                    sha256::hex(&slice.bytes),
-                    json_string(storage.backend),
-                    storage.encrypted_at_rest,
-                ),
-            )?;
+            cmd_read_revision(state.writer, state.store, state.canonical_root, state.storage, revision_id, start, end)?;
         }
         ("gc", [_, mode]) => {
             let apply = match *mode {
@@ -469,50 +306,440 @@ fn execute_command(
                 "apply" => true,
                 _ => return Err("SERVICE_GC_MODE_INVALID".to_owned()),
             };
-            store.verify()?;
+            state.store.verify()?;
             if apply {
-                attempt.arm();
+                state.attempt.arm();
             }
-            let result = guarded_collect_orphan_revisions(canonical_root, apply)?;
-            refresh_storage(storage, canonical_root)?;
-            write_line(
-                writer,
-                &format!(
-                    concat!(
-                        "{{\"event\":\"direct_store_gc_complete\",",
-                        "\"namespace_id\":\"{}\",\"applied\":{},",
-                        "\"referenced_revisions\":{},\"scanned_objects\":{},",
-                        "\"plaintext_objects\":{},\"protected_objects\":{},",
-                        "\"temporary_objects\":{},",
-                        "\"referenced_plaintext_objects\":{},",
-                        "\"referenced_protected_objects\":{},",
-                        "\"orphan_objects\":{},\"orphan_bytes\":{},",
-                        "\"deleted_objects\":{},\"deleted_bytes\":{},",
-                        "\"unexpected_objects\":{},\"storage_security\":{},",
-                        "\"encrypted_at_rest\":{}}}"
-                    ),
-                    store.namespace_id(),
-                    result.applied,
-                    result.referenced_revisions,
-                    result.scanned_objects,
-                    result.plaintext_objects,
-                    result.protected_objects,
-                    result.temporary_objects,
-                    result.referenced_plaintext_objects,
-                    result.referenced_protected_objects,
-                    result.orphan_objects,
-                    result.orphan_bytes,
-                    result.deleted_objects,
-                    result.deleted_bytes,
-                    result.unexpected_objects,
-                    storage.json(),
-                    storage.encrypted_at_rest,
-                ),
-            )?;
+            cmd_gc(state.writer, state.store, state.canonical_root, state.storage, apply)?;
         }
         _ => return Err("SERVICE_COMMAND_INVALID".to_owned()),
     }
-    Ok(ServiceControl::Continue)
+    Ok(())
+}
+
+fn cmd_version(writer: &mut impl std::io::Write) -> Result<(), String> {
+    write_line(
+        writer,
+        &format!(
+            "{{\"event\":\"version\",\"binary\":\"eliot-searchd\",\"version\":\"{}\",\"protocol_version\":{}}}",
+            env!("CARGO_PKG_VERSION"),
+            PROTOCOL_VERSION,
+        ),
+    )
+}
+
+fn cmd_list_sources(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+) -> Result<(), String> {
+    refresh_storage(storage, canonical_root)?;
+    emit_source_list(writer, store, storage)
+}
+
+fn cmd_migration_plan(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    owner: &DataRootGuard,
+    attempt: &mut MutationAttempt,
+    target_namespace: &str,
+) -> Result<(), String> {
+    let target = search_contracts::SourceNamespaceId::parse(target_namespace)
+        .map_err(|_| "DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned())?;
+    if target.as_bytes() == &[0; 16] {
+        return Err("DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned());
+    }
+    attempt.arm();
+    let result = store.stage_source_migration_plan(owner, target)?;
+    write_line(writer, &result)
+}
+
+fn cmd_index_directory(
+    writer: &mut impl std::io::Write,
+    store: &mut DirectStore,
+    continuations: &mut ContinuationCatalog,
+    handles: &mut ResultHandleCatalog,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+    directory: &Path,
+) -> Result<(), String> {
+    let (invalidated_continuations, invalidated_handles) =
+        invalidate_search_state(continuations, handles);
+    let indexed = store.index_directory(directory)?;
+    let changed = indexed.iter().filter(|source| source.changed).count();
+    refresh_storage(storage, canonical_root)?;
+    for source in &indexed {
+        emit_indexed_source(writer, source, 0, 0, storage)?;
+    }
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"directory_index_complete\",",
+                "\"namespace_id\":\"{}\",\"sources\":{},",
+                "\"changed\":{},\"invalidated_continuations\":{},",
+                "\"invalidated_handles\":{},\"source_backed\":true,",
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
+            ),
+            store.namespace_id(),
+            indexed.len(),
+            changed,
+            invalidated_continuations,
+            invalidated_handles,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
+        ),
+    )
+}
+
+fn cmd_prepare_root(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    continuations: &mut ContinuationCatalog,
+    handles: &mut ResultHandleCatalog,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+    cursor: Option<&PreparationCursor>,
+) -> Result<(), String> {
+    let invalidated = invalidate_search_state(continuations, handles);
+    let batch = store.prepare_root(cursor)?;
+    refresh_storage(storage, canonical_root)?;
+    crate::preparation_composition::emit_batch(writer, &batch, invalidated)
+}
+
+fn cmd_prepare_revision(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    continuations: &mut ContinuationCatalog,
+    handles: &mut ResultHandleCatalog,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+    revision_id: &str,
+) -> Result<(), String> {
+    // Backfill can remove a search gap without changing any source
+    // event. Source-fence equality alone cannot validate older pages.
+    let invalidated = invalidate_search_state(continuations, handles);
+    let gap = store.prepare_revision(revision_id)?;
+    refresh_storage(storage, canonical_root)?;
+    crate::preparation_composition::emit_prepared(writer, revision_id, invalidated, gap)
+}
+
+fn cmd_index_file(
+    writer: &mut impl std::io::Write,
+    store: &mut DirectStore,
+    continuations: &mut ContinuationCatalog,
+    handles: &mut ResultHandleCatalog,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+    path: &Path,
+) -> Result<(), String> {
+    // Unchanged source bytes may still acquire previously missing preparation.
+    let (invalidated_continuations, invalidated_handles) =
+        invalidate_search_state(continuations, handles);
+    let indexed = store.index_file(path)?;
+    refresh_storage(storage, canonical_root)?;
+    emit_indexed_source(
+        writer,
+        &indexed,
+        invalidated_continuations,
+        invalidated_handles,
+        storage,
+    )
+}
+
+fn cmd_search_page<W: std::io::Write>(
+    state: &mut CommandState<'_, W>,
+    mode: &str,
+    page_size: &str,
+    query_hex: &str,
+) -> Result<(), String> {
+    let CommandState {
+        writer,
+        store,
+        continuations,
+        handles,
+        canonical_root,
+        storage,
+        ..
+    } = &mut *state;
+    let query = decode_query(query_hex)?;
+    let page_size = parse_page_size(page_size)?;
+    let result = store.search(&query, parse_search_mode(mode)?)?;
+    let page = continuations
+        .create_page(store, result, page_size)
+        .map_err(continuation_error)?;
+    let public = handles
+        .mint_page(store, &page.matches)
+        .map_err(handle_error)?;
+    refresh_storage(storage, canonical_root)?;
+    emit_search_page(writer, &page, &public, storage)
+}
+
+fn cmd_continue<W: std::io::Write>(
+    state: &mut CommandState<'_, W>,
+    token: &str,
+    page_size: &str,
+) -> Result<(), String> {
+    let CommandState {
+        writer,
+        store,
+        continuations,
+        handles,
+        canonical_root,
+        storage,
+        ..
+    } = &mut *state;
+    let page_size = parse_page_size(page_size)?;
+    let page = continuations
+        .continue_page(store, token, page_size)
+        .map_err(continuation_error)?;
+    let public = handles
+        .mint_page(store, &page.matches)
+        .map_err(handle_error)?;
+    refresh_storage(storage, canonical_root)?;
+    emit_search_page(writer, &page, &public, storage)
+}
+
+fn cmd_expand_handle<W: std::io::Write>(
+    state: &mut CommandState<'_, W>,
+    token: &str,
+    start: &str,
+    end: &str,
+) -> Result<(), String> {
+    let CommandState {
+        writer,
+        store,
+        canonical_root,
+        storage,
+        handles,
+        ..
+    } = &mut *state;
+    let start = parse_u64(start, "SERVICE_START_OFFSET_INVALID")?;
+    let end = parse_u64(end, "SERVICE_END_OFFSET_INVALID")?;
+    let expansion = handles
+        .expand(store, token, start, end)
+        .map_err(handle_error)?;
+    refresh_storage(storage, canonical_root)?;
+    emit_handle_expansion(writer, &expansion, storage)
+}
+
+fn cmd_health(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    continuations: &mut ContinuationCatalog,
+    handles: &mut ResultHandleCatalog,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+) -> Result<(), String> {
+    let verification = store.verify()?;
+    let manifests = verify_directory_manifests(
+        canonical_root,
+        &store.namespace_id(),
+    )?;
+    refresh_storage(storage, canonical_root)?;
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"health\",\"namespace_id\":\"{}\",",
+                "\"registered_sources\":{},\"active_sources\":{},",
+                "\"verified_revisions\":{},\"directory_manifests\":{},",
+                "\"live_continuations\":{},",
+                "\"retained_continuation_matches\":{},",
+                "\"live_source_handles\":{},\"health\":{},",
+                "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
+            ),
+            store.namespace_id(),
+            verification.registered_sources,
+            verification.active_sources,
+            verification.verified_revisions,
+            manifests.manifest_files,
+            continuations.live_count(),
+            continuations.retained_matches(),
+            handles.live_count(),
+            Health::DIRECT_STORE.json(),
+            storage.json(),
+            storage.encrypted_at_rest,
+        ),
+    )
+}
+
+fn cmd_verify_manifests(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+) -> Result<(), String> {
+    let manifests = verify_directory_manifests(
+        canonical_root,
+        &store.namespace_id(),
+    )?;
+    refresh_storage(storage, canonical_root)?;
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"directory_manifests_verified\",",
+                "\"namespace_id\":\"{}\",\"manifest_files\":{},",
+                "\"directories\":{},\"current_entries\":{},",
+                "\"highest_generation\":{},\"source_backed\":true,",
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
+            ),
+            store.namespace_id(),
+            manifests.manifest_files,
+            manifests.directories,
+            manifests.current_entries,
+            manifests.highest_generation,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
+        ),
+    )
+}
+
+fn cmd_sync_directory<W: std::io::Write>(
+    state: &mut CommandState<'_, W>,
+    path_hex: &str,
+) -> Result<(), String> {
+    let CommandState {
+        writer,
+        store,
+        continuations,
+        handles,
+        canonical_root,
+        storage,
+        attempt,
+    } = &mut *state;
+    let directory = decode_path(path_hex)?;
+    attempt.arm();
+    let (invalidated_continuations, invalidated_handles) =
+        invalidate_search_state(continuations, handles);
+    let result = sync_directory(store, canonical_root, &directory)?;
+    store.verify()?;
+    let manifests = verify_directory_manifests(
+        canonical_root,
+        &store.namespace_id(),
+    )?;
+    refresh_storage(storage, canonical_root)?;
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"directory_sync_complete\",",
+                "\"namespace_id\":\"{}\",\"directory_digest\":\"{}\",",
+                "\"previous_generation\":{},\"generation\":{},",
+                "\"previous_sources\":{},\"indexed_sources\":{},",
+                "\"changed_sources\":{},\"missing_sources\":{},",
+                "\"retired_sources\":{},\"moved_or_rebound_sources\":{},",
+                "\"manifest_digest\":\"{}\",\"manifest_files\":{},",
+                "\"invalidated_continuations\":{},",
+                "\"invalidated_handles\":{},\"source_backed\":true,",
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
+            ),
+            result.namespace_id,
+            result.directory_digest,
+            result
+                .previous_generation
+                .map_or_else(|| "null".to_owned(), |value| value.to_string()),
+            result.generation,
+            result.previous_sources,
+            result.indexed_sources,
+            result.changed_sources,
+            result.missing_sources,
+            result.retired_sources,
+            result.moved_or_rebound_sources,
+            result.manifest_digest,
+            manifests.manifest_files,
+            invalidated_continuations,
+            invalidated_handles,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
+        ),
+    )
+}
+
+fn cmd_read_revision(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+    revision_id: &str,
+    start: &str,
+    end: &str,
+) -> Result<(), String> {
+    let start = parse_u64(start, "SERVICE_START_OFFSET_INVALID")?;
+    let end = parse_u64(end, "SERVICE_END_OFFSET_INVALID")?;
+    if end.saturating_sub(start) > MAX_DIAGNOSTIC_REVISION_SLICE_BYTES {
+        return Err("SERVICE_REVISION_SLICE_TOO_LARGE".to_owned());
+    }
+    let slice = store.read_revision_range(revision_id, start, end)?;
+    refresh_storage(storage, canonical_root)?;
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"revision_slice\",",
+                "\"revision_id\":\"{}\",\"content_digest\":\"{}\",",
+                "\"byte_start\":{},\"byte_end\":{},",
+                "\"encoding\":\"hex\",\"bytes\":\"{}\",",
+                "\"diagnostic_internal_identifiers\":true,",
+                "\"source_backed\":true,\"storage_backend\":{},",
+                "\"encrypted_at_rest\":{}}}"
+            ),
+            slice.revision_id,
+            slice.content_digest,
+            slice.byte_start,
+            slice.byte_end,
+            sha256::hex(&slice.bytes),
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
+        ),
+    )
+}
+
+fn cmd_gc(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    canonical_root: &Path,
+    storage: &mut StorageSecurityStatus,
+    apply: bool,
+) -> Result<(), String> {
+    let result = guarded_collect_orphan_revisions(canonical_root, apply)?;
+    refresh_storage(storage, canonical_root)?;
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"direct_store_gc_complete\",",
+                "\"namespace_id\":\"{}\",\"applied\":{},",
+                "\"referenced_revisions\":{},\"scanned_objects\":{},",
+                "\"plaintext_objects\":{},\"protected_objects\":{},",
+                "\"temporary_objects\":{},",
+                "\"referenced_plaintext_objects\":{},",
+                "\"referenced_protected_objects\":{},",
+                "\"orphan_objects\":{},\"orphan_bytes\":{},",
+                "\"deleted_objects\":{},\"deleted_bytes\":{},",
+                "\"unexpected_objects\":{},\"storage_security\":{},",
+                "\"encrypted_at_rest\":{}}}"
+            ),
+            store.namespace_id(),
+            result.applied,
+            result.referenced_revisions,
+            result.scanned_objects,
+            result.plaintext_objects,
+            result.protected_objects,
+            result.temporary_objects,
+            result.referenced_plaintext_objects,
+            result.referenced_protected_objects,
+            result.orphan_objects,
+            result.orphan_bytes,
+            result.deleted_objects,
+            result.deleted_bytes,
+            result.unexpected_objects,
+            storage.json(),
+            storage.encrypted_at_rest,
+        ),
+    )
 }
 
 fn refresh_storage(
@@ -643,41 +870,43 @@ fn decode_query(value: &str) -> Result<String, String> {
 }
 
 fn decode_path(value: &str) -> Result<PathBuf, String> {
-    decode_os_string(decode_hex(value, MAX_PATH_BYTES)?).map(PathBuf::from)
+    decode_os_string(&decode_hex(value, MAX_PATH_BYTES)?).map(PathBuf::from)
 }
 
 #[cfg(unix)]
-fn decode_os_string(bytes: Vec<u8>) -> Result<OsString, String> {
+fn decode_os_string(bytes: &[u8]) -> Result<OsString, String> {
     use std::os::unix::ffi::OsStringExt;
-    Ok(OsString::from_vec(bytes))
+    Ok(OsString::from_vec(bytes.to_vec()))
 }
 
 #[cfg(windows)]
-fn decode_os_string(bytes: Vec<u8>) -> Result<OsString, String> {
+fn decode_os_string(bytes: &[u8]) -> Result<OsString, String> {
     use std::os::windows::ffi::OsStringExt;
-    if bytes.len() % 2 != 0 {
+    if !bytes.len().is_multiple_of(2) {
         return Err("SERVICE_PATH_ENCODING_INVALID".to_owned());
     }
     let wide = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
         .collect::<Vec<_>>();
     Ok(OsString::from_wide(&wide))
 }
 
 #[cfg(not(any(unix, windows)))]
-fn decode_os_string(bytes: Vec<u8>) -> Result<OsString, String> {
-    String::from_utf8(bytes)
+fn decode_os_string(bytes: &[u8]) -> Result<OsString, String> {
+    String::from_utf8(bytes.to_vec())
         .map(OsString::from)
         .map_err(|_| "SERVICE_PATH_ENCODING_INVALID".to_owned())
 }
 
 fn decode_hex(value: &str, max_bytes: usize) -> Result<Vec<u8>, String> {
-    if value.len() % 2 != 0 || value.len() / 2 > max_bytes {
+    if !value.len().is_multiple_of(2) || value.len() / 2 > max_bytes {
         return Err("SERVICE_HEX_INVALID".to_owned());
     }
     let mut output = Vec::with_capacity(value.len() / 2);
-    for pair in value.as_bytes().chunks_exact(2) {
+    for pair in value.as_bytes().as_chunks::<2>().0 {
         let high = hex_nibble(pair[0]).ok_or_else(|| "SERVICE_HEX_INVALID".to_owned())?;
         let low = hex_nibble(pair[1]).ok_or_else(|| "SERVICE_HEX_INVALID".to_owned())?;
         output.push((high << 4) | low);
@@ -685,7 +914,7 @@ fn decode_hex(value: &str, max_bytes: usize) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
-fn hex_nibble(value: u8) -> Option<u8> {
+const fn hex_nibble(value: u8) -> Option<u8> {
     match value {
         b'0'..=b'9' => Some(value - b'0'),
         b'a'..=b'f' => Some(value - b'a' + 10),

@@ -19,7 +19,7 @@ use super::{
 
 /// Exact immutable object binding. Global event sequence is not a source revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RevisionMetadata {
+pub struct RevisionMetadata {
     pub(crate) source_id: String,
     pub(crate) revision_id: String,
     pub(crate) content_digest: String,
@@ -65,7 +65,7 @@ impl DirectStore {
         self.registry.revisions.get(revision_id).map(RevisionMetadata::from)
     }
 
-    pub(crate) fn source_event_count(&self) -> usize {
+    pub(crate) const fn source_event_count(&self) -> usize {
         self.registry.event_count
     }
 
@@ -100,7 +100,7 @@ pub(super) fn read_namespace(path: &Path) -> Result<[u8; 32], String> {
     sha256::decode_digest(value.trim()).ok_or_else(|| "DIRECT_NAMESPACE_INVALID".to_owned())
 }
 
-pub(crate) fn verify_revision_identity(metadata: &RevisionMetadata) -> Result<(), String> {
+pub fn verify_revision_identity(metadata: &RevisionMetadata) -> Result<(), String> {
     let content_digest = sha256::decode_digest(&metadata.content_digest)
         .ok_or_else(|| "DIRECT_REVISION_CONTENT_MISMATCH".to_owned())?;
     let expected = sha256::hex(&sha256::digest_parts(
@@ -120,6 +120,41 @@ pub(crate) fn verify_revision_identity(metadata: &RevisionMetadata) -> Result<()
 
 pub(super) fn load_registry(path: &Path) -> Result<RegistryState, String> {
     replay_registry(path, |_, _| Ok(()))
+}
+
+/// Parses and validates one already chained log event into its record.
+fn parse_event_record(fields: &[&str], sequence: u64) -> Result<SourceRecord, String> {
+    for index in [2_usize, 3, 5, 6, 7, 9, 10, 12] {
+        validate_digest_text(fields[index], "DIRECT_CONTROL_LOG_DIGEST_INVALID")?;
+    }
+    let state_value = SourceState::parse(fields[4])
+        .ok_or_else(|| "DIRECT_CONTROL_LOG_STATE_INVALID".to_owned())?;
+    let byte_length = fields[8].parse::<u64>()
+        .map_err(|_| "DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned())?;
+    if byte_length > u64::try_from(MAX_SCAN_INPUT_BYTES).unwrap_or(u64::MAX) {
+        return Err("DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned());
+    }
+    let identity_strength = IdentityStrength::parse(fields[11])
+        .ok_or_else(|| "DIRECT_CONTROL_LOG_IDENTITY_INVALID".to_owned())?;
+    let canonical = fields[..12].join("\t");
+    let record_digest = sha256::hex(&sha256::digest(canonical.as_bytes()));
+    if record_digest != fields[12] {
+        return Err("DIRECT_CONTROL_LOG_RECORD_DIGEST_INVALID".to_owned());
+    }
+    Ok(SourceRecord {
+        sequence,
+        previous_digest: fields[2].to_owned(),
+        operation_id: fields[3].to_owned(),
+        state: state_value,
+        source_id: fields[5].to_owned(),
+        revision_id: fields[6].to_owned(),
+        content_digest: fields[7].to_owned(),
+        byte_length,
+        file_identity_digest: fields[9].to_owned(),
+        path_digest: fields[10].to_owned(),
+        identity_strength,
+        record_digest: fields[12].to_owned(),
+    })
 }
 
 /// A read-only migration observer shares the full ordinary replay validator.
@@ -170,45 +205,15 @@ fn replay_registry(
         if sequence != expected_sequence || fields[2] != state.last_digest {
             return Err("DIRECT_CONTROL_LOG_CHAIN_INVALID".to_owned());
         }
-        for index in [2_usize, 3, 5, 6, 7, 9, 10, 12] {
-            validate_digest_text(fields[index], "DIRECT_CONTROL_LOG_DIGEST_INVALID")?;
-        }
-        let state_value = SourceState::parse(fields[4])
-            .ok_or_else(|| "DIRECT_CONTROL_LOG_STATE_INVALID".to_owned())?;
-        let byte_length = fields[8].parse::<u64>()
-            .map_err(|_| "DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned())?;
-        if byte_length > u64::try_from(MAX_SCAN_INPUT_BYTES).unwrap_or(u64::MAX) {
-            return Err("DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned());
-        }
-        let identity_strength = IdentityStrength::parse(fields[11])
-            .ok_or_else(|| "DIRECT_CONTROL_LOG_IDENTITY_INVALID".to_owned())?;
-        let canonical = fields[..12].join("\t");
-        let record_digest = sha256::hex(&sha256::digest(canonical.as_bytes()));
-        if record_digest != fields[12] {
-            return Err("DIRECT_CONTROL_LOG_RECORD_DIGEST_INVALID".to_owned());
-        }
+        let record = parse_event_record(&fields, sequence)?;
         if state.operations.contains_key(fields[3]) {
             return Err("DIRECT_CONTROL_LOG_OPERATION_DUPLICATE".to_owned());
         }
-        let record = SourceRecord {
-            sequence,
-            previous_digest: fields[2].to_owned(),
-            operation_id: fields[3].to_owned(),
-            state: state_value,
-            source_id: fields[5].to_owned(),
-            revision_id: fields[6].to_owned(),
-            content_digest: fields[7].to_owned(),
-            byte_length,
-            file_identity_digest: fields[9].to_owned(),
-            path_digest: fields[10].to_owned(),
-            identity_strength,
-            record_digest: fields[12].to_owned(),
-        };
         verify_revision_identity(&RevisionMetadata::from(&record))?;
-        if let Some(previous) = state.latest.get(&record.source_id) {
-            if previous.file_identity_digest != record.file_identity_digest {
-                return Err("DIRECT_CONTROL_LOG_SOURCE_COLLISION".to_owned());
-            }
+        if let Some(previous) = state.latest.get(&record.source_id)
+            && previous.file_identity_digest != record.file_identity_digest
+        {
+            return Err("DIRECT_CONTROL_LOG_SOURCE_COLLISION".to_owned());
         }
         if let Some(previous) = state.revisions.get(&record.revision_id) {
             // Repeated A/B/A occurrences retain their original history; only the
@@ -224,7 +229,7 @@ fn replay_registry(
         state.operations.insert(record.operation_id.clone(), record.record_digest.clone());
         state.revisions.entry(record.revision_id.clone()).or_insert_with(|| record.clone());
         state.last_sequence = sequence;
-        state.last_digest = record.record_digest.clone();
+        record.record_digest.clone_into(&mut state.last_digest);
         state.latest.insert(record.source_id.clone(), record);
         state.event_count += 1;
     }

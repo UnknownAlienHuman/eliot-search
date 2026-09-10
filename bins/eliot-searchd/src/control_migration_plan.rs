@@ -100,12 +100,15 @@ impl DirectStore {
         ensure_directory(&control)?;
         let directory = control.join("migration-plans");
         ensure_child_directory(&directory)?;
+        #[cfg(unix)]
         sync_directory(&control)?;
+        #[cfg(not(unix))]
+        sync_directory(&control);
         Self::stage_mapping_artifact(&self.inner, &self.root, target, &directory, "control/migration-plans/", deadline)
     }
 
     /// Shared artifact writer for the live owner and offline entrypoint. The caller
-    /// holds source_root's ordinary lock and opened source from that exact root.
+    /// holds `source_root`'s ordinary lock and opened source from that exact root.
     /// No source store is initialized. Payload readback resolves existing Windows
     /// credentials only; no credential or source object is created or converted.
     /// A returned locator is relative to the explicitly named location scope.
@@ -174,12 +177,18 @@ impl DirectStore {
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
             Err(_) => return Err("DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN".to_owned()),
         };
+        #[cfg(unix)]
         sync_directory(directory)?;
+        #[cfg(not(unix))]
+        sync_directory(directory);
         if fingerprint(&path, bytes, deadline)? != digest {
             return Err("DIRECT_MIGRATION_PLAN_IMMUTABLE_CONFLICT".to_owned());
         }
         staging.remove()?;
+        #[cfg(unix)]
         sync_directory(directory)?;
+        #[cfg(not(unix))]
+        sync_directory(directory);
         let content = content_readback::stage(source, source_root, target, digest, directory, deadline)?;
         let (database_name, database_reused) = redb_import::store(
             source, target, directory, digest, summary.import_counts(), &content, deadline,

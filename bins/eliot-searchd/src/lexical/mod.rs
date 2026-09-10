@@ -11,13 +11,13 @@ use search_lexical::AnalyzerConfig;
 use manifest::ManifestDocument;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct LexicalIndexLimits {
-    pub(crate) max_terms: usize,
-    pub(crate) max_postings: usize,
-    pub(crate) max_query_terms: usize,
-    pub(crate) max_results: usize,
-    pub(crate) max_file_bytes: u64,
-    pub(crate) max_excerpt_chars: usize,
+pub struct LexicalIndexLimits {
+    pub(crate) terms: usize,
+    pub(crate) postings: usize,
+    pub(crate) query_terms: usize,
+    pub(crate) results: usize,
+    pub(crate) file_bytes: u64,
+    pub(crate) excerpt_chars: usize,
 }
 
 impl LexicalIndexLimits {
@@ -27,12 +27,12 @@ impl LexicalIndexLimits {
         max_excerpt_chars: usize,
     ) -> Self {
         Self {
-            max_terms: 1_000_000,
-            max_postings: 8_000_000,
-            max_query_terms: 64,
-            max_results,
-            max_file_bytes,
-            max_excerpt_chars,
+            terms: 1_000_000,
+            postings: 8_000_000,
+            query_terms: 64,
+            results: max_results,
+            file_bytes: max_file_bytes,
+            excerpt_chars: max_excerpt_chars,
         }
     }
 }
@@ -51,7 +51,7 @@ struct IndexedDocument {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct LexicalIndex {
+pub struct LexicalIndex {
     snapshot_id: String,
     snapshot_manifest_fingerprint: [u8; 32],
     index_fingerprint: [u8; 32],
@@ -64,14 +64,6 @@ pub(crate) struct LexicalIndex {
 }
 
 impl LexicalIndex {
-    pub(crate) fn snapshot_id(&self) -> &str {
-        &self.snapshot_id
-    }
-
-    pub(crate) const fn snapshot_manifest_fingerprint(&self) -> [u8; 32] {
-        self.snapshot_manifest_fingerprint
-    }
-
     pub(crate) const fn index_fingerprint(&self) -> [u8; 32] {
         self.index_fingerprint
     }
@@ -80,7 +72,7 @@ impl LexicalIndex {
         self.analyzer.analyzer_id.as_str()
     }
 
-    pub(crate) fn document_count(&self) -> usize {
+    pub(crate) const fn document_count(&self) -> usize {
         self.documents.len()
     }
 
@@ -94,7 +86,7 @@ impl LexicalIndex {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct LexicalMatch {
+pub struct LexicalMatch {
     pub(crate) root_index: usize,
     pub(crate) relative_path: String,
     pub(crate) revision_fingerprint: [u8; 32],
@@ -107,7 +99,7 @@ pub(crate) struct LexicalMatch {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct LexicalSearchResult {
+pub struct LexicalSearchResult {
     pub(crate) snapshot_id: String,
     pub(crate) snapshot_manifest_fingerprint: [u8; 32],
     pub(crate) index_fingerprint: [u8; 32],

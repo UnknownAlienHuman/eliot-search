@@ -1,6 +1,7 @@
 //! Exercises shared preparation through the actual primary daemon executable.
 
 use std::fs;
+use std::fmt::Write as _;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
@@ -26,11 +27,11 @@ impl Fixture {
         Self { base, data, source }
     }
 
-    fn run(&self, args: &[&str]) -> (ExitStatus, String, String) {
-        self.run_with_stdin(args, Stdio::null())
+    fn run(args: &[&str]) -> (ExitStatus, String, String) {
+        Self::run_with_stdin(args, Stdio::null())
     }
 
-    fn run_with_stdin(&self, args: &[&str], input: Stdio) -> (ExitStatus, String, String) {
+    fn run_with_stdin(args: &[&str], input: Stdio) -> (ExitStatus, String, String) {
         let mut child = Command::new(env!("CARGO_BIN_EXE_eliot-searchd"))
             .args(args).stdin(input).stdout(Stdio::piped()).stderr(Stdio::piped())
             .spawn().expect("primary daemon");
@@ -53,19 +54,19 @@ impl Fixture {
         (status, out.join().unwrap(), err.join().unwrap())
     }
 
-    fn ok(&self, args: &[&str]) -> String {
-        let (status, stdout, stderr) = self.run(args);
+    fn ok(args: &[&str]) -> String {
+        let (status, stdout, stderr) = Self::run(args);
         assert!(status.success(), "status={status} stdout={stdout} stderr={stderr}");
         stdout
     }
 
     fn index(&self, bytes: &[u8]) -> String {
         fs::write(&self.source, bytes).unwrap();
-        self.ok(&["--index-file", self.data.to_str().unwrap(), self.source.to_str().unwrap()])
+        Self::ok(&["--index-file", self.data.to_str().unwrap(), self.source.to_str().unwrap()])
     }
 
     fn search(&self, query: &str) -> String {
-        self.ok(&["--search-root", self.data.to_str().unwrap(), query])
+        Self::ok(&["--search-root", self.data.to_str().unwrap(), query])
     }
 }
 impl Drop for Fixture {
@@ -76,7 +77,7 @@ fn read_output(reader: impl Read) -> String {
     const MAX_OUTPUT: u64 = 1024 * 1024;
     let mut bytes = Vec::new();
     reader.take(MAX_OUTPUT + 1).read_to_end(&mut bytes).unwrap();
-    assert!(bytes.len() <= MAX_OUTPUT as usize, "test output ceiling exceeded");
+    assert!(bytes.len() <= usize::try_from(MAX_OUTPUT).expect("test output ceiling fits"), "test output ceiling exceeded");
     String::from_utf8(bytes).expect("UTF-8 output")
 }
 
@@ -137,8 +138,11 @@ fn reindex_restart_and_source_deletion_preserve_exact_historical_readback() {
     assert_eq!(matches(&fixture.search("retained-new")).len(), 1);
     assert!(matches(&fixture.search("retained-old")).is_empty());
     let end = old.len().to_string();
-    let output = fixture.ok(&["--read-revision", fixture.data.to_str().unwrap(), &old_revision, "0", &end]);
-    let hex = old.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let output = Fixture::ok(&["--read-revision", fixture.data.to_str().unwrap(), &old_revision, "0", &end]);
+    let hex = old.iter().fold(String::new(), |mut output, byte| {
+        let _ = write!(output, "{byte:02x}");
+        output
+    });
     assert!(output.contains(&hex), "{output}");
 }
 
@@ -159,8 +163,8 @@ fn one_shot_file_and_stdin_preserve_exact_matches_without_creating_a_catalog() {
     let fixture = Fixture::new();
     let text = "α aAa\r\nb\0aaaa\n";
     fs::write(&fixture.source, text).unwrap();
-    let file = fixture.ok(&["--scan-file-ascii-insensitive", "aa", fixture.source.to_str().unwrap()]);
-    let (status, stdin, stderr) = fixture.run_with_stdin(&["--scan-stdin-ascii-insensitive", "aa"],
+    let file = Fixture::ok(&["--scan-file-ascii-insensitive", "aa", fixture.source.to_str().unwrap()]);
+    let (status, stdin, stderr) = Fixture::run_with_stdin(&["--scan-stdin-ascii-insensitive", "aa"],
         Stdio::from(fs::File::open(&fixture.source).unwrap()));
     assert!(status.success(), "{stderr}");
     let file_rows = matches(&file);

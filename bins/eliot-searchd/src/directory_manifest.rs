@@ -25,7 +25,7 @@ const MAX_MANIFEST_LINE_BYTES: usize = 1_024;
 
 /// One exact source binding in a complete directory inventory.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) struct DirectoryEntry {
+pub struct DirectoryEntry {
     pub(crate) source_id: String,
     pub(crate) path_digest: String,
     pub(crate) revision_id: String,
@@ -33,7 +33,7 @@ pub(crate) struct DirectoryEntry {
 
 /// One immutable verified directory inventory generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct DirectoryManifest {
+pub struct DirectoryManifest {
     pub(crate) namespace_id: String,
     pub(crate) directory_digest: String,
     pub(crate) generation: u64,
@@ -43,7 +43,7 @@ pub(crate) struct DirectoryManifest {
 
 /// Result of explicit directory reconciliation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct DirectorySyncResult {
+pub struct DirectorySyncResult {
     pub(crate) namespace_id: String,
     pub(crate) directory_digest: String,
     pub(crate) previous_generation: Option<u64>,
@@ -59,7 +59,7 @@ pub(crate) struct DirectorySyncResult {
 
 /// Verification summary for all immutable directory manifests.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct DirectoryManifestVerification {
+pub struct DirectoryManifestVerification {
     pub(crate) manifest_files: usize,
     pub(crate) directories: usize,
     pub(crate) current_entries: usize,
@@ -68,7 +68,7 @@ pub(crate) struct DirectoryManifestVerification {
 
 /// Completes one inventory, indexes current files, retires proven missing
 /// bindings, and publishes the next immutable manifest generation.
-pub(crate) fn sync_directory(
+pub fn sync_directory(
     store: &mut DirectStore,
     data_root: &Path,
     directory: &Path,
@@ -164,7 +164,7 @@ pub(crate) fn sync_directory(
 
 /// Verifies every immutable directory manifest and selects one unambiguous
 /// highest generation per directory.
-pub(crate) fn verify_directory_manifests(
+pub fn verify_directory_manifests(
     data_root: &Path,
     namespace_id: &str,
 ) -> Result<DirectoryManifestVerification, String> {
@@ -183,10 +183,10 @@ pub(crate) fn verify_directory_manifests(
             return Err("DIRECT_MANIFEST_NAMESPACE_MISMATCH".to_owned());
         }
         let key = (manifest.directory_digest.clone(), manifest.generation);
-        if let Some(existing) = generations.insert(key, manifest.manifest_digest.clone()) {
-            if existing != manifest.manifest_digest {
-                return Err("DIRECT_MANIFEST_GENERATION_AMBIGUOUS".to_owned());
-            }
+        if let Some(existing) = generations.insert(key, manifest.manifest_digest.clone())
+            && existing != manifest.manifest_digest
+        {
+            return Err("DIRECT_MANIFEST_GENERATION_AMBIGUOUS".to_owned());
         }
         highest_generation = highest_generation.max(manifest.generation);
         match current.get(&manifest.directory_digest) {
@@ -211,9 +211,15 @@ pub(crate) fn verify_directory_manifests(
     })
 }
 
+/// ASCII case-insensitive file-name suffix check. Uppercase variants such as
+/// `.TMP` classify the same as their lowercase form.
+fn has_ascii_suffix(name: &str, suffix: &str) -> bool {
+    name.len() >= suffix.len()
+        && name.as_bytes()[name.len() - suffix.len()..].eq_ignore_ascii_case(suffix.as_bytes())
+}
+
 fn entries_from_indexed(
-    indexed: &[IndexedSource],
-) -> Result<BTreeMap<String, DirectoryEntry>, String> {
+    indexed: &[IndexedSource],) -> Result<BTreeMap<String, DirectoryEntry>, String> {
     if indexed.len() > MAX_MANIFEST_ENTRIES {
         return Err("DIRECT_MANIFEST_ENTRY_LIMIT_EXCEEDED".to_owned());
     }
@@ -343,7 +349,10 @@ fn persist_manifest(root: &Path, manifest: &DirectoryManifest) -> Result<(), Str
         }
         return Err(format!("DIRECT_MANIFEST_RENAME_ERROR:{error}"));
     }
+    #[cfg(unix)]
     sync_manifest_directory(root)?;
+    #[cfg(not(unix))]
+    sync_manifest_directory(root);
     Ok(())
 }
 
@@ -372,10 +381,10 @@ fn load_latest_manifest(
         if let Some(existing) = seen_generation.insert(
             manifest.generation,
             manifest.manifest_digest.clone(),
-        ) {
-            if existing != manifest.manifest_digest {
-                return Err("DIRECT_MANIFEST_GENERATION_AMBIGUOUS".to_owned());
-            }
+        )
+            && existing != manifest.manifest_digest
+        {
+            return Err("DIRECT_MANIFEST_GENERATION_AMBIGUOUS".to_owned());
         }
         match &latest {
             Some(existing) if existing.generation > manifest.generation => {}
@@ -476,7 +485,7 @@ fn load_manifest_input(path: &Path, max_bytes: usize) -> Result<(DirectoryManife
 
 /// Exact raw-file SHA is distinct from the logical manifest digest.
 /// Reject noncanonical legacy encodings rather than rewriting them during import.
-pub(crate) fn migration_manifest(
+pub fn migration_manifest(
     path: &Path, remaining_bytes: usize,
 ) -> Result<(DirectoryManifest, [u8; 32], usize), String> {
     let (manifest, text) = load_manifest_input(path, remaining_bytes)?;
@@ -506,7 +515,10 @@ fn manifest_root(data_root: &Path) -> Result<PathBuf, String> {
     if !root.exists() {
         fs::create_dir(&root)
             .map_err(|error| format!("DIRECT_MANIFEST_DIRECTORY_CREATE_ERROR:{error}"))?;
+        #[cfg(unix)]
         sync_manifest_directory(&control)?;
+        #[cfg(not(unix))]
+        sync_manifest_directory(&control);
     }
     ensure_directory(&root)?;
     Ok(root)
@@ -517,7 +529,7 @@ fn manifest_files(root: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 /// Migration never creates a missing directory or silently drops unfinished writes.
-pub(crate) fn migration_manifest_files(
+pub fn migration_manifest_files(
     data_root: &Path, maximum: usize, deadline: Instant,
 ) -> Result<(bool, Vec<PathBuf>), String> {
     match existing_manifest_root(data_root)? {
@@ -545,11 +557,11 @@ fn list_manifest_files(
         ensure_regular_file(&path)?;
         let name = entry.file_name();
         let name = name.to_str().ok_or_else(|| "DIRECT_MANIFEST_FILENAME_INVALID".to_owned())?;
-        if name.starts_with('.') && name.ends_with(".tmp") {
+        if name.starts_with('.') && has_ascii_suffix(name, ".tmp") {
             if reject_pending { return Err("DIRECT_MIGRATION_MANIFEST_PENDING".to_owned()); }
             continue;
         }
-        if !name.ends_with(".manifest") {
+        if !has_ascii_suffix(name, ".manifest") {
             return Err("DIRECT_MANIFEST_UNEXPECTED_OBJECT".to_owned());
         }
         files.push(path);
@@ -619,7 +631,7 @@ pub(crate) fn path_identity_bytes(path: &Path) -> Vec<u8> {
 }
 
 #[cfg(windows)]
-pub(crate) fn path_identity_bytes(path: &Path) -> Vec<u8> {
+pub fn path_identity_bytes(path: &Path) -> Vec<u8> {
     use std::os::windows::ffi::OsStrExt;
     path.as_os_str()
         .encode_wide()
@@ -652,6 +664,4 @@ fn sync_manifest_directory(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
-fn sync_manifest_directory(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
+const fn sync_manifest_directory(_path: &Path) {}

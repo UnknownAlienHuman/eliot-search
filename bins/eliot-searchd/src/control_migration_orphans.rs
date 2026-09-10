@@ -18,7 +18,7 @@ const MAX_NAME_BYTES: usize = 192;
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Kind { Referenced, Orphan, Temporary }
 impl Kind {
-    fn tag(self) -> &'static str {
+    const fn tag(self) -> &'static str {
         match self {
             Self::Referenced => "catalog_referenced",
             Self::Orphan => "unreferenced_revision_object",
@@ -211,8 +211,11 @@ fn lower_hex(value: &str) -> bool {
 /// old GC's broad temporary-name recognizer; unknown names block rather than vanish.
 fn generated_name(name: &str) -> Option<(&str, bool)> {
     for suffix in [".bin", ".dpapi"] {
-        if let Some(id) = name.strip_suffix(suffix) {
-            if id.len() == 64 && lower_hex(id) { return Some((id, false)); }
+        if let Some(id) = name.strip_suffix(suffix)
+            && id.len() == 64
+            && lower_hex(id)
+        {
+            return Some((id, false));
         }
     }
     let body = name.strip_prefix('.')?.strip_suffix(".tmp")?;

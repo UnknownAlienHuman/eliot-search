@@ -15,7 +15,7 @@ use crate::plaintext_direct_store;
 use crate::service_output::{json_string, write_line};
 use crate::source_roots;
 
-pub(crate) fn maybe_run() -> Option<ExitCode> {
+pub fn maybe_run() -> Option<ExitCode> {
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
     if args.first().and_then(|arg| arg.to_str()) != Some("--plan-control-migration") {
         return None;
@@ -64,7 +64,7 @@ pub(crate) fn maybe_run() -> Option<ExitCode> {
 
 impl DataRootGuard {
     /// Borrow an existing canonical data root under its normal exclusive OS lock.
-    /// No DataRootGuard instance is constructed: its ordinary initializer and
+    /// No `DataRootGuard` instance is constructed: its ordinary initializer and
     /// marker-cleaning destructor must not run during source-preserving migration.
     /// Missing lock files require explicit recovery, never an invented new lease.
     pub(crate) fn with_existing_lock<T>(

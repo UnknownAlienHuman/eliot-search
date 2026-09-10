@@ -25,9 +25,9 @@ fn binding(plaintext: &[u8]) -> Binding {
 }
 
 // Independent legacy v1 field ordering, rather than the new encode_binding helper.
-fn old_header(magic: &[u8; 8], bound: Binding) -> Vec<u8> {
+fn old_header(magic: [u8; 8], bound: Binding) -> Vec<u8> {
     let mut bytes = Vec::new();
-    bytes.extend_from_slice(magic);
+    bytes.extend_from_slice(&magic);
     bytes.extend_from_slice(&1_u32.to_be_bytes());
     bytes.extend_from_slice(&bound.revision.namespace_id);
     bytes.extend_from_slice(&bound.key_binding_digest);
@@ -38,14 +38,14 @@ fn old_header(magic: &[u8; 8], bound: Binding) -> Vec<u8> {
 }
 
 fn outer(bound: Binding, payload: &[u8]) -> Vec<u8> {
-    let mut bytes = old_header(&OUTER_MAGIC, bound);
+    let mut bytes = old_header(OUTER_MAGIC, bound);
     bytes.extend_from_slice(&(payload.len() as u64).to_be_bytes());
     bytes.extend_from_slice(payload);
     bytes
 }
 
 fn inner(bound: Binding, plaintext: &[u8]) -> Vec<u8> {
-    let mut bytes = old_header(&INNER_MAGIC, bound);
+    let mut bytes = old_header(INNER_MAGIC, bound);
     bytes.extend_from_slice(plaintext);
     bytes
 }

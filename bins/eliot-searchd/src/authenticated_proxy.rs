@@ -21,7 +21,7 @@ use child_io::{ChildIo, ChildLimits};
 const MAX_PROXY_COMMAND_BYTES: usize = 128 * 1024;
 
 /// Intercepts `--serve-loopback-data-root ROOT PORT TOKEN_FILE`.
-pub(crate) fn maybe_run() -> Option<ExitCode> {
+pub fn maybe_run() -> Option<ExitCode> {
     let arguments = env::args_os().skip(1).collect::<Vec<_>>();
     if arguments.first().and_then(|value| value.to_str())
         != Some("--serve-loopback-data-root")
@@ -81,7 +81,7 @@ impl DirectChild {
         Ok(Self { io: ChildIo::spawn(command, ChildLimits::DEFAULT)?, fence: ExchangeFence::default() })
     }
 
-    fn dispatch(&mut self, command: &str, stream: &mut TcpStream) -> Result<EndpointAction, String> {
+    fn dispatch(&mut self, command: &str, stream: &TcpStream) -> Result<EndpointAction, String> {
         if self.fence.blocked() {
             self.abort();
             return Ok(EndpointAction::Abort);
