@@ -13,7 +13,7 @@ const MAX_RESPONSE_LINE_BYTES: usize = 256 * 1024;
 const MAX_RESPONSE_LINES: usize = 1_000_000;
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub(crate) fn invoke_remote(
+pub fn invoke_remote(
     address: &str,
     token_file: &Path,
     command: &str,
@@ -171,7 +171,7 @@ impl Digest {
             return Err("REMOTE_DIGEST_INVALID".to_owned());
         }
         let mut bytes = [0_u8; 32];
-        for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
             bytes[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
         }
         Ok(Self(bytes))
@@ -216,80 +216,16 @@ fn digest(bytes: &[u8]) -> Digest {
         0xa2bf_e8a1, 0xa81a_664b, 0xc24b_8b70, 0xc76c_51a3,
         0xd192_e819, 0xd699_0624, 0xf40e_3585, 0x106a_a070,
         0x19a4_c116, 0x1e37_6c08, 0x2748_774c, 0x34b0_bcb5,
-        0x391c_0cb3, 0x4ed8_aa4, 0x5b9c_ca4f, 0x682e_6ff3,
+        0x391c_0cb3, 0x04ed_8aa4, 0x5b9c_ca4f, 0x682e_6ff3,
         0x748f_82ee, 0x78a5_636f, 0x84c8_7814, 0x8cc7_0208,
         0x90be_fffa, 0xa450_6ceb, 0xbef9_a3f7, 0xc671_78f2,
     ];
 
-    fn compress(state: &mut [u32; 8], block: &[u8; 64], constants: &[u32; 64]) {
-        let mut schedule = [0_u32; 64];
-        for (index, word) in block.chunks_exact(4).enumerate() {
-            schedule[index] = u32::from_be_bytes(
-                word.try_into().expect("four-byte SHA-256 schedule word"),
-            );
-        }
-        for index in 16..64 {
-            let s0 = schedule[index - 15].rotate_right(7)
-                ^ schedule[index - 15].rotate_right(18)
-                ^ (schedule[index - 15] >> 3);
-            let s1 = schedule[index - 2].rotate_right(17)
-                ^ schedule[index - 2].rotate_right(19)
-                ^ (schedule[index - 2] >> 10);
-            schedule[index] = schedule[index - 16]
-                .wrapping_add(s0)
-                .wrapping_add(schedule[index - 7])
-                .wrapping_add(s1);
-        }
-        let mut a = state[0];
-        let mut b = state[1];
-        let mut c = state[2];
-        let mut d = state[3];
-        let mut e = state[4];
-        let mut f = state[5];
-        let mut g = state[6];
-        let mut h = state[7];
-        for index in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let choice = (e & f) ^ ((!e) & g);
-            let first = h
-                .wrapping_add(s1)
-                .wrapping_add(choice)
-                .wrapping_add(constants[index])
-                .wrapping_add(schedule[index]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let majority = (a & b) ^ (a & c) ^ (b & c);
-            let second = s0.wrapping_add(majority);
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(first);
-            d = c;
-            c = b;
-            b = a;
-            a = first.wrapping_add(second);
-        }
-        state[0] = state[0].wrapping_add(a);
-        state[1] = state[1].wrapping_add(b);
-        state[2] = state[2].wrapping_add(c);
-        state[3] = state[3].wrapping_add(d);
-        state[4] = state[4].wrapping_add(e);
-        state[5] = state[5].wrapping_add(f);
-        state[6] = state[6].wrapping_add(g);
-        state[7] = state[7].wrapping_add(h);
-    }
-
     let mut state = INITIAL;
-    let mut blocks = bytes.chunks_exact(64);
-    for block in &mut blocks {
-        compress(
-            &mut state,
-            block
-                .try_into()
-                .expect("chunks_exact yields a complete SHA-256 block"),
-            &K,
-        );
+    let (blocks, remainder) = bytes.as_chunks::<64>();
+    for block in blocks {
+        compress_block(&mut state, block, &K);
     }
-    let remainder = blocks.remainder();
     let mut tail = [0_u8; 128];
     tail[..remainder.len()].copy_from_slice(remainder);
     tail[remainder.len()] = 0x80;
@@ -298,18 +234,67 @@ fn digest(bytes: &[u8]) -> Digest {
         .unwrap_or(u64::MAX)
         .wrapping_mul(8);
     tail[padded - 8..padded].copy_from_slice(&bit_length.to_be_bytes());
-    for block in tail[..padded].chunks_exact(64) {
-        compress(
-            &mut state,
-            block
-                .try_into()
-                .expect("padded SHA-256 tail uses complete blocks"),
-            &K,
-        );
+    for block in tail[..padded].as_chunks::<64>().0 {
+        compress_block(&mut state, block, &K);
     }
     let mut output = [0_u8; 32];
     for (index, word) in state.into_iter().enumerate() {
         output[index * 4..index * 4 + 4].copy_from_slice(&word.to_be_bytes());
     }
     Digest(output)
+}
+
+fn compress_block(state: &mut [u32; 8], block: &[u8; 64], constants: &[u32; 64]) {
+    let mut schedule = [0_u32; 64];
+    for (index, word) in block.as_chunks::<4>().0.iter().enumerate() {
+        schedule[index] = u32::from_be_bytes(*word);
+    }
+    for index in 16..64 {
+        let s0 = schedule[index - 15].rotate_right(7)
+            ^ schedule[index - 15].rotate_right(18)
+            ^ (schedule[index - 15] >> 3);
+        let s1 = schedule[index - 2].rotate_right(17)
+            ^ schedule[index - 2].rotate_right(19)
+            ^ (schedule[index - 2] >> 10);
+        schedule[index] = schedule[index - 16]
+            .wrapping_add(s0)
+            .wrapping_add(schedule[index - 7])
+            .wrapping_add(s1);
+    }
+    let mut state_a = state[0];
+    let mut state_b = state[1];
+    let mut state_c = state[2];
+    let mut state_d = state[3];
+    let mut state_e = state[4];
+    let mut state_f = state[5];
+    let mut state_g = state[6];
+    let mut state_h = state[7];
+    for index in 0..64 {
+        let s1 = state_e.rotate_right(6) ^ state_e.rotate_right(11) ^ state_e.rotate_right(25);
+        let choice = (state_e & state_f) ^ ((!state_e) & state_g);
+        let first = state_h
+            .wrapping_add(s1)
+            .wrapping_add(choice)
+            .wrapping_add(constants[index])
+            .wrapping_add(schedule[index]);
+        let s0 = state_a.rotate_right(2) ^ state_a.rotate_right(13) ^ state_a.rotate_right(22);
+        let majority = (state_a & state_b) ^ (state_a & state_c) ^ (state_b & state_c);
+        let second = s0.wrapping_add(majority);
+        state_h = state_g;
+        state_g = state_f;
+        state_f = state_e;
+        state_e = state_d.wrapping_add(first);
+        state_d = state_c;
+        state_c = state_b;
+        state_b = state_a;
+        state_a = first.wrapping_add(second);
+    }
+    state[0] = state[0].wrapping_add(state_a);
+    state[1] = state[1].wrapping_add(state_b);
+    state[2] = state[2].wrapping_add(state_c);
+    state[3] = state[3].wrapping_add(state_d);
+    state[4] = state[4].wrapping_add(state_e);
+    state[5] = state[5].wrapping_add(state_f);
+    state[6] = state[6].wrapping_add(state_g);
+    state[7] = state[7].wrapping_add(state_h);
 }

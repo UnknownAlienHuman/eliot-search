@@ -83,7 +83,7 @@ fn run(options: Options) -> io::Result<String> {
     let mut stream = TcpStream::connect_timeout(&address, IO_TIMEOUT)?;
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
-    write!(stream, "ELIOT_SEARCH/1 {token} {command}\n")?;
+    writeln!(stream, "ELIOT_SEARCH/1 {token} {command}")?;
     stream.flush()?;
     read_response(&mut stream)
 }
