@@ -17,18 +17,19 @@ mod profile;
 mod vector;
 
 pub use encoding::{
-    SparseEncoding, SparseEncodingKind, SparseEncodingReceipt, encode_document,
-    encode_query,
+    SparseEncoding, SparseEncodingKind, SparseEncodingReceipt, encode_document, encode_query,
 };
 pub use error::SparseError;
 pub use fingerprint::SparseFingerprint;
+// Crate-internal sharing with frozen-profile/scoring modules (see allow above).
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) use fingerprint::fingerprint_bytes;
 pub use mapping::{
-    CollisionReport, SparseFeature, SparseFeatureSet, map_terms,
-    measure_collision_terms, term_index,
+    CollisionReport, SparseFeature, SparseFeatureSet, map_terms, measure_collision_terms,
+    term_index,
 };
 pub use profile::{
-    AcceptedSparseProfile, CollisionPolicy, DocumentTfWeighting,
-    FrozenCorpusStatistics, IdfMode, QueryTfWeighting, SparseLimits,
-    SparseProfile, SparseQualification, validate_sparse_profile,
+    AcceptedSparseProfile, CollisionPolicy, DocumentTfWeighting, FrozenCorpusStatistics, IdfMode,
+    QueryTfWeighting, SparseLimits, SparseProfile, SparseQualification, validate_sparse_profile,
 };
 pub use vector::SparseVector;

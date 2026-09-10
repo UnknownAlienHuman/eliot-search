@@ -3,14 +3,19 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use crate::analyzer::LexicalAnalysis;
 
+use super::SparseError;
 use super::fingerprint::{SparseFingerprint, fingerprint_bytes};
 use super::profile::{CollisionPolicy, SparseLimits, SparseProfile};
-use super::SparseError;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// One sparse index with the distinct normalized terms mapped to it.
+///
+/// `Debug` reports the term count, never term content: colliding terms are
+/// unit content and stay out of ordinary telemetry.
+#[derive(Clone, Eq, PartialEq)]
 pub struct SparseFeature {
     pub index: u32,
     pub terms: Vec<String>,
@@ -30,11 +35,40 @@ pub struct CollisionReport {
     pub accepted: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// Mapped feature set with its collision report and fingerprint.
+///
+/// `Debug` reports feature counts plus the content-free report and
+/// fingerprint; mapped terms are unit content and never appear in debug
+/// telemetry.
+#[derive(Clone, Eq, PartialEq)]
 pub struct SparseFeatureSet {
     pub features: Vec<SparseFeature>,
     pub report: CollisionReport,
     pub feature_fingerprint: SparseFingerprint,
+}
+
+impl fmt::Debug for SparseFeature {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SparseFeature")
+            .field("index", &self.index)
+            .field("term_count", &self.terms.len())
+            .field("frequency", &self.frequency)
+            .field("first_position", &self.first_position)
+            .field("last_position", &self.last_position)
+            .finish()
+    }
+}
+
+impl fmt::Debug for SparseFeatureSet {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SparseFeatureSet")
+            .field("feature_count", &self.features.len())
+            .field("report", &self.report)
+            .field("feature_fingerprint", &self.feature_fingerprint)
+            .finish()
+    }
 }
 
 pub fn map_terms(
@@ -174,10 +208,7 @@ pub fn measure_collision_terms(
     })
 }
 
-fn collision_rate(
-    distinct_terms: usize,
-    distinct_indexes: usize,
-) -> Result<u32, SparseError> {
+fn collision_rate(distinct_terms: usize, distinct_indexes: usize) -> Result<u32, SparseError> {
     if distinct_terms == 0 {
         return Ok(0);
     }
@@ -186,27 +217,23 @@ fn collision_rate(
         .map_err(|_| SparseError::FingerprintOverflow)?
         .checked_mul(1_000_000)
         .ok_or(SparseError::FingerprintOverflow)?;
-    let denominator = u128::try_from(distinct_terms)
-        .map_err(|_| SparseError::FingerprintOverflow)?;
-    u32::try_from(numerator / denominator)
-        .map_err(|_| SparseError::FingerprintOverflow)
+    let denominator =
+        u128::try_from(distinct_terms).map_err(|_| SparseError::FingerprintOverflow)?;
+    u32::try_from(numerator / denominator).map_err(|_| SparseError::FingerprintOverflow)
 }
 
-fn fingerprint_features(
-    features: &[SparseFeature],
-) -> Result<SparseFingerprint, SparseError> {
+fn fingerprint_features(features: &[SparseFeature]) -> Result<SparseFingerprint, SparseError> {
     let mut canonical = Vec::new();
     for feature in features {
         append(&mut canonical, &feature.index.to_be_bytes())?;
         append(&mut canonical, &feature.frequency.to_be_bytes())?;
         append(&mut canonical, &feature.first_position.to_be_bytes())?;
         append(&mut canonical, &feature.last_position.to_be_bytes())?;
-        let term_count = u64::try_from(feature.terms.len())
-            .map_err(|_| SparseError::FingerprintOverflow)?;
+        let term_count =
+            u64::try_from(feature.terms.len()).map_err(|_| SparseError::FingerprintOverflow)?;
         append(&mut canonical, &term_count.to_be_bytes())?;
         for term in &feature.terms {
-            let length = u64::try_from(term.len())
-                .map_err(|_| SparseError::FingerprintOverflow)?;
+            let length = u64::try_from(term.len()).map_err(|_| SparseError::FingerprintOverflow)?;
             append(&mut canonical, &length.to_be_bytes())?;
             append(&mut canonical, term.as_bytes())?;
         }

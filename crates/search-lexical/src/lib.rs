@@ -158,7 +158,11 @@ pub enum CaseNormalization {
 }
 
 /// Immutable bounded lexical analyzer configuration.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// `Debug` intentionally reports only the stop-word count (plus identity and
+/// fingerprint): dictionaries can be large and are configuration evidence,
+//  not per-call content.
+#[derive(Clone, Eq, PartialEq)]
 pub struct AnalyzerConfig {
     /// Stable analyzer profile identity.
     pub analyzer_id: OpaqueId,
@@ -241,6 +245,25 @@ impl AnalyzerConfig {
     }
 }
 
+impl fmt::Debug for AnalyzerConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AnalyzerConfig")
+            .field("analyzer_id", &self.analyzer_id)
+            .field("revision", &self.revision)
+            .field("character_policy", &self.character_policy)
+            .field("case_normalization", &self.case_normalization)
+            .field("min_token_chars", &self.min_token_chars)
+            .field(
+                "preserve_stop_word_positions",
+                &self.preserve_stop_word_positions,
+            )
+            .field("stop_word_count", &self.stop_words.len())
+            .field("fingerprint", &self.fingerprint)
+            .finish()
+    }
+}
+
 /// Exact source unit presented to the analyzer.
 #[derive(Clone, Eq, PartialEq)]
 pub struct LexicalInput {
@@ -315,7 +338,10 @@ impl fmt::Debug for LexicalInput {
 }
 
 /// One normalized emitted token with exact original offsets.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// `Debug` reports content-free lengths and offsets only; the normalized term
+/// itself is unit content and never appears in debug telemetry.
+#[derive(Clone, Eq, PartialEq)]
 pub struct LexicalToken {
     /// Normalized term.
     pub term: String,
@@ -334,7 +360,10 @@ pub struct LexicalToken {
 }
 
 /// Deterministic statistics for one normalized term.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// `Debug` reports content-free lengths and counts only; the term itself is
+/// unit content and never appears in debug telemetry.
+#[derive(Clone, Eq, PartialEq)]
 pub struct TermStatistics {
     /// Normalized term.
     pub term: String,
@@ -378,7 +407,10 @@ pub struct LexicalReceipt {
 }
 
 /// Complete deterministic lexical analysis result.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// `Debug` reports token/term counts plus the content-free receipt; emitted
+/// terms are unit content and never appear in debug telemetry.
+#[derive(Clone, Eq, PartialEq)]
 pub struct LexicalAnalysis {
     /// Exact emitted tokens in source order.
     pub tokens: Vec<LexicalToken>,
@@ -386,6 +418,45 @@ pub struct LexicalAnalysis {
     pub terms: Vec<TermStatistics>,
     /// Content-free analysis receipt.
     pub receipt: LexicalReceipt,
+}
+
+impl fmt::Debug for LexicalToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LexicalToken")
+            .field("term_bytes", &self.term.len())
+            .field("term_chars", &self.term.chars().count())
+            .field("position", &self.position)
+            .field("unit_byte_start", &self.unit_byte_start)
+            .field("unit_byte_end", &self.unit_byte_end)
+            .field("source_byte_start", &self.source_byte_start)
+            .field("source_byte_end", &self.source_byte_end)
+            .field("original_char_count", &self.original_char_count)
+            .finish()
+    }
+}
+
+impl fmt::Debug for TermStatistics {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TermStatistics")
+            .field("term_bytes", &self.term.len())
+            .field("frequency", &self.frequency)
+            .field("first_position", &self.first_position)
+            .field("last_position", &self.last_position)
+            .finish()
+    }
+}
+
+impl fmt::Debug for LexicalAnalysis {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LexicalAnalysis")
+            .field("token_count", &self.tokens.len())
+            .field("term_count", &self.terms.len())
+            .field("receipt", &self.receipt)
+            .finish()
+    }
 }
 
 /// Analyzes one exact UTF-8 unit deterministically.
@@ -460,19 +531,19 @@ pub fn analyze(
     }
     let terms = term_stats
         .into_iter()
-        .map(|(term, (frequency, first_position, last_position))| TermStatistics {
-            term,
-            frequency,
-            first_position,
-            last_position,
-        })
+        .map(
+            |(term, (frequency, first_position, last_position))| TermStatistics {
+                term,
+                frequency,
+                first_position,
+                last_position,
+            },
+        )
         .collect::<Vec<_>>();
     let emitted_token_count =
         u64::try_from(tokens.len()).map_err(|_| LexicalError::OffsetOverflow)?;
-    let unique_term_count =
-        u64::try_from(terms.len()).map_err(|_| LexicalError::OffsetOverflow)?;
-    let input_bytes =
-        u64::try_from(input.len()).map_err(|_| LexicalError::OffsetOverflow)?;
+    let unique_term_count = u64::try_from(terms.len()).map_err(|_| LexicalError::OffsetOverflow)?;
+    let input_bytes = u64::try_from(input.len()).map_err(|_| LexicalError::OffsetOverflow)?;
     Ok(LexicalAnalysis {
         tokens,
         terms,
@@ -551,8 +622,8 @@ fn emit_candidate(
             .checked_add(1)
             .ok_or(LexicalError::OffsetOverflow)?;
     }
-    let consumes_position = !filtered_short
-        && (!filtered_stop || config.preserve_stop_word_positions);
+    let consumes_position =
+        !filtered_short && (!filtered_stop || config.preserve_stop_word_positions);
     let current_position = *position;
     if consumes_position {
         *position = position
@@ -601,8 +672,7 @@ fn emit_candidate(
 
 fn is_token_character(character: char, policy: TokenCharacterPolicy) -> bool {
     character.is_alphanumeric()
-        || (policy == TokenCharacterPolicy::UnicodeAlphanumericAndUnderscore
-            && character == '_')
+        || (policy == TokenCharacterPolicy::UnicodeAlphanumericAndUnderscore && character == '_')
 }
 
 fn normalize_term(value: &str, policy: CaseNormalization) -> String {
@@ -618,9 +688,7 @@ fn reject_binary_controls(bytes: &[u8]) -> Result<(), LexicalError> {
     }
     let disallowed = bytes
         .iter()
-        .filter(|byte| {
-            **byte < 0x20 && !matches!(**byte, b'\t' | b'\n' | b'\r' | 0x0c)
-        })
+        .filter(|byte| **byte < 0x20 && !matches!(**byte, b'\t' | b'\n' | b'\r' | 0x0c))
         .count();
     let threshold = bytes.len().div_ceil(100).max(4);
     if disallowed >= threshold {
@@ -662,12 +730,8 @@ mod tests {
 
     #[test]
     fn unicode_lowercase_preserves_original_byte_offsets() {
-        let result = analyze(
-            input("Alpha ΓΆΜΜΑ"),
-            &config(&[]),
-            DEFAULT_LEXICAL_LIMITS,
-        )
-        .expect("analyze");
+        let result =
+            analyze(input("Alpha ΓΆΜΜΑ"), &config(&[]), DEFAULT_LEXICAL_LIMITS).expect("analyze");
         assert_eq!(result.tokens[0].term, "alpha");
         assert_eq!(result.tokens[0].unit_byte_start, 0);
         assert_eq!(result.tokens[0].unit_byte_end, 5);
@@ -707,12 +771,8 @@ mod tests {
 
     #[test]
     fn underscore_policy_is_explicit() {
-        let joined = analyze(
-            input("one_two"),
-            &config(&[]),
-            DEFAULT_LEXICAL_LIMITS,
-        )
-        .expect("joined");
+        let joined =
+            analyze(input("one_two"), &config(&[]), DEFAULT_LEXICAL_LIMITS).expect("joined");
         assert_eq!(joined.tokens[0].term, "one_two");
         let split_config = AnalyzerConfig::new(
             OpaqueId::new("analyzer:split").expect("analyzer"),
@@ -726,12 +786,8 @@ mod tests {
             DEFAULT_LEXICAL_LIMITS,
         )
         .expect("config");
-        let split = analyze(
-            input("one_two"),
-            &split_config,
-            DEFAULT_LEXICAL_LIMITS,
-        )
-        .expect("split");
+        let split =
+            analyze(input("one_two"), &split_config, DEFAULT_LEXICAL_LIMITS).expect("split");
         assert_eq!(
             split
                 .tokens
@@ -785,11 +841,7 @@ mod tests {
     #[test]
     fn binary_controls_fail_closed() {
         assert_eq!(
-            analyze(
-                input("abc\0def"),
-                &config(&[]),
-                DEFAULT_LEXICAL_LIMITS,
-            ),
+            analyze(input("abc\0def"), &config(&[]), DEFAULT_LEXICAL_LIMITS,),
             Err(LexicalError::BinaryContent)
         );
     }

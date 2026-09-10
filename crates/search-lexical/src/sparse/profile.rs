@@ -1,5 +1,6 @@
 //! Qualified sparse profile and finite statistics.
 
+use core::fmt;
 use std::collections::BTreeMap;
 
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
@@ -62,15 +63,13 @@ impl SparseProfile {
         match self.document_tf {
             DocumentTfWeighting::Raw | DocumentTfWeighting::Logarithmic => {}
             DocumentTfWeighting::Bm25 { k1, b }
-                if k1.is_finite()
-                    && b.is_finite()
-                    && k1 > 0.0
-                    && (0.0..=1.0).contains(&b) => {}
+                if k1.is_finite() && b.is_finite() && k1 > 0.0 && (0.0..=1.0).contains(&b) => {}
             DocumentTfWeighting::Bm25 { .. } => return Err(SparseError::InvalidProfile),
         }
         match (self.idf_mode, self.qdrant_idf_enabled) {
-            (IdfMode::DelegatedToQdrant, true)
-            | (IdfMode::FrozenLocal | IdfMode::None, false) => Ok(()),
+            (IdfMode::DelegatedToQdrant, true) | (IdfMode::FrozenLocal | IdfMode::None, false) => {
+                Ok(())
+            }
             _ => Err(SparseError::DoubleIdf),
         }
     }
@@ -116,8 +115,7 @@ pub fn validate_sparse_profile(
     }
     let id_mismatch = qualification.profile_id != profile.profile_id;
     let revision_mismatch = qualification.profile_revision != profile.revision;
-    let fingerprint_mismatch =
-        qualification.profile_fingerprint != profile.fingerprint;
+    let fingerprint_mismatch = qualification.profile_fingerprint != profile.fingerprint;
     if id_mismatch || revision_mismatch || fingerprint_mismatch {
         return Err(SparseError::QualificationMismatch);
     }
@@ -156,7 +154,12 @@ impl SparseLimits {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+/// Frozen denominator snapshot: one entry per sparse index with the number
+/// of scoring documents containing it.
+///
+/// `Debug` reports entry counts plus the digest, never the full frequency
+/// table: large maps must not flood ordinary telemetry.
+#[derive(Clone, PartialEq)]
 pub struct FrozenCorpusStatistics {
     pub document_count: u64,
     pub average_document_length: f64,
@@ -164,19 +167,26 @@ pub struct FrozenCorpusStatistics {
     pub statistics_digest: Blake3Digest32,
 }
 
+impl fmt::Debug for FrozenCorpusStatistics {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FrozenCorpusStatistics")
+            .field("document_count", &self.document_count)
+            .field("average_document_length", &self.average_document_length)
+            .field("frequency_entries", &self.document_frequency.len())
+            .field("statistics_digest", &self.statistics_digest)
+            .finish()
+    }
+}
+
 impl FrozenCorpusStatistics {
     pub fn validate(&self, profile: &SparseProfile) -> Result<(), SparseError> {
         if self.document_count == 0
             || !self.average_document_length.is_finite()
             || self.average_document_length <= 0.0
-            || self
-                .document_frequency
-                .iter()
-                .any(|(index, frequency)| {
-                    *index >= profile.index_space
-                        || *frequency == 0
-                        || *frequency > self.document_count
-                })
+            || self.document_frequency.iter().any(|(index, frequency)| {
+                *index >= profile.index_space || *frequency == 0 || *frequency > self.document_count
+            })
         {
             return Err(SparseError::StatisticsInvalid);
         }

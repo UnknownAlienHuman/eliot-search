@@ -3,7 +3,11 @@
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct SparseFingerprint(pub [u8; 32]);
 
-pub(super) fn fingerprint_bytes(bytes: &[u8]) -> SparseFingerprint {
+/// Package-local deterministic 32-byte fingerprint over canonical bytes.
+// Shared crate-internally with the frozen-profile and scoring-accounting
+// modules; the `sparse` module is private as a unit, hence the allow.
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn fingerprint_bytes(bytes: &[u8]) -> SparseFingerprint {
     let mut lanes = initial_lanes();
     mix(&mut lanes, bytes);
     SparseFingerprint(finish_lanes(lanes))

@@ -1,19 +1,19 @@
 //! End-to-end qualified document and query sparse encoding.
 
+use core::fmt;
+
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
 
-use crate::analyzer::{
-    analyze, LexicalAnalysis, LexicalInput, LexicalLimits,
-};
+use crate::analyzer::{LexicalAnalysis, LexicalInput, LexicalLimits, analyze};
 
+use super::SparseError;
 use super::fingerprint::{SparseFingerprint, fingerprint_bytes};
 use super::mapping::{CollisionReport, SparseFeatureSet, map_terms};
 use super::profile::{
-    AcceptedSparseProfile, DocumentTfWeighting, FrozenCorpusStatistics, IdfMode,
-    SparseLimits, SparseProfile,
+    AcceptedSparseProfile, DocumentTfWeighting, FrozenCorpusStatistics, IdfMode, SparseLimits,
+    SparseProfile,
 };
 use super::vector::{SparseVector, weight_document, weight_query};
-use super::SparseError;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SparseEncodingKind {
@@ -40,12 +40,31 @@ pub struct SparseEncodingReceipt {
     pub statistics_digest: Option<Blake3Digest32>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+/// Complete qualified sparse encoding.
+///
+/// `Debug` reports the content-free receipt plus vector shape only; the
+/// lexical analysis and mapped terms are unit content and never appear in
+/// debug telemetry.
+#[derive(Clone, PartialEq)]
 pub struct SparseEncoding {
     pub analysis: LexicalAnalysis,
     pub features: SparseFeatureSet,
     pub vector: SparseVector,
     pub receipt: SparseEncodingReceipt,
+}
+
+// Intentional redaction: `analysis` and `features` hold unit content and
+// must not appear in debug telemetry; only the receipt and vector shape.
+#[allow(clippy::missing_fields_in_debug)]
+impl fmt::Debug for SparseEncoding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SparseEncoding")
+            .field("receipt", &self.receipt)
+            .field("index_count", &self.vector.indices.len())
+            .field("vector_fingerprint", &self.vector.fingerprint())
+            .finish()
+    }
 }
 
 pub fn encode_document(
@@ -115,9 +134,7 @@ fn encode(
         SparseEncodingKind::Document => {
             weight_document(&analysis, &features, profile, statistics, sparse_limits)?
         }
-        SparseEncodingKind::Query => {
-            weight_query(&features, profile, statistics, sparse_limits)?
-        }
+        SparseEncodingKind::Query => weight_query(&features, profile, statistics, sparse_limits)?,
     };
     vector.validate(profile)?;
     let vector_fingerprint = vector.fingerprint();
@@ -136,10 +153,7 @@ fn encode(
             distinct_terms: features.report.distinct_terms,
             vector_values: vector.indices.len(),
             collision_report: features.report.clone(),
-            qualification_receipt: accepted
-                .qualification()
-                .qualification_receipt
-                .clone(),
+            qualification_receipt: accepted.qualification().qualification_receipt.clone(),
             statistics_digest,
         },
         analysis,
