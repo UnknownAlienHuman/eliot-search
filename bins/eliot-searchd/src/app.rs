@@ -451,7 +451,7 @@ fn run() -> Result<(), String> {
 }
 
 fn cmd_serve_data_root(arguments: &[String]) -> Result<(), String> {
-    let (guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    let (mut guard, store) = open_direct_store(Path::new(&arguments[1]))?;
     store.verify()?;
     println!(
         "{{\"event\":\"data_root_ready\",\"namespace_id\":\"{}\",\"encrypted_at_rest\":false}}",
@@ -459,8 +459,11 @@ fn cmd_serve_data_root(arguments: &[String]) -> Result<(), String> {
     );
     serve_stdio(Health::DIRECT_STORE)
         .map_err(|error| format!("STDIO_ERROR:{error}"))?;
+    // Same guarded close-out as the primary service: drain, release
+    // tombstone, then release exclusion after the store is closed.
+    guard.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
+    guard.release_cleanly().map(|_| ())?;
     drop(store);
-    drop(guard);
     Ok(())
 }
 

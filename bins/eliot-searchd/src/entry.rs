@@ -21,6 +21,7 @@ mod directory_manifest;
 mod endpoint;
 mod maintenance;
 mod maintenance_guard;
+pub(crate) mod owner_composition;
 #[path = "direct_store.rs"]
 mod plaintext_direct_store;
 mod preparation_composition;
@@ -29,6 +30,24 @@ mod public_runtime_service;
 mod result_handles;
 mod revision_protection;
 mod safe_reader_adapter;
+// The sealed modules below are shared with the harness-only sealed binaries.
+// Only the root lock, the epoch-head observer and the root-binding check are
+// live on this path; the remaining sealed surface is harness-owned, hence
+// the scoped allowance instead of a second owner type.
+#[allow(dead_code)]
+mod sealed_digest;
+#[allow(dead_code)]
+pub(crate) mod sealed_owner_epoch;
+#[allow(dead_code)]
+pub(crate) mod sealed_root_identity;
+#[allow(dead_code)]
+pub(crate) mod sealed_root_lock;
+#[allow(dead_code)]
+mod sealed_store;
+#[allow(dead_code)]
+mod sealed_transaction;
+#[allow(dead_code)]
+mod sealed_transaction_guard;
 mod secure_commands;
 mod service_output;
 mod sha256;

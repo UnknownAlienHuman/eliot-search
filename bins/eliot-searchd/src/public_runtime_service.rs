@@ -55,7 +55,7 @@ pub fn maybe_run() -> Option<ExitCode> {
 }
 
 fn run_service(root: &Path) -> Result<(), String> {
-    let guard = DataRootGuard::acquire(root)?;
+    let mut guard = DataRootGuard::acquire(root)?;
     // Persistent quarantine precedes catalog open and READY. Reopen observes
     // the marker instead of inventing empty state; no implicit repair follows.
     catalog_quarantine::check(guard.canonical_root())?;
@@ -70,6 +70,10 @@ fn run_service(root: &Path) -> Result<(), String> {
     let mut reader = input.lock();
     let output = io::stdout();
     let mut writer = output.lock();
+    // The single live owner binding is operator-observable: epoch,
+    // installation incarnation and physical-root identity travel with READY
+    // so a successor incarnation is never mistaken for its predecessor.
+    let (owner_incarnation, owner_root, _) = guard.journal_owner_inputs();
     write_line(
         &mut writer,
         &format!(
@@ -79,6 +83,9 @@ fn run_service(root: &Path) -> Result<(), String> {
                 "\"registered_sources\":{},\"active_sources\":{},",
                 "\"directory_manifests\":{},",
                 "\"runtime_owner_ready\":true,\"direct_store_ready\":true,",
+                "\"owner_epoch\":{},\"recovered_previous_active\":{},",
+                "\"installation_incarnation_id\":\"{}\",",
+                "\"data_root_id\":\"{}\",",
                 "\"source_backed_search_available\":true,",
                 "\"paged_search_available\":true,",
                 "\"opaque_source_handles_available\":true,",
@@ -91,6 +98,10 @@ fn run_service(root: &Path) -> Result<(), String> {
             verification.registered_sources,
             verification.active_sources,
             manifests.manifest_files,
+            guard.epoch(),
+            guard.recovered_previous_active(),
+            owner_incarnation,
+            owner_root,
             DEFAULT_PAGE_SIZE,
             MAX_PAGE_SIZE,
             MAX_HANDLE_EXPANSION_BYTES,
@@ -122,9 +133,27 @@ fn run_service(root: &Path) -> Result<(), String> {
         invalidate_search_state(&mut continuations, &mut handles);
     }
     result?;
+    // Guarded succession close-out: drain intent first, then the release
+    // tombstone, both before the clean claim. Dependencies already shut down
+    // in reverse startup order above; the guard drop below releases
+    // exclusion last. Any persistence failure here refuses the clean claim
+    // instead of relabelling an unknown outcome as success. The shutdown
+    // receipt (epoch, generation and BLAKE3 hex of the exact RELEASED
+    // record) travels with the stopped event as audit evidence.
+    guard.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
+    let receipt = guard.release_cleanly()?;
     write_line(
         &mut writer,
-        "{\"event\":\"data_root_stopped\",\"clean\":true}",
+        &format!(
+            concat!(
+                "{{\"event\":\"data_root_stopped\",\"clean\":true,",
+                "\"owner_epoch\":{},\"owner_generation\":{},",
+                "\"owner_release_digest\":\"{}\"}}"
+            ),
+            receipt.epoch.get(),
+            receipt.generation,
+            sha256::hex(&receipt.record_digest),
+        ),
     )?;
     Ok(())
 }

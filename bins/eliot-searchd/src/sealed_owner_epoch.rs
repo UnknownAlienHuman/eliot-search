@@ -24,6 +24,8 @@ pub const MAX_OWNER_EPOCH_RECORDS: usize = 1_000_000;
 const OWNER_EPOCH_MAGIC: &str = "ELIOT-SEALED-OWNER-EPOCH-V1";
 const OWNER_EPOCH_FORMAT_VERSION: u16 = 1;
 const OWNER_EPOCH_FIELD_COUNT: usize = 5;
+const SEALED_DIRECTORY: &str = "sealed-revisions";
+const SEALED_SUFFIX: &str = ".els-dpapi";
 const ZERO_DIGEST_HEX: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -160,7 +162,7 @@ impl OwnerEpochRecord {
         ))
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self, OwnerEpochError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, OwnerEpochError> {
         let value = core::str::from_utf8(bytes).map_err(|_| OwnerEpochError::ChainInvalid)?;
         if !value.ends_with('\n') {
             return Err(OwnerEpochError::ChainInvalid);
@@ -263,6 +265,26 @@ impl fmt::Debug for OwnerEpochGuard {
     }
 }
 
+/// Reads the sealed epoch head without acquiring live authority.
+///
+/// A returned record proves only that a sealed mirror exists and binds some
+/// physical root; it never grants ownership. The single primary owner
+/// protocol compares the head's root binding against its own fresh native
+/// observation and quarantines on disagreement or on unreadable sealed
+/// state. `Ok(None)` means no sealed epoch authority is co-present.
+///
+/// The harness-only sealed binaries do not call this observer; the
+/// allowance keeps their builds quiet without touching their surface.
+///
+/// # Errors
+///
+/// Returns the closed [`OwnerEpochError`] when sealed objects exist but
+/// cannot be authenticated or decoded; the caller maps this to quarantine.
+#[allow(dead_code)]
+pub fn latest_sealed_head(data_root: &Path) -> Result<Option<OwnerEpochRecord>, OwnerEpochError> {
+    platform::latest_head(data_root)
+}
+
 fn object_id(epoch: u64) -> String {
     format!("owner-epoch-{epoch:020}")
 }
@@ -324,19 +346,50 @@ fn parse_u16(value: &str) -> Result<u16, OwnerEpochError> {
 
 #[cfg(not(windows))]
 mod platform {
-    use super::{OwnerEpochError, OwnerEpochGuard};
+    use super::{OwnerEpochError, OwnerEpochGuard, OwnerEpochRecord};
+    use super::{SEALED_DIRECTORY, SEALED_SUFFIX};
+    use std::io;
     use std::path::Path;
+
+    const SEALED_EPOCH_PREFIX: &str = "owner-epoch-";
 
     pub(super) fn acquire(_data_root: &Path) -> Result<OwnerEpochGuard, OwnerEpochError> {
         Err(OwnerEpochError::UnsupportedPlatform)
+    }
+
+    /// Reports a sealed epoch head without DPAPI: any `owner-epoch-*` object
+    /// is unverifiable on this platform and fails closed at the caller.
+    pub(super) fn latest_head(
+        data_root: &Path,
+    ) -> Result<Option<OwnerEpochRecord>, OwnerEpochError> {
+        let directory = data_root.join(SEALED_DIRECTORY);
+        let entries = match std::fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(OwnerEpochError::IoFailure),
+        };
+        for entry in entries {
+            let entry = entry.map_err(|_| OwnerEpochError::IoFailure)?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(epoch_id) = name.strip_suffix(SEALED_SUFFIX) else {
+                continue;
+            };
+            if epoch_id.starts_with(SEALED_EPOCH_PREFIX) {
+                return Err(OwnerEpochError::ChainInvalid);
+            }
+        }
+        Ok(None)
     }
 }
 
 #[cfg(windows)]
 mod platform {
     use super::{
-        MAX_OWNER_EPOCH_RECORDS, OWNER_EPOCH_FORMAT_VERSION, OwnerEpochError,
-        OwnerEpochGuard, OwnerEpochRecord, Sha256Digest, SensitiveBytes,
+        MAX_OWNER_EPOCH_RECORDS, OWNER_EPOCH_FORMAT_VERSION, OwnerEpochError, OwnerEpochGuard,
+        OwnerEpochRecord, SEALED_DIRECTORY, SEALED_SUFFIX, SensitiveBytes, Sha256Digest,
         ZERO_DIGEST_HEX, object_id, parse_epoch_object_id, put_idempotent_verified,
         require_epoch_capacity, transaction_id,
     };
@@ -349,11 +402,32 @@ mod platform {
     use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
     use std::path::Path;
 
-    const SEALED_DIRECTORY: &str = "sealed-revisions";
-    const SEALED_SUFFIX: &str = ".els-dpapi";
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
     const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    /// Reads and authenticates only the sealed epoch head.
+    ///
+    /// The full chain stays owned by [`OwnerEpochGuard::acquire`]; this
+    /// read-only observer lets the single primary owner protocol verify that
+    /// a co-present sealed mirror binds the same physical root instead of
+    /// maintaining a second live epoch authority. Unused by the harness
+    /// binaries that own the full authority path.
+    #[allow(dead_code)]
+    pub(super) fn latest_head(
+        data_root: &Path,
+    ) -> Result<Option<OwnerEpochRecord>, OwnerEpochError> {
+        let records = discover_epoch_objects(data_root)?;
+        let Some((epoch, epoch_object_id)) = records.last_key_value() else {
+            return Ok(None);
+        };
+        let plaintext = open_sealed(data_root, epoch_object_id)?;
+        let record = OwnerEpochRecord::decode(plaintext.expose())?;
+        if record.epoch != *epoch {
+            return Err(OwnerEpochError::ChainInvalid);
+        }
+        Ok(Some(record))
+    }
 
     pub(super) fn acquire(data_root: &Path) -> Result<OwnerEpochGuard, OwnerEpochError> {
         let root_lease = SealedRootLease::acquire(data_root)?;

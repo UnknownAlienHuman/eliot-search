@@ -405,10 +405,13 @@ mod platform {
 
     #[link(name = "Crypt32")]
     unsafe extern "system" {
+        // Input blobs are observed, never mutated, matching the primary
+        // revision-protection declarations of the same symbols so one
+        // product binary can link both without a signature clash.
         fn CryptProtectData(
-            data_in: *mut DataBlob,
+            data_in: *const DataBlob,
             description: *const u16,
-            optional_entropy: *mut DataBlob,
+            optional_entropy: *const DataBlob,
             reserved: *mut c_void,
             prompt: *mut c_void,
             flags: u32,
@@ -416,9 +419,9 @@ mod platform {
         ) -> i32;
 
         fn CryptUnprotectData(
-            data_in: *mut DataBlob,
+            data_in: *const DataBlob,
             description: *mut *mut u16,
-            optional_entropy: *mut DataBlob,
+            optional_entropy: *const DataBlob,
             reserved: *mut c_void,
             prompt: *mut c_void,
             flags: u32,
@@ -751,9 +754,9 @@ mod platform {
         // the call; output ownership is transferred to `LocalAllocation`.
         let succeeded = unsafe {
             CryptProtectData(
-                &raw mut input,
+                (&raw mut input).cast_const(),
                 description.as_ptr(),
-                &raw mut entropy_blob,
+                (&raw mut entropy_blob).cast_const(),
                 null_mut(),
                 null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,
@@ -790,9 +793,9 @@ mod platform {
         // description allocations are released below with `LocalFree`.
         let succeeded = unsafe {
             CryptUnprotectData(
-                &raw mut input,
+                (&raw mut input).cast_const(),
                 &raw mut description,
-                &raw mut entropy_blob,
+                (&raw mut entropy_blob).cast_const(),
                 null_mut(),
                 null_mut(),
                 CRYPTPROTECT_UI_FORBIDDEN,

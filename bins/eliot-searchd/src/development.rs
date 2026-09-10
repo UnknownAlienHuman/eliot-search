@@ -3,12 +3,24 @@
 //! Data-root exclusion uses the operating-system file-lock API. Observation-root
 //! registration is restored only while that lock is held. One-shot file scanning
 //! verifies identity and metadata through one final handle before and after read.
+//!
+//! Live ownership is the single [`DataRootGuard`]: the OS exclusion plus the
+//! durable installation/root/executable/epoch protocol from
+//! `owner_composition`, reusing the `search-runtime-owner` policy codes. No
+//! second owner type exists on this path.
 
 use std::fs::{self, File, Metadata, OpenOptions, TryLockError};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use search_contracts::{DataRootId, InstallationIncarnationId, OwnerEpoch};
+use search_runtime_owner::DrainReason;
+
+use crate::owner_composition::{LiveOwner, ShutdownReceipt};
+use crate::sealed_root_lock::SealedRootLease;
+#[cfg(windows)]
+use crate::sealed_root_lock::SealedRootLockError;
 use crate::source_roots::SourceRootCatalog;
 
 pub const MAX_SCAN_INPUT_BYTES: usize = 64 * 1024 * 1024;
@@ -277,10 +289,19 @@ fn map_full_read_error(error: crate::safe_reader_adapter::FullReadError) -> Stri
 }
 
 /// Process-local exclusive owner guard and restored observation registration.
+///
+/// Exactly one live guard exists per data root. It holds the OS exclusion
+/// (co-held with the sealed lock on Windows so no second owner type can go
+/// live concurrently) together with the durable installation, physical-root,
+/// executable and monotone-epoch bindings established under that exclusion.
+/// The guard is non-cloneable; dropping it releases exclusion without
+/// rewriting durable ownership evidence.
 pub struct DataRootGuard {
+    sealed: Option<SealedRootLease>,
     file: File,
     canonical_root: PathBuf,
     source_roots: SourceRootCatalog,
+    owner: LiveOwner,
 }
 
 impl DataRootGuard {
@@ -334,6 +355,19 @@ impl DataRootGuard {
             Err(TryLockError::WouldBlock) => return Err("DATA_ROOT_ALREADY_OWNED".to_owned()),
             Err(TryLockError::Error(error)) => return Err(format!("DATA_ROOT_LOCK_ERROR:{error}")),
         }
+        // Co-hold the sealed exclusion before reopening durable state so the
+        // harness-era sealed authority can never go live on the same root
+        // concurrently. A held sealed lease denies exactly like our own lock.
+        #[cfg(windows)]
+        let sealed = acquire_sealed_exclusion(&canonical_root)?;
+        #[cfg(not(windows))]
+        let sealed: Option<SealedRootLease> = None;
+        // Bind installation, physical root, executable, process-creation
+        // token and the next monotone epoch before restoring anything else.
+        // Any binding disagreement or unprovable state fails closed here,
+        // releasing both exclusions on unwind without touching catalogs.
+        let owner = crate::owner_composition::establish(&canonical_root)
+            .map_err(|error| error.code().to_owned())?;
         let source_roots = SourceRootCatalog::load_owned(&canonical_root)
             .map_err(|error| error.code().to_owned())?;
 
@@ -357,15 +391,62 @@ impl DataRootGuard {
             .map_err(|error| format!("DATA_ROOT_OWNER_RECORD_ERROR:{error}"))?;
 
         Ok(Self {
+            sealed,
             file,
             canonical_root,
             source_roots,
+            owner,
         })
     }
 
     /// Canonical local root protected by this guard.
     pub(crate) fn canonical_root(&self) -> &Path {
         &self.canonical_root
+    }
+
+    /// Bound monotone owner epoch of this live incarnation.
+    pub(crate) const fn epoch(&self) -> u64 {
+        self.owner.epoch().get()
+    }
+
+    /// Whether the predecessor left an unreleased record behind.
+    pub(crate) const fn recovered_previous_active(&self) -> bool {
+        self.owner.recovered_previous_active()
+    }
+
+    /// Exact owner-side journal identity inputs for the redb follow-up.
+    pub(crate) const fn journal_owner_inputs(
+        &self,
+    ) -> (InstallationIncarnationId, DataRootId, OwnerEpoch) {
+        self.owner.journal_owner_inputs()
+    }
+
+    /// Persists `DRAINING` intent; new ordinary work must stop first.
+    ///
+    /// # Errors
+    ///
+    /// A poisoned or already-released guard is refused with the closed
+    /// owner-policy code.
+    pub(crate) fn begin_drain(&mut self, reason: DrainReason) -> Result<(), String> {
+        self.owner
+            .begin_drain(reason)
+            .map_err(|error| error.code().to_owned())
+    }
+
+    /// Persists the `RELEASED` tombstone and consumes the guard.
+    ///
+    /// Call only after dependencies shut down in reverse startup order and
+    /// every storage and process resource is closed: the following drop
+    /// releases exclusion last.
+    ///
+    /// # Errors
+    ///
+    /// Release without a prior drain, or an unprovable durable outcome,
+    /// fails closed with the closed owner-policy code.
+    pub(crate) fn release_cleanly(mut self) -> Result<ShutdownReceipt, String> {
+        self.owner
+            .release_cleanly()
+            .map_err(|error| error.code().to_owned())
     }
 
     pub(crate) const fn source_roots(&self) -> &SourceRootCatalog {
@@ -379,9 +460,38 @@ impl DataRootGuard {
 
 impl Drop for DataRootGuard {
     fn drop(&mut self) {
+        // The co-held sealed exclusion must survive the full guard lifetime;
+        // it is released here by field-drop order (sealed first) together
+        // with the primary lock, after every durable transition finished.
+        debug_assert!(self.sealed.as_ref().is_none_or(SealedRootLease::is_held));
         let _ = self.file.set_len(0);
         let _ = self.file.sync_all();
         let _ = self.file.unlock();
+    }
+}
+
+/// Co-holds the sealed exclusion behind the already-held primary lock.
+///
+/// A live sealed holder denies exactly like a live primary holder, so the
+/// two lock files never admit two concurrent owners. Observation-only
+/// failures map to the existing primary lock codes.
+///
+/// # Errors
+///
+/// Returns `DATA_ROOT_ALREADY_OWNED` for a live sealed holder and the
+/// matching primary lock code for unusable roots.
+#[cfg(windows)]
+fn acquire_sealed_exclusion(canonical_root: &Path) -> Result<Option<SealedRootLease>, String> {
+    match SealedRootLease::acquire(canonical_root) {
+        Ok(lease) => Ok(Some(lease)),
+        Err(SealedRootLockError::AlreadyOwned) => {
+            Err(search_runtime_owner::OwnerError::DataRootAlreadyOwned
+                .code()
+                .to_owned())
+        }
+        Err(SealedRootLockError::InvalidDataRoot) => Err("DATA_ROOT_NOT_DIRECTORY".to_owned()),
+        Err(SealedRootLockError::ReparsePointDenied) => Err("DATA_ROOT_LINK_DENIED".to_owned()),
+        Err(_) => Err("DATA_ROOT_LOCK_ERROR".to_owned()),
     }
 }
 
@@ -400,6 +510,37 @@ fn is_reparse(_metadata: &Metadata) -> bool {
 #[cfg(test)]
 mod owner_tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    struct Scratch {
+        base: PathBuf,
+        data: PathBuf,
+    }
+
+    impl Scratch {
+        fn new() -> Self {
+            let stamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let base = std::env::temp_dir().join(format!(
+                "eliot-owner-guard-{}-{stamp}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let data = base.join("data");
+            fs::create_dir_all(&data).unwrap();
+            Self { base, data }
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.base);
+        }
+    }
 
     #[test]
     fn registration_reopens_under_the_same_exclusive_owner_lock() {
@@ -420,6 +561,103 @@ mod owner_tests {
             assert_eq!(owner.source_roots().available_count(), 1);
         }
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn single_guard_binds_epoch_and_stable_identities_across_succession() {
+        let scratch = Scratch::new();
+        let (incarnation, root, _) = {
+            let guard = DataRootGuard::acquire(&scratch.data).unwrap();
+            assert_eq!(guard.epoch(), 1);
+            assert!(!guard.recovered_previous_active());
+            guard.journal_owner_inputs()
+        };
+        {
+            let guard = DataRootGuard::acquire(&scratch.data).unwrap();
+            assert_eq!(guard.epoch(), 2);
+            assert!(guard.recovered_previous_active());
+            let (incarnation_next, root_next, epoch_next) = guard.journal_owner_inputs();
+            assert_eq!(incarnation, incarnation_next);
+            assert_eq!(root, root_next);
+            assert_eq!(epoch_next.get(), 2);
+        }
+    }
+
+    #[test]
+    fn guard_stays_live_until_released_then_successor_advances() {
+        let scratch = Scratch::new();
+        let first = DataRootGuard::acquire(&scratch.data).unwrap();
+        assert!(
+            matches!(DataRootGuard::acquire(&scratch.data), Err(error) if error == "DATA_ROOT_ALREADY_OWNED")
+        );
+        drop(first);
+        let second = DataRootGuard::acquire(&scratch.data).unwrap();
+        assert_eq!(second.epoch(), 2);
+    }
+
+    #[test]
+    fn release_requires_prior_drain_and_persists_one_tombstone() {
+        use search_runtime_owner::OwnerError;
+
+        let scratch = Scratch::new();
+        let guard = DataRootGuard::acquire(&scratch.data).unwrap();
+        assert_eq!(
+            guard.release_cleanly().map(|_| ()),
+            Err(OwnerError::OwnerDrainRequired.code().to_owned())
+        );
+        let mut guard = DataRootGuard::acquire(&scratch.data).unwrap();
+        // The refused release above wrote nothing: the next incarnation
+        // still succeeds the dropped (unreleased) guard at epoch two.
+        assert_eq!(guard.epoch(), 2);
+        guard
+            .begin_drain(search_runtime_owner::DrainReason::Shutdown)
+            .unwrap();
+        let receipt = guard.release_cleanly().unwrap();
+        assert_eq!(receipt.epoch.get(), 2);
+        let next = DataRootGuard::acquire(&scratch.data).unwrap();
+        assert_eq!(next.epoch(), 3);
+        assert!(!next.recovered_previous_active());
+    }
+
+    #[test]
+    fn relocated_copy_is_denied_while_original_advances() {
+        let scratch = Scratch::new();
+        drop(DataRootGuard::acquire(&scratch.data).unwrap());
+        let moved = scratch.base.join("moved");
+        fs::create_dir(&moved).unwrap();
+        for name in [
+            ".eliot-search-installation.v1",
+            ".eliot-search-owner-state-a.v1",
+        ] {
+            let bytes = fs::read(scratch.data.join(name)).unwrap();
+            fs::write(moved.join(name), &bytes).unwrap();
+        }
+        assert!(
+            matches!(DataRootGuard::acquire(&moved), Err(error) if error == "OWNER_GUARD_MISMATCH")
+        );
+        // The denied copy wrote no successor slot of its own.
+        assert!(!moved.join(".eliot-search-owner-state-b.v1").exists());
+        let guard = DataRootGuard::acquire(&scratch.data).unwrap();
+        assert_eq!(guard.epoch(), 2);
+    }
+
+    #[test]
+    fn corrupt_owner_state_quarantines_without_touching_catalogs() {
+        let scratch = Scratch::new();
+        drop(DataRootGuard::acquire(&scratch.data).unwrap());
+        for name in [
+            ".eliot-search-owner-state-a.v1",
+            ".eliot-search-owner-state-b.v1",
+        ] {
+            fs::write(scratch.data.join(name), b"corrupt-and-preserved").unwrap();
+        }
+        assert!(
+            matches!(DataRootGuard::acquire(&scratch.data), Err(error) if error == "OWNER_RECOVERY_QUARANTINED")
+        );
+        assert_eq!(
+            fs::read(scratch.data.join(".eliot-search-owner-state-a.v1")).unwrap(),
+            b"corrupt-and-preserved"
+        );
     }
 }
 

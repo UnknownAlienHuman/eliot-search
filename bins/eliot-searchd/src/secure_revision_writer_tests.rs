@@ -58,15 +58,17 @@ fn files(root: &Path) -> Vec<PathBuf> {
 
 /// Exclusive data-root owner lease; guard-written JSON, never source bytes.
 const OWNER_LOCK_FILE_NAME: &str = ".eliot-search-owner.lock";
+/// Co-held sealed exclusion; guard-written JSON, never source bytes.
+const SEALED_LOCK_FILE_NAME: &str = ".eliot-search-sealed-owner.lock";
 
 fn assert_no_plaintext(root: &Path) {
     for path in files(root) {
-        // The guard-held lock file is region-locked on Windows, so reading it
+        // Guard-held lock files are region-locked on Windows, so reading them
         // fails with ERROR_LOCK_VIOLATION while the fixture guard is alive.
-        // It carries only the guard's JSON owner record, never source bytes.
+        // They carry only guard JSON owner records, never source bytes.
         if path
             .file_name()
-            .is_some_and(|name| name == OWNER_LOCK_FILE_NAME)
+            .is_some_and(|name| name == OWNER_LOCK_FILE_NAME || name == SEALED_LOCK_FILE_NAME)
         {
             continue;
         }
