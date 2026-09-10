@@ -275,12 +275,12 @@ pub struct LegPinSet {
 
 impl LegPinSet {
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.epoch_pins.len()
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.epoch_pins.is_empty()
     }
 }
@@ -381,10 +381,8 @@ pub fn dispatch_leg<B: LegBackend>(
         {
             return Err(ExecuteError::InvalidNomination);
         }
-        if let Some(population) = output.scoring_population_digest {
-            if nomination.scoring_population_digest != population {
-                return Err(ExecuteError::PopulationMismatch);
-            }
+        if let Some(population) = output.scoring_population_digest && nomination.scoring_population_digest != population {
+            return Err(ExecuteError::PopulationMismatch);
         }
     }
     Ok(output)
@@ -614,7 +612,7 @@ pub struct CancelOutcome {
     pub already_cancelled: bool,
 }
 
-fn validate_leg_budget(budget: LegBudget) -> Result<(), ExecuteError> {
+const fn validate_leg_budget(budget: LegBudget) -> Result<(), ExecuteError> {
     if budget.deadline_ms == 0
         || budget.max_candidates == 0
         || budget.max_source_read_bytes == 0
