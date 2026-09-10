@@ -437,7 +437,19 @@ mod tests {
         client.shutdown(Shutdown::Write).unwrap();
         let mut output = String::new();
         let read = Read::take(&mut reader, 4096).read_to_string(&mut output);
-        assert!(read.is_ok() || read.is_err_and(|error| error.kind() == io::ErrorKind::ConnectionReset));
+        // Abortive close races on Windows: the server drops the connection
+        // while the client is reading, which surfaces as a clean EOF or as
+        // RST (ConnectionReset) — or, when the teardown wins the race,
+        // as ConnectionAborted. All three prove termination without a hang
+        // (the read itself is bounded by the 5s read timeout above); the
+        // behavioral assertions below carry the test's property.
+        assert!(
+            read.is_ok()
+                || read.is_err_and(|error| matches!(
+                    error.kind(),
+                    io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionAborted
+                ))
+        );
         let (status, calls) = result.recv_timeout(timeout).expect("bounded listener exit");
         server.join().unwrap();
         assert_eq!(status, Err("ENDPOINT_HANDLER_ABORTED".to_owned()));
