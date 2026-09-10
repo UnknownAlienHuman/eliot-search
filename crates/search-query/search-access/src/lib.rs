@@ -17,9 +17,9 @@ use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
-    BindingId, Blake3Digest32, CollectionGenerationId, Epoch, GrantId,
-    InstallationId, InstallationIncarnationId, OpaqueId, OwnerEpoch, RecipeIdV1,
-    SourceMembershipId,
+    AccessPolicyRevision, BindingId, Blake3Digest32, CollectionGenerationId, Epoch, GrantFence,
+    GrantId, InstallationId, InstallationIncarnationId, OpaqueId, OwnerEpoch, PurgeFenceRevision,
+    RecipeIdV1, ShadowFenceRevision, SourceMembershipId, SourceNamespaceId, SourceOwnerGeneration,
 };
 
 /// Closed access failure.
@@ -50,6 +50,11 @@ pub enum AccessError {
     LivePurge,
     SecurityFenceStale,
     ContaminatedExecution,
+    NamespaceUnknown,
+    OwnerMismatch,
+    PolicyRevisionStale,
+    HandlePossessionNotAuthority,
+    LocalIdentityNotAuthority,
 }
 
 impl AccessError {
@@ -82,6 +87,11 @@ impl AccessError {
             Self::LivePurge => "ACCESS_LIVE_PURGED",
             Self::SecurityFenceStale => "ACCESS_SECURITY_FENCE_STALE",
             Self::ContaminatedExecution => "ACCESS_EXECUTION_CONTAMINATED",
+            Self::NamespaceUnknown => "ACCESS_NAMESPACE_UNKNOWN",
+            Self::OwnerMismatch => "ACCESS_OWNER_MISMATCH",
+            Self::PolicyRevisionStale => "ACCESS_POLICY_REVISION_STALE",
+            Self::HandlePossessionNotAuthority => "ACCESS_HANDLE_NOT_AUTHORITY",
+            Self::LocalIdentityNotAuthority => "ACCESS_LOCAL_IDENTITY_NOT_AUTHORITY",
         }
     }
 }
@@ -439,7 +449,9 @@ pub enum AccessCheckpoint {
     BeforeLegDispatch,
     AfterLegCompletion,
     BeforeSourceReadback,
+    AfterSourceReadback,
     BeforeResultEmission,
+    BeforeExactEmission,
     HandleExpansion,
     ContinuationExpansion,
 }
@@ -527,7 +539,11 @@ pub fn classify_contaminated_legs(
     let newly_restricted = current
         .denied_memberships
         .difference(&previous.denied_memberships)
-        .chain(current.purged_memberships.difference(&previous.purged_memberships))
+        .chain(
+            current
+                .purged_memberships
+                .difference(&previous.purged_memberships),
+        )
         .copied()
         .collect::<BTreeSet<_>>();
     let contaminated = execution
@@ -543,6 +559,306 @@ pub fn classify_contaminated_legs(
     } else {
         ContaminationDecision::DiscardLegs(contaminated)
     }
+}
+
+// ---------------------------------------------------------------------------
+// T20 mandatory pre-retrieval compiler and live-barrier path.
+// ---------------------------------------------------------------------------
+
+/// Live Qdrant scoring/IDF/count parity marker.
+///
+/// Live Qdrant scoring/IDF/count parity is an explicit T24 acceptance
+/// obligation, not a T20 claim. This package emits vendor-neutral predicate
+/// digests only; no Qdrant filter, collection name or point ID crosses here.
+pub const QDRANT_LIVE_PARITY_DEFERRED_TO: &str = "T24";
+
+/// Requested source-namespace fence: the exact namespace, owner generation
+/// and access-policy revision the client claims.
+///
+/// Any mismatch with server authority denies before any source byte or
+/// provider call. Root registration, local process identity and handle
+/// possession are never valid substitutes for this fence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NamespacePolicyFence {
+    pub namespace_id: SourceNamespaceId,
+    pub owner_generation: SourceOwnerGeneration,
+    pub policy_revision: AccessPolicyRevision,
+}
+
+/// Server-authoritative namespace/owner/policy state.
+///
+/// `shadow_revision` and `purge_revision` are the fence generations bound
+/// into retrieval/IDF predicate digests; the policy record itself is
+/// persisted as data by `search-control-redb`, never decided there.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AuthoritativePolicyState {
+    pub namespace_id: SourceNamespaceId,
+    pub owner_generation: SourceOwnerGeneration,
+    pub policy_revision: AccessPolicyRevision,
+    pub shadow_revision: ShadowFenceRevision,
+    pub purge_revision: PurgeFenceRevision,
+}
+
+/// Denies an invalid namespace, owner or policy revision before any source
+/// byte or provider call.
+pub fn check_policy_fence(
+    requested: &NamespacePolicyFence,
+    authoritative: &AuthoritativePolicyState,
+) -> Result<(), AccessError> {
+    if requested.namespace_id != authoritative.namespace_id {
+        return Err(AccessError::NamespaceUnknown);
+    }
+    if requested.owner_generation != authoritative.owner_generation {
+        return Err(AccessError::OwnerMismatch);
+    }
+    if requested.policy_revision != authoritative.policy_revision {
+        return Err(AccessError::PolicyRevisionStale);
+    }
+    Ok(())
+}
+
+/// Retrieval and IDF-corpus predicates derived from one accepted contract.
+///
+/// Both digests always name the same [`BaseEligibilityPlan::predicate_digest`]:
+/// denied members are excluded before scoring, counts, facets and traces, so
+/// retrieval and filtered-IDF populations can never diverge.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EligibilityPredicates {
+    pub retrieval_digest: EligibilityPlanDigest,
+    pub idf_digest: EligibilityPlanDigest,
+}
+
+impl EligibilityPredicates {
+    /// Whether retrieval and IDF name the same contract digest.
+    #[must_use]
+    pub fn is_consistent(&self) -> bool {
+        self.retrieval_digest == self.idf_digest
+    }
+}
+
+impl BaseEligibilityPlan {
+    /// Derives the retrieval/IDF predicate pair from this plan's single
+    /// accepted contract digest.
+    #[must_use]
+    pub const fn predicates(&self) -> EligibilityPredicates {
+        EligibilityPredicates {
+            retrieval_digest: self.predicate_digest,
+            idf_digest: self.predicate_digest,
+        }
+    }
+}
+
+/// Retrieval predicate digest for one eligibility plan: the accepted contract
+/// digest, shared with IDF.
+#[must_use]
+pub const fn retrieval_predicate_digest(plan: &BaseEligibilityPlan) -> EligibilityPlanDigest {
+    plan.predicate_digest
+}
+
+/// IDF-corpus predicate digest for one eligibility plan: the accepted
+/// contract digest, shared with retrieval.
+#[must_use]
+pub const fn idf_predicate_digest(plan: &BaseEligibilityPlan) -> EligibilityPlanDigest {
+    plan.predicate_digest
+}
+
+/// Retains only live-eligible plans for scoring, counts, facets and traces.
+///
+/// Any plan whose membership is newly purged or denied fails the whole set
+/// instead of silently narrowing it: callers must discard and replan the
+/// contaminated leg via [`classify_contaminated_legs`].
+pub fn retain_eligible_plans<'a>(
+    plans: &'a [BaseEligibilityPlan],
+    live: &LiveSecurityState,
+) -> Result<Vec<&'a BaseEligibilityPlan>, AccessError> {
+    if live.fail_closed {
+        return Err(AccessError::SecurityFailClosed);
+    }
+    if plans
+        .iter()
+        .any(|plan| live.purged_memberships.contains(&plan.membership_id))
+    {
+        return Err(AccessError::LivePurge);
+    }
+    if plans
+        .iter()
+        .any(|plan| live.denied_memberships.contains(&plan.membership_id))
+    {
+        return Err(AccessError::LiveRevocation);
+    }
+    Ok(plans.iter().collect())
+}
+
+/// Whole-request live-barrier decision for an in-flight request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActiveRequestDecision {
+    /// Live fences moved but this request's memberships are unaffected.
+    ContinueUnaffected,
+    /// A denied member influenced this request: discard every affected leg
+    /// and replan without it.
+    DiscardAndReplan,
+    /// A purged member influenced this request: deny outright.
+    Deny,
+    /// The domain failed closed: cancel and report an explicit gap.
+    CancelAndGap,
+    /// No content remains pending and no barrier fired: only a
+    /// content-free receipt may complete.
+    CompleteNonContentReceiptOnly,
+}
+
+/// Classifies an in-flight request against a live fence move.
+///
+/// Purge overlap denies; deny overlap discards and replans; a fail-closed
+/// domain cancels with an explicit gap. No decision exposes inaccessible
+/// names, counts, scores or whether a foreign token/source existed.
+#[must_use]
+pub fn classify_active_request_contamination(
+    memberships: &BTreeSet<SourceMembershipId>,
+    previous: &LiveSecurityState,
+    current: &LiveSecurityState,
+    content_pending: bool,
+) -> ActiveRequestDecision {
+    if current.fail_closed {
+        return ActiveRequestDecision::CancelAndGap;
+    }
+    let newly_purged = current
+        .purged_memberships
+        .difference(&previous.purged_memberships)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if !memberships.is_disjoint(&newly_purged) {
+        return ActiveRequestDecision::Deny;
+    }
+    let newly_denied = current
+        .denied_memberships
+        .difference(&previous.denied_memberships)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if !memberships.is_disjoint(&newly_denied) {
+        return ActiveRequestDecision::DiscardAndReplan;
+    }
+    if content_pending {
+        ActiveRequestDecision::ContinueUnaffected
+    } else {
+        ActiveRequestDecision::CompleteNonContentReceiptOnly
+    }
+}
+
+/// Handle possession is never authority.
+///
+/// There is no constructor from a source handle to a [`ValidatedGrant`];
+/// composition layers offered a handle where a grant is required must deny
+/// with the returned error.
+#[must_use]
+pub const fn deny_handle_as_grant() -> AccessError {
+    AccessError::HandlePossessionNotAuthority
+}
+
+/// Local process identity or a bare local token is never authority.
+///
+/// Authenticating a local token establishes no per-request allowed scope;
+/// only [`validate_grant`] against current server state validates a grant.
+#[must_use]
+pub const fn deny_local_identity_as_grant() -> AccessError {
+    AccessError::LocalIdentityNotAuthority
+}
+
+/// One mandatory pre-retrieval compilation request.
+///
+/// All inputs are captured values or immutable snapshots: the compiler
+/// performs no I/O, persists nothing and emits no reusable authorization.
+/// The returned [`PreRetrievalPlan`] is bound to one admission checkpoint
+/// and must be rechecked with [`recheck_live_access`] before every leg
+/// dispatch, after every leg, before source readback and before emission.
+pub struct PreRetrievalRequest<'a> {
+    pub claims: GrantClaims,
+    pub validation_context: &'a GrantValidationContext,
+    pub recipe: RecipeIdV1,
+    pub modality: AccessModality,
+    pub requested_scope: &'a RequestedMembershipScope,
+    pub grant_scope: &'a BTreeSet<SourceMembershipId>,
+    pub authoritative: &'a AuthoritativeAccessSnapshot,
+    pub policy_fence: &'a NamespacePolicyFence,
+    pub authoritative_policy: &'a AuthoritativePolicyState,
+    pub route: IndexedRouteFence,
+    pub live: &'a LiveSecurityState,
+    pub overlap_proof: Option<&'a OverlapFreeRouteProof>,
+    pub max_legs: usize,
+}
+
+/// Admitted pre-retrieval plan: finite safe legs plus their unified
+/// retrieval/IDF predicates and the admission live-barrier permit.
+///
+/// The [`ValidatedGrant`] itself never escapes: only a content-free
+/// [`GrantFence`] binding grant identity and revocation generation is
+/// returned. DIRECT and indexed requests share this plan shape; indexed
+/// backends render vendor filters from it only in T24.
+#[derive(Debug)]
+pub struct PreRetrievalPlan {
+    pub grant_fence: GrantFence,
+    pub scope: AuthorizedScope,
+    pub legs: Vec<SafeRetrievalLeg>,
+    pub predicates: Vec<EligibilityPredicates>,
+    pub permit: AccessPermit,
+}
+
+/// Compiles explicit client/session grants to non-widening eligible source
+/// memberships and restrictive barriers for DIRECT and indexed requests.
+///
+/// Fixed order: grant validation, recipe/modality ceiling, namespace/owner/
+/// policy fence, scope intersection, safe-leg compilation, then the mandatory
+/// live-barrier recheck. Deny barriers therefore precede any scoring, count,
+/// facet or trace influence. Any failure denies before any source byte or
+/// provider call.
+pub fn compile_pre_retrieval(
+    request: PreRetrievalRequest<'_>,
+) -> Result<PreRetrievalPlan, AccessError> {
+    let grant = validate_grant(request.claims, request.validation_context)?;
+    if !grant.permits_recipe(request.recipe) {
+        return Err(AccessError::RecipeDenied);
+    }
+    if !grant.permits_modality(request.modality) {
+        return Err(AccessError::ModalityDenied);
+    }
+    check_policy_fence(request.policy_fence, request.authoritative_policy)?;
+    let scope = intersect_scope(
+        request.requested_scope,
+        request.grant_scope,
+        request.authoritative,
+    )?;
+    let legs = compile_safe_legs(
+        &scope,
+        request.route,
+        request.live.generation,
+        request.authoritative_policy.shadow_revision.get(),
+        request.authoritative_policy.purge_revision.get(),
+        request.overlap_proof,
+        request.max_legs,
+    )?;
+    let fence = RequestSecurityFence {
+        planned_generation: request.authoritative.generation,
+        memberships: scope.memberships.keys().copied().collect(),
+    };
+    let permit = recheck_live_access(&fence, request.live, AccessCheckpoint::RequestAdmission)?;
+    let predicates = legs
+        .iter()
+        .flat_map(|leg| {
+            leg.eligibility_plans
+                .iter()
+                .map(BaseEligibilityPlan::predicates)
+        })
+        .collect();
+    let grant_fence = GrantFence {
+        grant_id: grant.claims().grant_id,
+        revocation_generation: grant.claims().revocation_generation,
+    };
+    Ok(PreRetrievalPlan {
+        grant_fence,
+        scope,
+        legs,
+        predicates,
+        permit,
+    })
 }
 
 fn derive_predicate_digest(

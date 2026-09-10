@@ -8,6 +8,8 @@
 
 #![deny(unsafe_code)]
 
+#[cfg(feature = "wave4-query")]
+mod access_composition;
 mod app;
 mod authenticated_proxy;
 mod catalog_presence;
