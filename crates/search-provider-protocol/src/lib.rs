@@ -26,17 +26,26 @@
 )]
 
 use core::fmt;
-use core::num::NonZeroU16;
 use std::collections::BTreeSet;
 
-/// Fixed wire magic for protocol version one framing.
-pub const FRAME_MAGIC: [u8; 4] = *b"ELS1";
-/// Fixed header length in bytes.
-pub const FRAME_HEADER_BYTES: usize = 36;
+use search_contracts::protocol::{decode_json_frame, encode_json_frame};
+use search_contracts::{BoundedBytes, ContractErrorKind, MAX_FRAME_BYTES, ProtocolErrorCode};
+
+/// Canonical transport payload owned by `search-contracts`.
+pub use search_contracts::protocol::{JsonFramePayload, ProviderEnvelope};
+/// Canonical protocol identity owned by `search-contracts`.
+///
+/// Norm #89 forbids duplicate canonical `ProtocolVersion` / `ProtocolRange`
+/// definitions: this package re-exports the canonical types instead of
+/// defining its own single-`u16` versions.
+pub use search_contracts::{ProtocolRange, ProtocolVersion, RequestId};
+
+/// Length-prefix size in bytes for canonical framing (`u32` little-endian).
+pub const FRAME_PREFIX_BYTES: usize = 4;
 /// Conservative default protocol limits.
 pub const DEFAULT_PROTOCOL_LIMITS: ProtocolLimits = ProtocolLimits {
-    max_frame_bytes: 8 * 1024 * 1024,
-    max_body_bytes: 8 * 1024 * 1024 - FRAME_HEADER_BYTES,
+    max_frame_bytes: MAX_FRAME_BYTES,
+    max_body_bytes: MAX_FRAME_BYTES - FRAME_PREFIX_BYTES,
     max_replay_entries: 4_096,
     max_progress_total: 1_000_000_000,
 };
@@ -46,16 +55,9 @@ pub const DEFAULT_PROTOCOL_LIMITS: ProtocolLimits = ProtocolLimits {
 pub enum ProtocolError {
     /// Complete frame exceeds the configured byte ceiling.
     FrameTooLarge,
-    /// Complete frame is shorter than the fixed header.
-    TruncatedHeader,
-    /// Frame magic does not identify this protocol.
-    InvalidMagic,
-    /// Reserved header flags are non-zero.
-    ReservedFlags,
-    /// Closed frame-kind tag is unknown.
-    UnknownFrameKind,
-    /// Declared body length and received bytes disagree.
-    LengthMismatch,
+    /// Length-prefixed JSON frame is malformed (truncated prefix, declared
+    /// length mismatch, non-UTF-8 or non-JSON body).
+    InvalidEnvelope,
     /// Version value or range is malformed.
     InvalidVersion,
     /// Client and provider version ranges do not overlap.
@@ -99,11 +101,7 @@ impl ProtocolError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::FrameTooLarge => "PROTOCOL_FRAME_TOO_LARGE",
-            Self::TruncatedHeader => "PROTOCOL_TRUNCATED_HEADER",
-            Self::InvalidMagic => "PROTOCOL_INVALID_MAGIC",
-            Self::ReservedFlags => "PROTOCOL_RESERVED_FLAGS",
-            Self::UnknownFrameKind => "PROTOCOL_UNKNOWN_FRAME_KIND",
-            Self::LengthMismatch => "PROTOCOL_LENGTH_MISMATCH",
+            Self::InvalidEnvelope => "PROTOCOL_INVALID_ENVELOPE",
             Self::InvalidVersion => "PROTOCOL_INVALID_VERSION",
             Self::NoCompatibleVersion => "PROTOCOL_NO_COMPATIBLE_VERSION",
             Self::DuplicateSequence => "PROTOCOL_DUPLICATE_SEQUENCE",
@@ -150,8 +148,9 @@ pub struct ProtocolLimits {
 impl ProtocolLimits {
     /// Validates finite internally consistent limits.
     pub const fn validate(self) -> Result<Self, ProtocolError> {
-        if self.max_frame_bytes < FRAME_HEADER_BYTES
-            || self.max_body_bytes > self.max_frame_bytes - FRAME_HEADER_BYTES
+        if self.max_frame_bytes < FRAME_PREFIX_BYTES
+            || self.max_frame_bytes > MAX_FRAME_BYTES
+            || self.max_body_bytes > self.max_frame_bytes - FRAME_PREFIX_BYTES
             || self.max_replay_entries == 0
             || self.max_progress_total == 0
         {
@@ -162,277 +161,115 @@ impl ProtocolLimits {
     }
 }
 
-/// Non-zero protocol version.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct ProtocolVersion(NonZeroU16);
-
-impl ProtocolVersion {
-    /// Creates a non-zero version.
-    pub const fn new(value: u16) -> Result<Self, ProtocolError> {
-        match NonZeroU16::new(value) {
-            Some(value) => Ok(Self(value)),
-            None => Err(ProtocolError::InvalidVersion),
-        }
-    }
-
-    /// Numeric version value.
-    pub const fn get(self) -> u16 {
-        self.0.get()
+/// Maps a canonical frame failure to the package failure registry.
+const fn map_frame_error(code: ProtocolErrorCode) -> ProtocolError {
+    match code {
+        ProtocolErrorCode::FrameTooLarge => ProtocolError::FrameTooLarge,
+        _ => ProtocolError::InvalidEnvelope,
     }
 }
 
-/// Inclusive supported version range.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ProtocolRange {
-    min: ProtocolVersion,
-    max: ProtocolVersion,
-}
+/// Canonical `u32` little-endian length plus UTF-8 JSON framing.
+///
+/// This is a thin limit-enforcing wrapper over
+/// `search-contracts::protocol::{encode_json_frame, decode_json_frame}`
+/// (`search-contracts/src/protocol.rs:302-336`). Baseline performs no
+/// compression and no fragmented message assembly; the 8 MiB ceiling includes
+/// the 4-byte prefix.
+pub struct FrameCodec;
 
-impl ProtocolRange {
-    /// Creates an ordered inclusive range.
-    pub const fn new(
-        min: ProtocolVersion,
-        max: ProtocolVersion,
-    ) -> Result<Self, ProtocolError> {
-        if min.get() > max.get() {
-            Err(ProtocolError::InvalidVersion)
-        } else {
-            Ok(Self { min, max })
-        }
+impl FrameCodec {
+    /// Emits `u32` little-endian length plus canonical UTF-8 JSON.
+    pub fn encode(
+        payload: &JsonFramePayload,
+        limits: ProtocolLimits,
+    ) -> Result<BoundedBytes<MAX_FRAME_BYTES>, ProtocolError> {
+        encode_frame(payload, limits)
     }
 
-    /// Lowest supported version.
-    pub const fn min(self) -> ProtocolVersion {
-        self.min
-    }
-
-    /// Highest supported version.
-    pub const fn max(self) -> ProtocolVersion {
-        self.max
-    }
-
-    /// Returns whether the range contains a version.
-    pub const fn contains(self, version: ProtocolVersion) -> bool {
-        version.get() >= self.min.get() && version.get() <= self.max.get()
+    /// Validates length before body allocation, then UTF-8/JSON shape.
+    pub fn decode(bytes: &[u8], limits: ProtocolLimits) -> Result<JsonFramePayload, ProtocolError> {
+        decode_frame(bytes, limits)
     }
 }
 
-/// Selects the highest mutually supported protocol version.
-pub const fn negotiate_version(
+/// Emits `u32` little-endian length plus canonical UTF-8 JSON.
+pub fn encode_frame(
+    payload: &JsonFramePayload,
+    limits: ProtocolLimits,
+) -> Result<BoundedBytes<MAX_FRAME_BYTES>, ProtocolError> {
+    let limits = limits.validate()?;
+    if payload.as_slice().len() > limits.max_body_bytes
+        || payload.as_slice().len().saturating_add(FRAME_PREFIX_BYTES) > limits.max_frame_bytes
+    {
+        return Err(ProtocolError::FrameTooLarge);
+    }
+    encode_json_frame(payload).map_err(map_frame_error)
+}
+
+/// Validates length before body allocation, then UTF-8/JSON shape.
+///
+/// Oversize input is rejected without unbounded buffering: the configured
+/// ceiling is enforced from the declared `u32` prefix before the canonical
+/// decoder copies the body.
+pub fn decode_frame(
+    bytes: &[u8],
+    limits: ProtocolLimits,
+) -> Result<JsonFramePayload, ProtocolError> {
+    let limits = limits.validate()?;
+    if bytes.len() > limits.max_frame_bytes {
+        return Err(ProtocolError::FrameTooLarge);
+    }
+    if bytes.len() < FRAME_PREFIX_BYTES {
+        return Err(ProtocolError::InvalidEnvelope);
+    }
+    let declared = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let declared = usize::try_from(declared).map_err(|_| ProtocolError::FrameTooLarge)?;
+    if declared > limits.max_body_bytes
+        || declared.saturating_add(FRAME_PREFIX_BYTES) > limits.max_frame_bytes
+    {
+        return Err(ProtocolError::FrameTooLarge);
+    }
+    decode_json_frame(bytes).map_err(map_frame_error)
+}
+
+/// Selects the highest mutually supported `(major, minor)` version.
+///
+/// Major mismatch fails. Minor negotiation is explicit and cannot reinterpret
+/// load-bearing fields. Delegates to the canonical
+/// `search-contracts::protocol::ProtocolRange::negotiate`.
+pub fn negotiate_hello(
+    local: ProtocolRange,
+    remote: ProtocolRange,
+) -> Result<ProtocolVersion, ProtocolError> {
+    local
+        .negotiate(remote)
+        .map_err(|_| ProtocolError::NoCompatibleVersion)
+}
+
+/// Alias for [`negotiate_hello`] preserved for intra-package callers.
+pub fn negotiate_version(
     client: ProtocolRange,
     provider: ProtocolRange,
 ) -> Result<ProtocolVersion, ProtocolError> {
-    let lower = if client.min().get() > provider.min().get() {
-        client.min()
-    } else {
-        provider.min()
-    };
-    let upper = if client.max().get() < provider.max().get() {
-        client.max()
-    } else {
-        provider.max()
-    };
-    if lower.get() > upper.get() {
-        Err(ProtocolError::NoCompatibleVersion)
-    } else {
-        Ok(upper)
-    }
+    negotiate_hello(client, provider)
 }
 
-/// Opaque fixed-size request correlation identity.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct RequestId([u8; 16]);
-
-impl RequestId {
-    /// Creates a fixed-size request identity.
-    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
-        Self(bytes)
-    }
-
-    /// Exact wire bytes.
-    pub const fn as_bytes(&self) -> &[u8; 16] {
-        &self.0
-    }
-}
-
-/// Closed frame-kind registry.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-#[repr(u8)]
-pub enum FrameKind {
-    /// Client hello and supported version range.
-    ClientHello = 1,
-    /// Provider hello and negotiated version.
-    ProviderHello = 2,
-    /// Pairing challenge.
-    PairingChallenge = 3,
-    /// Pairing proof.
-    PairingProof = 4,
-    /// Bounded request body.
-    Request = 5,
-    /// Monotone progress update.
-    Progress = 6,
-    /// Cancellation request.
-    Cancel = 7,
-    /// Exactly one terminal response.
-    Terminal = 8,
-    /// Graceful drain notification.
-    Drain = 9,
-}
-
-impl TryFrom<u8> for FrameKind {
-    type Error = ProtocolError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            1 => Ok(Self::ClientHello),
-            2 => Ok(Self::ProviderHello),
-            3 => Ok(Self::PairingChallenge),
-            4 => Ok(Self::PairingProof),
-            5 => Ok(Self::Request),
-            6 => Ok(Self::Progress),
-            7 => Ok(Self::Cancel),
-            8 => Ok(Self::Terminal),
-            9 => Ok(Self::Drain),
-            _ => Err(ProtocolError::UnknownFrameKind),
-        }
-    }
-}
-
-/// One complete bounded protocol frame.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WireFrame {
-    version: ProtocolVersion,
-    kind: FrameKind,
-    sequence: u64,
-    request_id: RequestId,
-    body: Vec<u8>,
-}
-
-impl WireFrame {
-    /// Creates a frame after validating its body against limits.
-    pub fn new(
-        version: ProtocolVersion,
-        kind: FrameKind,
-        sequence: u64,
-        request_id: RequestId,
-        body: Vec<u8>,
-        limits: ProtocolLimits,
-    ) -> Result<Self, ProtocolError> {
-        let limits = limits.validate()?;
-        if body.len() > limits.max_body_bytes {
-            return Err(ProtocolError::FrameTooLarge);
-        }
-        Ok(Self {
-            version,
-            kind,
-            sequence,
-            request_id,
-            body,
+/// Validates the envelope tag and requires its version to be in the
+/// negotiated canonical range.
+pub fn validate_envelope_version(
+    envelope: &ProviderEnvelope,
+    supported: ProtocolRange,
+) -> Result<(), ProtocolError> {
+    envelope
+        .validate_version_and_limits(supported)
+        .map_err(|error| {
+            if error.kind() == ContractErrorKind::UnsupportedVersion {
+                ProtocolError::NoCompatibleVersion
+            } else {
+                ProtocolError::InvalidEnvelope
+            }
         })
-    }
-
-    /// Negotiated version.
-    pub const fn version(&self) -> ProtocolVersion {
-        self.version
-    }
-
-    /// Closed frame kind.
-    pub const fn kind(&self) -> FrameKind {
-        self.kind
-    }
-
-    /// Direction-local sequence.
-    pub const fn sequence(&self) -> u64 {
-        self.sequence
-    }
-
-    /// Request correlation identity.
-    pub const fn request_id(&self) -> RequestId {
-        self.request_id
-    }
-
-    /// Finite body bytes.
-    pub fn body(&self) -> &[u8] {
-        &self.body
-    }
-
-    /// Encodes the complete bounded frame.
-    pub fn encode(&self, limits: ProtocolLimits) -> Result<Vec<u8>, ProtocolError> {
-        let limits = limits.validate()?;
-        if self.body.len() > limits.max_body_bytes {
-            return Err(ProtocolError::FrameTooLarge);
-        }
-        let total = FRAME_HEADER_BYTES
-            .checked_add(self.body.len())
-            .ok_or(ProtocolError::FrameTooLarge)?;
-        if total > limits.max_frame_bytes {
-            return Err(ProtocolError::FrameTooLarge);
-        }
-        let body_len = u32::try_from(self.body.len())
-            .map_err(|_| ProtocolError::FrameTooLarge)?;
-        let mut encoded = Vec::with_capacity(total);
-        encoded.extend_from_slice(&FRAME_MAGIC);
-        encoded.extend_from_slice(&self.version.get().to_be_bytes());
-        encoded.push(self.kind as u8);
-        encoded.push(0);
-        encoded.extend_from_slice(&self.sequence.to_be_bytes());
-        encoded.extend_from_slice(self.request_id.as_bytes());
-        encoded.extend_from_slice(&body_len.to_be_bytes());
-        encoded.extend_from_slice(&self.body);
-        Ok(encoded)
-    }
-
-    /// Decodes one complete frame with length checks before body allocation.
-    pub fn decode(bytes: &[u8], limits: ProtocolLimits) -> Result<Self, ProtocolError> {
-        let limits = limits.validate()?;
-        if bytes.len() > limits.max_frame_bytes {
-            return Err(ProtocolError::FrameTooLarge);
-        }
-        if bytes.len() < FRAME_HEADER_BYTES {
-            return Err(ProtocolError::TruncatedHeader);
-        }
-        if bytes[..4] != FRAME_MAGIC {
-            return Err(ProtocolError::InvalidMagic);
-        }
-        if bytes[7] != 0 {
-            return Err(ProtocolError::ReservedFlags);
-        }
-        let version = ProtocolVersion::new(u16::from_be_bytes([bytes[4], bytes[5]]))?;
-        let kind = FrameKind::try_from(bytes[6])?;
-        let sequence = u64::from_be_bytes(
-            bytes[8..16]
-                .try_into()
-                .map_err(|_| ProtocolError::TruncatedHeader)?,
-        );
-        let request_id = RequestId::from_bytes(
-            bytes[16..32]
-                .try_into()
-                .map_err(|_| ProtocolError::TruncatedHeader)?,
-        );
-        let body_len = usize::try_from(u32::from_be_bytes(
-            bytes[32..36]
-                .try_into()
-                .map_err(|_| ProtocolError::TruncatedHeader)?,
-        ))
-        .map_err(|_| ProtocolError::FrameTooLarge)?;
-        if body_len > limits.max_body_bytes {
-            return Err(ProtocolError::FrameTooLarge);
-        }
-        let expected = FRAME_HEADER_BYTES
-            .checked_add(body_len)
-            .ok_or(ProtocolError::FrameTooLarge)?;
-        if bytes.len() != expected {
-            return Err(ProtocolError::LengthMismatch);
-        }
-        Self::new(
-            version,
-            kind,
-            sequence,
-            request_id,
-            bytes[FRAME_HEADER_BYTES..].to_vec(),
-            limits,
-        )
-    }
 }
 
 /// Direction-local sequence observation.
@@ -489,9 +326,7 @@ impl SequenceTracker {
     }
 
     /// Converts an observation to a typed protocol result.
-    pub const fn require_accepted(
-        observation: SequenceObservation,
-    ) -> Result<(), ProtocolError> {
+    pub const fn require_accepted(observation: SequenceObservation) -> Result<(), ProtocolError> {
         match observation {
             SequenceObservation::Accepted => Ok(()),
             SequenceObservation::Duplicate => Err(ProtocolError::DuplicateSequence),
@@ -701,10 +536,7 @@ impl SessionMachine {
             state: SessionState::Offered,
             version: None,
             binding_verified: false,
-            sequences: BidirectionalSequence::new(
-                client_first_sequence,
-                provider_first_sequence,
-            ),
+            sequences: BidirectionalSequence::new(client_first_sequence, provider_first_sequence),
             replay: BTreeSet::new(),
             limits: limits.validate()?,
         })
@@ -824,37 +656,69 @@ impl SessionMachine {
 mod tests {
     use super::*;
 
-    fn version(value: u16) -> ProtocolVersion {
-        ProtocolVersion::new(value).expect("version")
+    fn version(major: u16, minor: u16) -> ProtocolVersion {
+        ProtocolVersion { major, minor }
+    }
+
+    fn range(min_major: u16, min_minor: u16, max_major: u16, max_minor: u16) -> ProtocolRange {
+        ProtocolRange::new(version(min_major, min_minor), version(max_major, max_minor))
+            .expect("range")
     }
 
     #[test]
-    fn highest_version_overlap_is_selected() {
-        let selected = negotiate_version(
-            ProtocolRange::new(version(1), version(4)).expect("range"),
-            ProtocolRange::new(version(3), version(6)).expect("range"),
-        )
-        .expect("overlap");
-        assert_eq!(selected.get(), 4);
-    }
-
-    #[test]
-    fn frame_round_trips_exactly() {
-        let frame = WireFrame::new(
-            version(1),
-            FrameKind::Request,
-            7,
-            RequestId::from_bytes([3; 16]),
-            vec![1, 2, 3],
-            DEFAULT_PROTOCOL_LIMITS,
-        )
-        .expect("frame");
-        let encoded = frame
-            .encode(DEFAULT_PROTOCOL_LIMITS)
-            .expect("encode");
+    fn negotiation_selects_highest_minor_and_rejects_major_mismatch() {
+        let selected = negotiate_hello(range(1, 0, 1, 2), range(1, 1, 1, 5)).expect("overlap");
+        assert_eq!(selected, version(1, 2));
         assert_eq!(
-            WireFrame::decode(&encoded, DEFAULT_PROTOCOL_LIMITS).expect("decode"),
-            frame
+            negotiate_hello(range(1, 0, 1, 1), range(2, 0, 2, 0)),
+            Err(ProtocolError::NoCompatibleVersion)
+        );
+        assert_eq!(
+            negotiate_hello(range(1, 0, 1, 1), range(1, 2, 1, 3)),
+            Err(ProtocolError::NoCompatibleVersion)
+        );
+    }
+
+    #[test]
+    fn canonical_types_are_not_duplicated() {
+        assert_eq!(
+            std::any::type_name::<ProtocolVersion>(),
+            std::any::type_name::<search_contracts::protocol::ProtocolVersion>()
+        );
+        assert_eq!(
+            std::any::type_name::<ProtocolRange>(),
+            std::any::type_name::<search_contracts::protocol::ProtocolRange>()
+        );
+        assert_eq!(
+            std::any::type_name::<RequestId>(),
+            std::any::type_name::<search_contracts::RequestId>()
+        );
+    }
+
+    #[test]
+    fn canonical_framing_round_trips_with_le_prefix() {
+        let payload = JsonFramePayload::new(br#"{"ok":true}"#.to_vec()).expect("payload");
+        let encoded = FrameCodec::encode(&payload, DEFAULT_PROTOCOL_LIMITS).expect("encode");
+        assert_eq!(&encoded.as_slice()[..4], &11_u32.to_le_bytes());
+        assert_eq!(
+            FrameCodec::decode(encoded.as_slice(), DEFAULT_PROTOCOL_LIMITS).expect("decode"),
+            payload
+        );
+    }
+
+    #[test]
+    fn framing_rejects_truncated_and_length_mismatch() {
+        assert_eq!(
+            FrameCodec::decode(&[1, 0, 0], DEFAULT_PROTOCOL_LIMITS),
+            Err(ProtocolError::InvalidEnvelope)
+        );
+        assert_eq!(
+            FrameCodec::decode(&[2, 0, 0, 0, b'{'], DEFAULT_PROTOCOL_LIMITS),
+            Err(ProtocolError::InvalidEnvelope)
+        );
+        assert_eq!(
+            FrameCodec::decode(&[11, 0, 0, 0, 0xff], DEFAULT_PROTOCOL_LIMITS),
+            Err(ProtocolError::InvalidEnvelope)
         );
     }
 
@@ -862,7 +726,7 @@ mod tests {
     fn oversize_is_rejected_before_body_copy() {
         let bytes = vec![0; DEFAULT_PROTOCOL_LIMITS.max_frame_bytes + 1];
         assert_eq!(
-            WireFrame::decode(&bytes, DEFAULT_PROTOCOL_LIMITS),
+            FrameCodec::decode(&bytes, DEFAULT_PROTOCOL_LIMITS),
             Err(ProtocolError::FrameTooLarge)
         );
     }
@@ -879,7 +743,10 @@ mod tests {
     #[test]
     fn direction_sequences_are_independent() {
         let mut sequences = BidirectionalSequence::new(1, 100);
-        assert_eq!(sequences.client_mut().observe(1), SequenceObservation::Accepted);
+        assert_eq!(
+            sequences.client_mut().observe(1),
+            SequenceObservation::Accepted
+        );
         assert_eq!(sequences.provider().next_expected(), Some(100));
     }
 
@@ -893,9 +760,8 @@ mod tests {
 
     #[test]
     fn unauthenticated_configuration_does_not_admit_requests() {
-        let mut session = SessionMachine::new(DEFAULT_PROTOCOL_LIMITS, 1, 100)
-            .expect("session");
-        session.negotiate(version(1)).expect("negotiate");
+        let mut session = SessionMachine::new(DEFAULT_PROTOCOL_LIMITS, 1, 100).expect("session");
+        session.negotiate(version(1, 0)).expect("negotiate");
         assert_eq!(
             session.admit_request(RequestId::from_bytes([1; 16]), 1),
             Err(ProtocolError::AuthenticationRequired)
@@ -904,9 +770,8 @@ mod tests {
 
     #[test]
     fn replay_is_rejected_after_authentication() {
-        let mut session = SessionMachine::new(DEFAULT_PROTOCOL_LIMITS, 1, 100)
-            .expect("session");
-        session.negotiate(version(1)).expect("negotiate");
+        let mut session = SessionMachine::new(DEFAULT_PROTOCOL_LIMITS, 1, 100).expect("session");
+        session.negotiate(version(1, 0)).expect("negotiate");
         let proof = ProofDigest::from_bytes([7; 32]);
         session.activate(&proof, &proof).expect("activate");
         let id = RequestId::from_bytes([1; 16]);
@@ -919,9 +784,8 @@ mod tests {
 
     #[test]
     fn drain_denies_new_work_and_close_is_terminal() {
-        let mut session = SessionMachine::new(DEFAULT_PROTOCOL_LIMITS, 1, 100)
-            .expect("session");
-        session.negotiate(version(1)).expect("negotiate");
+        let mut session = SessionMachine::new(DEFAULT_PROTOCOL_LIMITS, 1, 100).expect("session");
+        session.negotiate(version(1, 0)).expect("negotiate");
         let proof = ProofDigest::from_bytes([7; 32]);
         session.activate(&proof, &proof).expect("activate");
         session.begin_drain().expect("drain");
@@ -935,8 +799,7 @@ mod tests {
 
     #[test]
     fn success_requires_complete_progress_and_terminal_is_unique() {
-        let mut progress = ProgressState::new(2, DEFAULT_PROTOCOL_LIMITS)
-            .expect("progress");
+        let mut progress = ProgressState::new(2, DEFAULT_PROTOCOL_LIMITS).expect("progress");
         progress.advance(1).expect("advance");
         assert_eq!(
             progress.finish(TerminalKind::Success),
