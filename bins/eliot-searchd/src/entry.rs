@@ -28,6 +28,7 @@ mod protocol_io;
 mod public_runtime_service;
 mod result_handles;
 mod revision_protection;
+mod safe_reader_adapter;
 mod secure_commands;
 mod service_output;
 mod sha256;
