@@ -15,6 +15,25 @@ search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
 search-config.workspace = true
+# T22 qualified Rust client: exact pin, no floating range.
+# =1.19.0 is the latest stable and the exact major.minor.patch match for the
+# qualified server 1.19.0 (build 74f3e85b): only the same-version client is
+# guaranteed to speak every 1.19 proto field the qualification relies on
+# (`SearchParams.idf`, `IdfParams.corpus`, strict-mode floors, strong write
+# ordering). default-features=false drops the reqwest/futures-util
+# snapshot-download surface; the gRPC transport stays fully available.
+qdrant-client = { version = "=1.19.0", default-features = false }
+# Pre-spawn executable identity measurement (SHA-256 + byte length).
+# Exact pin of the already-locked workspace version: zero new packages.
+sha2 = { version = "=0.10.9", default-features = false }
+# Async live-qualification path only (the pinned client is async-only):
+# multithreaded runtime handle plus timers. Macros stay test-only below.
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "time"] }
+
+[dev-dependencies]
+# Live-probe test harness: #[tokio::test] support. Exact pin matching the
+# normal dependency above; features unify at test build time.
+tokio = { version = "=1.53.1", features = ["macros"] }
 
 [lints]
 workspace = true

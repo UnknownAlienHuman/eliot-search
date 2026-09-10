@@ -38,108 +38,108 @@ id = "strict_unindexed_retrieve_rejected"
 owner = "bridge"
 mandatory = true
 purpose = "Strict mode rejects retrieval filters on fields without a compatible payload index."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; query filter on never-indexed unit_kind rejected under strict mode"
 
 [[probe]]
 id = "strict_unindexed_update_rejected"
 owner = "bridge"
 mandatory = true
 purpose = "Strict mode rejects update/delete-by-filter on fields without a compatible payload index."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; delete-by-filter on never-indexed unit_kind rejected under strict mode"
 
 [[probe]]
 id = "schema_digest_equality"
 owner = "bridge"
 mandatory = true
 purpose = "Actual collection topology, vectors, payload indexes and strict settings equal the descriptor."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; shards=1 sparse idf/idf indexes present strict=true/false/false status=Green"
 
 [[probe]]
 id = "signed_i64_epoch_range"
 owner = "bridge"
 mandatory = true
 purpose = "Signed integer range behavior accepts the architecture epoch domain and rejects invalid sentinels."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; from<=MIN count=1 until>=MAX count=1 (exact f64-representable extremes)"
 
 [[probe]]
 id = "missing_valid_until_open_end"
 owner = "bridge"
 mandatory = true
 purpose = "A missing valid_until field passes NOT(valid_until <= visible_epoch)."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; must_not(until<=42)=4 (missing passes) must(until<=42)=0 (missing excluded)"
 
 [[probe]]
 id = "sparse_idf_modifier"
 owner = "bridge"
 mandatory = true
 purpose = "Sparse-vector IDF modifier is admitted and produces the qualified fixture result."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; t1 top=1 score(t1)=0.6931472 score(t0)=0.35667497 rarer term higher"
 
 [[probe]]
 id = "independent_idf_population_filter"
 owner = "bridge"
 mandatory = true
 purpose = "IDF population can be filtered independently from retrieval while sharing base eligibility."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; scoped 0.35667497 bit-identical after tenant-b insert, global moved to 0.14660347"
 
 [[probe]]
 id = "idf_access_noninterference"
 owner = "bridge"
 mandatory = true
 purpose = "Changing inaccessible/staged/retired/denied points cannot change authorized result ordering."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; tenant-scoped ordering/scores unchanged by 6 forbidden-population inserts"
 
 [[probe]]
 id = "payload_index_completeness"
 owner = "bridge"
 mandatory = true
 purpose = "Every mandatory base-filter field has an admitted compatible payload index before ingestion."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; 4 indexes before ingest, missing=[]"
 
 [[probe]]
 id = "wait_true_mutation_ack"
 owner = "bridge"
 mandatory = true
 purpose = "Acknowledged upsert/close/delete is observable by exact readback before success."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; wait=true acked and immediately readable 4/4"
 
 [[probe]]
 id = "strong_write_ordering"
 owner = "bridge"
 mandatory = true
 purpose = "The selected client/server pair accepts and honors the strongest qualified ordering mode."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; WriteOrdering::Strong accepted, Completed, immediate readback"
 
 [[probe]]
 id = "exact_count_and_readback"
 owner = "bridge"
 mandatory = true
 purpose = "Exact IDs, counts, payload digest and vector-name set match the requested manifest."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; exact count=4 ids=[1,2,uuid,9] unknown empty; delete 2 recounts to 3"
 
 [[probe]]
 id = "uuid_point_identity"
@@ -155,9 +155,9 @@ id = "one_shard_topology"
 owner = "bridge"
 mandatory = true
 purpose = "Collection is admitted only with shard_number=1 and matching scoring identity."
-result = "UNAVAILABLE"
-raw_output_ref = ""
-receipt_ref = ""
+result = "PASS"
+raw_output_ref = "cargo +1.98.0 test --locked -p search-qdrant-bridge --test live_probe (2026-09-10, 3/3 tests, 13/13 bridge probes PASS)"
+receipt_ref = "search-qdrant-bridge QualifiedGate server=1.19.0/74f3e85b client=qdrant-client/1.19.0 collection=t22_qual_probe disposable-loopback; shard_number=1 replication=1 consistency=1"
 
 [[probe]]
 id = "lexical_document_query_golden"

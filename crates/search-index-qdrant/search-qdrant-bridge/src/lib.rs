@@ -22,6 +22,11 @@ use search_contracts::{
     Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, OwnerEpoch, ReceiptRef,
 };
 
+/// Live T22 qualification path beside the in-memory oracle.
+pub mod live;
+/// Exact T22 artifact/client/IDF qualification gate.
+pub mod qualified;
+
 /// Closed Qdrant bridge failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BridgeError {

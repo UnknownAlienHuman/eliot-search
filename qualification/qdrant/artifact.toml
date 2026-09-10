@@ -22,10 +22,10 @@ automatic_upgrade = false
 
 [client]
 crate_name = "qdrant-client"
-version = ""
-source_checksum = ""
-source_ref = ""
-lockfile_digest = ""
+version = "1.19.0"
+source_checksum = "dddc19df129bad7346ebd027288621ab1ac7e52678371f906b9a8622d7aaf87e"
+source_ref = "https://crates.io/crates/qdrant-client/1.19.0 + github.com/qdrant/rust-client@7c838035ae7b9455636dcaca918a55b7d7ca638f"
+lockfile_digest = "CA516A8CF8F512ADA0C1E16787F84D6DD112465158375D7FDAFF259506ADCCE3"
 license_receipt_ref = ""
 
 [process]
