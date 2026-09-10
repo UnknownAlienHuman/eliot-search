@@ -548,13 +548,11 @@ fn reconcile_present(
             content_digest: observed_content_digest,
             content_bytes: observed_content_bytes,
         }),
-        (None, Some(file), false, false | true) => {
-            Ok(ReconcileAction::BindStableFileIdentity {
-                expected_binding_revision: binding.binding_revision(),
-                next_binding_revision: next_revision(binding.binding_revision())?,
-                stable_file_identity_digest: file,
-            })
-        }
+        (None, Some(file), false, false | true) => Ok(ReconcileAction::BindStableFileIdentity {
+            expected_binding_revision: binding.binding_revision(),
+            next_binding_revision: next_revision(binding.binding_revision())?,
+            stable_file_identity_digest: file,
+        }),
         (None, Some(_) | None, true, _) | (Some(_), None, true, _) => {
             denial_as_error(ReconcileDenialReason::RenameIdentityEvidenceMissing)
         }
@@ -676,9 +674,10 @@ mod tests {
         OpaqueCanonicalBytes, OwnerEpoch, ReceiptRef, SourceId, SourceIdentityKind,
         SourceNamespaceId,
     };
-    use search_ports::{IdempotencyClass, MutationIdentity};
     use search_source_admission::{
-        AdmissionGrant, AdmissionOperation, AdmissionProfile, ResidencyClass, SourceModality,
+        AdmissionBudget, AdmissionReceipt, BASELINE_PROFILE, CancelFlag, DEFAULT_ADMISSION_LIMITS,
+        UnvalidatedObservationInput, baseline_policy, evaluate, issue_receipt,
+        validate_observation,
     };
     use search_source_identity::{SourceBinding, SourceObservation};
     use search_source_registry::{
@@ -703,6 +702,40 @@ mod tests {
             .expect("path")
     }
 
+    fn allow_receipt() -> AdmissionReceipt {
+        let policy = baseline_policy(1, 1_024);
+        let input = UnvalidatedObservationInput {
+            locator_class: "normalized-file".to_owned(),
+            location_class: "local-fixed".to_owned(),
+            source_kind: "file".to_owned(),
+            source_class: "regular".to_owned(),
+            byte_size: Some(10),
+            is_generated: Some(false),
+            is_vendor: Some(false),
+            is_binary: Some(false),
+            is_system: Some(false),
+            sensitivity: Some("public".to_owned()),
+            detector_id: Some("detector:baseline-v1".to_owned()),
+            profile_id: Some(BASELINE_PROFILE.to_owned()),
+            unavailable_fields: Vec::new(),
+            unknown_fields: Vec::new(),
+        };
+        let observation =
+            validate_observation(&input, &policy, DEFAULT_ADMISSION_LIMITS).expect("observation");
+        let decision = evaluate(
+            &policy,
+            &observation,
+            AdmissionBudget::default_budget(),
+            CancelFlag::live(),
+        )
+        .expect("decision");
+        assert_eq!(
+            decision.outcome(),
+            search_source_admission::AdmissionOutcome::Allow
+        );
+        issue_receipt(&policy, &observation, &decision).expect("receipt")
+    }
+
     fn registered() -> RegisteredSource {
         let identity = source_identity();
         let binding = SourceBinding::new(
@@ -718,23 +751,7 @@ mod tests {
             NonZeroRevision::new(1).expect("revision"),
             NonZeroRevision::new(1).expect("revision"),
         );
-        let admission = AdmissionGrant {
-            candidate_id: OpaqueId::new("candidate:test").expect("candidate"),
-            profile: AdmissionProfile::Direct,
-            modality: SourceModality::RegularFile,
-            residency: ResidencyClass::LocalFixed,
-            policy_revision: NonZeroRevision::new(1).expect("revision"),
-            owner_epoch: OwnerEpoch::new(1).expect("epoch"),
-            security_barrier_revision: NonZeroRevision::new(1).expect("revision"),
-            evidence_digest: Blake3Digest32::from_bytes([4; 32]),
-            operation: AdmissionOperation::new(
-                MutationIdentity::new(
-                    OpaqueId::new("admission-operation:test").expect("operation"),
-                    IdempotencyClass::RetrySameIdentity,
-                ),
-                Blake3Digest32::from_bytes([5; 32]),
-            ),
-        };
+        let admission = allow_receipt();
         let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
         registry
             .apply(RegistryBatch {
@@ -744,10 +761,12 @@ mod tests {
                     Blake3Digest32::from_bytes([6; 32]),
                 ),
                 changes: vec![RegistryChange::RegisterSource {
-                    admission,
+                    admission: admission.clone(),
                     binding,
                     assignment: AdmissionBindingProof {
-                        candidate_id: OpaqueId::new("candidate:test").expect("candidate"),
+                        observation_digest: Blake3Digest32::from_bytes(
+                            *admission.observation_digest().as_bytes(),
+                        ),
                         source_identity: identity.clone(),
                         assignment_digest: Blake3Digest32::from_bytes([7; 32]),
                         assignment_receipt: ReceiptRef::new("receipt:assignment").expect("receipt"),
