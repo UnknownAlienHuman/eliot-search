@@ -18,6 +18,11 @@ Thumbs.db
 .env
 .env.*
 
+# One-off patch and verification transcripts are scratch, not qualification evidence.
+# Real evidence lives under qualification/.
+*-patch.log
+/runtime-verification.log
+
 # Generated caches are not source or qualification evidence.
 __pycache__/
 *.py[cod]
