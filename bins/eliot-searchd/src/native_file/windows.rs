@@ -72,7 +72,7 @@ pub(super) fn observe(file: &File) -> Result<Observation, ObservationError> {
             handle,
             core::ptr::null_mut(),
             0,
-            &mut volume_serial,
+            &raw mut volume_serial,
             core::ptr::null_mut(),
             core::ptr::null_mut(),
             filesystem_name.as_mut_ptr(),
@@ -89,7 +89,7 @@ pub(super) fn observe(file: &File) -> Result<Observation, ObservationError> {
     let mut info = FileInformation::default();
     // SAFETY: layout is asserted above; output is initialized and uniquely
     // borrowed. The borrowed File keeps the handle valid; failure is checked.
-    if unsafe { GetFileInformationByHandle(handle, &mut info) } == 0 {
+    if unsafe { GetFileInformationByHandle(handle, &raw mut info) } == 0 {
         return Err(ObservationError::ObservationFailed);
     }
     if info.volume_serial != volume_serial {

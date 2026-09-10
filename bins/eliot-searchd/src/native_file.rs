@@ -78,7 +78,7 @@ impl Observation {
 /// Observes a borrowed final handle using stable Win32 APIs.
 ///
 /// Does not reopen a locator, take ownership of the handle or fabricate a
-/// missing identity. The old 64-bit encoding is retained only on NTFS: ReFS
+/// missing identity. The old 64-bit encoding is retained only on NTFS: `ReFS`
 /// requires a separately versioned 128-bit identity and migration, not truncation.
 ///
 /// # Errors
