@@ -1,6 +1,14 @@
 //! Immutable DIRECT preparation objects plus content-free lookup references.
 //! The existing `DirectStore` owner and revision protector own this adapter too.
 //! No query path creates files, repairs missing objects or changes source metadata.
+//!
+//! Canonical preparation binding (T16): every durable object binds its source
+//! revision, representation identity, materializer/unitizer profile revisions
+//! and exact digest algorithms with real provenance. Content addressing follows
+//! the T14 CAS principles (scoped domain separation, no cross-domain reuse,
+//! no-clobber publication with exact readback before reference). No
+//! `ReceiptRef` is fabricated: representation and profile digests are
+//! recomputed from live bytes and validated profiles.
 
 #[path = "control_migration_preparation.rs"]
 mod migration_inventory;
@@ -11,27 +19,45 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
+use super::storage_io::{
+    ensure_child_directory, ensure_directory, persist_immutable_object, read_regular_file,
+    sync_directory,
+};
 use super::{IndexedSource, RevisionMetadata, RevisionProtector, verify_plaintext};
-use super::storage_io::{ensure_child_directory, ensure_directory, persist_immutable_object,
-    read_regular_file, sync_directory};
-use crate::direct_preparation::{MAX_LAYOUT_BYTES, encode_preparation, preparation_gap, profile_digest};
+use crate::direct_preparation::{
+    CANONICAL_MATERIALIZER_REVISION, CANONICAL_UNITIZER_REVISION, CONTENT_DIGEST_ALGORITHM,
+    CanonicalPreparationReceipt, MANIFEST_DIGEST_ALGORITHM, MAX_LAYOUT_BYTES,
+    REPRESENTATION_DIGEST_ALGORITHM, canonical_materializer_digest, canonical_unitizer_digest,
+};
+// Re-exported for the migration-inventory child module, which binds the legacy
+// dev profile digest into its cursor without treating it as admitted data.
+pub(super) use crate::direct_preparation::profile_digest;
 use crate::sha256;
 
-const MAGIC: &[u8; 8] = b"ELSPRP01";
+const MAGIC: &[u8; 8] = b"ELSPRP02";
 const REF_MAGIC: &[u8; 8] = b"ELSPRF01";
-const BINDING_BYTES: usize = 176;
+const BINDING_BYTES: usize = 208;
+const OLD_BINDING_BYTES: usize = 176;
+const REPRESENTATION_BYTES: usize = 32;
+const BINDING_SUFFIX_BYTES: usize = 19;
+const HEADER_BYTES: usize = BINDING_BYTES + REPRESENTATION_BYTES + BINDING_SUFFIX_BYTES;
 const REF_BYTES: usize = 81;
-const MAX_MANIFEST_BYTES: usize = BINDING_BYTES + MAX_LAYOUT_BYTES + 1;
+const MAX_MANIFEST_BYTES: usize = HEADER_BYTES + MAX_LAYOUT_BYTES + 1;
 const MAX_OBJECT_BYTES: usize = 65 * 1024 * 1024;
 
 pub(super) fn persist_source(
-    root: &Path, protector: &RevisionProtector, namespace: &str,
-    source: &IndexedSource, bytes: &[u8],
+    root: &Path,
+    protector: &RevisionProtector,
+    namespace: &str,
+    source: &IndexedSource,
+    bytes: &[u8],
 ) -> Result<(), String> {
     super::revision_writer::persist_before_publication(root, protector, source, bytes)?;
     let metadata = RevisionMetadata {
-        source_id: source.source_id.clone(), revision_id: source.revision_id.clone(),
-        content_digest: source.content_digest.clone(), byte_length: source.byte_length,
+        source_id: source.source_id.clone(),
+        revision_id: source.revision_id.clone(),
+        content_digest: source.content_digest.clone(),
+        byte_length: source.byte_length,
     };
     persist(root, protector, namespace, &metadata, bytes).map(|_| ())
 }
@@ -39,15 +65,59 @@ pub(super) fn persist_source(
 /// Object publication and exact readback precede its reference, which in turn
 /// precedes the source-catalog event. Existing conflicting bytes are not replaced.
 pub(super) fn persist(
-    root: &Path, protector: &RevisionProtector, namespace: &str,
-    metadata: &RevisionMetadata, source: &[u8],
+    root: &Path,
+    protector: &RevisionProtector,
+    namespace: &str,
+    metadata: &RevisionMetadata,
+    source: &[u8],
 ) -> Result<Option<&'static str>, String> {
+    persist_canonical(root, protector, namespace, metadata, source).map(|receipt| receipt.gap)
+}
+
+/// Canonical persist returning real provenance (representation and profile
+/// digests) alongside the preparation gap. The legacy `persist` wrapper above
+/// preserves the existing caller contract.
+pub(super) fn persist_canonical(
+    root: &Path,
+    protector: &RevisionProtector,
+    namespace: &str,
+    metadata: &RevisionMetadata,
+    source: &[u8],
+) -> Result<CanonicalPreparationReceipt, String> {
+    use crate::direct_preparation::{encode_canonical_preparation, preparation_gap as gap_of};
     verify_plaintext(metadata, source)?;
     let binding = binding(namespace, metadata)?;
+    let namespace_bytes = crate::sha256::decode_digest(namespace)
+        .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+    let source_bytes = crate::sha256::decode_digest(&metadata.source_id)
+        .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+    let revision_bytes = crate::sha256::decode_digest(&metadata.revision_id)
+        .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+    let content_bytes = crate::sha256::decode_digest(&metadata.content_digest)
+        .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+    let materializer_digest = canonical_materializer_digest().map_err(str::to_owned)?;
+    let unitizer_digest = canonical_unitizer_digest().map_err(str::to_owned)?;
+    let (representation, body) = encode_canonical_preparation(
+        source,
+        &namespace_bytes,
+        &source_bytes,
+        &revision_bytes,
+        &content_bytes,
+        metadata.byte_length,
+    )
+    .map_err(str::to_owned)?;
+    let gap = gap_of(&body).map_err(str::to_owned)?;
     let mut manifest = Zeroizing::new(binding.to_vec());
-    manifest.extend_from_slice(&encode_preparation(source).map_err(str::to_owned)?);
-    let gap = preparation_gap(&manifest[BINDING_BYTES..]).map_err(str::to_owned)?;
-    if manifest.len() > MAX_MANIFEST_BYTES { return Err("DIRECT_PREPARATION_TOO_LARGE".to_owned()); }
+    manifest.extend_from_slice(&representation);
+    manifest.push(CONTENT_DIGEST_ALGORITHM);
+    manifest.push(REPRESENTATION_DIGEST_ALGORITHM);
+    manifest.extend_from_slice(&CANONICAL_MATERIALIZER_REVISION.to_be_bytes());
+    manifest.extend_from_slice(&CANONICAL_UNITIZER_REVISION.to_be_bytes());
+    manifest.push(MANIFEST_DIGEST_ALGORITHM);
+    manifest.extend_from_slice(&body);
+    if manifest.len() > MAX_MANIFEST_BYTES {
+        return Err("DIRECT_PREPARATION_TOO_LARGE".to_owned());
+    }
     let digest = sha256::digest(&manifest);
     let key = lookup_key(&binding, protector);
     let (reference_path, objects) = directories(root, &key, true)?;
@@ -63,8 +133,14 @@ pub(super) fn persist(
     // A corrupt/conflicting lookup never authorizes overwriting immutable state.
     match fs::symlink_metadata(&reference_path) {
         Ok(_) => {
-            let observed = read_regular_file(&reference_path, REF_BYTES, "DIRECT_PREPARATION_REFERENCE_READ_FAILED")?;
-            if observed != expected_ref { return Err("DIRECT_PREPARATION_REFERENCE_CONFLICT".to_owned()); }
+            let observed = read_regular_file(
+                &reference_path,
+                REF_BYTES,
+                "DIRECT_PREPARATION_REFERENCE_READ_FAILED",
+            )?;
+            if observed != expected_ref {
+                return Err("DIRECT_PREPARATION_REFERENCE_CONFLICT".to_owned());
+            }
         }
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(_) => return Err("DIRECT_PREPARATION_REFERENCE_READ_FAILED".to_owned()),
@@ -74,31 +150,51 @@ pub(super) fn persist(
         Err(error) if error.kind() == ErrorKind::NotFound => {
             let encoded = Zeroizing::new(if protector.encrypts_new_objects() {
                 protector.protect(&object_id, &sha256::hex(&digest), &manifest)?
-            } else { manifest.to_vec() });
+            } else {
+                manifest.to_vec()
+            });
             persist_immutable_object(&object_path, &encoded)?;
         }
         Err(_) => return Err("DIRECT_PREPARATION_OBJECT_READ_FAILED".to_owned()),
     }
-    let observed = read_object(&object_path, protector, &object_id, digest, manifest.len() as u64)?;
+    let observed = read_object(
+        &object_path,
+        protector,
+        &object_id,
+        digest,
+        manifest.len() as u64,
+    )?;
     if observed.as_slice() != manifest.as_slice() {
         return Err("DIRECT_PREPARATION_OBJECT_CONFLICT".to_owned());
     }
     persist_immutable_object(&reference_path, &expected_ref)?;
     // Reference readback is performed by persist_immutable_object itself.
-    Ok(gap)
+    Ok(CanonicalPreparationReceipt {
+        representation_id: representation,
+        materializer_digest,
+        unitizer_digest,
+        gap,
+    })
 }
 
 /// Exact, bounded, read-only lookup. The returned body is tied to the caller's
 /// source revision, preparation profile and current storage protection profile.
 pub(super) fn load(
-    root: &Path, protector: &RevisionProtector, namespace: &str, metadata: &RevisionMetadata,
+    root: &Path,
+    protector: &RevisionProtector,
+    namespace: &str,
+    metadata: &RevisionMetadata,
 ) -> Result<Zeroizing<Vec<u8>>, &'static str> {
     let binding = binding(namespace, metadata).map_err(|_| "DIRECT_PREPARATION_BINDING_INVALID")?;
     let key = lookup_key(&binding, protector);
-    let (reference_path, objects) = directories(root, &key, false)
-        .map_err(|_| "DIRECT_PREPARATION_UNAVAILABLE")?;
-    let saved = read_regular_file(&reference_path, REF_BYTES, "DIRECT_PREPARATION_REFERENCE_READ_FAILED")
-        .map_err(|_| "DIRECT_PREPARATION_UNAVAILABLE")?;
+    let (reference_path, objects) =
+        directories(root, &key, false).map_err(|_| "DIRECT_PREPARATION_UNAVAILABLE")?;
+    let saved = read_regular_file(
+        &reference_path,
+        REF_BYTES,
+        "DIRECT_PREPARATION_REFERENCE_READ_FAILED",
+    )
+    .map_err(|_| "DIRECT_PREPARATION_UNAVAILABLE")?;
     let (digest, length) = decode_reference(&saved, &key, protector)?;
     let id = object_id(&binding, protector, &digest);
     let object_shard = objects.join(&id[..2]);
@@ -106,10 +202,96 @@ pub(super) fn load(
     let path = object_shard.join(format!("{id}.{}", extension(protector)));
     let manifest = read_object(&path, protector, &id, digest, length)
         .map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID")?;
+    verify_manifest(&manifest, &binding, metadata, namespace)?;
+    Ok(Zeroizing::new(manifest[HEADER_BYTES..].to_vec()))
+}
+
+/// Verifies a durable manifest against its lookup binding, exact digest
+/// algorithms, current canonical profiles and recomputed representation.
+/// No algorithm is reinterpreted: unknown tags fail closed.
+fn verify_manifest(
+    manifest: &[u8],
+    binding: &[u8; BINDING_BYTES],
+    metadata: &RevisionMetadata,
+    namespace: &str,
+) -> Result<(), &'static str> {
+    use crate::direct_preparation::{preparation_gap as gap_of, representation_id as repr_of};
+    if manifest.len() < HEADER_BYTES + 1 || manifest.len() > MAX_MANIFEST_BYTES {
+        return Err("DIRECT_PREPARATION_OBJECT_INVALID");
+    }
     if manifest.get(..BINDING_BYTES) != Some(binding.as_slice()) {
         return Err("DIRECT_PREPARATION_BINDING_MISMATCH");
     }
-    Ok(Zeroizing::new(manifest[BINDING_BYTES..].to_vec()))
+    let stored_representation: [u8; 32] = manifest[BINDING_BYTES..BINDING_BYTES + 32]
+        .try_into()
+        .map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID")?;
+    let suffix = &manifest[BINDING_BYTES + 32..HEADER_BYTES];
+    // Suffix layout: [content_algo(1), repr_algo(1), mat_rev(8), unit_rev(8),
+    // manifest_algo(1)]; indexes 0, 1, 2..10, 10..18, 18.
+    if suffix.len() != 19
+        || suffix[0] != CONTENT_DIGEST_ALGORITHM
+        || suffix[1] != REPRESENTATION_DIGEST_ALGORITHM
+        || suffix[18] != MANIFEST_DIGEST_ALGORITHM
+    {
+        return Err("DIRECT_PREPARATION_DIGEST_ALGORITHM_MISMATCH");
+    }
+    if u64::from_be_bytes(
+        suffix[2..10]
+            .try_into()
+            .map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID")?,
+    ) != CANONICAL_MATERIALIZER_REVISION
+        || u64::from_be_bytes(
+            suffix[10..18]
+                .try_into()
+                .map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID")?,
+        ) != CANONICAL_UNITIZER_REVISION
+    {
+        return Err("DIRECT_PREPARATION_PROFILE_MISMATCH");
+    }
+    let body = &manifest[HEADER_BYTES..];
+    gap_of(body).map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID")?;
+    // Recompute the representation from the stored body and the lookup binding.
+    let namespace_bytes =
+        crate::sha256::decode_digest(namespace).ok_or("DIRECT_PREPARATION_BINDING_INVALID")?;
+    let source_bytes = crate::sha256::decode_digest(&metadata.source_id)
+        .ok_or("DIRECT_PREPARATION_BINDING_INVALID")?;
+    let revision_bytes = crate::sha256::decode_digest(&metadata.revision_id)
+        .ok_or("DIRECT_PREPARATION_BINDING_INVALID")?;
+    let content_bytes = crate::sha256::decode_digest(&metadata.content_digest)
+        .ok_or("DIRECT_PREPARATION_BINDING_INVALID")?;
+    let materializer_digest =
+        canonical_materializer_digest().map_err(|_| "DIRECT_PREPARATION_PROFILE_MISMATCH")?;
+    let unitizer_digest =
+        canonical_unitizer_digest().map_err(|_| "DIRECT_PREPARATION_PROFILE_MISMATCH")?;
+    // Binding already pins both profile digests; reject a stored manifest that
+    // carries a different profile generation without reinterpreting it.
+    if binding[144..176] != materializer_digest || binding[176..208] != unitizer_digest {
+        return Err("DIRECT_PREPARATION_PROFILE_MISMATCH");
+    }
+    let marker: &[u8] = match body {
+        [0, layout @ ..] => layout,
+        [1] => b"DIRECT_REVISION_NOT_UTF8",
+        [2] => b"MATERIALIZATION_BINARY_CONTENT",
+        [3] => b"MATERIALIZATION_TOO_MANY_LINES",
+        [4] => b"UNITIZATION_TOO_MANY_UNITS",
+        [5] => b"DIRECT_PREPARATION_LAYOUT_TOO_LARGE",
+        [6] => b"DIRECT_REVISION_HAS_BOM",
+        _ => return Err("DIRECT_PREPARATION_OBJECT_INVALID"),
+    };
+    let expected = repr_of(
+        &namespace_bytes,
+        &source_bytes,
+        &revision_bytes,
+        &content_bytes,
+        metadata.byte_length,
+        &materializer_digest,
+        &unitizer_digest,
+        marker,
+    );
+    if expected != stored_representation {
+        return Err("DIRECT_PREPARATION_BINDING_MISMATCH");
+    }
+    Ok(())
 }
 
 /// One reference/object observation; payloads never escape into migration output.
@@ -123,23 +305,35 @@ pub(super) struct PreparationEvidence {
 /// Shared reference/envelope decoders are also used by normal query readback.
 /// Absence is an explicit missing derivative; malformed or contradictory state is an error.
 pub(super) fn inspect(
-    root: &Path, protector: &RevisionProtector, namespace: &str,
-    metadata: &RevisionMetadata, source: &[u8], deadline: Instant,
+    root: &Path,
+    protector: &RevisionProtector,
+    namespace: &str,
+    metadata: &RevisionMetadata,
+    source: &[u8],
+    deadline: Instant,
 ) -> Result<PreparationEvidence, String> {
-    let check = || if Instant::now() >= deadline {
-        Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
-    } else { Ok(()) };
+    let check = || {
+        if Instant::now() >= deadline {
+            Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+        } else {
+            Ok(())
+        }
+    };
     check()?;
     verify_plaintext(metadata, source)?;
     let binding = binding(namespace, metadata)?;
     let key = lookup_key(&binding, protector);
     let hex = sha256::hex(&key);
     let missing = || PreparationEvidence {
-        present: false, stored_bytes: 0,
-        json: format!(concat!(
-            "{{\"status\":\"missing_reference\",\"reference_key_sha256\":\"{}\",",
-            "\"record_verified\":false,\"layout_available\":false}}"
-        ), hex),
+        present: false,
+        stored_bytes: 0,
+        json: format!(
+            concat!(
+                "{{\"status\":\"missing_reference\",\"reference_key_sha256\":\"{}\",",
+                "\"record_verified\":false,\"layout_available\":false}}"
+            ),
+            hex
+        ),
     };
     // Do not translate permission/type errors into absence, follow a dangling
     // symlink, create a directory, or reconstruct a missing object here.
@@ -161,7 +355,11 @@ pub(super) fn inspect(
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(missing()),
         Err(_) => return Err("DIRECT_PREPARATION_REFERENCE_READ_FAILED".to_owned()),
     }
-    let saved = read_regular_file(&ref_path, REF_BYTES, "DIRECT_PREPARATION_REFERENCE_READ_FAILED")?;
+    let saved = read_regular_file(
+        &ref_path,
+        REF_BYTES,
+        "DIRECT_PREPARATION_REFERENCE_READ_FAILED",
+    )?;
     let (digest, length) = decode_reference(&saved, &key, protector).map_err(str::to_owned)?;
     let id = object_id(&binding, protector, &digest);
     let objects = base.join("objects");
@@ -171,53 +369,132 @@ pub(super) fn inspect(
     let object_path = object_shard.join(format!("{id}.{}", extension(protector)));
     check()?;
     let encoded = Zeroizing::new(read_regular_file(
-        &object_path, MAX_OBJECT_BYTES, "DIRECT_PREPARATION_OBJECT_READ_FAILED",
+        &object_path,
+        MAX_OBJECT_BYTES,
+        "DIRECT_PREPARATION_OBJECT_READ_FAILED",
     )?);
     let raw_digest = sha256::digest(&encoded);
     let raw_length = encoded.len() as u64;
     let manifest = decode_object(&encoded, protector, &id, digest, length)?;
     drop(encoded);
-    if manifest.get(..BINDING_BYTES) != Some(binding.as_slice()) {
-        return Err("DIRECT_PREPARATION_BINDING_MISMATCH".to_owned());
-    }
+    verify_manifest(&manifest, &binding, metadata, namespace).map_err(str::to_owned)?;
     check()?;
-    let expected = Zeroizing::new(encode_preparation(source).map_err(str::to_owned)?);
-    if manifest.get(BINDING_BYTES..) != Some(expected.as_slice()) {
+    let body = manifest[HEADER_BYTES..].to_vec();
+    let expected = {
+        use crate::direct_preparation::encode_canonical_preparation;
+        let namespace_bytes = crate::sha256::decode_digest(namespace)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let source_bytes = crate::sha256::decode_digest(&metadata.source_id)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let revision_bytes = crate::sha256::decode_digest(&metadata.revision_id)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let content_bytes = crate::sha256::decode_digest(&metadata.content_digest)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let (_, recomputed) = encode_canonical_preparation(
+            source,
+            &namespace_bytes,
+            &source_bytes,
+            &revision_bytes,
+            &content_bytes,
+            metadata.byte_length,
+        )
+        .map_err(str::to_owned)?;
+        Zeroizing::new(recomputed)
+    };
+    if body.as_slice() != expected.as_slice() {
         return Err("DIRECT_PREPARATION_DERIVATION_MISMATCH".to_owned());
     }
-    let gap = preparation_gap(&expected).map_err(str::to_owned)?;
+    let gap = crate::direct_preparation::preparation_gap(&expected).map_err(str::to_owned)?;
     drop(expected);
+    let stored_representation: [u8; 32] = manifest[BINDING_BYTES..BINDING_BYTES + 32]
+        .try_into()
+        .map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID".to_owned())?;
+    {
+        use crate::direct_preparation::verify_canonical_representation;
+        let namespace_bytes = crate::sha256::decode_digest(namespace)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let source_bytes = crate::sha256::decode_digest(&metadata.source_id)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let revision_bytes = crate::sha256::decode_digest(&metadata.revision_id)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let content_bytes = crate::sha256::decode_digest(&metadata.content_digest)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        verify_canonical_representation(
+            &stored_representation,
+            source,
+            &namespace_bytes,
+            &source_bytes,
+            &revision_bytes,
+            &content_bytes,
+            metadata.byte_length,
+        )
+        .map_err(str::to_owned)?;
+    }
+    let representation_hex = crate::sha256::hex(&stored_representation);
+    let materializer_hex = crate::sha256::hex(&manifest[144..176]);
+    let unitizer_hex = crate::sha256::hex(&manifest[176..208]);
     drop(manifest);
     // The fingerprints describe the same decoded object/reference, not another
     // path read substituted after validation. The importer must still revalidate
     // at cutover; this is not an atomic snapshot of the entire filesystem.
     check()?;
     let reread = Zeroizing::new(read_regular_file(
-        &object_path, MAX_OBJECT_BYTES, "DIRECT_PREPARATION_OBJECT_READ_FAILED",
+        &object_path,
+        MAX_OBJECT_BYTES,
+        "DIRECT_PREPARATION_OBJECT_READ_FAILED",
     )?);
-    if reread.len() as u64 != raw_length || sha256::digest(&reread) != raw_digest
-        || read_regular_file(&ref_path, REF_BYTES, "DIRECT_PREPARATION_REFERENCE_READ_FAILED")? != saved
+    if reread.len() as u64 != raw_length
+        || sha256::digest(&reread) != raw_digest
+        || read_regular_file(
+            &ref_path,
+            REF_BYTES,
+            "DIRECT_PREPARATION_REFERENCE_READ_FAILED",
+        )? != saved
     {
         return Err("DIRECT_MIGRATION_PREPARATION_CHANGED".to_owned());
     }
     check()?;
     Ok(PreparationEvidence {
-        present: true, stored_bytes: raw_length + REF_BYTES as u64,
-        json: format!(concat!(
-            "{{\"status\":\"verified_record\",\"reference_key_sha256\":\"{}\",",
-            "\"reference_file_sha256\":\"{}\",\"reference_bytes\":{},",
-            "\"object_id\":\"{}\",\"object_format\":\"{}\",",
-            "\"manifest_sha256\":\"{}\",\"manifest_bytes\":{},",
-            "\"encoded_sha256\":\"{}\",\"encoded_bytes\":{},",
-            "\"record_verified\":true,\"layout_available\":{},\"preparation_gap\":{}}}"
-        ), hex, sha256::hex(&sha256::digest(&saved)), REF_BYTES, id, extension(protector),
-            sha256::hex(&digest), length, sha256::hex(&raw_digest), raw_length,
-            gap.is_none(), gap.map_or_else(|| "null".to_owned(), crate::service_output::json_string)),
+        present: true,
+        stored_bytes: raw_length + REF_BYTES as u64,
+        json: format!(
+            concat!(
+                "{{\"status\":\"verified_record\",\"reference_key_sha256\":\"{}\",",
+                "\"reference_file_sha256\":\"{}\",\"reference_bytes\":{},",
+                "\"object_id\":\"{}\",\"object_format\":\"{}\",",
+                "\"manifest_sha256\":\"{}\",\"manifest_bytes\":{},",
+                "\"encoded_sha256\":\"{}\",\"encoded_bytes\":{},",
+                "\"record_verified\":true,\"layout_available\":{},\"preparation_gap\":{},",
+                "\"representation_id\":\"{}\",\"materializer_profile_digest\":\"{}\",",
+                "\"unitizer_profile_digest\":\"{}\",\"materializer_profile_revision\":{},",
+                "\"unitizer_profile_revision\":{},\"content_digest_algorithm\":\"sha256\",",
+                "\"representation_digest_algorithm\":\"blake3_256\",",
+                "\"manifest_digest_algorithm\":\"sha256\"}}"
+            ),
+            hex,
+            sha256::hex(&sha256::digest(&saved)),
+            REF_BYTES,
+            id,
+            extension(protector),
+            sha256::hex(&digest),
+            length,
+            sha256::hex(&raw_digest),
+            raw_length,
+            gap.is_none(),
+            gap.map_or_else(|| "null".to_owned(), crate::service_output::json_string),
+            representation_hex,
+            materializer_hex,
+            unitizer_hex,
+            CANONICAL_MATERIALIZER_REVISION,
+            CANONICAL_UNITIZER_REVISION
+        ),
     })
 }
 
 fn decode_reference(
-    saved: &[u8], key: &[u8; 32], protector: &RevisionProtector,
+    saved: &[u8],
+    key: &[u8; 32],
+    protector: &RevisionProtector,
 ) -> Result<([u8; 32], u64), &'static str> {
     let (digest, length, protected) = decode_reference_fields(saved, key)?;
     if protected != protector.encrypts_new_objects() {
@@ -228,17 +505,29 @@ fn decode_reference(
 
 /// Shared wire validation, independent of the currently active protection backend.
 /// Used to account for old-profile references without treating them as admitted data.
+/// Accepts both v1 (`OLD_BINDING_BYTES`) and v2 (`BINDING_BYTES`) manifest
+/// lengths so pre-cutover residue remains inventory-visible instead of failing
+/// the whole migration sweep; binding generation is decided by object content.
 fn decode_reference_fields(
-    saved: &[u8], key: &[u8; 32],
+    saved: &[u8],
+    key: &[u8; 32],
 ) -> Result<([u8; 32], u64, bool), &'static str> {
-    if saved.len() != REF_BYTES || &saved[..8] != REF_MAGIC || saved[8..40] != key[..]
+    if saved.len() != REF_BYTES
+        || &saved[..8] != REF_MAGIC
+        || saved[8..40] != key[..]
         || saved[80] > 1
     {
         return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
     }
-    let digest = saved[40..72].try_into().map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?;
-    let length = u64::from_be_bytes(saved[72..80].try_into().map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?);
-    if length <= BINDING_BYTES as u64 || length > MAX_MANIFEST_BYTES as u64 {
+    let digest = saved[40..72]
+        .try_into()
+        .map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?;
+    let length = u64::from_be_bytes(
+        saved[72..80]
+            .try_into()
+            .map_err(|_| "DIRECT_PREPARATION_REFERENCE_INVALID")?,
+    );
+    if length <= OLD_BINDING_BYTES as u64 || length > MAX_MANIFEST_BYTES as u64 {
         return Err("DIRECT_PREPARATION_REFERENCE_INVALID");
     }
     Ok((digest, length, saved[80] == 1))
@@ -247,45 +536,88 @@ fn decode_reference_fields(
 fn binding(namespace: &str, metadata: &RevisionMetadata) -> Result<[u8; BINDING_BYTES], String> {
     let mut out = [0; BINDING_BYTES];
     out[..8].copy_from_slice(MAGIC);
-    for (index, value) in [namespace, &metadata.source_id, &metadata.revision_id, &metadata.content_digest]
-        .into_iter().enumerate()
+    for (index, value) in [
+        namespace,
+        &metadata.source_id,
+        &metadata.revision_id,
+        &metadata.content_digest,
+    ]
+    .into_iter()
+    .enumerate()
     {
-        let digest = sha256::decode_digest(value).ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
+        let digest = sha256::decode_digest(value)
+            .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
         out[8 + index * 32..40 + index * 32].copy_from_slice(&digest);
     }
     out[136..144].copy_from_slice(&metadata.byte_length.to_be_bytes());
-    out[144..176].copy_from_slice(&profile_digest());
+    let materializer = canonical_materializer_digest()
+        .map_err(|_| "DIRECT_PREPARATION_PROFILE_INVALID".to_owned())?;
+    let unitizer =
+        canonical_unitizer_digest().map_err(|_| "DIRECT_PREPARATION_PROFILE_INVALID".to_owned())?;
+    out[144..176].copy_from_slice(&materializer);
+    out[176..208].copy_from_slice(&unitizer);
     Ok(out)
 }
 fn lookup_key(binding: &[u8], protector: &RevisionProtector) -> [u8; 32] {
-    sha256::digest_parts(b"eliot-search/direct-preparation-ref/v1", &[binding, protector.backend_name().as_bytes()])
+    sha256::digest_parts(
+        b"eliot-search/direct-preparation-ref/v2",
+        &[binding, protector.backend_name().as_bytes()],
+    )
 }
 fn object_id(binding: &[u8], protector: &RevisionProtector, digest: &[u8; 32]) -> String {
-    sha256::hex(&sha256::digest_parts(b"eliot-search/direct-preparation-object/v1",
-        &[binding, protector.backend_name().as_bytes(), digest]))
+    sha256::hex(&sha256::digest_parts(
+        b"eliot-search/direct-preparation-object/v2",
+        &[binding, protector.backend_name().as_bytes(), digest],
+    ))
 }
 const fn extension(protector: &RevisionProtector) -> &'static str {
-    if protector.encrypts_new_objects() { "dpapi" } else { "bin" }
+    if protector.encrypts_new_objects() {
+        "dpapi"
+    } else {
+        "bin"
+    }
 }
-fn reference(key: &[u8; 32], digest: [u8; 32], length: u64, protector: &RevisionProtector) -> Vec<u8> {
+fn reference(
+    key: &[u8; 32],
+    digest: [u8; 32],
+    length: u64,
+    protector: &RevisionProtector,
+) -> Vec<u8> {
     let mut out = Vec::with_capacity(REF_BYTES);
-    out.extend_from_slice(REF_MAGIC); out.extend_from_slice(key); out.extend_from_slice(&digest);
-    out.extend_from_slice(&length.to_be_bytes()); out.push(u8::from(protector.encrypts_new_objects()));
+    out.extend_from_slice(REF_MAGIC);
+    out.extend_from_slice(key);
+    out.extend_from_slice(&digest);
+    out.extend_from_slice(&length.to_be_bytes());
+    out.push(u8::from(protector.encrypts_new_objects()));
     out
 }
 fn read_object(
-    path: &Path, protector: &RevisionProtector, id: &str, digest: [u8; 32], length: u64,
+    path: &Path,
+    protector: &RevisionProtector,
+    id: &str,
+    digest: [u8; 32],
+    length: u64,
 ) -> Result<Zeroizing<Vec<u8>>, String> {
-    let encoded = Zeroizing::new(read_regular_file(path, MAX_OBJECT_BYTES, "DIRECT_PREPARATION_OBJECT_READ_FAILED")?);
+    let encoded = Zeroizing::new(read_regular_file(
+        path,
+        MAX_OBJECT_BYTES,
+        "DIRECT_PREPARATION_OBJECT_READ_FAILED",
+    )?);
     decode_object(&encoded, protector, id, digest, length)
 }
 
 fn decode_object(
-    encoded: &[u8], protector: &RevisionProtector, id: &str, digest: [u8; 32], length: u64,
+    encoded: &[u8],
+    protector: &RevisionProtector,
+    id: &str,
+    digest: [u8; 32],
+    length: u64,
 ) -> Result<Zeroizing<Vec<u8>>, String> {
     let decoded = Zeroizing::new(if protector.encrypts_new_objects() {
         protector.unprotect(encoded, id, &sha256::hex(&digest), length)?
-    } else { encoded.to_vec() });
+    } else {
+        encoded.to_vec()
+    });
     if decoded.len() as u64 != length || sha256::digest(&decoded) != digest {
         return Err("DIRECT_PREPARATION_CONTENT_MISMATCH".to_owned());
     }
@@ -302,14 +634,21 @@ fn directories(root: &Path, key: &[u8; 32], create: bool) -> Result<(PathBuf, Pa
         if create {
             ensure_child_directory(path)?;
             #[cfg(unix)]
-            sync_directory(path.parent().ok_or_else(|| "DIRECT_PREPARATION_PARENT_INVALID".to_owned())?)?;
+            sync_directory(
+                path.parent()
+                    .ok_or_else(|| "DIRECT_PREPARATION_PARENT_INVALID".to_owned())?,
+            )?;
             #[cfg(not(unix))]
-            sync_directory(path.parent().ok_or_else(|| "DIRECT_PREPARATION_PARENT_INVALID".to_owned())?);
-        } else { ensure_directory(path)?; }
+            sync_directory(
+                path.parent()
+                    .ok_or_else(|| "DIRECT_PREPARATION_PARENT_INVALID".to_owned())?,
+            );
+        } else {
+            ensure_directory(path)?;
+        }
     }
     Ok((shard.join(format!("{hex}.ref")), objects))
 }
-
 
 const MAX_BATCH_REVISIONS: usize = 64;
 const MAX_BATCH_SOURCE_BYTES: u64 = 256 * 1024 * 1024;
@@ -325,7 +664,9 @@ pub struct PreparationCursor {
 impl PreparationCursor {
     pub(crate) fn parse(value: &str) -> Result<Self, String> {
         // v1.<64 lowercase hex>.<64 lowercase hex>; ASCII validated before slicing.
-        if value.len() != 132 || !value.is_ascii() || !value.starts_with("v1.")
+        if value.len() != 132
+            || !value.is_ascii()
+            || !value.starts_with("v1.")
             || value.as_bytes()[67] != b'.'
         {
             return Err("DIRECT_PREPARATION_CURSOR_INVALID".to_owned());
@@ -339,7 +680,10 @@ impl PreparationCursor {
         {
             return Err("DIRECT_PREPARATION_CURSOR_INVALID".to_owned());
         }
-        Ok(Self { checkpoint, after: after.to_owned() })
+        Ok(Self {
+            checkpoint,
+            after: after.to_owned(),
+        })
     }
 }
 
@@ -350,20 +694,63 @@ pub struct PreparationBatch {
     pub(crate) source_bytes: u64,
     pub(crate) gaps: Vec<(String, &'static str)>,
     pub(crate) next_cursor: Option<String>,
+    /// Canonical per-revision bindings: `(revision_id, representation_hex, gap)`.
+    /// No receipt is stored.
+    pub(crate) manifests: Vec<(String, String, Option<&'static str>)>,
+}
+
+impl PreparationBatch {
+    /// Canonical manifest bindings in processing order as
+    /// `(revision_id, representation_hex, gap)` triples.
+    pub fn manifests(&self) -> &[(String, String, Option<&'static str>)] {
+        &self.manifests
+    }
 }
 
 impl super::DirectStore {
     fn preparation_checkpoint(&self) -> [u8; 32] {
-        sha256::digest_parts(b"eliot-search/direct-preparation-cursor/v1", &[
-            &self.inner.preparation_catalog_digest(), &profile_digest(),
-            self.protector.backend_name().as_bytes(),
-        ])
+        let materializer = canonical_materializer_digest().unwrap_or([0; 32]);
+        let unitizer = canonical_unitizer_digest().unwrap_or([0; 32]);
+        sha256::digest_parts(
+            b"eliot-search/direct-preparation-cursor/v2",
+            &[
+                &self.inner.preparation_catalog_digest(),
+                &materializer,
+                &unitizer,
+                self.protector.backend_name().as_bytes(),
+            ],
+        )
+    }
+
+    /// Canonical single-revision prepare returning real provenance.
+    /// Used by the `--prepare-revision` composition path; the legacy
+    /// `prepare_revision` contract in the revision writer stays unchanged for
+    /// existing service callers.
+    pub(crate) fn prepare_revision_canonical(
+        &self,
+        revision_id: &str,
+    ) -> Result<CanonicalPreparationReceipt, String> {
+        crate::catalog_presence::require_existing(&self.root)?;
+        self.inner.verify_control()?;
+        let metadata = self
+            .inner
+            .retained_revision(revision_id)
+            .ok_or_else(|| "DIRECT_REVISION_NOT_FOUND".to_owned())?;
+        let bytes = Zeroizing::new(self.read_revision_detailed(&metadata)?);
+        persist_canonical(
+            &self.root,
+            &self.protector,
+            &self.inner.namespace_id(),
+            &metadata,
+            &bytes,
+        )
     }
 
     /// Cheap pre-dispatch validation against the owner's admitted catalog snapshot.
     /// The batch also rereads control state before its first possible object write.
     pub(crate) fn validate_preparation_cursor(
-        &self, cursor: Option<&PreparationCursor>,
+        &self,
+        cursor: Option<&PreparationCursor>,
     ) -> Result<(), String> {
         if let Some(cursor) = cursor
             && (cursor.checkpoint != self.preparation_checkpoint()
@@ -379,41 +766,58 @@ impl super::DirectStore {
     /// not one atomic corpus transaction: on failure, retry the last accepted cursor.
     /// No file enumeration, source-path read, source event or query-time repair occurs.
     pub(crate) fn prepare_root(
-        &self, cursor: Option<&PreparationCursor>,
+        &self,
+        cursor: Option<&PreparationCursor>,
     ) -> Result<PreparationBatch, String> {
         crate::catalog_presence::require_existing(&self.root)?;
         self.inner.verify_control()?;
         self.validate_preparation_cursor(cursor)?;
         let checkpoint = self.preparation_checkpoint();
         let namespace = self.inner.namespace_id();
-        let mut pending = self.inner.retained_revisions_after(
-            cursor.map(|value| value.after.as_str()),
-        ).peekable();
+        let mut pending = self
+            .inner
+            .retained_revisions_after(cursor.map(|value| value.after.as_str()))
+            .peekable();
         let mut batch = PreparationBatch {
-            stored: 0, layouts: 0, source_bytes: 0, gaps: Vec::new(), next_cursor: None,
+            stored: 0,
+            layouts: 0,
+            source_bytes: 0,
+            gaps: Vec::new(),
+            next_cursor: None,
+            manifests: Vec::new(),
         };
         let started = Instant::now();
         let mut last = None;
         while let Some(metadata) = pending.peek() {
             if batch.stored >= MAX_BATCH_REVISIONS
-                || batch.source_bytes.checked_add(metadata.byte_length)
+                || batch
+                    .source_bytes
+                    .checked_add(metadata.byte_length)
                     .is_none_or(|bytes| bytes > MAX_BATCH_SOURCE_BYTES)
                 || (batch.stored > 0 && started.elapsed() >= BATCH_SLICE)
             {
                 break;
             }
-            let metadata = pending.next().ok_or_else(|| "DIRECT_PREPARATION_NO_PROGRESS".to_owned())?;
+            let metadata = pending
+                .next()
+                .ok_or_else(|| "DIRECT_PREPARATION_NO_PROGRESS".to_owned())?;
             // Only one revision's bytes/layouts are retained at a time. The time
             // slice is cooperative between objects; it cannot interrupt OS I/O.
             let bytes = Zeroizing::new(self.read_revision_detailed(&metadata)?);
-            let gap = persist(&self.root, &self.protector, &namespace, &metadata, &bytes)?;
+            let receipt =
+                persist_canonical(&self.root, &self.protector, &namespace, &metadata, &bytes)?;
             batch.source_bytes += metadata.byte_length; // checked against the ceiling above
             batch.stored += 1;
-            if let Some(reason) = gap {
+            if let Some(reason) = receipt.gap {
                 batch.gaps.push((metadata.revision_id.clone(), reason));
             } else {
                 batch.layouts += 1;
             }
+            batch.manifests.push((
+                metadata.revision_id.clone(),
+                receipt.representation_hex(),
+                receipt.gap,
+            ));
             last = Some(metadata.revision_id);
         }
         if pending.peek().is_some() {
