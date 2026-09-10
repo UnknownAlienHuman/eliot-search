@@ -5,14 +5,28 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions,
-    clippy::must_use_candidate, clippy::too_many_lines)]
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::module_name_repetitions,
+    clippy::must_use_candidate,
+    clippy::too_many_lines
+)]
 
 use core::fmt;
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
 
 mod layout;
 pub use layout::{UnitSpan, unitize_text};
+
+mod manifest;
+pub use manifest::{
+    CanonicalUnitManifestBytes, MaterializerProvenance, UNIT_MANIFEST_DIGEST_ALGORITHM,
+    UNIT_MANIFEST_FORMAT, UNIT_MANIFEST_VERSION, UnitDescriptor, UnitManifest, UnitManifestDiff,
+    UnitManifestVerificationReceipt, UnitizerProfileChange, UnitizerProfileDescriptor,
+    UnitizerProfileId, ValidatedUnitizerProfile, build_unit_manifest, canonicalize_unit_manifest,
+    classify_unitizer_profile_change, decode_unit_manifest, diff_unit_manifests, manifest_digest,
+    unitizer_profile_digest, validate_unitizer_profile, verify_unit_manifest,
+};
 
 /// Conservative finite unitization limits.
 pub const DEFAULT_UNITIZATION_LIMITS: UnitizationLimits = UnitizationLimits {
@@ -56,6 +70,16 @@ pub enum UnitizationError {
     OffsetOverflow,
     /// Required content-free materialization receipt is absent.
     MissingMaterializationReceipt,
+    /// Unitizer profile descriptor is malformed or unsupported.
+    UnitizerProfileInvalid,
+    /// Unitizer profile identity is not the accepted profile.
+    UnitizerProfileMismatch,
+    /// Unit manifest binding is incomplete for the claimed provenance.
+    UnitManifestIncomplete,
+    /// A recomputed unit or manifest digest differs from the stored manifest.
+    UnitManifestDigestMismatch,
+    /// A stored manifest is internally inconsistent across rebuilds.
+    UnitizationNondeterministic,
 }
 impl UnitizationError {
     /// Stable machine-readable reason code.
@@ -76,11 +100,18 @@ impl UnitizationError {
             Self::UnitCoverageMismatch => "UNITIZATION_UNIT_COVERAGE_MISMATCH",
             Self::OffsetOverflow => "UNITIZATION_OFFSET_OVERFLOW",
             Self::MissingMaterializationReceipt => "UNITIZATION_MISSING_MATERIALIZATION_RECEIPT",
+            Self::UnitizerProfileInvalid => "UNITIZER_PROFILE_INVALID",
+            Self::UnitizerProfileMismatch => "UNITIZER_PROFILE_MISMATCH",
+            Self::UnitManifestIncomplete => "UNIT_MANIFEST_INCOMPLETE",
+            Self::UnitManifestDigestMismatch => "UNIT_MANIFEST_DIGEST_MISMATCH",
+            Self::UnitizationNondeterministic => "UNITIZATION_NONDETERMINISTIC",
         }
     }
 }
 impl fmt::Display for UnitizationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result { formatter.write_str(self.code()) }
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.code())
+    }
 }
 impl std::error::Error for UnitizationError {}
 
@@ -101,10 +132,17 @@ pub struct UnitizationLimits {
 impl UnitizationLimits {
     /// Validates finite, non-zero dimensions and preferred/hard size ordering.
     pub const fn validate(self) -> Result<Self, UnitizationError> {
-        if self.max_input_bytes == 0 || self.preferred_unit_bytes == 0
-            || self.max_unit_bytes == 0 || self.preferred_unit_bytes > self.max_unit_bytes
-            || self.max_lines == 0 || self.max_units == 0
-        { Err(UnitizationError::InvalidLimits) } else { Ok(self) }
+        if self.max_input_bytes == 0
+            || self.preferred_unit_bytes == 0
+            || self.max_unit_bytes == 0
+            || self.preferred_unit_bytes > self.max_unit_bytes
+            || self.max_lines == 0
+            || self.max_units == 0
+        {
+            Err(UnitizationError::InvalidLimits)
+        } else {
+            Ok(self)
+        }
     }
 }
 
@@ -122,11 +160,17 @@ pub struct SourceLineSpan {
 }
 impl SourceLineSpan {
     /// Exact line content byte length excluding the terminator.
-    pub const fn content_len(self) -> u64 { self.content_end - self.source_start }
+    pub const fn content_len(self) -> u64 {
+        self.content_end - self.source_start
+    }
     /// Exact full span byte length including the terminator.
-    pub const fn span_len(self) -> u64 { self.source_end - self.source_start }
+    pub const fn span_len(self) -> u64 {
+        self.source_end - self.source_start
+    }
     /// Exact terminator byte length.
-    pub const fn terminator_len(self) -> u64 { self.source_end - self.content_end }
+    pub const fn terminator_len(self) -> u64 {
+        self.source_end - self.content_end
+    }
 }
 
 /// Exact unitization input produced from one materialized retained revision.
@@ -148,25 +192,50 @@ impl UnitizationInput {
     /// Creates an input from exact materialized values.
     #[must_use]
     pub const fn new(
-        source_id: OpaqueId, revision: NonZeroRevision, content_digest: Blake3Digest32,
-        text: String, lines: Vec<SourceLineSpan>, materialization_receipt: Option<ReceiptRef>,
-    ) -> Self { Self { source_id, revision, content_digest, text, lines, materialization_receipt } }
+        source_id: OpaqueId,
+        revision: NonZeroRevision,
+        content_digest: Blake3Digest32,
+        text: String,
+        lines: Vec<SourceLineSpan>,
+        materialization_receipt: Option<ReceiptRef>,
+    ) -> Self {
+        Self {
+            source_id,
+            revision,
+            content_digest,
+            text,
+            lines,
+            materialization_receipt,
+        }
+    }
     /// Exact UTF-8 text.
-    pub fn text(&self) -> &str { &self.text }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
     /// Exact UTF-8 bytes.
-    pub const fn bytes(&self) -> &[u8] { self.text.as_bytes() }
+    pub const fn bytes(&self) -> &[u8] {
+        self.text.as_bytes()
+    }
     /// Exact input byte length.
-    pub const fn len(&self) -> usize { self.text.len() }
+    pub const fn len(&self) -> usize {
+        self.text.len()
+    }
     /// Returns whether the exact input is empty.
-    pub const fn is_empty(&self) -> bool { self.text.is_empty() }
+    pub const fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
 }
 impl fmt::Debug for UnitizationInput {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("UnitizationInput")
-            .field("source_id", &self.source_id).field("revision", &self.revision)
+        formatter
+            .debug_struct("UnitizationInput")
+            .field("source_id", &self.source_id)
+            .field("revision", &self.revision)
             .field("content_digest", &self.content_digest)
             .field("text", &format_args!("<{} UTF-8 bytes>", self.text.len()))
-            .field("lines", &self.lines).field("materialization_receipt", &self.materialization_receipt).finish()
+            .field("lines", &self.lines)
+            .field("materialization_receipt", &self.materialization_receipt)
+            .finish()
     }
 }
 
@@ -202,22 +271,33 @@ pub struct TextUnit {
 }
 impl TextUnit {
     /// Exact unit UTF-8 text.
-    pub fn text(&self) -> &str { &self.text }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
     /// Exact unit UTF-8 bytes.
-    pub const fn bytes(&self) -> &[u8] { self.text.as_bytes() }
+    pub const fn bytes(&self) -> &[u8] {
+        self.text.as_bytes()
+    }
     /// Exact unit byte length.
-    pub const fn len(&self) -> usize { self.text.len() }
+    pub const fn len(&self) -> usize {
+        self.text.len()
+    }
     /// Returns whether the unit is empty.
-    pub const fn is_empty(&self) -> bool { self.text.is_empty() }
+    pub const fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
 }
 impl fmt::Debug for TextUnit {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("TextUnit").field("identity", &self.identity)
+        formatter
+            .debug_struct("TextUnit")
+            .field("identity", &self.identity)
             .field("logical_line_start", &self.logical_line_start)
             .field("logical_line_end", &self.logical_line_end)
             .field("starts_at_line_boundary", &self.starts_at_line_boundary)
             .field("ends_at_line_boundary", &self.ends_at_line_boundary)
-            .field("text", &format_args!("<{} UTF-8 bytes>", self.text.len())).finish()
+            .field("text", &format_args!("<{} UTF-8 bytes>", self.text.len()))
+            .finish()
     }
 }
 
@@ -257,33 +337,58 @@ pub fn unitize(
     limits: UnitizationLimits,
 ) -> Result<UnitizationResult, UnitizationError> {
     let limits = limits.validate()?;
-    if input.is_empty() { return Err(UnitizationError::EmptyInput); }
+    if input.is_empty() {
+        return Err(UnitizationError::EmptyInput);
+    }
     let ranges = unitize_text(input.text(), &input.lines, limits)?;
-    let materialization_receipt = input.materialization_receipt
+    let materialization_receipt = input
+        .materialization_receipt
         .ok_or(UnitizationError::MissingMaterializationReceipt)?;
-    let units = ranges.iter().enumerate().map(|(ordinal, span)| {
-        Ok(TextUnit {
-            identity: UnitIdentity {
-                source_id: input.source_id.clone(), revision: input.revision,
-                ordinal: u64::try_from(ordinal).map_err(|_| UnitizationError::OffsetOverflow)?,
-                source_start: u64::try_from(span.source_start).map_err(|_| UnitizationError::OffsetOverflow)?,
-                source_end: u64::try_from(span.source_end).map_err(|_| UnitizationError::OffsetOverflow)?,
-            },
-            logical_line_start: span.logical_line_start,
-            logical_line_end: span.logical_line_end,
-            starts_at_line_boundary: span.starts_at_line_boundary,
-            ends_at_line_boundary: span.ends_at_line_boundary,
-            text: input.text.get(span.source_start..span.source_end)
-                .ok_or(UnitizationError::InvalidUtf8Boundary)?.to_owned(),
+    let units = ranges
+        .iter()
+        .enumerate()
+        .map(|(ordinal, span)| {
+            Ok(TextUnit {
+                identity: UnitIdentity {
+                    source_id: input.source_id.clone(),
+                    revision: input.revision,
+                    ordinal: u64::try_from(ordinal)
+                        .map_err(|_| UnitizationError::OffsetOverflow)?,
+                    source_start: u64::try_from(span.source_start)
+                        .map_err(|_| UnitizationError::OffsetOverflow)?,
+                    source_end: u64::try_from(span.source_end)
+                        .map_err(|_| UnitizationError::OffsetOverflow)?,
+                },
+                logical_line_start: span.logical_line_start,
+                logical_line_end: span.logical_line_end,
+                starts_at_line_boundary: span.starts_at_line_boundary,
+                ends_at_line_boundary: span.ends_at_line_boundary,
+                text: input
+                    .text
+                    .get(span.source_start..span.source_end)
+                    .ok_or(UnitizationError::InvalidUtf8Boundary)?
+                    .to_owned(),
+            })
         })
-    }).collect::<Result<Vec<_>, UnitizationError>>()?;
-    let input_bytes = u64::try_from(input.text.len()).map_err(|_| UnitizationError::OffsetOverflow)?;
+        .collect::<Result<Vec<_>, UnitizationError>>()?;
+    let input_bytes =
+        u64::try_from(input.text.len()).map_err(|_| UnitizationError::OffsetOverflow)?;
     let unit_count = u64::try_from(units.len()).map_err(|_| UnitizationError::OffsetOverflow)?;
-    let line_count = u64::try_from(input.lines.len()).map_err(|_| UnitizationError::OffsetOverflow)?;
-    Ok(UnitizationResult { units, receipt: UnitizationReceipt {
-        source_id: input.source_id, revision: input.revision, content_digest: input.content_digest,
-        input_bytes, emitted_bytes: input_bytes, unit_count, line_count, materialization_receipt,
-    } })
+    let line_count =
+        u64::try_from(input.lines.len()).map_err(|_| UnitizationError::OffsetOverflow)?;
+    Ok(UnitizationResult {
+        units,
+        receipt: UnitizationReceipt {
+            source_id: input.source_id,
+            revision: input.revision,
+            content_digest: input.content_digest,
+            input_bytes,
+            emitted_bytes: input_bytes,
+            unit_count,
+            line_count,
+            materialization_receipt,
+        },
+    })
 }
 
 #[cfg(test)]
