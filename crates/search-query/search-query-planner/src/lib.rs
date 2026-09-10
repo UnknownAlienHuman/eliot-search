@@ -529,6 +529,57 @@ const fn recipe_modalities(recipe: RecipeIdV1) -> RecipeModalities {
     }
 }
 
+/// DIRECT-spine leg support for one closed v1 recipe.
+///
+/// Derived from the same closed modality registry that drives leg planning
+/// ([`recipe_modalities`]), so the advertised coverage table cannot drift
+/// from the planner. Indexed/Qdrant legs are out of scope for the DIRECT
+/// spine: recipes that need them for full fidelity run with those
+/// capabilities explicitly omitted, never silently downgraded.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DirectLegSupport {
+    /// A `Direct` leg is plannable from the authorized memberships.
+    pub direct: bool,
+    /// An `Exact` leg is plannable; exact-only recipes are T34-proven.
+    pub exact: bool,
+    /// Full fidelity wants structural/semantic/rerank legs, which the DIRECT
+    /// spine explicitly reports as omitted until their waves accept them.
+    pub advanced: bool,
+}
+
+/// Classifies one v1 recipe for DIRECT-spine execution.
+#[must_use]
+pub const fn direct_leg_support(recipe: RecipeIdV1) -> DirectLegSupport {
+    match recipe {
+        RecipeIdV1::Locate
+        | RecipeIdV1::InspectEntity
+        | RecipeIdV1::ExploreEntity
+        | RecipeIdV1::CompareImplementations => DirectLegSupport {
+            direct: true,
+            exact: false,
+            advanced: true,
+        },
+        RecipeIdV1::FindText => DirectLegSupport {
+            direct: true,
+            exact: true,
+            advanced: false,
+        },
+        RecipeIdV1::CorpusProfile
+        | RecipeIdV1::CorpusDelta
+        | RecipeIdV1::Provenance
+        | RecipeIdV1::ExpandHandle => DirectLegSupport {
+            direct: true,
+            exact: false,
+            advanced: false,
+        },
+        RecipeIdV1::CompileExactScan | RecipeIdV1::ExecuteExactScan => DirectLegSupport {
+            direct: false,
+            exact: true,
+            advanced: false,
+        },
+    }
+}
+
 const fn cancellation_boundary(kind: LegKind) -> CancellationBoundary {
     match kind {
         LegKind::Direct | LegKind::Exact => CancellationBoundary::BetweenSourceReads,
@@ -633,5 +684,369 @@ fn mix(lanes: &mut [u64; 4], bytes: &[u8]) {
         lanes[lane] = lanes[lane]
             .wrapping_mul(0x0000_0100_0000_01b3)
             .rotate_left(u32::try_from(17 + lane * 3).unwrap_or(17));
+    }
+}
+
+#[cfg(test)]
+mod direct_spine_tests {
+    use search_contracts::{
+        BoundedCanonicalBytes, BoundedList, BoundedName, BoundedSet, CasePolicy,
+        CompareImplementationsRecipe, ComparisonAxis, CompileExactScanRecipe, CorpusDeltaDimension,
+        CorpusDeltaRecipe, CorpusFacetDimension, CorpusProfileRecipe, EntityKind,
+        ExactCompletenessRequirements, ExactInputDomain, ExactPredicate, ExactPredicateKind,
+        ExactScanPlanRef, ExecuteExactScanRecipe, ExpandHandleRecipe, ExpandHandleTarget,
+        ExploreEntityRecipe, FindTextRecipe, HandleClass, HandleExpansionKind, HandleId,
+        InspectEntityRecipe, LocateRecipe, NonZeroRevision, NormalizedNameSelector,
+        OpaqueHandleToken, PlanFingerprint, PlanId, PortfolioRevision, PriorityClass, ProfileId,
+        ProvenanceRecipe, QueryExecutionBudget, RecipeBodyV1, RecipeIdV1, ReferencePortfolioId,
+        ReferencePortfolioScope, RelationKind, RequestId, RequestedScope, SearchRecipeRequest,
+        SearchSourceHandle, SourceRevisionId, SourceView, SubjectSelector,
+    };
+
+    use super::{PlanError, allocate_leg_budgets, direct_leg_support, normalize_recipe};
+
+    /// Crate dictionary shared with the resolver/comparator baseline: every
+    /// subject name below is a real workspace package, never invented text.
+    const CRATE_DICTIONARY: [&str; 6] = [
+        "search-contracts",
+        "search-access",
+        "search-exact",
+        "search-subject-resolver",
+        "search-comparator",
+        "search-query-planner",
+    ];
+
+    fn profile(name: &str) -> ProfileId {
+        ProfileId::new(name).expect("fixture profile")
+    }
+
+    fn source_view() -> SourceView {
+        SourceView::RetainedRevision(SourceRevisionId::from_bytes([0x51; 16]))
+    }
+
+    fn scope() -> RequestedScope {
+        RequestedScope::ExplicitMemberships(BoundedList::new(Vec::new()).expect("fixture scope"))
+    }
+
+    fn name_selector(word: &str) -> SubjectSelector {
+        SubjectSelector::NormalizedName(NormalizedNameSelector {
+            name: BoundedName::new(word).expect("fixture name"),
+            entity_kinds: BoundedSet::empty(),
+        })
+    }
+
+    fn kinds(kind: EntityKind) -> BoundedSet<EntityKind, 4096> {
+        BoundedSet::from_items([kind]).expect("fixture kinds")
+    }
+
+    fn handle(seed: u8) -> SearchSourceHandle {
+        SearchSourceHandle {
+            handle_id: HandleId::from_bytes([seed; 16]),
+            handle_revision: NonZeroRevision::new(1).expect("fixture revision"),
+            handle_class: HandleClass::DurableSource,
+            expires_at: None,
+            opaque_token: OpaqueHandleToken::new(&[0xA5; 32]).expect("fixture token"),
+        }
+    }
+
+    fn predicate() -> ExactPredicate {
+        ExactPredicate {
+            kind: ExactPredicateKind::Literal,
+            engine_and_version: profile("literal-v1"),
+            serialized_form: BoundedCanonicalBytes::from_validated(b"needle".to_vec())
+                .expect("fixture predicate bytes"),
+            input_domain: ExactInputDomain::DecodedText,
+            worst_case_complexity_class: profile("linear-scan"),
+        }
+    }
+
+    fn request(recipe: RecipeIdV1, body: RecipeBodyV1) -> SearchRecipeRequest {
+        SearchRecipeRequest::new(
+            RequestId::from_bytes([0x11; 16]),
+            recipe,
+            source_view(),
+            scope(),
+            profile("interactive"),
+            body,
+        )
+        .expect("fixture request")
+    }
+
+    fn completeness() -> ExactCompletenessRequirements {
+        ExactCompletenessRequirements {
+            require_every_denominator_item: true,
+            require_stable_or_retained_revision: true,
+            require_current_observation: true,
+            include_authenticated_unsaved_buffers: false,
+            fail_on_timeout: true,
+            fail_on_cancellation: true,
+            fail_on_scope_drift: true,
+        }
+    }
+
+    fn references() -> ReferencePortfolioScope {
+        ReferencePortfolioScope {
+            portfolio_id: ReferencePortfolioId::from_bytes([0x09; 16]),
+            portfolio_revision: PortfolioRevision::new(3),
+        }
+    }
+
+    #[test]
+    fn registry_is_exactly_eleven_versioned_recipes() {
+        assert_eq!(RecipeIdV1::ALL.len(), 11);
+        for recipe in RecipeIdV1::ALL {
+            assert_eq!(RecipeIdV1::parse(recipe.as_str()), Ok(recipe));
+            assert_eq!(RecipeIdV1::parse_versioned(recipe.as_str()), Ok(recipe));
+        }
+        for rejected in [
+            "",
+            "locate",
+            "find_text",
+            "locate@2",
+            "LOCATE@1",
+            "compare@1",
+        ] {
+            assert!(RecipeIdV1::parse(rejected).is_err(), "{rejected}");
+            assert!(RecipeIdV1::parse_versioned(rejected).is_err(), "{rejected}");
+        }
+    }
+
+    #[test]
+    fn normalize_accepts_all_eleven_bodies() {
+        let subject = name_selector(CRATE_DICTIONARY[4]);
+        let bodies = [
+            (
+                RecipeIdV1::Locate,
+                RecipeBodyV1::Locate(LocateRecipe {
+                    subject: subject.clone(),
+                    evidence_roles: BoundedSet::empty(),
+                }),
+            ),
+            (
+                RecipeIdV1::FindText,
+                RecipeBodyV1::FindText(FindTextRecipe {
+                    predicate: predicate(),
+                    case_policy: CasePolicy::Exact,
+                    context_bytes_before: 32,
+                    context_bytes_after: 32,
+                }),
+            ),
+            (
+                RecipeIdV1::InspectEntity,
+                RecipeBodyV1::InspectEntity(InspectEntityRecipe {
+                    subject: subject.clone(),
+                    evidence_roles: BoundedSet::empty(),
+                    include_relations: BoundedSet::from_items([RelationKind::Definition])
+                        .expect("fixture relations"),
+                }),
+            ),
+            (
+                RecipeIdV1::CompareImplementations,
+                RecipeBodyV1::CompareImplementations(CompareImplementationsRecipe {
+                    subject: subject.clone(),
+                    references: references(),
+                    comparison_axes: BoundedSet::from_items([
+                        ComparisonAxis::Interface,
+                        ComparisonAxis::Tests,
+                    ])
+                    .expect("fixture axes"),
+                }),
+            ),
+            (
+                RecipeIdV1::ExploreEntity,
+                RecipeBodyV1::ExploreEntity(ExploreEntityRecipe {
+                    subject,
+                    relation_kinds: BoundedSet::from_items([RelationKind::Caller])
+                        .expect("fixture relations"),
+                    max_depth: 3,
+                }),
+            ),
+            (
+                RecipeIdV1::CorpusProfile,
+                RecipeBodyV1::CorpusProfile(CorpusProfileRecipe {
+                    facets: BoundedSet::from_items([
+                        CorpusFacetDimension::Role,
+                        CorpusFacetDimension::EntityKind,
+                    ])
+                    .expect("fixture facets"),
+                }),
+            ),
+            (
+                RecipeIdV1::CorpusDelta,
+                RecipeBodyV1::CorpusDelta(CorpusDeltaRecipe {
+                    from_view: SourceView::RetainedRevision(SourceRevisionId::from_bytes([1; 16])),
+                    to_view: SourceView::RetainedRevision(SourceRevisionId::from_bytes([2; 16])),
+                    dimensions: BoundedSet::from_items([CorpusDeltaDimension::Source])
+                        .expect("fixture dimensions"),
+                }),
+            ),
+            (
+                RecipeIdV1::Provenance,
+                RecipeBodyV1::Provenance(ProvenanceRecipe {
+                    source_handle: handle(4),
+                    max_lineage_depth: 4,
+                }),
+            ),
+            (
+                RecipeIdV1::CompileExactScan,
+                RecipeBodyV1::CompileExactScan {
+                    predicate: predicate(),
+                    body: CompileExactScanRecipe {
+                        completeness_requirements: completeness(),
+                    },
+                },
+            ),
+            (
+                RecipeIdV1::ExecuteExactScan,
+                RecipeBodyV1::ExecuteExactScan(ExecuteExactScanRecipe {
+                    plan_ref: ExactScanPlanRef {
+                        plan_id: PlanId::from_bytes([0x07; 16]),
+                        plan_fingerprint: PlanFingerprint::from_bytes([0x08; 32]),
+                    },
+                }),
+            ),
+            (
+                RecipeIdV1::ExpandHandle,
+                RecipeBodyV1::ExpandHandle(ExpandHandleRecipe {
+                    handle: ExpandHandleTarget::Source(handle(5)),
+                    expansion: HandleExpansionKind::Excerpt,
+                    max_bytes: 1024,
+                }),
+            ),
+        ];
+        assert_eq!(bodies.len(), 11);
+        for (recipe, body) in bodies {
+            assert_eq!(body.recipe_id(), recipe);
+            normalize_recipe(request(recipe, body)).expect("eleven v1 normalize");
+        }
+        assert_eq!(kinds(EntityKind::Function).len(), 1);
+    }
+
+    #[test]
+    fn normalize_rejects_mismatch_and_zero_bounds() {
+        let mismatched = SearchRecipeRequest {
+            request_id: RequestId::from_bytes([0x11; 16]),
+            recipe: RecipeIdV1::Locate,
+            source_view: source_view(),
+            requested_scope: scope(),
+            requested_budget_class: profile("interactive"),
+            body: RecipeBodyV1::FindText(FindTextRecipe {
+                predicate: predicate(),
+                case_policy: CasePolicy::Exact,
+                context_bytes_before: 0,
+                context_bytes_after: 0,
+            }),
+        };
+        assert_eq!(
+            normalize_recipe(mismatched),
+            Err(PlanError::RecipeBodyMismatch)
+        );
+        let zero_depth = request(
+            RecipeIdV1::ExploreEntity,
+            RecipeBodyV1::ExploreEntity(ExploreEntityRecipe {
+                subject: name_selector(CRATE_DICTIONARY[0]),
+                relation_kinds: BoundedSet::empty(),
+                max_depth: 0,
+            }),
+        );
+        assert_eq!(
+            normalize_recipe(zero_depth),
+            Err(PlanError::RecipeBodyMismatch)
+        );
+        let zero_lineage = request(
+            RecipeIdV1::Provenance,
+            RecipeBodyV1::Provenance(ProvenanceRecipe {
+                source_handle: handle(6),
+                max_lineage_depth: 0,
+            }),
+        );
+        assert_eq!(
+            normalize_recipe(zero_lineage),
+            Err(PlanError::RecipeBodyMismatch)
+        );
+        let zero_bytes = request(
+            RecipeIdV1::ExpandHandle,
+            RecipeBodyV1::ExpandHandle(ExpandHandleRecipe {
+                handle: ExpandHandleTarget::Source(handle(7)),
+                expansion: HandleExpansionKind::Provenance,
+                max_bytes: 0,
+            }),
+        );
+        assert_eq!(
+            normalize_recipe(zero_bytes),
+            Err(PlanError::RecipeBodyMismatch)
+        );
+    }
+
+    #[test]
+    fn direct_leg_support_covers_all_eleven_without_drift() {
+        let mut direct_count = 0_usize;
+        let mut exact_only_count = 0_usize;
+        for recipe in RecipeIdV1::ALL {
+            let support = direct_leg_support(recipe);
+            if support.direct {
+                direct_count += 1;
+            } else {
+                assert!(support.exact, "{recipe:?}");
+                assert!(!support.advanced, "{recipe:?}");
+                exact_only_count += 1;
+            }
+        }
+        assert_eq!(direct_count, 9);
+        assert_eq!(exact_only_count, 2);
+        assert!(direct_leg_support(RecipeIdV1::FindText).exact);
+        assert!(!direct_leg_support(RecipeIdV1::CorpusProfile).exact);
+        assert!(!direct_leg_support(RecipeIdV1::CorpusProfile).advanced);
+        for recipe in [
+            RecipeIdV1::Locate,
+            RecipeIdV1::InspectEntity,
+            RecipeIdV1::ExploreEntity,
+            RecipeIdV1::CompareImplementations,
+        ] {
+            assert!(direct_leg_support(recipe).advanced, "{recipe:?}");
+        }
+        for recipe in [
+            RecipeIdV1::FindText,
+            RecipeIdV1::CompileExactScan,
+            RecipeIdV1::ExecuteExactScan,
+            RecipeIdV1::CorpusProfile,
+            RecipeIdV1::CorpusDelta,
+            RecipeIdV1::Provenance,
+            RecipeIdV1::ExpandHandle,
+        ] {
+            assert!(!direct_leg_support(recipe).advanced, "{recipe:?}");
+        }
+    }
+
+    #[test]
+    fn leg_budgets_stay_finite_and_bounded() {
+        let global = QueryExecutionBudget {
+            priority_class: PriorityClass::Interactive,
+            deadline_ms: 3000,
+            max_scoring_legs: 8,
+            max_prefetch_candidates_per_leg: 64,
+            max_validated_candidates: 128,
+            max_source_read_bytes: 1_048_576,
+            max_exact_scan_items: 4096,
+            max_exact_scan_bytes: 1_048_576,
+            max_materialized_result_bytes: 262_144,
+            max_cpu_ms: 2000,
+            max_memory_bytes: 67_108_864,
+        };
+        let budgets = allocate_leg_budgets(global, 3).expect("finite budgets");
+        assert_eq!(budgets.len(), 3);
+        let mut read_sum = 0_u64;
+        for budget in &budgets {
+            assert!(budget.deadline_ms > 0);
+            assert!(budget.max_source_read_bytes > 0);
+            read_sum += budget.max_source_read_bytes;
+        }
+        assert!(read_sum <= global.max_source_read_bytes);
+        assert!(allocate_leg_budgets(global, 0).is_err());
+        let zero = QueryExecutionBudget {
+            deadline_ms: 0,
+            ..global
+        };
+        assert!(allocate_leg_budgets(zero, 1).is_err());
     }
 }

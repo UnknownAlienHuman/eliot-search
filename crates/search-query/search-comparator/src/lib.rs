@@ -1880,3 +1880,986 @@ const fn decision_rank(value: BehaviorComparisonDecision) -> u8 {
         BehaviorComparisonDecision::Conflict => 5,
     }
 }
+
+/// T36 baseline dictionary tests: implementations below are named after real
+/// workspace packages, lineages after repository copies, and every verdict
+/// stays descriptive — the comparator never declares a correct, best or
+/// adoptable implementation.
+#[cfg(test)]
+mod recipe_dictionary_tests {
+    use search_contracts::{
+        AmbiguousSubjectCandidate, AssuranceClass, BehaviorObservation, Blake3Digest32,
+        BoundedBehaviorSignature, BoundedList, BoundedName, BoundedNonContentMetadata,
+        BoundedObservation, BoundedSet, ComparisonAxis, EntityKind, EvidenceRole, HandleClass,
+        HandleId, LocalComparisonSubject, MatchBasis, NonZeroRevision, OpaqueHandleToken,
+        PortfolioRevision, ProfileId, ReceiptRef, ReferencePortfolioId, ResolvedSubject,
+        SearchReasonCodeV1, SearchSourceHandle, SubjectAmbiguitySet,
+    };
+    use search_subject_resolver::SubjectResolution;
+
+    use super::LocalBehaviorEvidence;
+    use super::{
+        BehaviorComparisonDecision, CandidateAccess, CandidateEvidenceTrust, ComparableCandidate,
+        ComparableImplementation, ComparableObservation, CompareError, ComparisonGap,
+        ComparisonLimits, ComparisonLiveState, ComparisonProfile, ComparisonRequest,
+        LineageRelationKind, LineageRelationReceipt, PredicateRelation, ReadingCandidate,
+        align_evidence_roles, classify_conflict, collapse_repository_lineages, compare_axes,
+        normalize_behavior_signature, order_recommended_reading,
+        validate_comparable_implementation, validate_comparison_request,
+    };
+
+    /// Real workspace packages used as the implementation dictionary.
+    const CRATE_DICTIONARY: [&str; 6] = [
+        "search-contracts",
+        "search-access",
+        "search-exact",
+        "search-subject-resolver",
+        "search-comparator",
+        "search-query-planner",
+    ];
+
+    fn digest(first: u8, second: u8) -> Blake3Digest32 {
+        let mut bytes = [0x5A; 32];
+        bytes[0] = first;
+        bytes[1] = second;
+        Blake3Digest32::from_bytes(bytes)
+    }
+
+    fn test_digest(bytes: &[u8]) -> [u8; 32] {
+        let mut out = [0x33_u8; 32];
+        let mut tweak = 0_u8;
+        for (index, byte) in bytes.iter().enumerate() {
+            out[index % 32] = out[index % 32].wrapping_add(*byte).wrapping_add(tweak);
+            tweak = tweak.wrapping_add(1);
+        }
+        out
+    }
+
+    fn handle(seed: u8) -> SearchSourceHandle {
+        SearchSourceHandle {
+            handle_id: HandleId::from_bytes([seed; 16]),
+            handle_revision: NonZeroRevision::new(1).expect("fixture revision"),
+            handle_class: HandleClass::DurableSource,
+            expires_at: None,
+            opaque_token: OpaqueHandleToken::new(&[0xA5; 32]).expect("fixture token"),
+        }
+    }
+
+    fn receipt(tag: &str) -> ReceiptRef {
+        ReceiptRef::new(tag).expect("fixture receipt")
+    }
+
+    fn limits() -> ComparisonLimits {
+        ComparisonLimits::BASELINE
+            .validate()
+            .expect("baseline limits")
+    }
+
+    fn lineage(seed: u128) -> search_contracts::RepositoryLineageId {
+        search_contracts::RepositoryLineageId::from_bytes(seed.to_be_bytes())
+    }
+
+    fn observation(
+        axis: ComparisonAxis,
+        summary: &str,
+        role: EvidenceRole,
+        seed: (u8, u8),
+        handle_seed: u8,
+    ) -> ComparableObservation {
+        ComparableObservation {
+            observation: BehaviorObservation {
+                axis,
+                summary: BoundedObservation::new(summary).expect("fixture summary"),
+                evidence_handles: BoundedList::new(vec![handle(handle_seed)])
+                    .expect("fixture handles"),
+                configuration_predicate: None,
+                independent_lineage_count: 1,
+                assurance: AssuranceClass::MappedText,
+            },
+            observation_digest: digest(seed.0, seed.1),
+            configuration_digest: None,
+            evidence_role: role,
+            validation_receipt_ref: receipt("t36-compare-validation-01"),
+            exact_readback_valid: true,
+            authorized: true,
+            current: true,
+        }
+    }
+
+    fn candidate(
+        name: &str,
+        lineage_seed: u128,
+        basis: MatchBasis,
+        observations: Vec<ComparableObservation>,
+        analogue: bool,
+        handle_seed: u8,
+    ) -> ComparableCandidate {
+        let roles = observations
+            .iter()
+            .map(|observation| observation.evidence_role)
+            .collect::<std::collections::BTreeSet<_>>();
+        ComparableCandidate {
+            implementation: ComparableImplementation {
+                lineage_id: lineage(lineage_seed),
+                match_basis: basis,
+                configuration_predicate: None,
+                evidence_roles: BoundedSet::from_items(roles).expect("fixture roles"),
+                behavior_signature: BoundedBehaviorSignature::new(format!("signature:{name}"))
+                    .expect("fixture signature"),
+                exact_handles: BoundedList::new(vec![handle(handle_seed)])
+                    .expect("fixture handles"),
+            },
+            subject_hypothesis_digest: digest(77, 77),
+            access: CandidateAccess {
+                authorized: true,
+                current: true,
+            },
+            evidence_trust: CandidateEvidenceTrust {
+                entity_kind_and_signature_compatible: true,
+                exact_revision_valid: true,
+            },
+            analogue_receipt_ref: analogue.then(|| receipt("t36-compare-analogue-01")),
+            observations: BoundedList::new(observations).expect("fixture observations"),
+            evidence_receipt_refs: BoundedList::new(vec![receipt("t36-compare-evidence-01")])
+                .expect("fixture receipts"),
+        }
+    }
+
+    fn interface_candidate(
+        name: &str,
+        lineage_seed: u128,
+        basis: MatchBasis,
+        summary: &str,
+        role: EvidenceRole,
+    ) -> ComparableCandidate {
+        let byte = u8::try_from(lineage_seed).expect("fixture seed fits in a byte");
+        candidate(
+            name,
+            lineage_seed,
+            basis,
+            vec![observation(
+                ComparisonAxis::Interface,
+                summary,
+                role,
+                (90, byte),
+                byte,
+            )],
+            false,
+            byte,
+        )
+    }
+
+    fn relation(
+        left: u128,
+        right: u128,
+        relation: LineageRelationKind,
+        tag: &str,
+    ) -> LineageRelationReceipt {
+        LineageRelationReceipt {
+            left: lineage(left),
+            right: lineage(right),
+            relation,
+            evidence_digest: digest(60, 60),
+            portfolio_revision: PortfolioRevision::new(3),
+            receipt_ref: receipt(tag),
+            current: true,
+        }
+    }
+
+    fn resolved_subject(name: &str, basis: MatchBasis) -> ResolvedSubject {
+        ResolvedSubject {
+            canonical_handle: handle(200),
+            match_basis: basis,
+            entity_kind: EntityKind::Function,
+            normalized_name: BoundedName::new(name).expect("fixture name"),
+            signature_observation: None,
+            configuration_predicate: None,
+        }
+    }
+
+    fn local_subject(name: &str) -> LocalComparisonSubject {
+        LocalComparisonSubject {
+            resolved_subject: resolved_subject(name, MatchBasis::QualifiedName),
+            definition: handle(201),
+            signature: None,
+            callers: BoundedList::new(Vec::new()).expect("fixture callers"),
+            tests: BoundedList::new(Vec::new()).expect("fixture tests"),
+            documentation: BoundedList::new(Vec::new()).expect("fixture docs"),
+        }
+    }
+
+    fn profile() -> ComparisonProfile {
+        ComparisonProfile {
+            profile_id: ProfileId::new("t36-baseline").expect("fixture profile"),
+            profile_digest: digest(61, 61),
+            supported_axes: BoundedSet::from_items([
+                ComparisonAxis::Interface,
+                ComparisonAxis::Tests,
+            ])
+            .expect("fixture axes"),
+            minimum_conflict_assurance: AssuranceClass::MappedText,
+            minimum_shared_assurance: AssuranceClass::MappedText,
+            qualification_receipt_ref: receipt("t36-compare-profile-01"),
+        }
+    }
+
+    fn live() -> ComparisonLiveState {
+        ComparisonLiveState {
+            source_view_digest: digest(62, 62),
+            owner_generation_digest: digest(63, 63),
+            security_fence_digest: digest(64, 64),
+            portfolio_revision: PortfolioRevision::new(3),
+            access_permitted: true,
+            purge_clear: true,
+            observation_current: true,
+        }
+    }
+
+    fn comparison_request(axes: Vec<ComparisonAxis>) -> ComparisonRequest {
+        ComparisonRequest {
+            local_subject_resolution_digest: digest(65, 65),
+            portfolio_id: ReferencePortfolioId::from_bytes([0x09; 16]),
+            portfolio_revision: PortfolioRevision::new(3),
+            axes: BoundedSet::from_items(axes).expect("fixture axes"),
+            source_view_digest: digest(62, 62),
+            owner_generation_digest: digest(63, 63),
+            security_fence_digest: digest(64, 64),
+            reference_inventory_complete: true,
+            omitted_memberships: 0,
+            unknown_memberships: 0,
+            normative_verdict_requested: false,
+            cancelled: false,
+        }
+    }
+
+    fn resolved_local(name: &str) -> SubjectResolution {
+        SubjectResolution::Resolved {
+            subject: resolved_subject(name, MatchBasis::QualifiedName),
+            candidate_digest: digest(66, 66),
+            priority: search_subject_resolver::ResolutionPriority::QualifiedKey,
+        }
+    }
+
+    #[test]
+    fn forks_mirrors_and_copies_collapse_to_one_independent_lineage() {
+        // Five repository copies of the `search-comparator` implementation
+        // must count as one independent lineage, never five votes.
+        let implementations = ["alpha", "beta", "gamma", "delta", "epsilon"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, member)| {
+                interface_candidate(
+                    CRATE_DICTIONARY[4],
+                    101 + index as u128,
+                    MatchBasis::QualifiedName,
+                    &format!("definition of {} copy", CRATE_DICTIONARY[4]),
+                    EvidenceRole::Definition,
+                )
+                .clone_with_member(member, index)
+            })
+            .collect::<Vec<_>>();
+        let receipts = vec![
+            relation(101, 102, LineageRelationKind::Fork, "t36-lineage-01"),
+            relation(102, 103, LineageRelationKind::Mirror, "t36-lineage-02"),
+            relation(103, 104, LineageRelationKind::ProvenCopy, "t36-lineage-03"),
+            relation(104, 105, LineageRelationKind::SameLineage, "t36-lineage-04"),
+        ];
+        let groups = collapse_repository_lineages(
+            implementations,
+            &receipts,
+            PortfolioRevision::new(3),
+            limits(),
+        )
+        .expect("proven copies collapse");
+        assert_eq!(groups.groups.len(), 1, "five copies are one lineage");
+        assert_eq!(
+            groups
+                .groups
+                .iter()
+                .next()
+                .expect("group")
+                .implementations
+                .len(),
+            5
+        );
+        assert!(groups.ambiguous_lineages.is_empty());
+        assert_eq!(groups.relation_receipt_refs.len(), 4);
+    }
+
+    #[test]
+    fn ambiguous_lineage_neither_collapses_nor_counts_confident() {
+        let left = interface_candidate(
+            CRATE_DICTIONARY[3],
+            111,
+            MatchBasis::QualifiedName,
+            "local resolver definition",
+            EvidenceRole::Definition,
+        );
+        let right = interface_candidate(
+            CRATE_DICTIONARY[3],
+            112,
+            MatchBasis::QualifiedName,
+            "foreign resolver definition",
+            EvidenceRole::Definition,
+        );
+        let receipts = vec![relation(
+            111,
+            112,
+            LineageRelationKind::Ambiguous,
+            "t36-lineage-ambiguous-01",
+        )];
+        let groups = collapse_repository_lineages(
+            vec![left, right],
+            &receipts,
+            PortfolioRevision::new(3),
+            limits(),
+        )
+        .expect("ambiguous lineages stay separate");
+        assert_eq!(groups.groups.len(), 2);
+        assert_eq!(groups.ambiguous_lineages.len(), 2);
+    }
+
+    #[test]
+    fn stale_lineage_receipt_fails_closed() {
+        let left = interface_candidate(
+            CRATE_DICTIONARY[5],
+            121,
+            MatchBasis::QualifiedName,
+            "planner definition",
+            EvidenceRole::Definition,
+        );
+        let right = interface_candidate(
+            CRATE_DICTIONARY[5],
+            122,
+            MatchBasis::QualifiedName,
+            "planner mirror definition",
+            EvidenceRole::Definition,
+        );
+        let mut stale = relation(121, 122, LineageRelationKind::Fork, "t36-lineage-stale-01");
+        stale.current = false;
+        assert_eq!(
+            collapse_repository_lineages(
+                vec![left.clone(), right.clone()],
+                &[stale],
+                PortfolioRevision::new(3),
+                limits()
+            )
+            .expect_err("stale receipt"),
+            CompareError::LineageReceiptStale
+        );
+        let mut drifted = relation(121, 122, LineageRelationKind::Fork, "t36-lineage-drift-01");
+        drifted.portfolio_revision = PortfolioRevision::new(4);
+        assert_eq!(
+            collapse_repository_lineages(
+                vec![left, right],
+                &[drifted],
+                PortfolioRevision::new(3),
+                limits()
+            )
+            .expect_err("drifted receipt"),
+            CompareError::LineageReceiptStale
+        );
+    }
+
+    #[test]
+    fn same_name_needs_accepted_analogue_basis() {
+        let axes = BoundedSet::from_items([ComparisonAxis::Interface]).expect("axes");
+        // Same-name `search-exact` hit without an analogue receipt is not
+        // comparable; with one it is admitted as a weak basis.
+        let bare = candidate(
+            CRATE_DICTIONARY[2],
+            131,
+            MatchBasis::ExactName,
+            vec![observation(
+                ComparisonAxis::Interface,
+                "same-name observation",
+                EvidenceRole::Definition,
+                (91, 1),
+                131,
+            )],
+            false,
+            131,
+        );
+        assert_eq!(
+            validate_comparable_implementation(&bare, digest(1, 1), &axes, limits())
+                .expect_err("bare same-name"),
+            CompareError::ComparableEvidenceInvalid
+        );
+        let admitted = candidate(
+            CRATE_DICTIONARY[2],
+            132,
+            MatchBasis::Lexical,
+            vec![observation(
+                ComparisonAxis::Interface,
+                "admitted lexical analogue observation",
+                EvidenceRole::Definition,
+                (91, 2),
+                132,
+            )],
+            true,
+            132,
+        );
+        validate_comparable_implementation(&admitted, digest(1, 1), &axes, limits())
+            .expect("admitted analogue");
+        // A renamed true analogue on a strong structural basis needs no
+        // extra receipt; semantic similarity alone is never a basis.
+        let structural = interface_candidate(
+            CRATE_DICTIONARY[4],
+            133,
+            MatchBasis::Structural,
+            "renamed structural analogue",
+            EvidenceRole::Definition,
+        );
+        validate_comparable_implementation(&structural, digest(1, 1), &axes, limits())
+            .expect("strong basis");
+        let semantic = candidate(
+            CRATE_DICTIONARY[4],
+            134,
+            MatchBasis::Semantic,
+            vec![observation(
+                ComparisonAxis::Interface,
+                "semantic guess",
+                EvidenceRole::Definition,
+                (91, 3),
+                134,
+            )],
+            true,
+            134,
+        );
+        assert_eq!(
+            validate_comparable_implementation(&semantic, digest(1, 1), &axes, limits())
+                .expect_err("semantic never comparable"),
+            CompareError::ComparableEvidenceInvalid
+        );
+    }
+
+    #[test]
+    fn conflict_matrix_keeps_variants_conflicts_and_unknowns_distinct() {
+        let local = observation(
+            ComparisonAxis::Interface,
+            "local contract definition",
+            EvidenceRole::Definition,
+            (95, 1),
+            141,
+        );
+        let same = observation(
+            ComparisonAxis::Interface,
+            "matching contract definition",
+            EvidenceRole::Definition,
+            (95, 1),
+            142,
+        );
+        assert_eq!(
+            classify_conflict(
+                &local,
+                &same,
+                PredicateRelation::Overlapping,
+                AssuranceClass::MappedText
+            ),
+            BehaviorComparisonDecision::EquivalentObservation
+        );
+        let exclusive = observation(
+            ComparisonAxis::Interface,
+            "cfg-gated alternative definition",
+            EvidenceRole::Definition,
+            (95, 2),
+            143,
+        );
+        assert_eq!(
+            classify_conflict(
+                &local,
+                &exclusive,
+                PredicateRelation::MutuallyExclusive,
+                AssuranceClass::MappedText
+            ),
+            BehaviorComparisonDecision::ConfigurationVariant
+        );
+        let conflicting = observation(
+            ComparisonAxis::Interface,
+            "overlapping incompatible definition",
+            EvidenceRole::Definition,
+            (95, 3),
+            144,
+        );
+        assert_eq!(
+            classify_conflict(
+                &local,
+                &conflicting,
+                PredicateRelation::Overlapping,
+                AssuranceClass::MappedText
+            ),
+            BehaviorComparisonDecision::Conflict
+        );
+        assert_eq!(
+            classify_conflict(
+                &local,
+                &conflicting,
+                PredicateRelation::Unknown,
+                AssuranceClass::MappedText
+            ),
+            BehaviorComparisonDecision::Unknown
+        );
+        let weak = ComparableObservation {
+            observation: BehaviorObservation {
+                assurance: AssuranceClass::DescriptiveOnly,
+                ..conflicting.observation.clone()
+            },
+            ..conflicting
+        };
+        assert_eq!(
+            classify_conflict(
+                &local,
+                &weak,
+                PredicateRelation::Overlapping,
+                AssuranceClass::ExactBytes
+            ),
+            BehaviorComparisonDecision::InsufficientAssurance
+        );
+        let other_axis = observation(
+            ComparisonAxis::Tests,
+            "test observation on another axis",
+            EvidenceRole::Test,
+            (95, 4),
+            145,
+        );
+        assert_eq!(
+            classify_conflict(
+                &local,
+                &other_axis,
+                PredicateRelation::Overlapping,
+                AssuranceClass::MappedText
+            ),
+            BehaviorComparisonDecision::Unknown
+        );
+    }
+
+    #[test]
+    fn ambiguous_subject_normative_and_unsupported_requests_fail_typed() {
+        let local = local_subject(CRATE_DICTIONARY[4]);
+        let ambiguity = SubjectResolution::Ambiguous {
+            ambiguity: SubjectAmbiguitySet {
+                requested_selector_digest: digest(70, 70),
+                candidates: BoundedList::new(vec![AmbiguousSubjectCandidate {
+                    source_handle: handle(150),
+                    entity_kind: EntityKind::Function,
+                    match_basis: MatchBasis::QualifiedName,
+                    disambiguation_summary: BoundedNonContentMetadata::empty(),
+                }])
+                .expect("ambiguity candidates"),
+                reason_code: SearchReasonCodeV1::AmbiguousSubject,
+            },
+            priority: search_subject_resolver::ResolutionPriority::QualifiedKey,
+        };
+        assert_eq!(
+            validate_comparison_request(
+                comparison_request(vec![ComparisonAxis::Interface]),
+                &ambiguity,
+                local.clone(),
+                &profile(),
+                live()
+            )
+            .expect_err("ambiguous subject blocks"),
+            CompareError::AmbiguousSubject
+        );
+        let mut normative = comparison_request(vec![ComparisonAxis::Interface]);
+        normative.normative_verdict_requested = true;
+        assert_eq!(
+            validate_comparison_request(
+                normative,
+                &resolved_local(CRATE_DICTIONARY[4]),
+                local.clone(),
+                &profile(),
+                live()
+            )
+            .expect_err("normative verdict forbidden"),
+            CompareError::NormativeVerdictForbidden
+        );
+        assert_eq!(
+            validate_comparison_request(
+                comparison_request(vec![ComparisonAxis::Documentation]),
+                &resolved_local(CRATE_DICTIONARY[4]),
+                local.clone(),
+                &profile(),
+                live()
+            )
+            .expect_err("unsupported axis"),
+            CompareError::ComparisonAxisUnsupported
+        );
+        let mut stale = live();
+        stale.source_view_digest = digest(0, 0);
+        assert_eq!(
+            validate_comparison_request(
+                comparison_request(vec![ComparisonAxis::Interface]),
+                &resolved_local(CRATE_DICTIONARY[4]),
+                local,
+                &profile(),
+                stale
+            )
+            .expect_err("stale fence"),
+            CompareError::ComparisonContextStale
+        );
+    }
+
+    #[test]
+    fn evidence_roles_stay_distinct_without_auto_truth() {
+        // Definition, test and documentation observations of one lineage
+        // align into separate role groups; a contradictory second test
+        // observation marks its own role conflicting instead of
+        // outvoting the definition.
+        let implementations = vec![candidate(
+            CRATE_DICTIONARY[5],
+            161,
+            MatchBasis::QualifiedName,
+            vec![
+                observation(
+                    ComparisonAxis::Interface,
+                    "planner definition contract",
+                    EvidenceRole::Definition,
+                    (96, 1),
+                    161,
+                ),
+                observation(
+                    ComparisonAxis::Interface,
+                    "planner asserted example",
+                    EvidenceRole::Test,
+                    (96, 2),
+                    162,
+                ),
+                observation(
+                    ComparisonAxis::Interface,
+                    "planner stated intent",
+                    EvidenceRole::Documentation,
+                    (96, 3),
+                    163,
+                ),
+            ],
+            false,
+            161,
+        )];
+        let groups =
+            collapse_repository_lineages(implementations, &[], PortfolioRevision::new(3), limits())
+                .expect("single lineage");
+        let group = groups.groups.iter().next().expect("group");
+        let axes = BoundedSet::from_items([ComparisonAxis::Interface]).expect("axes");
+        let alignment = align_evidence_roles(group, &axes, limits()).expect("role alignment");
+        assert_eq!(alignment.groups.len(), 3);
+        assert!(
+            alignment
+                .groups
+                .iter()
+                .all(|group| !group.internally_conflicting),
+            "distinct roles never merge"
+        );
+        let contradictory = vec![candidate(
+            CRATE_DICTIONARY[5],
+            162,
+            MatchBasis::QualifiedName,
+            vec![
+                observation(
+                    ComparisonAxis::Interface,
+                    "first asserted example",
+                    EvidenceRole::Test,
+                    (96, 4),
+                    164,
+                ),
+                observation(
+                    ComparisonAxis::Interface,
+                    "contradictory asserted example",
+                    EvidenceRole::Test,
+                    (96, 5),
+                    165,
+                ),
+            ],
+            false,
+            164,
+        )];
+        let groups =
+            collapse_repository_lineages(contradictory, &[], PortfolioRevision::new(3), limits())
+                .expect("single lineage");
+        let alignment =
+            align_evidence_roles(groups.groups.iter().next().expect("group"), &axes, limits())
+                .expect("role alignment");
+        assert_eq!(alignment.groups.len(), 1);
+        assert!(
+            alignment
+                .groups
+                .iter()
+                .next()
+                .expect("role")
+                .internally_conflicting,
+            "contradictory tests stay an explicit conflict, never truth"
+        );
+    }
+
+    #[test]
+    fn overlapping_remote_difference_becomes_source_backed_conflict() {
+        let name = CRATE_DICTIONARY[4];
+        let local_subject_value = local_subject(name);
+        let validated = validate_comparison_request(
+            comparison_request(vec![ComparisonAxis::Interface]),
+            &resolved_local(name),
+            local_subject_value.clone(),
+            &profile(),
+            live(),
+        )
+        .expect("validated request");
+        let local_evidence = LocalBehaviorEvidence {
+            subject: local_subject_value,
+            observations: BoundedList::new(vec![observation(
+                ComparisonAxis::Interface,
+                "local contract definition",
+                EvidenceRole::Definition,
+                (97, 1),
+                171,
+            )])
+            .expect("local observations"),
+            exact_complete_axes: BoundedSet::empty(),
+            exact_absence_receipt_refs: BoundedList::new(Vec::new()).expect("receipts"),
+        };
+        let remote = candidate(
+            name,
+            171,
+            MatchBasis::QualifiedName,
+            vec![observation(
+                ComparisonAxis::Interface,
+                "overlapping incompatible remote definition",
+                EvidenceRole::Definition,
+                (97, 2),
+                172,
+            )],
+            false,
+            172,
+        );
+        let groups =
+            collapse_repository_lineages(vec![remote], &[], PortfolioRevision::new(3), limits())
+                .expect("one remote lineage");
+        let alignments = groups
+            .groups
+            .iter()
+            .map(|group| {
+                let axes = BoundedSet::from_items([ComparisonAxis::Interface]).expect("axes");
+                align_evidence_roles(group, &axes, limits()).expect("alignment")
+            })
+            .collect::<Vec<_>>();
+        let relations = vec![super::PredicateRelationReceipt {
+            left_observation_digest: digest(97, 1),
+            right_observation_digest: digest(97, 2),
+            relation: PredicateRelation::Overlapping,
+            context_digest: digest(62, 62),
+            current: true,
+            receipt_ref: receipt("t36-compare-relation-01"),
+        }];
+        let matrix = compare_axes(
+            &validated,
+            &local_evidence,
+            &groups,
+            &alignments,
+            &profile(),
+            &relations,
+            limits(),
+            test_digest,
+        )
+        .expect("descriptive matrix");
+        assert_eq!(matrix.comparison.conflicts.len(), 1);
+        assert!(matrix.comparison.shared_observations.is_empty());
+        let conflict = matrix.comparison.conflicts.iter().next().expect("conflict");
+        assert_eq!(conflict.axis, ComparisonAxis::Interface);
+        assert!(!conflict.left.evidence_handles.is_empty());
+        assert!(!conflict.right.evidence_handles.is_empty());
+    }
+
+    #[test]
+    fn incomplete_portfolio_and_missing_axes_stay_explicit() {
+        let name = CRATE_DICTIONARY[3];
+        let local_subject_value = local_subject(name);
+        let mut incomplete =
+            comparison_request(vec![ComparisonAxis::Interface, ComparisonAxis::Tests]);
+        incomplete.omitted_memberships = 2;
+        incomplete.reference_inventory_complete = false;
+        let validated = validate_comparison_request(
+            incomplete,
+            &resolved_local(name),
+            local_subject_value.clone(),
+            &profile(),
+            live(),
+        )
+        .expect("incomplete scope still validates truthfully");
+        let local_evidence = LocalBehaviorEvidence {
+            subject: local_subject_value,
+            observations: BoundedList::new(vec![observation(
+                ComparisonAxis::Interface,
+                "local contract definition",
+                EvidenceRole::Definition,
+                (98, 1),
+                181,
+            )])
+            .expect("local observations"),
+            exact_complete_axes: BoundedSet::empty(),
+            exact_absence_receipt_refs: BoundedList::new(Vec::new()).expect("receipts"),
+        };
+        let remote = interface_candidate(
+            name,
+            181,
+            MatchBasis::QualifiedName,
+            "remote matching definition",
+            EvidenceRole::Definition,
+        );
+        let groups =
+            collapse_repository_lineages(vec![remote], &[], PortfolioRevision::new(3), limits())
+                .expect("one remote lineage");
+        let alignments = groups
+            .groups
+            .iter()
+            .map(|group| {
+                let axes =
+                    BoundedSet::from_items([ComparisonAxis::Interface, ComparisonAxis::Tests])
+                        .expect("axes");
+                align_evidence_roles(group, &axes, limits()).expect("alignment")
+            })
+            .collect::<Vec<_>>();
+        let matrix = compare_axes(
+            &validated,
+            &local_evidence,
+            &groups,
+            &alignments,
+            &profile(),
+            &[],
+            limits(),
+            test_digest,
+        )
+        .expect("partial matrix");
+        let gaps = matrix.coverage.gaps.iter().collect::<Vec<_>>();
+        assert!(
+            gaps.contains(&&ComparisonGap::OmittedMemberships),
+            "omitted memberships stay explicit: {gaps:?}"
+        );
+        assert!(
+            gaps.iter().any(|gap| matches!(
+                gap,
+                ComparisonGap::MissingAxisEvidence(ComparisonAxis::Tests)
+            )),
+            "unobserved requested axis stays explicit: {gaps:?}"
+        );
+        assert!(!matrix.coverage.complete_reference_scope);
+        assert!(
+            !matrix
+                .coverage
+                .coverage_digest
+                .as_bytes()
+                .iter()
+                .all(|byte| *byte == 0),
+            "coverage digest binds the gaps"
+        );
+    }
+
+    #[test]
+    fn signatures_and_reading_orders_are_deterministic() {
+        let name = CRATE_DICTIONARY[1];
+        let validated = validate_comparison_request(
+            comparison_request(vec![ComparisonAxis::Interface]),
+            &resolved_local(name),
+            local_subject(name),
+            &profile(),
+            live(),
+        )
+        .expect("validated request");
+        let signature = normalize_behavior_signature(
+            &interface_candidate(
+                name,
+                191,
+                MatchBasis::QualifiedName,
+                "stable definition observation",
+                EvidenceRole::Definition,
+            ),
+            &validated,
+            &profile(),
+            limits(),
+            test_digest,
+        )
+        .expect("stable signature");
+        let repeated = normalize_behavior_signature(
+            &interface_candidate(
+                name,
+                191,
+                MatchBasis::QualifiedName,
+                "stable definition observation",
+                EvidenceRole::Definition,
+            ),
+            &validated,
+            &profile(),
+            limits(),
+            test_digest,
+        )
+        .expect("stable signature");
+        assert_eq!(signature.signature_digest, repeated.signature_digest);
+        assert!(signature.unknown_axes.is_empty());
+        let reading_candidates = || {
+            vec![
+                ReadingCandidate {
+                    handle: handle(191),
+                    role: EvidenceRole::Definition,
+                    local: true,
+                    material: false,
+                    assurance: AssuranceClass::ExactBytes,
+                    portfolio_priority: 0,
+                    lineage_id: lineage(191),
+                    source_identity_digest: digest(71, 71),
+                    coordinate_digest: digest(72, 72),
+                    authorized: true,
+                },
+                ReadingCandidate {
+                    handle: handle(192),
+                    role: EvidenceRole::Test,
+                    local: false,
+                    material: true,
+                    assurance: AssuranceClass::MappedText,
+                    portfolio_priority: 1,
+                    lineage_id: lineage(192),
+                    source_identity_digest: digest(73, 73),
+                    coordinate_digest: digest(74, 74),
+                    authorized: true,
+                },
+                ReadingCandidate {
+                    handle: handle(193),
+                    role: EvidenceRole::Documentation,
+                    local: false,
+                    material: false,
+                    assurance: AssuranceClass::MappedText,
+                    portfolio_priority: 2,
+                    lineage_id: lineage(193),
+                    source_identity_digest: digest(75, 75),
+                    coordinate_digest: digest(76, 76),
+                    authorized: false,
+                },
+            ]
+        };
+        let first_reading =
+            order_recommended_reading(reading_candidates(), limits()).expect("reading");
+        let second_reading =
+            order_recommended_reading(reading_candidates(), limits()).expect("reading");
+        assert_eq!(first_reading, second_reading);
+        assert_eq!(first_reading.len(), 2, "unauthorized handle never listed");
+        assert_eq!(
+            first_reading.iter().next().expect("first"),
+            &handle(191),
+            "local definition leads"
+        );
+    }
+
+    trait MemberClone {
+        fn clone_with_member(&self, member: &str, index: usize) -> Self;
+    }
+
+    impl MemberClone for ComparableCandidate {
+        fn clone_with_member(&self, member: &str, index: usize) -> Self {
+            let mut renamed = self.clone();
+            renamed.implementation.behavior_signature =
+                BoundedBehaviorSignature::new(format!("signature:{member}"))
+                    .expect("member signature");
+            let seed = u8::try_from(101 + index).unwrap_or(101);
+            renamed.implementation.exact_handles =
+                BoundedList::new(vec![handle(seed)]).expect("member handle");
+            renamed
+        }
+    }
+}

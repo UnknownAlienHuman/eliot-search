@@ -924,3 +924,720 @@ mod tests {
         );
     }
 }
+
+/// T36 baseline dictionary tests: every subject name below is a real
+/// workspace package (or a filename shared by all of them), never invented
+/// text. The fixtures prove the ladder, ambiguity and collapse rules that
+/// the DIRECT-spine recipes rely on.
+#[cfg(test)]
+mod recipe_dictionary_tests {
+    use search_contracts::{
+        AssuranceClass, Blake3Digest32, BoundedList, BoundedName, BoundedNonContentMetadata,
+        BoundedSet, EntityKind, HandleClass, HandleId, MatchBasis, NonZeroRevision,
+        OpaqueHandleToken, ReceiptRef, ResolvedSubject, SearchReasonCodeV1, SearchSourceHandle,
+    };
+
+    use super::{
+        CurrencyFence, DisclosureFence, ResolutionContext, ResolutionPriority, ResolutionStep,
+        ResolutionStepState, ScopeObservationFence, StepIncompleteReason, SubjectCandidate,
+        SubjectError, SubjectRequest, SubjectResolution, SubjectResolutionLimits,
+        issue_resolution_receipt, resolve_subject,
+    };
+
+    /// Real workspace packages used as the subject dictionary.
+    const CRATE_DICTIONARY: [&str; 6] = [
+        "search-contracts",
+        "search-access",
+        "search-exact",
+        "search-subject-resolver",
+        "search-comparator",
+        "search-query-planner",
+    ];
+
+    fn digest(first: u8, second: u8) -> Blake3Digest32 {
+        let mut bytes = [0x5A; 32];
+        bytes[0] = first;
+        bytes[1] = second;
+        Blake3Digest32::from_bytes(bytes)
+    }
+
+    /// Test-only non-crypto digest for receipt binding (determinism only).
+    fn test_digest(bytes: &[u8]) -> [u8; 32] {
+        let mut out = [0x33_u8; 32];
+        let mut tweak = 0_u8;
+        for (index, byte) in bytes.iter().enumerate() {
+            out[index % 32] = out[index % 32].wrapping_add(*byte).wrapping_add(tweak);
+            tweak = tweak.wrapping_add(1);
+        }
+        out
+    }
+
+    fn handle(seed: u8) -> SearchSourceHandle {
+        SearchSourceHandle {
+            handle_id: HandleId::from_bytes([seed; 16]),
+            handle_revision: NonZeroRevision::new(1).expect("fixture revision"),
+            handle_class: HandleClass::DurableSource,
+            expires_at: None,
+            opaque_token: OpaqueHandleToken::new(&[0xA5; 32]).expect("fixture token"),
+        }
+    }
+
+    fn receipt(tag: &str) -> ReceiptRef {
+        ReceiptRef::new(tag).expect("fixture receipt")
+    }
+
+    fn context() -> ResolutionContext {
+        ResolutionContext {
+            context_digest: digest(1, 1),
+            owner_generation_digest: digest(2, 2),
+            security_fence_digest: digest(3, 3),
+            scope_observation: ScopeObservationFence {
+                scope_non_empty: true,
+                observation_complete: true,
+            },
+            disclosure: DisclosureFence {
+                access_permitted: true,
+                purge_clear: true,
+            },
+            currency: CurrencyFence {
+                view_current: true,
+                owner_generation_current: true,
+            },
+        }
+    }
+
+    fn request(steps: &[ResolutionPriority]) -> SubjectRequest {
+        SubjectRequest {
+            selector_digest: digest(9, 9),
+            requested_context_digest: digest(1, 1),
+            applicable_steps: BoundedSet::from_items(steps.iter().copied()).expect("fixture steps"),
+            required_entity_kind: None,
+            cancelled: false,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn candidate(
+        seed: u8,
+        name: &str,
+        basis: MatchBasis,
+        source_identity: (u8, u8),
+        coordinate: (u8, u8),
+        hypothesis: Option<(u8, u8)>,
+        assurance: AssuranceClass,
+        portfolio_priority: u16,
+    ) -> SubjectCandidate {
+        let hypothesis_digest =
+            hypothesis.map_or_else(|| digest(seed, seed), |(a, b)| digest(a, b));
+        SubjectCandidate {
+            candidate_digest: digest(seed, seed),
+            hypothesis_digest,
+            subject: ResolvedSubject {
+                canonical_handle: handle(seed),
+                match_basis: basis,
+                entity_kind: EntityKind::Function,
+                normalized_name: BoundedName::new(name).expect("fixture name"),
+                signature_observation: None,
+                configuration_predicate: None,
+            },
+            match_basis: basis,
+            assurance,
+            entity_kind_compatible: true,
+            portfolio_priority,
+            source_identity_digest: digest(source_identity.0, source_identity.1),
+            coordinate_digest: digest(coordinate.0, coordinate.1),
+            context_digest: digest(1, 1),
+            authorized: true,
+            current: true,
+            equivalence_receipt_ref: hypothesis.map(|_| receipt("t36-resolver-equivalence-01")),
+            disambiguation_summary: BoundedNonContentMetadata::empty(),
+            evidence_receipt_ref: receipt("t36-resolver-evidence-01"),
+        }
+    }
+
+    fn step(
+        priority: ResolutionPriority,
+        state: ResolutionStepState,
+        candidates: Vec<SubjectCandidate>,
+    ) -> ResolutionStep {
+        ResolutionStep {
+            priority,
+            state,
+            candidates: BoundedList::new(candidates).expect("fixture candidates"),
+            omitted_candidates: 0,
+        }
+    }
+
+    fn limits() -> SubjectResolutionLimits {
+        SubjectResolutionLimits::BASELINE
+            .validate()
+            .expect("baseline limits")
+    }
+
+    #[test]
+    fn ambiguous_crate_filename_returns_bounded_set() {
+        // `lib` exists in every workspace package: the same normalized name
+        // observed in `search-comparator` and `search-subject-resolver` is
+        // material ambiguity, never a first-rank win.
+        let left = candidate(
+            11,
+            "lib",
+            MatchBasis::ExactName,
+            (21, 21),
+            (31, 31),
+            None,
+            AssuranceClass::MappedText,
+            1,
+        );
+        let right = candidate(
+            12,
+            "lib",
+            MatchBasis::ExactName,
+            (22, 22),
+            (32, 32),
+            None,
+            AssuranceClass::MappedText,
+            1,
+        );
+        let resolution = resolve_subject(
+            &request(&[ResolutionPriority::ExactName]),
+            &context(),
+            vec![step(
+                ResolutionPriority::ExactName,
+                ResolutionStepState::Complete,
+                vec![left, right],
+            )],
+            limits(),
+        )
+        .expect("ambiguity is a normal output");
+        let SubjectResolution::Ambiguous {
+            ambiguity,
+            priority,
+        } = resolution
+        else {
+            panic!("same-name distinct definitions must stay ambiguous");
+        };
+        assert_eq!(priority, ResolutionPriority::ExactName);
+        assert_eq!(ambiguity.candidates.len(), 2);
+        assert_eq!(ambiguity.reason_code, SearchReasonCodeV1::AmbiguousSubject);
+        ambiguity.validate().expect("contract ambiguity set");
+    }
+
+    #[test]
+    fn same_path_across_repos_stays_distinct_without_receipt() {
+        // Paths are locators, not identity: one shared native coordinate in
+        // two source identities never collapses without an equivalence
+        // receipt, even when every other field agrees.
+        let left = candidate(
+            13,
+            CRATE_DICTIONARY[4],
+            MatchBasis::QualifiedName,
+            (41, 41),
+            (50, 50),
+            None,
+            AssuranceClass::ExactBytes,
+            0,
+        );
+        let right = candidate(
+            14,
+            CRATE_DICTIONARY[4],
+            MatchBasis::QualifiedName,
+            (42, 42),
+            (50, 50),
+            None,
+            AssuranceClass::ExactBytes,
+            0,
+        );
+        let resolution = resolve_subject(
+            &request(&[ResolutionPriority::QualifiedKey]),
+            &context(),
+            vec![step(
+                ResolutionPriority::QualifiedKey,
+                ResolutionStepState::Complete,
+                vec![left, right],
+            )],
+            limits(),
+        )
+        .expect("ambiguity is a normal output");
+        assert!(
+            matches!(resolution, SubjectResolution::Ambiguous { .. }),
+            "shared coordinate must not prove one subject: {resolution:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_handle_outranks_lexical_candidates() {
+        let explicit = candidate(
+            15,
+            CRATE_DICTIONARY[3],
+            MatchBasis::ExplicitHandle,
+            (51, 51),
+            (61, 61),
+            None,
+            AssuranceClass::ExactBytes,
+            5,
+        );
+        let lexical = candidate(
+            16,
+            CRATE_DICTIONARY[3],
+            MatchBasis::Lexical,
+            (52, 52),
+            (62, 62),
+            None,
+            AssuranceClass::DescriptiveOnly,
+            0,
+        );
+        let resolution = resolve_subject(
+            &request(&[
+                ResolutionPriority::ExplicitHandle,
+                ResolutionPriority::Lexical,
+            ]),
+            &context(),
+            vec![
+                step(
+                    ResolutionPriority::ExplicitHandle,
+                    ResolutionStepState::Complete,
+                    vec![explicit],
+                ),
+                step(
+                    ResolutionPriority::Lexical,
+                    ResolutionStepState::Complete,
+                    vec![lexical],
+                ),
+            ],
+            limits(),
+        )
+        .expect("explicit resolution");
+        let SubjectResolution::Resolved {
+            priority,
+            candidate_digest,
+            ..
+        } = resolution
+        else {
+            panic!("explicit handle must win: {resolution:?}");
+        };
+        assert_eq!(priority, ResolutionPriority::ExplicitHandle);
+        assert_eq!(candidate_digest, digest(15, 15));
+    }
+
+    #[test]
+    fn stale_explicit_reference_never_falls_through_to_lexical() {
+        let mut stale = candidate(
+            17,
+            CRATE_DICTIONARY[5],
+            MatchBasis::ExplicitHandle,
+            (53, 53),
+            (63, 63),
+            None,
+            AssuranceClass::ExactBytes,
+            0,
+        );
+        stale.current = false;
+        let lexical = candidate(
+            18,
+            CRATE_DICTIONARY[5],
+            MatchBasis::Lexical,
+            (54, 54),
+            (64, 64),
+            None,
+            AssuranceClass::MappedText,
+            0,
+        );
+        let error = resolve_subject(
+            &request(&[
+                ResolutionPriority::ExplicitHandle,
+                ResolutionPriority::Lexical,
+            ]),
+            &context(),
+            vec![
+                step(
+                    ResolutionPriority::ExplicitHandle,
+                    ResolutionStepState::Complete,
+                    vec![stale],
+                ),
+                step(
+                    ResolutionPriority::Lexical,
+                    ResolutionStepState::Complete,
+                    vec![lexical],
+                ),
+            ],
+            limits(),
+        )
+        .expect_err("stale explicit evidence must fail typed");
+        assert_eq!(error, SubjectError::SubjectContextStale);
+    }
+
+    #[test]
+    fn qualified_key_precedes_name_and_empty_higher_falls_through() {
+        let named = candidate(
+            19,
+            CRATE_DICTIONARY[0],
+            MatchBasis::ExactName,
+            (55, 55),
+            (65, 65),
+            None,
+            AssuranceClass::MappedText,
+            0,
+        );
+        let resolution = resolve_subject(
+            &request(&[
+                ResolutionPriority::QualifiedKey,
+                ResolutionPriority::ExactName,
+            ]),
+            &context(),
+            vec![
+                step(
+                    ResolutionPriority::QualifiedKey,
+                    ResolutionStepState::Complete,
+                    Vec::new(),
+                ),
+                step(
+                    ResolutionPriority::ExactName,
+                    ResolutionStepState::Complete,
+                    vec![named],
+                ),
+            ],
+            limits(),
+        )
+        .expect("fall-through resolution");
+        assert!(
+            matches!(
+                resolution,
+                SubjectResolution::Resolved {
+                    priority: ResolutionPriority::ExactName,
+                    ..
+                }
+            ),
+            "{resolution:?}"
+        );
+    }
+
+    #[test]
+    fn higher_incomplete_evidence_blocks_lower_resolved_success() {
+        let named = candidate(
+            20,
+            CRATE_DICTIONARY[1],
+            MatchBasis::ExactName,
+            (56, 56),
+            (66, 66),
+            None,
+            AssuranceClass::ExactBytes,
+            0,
+        );
+        let resolution = resolve_subject(
+            &request(&[
+                ResolutionPriority::QualifiedKey,
+                ResolutionPriority::ExactName,
+            ]),
+            &context(),
+            vec![
+                step(
+                    ResolutionPriority::QualifiedKey,
+                    ResolutionStepState::Incomplete(StepIncompleteReason::Timeout),
+                    Vec::new(),
+                ),
+                step(
+                    ResolutionPriority::ExactName,
+                    ResolutionStepState::Complete,
+                    vec![named],
+                ),
+            ],
+            limits(),
+        )
+        .expect("incomplete is a normal output");
+        let SubjectResolution::Incomplete { priority, reason } = resolution else {
+            panic!("higher incomplete rung must block: {resolution:?}");
+        };
+        assert_eq!(priority, ResolutionPriority::QualifiedKey);
+        assert_eq!(reason, SubjectError::SubjectBudgetExhausted);
+    }
+
+    #[test]
+    fn renamed_true_subject_collapses_only_with_accepted_receipt() {
+        let renamed = |seed: u8, with_receipt: bool| {
+            let hypothesis = with_receipt.then_some((77, 77));
+            candidate(
+                seed,
+                CRATE_DICTIONARY[2],
+                MatchBasis::QualifiedName,
+                (57, seed),
+                (67, seed),
+                hypothesis,
+                AssuranceClass::ExactBytes,
+                0,
+            )
+        };
+        let proven = resolve_subject(
+            &request(&[ResolutionPriority::QualifiedKey]),
+            &context(),
+            vec![step(
+                ResolutionPriority::QualifiedKey,
+                ResolutionStepState::Complete,
+                vec![renamed(21, true), renamed(22, true)],
+            )],
+            limits(),
+        )
+        .expect("proven collapse resolves");
+        assert!(
+            matches!(proven, SubjectResolution::Resolved { .. }),
+            "{proven:?}"
+        );
+        let unproven = resolve_subject(
+            &request(&[ResolutionPriority::QualifiedKey]),
+            &context(),
+            vec![step(
+                ResolutionPriority::QualifiedKey,
+                ResolutionStepState::Complete,
+                vec![renamed(21, false), renamed(22, false)],
+            )],
+            limits(),
+        )
+        .expect("unproven rename stays ambiguous");
+        assert!(
+            matches!(unproven, SubjectResolution::Ambiguous { .. }),
+            "{unproven:?}"
+        );
+    }
+
+    #[test]
+    fn overload_and_signature_variants_remain_distinct_when_material() {
+        let first = candidate(
+            23,
+            CRATE_DICTIONARY[5],
+            MatchBasis::Signature,
+            (58, 58),
+            (68, 68),
+            None,
+            AssuranceClass::MappedText,
+            0,
+        );
+        let second = candidate(
+            24,
+            CRATE_DICTIONARY[5],
+            MatchBasis::Signature,
+            (59, 59),
+            (69, 69),
+            None,
+            AssuranceClass::MappedText,
+            0,
+        );
+        let resolution = resolve_subject(
+            &request(&[ResolutionPriority::SignatureAndKind]),
+            &context(),
+            vec![step(
+                ResolutionPriority::SignatureAndKind,
+                ResolutionStepState::Complete,
+                vec![first, second],
+            )],
+            limits(),
+        )
+        .expect("signature ambiguity is a normal output");
+        assert!(
+            matches!(
+                resolution,
+                SubjectResolution::Ambiguous {
+                    priority: ResolutionPriority::SignatureAndKind,
+                    ..
+                }
+            ),
+            "{resolution:?}"
+        );
+    }
+
+    #[test]
+    fn structural_rank_gap_never_forces_resolution() {
+        let top = candidate(
+            25,
+            CRATE_DICTIONARY[4],
+            MatchBasis::Structural,
+            (70, 70),
+            (80, 80),
+            None,
+            AssuranceClass::MappedText,
+            0,
+        );
+        let runner_up = candidate(
+            26,
+            CRATE_DICTIONARY[4],
+            MatchBasis::Structural,
+            (71, 71),
+            (81, 81),
+            None,
+            AssuranceClass::DescriptiveOnly,
+            9,
+        );
+        let resolution = resolve_subject(
+            &request(&[ResolutionPriority::Structural]),
+            &context(),
+            vec![step(
+                ResolutionPriority::Structural,
+                ResolutionStepState::Complete,
+                vec![top, runner_up],
+            )],
+            limits(),
+        )
+        .expect("structural ambiguity is a normal output");
+        assert!(
+            matches!(resolution, SubjectResolution::Ambiguous { .. }),
+            "rank gap must not select: {resolution:?}"
+        );
+    }
+
+    #[test]
+    fn truncation_is_explicit_and_never_complete_ambiguity() {
+        let pair = vec![
+            candidate(
+                27,
+                "lib",
+                MatchBasis::ExactName,
+                (72, 72),
+                (82, 82),
+                None,
+                AssuranceClass::MappedText,
+                0,
+            ),
+            candidate(
+                28,
+                "lib",
+                MatchBasis::ExactName,
+                (73, 73),
+                (83, 83),
+                None,
+                AssuranceClass::MappedText,
+                0,
+            ),
+        ];
+        let tight = SubjectResolutionLimits {
+            max_ambiguity_candidates: 1,
+            ..limits()
+        };
+        let error = resolve_subject(
+            &request(&[ResolutionPriority::ExactName]),
+            &context(),
+            vec![step(
+                ResolutionPriority::ExactName,
+                ResolutionStepState::Complete,
+                pair,
+            )],
+            tight,
+        )
+        .expect_err("truncation must fail typed");
+        assert_eq!(error, SubjectError::SubjectAmbiguityTruncated);
+    }
+
+    #[test]
+    fn fence_drift_fails_typed_before_any_resolution() {
+        let named = candidate(
+            29,
+            CRATE_DICTIONARY[0],
+            MatchBasis::ExactName,
+            (74, 74),
+            (84, 84),
+            None,
+            AssuranceClass::ExactBytes,
+            0,
+        );
+        let steps = || {
+            vec![step(
+                ResolutionPriority::ExactName,
+                ResolutionStepState::Complete,
+                vec![named.clone()],
+            )]
+        };
+        let mut stale_view = context();
+        stale_view.context_digest = digest(8, 8);
+        assert_eq!(
+            resolve_subject(
+                &request(&[ResolutionPriority::ExactName]),
+                &stale_view,
+                steps(),
+                limits()
+            )
+            .expect_err("stale view"),
+            SubjectError::SubjectContextStale
+        );
+        let mut revoked = context();
+        revoked.disclosure.access_permitted = false;
+        assert_eq!(
+            resolve_subject(
+                &request(&[ResolutionPriority::ExactName]),
+                &revoked,
+                steps(),
+                limits()
+            )
+            .expect_err("revoked access"),
+            SubjectError::SubjectAccessRevoked
+        );
+        let mut empty = context();
+        empty.scope_observation.scope_non_empty = false;
+        assert!(
+            matches!(
+                resolve_subject(
+                    &request(&[ResolutionPriority::ExactName]),
+                    &empty,
+                    steps(),
+                    limits()
+                ),
+                Ok(SubjectResolution::ScopeEmpty)
+            ),
+            "empty scope is explicit"
+        );
+    }
+
+    #[test]
+    fn equal_inputs_yield_equal_resolution_and_receipt_bytes() {
+        let pair = || {
+            vec![
+                candidate(
+                    30,
+                    CRATE_DICTIONARY[3],
+                    MatchBasis::ExactName,
+                    (75, 75),
+                    (85, 85),
+                    None,
+                    AssuranceClass::MappedText,
+                    2,
+                ),
+                candidate(
+                    31,
+                    CRATE_DICTIONARY[3],
+                    MatchBasis::ExactName,
+                    (76, 76),
+                    (86, 86),
+                    None,
+                    AssuranceClass::MappedText,
+                    1,
+                ),
+            ]
+        };
+        let run = |candidates: Vec<SubjectCandidate>| {
+            let resolution = resolve_subject(
+                &request(&[ResolutionPriority::ExactName]),
+                &context(),
+                vec![step(
+                    ResolutionPriority::ExactName,
+                    ResolutionStepState::Complete,
+                    candidates.clone(),
+                )],
+                limits(),
+            )
+            .expect("deterministic ambiguity");
+            let receipt = issue_resolution_receipt(
+                &request(&[ResolutionPriority::ExactName]),
+                &context(),
+                &resolution,
+                candidates,
+                limits(),
+                test_digest,
+            )
+            .expect("deterministic receipt");
+            (resolution, receipt.receipt_digest)
+        };
+        let (first, first_digest) = run(pair());
+        let mut reversed = pair();
+        reversed.reverse();
+        let (second, second_digest) = run(reversed);
+        assert_eq!(first, second);
+        assert_eq!(first_digest, second_digest);
+    }
+}
