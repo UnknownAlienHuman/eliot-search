@@ -26,6 +26,9 @@ search-contracts.workspace = true
 search-ports.workspace = true
 search-config.workspace = true
 search-provider-protocol.workspace = true
+# Pairing/envelope proofs for the canonical provider client (T19). Exact pin
+# matches the daemon (`bins/eliot-searchd`); keyed BLAKE3 only, no storage.
+blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure"] }
 
 [lints]
 workspace = true

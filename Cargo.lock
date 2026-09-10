@@ -149,6 +149,7 @@ dependencies = [
 name = "eliot-search"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-config",
  "search-contracts",
  "search-ports",

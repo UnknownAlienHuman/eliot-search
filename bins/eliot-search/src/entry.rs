@@ -9,6 +9,7 @@
 
 mod app;
 mod endpoint_client;
+mod provider_client;
 mod public_client;
 mod remote_client;
 

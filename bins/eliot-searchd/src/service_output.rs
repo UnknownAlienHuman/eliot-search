@@ -143,8 +143,7 @@ pub fn emit_search_page(
                     "\"reason\":\"{}\",",
                     "\"diagnostic_internal_identifiers\":false}}"
                 ),
-                index,
-                gap.reason,
+                index, gap.reason,
             ),
         )?;
     }
@@ -192,6 +191,53 @@ pub fn emit_search_page(
             page.coverage.truncation.candidate_window_truncated,
             page.coverage.gap_count,
             page.coverage.truncation.gap_details_truncated,
+            json_string(storage.backend),
+            storage.encrypted_at_rest,
+        ),
+    )
+}
+
+/// Bounded provider status for the T19 `status` command: protocol version,
+///
+/// T12-derived availability and closed blocker codes. Read-only like
+/// `health`; it never mutates search state and never emits an empty success.
+pub fn emit_provider_status(
+    writer: &mut impl Write,
+    namespace_id: &str,
+    search_available: bool,
+    indexed_search_available: bool,
+    source_backed_search_available: bool,
+    blockers: &[&str],
+    storage: &StorageSecurityStatus,
+) -> Result<(), String> {
+    if blockers.len() > 8 {
+        return Err("SERVICE_STATUS_TOO_LARGE".to_owned());
+    }
+    let mut blockers_json = String::from("[");
+    for (index, blocker) in blockers.iter().enumerate() {
+        if index > 0 {
+            blockers_json.push(',');
+        }
+        blockers_json.push_str(&json_string(blocker));
+    }
+    blockers_json.push(']');
+    write_line(
+        writer,
+        &format!(
+            concat!(
+                "{{\"event\":\"provider_status\",",
+                "\"namespace_id\":\"{}\",\"protocol_version\":\"1.0\",",
+                "\"search_available\":{},",
+                "\"indexed_search_available\":{},",
+                "\"source_backed_search_available\":{},",
+                "\"blockers\":{},\"source_backed\":true,",
+                "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
+            ),
+            namespace_id,
+            search_available,
+            indexed_search_available,
+            source_backed_search_available,
+            blockers_json,
             json_string(storage.backend),
             storage.encrypted_at_rest,
         ),
@@ -254,10 +300,7 @@ fn emit_internal_match(
     )
 }
 
-fn emit_public_match(
-    writer: &mut impl Write,
-    item: &PublicHandledMatch,
-) -> Result<(), String> {
+fn emit_public_match(writer: &mut impl Write, item: &PublicHandledMatch) -> Result<(), String> {
     write_line(
         writer,
         &format!(

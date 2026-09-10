@@ -20,8 +20,8 @@ use crate::directory_manifest::{sync_directory, verify_directory_manifests};
 use crate::maintenance_guard::guarded_collect_orphan_revisions;
 use crate::result_handles::{MAX_HANDLE_EXPANSION_BYTES, ResultHandleCatalog, ResultHandleError};
 use crate::service_output::{
-    emit_handle_expansion, emit_indexed_source, emit_search_page, emit_streaming_search,
-    json_string, write_line,
+    emit_handle_expansion, emit_indexed_source, emit_provider_status, emit_search_page,
+    emit_streaming_search, json_string, write_line,
 };
 use crate::sha256;
 use crate::storage_security::StorageSecurityStatus;
@@ -37,7 +37,14 @@ const MAX_DIAGNOSTIC_REVISION_SLICE_BYTES: u64 = 24 * 1024;
 
 /// Intercepts `--serve-data-root ROOT` before one-shot command dispatch.
 pub fn maybe_run() -> Option<ExitCode> {
-    let arguments = env::args_os().skip(1).collect::<Vec<_>>();
+    let raw = env::args_os().skip(1).collect::<Vec<_>>();
+    let (arguments, _) = match crate::config_composition::strip_config_args_os(&raw) {
+        Ok(split) => split,
+        Err(error) => {
+            eprintln!("{{\"error\":{}}}", json_string(&error));
+            return Some(ExitCode::from(2));
+        }
+    };
     if arguments.first().and_then(|value| value.to_str()) != Some("--serve-data-root") {
         return None;
     }
@@ -74,12 +81,13 @@ fn run_service(root: &Path) -> Result<(), String> {
     // installation incarnation and physical-root identity travel with READY
     // so a successor incarnation is never mistaken for its predecessor.
     let (owner_incarnation, owner_root, _) = guard.journal_owner_inputs();
-    let effective = crate::config_composition::build_effective_defaults()
-        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let cli_args: Vec<String> = env::args().skip(1).collect();
+    let (_, cli) = crate::config_composition::parse_cli_config_args(&cli_args)?;
+    let effective = crate::config_composition::effective_from_process(&cli)?;
     let readiness = crate::config_composition::derive_readiness(
         &effective,
-        &crate::config_composition::direct_dependencies(),
-        &crate::config_composition::AcceptedReceipts::default(),
+        crate::config_composition::direct_dependencies(),
+        crate::config_composition::AcceptedReceipts::default(),
     );
     write_line(
         &mut writer,
@@ -111,8 +119,8 @@ fn run_service(root: &Path) -> Result<(), String> {
             guard.recovered_previous_active(),
             owner_incarnation,
             owner_root,
-            readiness.search_available,
-            readiness.indexed_search_available,
+            readiness.capabilities.search_available,
+            readiness.capabilities.indexed_search_available,
             DEFAULT_PAGE_SIZE,
             MAX_PAGE_SIZE,
             MAX_HANDLE_EXPANSION_BYTES,
@@ -212,6 +220,10 @@ fn execute_command(
                 canonical_root,
                 storage,
             )?;
+        }
+        ("status", [_]) => {
+            refresh_storage(storage, canonical_root)?;
+            cmd_status(writer, store, storage)?;
         }
         ("version", [_]) => {
             cmd_version(writer)?;
@@ -642,6 +654,38 @@ fn cmd_expand_handle<W: std::io::Write>(
     emit_handle_expansion(writer, &expansion, storage)
 }
 
+/// Read-only T19 provider status: canonical protocol version plus the exact
+/// T12 readiness snapshot. No quarantine, owner or ingest state is touched
+/// beyond the shared storage inspection every read already performs.
+fn cmd_status(
+    writer: &mut impl std::io::Write,
+    store: &DirectStore,
+    storage: &StorageSecurityStatus,
+) -> Result<(), String> {
+    let readiness = current_readiness()?;
+    emit_provider_status(
+        writer,
+        &store.namespace_id(),
+        readiness.capabilities.search_available,
+        readiness.capabilities.indexed_search_available,
+        readiness.capabilities.source_backed_search_available,
+        &readiness.blockers,
+        storage,
+    )
+}
+
+/// Builds the exact T12 readiness snapshot shared by `health` and `status`.
+fn current_readiness() -> Result<crate::config_composition::ReadinessReport, String> {
+    let cli_args: Vec<String> = env::args().skip(1).collect();
+    let (_, cli) = crate::config_composition::parse_cli_config_args(&cli_args)?;
+    let effective = crate::config_composition::effective_from_process(&cli)?;
+    Ok(crate::config_composition::derive_readiness(
+        &effective,
+        crate::config_composition::direct_dependencies(),
+        crate::config_composition::AcceptedReceipts::default(),
+    ))
+}
+
 fn cmd_health(
     writer: &mut impl std::io::Write,
     store: &DirectStore,
@@ -653,12 +697,13 @@ fn cmd_health(
     let verification = store.verify()?;
     let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
     refresh_storage(storage, canonical_root)?;
-    let effective = crate::config_composition::build_effective_defaults()
-        .map_err(|error| format!("DAEMON_CONFIG_INVALID:{error}"))?;
+    let cli_args: Vec<String> = env::args().skip(1).collect();
+    let (_, cli) = crate::config_composition::parse_cli_config_args(&cli_args)?;
+    let effective = crate::config_composition::effective_from_process(&cli)?;
     let readiness = crate::config_composition::derive_readiness(
         &effective,
-        &crate::config_composition::direct_dependencies(),
-        &crate::config_composition::AcceptedReceipts::default(),
+        crate::config_composition::direct_dependencies(),
+        crate::config_composition::AcceptedReceipts::default(),
     );
     let health = Health::from_readiness(&readiness);
     write_line(
