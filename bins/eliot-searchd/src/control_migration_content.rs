@@ -82,12 +82,18 @@ pub(super) fn stage(
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(_) => return Err("DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN".to_owned()),
     }
+    #[cfg(unix)]
     sync_directory(directory)?;
+    #[cfg(not(unix))]
+    sync_directory(directory);
     if fingerprint(&destination, length, deadline)? != digest {
         return Err("DIRECT_MIGRATION_CONTENT_IMMUTABLE_CONFLICT".to_owned());
     }
     staging.remove()?;
+    #[cfg(unix)]
     sync_directory(directory)?;
+    #[cfg(not(unix))]
+    sync_directory(directory);
     check_deadline(Some(deadline))?;
     Ok(ContentArtifact { name, chain: digest, records: counts.records, source_bytes: counts.source_bytes,
         encoded_bytes: length, profile: sha256::digest(PROFILE) })

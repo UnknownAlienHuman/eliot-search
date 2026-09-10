@@ -15,6 +15,7 @@ use crate::sealed_owner_epoch::OwnerEpochGuard;
 /// Closed root-identity failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RootIdentityError {
+    #[cfg(not(windows))]
     /// Windows native root identity is unavailable on this platform.
     UnsupportedPlatform,
     /// Root is absent or not a directory.
@@ -34,6 +35,7 @@ impl RootIdentityError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_ROOT_IDENTITY_UNSUPPORTED_PLATFORM",
             Self::InvalidRoot => "SEALED_ROOT_IDENTITY_INVALID_ROOT",
             Self::ReparsePointDenied => "SEALED_ROOT_IDENTITY_REPARSE_POINT_DENIED",

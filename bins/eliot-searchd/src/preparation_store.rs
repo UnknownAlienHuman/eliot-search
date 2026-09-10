@@ -1,5 +1,5 @@
 //! Immutable DIRECT preparation objects plus content-free lookup references.
-//! The existing DirectStore owner and revision protector own this adapter too.
+//! The existing `DirectStore` owner and revision protector own this adapter too.
 //! No query path creates files, repairs missing objects or changes source metadata.
 
 #[path = "control_migration_preparation.rs"]
@@ -54,7 +54,10 @@ pub(super) fn persist(
     let object_id = object_id(&binding, protector, &digest);
     let object_shard = objects.join(&object_id[..2]);
     ensure_child_directory(&object_shard)?;
+    #[cfg(unix)]
     sync_directory(&objects)?;
+    #[cfg(not(unix))]
+    sync_directory(&objects);
     let object_path = object_shard.join(format!("{object_id}.{}", extension(protector)));
     let expected_ref = reference(&key, digest, manifest.len() as u64, protector);
     // A corrupt/conflicting lookup never authorizes overwriting immutable state.
@@ -261,7 +264,7 @@ fn object_id(binding: &[u8], protector: &RevisionProtector, digest: &[u8; 32]) -
     sha256::hex(&sha256::digest_parts(b"eliot-search/direct-preparation-object/v1",
         &[binding, protector.backend_name().as_bytes(), digest]))
 }
-fn extension(protector: &RevisionProtector) -> &'static str {
+const fn extension(protector: &RevisionProtector) -> &'static str {
     if protector.encrypts_new_objects() { "dpapi" } else { "bin" }
 }
 fn reference(key: &[u8; 32], digest: [u8; 32], length: u64, protector: &RevisionProtector) -> Vec<u8> {
@@ -298,7 +301,10 @@ fn directories(root: &Path, key: &[u8; 32], create: bool) -> Result<(PathBuf, Pa
     for path in [&base, &refs, &objects, &shard] {
         if create {
             ensure_child_directory(path)?;
+            #[cfg(unix)]
             sync_directory(path.parent().ok_or_else(|| "DIRECT_PREPARATION_PARENT_INVALID".to_owned())?)?;
+            #[cfg(not(unix))]
+            sync_directory(path.parent().ok_or_else(|| "DIRECT_PREPARATION_PARENT_INVALID".to_owned())?);
         } else { ensure_directory(path)?; }
     }
     Ok((shard.join(format!("{hex}.ref")), objects))
@@ -311,7 +317,7 @@ const BATCH_SLICE: Duration = Duration::from_secs(10);
 
 /// Stateless admin bookmark, never a bearer token or proof of the processed prefix.
 /// Bound to the complete source-event history, preparation profile and storage backend.
-pub(crate) struct PreparationCursor {
+pub struct PreparationCursor {
     checkpoint: [u8; 32],
     after: String,
 }
@@ -338,7 +344,7 @@ impl PreparationCursor {
 }
 
 /// One bounded suffix batch. Exhaustion is not a complete-corpus search proof.
-pub(crate) struct PreparationBatch {
+pub struct PreparationBatch {
     pub(crate) stored: usize,
     pub(crate) layouts: usize,
     pub(crate) source_bytes: u64,
@@ -359,12 +365,11 @@ impl super::DirectStore {
     pub(crate) fn validate_preparation_cursor(
         &self, cursor: Option<&PreparationCursor>,
     ) -> Result<(), String> {
-        if let Some(cursor) = cursor {
-            if cursor.checkpoint != self.preparation_checkpoint()
-                || self.inner.retained_revision(&cursor.after).is_none()
-            {
-                return Err("DIRECT_PREPARATION_CURSOR_STALE".to_owned());
-            }
+        if let Some(cursor) = cursor
+            && (cursor.checkpoint != self.preparation_checkpoint()
+                || self.inner.retained_revision(&cursor.after).is_none())
+        {
+            return Err("DIRECT_PREPARATION_CURSOR_STALE".to_owned());
         }
         Ok(())
     }
@@ -374,7 +379,7 @@ impl super::DirectStore {
     /// not one atomic corpus transaction: on failure, retry the last accepted cursor.
     /// No file enumeration, source-path read, source event or query-time repair occurs.
     pub(crate) fn prepare_root(
-        &mut self, cursor: Option<&PreparationCursor>,
+        &self, cursor: Option<&PreparationCursor>,
     ) -> Result<PreparationBatch, String> {
         crate::catalog_presence::require_existing(&self.root)?;
         self.inner.verify_control()?;

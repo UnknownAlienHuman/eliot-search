@@ -15,6 +15,78 @@ use crate::snapshot::fingerprint;
 use super::manifest::{load_manifest_documents, read_retained_document};
 use super::{IndexedDocument, LexicalIndex, LexicalIndexLimits, Posting};
 
+/// Analyzes one retained document and accumulates its postings, returning the
+/// emitted token count.
+fn analyze_document(
+    analyzer: &AnalyzerConfig,
+    document_index: usize,
+    text: String,
+    postings: &mut BTreeMap<String, Vec<Posting>>,
+    posting_count: &mut usize,
+    limits: LexicalIndexLimits,
+) -> io::Result<u64> {
+    if text.is_empty() {
+        return Ok(0);
+    }
+    let input_length = u64::try_from(text.len()).map_err(|_| {
+        io::Error::new(ErrorKind::InvalidData, "lexical input length overflow")
+    })?;
+    let analysis = analyze(
+        LexicalInput::new(
+            OpaqueId::new(format!("snapshot-document:{document_index}"))
+                .map_err(|_| io::Error::other("invalid lexical source identity"))?,
+            NonZeroRevision::new(1).map_err(|_| {
+                io::Error::other("invalid lexical source revision")
+            })?,
+            0,
+            0,
+            input_length,
+            text,
+        ),
+        analyzer,
+        DEFAULT_LEXICAL_LIMITS,
+    )
+    .map_err(|error| io::Error::other(error.to_string()))?;
+    let mut first_offsets = BTreeMap::<String, u64>::new();
+    for token in &analysis.tokens {
+        first_offsets
+            .entry(token.term.clone())
+            .or_insert(token.unit_byte_start);
+    }
+    for term in &analysis.terms {
+        if !postings.contains_key(&term.term) && postings.len() >= limits.terms {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "lexical term ceiling exceeded",
+            ));
+        }
+        *posting_count = posting_count.checked_add(1).ok_or_else(|| {
+            io::Error::new(ErrorKind::InvalidData, "lexical posting overflow")
+        })?;
+        if *posting_count > limits.postings {
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "lexical posting ceiling exceeded",
+            ));
+        }
+        let first_byte_offset = first_offsets
+            .get(&term.term)
+            .copied()
+            .ok_or_else(|| {
+                io::Error::new(
+                    ErrorKind::InvalidData,
+                    "lexical first-offset accounting mismatch",
+                )
+            })?;
+        postings.entry(term.term.clone()).or_default().push(Posting {
+            document_index,
+            frequency: term.frequency,
+            first_byte_offset,
+        });
+    }
+    Ok(analysis.receipt.emitted_token_count)
+}
+
 impl LexicalIndex {
     pub(crate) fn build(
         data_root: &Path,
@@ -43,7 +115,7 @@ impl LexicalIndex {
             manifest_path,
             snapshot_id,
             snapshot_manifest_fingerprint,
-            limits.max_file_bytes,
+            limits.file_bytes,
         )?;
 
         let mut documents = Vec::with_capacity(manifest_documents.len());
@@ -52,68 +124,15 @@ impl LexicalIndex {
         let mut total_tokens = 0_u64;
 
         for (document_index, source) in manifest_documents.into_iter().enumerate() {
-            let text = read_retained_document(&source, limits.max_file_bytes)?;
-            let token_count = if text.is_empty() {
-                0
-            } else {
-                let input_length = u64::try_from(text.len()).map_err(|_| {
-                    io::Error::new(ErrorKind::InvalidData, "lexical input length overflow")
-                })?;
-                let analysis = analyze(
-                    LexicalInput::new(
-                        OpaqueId::new(format!("snapshot-document:{document_index}"))
-                            .map_err(|_| io::Error::other("invalid lexical source identity"))?,
-                        NonZeroRevision::new(1).map_err(|_| {
-                            io::Error::other("invalid lexical source revision")
-                        })?,
-                        0,
-                        0,
-                        input_length,
-                        text,
-                    ),
-                    &analyzer,
-                    DEFAULT_LEXICAL_LIMITS,
-                )
-                .map_err(|error| io::Error::other(error.to_string()))?;
-                let mut first_offsets = BTreeMap::<String, u64>::new();
-                for token in &analysis.tokens {
-                    first_offsets
-                        .entry(token.term.clone())
-                        .or_insert(token.unit_byte_start);
-                }
-                for term in &analysis.terms {
-                    if !postings.contains_key(&term.term) && postings.len() >= limits.max_terms {
-                        return Err(io::Error::new(
-                            ErrorKind::InvalidData,
-                            "lexical term ceiling exceeded",
-                        ));
-                    }
-                    posting_count = posting_count.checked_add(1).ok_or_else(|| {
-                        io::Error::new(ErrorKind::InvalidData, "lexical posting overflow")
-                    })?;
-                    if posting_count > limits.max_postings {
-                        return Err(io::Error::new(
-                            ErrorKind::InvalidData,
-                            "lexical posting ceiling exceeded",
-                        ));
-                    }
-                    let first_byte_offset = first_offsets
-                        .get(&term.term)
-                        .copied()
-                        .ok_or_else(|| {
-                            io::Error::new(
-                                ErrorKind::InvalidData,
-                                "lexical first-offset accounting mismatch",
-                            )
-                        })?;
-                    postings.entry(term.term.clone()).or_default().push(Posting {
-                        document_index,
-                        frequency: term.frequency,
-                        first_byte_offset,
-                    });
-                }
-                analysis.receipt.emitted_token_count
-            };
+            let text = read_retained_document(&source, limits.file_bytes)?;
+            let token_count = analyze_document(
+                &analyzer,
+                document_index,
+                text,
+                &mut postings,
+                &mut posting_count,
+                limits,
+            )?;
             total_tokens = total_tokens.checked_add(token_count).ok_or_else(|| {
                 io::Error::new(ErrorKind::InvalidData, "lexical token accounting overflow")
             })?;
@@ -138,7 +157,8 @@ impl LexicalIndex {
         let average_document_length = if documents.is_empty() {
             1.0
         } else {
-            let average = total_tokens as f64 / documents.len() as f64;
+            let average = f64::from(u32::try_from(total_tokens).unwrap_or(u32::MAX))
+                / f64::from(u32::try_from(documents.len()).unwrap_or(u32::MAX));
             if average > 0.0 { average } else { 1.0 }
         };
         let index_fingerprint = index_fingerprint(
@@ -163,14 +183,14 @@ impl LexicalIndex {
 }
 
 fn validate_limits(limits: LexicalIndexLimits) -> io::Result<()> {
-    if limits.max_terms == 0
-        || limits.max_postings == 0
-        || limits.max_query_terms == 0
-        || limits.max_results == 0
-        || limits.max_results > 32
-        || limits.max_file_bytes == 0
-        || limits.max_excerpt_chars == 0
-        || limits.max_excerpt_chars > 512
+    if limits.terms == 0
+        || limits.postings == 0
+        || limits.query_terms == 0
+        || limits.results == 0
+        || limits.results > 32
+        || limits.file_bytes == 0
+        || limits.excerpt_chars == 0
+        || limits.excerpt_chars > 512
     {
         return Err(io::Error::new(
             ErrorKind::InvalidInput,

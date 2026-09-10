@@ -1,4 +1,4 @@
-//! Operational CLI for the Windows CurrentUser DPAPI sealed-object adapter.
+//! Operational CLI for the Windows `CurrentUser` DPAPI sealed-object adapter.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -14,7 +14,7 @@ use sealed_store::{
     seal_immutable, verify_sealed,
 };
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-search-sealed-store\n\n",
         "USAGE:\n",
@@ -60,7 +60,7 @@ fn run() -> Result<(), String> {
     let object_id = &arguments[2];
     match command {
         "put" => {
-            let receipt = seal_immutable(root, object_id, read_plaintext()?)
+            let receipt = seal_immutable(root, object_id, &read_plaintext()?)
                 .map_err(|error| error.code().to_owned())?;
             println!(
                 concat!(

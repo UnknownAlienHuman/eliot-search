@@ -35,8 +35,6 @@ pub enum SealedCatalogError {
     ManifestInvalid,
     /// Requested source or revision differs from the immutable manifest.
     SourceBindingMismatch,
-    /// Content object or transaction identity differs from the manifest.
-    ContentBindingMismatch,
     /// Current content bytes differ from the immutable catalog digest.
     ContentDigestMismatch,
     /// Current content byte accounting differs from the immutable manifest.
@@ -59,7 +57,6 @@ impl SealedCatalogError {
             Self::InvalidIdentifier => "SEALED_CATALOG_IDENTIFIER_INVALID",
             Self::ManifestInvalid => "SEALED_CATALOG_MANIFEST_INVALID",
             Self::SourceBindingMismatch => "SEALED_CATALOG_SOURCE_BINDING_MISMATCH",
-            Self::ContentBindingMismatch => "SEALED_CATALOG_CONTENT_BINDING_MISMATCH",
             Self::ContentDigestMismatch => "SEALED_CATALOG_CONTENT_DIGEST_MISMATCH",
             Self::ContentLengthMismatch => "SEALED_CATALOG_CONTENT_LENGTH_MISMATCH",
             Self::CatalogReadbackMismatch => "SEALED_CATALOG_READBACK_MISMATCH",
@@ -298,7 +295,7 @@ pub fn bind_revision(
         data_root,
         content_operation_id,
         content_object_id,
-        content,
+        &content,
     )?;
     let content_verification = verify_sealed(data_root, content_object_id)?;
     if content_transaction.plaintext_bytes != content_plaintext_bytes
@@ -323,7 +320,7 @@ pub fn bind_revision(
         data_root,
         catalog_operation_id,
         catalog_object_id,
-        SensitiveBytes::new(encoded.as_bytes().to_vec())?,
+        &SensitiveBytes::new(encoded.as_bytes().to_vec())?,
     )?;
     let readback = open_sealed(data_root, catalog_object_id)?;
     if readback.expose() != encoded.as_bytes()

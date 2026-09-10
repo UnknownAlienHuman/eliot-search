@@ -21,14 +21,14 @@ const MAX_COMMANDS_PER_CONNECTION: usize = 4096;
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum EndpointAction {
+pub enum EndpointAction {
     Continue,
     Shutdown,
     /// Unusable handler/output channel; close listener without any further reply.
     Abort,
 }
 
-pub(crate) fn serve_loopback<F>(
+pub fn serve_loopback<F>(
     port: u16,
     token_file: &Path,
     handler: F,
@@ -46,14 +46,13 @@ where
         return Err("ENDPOINT_NON_LOOPBACK_BIND_DENIED".to_owned());
     }
     println!(
-        "{{\"event\":\"loopback_ready\",\"address\":\"{}\",\"protocol_version\":1,\"authentication\":\"sha256_challenge_v1\"}}",
-        local,
+        "{{\"event\":\"loopback_ready\",\"address\":\"{local}\",\"protocol_version\":1,\"authentication\":\"sha256_challenge_v1\"}}",
     );
 
-    serve_listener(listener, token_verifier, handler)
+    serve_listener(&listener, token_verifier, handler)
 }
 
-fn serve_listener<F>(listener: TcpListener, token_verifier: Sha256Digest, mut handler: F)
+fn serve_listener<F>(listener: &TcpListener, token_verifier: Sha256Digest, mut handler: F)
     -> Result<(), String>
 where
     F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
@@ -404,7 +403,7 @@ mod tests {
         let (done, result) = mpsc::channel();
         let server = thread::spawn(move || {
             let mut calls = 0;
-            let status = serve_listener(listener, verifier, |_, stream| {
+            let status = serve_listener(&listener, verifier, |_, stream| {
                 calls += 1;
                 stream.write_all(b"{\"partial\":").map_err(|_| "FIXTURE_WRITE_FAILED".to_owned())?;
                 Ok(EndpointAction::Abort)

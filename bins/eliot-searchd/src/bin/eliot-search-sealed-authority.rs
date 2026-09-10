@@ -28,7 +28,7 @@ mod sealed_transaction;
 mod sealed_transaction_guard;
 
 use std::env;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -43,7 +43,7 @@ use sealed_owner_epoch::OwnerEpochGuard;
 use sealed_recovery::{SealedRecoveryReport, recover_all};
 use sealed_root_identity::verify_owner_root;
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-search-sealed-authority\n\n",
         "USAGE:\n",
@@ -160,9 +160,9 @@ struct ExpectedFence<'a> {
     purge_generation: u64,
 }
 
-fn expected_fence<'a>(
-    arguments: &'a [std::ffi::OsString],
-) -> Result<ExpectedFence<'a>, String> {
+fn expected_fence(
+    arguments: &[std::ffi::OsString],
+) -> Result<ExpectedFence<'_>, String> {
     Ok(ExpectedFence {
         catalog_object_id: utf8_argument(
             &arguments[3],
@@ -255,9 +255,7 @@ fn emit_fence(
             "\"production_ready\":false}}"
         ),
         event,
-        disposition
-            .map(|value| format!("\"{value}\""))
-            .unwrap_or_else(|| "null".to_owned()),
+        disposition.map_or_else(|| "null".to_owned(), |value| format!("\"{value}\"")),
         snapshot.record.fence_id,
         snapshot.record.mutation_id,
         snapshot.record.generation,
@@ -429,108 +427,118 @@ fn run() -> Result<(), String> {
             emit_fence("fence_status", &snapshot, &owner, &recovery, None);
         }
         "verify" if arguments.len() == 12 => {
-            let data_root = Path::new(&arguments[1]);
-            let (owner, recovery) = acquire_ready_owner(data_root)?;
-            let fence_id = utf8_argument(
-                &arguments[2],
-                "SEALED_ACCESS_IDENTIFIER_INVALID",
-            )?;
-            let expected = expected_fence(&arguments)?;
-            let active = require_active_fence(
-                data_root,
-                &owner,
-                fence_id,
-                expected.source_id,
-                expected.source_revision_id,
-                expected.catalog_object_id,
-            )
-            .map_err(|error| error.code().to_owned())?;
-            require_expected_fence(&active, &expected)?;
-            let receipt = verify_revision(
-                data_root,
-                expected.catalog_object_id,
-                expected.source_id,
-                expected.source_revision_id,
-            )
-            .map_err(|error| error.code().to_owned())?;
-            println!(
-                concat!(
-                    "{{\"status\":\"AUTHORITY_VERIFIED\",",
-                    "\"fence_id\":\"{}\",\"fence_generation\":{},",
-                    "\"scope_id\":\"{}\",\"scope_revision\":{},",
-                    "\"policy_id\":\"{}\",\"policy_revision\":{},",
-                    "\"access_generation\":{},\"purge_generation\":{},",
-                    "\"source_id\":\"{}\",\"source_revision_id\":\"{}\",",
-                    "\"catalog_object_id\":\"{}\",\"content_sha256\":\"{}\",",
-                    "\"current_owner_epoch\":{},",
-                    "\"startup_recovery_scanned\":{},",
-                    "\"scope_bound\":true,\"policy_bound\":true,",
-                    "\"access_generation_bound\":true,",
-                    "\"purge_generation_bound\":true,",
-                    "\"production_ready\":false}}"
-                ),
-                active.record().fence_id,
-                active.record().generation,
-                active.record().scope_id,
-                active.record().scope_revision,
-                active.record().policy_id,
-                active.record().policy_revision,
-                active.record().access_generation,
-                active.record().purge_generation,
-                receipt.source_id,
-                receipt.source_revision_id,
-                receipt.catalog_object_id,
-                receipt.content_sha256,
-                owner.epoch(),
-                recovery.scanned_operations,
-            );
+            run_verify_command(&arguments)?;
         }
         "search" | "search-ascii-insensitive" if arguments.len() == 13 => {
-            let data_root = Path::new(&arguments[1]);
-            let (owner, recovery) = acquire_ready_owner(data_root)?;
-            let fence_id = utf8_argument(
-                &arguments[2],
-                "SEALED_ACCESS_IDENTIFIER_INVALID",
-            )?;
-            let expected = expected_fence(&arguments)?;
-            let query = utf8_argument(
-                &arguments[12],
-                "SEALED_EXACT_QUERY_INVALID_UTF8",
-            )?;
-            let active = require_active_fence(
-                data_root,
-                &owner,
-                fence_id,
-                expected.source_id,
-                expected.source_revision_id,
-                expected.catalog_object_id,
-            )
-            .map_err(|error| error.code().to_owned())?;
-            require_expected_fence(&active, &expected)?;
-            let revision = read_revision(
-                data_root,
-                expected.catalog_object_id,
-                expected.source_id,
-                expected.source_revision_id,
-            )
-            .map_err(|error| error.code().to_owned())?;
-            let result = scan_exact(
-                revision.content.expose(),
-                query,
-                command == "search-ascii-insensitive",
-            )
-            .map_err(|error| error.code().to_owned())?;
-            emit_search(
-                &active,
-                &owner,
-                &recovery,
-                &revision.binding.content_sha256.to_hex(),
-                &result,
-                command == "search-ascii-insensitive",
-            );
+            run_search_command(&arguments, command)?;
         }
         _ => return Err("SEALED_AUTHORITY_USAGE_ERROR".to_owned()),
     }
+    Ok(())
+}
+
+fn run_verify_command(arguments: &[OsString]) -> Result<(), String> {
+    let data_root = Path::new(&arguments[1]);
+    let (owner, recovery) = acquire_ready_owner(data_root)?;
+    let fence_id = utf8_argument(
+        &arguments[2],
+        "SEALED_ACCESS_IDENTIFIER_INVALID",
+    )?;
+    let expected = expected_fence(arguments)?;
+    let active = require_active_fence(
+        data_root,
+        &owner,
+        fence_id,
+        expected.source_id,
+        expected.source_revision_id,
+        expected.catalog_object_id,
+    )
+    .map_err(|error| error.code().to_owned())?;
+    require_expected_fence(&active, &expected)?;
+    let receipt = verify_revision(
+        data_root,
+        expected.catalog_object_id,
+        expected.source_id,
+        expected.source_revision_id,
+    )
+    .map_err(|error| error.code().to_owned())?;
+    println!(
+        concat!(
+            "{{\"status\":\"AUTHORITY_VERIFIED\",",
+            "\"fence_id\":\"{}\",\"fence_generation\":{},",
+            "\"scope_id\":\"{}\",\"scope_revision\":{},",
+            "\"policy_id\":\"{}\",\"policy_revision\":{},",
+            "\"access_generation\":{},\"purge_generation\":{},",
+            "\"source_id\":\"{}\",\"source_revision_id\":\"{}\",",
+            "\"catalog_object_id\":\"{}\",\"content_sha256\":\"{}\",",
+            "\"current_owner_epoch\":{},",
+            "\"startup_recovery_scanned\":{},",
+            "\"scope_bound\":true,\"policy_bound\":true,",
+            "\"access_generation_bound\":true,",
+            "\"purge_generation_bound\":true,",
+            "\"production_ready\":false}}"
+        ),
+        active.record().fence_id,
+        active.record().generation,
+        active.record().scope_id,
+        active.record().scope_revision,
+        active.record().policy_id,
+        active.record().policy_revision,
+        active.record().access_generation,
+        active.record().purge_generation,
+        receipt.source_id,
+        receipt.source_revision_id,
+        receipt.catalog_object_id,
+        receipt.content_sha256,
+        owner.epoch(),
+        recovery.scanned_operations,
+    );
+    Ok(())
+}
+
+fn run_search_command(arguments: &[OsString], command: &str) -> Result<(), String> {
+    let data_root = Path::new(&arguments[1]);
+    let (owner, recovery) = acquire_ready_owner(data_root)?;
+    let fence_id = utf8_argument(
+        &arguments[2],
+        "SEALED_ACCESS_IDENTIFIER_INVALID",
+    )?;
+    let expected = expected_fence(arguments)?;
+    let query = utf8_argument(
+        &arguments[12],
+        "SEALED_EXACT_QUERY_INVALID_UTF8",
+    )?;
+    let active = require_active_fence(
+        data_root,
+        &owner,
+        fence_id,
+        expected.source_id,
+        expected.source_revision_id,
+        expected.catalog_object_id,
+    )
+    .map_err(|error| error.code().to_owned())?;
+    require_expected_fence(&active, &expected)?;
+    let revision = read_revision(
+        data_root,
+        expected.catalog_object_id,
+        expected.source_id,
+        expected.source_revision_id,
+    )
+    .map_err(|error| error.code().to_owned())?;
+    let result = scan_exact(
+        revision.content.expose(),
+        query,
+        command == "search-ascii-insensitive",
+    )
+    .map_err(|error| error.code().to_owned())?;
+    emit_search(
+        &active,
+        &owner,
+        &recovery,
+        &revision.binding.content_sha256.to_hex(),
+        &result,
+        command == "search-ascii-insensitive",
+    );
     Ok(())
 }
 

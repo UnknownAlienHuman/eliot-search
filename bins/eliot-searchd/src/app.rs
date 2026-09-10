@@ -34,7 +34,7 @@ impl Command {
     }
 }
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-searchd ",
         env!("CARGO_PKG_VERSION"),
@@ -117,9 +117,9 @@ fn serve_control(
                 "\"source_backed_search_available\":{}}}"
             ),
             PROTOCOL_VERSION,
-            health.runtime_owner_ready,
-            health.direct_store_ready,
-            health.source_backed_search_available,
+            health.composition.runtime_owner_ready,
+            health.stores.direct_store_ready,
+            health.capabilities.source_backed_search_available,
         ),
     )?;
 
@@ -165,11 +165,11 @@ fn emit_one_shot_scan(
     source: &str,
     query: &str,
     ascii_insensitive: bool,
-    text: String,
+    text: &str,
     same_handle_verified: bool,
     source_backed: bool,
 ) -> Result<(), String> {
-    let result = scan_text(&text, query, ascii_insensitive)?;
+    let result = scan_text(text, query, ascii_insensitive)?;
     let content_digest = sha256::hex(&sha256::digest(text.as_bytes()));
     println!(
         concat!(
@@ -375,20 +375,7 @@ fn run() -> Result<(), String> {
         }
         "--health-data-root" => {
             require_argument_count(&arguments, 2)?;
-            let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-            let verification = store.verify()?;
-            println!(
-                concat!(
-                    "{{\"event\":\"health\",\"namespace_id\":\"{}\",",
-                    "\"registered_sources\":{},\"active_sources\":{},",
-                    "\"verified_revisions\":{},\"health\":{}}}"
-                ),
-                store.namespace_id(),
-                verification.registered_sources,
-                verification.active_sources,
-                verification.verified_revisions,
-                Health::DIRECT_STORE.json(),
-            );
+            cmd_health_data_root(&arguments)?;
         }
         "--self-test" => {
             require_argument_count(&arguments, 1)?;
@@ -410,219 +397,297 @@ fn run() -> Result<(), String> {
         }
         "--serve-data-root" => {
             require_argument_count(&arguments, 2)?;
-            let (guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-            store.verify()?;
-            println!(
-                "{{\"event\":\"data_root_ready\",\"namespace_id\":\"{}\",\"encrypted_at_rest\":false}}",
-                store.namespace_id(),
-            );
-            serve_stdio(Health::DIRECT_STORE)
-                .map_err(|error| format!("STDIO_ERROR:{error}"))?;
-            drop(store);
-            drop(guard);
+            cmd_serve_data_root(&arguments)?;
         }
         "--source-roots" | "--register-source-root" | "--unregister-source-root"
         | "--sync-source-roots" => crate::source_root_commands::run(&arguments)?,
         "--scan-stdin" | "--scan-stdin-ascii-insensitive" => {
             require_argument_count(&arguments, 2)?;
-            emit_one_shot_scan(
-                "stdin",
-                &arguments[1],
-                argument == "--scan-stdin-ascii-insensitive",
-                read_stdin_bounded()?,
-                false,
-                false,
-            )?;
+            cmd_scan_stdin(&arguments, argument)?;
         }
         "--scan-file" | "--scan-file-ascii-insensitive" => {
             require_argument_count(&arguments, 3)?;
-            emit_one_shot_scan(
-                "file",
-                &arguments[1],
-                argument == "--scan-file-ascii-insensitive",
-                read_file_bounded(Path::new(&arguments[2]))?,
-                true,
-                true,
-            )?;
+            cmd_scan_file(&arguments, argument)?;
         }
         "--index-file" => {
             require_argument_count(&arguments, 3)?;
-            let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
-            let indexed = store.index_file(Path::new(&arguments[2]))?;
-            emit_indexed_source(&indexed);
+            cmd_index_file(&arguments)?;
         }
         "--index-directory" => {
             require_argument_count(&arguments, 3)?;
-            let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
-            let indexed = store.index_directory(Path::new(&arguments[2]))?;
-            let changed = indexed.iter().filter(|source| source.changed).count();
-            for source in &indexed {
-                emit_indexed_source(source);
-            }
-            println!(
-                concat!(
-                    "{{\"event\":\"directory_index_complete\",",
-                    "\"namespace_id\":\"{}\",\"sources\":{},",
-                    "\"changed\":{},\"source_backed\":true,",
-                    "\"encrypted_at_rest\":false}}"
-                ),
-                store.namespace_id(),
-                indexed.len(),
-                changed,
-            );
+            cmd_index_directory(&arguments)?;
         }
         "--search-root" | "--search-root-ascii-insensitive" => {
             require_argument_count(&arguments, 3)?;
-            let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-            let result = store.search(
-                &arguments[2],
-                argument == "--search-root-ascii-insensitive",
-            )?;
-            emit_store_search(&store.namespace_id(), &result);
+            cmd_search_root(&arguments, argument)?;
         }
         "--list-sources" => {
             require_argument_count(&arguments, 2)?;
-            let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-            let sources = store.list_sources();
-            for source in &sources {
-                println!(
-                    concat!(
-                        "{{\"event\":\"source\",\"source_id\":\"{}\",",
-                        "\"revision_id\":\"{}\",\"content_digest\":\"{}\",",
-                        "\"path_digest\":\"{}\",\"byte_length\":{},",
-                        "\"identity_strength\":\"{}\",\"active\":{},",
-                        "\"sequence\":{}}}"
-                    ),
-                    source.source_id,
-                    source.revision_id,
-                    source.content_digest,
-                    source.path_digest,
-                    source.byte_length,
-                    source.identity_strength,
-                    source.active,
-                    source.sequence,
-                );
-            }
-            println!(
-                "{{\"event\":\"source_list_complete\",\"namespace_id\":\"{}\",\"sources\":{}}}",
-                store.namespace_id(),
-                sources.len(),
-            );
+            cmd_list_sources(&arguments)?;
         }
         "--verify-root" => {
             require_argument_count(&arguments, 2)?;
-            let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-            let verification = store.verify()?;
-            println!(
-                concat!(
-                    "{{\"event\":\"direct_store_verified\",",
-                    "\"namespace_id\":\"{}\",\"source_events\":{},",
-                    "\"registered_sources\":{},\"active_sources\":{},",
-                    "\"referenced_revisions\":{},\"verified_revisions\":{},",
-                    "\"total_revision_bytes\":{},\"source_backed\":true,",
-                    "\"encrypted_at_rest\":false}}"
-                ),
-                store.namespace_id(),
-                verification.source_events,
-                verification.registered_sources,
-                verification.active_sources,
-                verification.referenced_revisions,
-                verification.verified_revisions,
-                verification.total_revision_bytes,
-            );
+            cmd_verify_root(&arguments)?;
         }
         "--retire-source" => {
             require_argument_count(&arguments, 3)?;
-            let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
-            let source = store.retire_source(&arguments[2])?;
-            println!(
-                concat!(
-                    "{{\"event\":\"source_retired\",\"source_id\":\"{}\",",
-                    "\"revision_id\":\"{}\",\"sequence\":{},",
-                    "\"active\":false}}"
-                ),
-                source.source_id, source.revision_id, source.sequence,
-            );
+            cmd_retire_source(&arguments)?;
         }
         "--read-revision" => {
             require_argument_count(&arguments, 5)?;
-            let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-            let start = parse_u64(&arguments[3], "START_OFFSET")?;
-            let end = parse_u64(&arguments[4], "END_OFFSET")?;
-            let slice = store.read_revision_range(&arguments[2], start, end)?;
-            println!(
-                concat!(
-                    "{{\"event\":\"revision_slice\",",
-                    "\"revision_id\":\"{}\",\"content_digest\":\"{}\",",
-                    "\"byte_start\":{},\"byte_end\":{},",
-                    "\"encoding\":\"hex\",\"bytes\":\"{}\",",
-                    "\"source_backed\":true,\"encrypted_at_rest\":false}}"
-                ),
-                slice.revision_id,
-                slice.content_digest,
-                slice.byte_start,
-                slice.byte_end,
-                sha256::hex(&slice.bytes),
-            );
+            cmd_read_revision(&arguments)?;
         }
         "--repair-root" => {
             require_argument_count(&arguments, 2)?;
-            let guard = DataRootGuard::acquire(Path::new(&arguments[1]))?;
-            let repair = repair_control_log(guard.canonical_root())?;
-            let store = DirectStore::open(guard.canonical_root())?;
-            store.verify()?;
-            println!(
-                concat!(
-                    "{{\"event\":\"direct_store_repair_complete\",",
-                    "\"namespace_id\":\"{}\",\"repaired\":{},",
-                    "\"removed_bytes\":{},\"retained_events\":{},",
-                    "\"last_sequence\":{},\"last_digest\":\"{}\"}}"
-                ),
-                store.namespace_id(),
-                repair.repaired,
-                repair.removed_bytes,
-                repair.retained_events,
-                repair.last_sequence,
-                repair.last_digest,
-            );
+            cmd_repair_root(&arguments)?;
         }
         "--gc-root" => {
             require_argument_count(&arguments, 3)?;
-            let apply = match arguments[2].as_str() {
-                "--dry-run" => false,
-                "--apply" => true,
-                _ => return Err("USAGE_ERROR".to_owned()),
-            };
-            let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-            store.verify()?;
-            let result = collect_orphan_revisions(Path::new(&arguments[1]), apply)?;
-            println!(
-                concat!(
-                    "{{\"event\":\"direct_store_gc_complete\",",
-                    "\"namespace_id\":\"{}\",\"applied\":{},",
-                    "\"referenced_revisions\":{},\"scanned_objects\":{},",
-                    "\"orphan_objects\":{},\"orphan_bytes\":{},",
-                    "\"deleted_objects\":{},\"deleted_bytes\":{},",
-                    "\"unexpected_objects\":{}}}"
-                ),
-                store.namespace_id(),
-                result.applied,
-                result.referenced_revisions,
-                result.scanned_objects,
-                result.orphan_objects,
-                result.orphan_bytes,
-                result.deleted_objects,
-                result.deleted_bytes,
-                result.unexpected_objects,
-            );
+            cmd_gc_root(&arguments)?;
         }
         _ => return Err(format!("UNKNOWN_ARGUMENT:{argument}")),
     }
     Ok(())
 }
 
+fn cmd_serve_data_root(arguments: &[String]) -> Result<(), String> {
+    let (guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    store.verify()?;
+    println!(
+        "{{\"event\":\"data_root_ready\",\"namespace_id\":\"{}\",\"encrypted_at_rest\":false}}",
+        store.namespace_id(),
+    );
+    serve_stdio(Health::DIRECT_STORE)
+        .map_err(|error| format!("STDIO_ERROR:{error}"))?;
+    drop(store);
+    drop(guard);
+    Ok(())
+}
+
+fn cmd_scan_stdin(arguments: &[String], argument: &str) -> Result<(), String> {
+    let text = read_stdin_bounded()?;
+    emit_one_shot_scan(
+        "stdin",
+        &arguments[1],
+        argument == "--scan-stdin-ascii-insensitive",
+        &text,
+        false,
+        false,
+    )
+}
+
+fn cmd_scan_file(arguments: &[String], argument: &str) -> Result<(), String> {
+    let text = read_file_bounded(Path::new(&arguments[2]))?;
+    emit_one_shot_scan(
+        "file",
+        &arguments[1],
+        argument == "--scan-file-ascii-insensitive",
+        &text,
+        true,
+        true,
+    )
+}
+
+fn cmd_index_file(arguments: &[String]) -> Result<(), String> {
+    let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
+    let indexed = store.index_file(Path::new(&arguments[2]))?;
+    emit_indexed_source(&indexed);
+    Ok(())
+}
+
+fn cmd_retire_source(arguments: &[String]) -> Result<(), String> {
+    let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
+    let source = store.retire_source(&arguments[2])?;
+    println!(
+        concat!(
+            "{{\"event\":\"source_retired\",\"source_id\":\"{}\",",
+            "\"revision_id\":\"{}\",\"sequence\":{},",
+            "\"active\":false}}"
+        ),
+        source.source_id, source.revision_id, source.sequence,
+    );
+    Ok(())
+}
+
+fn cmd_health_data_root(arguments: &[String]) -> Result<(), String> {
+    let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    let verification = store.verify()?;
+    println!(
+        concat!(
+            "{{\"event\":\"health\",\"namespace_id\":\"{}\",",
+            "\"registered_sources\":{},\"active_sources\":{},",
+            "\"verified_revisions\":{},\"health\":{}}}"
+        ),
+        store.namespace_id(),
+        verification.registered_sources,
+        verification.active_sources,
+        verification.verified_revisions,
+        Health::DIRECT_STORE.json(),
+    );
+    Ok(())
+}
+
+fn cmd_index_directory(arguments: &[String]) -> Result<(), String> {
+    let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
+    let indexed = store.index_directory(Path::new(&arguments[2]))?;
+    let changed = indexed.iter().filter(|source| source.changed).count();
+    for source in &indexed {
+        emit_indexed_source(source);
+    }
+    println!(
+        concat!(
+            "{{\"event\":\"directory_index_complete\",",
+            "\"namespace_id\":\"{}\",\"sources\":{},",
+            "\"changed\":{},\"source_backed\":true,",
+            "\"encrypted_at_rest\":false}}"
+        ),
+        store.namespace_id(),
+        indexed.len(),
+        changed,
+    );
+    Ok(())
+}
+
+fn cmd_search_root(arguments: &[String], argument: &str) -> Result<(), String> {
+    let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    let result = store.search(
+        &arguments[2],
+        argument == "--search-root-ascii-insensitive",
+    )?;
+    emit_store_search(&store.namespace_id(), &result);
+    Ok(())
+}
+
+fn cmd_list_sources(arguments: &[String]) -> Result<(), String> {
+    let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    let sources = store.list_sources();
+    for source in &sources {
+        println!(
+            concat!(
+                "{{\"event\":\"source\",\"source_id\":\"{}\",",
+                "\"revision_id\":\"{}\",\"content_digest\":\"{}\",",
+                "\"path_digest\":\"{}\",\"byte_length\":{},",
+                "\"identity_strength\":\"{}\",\"active\":{},",
+                "\"sequence\":{}}}"
+            ),
+            source.source_id,
+            source.revision_id,
+            source.content_digest,
+            source.path_digest,
+            source.byte_length,
+            source.identity_strength,
+            source.active,
+            source.sequence,
+        );
+    }
+    println!(
+        "{{\"event\":\"source_list_complete\",\"namespace_id\":\"{}\",\"sources\":{}}}",
+        store.namespace_id(),
+        sources.len(),
+    );
+    Ok(())
+}
+
+fn cmd_verify_root(arguments: &[String]) -> Result<(), String> {
+    let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    let verification = store.verify()?;
+    println!(
+        concat!(
+            "{{\"event\":\"direct_store_verified\",",
+            "\"namespace_id\":\"{}\",\"source_events\":{},",
+            "\"registered_sources\":{},\"active_sources\":{},",
+            "\"referenced_revisions\":{},\"verified_revisions\":{},",
+            "\"total_revision_bytes\":{},\"source_backed\":true,",
+            "\"encrypted_at_rest\":false}}"
+        ),
+        store.namespace_id(),
+        verification.source_events,
+        verification.registered_sources,
+        verification.active_sources,
+        verification.referenced_revisions,
+        verification.verified_revisions,
+        verification.total_revision_bytes,
+    );
+    Ok(())
+}
+
+fn cmd_read_revision(arguments: &[String]) -> Result<(), String> {
+    let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    let start = parse_u64(&arguments[3], "START_OFFSET")?;
+    let end = parse_u64(&arguments[4], "END_OFFSET")?;
+    let slice = store.read_revision_range(&arguments[2], start, end)?;
+    println!(
+        concat!(
+            "{{\"event\":\"revision_slice\",",
+            "\"revision_id\":\"{}\",\"content_digest\":\"{}\",",
+            "\"byte_start\":{},\"byte_end\":{},",
+            "\"encoding\":\"hex\",\"bytes\":\"{}\",",
+            "\"source_backed\":true,\"encrypted_at_rest\":false}}"
+        ),
+        slice.revision_id,
+        slice.content_digest,
+        slice.byte_start,
+        slice.byte_end,
+        sha256::hex(&slice.bytes),
+    );
+    Ok(())
+}
+
+fn cmd_repair_root(arguments: &[String]) -> Result<(), String> {
+    let guard = DataRootGuard::acquire(Path::new(&arguments[1]))?;
+    let repair = repair_control_log(guard.canonical_root())?;
+    let store = DirectStore::open(guard.canonical_root())?;
+    store.verify()?;
+    println!(
+        concat!(
+            "{{\"event\":\"direct_store_repair_complete\",",
+            "\"namespace_id\":\"{}\",\"repaired\":{},",
+            "\"removed_bytes\":{},\"retained_events\":{},",
+            "\"last_sequence\":{},\"last_digest\":\"{}\"}}"
+        ),
+        store.namespace_id(),
+        repair.repaired,
+        repair.removed_bytes,
+        repair.retained_events,
+        repair.last_sequence,
+        repair.last_digest,
+    );
+    Ok(())
+}
+
+fn cmd_gc_root(arguments: &[String]) -> Result<(), String> {
+    let apply = match arguments[2].as_str() {
+        "--dry-run" => false,
+        "--apply" => true,
+        _ => return Err("USAGE_ERROR".to_owned()),
+    };
+    let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
+    store.verify()?;
+    let result = collect_orphan_revisions(Path::new(&arguments[1]), apply)?;
+    println!(
+        concat!(
+            "{{\"event\":\"direct_store_gc_complete\",",
+            "\"namespace_id\":\"{}\",\"applied\":{},",
+            "\"referenced_revisions\":{},\"scanned_objects\":{},",
+            "\"orphan_objects\":{},\"orphan_bytes\":{},",
+            "\"deleted_objects\":{},\"deleted_bytes\":{},",
+            "\"unexpected_objects\":{}}}"
+        ),
+        store.namespace_id(),
+        result.applied,
+        result.referenced_revisions,
+        result.scanned_objects,
+        result.orphan_objects,
+        result.orphan_bytes,
+        result.deleted_objects,
+        result.deleted_bytes,
+        result.unexpected_objects,
+    );
+    Ok(())
+}
+
 /// Runs the daemon command application and maps failures to process status.
-pub(crate) fn run_main() -> ExitCode {
+pub fn run_main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

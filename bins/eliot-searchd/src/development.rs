@@ -11,55 +11,79 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::source_roots::SourceRootCatalog;
 
-pub(crate) const MAX_SCAN_INPUT_BYTES: usize = 64 * 1024 * 1024;
-pub(crate) const MAX_SCAN_QUERY_BYTES: usize = 64 * 1024;
-pub(crate) const MAX_SCAN_MATCHES: usize = 100_000;
+pub const MAX_SCAN_INPUT_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_SCAN_QUERY_BYTES: usize = 64 * 1024;
+pub const MAX_SCAN_MATCHES: usize = 100_000;
 
-/// Truthful capability summary for one daemon composition state.
+/// Composition-prerequisite readiness for one daemon state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct Health {
+pub struct CompositionReadiness {
     pub(crate) configuration_ready: bool,
     pub(crate) runtime_owner_ready: bool,
     pub(crate) control_store_ready: bool,
+}
+
+/// Store and channel readiness for one daemon state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StoreReadiness {
     pub(crate) secret_store_ready: bool,
     pub(crate) endpoint_ready: bool,
     pub(crate) direct_store_ready: bool,
+}
+
+/// Capability availability for one daemon state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CapabilityAvailability {
     pub(crate) source_backed_search_available: bool,
     pub(crate) development_stdin_scan_available: bool,
     pub(crate) development_file_scan_available: bool,
 }
 
+/// Truthful capability summary for one daemon composition state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Health {
+    pub(crate) composition: CompositionReadiness,
+    pub(crate) stores: StoreReadiness,
+    pub(crate) capabilities: CapabilityAvailability,
+}
+
 impl Health {
     /// Process shell before a data root is opened.
     pub(crate) const SHELL: Self = Self {
-        configuration_ready: true,
-        runtime_owner_ready: false,
-        control_store_ready: false,
-        secret_store_ready: false,
-        endpoint_ready: true,
-        direct_store_ready: false,
-        source_backed_search_available: false,
-        development_stdin_scan_available: true,
-        development_file_scan_available: true,
-    };
-
-    /// Owner lock is held, but no persistent source store was admitted.
-    pub(crate) const OWNED_SHELL: Self = Self {
-        runtime_owner_ready: true,
-        ..Self::SHELL
+        composition: CompositionReadiness {
+            configuration_ready: true,
+            runtime_owner_ready: false,
+            control_store_ready: false,
+        },
+        stores: StoreReadiness {
+            secret_store_ready: false,
+            endpoint_ready: true,
+            direct_store_ready: false,
+        },
+        capabilities: CapabilityAvailability {
+            source_backed_search_available: false,
+            development_stdin_scan_available: true,
+            development_file_scan_available: true,
+        },
     };
 
     /// Owner-fenced persistent DIRECT source store is open and verified.
     pub(crate) const DIRECT_STORE: Self = Self {
-        configuration_ready: true,
-        runtime_owner_ready: true,
-        control_store_ready: true,
-        secret_store_ready: cfg!(windows),
-        endpoint_ready: true,
-        direct_store_ready: true,
-        source_backed_search_available: true,
-        development_stdin_scan_available: true,
-        development_file_scan_available: true,
+        composition: CompositionReadiness {
+            configuration_ready: true,
+            runtime_owner_ready: true,
+            control_store_ready: true,
+        },
+        stores: StoreReadiness {
+            secret_store_ready: cfg!(windows),
+            endpoint_ready: true,
+            direct_store_ready: true,
+        },
+        capabilities: CapabilityAvailability {
+            source_backed_search_available: true,
+            development_stdin_scan_available: true,
+            development_file_scan_available: true,
+        },
     };
 
     pub(crate) fn json(self) -> String {
@@ -76,21 +100,21 @@ impl Health {
                 "\"development_stdin_scan_available\":{},",
                 "\"development_file_scan_available\":{}}}"
             ),
-            self.configuration_ready,
-            self.runtime_owner_ready,
-            self.control_store_ready,
-            self.secret_store_ready,
-            self.endpoint_ready,
-            self.direct_store_ready,
-            self.source_backed_search_available,
-            self.development_stdin_scan_available,
-            self.development_file_scan_available,
+            self.composition.configuration_ready,
+            self.composition.runtime_owner_ready,
+            self.composition.control_store_ready,
+            self.stores.secret_store_ready,
+            self.stores.endpoint_ready,
+            self.stores.direct_store_ready,
+            self.capabilities.source_backed_search_available,
+            self.capabilities.development_stdin_scan_available,
+            self.capabilities.development_file_scan_available,
         )
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ScanMatch {
+pub struct ScanMatch {
     pub(crate) byte_start: usize,
     pub(crate) byte_end: usize,
     pub(crate) line: usize,
@@ -98,21 +122,21 @@ pub(crate) struct ScanMatch {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ScanCoverage {
+pub struct ScanCoverage {
     pub(crate) input_bytes: usize,
     pub(crate) complete: bool,
     pub(crate) match_limit_reached: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ScanResult {
+pub struct ScanResult {
     pub(crate) matches: Vec<ScanMatch>,
     pub(crate) coverage: ScanCoverage,
 }
 
 /// Uses the same bounded literal engine as retained DIRECT preparation.
 /// Only the historical one-shot LF/byte-coordinate projection belongs here.
-pub(crate) fn scan_text(
+pub fn scan_text(
     text: &str,
     query: &str,
     ascii_insensitive: bool,
@@ -159,7 +183,7 @@ pub(crate) fn scan_text(
 }
 
 /// Reads bounded UTF-8 from standard input.
-pub(crate) fn read_stdin_bounded() -> Result<String, String> {
+pub fn read_stdin_bounded() -> Result<String, String> {
     let mut bytes = Vec::new();
     io::stdin()
         .take(u64::try_from(MAX_SCAN_INPUT_BYTES + 1).unwrap_or(u64::MAX))
@@ -235,7 +259,7 @@ fn observe_file(file: &File) -> Result<FileObservation, String> {
 
 /// Reads one regular non-link file through the same open handle before and
 /// after identity verification.
-pub(crate) fn read_file_bounded(path: &Path) -> Result<String, String> {
+pub fn read_file_bounded(path: &Path) -> Result<String, String> {
     let link_metadata = fs::symlink_metadata(path)
         .map_err(|error| format!("SCAN_FILE_OPEN_ERROR:{error}"))?;
     if link_metadata.file_type().is_symlink() || is_reparse(&link_metadata) {
@@ -272,7 +296,7 @@ pub(crate) fn read_file_bounded(path: &Path) -> Result<String, String> {
 }
 
 /// Process-local exclusive owner guard and restored observation registration.
-pub(crate) struct DataRootGuard {
+pub struct DataRootGuard {
     file: File,
     canonical_root: PathBuf,
     source_roots: SourceRootCatalog,
@@ -313,6 +337,7 @@ impl DataRootGuard {
         }
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(&lock_path)
@@ -362,11 +387,11 @@ impl DataRootGuard {
         &self.canonical_root
     }
 
-    pub(crate) fn source_roots(&self) -> &SourceRootCatalog {
+    pub(crate) const fn source_roots(&self) -> &SourceRootCatalog {
         &self.source_roots
     }
 
-    pub(crate) fn source_roots_mut(&mut self) -> &mut SourceRootCatalog {
+    pub(crate) const fn source_roots_mut(&mut self) -> &mut SourceRootCatalog {
         &mut self.source_roots
     }
 }
@@ -421,6 +446,17 @@ mod owner_tests {
 mod scan_tests {
     use super::*;
 
+    /// Counts newline bytes with an explicit loop.
+    fn count_newlines(bytes: &[u8]) -> usize {
+        let mut count = 0_usize;
+        for byte in bytes {
+            if *byte == b'\n' {
+                count += 1;
+            }
+        }
+        count
+    }
+
     #[test]
     fn shared_matcher_preserves_legacy_coordinates_and_ascii_only_folding() {
         for text in ["", "aaaaa", "aAéAa", "ΑαA\0a", "\n\nx\r\nX", "a\rb", "𐀀a𐀀", "a\r\nβ\nz"] {
@@ -436,7 +472,7 @@ mod scan_tests {
                             let prefix = &text.as_bytes()[..start];
                             let line_start = prefix.iter().rposition(|byte| *byte == b'\n').map_or(0, |index| index + 1);
                             ScanMatch { byte_start: start, byte_end: start + query.len(),
-                                line: prefix.iter().filter(|byte| **byte == b'\n').count(), column_bytes: start - line_start }
+                                line: count_newlines(prefix), column_bytes: start - line_start }
                         }).collect::<Vec<_>>();
                     let actual = scan_text(text, query, insensitive).unwrap();
                     assert_eq!(actual.matches, expected, "text={text:?} query={query:?} insensitive={insensitive}");

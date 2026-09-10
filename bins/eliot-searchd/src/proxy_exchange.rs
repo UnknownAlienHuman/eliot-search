@@ -17,7 +17,7 @@ pub(super) struct ExchangeFence {
 }
 
 impl ExchangeFence {
-    pub(super) fn blocked(self) -> bool {
+    pub(super) const fn blocked(self) -> bool {
         self.blocked
     }
 

@@ -31,14 +31,14 @@ mod revision_writer;
 mod preparation_store;
 #[path = "control_migration_objects.rs"]
 mod migration_objects;
-pub(crate) use preparation_store::{PreparationBatch, PreparationCursor};
+pub use preparation_store::{PreparationBatch, PreparationCursor};
 
 use storage_io::{
     legacy_path, protected_path,
     read_plaintext_path, read_regular_file, remove_plaintext_after_readback,
 };
 
-pub(crate) use plaintext::{
+pub use plaintext::{
     IndexedSource, RevisionSlice, SourceSummary, StoreGap, StoreSearchResult,
     StoreVerification, StoredMatch,
 };
@@ -49,7 +49,7 @@ const MAX_SEARCH_GAPS: usize = 100_000;
 const MAX_READ_RANGE_BYTES: usize = 8 * 1024 * 1024;
 
 /// DIRECT catalog with a platform-specific prepublication revision writer.
-pub(crate) struct DirectStore {
+pub struct DirectStore {
     root: PathBuf,
     inner: plaintext::DirectStore,
     protector: RevisionProtector,
@@ -79,7 +79,7 @@ impl DirectStore {
             .ok_or_else(|| "DIRECT_NAMESPACE_INVALID".to_owned())?;
         let revision_root = canonical_root.join(REVISION_DIRECTORY);
         let protector = RevisionProtector::open(namespace_id, &revision_root)?;
-        let mut store = Self {
+        let store = Self {
             root: canonical_root,
             inner,
             protector,
@@ -122,7 +122,7 @@ impl DirectStore {
 
     /// Explicitly prepares a retained revision without rereading a current path.
     /// Missing objects may be reconstructed; conflicting immutable objects fail.
-    pub(crate) fn prepare_revision(&mut self, revision_id: &str) -> Result<Option<&'static str>, String> {
+    pub(crate) fn prepare_revision(&self, revision_id: &str) -> Result<Option<&'static str>, String> {
         crate::catalog_presence::require_existing(&self.root)?;
         self.inner.verify_control()?;
         let metadata = self.inner.retained_revision(revision_id)
@@ -191,21 +191,18 @@ impl DirectStore {
                     continue;
                 }
             };
-            let text = match String::from_utf8(bytes) {
-                Ok(text) => text,
-                Err(_) => {
-                    if gaps.len() >= MAX_SEARCH_GAPS {
-                        complete = false;
-                        break;
-                    }
-                    gaps.push(StoreGap {
-                        source_id: source.source_id.clone(),
-                        revision_id: source.revision_id.clone(),
-                        reason: "DIRECT_REVISION_NOT_UTF8",
-                    });
+            let Ok(text) = String::from_utf8(bytes) else {
+                if gaps.len() >= MAX_SEARCH_GAPS {
                     complete = false;
-                    continue;
+                    break;
                 }
+                gaps.push(StoreGap {
+                    source_id: source.source_id.clone(),
+                    revision_id: source.revision_id.clone(),
+                    reason: "DIRECT_REVISION_NOT_UTF8",
+                });
+                complete = false;
+                continue;
             };
             let ScanResult {
                 matches: source_matches,
@@ -333,15 +330,15 @@ impl DirectStore {
         let end = usize::try_from(byte_end)
             .map_err(|_| "DIRECT_REVISION_RANGE_INVALID".to_owned())?;
         Ok(RevisionSlice {
-            revision_id: metadata.revision_id.clone(),
-            content_digest: metadata.content_digest.clone(),
+            revision_id: metadata.revision_id,
+            content_digest: metadata.content_digest,
             byte_start,
             byte_end,
             bytes: bytes[start..end].to_vec(),
         })
     }
 
-    fn migrate_referenced_plaintext(&mut self) -> Result<(), String> {
+    fn migrate_referenced_plaintext(&self) -> Result<(), String> {
         for metadata in self.inner.retained_revisions() {
             self.seal_revision(&metadata)?;
         }

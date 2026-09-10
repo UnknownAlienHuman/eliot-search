@@ -7,7 +7,7 @@
 use crate::direct_store::DirectStore;
 use crate::sha256;
 
-pub(crate) fn digest(store: &DirectStore) -> String {
+pub fn digest(store: &DirectStore) -> String {
     let namespace = store.namespace_id();
     let sources = store.list_sources();
     let mut encoded = Vec::new();

@@ -20,7 +20,7 @@ const MAX_REVISION_OBJECTS: usize = 2_000_000;
 
 /// Exact current at-rest layout classification.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct StorageSecurityStatus {
+pub struct StorageSecurityStatus {
     pub(crate) backend: &'static str,
     pub(crate) protects_new_objects: bool,
     pub(crate) referenced_revisions: usize,

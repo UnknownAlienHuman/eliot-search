@@ -21,7 +21,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::sha256;
 
-pub(crate) const PROTECTED_OBJECT_EXTENSION: &str = "dpapi";
+pub const PROTECTED_OBJECT_EXTENSION: &str = "dpapi";
 const OUTER_MAGIC: [u8; 8] = *b"ELSRV2\0\0";
 #[cfg(any(windows, test))]
 const INNER_MAGIC: [u8; 8] = *b"ELSIN2\0\0";
@@ -33,7 +33,7 @@ const OUTER_HEADER_BYTES: usize = 8 + 4 + 32 + 32 + 32 + 32 + 8 + 8;
 const INNER_HEADER_BYTES: usize = 8 + 4 + 32 + 32 + 32 + 32 + 8;
 
 /// Per-namespace revision protection capability.
-pub(crate) struct RevisionProtector {
+pub struct RevisionProtector {
     namespace_id: [u8; 32],
     #[cfg(windows)]
     key_binding_digest: [u8; 32],
@@ -43,11 +43,18 @@ pub(crate) struct RevisionProtector {
 
 impl fmt::Debug for RevisionProtector {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("RevisionProtector")
+        let mut debug = formatter.debug_struct("RevisionProtector");
+        debug
             .field("namespace_id", &sha256::hex(&self.namespace_id))
             .field("backend", &self.backend_name())
-            .field("secret", &"<redacted>")
-            .finish()
+            .field("secret", &"<redacted>");
+        #[cfg(windows)]
+        {
+            debug
+                .field("key_binding_digest", &"<redacted>")
+                .field("entropy", &"<redacted>");
+        }
+        debug.finish()
     }
 }
 

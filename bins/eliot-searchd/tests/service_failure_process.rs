@@ -1,6 +1,7 @@
 //! Regression tests through the actual primary service, on disposable roots.
 
 use std::fs;
+use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
@@ -127,7 +128,10 @@ fn path_hex(path: &Path) -> String {
     hex(path.to_str().unwrap().as_bytes())
 }
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut output, byte| {
+        let _ = write!(output, "{byte:02x}");
+        output
+    })
 }
 
 #[test]

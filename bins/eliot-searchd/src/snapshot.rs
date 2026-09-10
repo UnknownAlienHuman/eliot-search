@@ -6,12 +6,12 @@
 //! those retained revision objects. The current fingerprint is collision-checked
 //! but is not advertised as a cryptographic digest.
 
-use std::collections::BTreeSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::fmt::Write as _;
 
 const FINGERPRINT_ALGORITHM: &str = "eliot-fnv4-v1";
 const MAX_MANIFEST_BYTES: usize = 64 * 1024 * 1024;
@@ -20,22 +20,22 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 /// Finite capture and query limits.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct SnapshotLimits {
-    pub(crate) max_files: usize,
-    pub(crate) max_file_bytes: u64,
-    pub(crate) max_total_bytes: u64,
-    pub(crate) max_results: usize,
-    pub(crate) max_excerpt_chars: usize,
+pub struct SnapshotLimits {
+    pub(crate) files: usize,
+    pub(crate) file_bytes: u64,
+    pub(crate) total_bytes: u64,
+    pub(crate) results: usize,
+    pub(crate) excerpt_chars: usize,
 }
 
 impl SnapshotLimits {
     pub(crate) fn validate(self) -> io::Result<Self> {
-        if self.max_files == 0
-            || self.max_file_bytes == 0
-            || self.max_total_bytes == 0
-            || self.max_results == 0
-            || self.max_excerpt_chars == 0
-            || self.max_file_bytes > self.max_total_bytes
+        if self.files == 0
+            || self.file_bytes == 0
+            || self.total_bytes == 0
+            || self.results == 0
+            || self.excerpt_chars == 0
+            || self.file_bytes > self.total_bytes
         {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
@@ -48,7 +48,7 @@ impl SnapshotLimits {
 
 /// Content-free capture accounting.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct SnapshotStats {
+pub struct SnapshotStats {
     pub(crate) indexed_files: usize,
     pub(crate) total_bytes: u64,
     pub(crate) written_revisions: usize,
@@ -73,13 +73,19 @@ struct SnapshotEntry {
 
 /// Frozen retained-revision snapshot used by the daemon hot path.
 #[derive(Clone, Debug)]
-pub(crate) struct SnapshotIndex {
+pub struct SnapshotIndex {
     snapshot_id: String,
     manifest_fingerprint: [u8; 32],
     manifest_path: PathBuf,
     entries: Vec<SnapshotEntry>,
     stats: SnapshotStats,
     limits: SnapshotLimits,
+}
+
+/// Mutable entry batch shared by one snapshot-capture walk.
+struct CaptureBatch<'a> {
+    entries: &'a mut Vec<SnapshotEntry>,
+    stats: &'a mut SnapshotStats,
 }
 
 impl SnapshotIndex {
@@ -107,7 +113,7 @@ impl SnapshotIndex {
             .collect::<Vec<_>>();
 
         while let Some((root_index, path)) = stack.pop() {
-            if entries.len() >= limits.max_files || stats.total_bytes >= limits.max_total_bytes {
+            if entries.len() >= limits.files || stats.total_bytes >= limits.total_bytes {
                 stats.truncated = true;
                 break;
             }
@@ -116,12 +122,9 @@ impl SnapshotIndex {
                 continue;
             }
 
-            let metadata = match fs::symlink_metadata(&path) {
-                Ok(metadata) => metadata,
-                Err(_) => {
-                    stats.unreadable_files = stats.unreadable_files.saturating_add(1);
-                    continue;
-                }
+            let Ok(metadata) = fs::symlink_metadata(&path) else {
+                stats.unreadable_files = stats.unreadable_files.saturating_add(1);
+                continue;
             };
             if is_link_or_reparse(&metadata) {
                 stats.skipped_links = stats.skipped_links.saturating_add(1);
@@ -132,16 +135,14 @@ impl SnapshotIndex {
                     stats.skipped_policy = stats.skipped_policy.saturating_add(1);
                     continue;
                 }
-                let mut children = match fs::read_dir(&path) {
-                    Ok(children) => children
-                        .filter_map(Result::ok)
-                        .map(|entry| entry.path())
-                        .collect::<Vec<_>>(),
-                    Err(_) => {
-                        stats.unreadable_files = stats.unreadable_files.saturating_add(1);
-                        continue;
-                    }
+                let Ok(children) = fs::read_dir(&path) else {
+                    stats.unreadable_files = stats.unreadable_files.saturating_add(1);
+                    continue;
                 };
+                let mut children = children
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .collect::<Vec<_>>();
                 children.sort();
                 for child in children.into_iter().rev() {
                     stack.push((root_index, child));
@@ -152,74 +153,153 @@ impl SnapshotIndex {
                 stats.skipped_policy = stats.skipped_policy.saturating_add(1);
                 continue;
             }
-            if policy_denies_file(&path) {
+            if policy_denies_file(&path) || metadata.len() > limits.file_bytes {
                 stats.skipped_policy = stats.skipped_policy.saturating_add(1);
                 continue;
             }
-            if metadata.len() > limits.max_file_bytes {
-                stats.skipped_policy = stats.skipped_policy.saturating_add(1);
-                continue;
-            }
-
-            let root = &source_roots[root_index];
-            let read = match stable_read(root, &data_root, &path, limits.max_file_bytes) {
-                Ok(read) => read,
-                Err(StableReadFailure::LinkOrEscape) => {
-                    stats.skipped_links = stats.skipped_links.saturating_add(1);
-                    continue;
-                }
-                Err(StableReadFailure::Binary) => {
-                    stats.skipped_binary = stats.skipped_binary.saturating_add(1);
-                    continue;
-                }
-                Err(StableReadFailure::Unstable) => {
-                    stats.unstable_files = stats.unstable_files.saturating_add(1);
-                    continue;
-                }
-                Err(StableReadFailure::Unreadable) => {
-                    stats.unreadable_files = stats.unreadable_files.saturating_add(1);
-                    continue;
-                }
-            };
-            let next_total = stats
-                .total_bytes
-                .checked_add(u64::try_from(read.bytes.len()).map_err(|_| {
-                    io::Error::new(ErrorKind::InvalidData, "snapshot byte accounting overflow")
-                })?)
-                .ok_or_else(|| {
-                    io::Error::new(ErrorKind::InvalidData, "snapshot byte accounting overflow")
-                })?;
-            if next_total > limits.max_total_bytes {
-                stats.truncated = true;
+            if !Self::capture_one_file(
+                root_index,
+                &source_roots[root_index],
+                &path,
+                &data_root,
+                &revisions_root,
+                &limits,
+                &mut CaptureBatch {
+                    entries: &mut entries,
+                    stats: &mut stats,
+                },
+            )? {
                 break;
             }
-
-            let revision_fingerprint = fingerprint(&read.bytes);
-            let (revision_path, reused) = store_revision(
-                &revisions_root,
-                revision_fingerprint,
-                &read.bytes,
-                limits.max_file_bytes,
-            )?;
-            if reused {
-                stats.reused_revisions = stats.reused_revisions.saturating_add(1);
-            } else {
-                stats.written_revisions = stats.written_revisions.saturating_add(1);
-            }
-            stats.total_bytes = next_total;
-            stats.indexed_files = stats.indexed_files.saturating_add(1);
-            entries.push(SnapshotEntry {
-                root_index,
-                relative_path: read.relative_path,
-                revision_fingerprint,
-                revision_path,
-                byte_length: u64::try_from(read.bytes.len()).map_err(|_| {
-                    io::Error::new(ErrorKind::InvalidData, "revision length overflow")
-                })?,
-                line_count: count_lines(&read.bytes),
-            });
         }
 
+        let (snapshot_id, manifest_fingerprint, manifest_path) =
+            Self::publish_manifest(source_roots.len(), &mut entries, &stats, &manifests_root)?;
+
+        Ok(Self {
+            snapshot_id,
+            manifest_fingerprint,
+            manifest_path,
+            entries,
+            stats,
+            limits,
+        })
+    }
+
+    /// Captures one regular file into the entry batch. Returns `Ok(false)`
+    /// when the batch budget is exhausted and the walk must stop.
+    fn capture_one_file(
+        root_index: usize,
+        root: &Path,
+        path: &Path,
+        data_root: &Path,
+        revisions_root: &Path,
+        limits: &SnapshotLimits,
+        batch: &mut CaptureBatch<'_>,
+    ) -> io::Result<bool> {
+        let Some(read) =
+            Self::read_candidate_file(root, data_root, path, limits.file_bytes, batch.stats)
+        else {
+            return Ok(true);
+        };
+        Self::store_candidate(
+            root_index,
+            read,
+            revisions_root,
+            limits,
+            batch,
+        )
+    }
+
+    /// Reads one candidate file, counting skipped files instead of failing.
+    /// Returns `None` when the file was skipped.
+    fn read_candidate_file(
+        root: &Path,
+        data_root: &Path,
+        path: &Path,
+        file_bytes: u64,
+        stats: &mut SnapshotStats,
+    ) -> Option<StableRead> {
+        match stable_read(root, data_root, path, file_bytes) {
+            Ok(read) => Some(read),
+            Err(StableReadFailure::LinkOrEscape) => {
+                stats.skipped_links = stats.skipped_links.saturating_add(1);
+                None
+            }
+            Err(StableReadFailure::Binary) => {
+                stats.skipped_binary = stats.skipped_binary.saturating_add(1);
+                None
+            }
+            Err(StableReadFailure::Unstable) => {
+                stats.unstable_files = stats.unstable_files.saturating_add(1);
+                None
+            }
+            Err(StableReadFailure::Unreadable) => {
+                stats.unreadable_files = stats.unreadable_files.saturating_add(1);
+                None
+            }
+        }
+    }
+
+    /// Stores one verified read into the entry batch. Returns `Ok(false)`
+    /// when the batch budget is exhausted and the walk must stop.
+    fn store_candidate(
+        root_index: usize,
+        read: StableRead,
+        revisions_root: &Path,
+        limits: &SnapshotLimits,
+        batch: &mut CaptureBatch<'_>,
+    ) -> io::Result<bool> {
+        let stats = &mut *batch.stats;
+        let entries = &mut *batch.entries;
+        let next_total = stats
+            .total_bytes
+            .checked_add(u64::try_from(read.bytes.len()).map_err(|_| {
+                io::Error::new(ErrorKind::InvalidData, "snapshot byte accounting overflow")
+            })?)
+            .ok_or_else(|| {
+                io::Error::new(ErrorKind::InvalidData, "snapshot byte accounting overflow")
+            })?;
+        if next_total > limits.total_bytes {
+            stats.truncated = true;
+            return Ok(false);
+        }
+
+        let revision_fingerprint = fingerprint(&read.bytes);
+        let (revision_path, reused) = store_revision(
+            revisions_root,
+            revision_fingerprint,
+            &read.bytes,
+            limits.file_bytes,
+        )?;
+        if reused {
+            stats.reused_revisions = stats.reused_revisions.saturating_add(1);
+        } else {
+            stats.written_revisions = stats.written_revisions.saturating_add(1);
+        }
+        stats.total_bytes = next_total;
+        stats.indexed_files = stats.indexed_files.saturating_add(1);
+        entries.push(SnapshotEntry {
+            root_index,
+            relative_path: read.relative_path,
+            revision_fingerprint,
+            revision_path,
+            byte_length: u64::try_from(read.bytes.len()).map_err(|_| {
+                io::Error::new(ErrorKind::InvalidData, "revision length overflow")
+            })?,
+            line_count: count_lines(&read.bytes),
+        });
+        Ok(true)
+    }
+
+    /// Sorts captured entries, renders the frozen manifest, and publishes it
+    /// with exact readback verification.
+    fn publish_manifest(
+        source_root_count: usize,
+        entries: &mut [SnapshotEntry],
+        stats: &SnapshotStats,
+        manifests_root: &Path,
+    ) -> io::Result<(String, [u8; 32], PathBuf)> {
         entries.sort_by(|left, right| {
             left.root_index
                 .cmp(&right.root_index)
@@ -227,7 +307,7 @@ impl SnapshotIndex {
                 .then_with(|| left.revision_fingerprint.cmp(&right.revision_fingerprint))
         });
         let snapshot_id = new_snapshot_id()?;
-        let manifest = render_manifest(&snapshot_id, source_roots.len(), &entries, &stats)?;
+        let manifest = render_manifest(&snapshot_id, source_root_count, entries, stats)?;
         if manifest.len() > MAX_MANIFEST_BYTES {
             return Err(io::Error::new(
                 ErrorKind::InvalidData,
@@ -241,19 +321,10 @@ impl SnapshotIndex {
             &manifest,
             u64::try_from(MAX_MANIFEST_BYTES).unwrap_or(u64::MAX),
         )?;
-
-        Ok(Self {
-            snapshot_id,
-            manifest_fingerprint,
-            manifest_path,
-            entries,
-            stats,
-            limits,
-        })
+        Ok((snapshot_id, manifest_fingerprint, manifest_path))
     }
 
-    pub(crate) fn snapshot_id(&self) -> &str {
-        &self.snapshot_id
+    pub(crate) fn snapshot_id(&self) -> &str {        &self.snapshot_id
     }
 
     pub(crate) const fn manifest_fingerprint(&self) -> [u8; 32] {
@@ -268,7 +339,7 @@ impl SnapshotIndex {
         &self.stats
     }
 
-    pub(crate) const fn fingerprint_algorithm(&self) -> &'static str {
+    pub(crate) const fn fingerprint_algorithm() -> &'static str {
         FINGERPRINT_ALGORITHM
     }
 
@@ -286,21 +357,18 @@ impl SnapshotIndex {
         let mut truncated = false;
 
         for entry in &self.entries {
-            if matches.len() >= self.limits.max_results {
+            if matches.len() >= self.limits.results {
                 truncated = true;
                 break;
             }
-            let bytes = match read_verified_revision(
+            let Ok(bytes) = read_verified_revision(
                 &entry.revision_path,
                 entry.revision_fingerprint,
                 entry.byte_length,
-                self.limits.max_file_bytes,
-            ) {
-                Ok(bytes) => bytes,
-                Err(_) => {
-                    unavailable_revisions = unavailable_revisions.saturating_add(1);
-                    continue;
-                }
+                self.limits.file_bytes,
+            ) else {
+                unavailable_revisions = unavailable_revisions.saturating_add(1);
+                continue;
             };
             scanned_revisions = scanned_revisions.saturating_add(1);
             let text = String::from_utf8(bytes).map_err(|_| {
@@ -325,9 +393,9 @@ impl SnapshotIndex {
                     column_bytes: column,
                     byte_start,
                     byte_end,
-                    excerpt: truncate_chars(line.text.trim(), self.limits.max_excerpt_chars),
+                    excerpt: truncate_chars(line.text.trim(), self.limits.excerpt_chars),
                 });
-                if matches.len() >= self.limits.max_results {
+                if matches.len() >= self.limits.results {
                     truncated = true;
                     break;
                 }
@@ -350,7 +418,7 @@ impl SnapshotIndex {
 
 /// One source-backed result from an exact retained revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SnapshotMatch {
+pub struct SnapshotMatch {
     pub(crate) root_index: usize,
     pub(crate) relative_path: String,
     pub(crate) revision_fingerprint: [u8; 32],
@@ -363,7 +431,7 @@ pub(crate) struct SnapshotMatch {
 
 /// Search result with explicit frozen denominator and gaps.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SnapshotSearchResult {
+pub struct SnapshotSearchResult {
     pub(crate) snapshot_id: String,
     pub(crate) manifest_fingerprint: [u8; 32],
     pub(crate) fingerprint_algorithm: &'static str,
@@ -493,7 +561,7 @@ fn store_revision(
     }
     match fs::rename(&temporary, &final_path) {
         Ok(()) => {}
-        Err(error) if final_path.exists() => {
+        Err(_) if final_path.exists() => {
             let _ = fs::remove_file(&temporary);
             verify_exact_file(&final_path, bytes, revision_fingerprint, max_bytes)?;
             return Ok((final_path, true));
@@ -503,7 +571,10 @@ fn store_revision(
             return Err(error);
         }
     }
+    #[cfg(unix)]
     sync_directory(&directory)?;
+    #[cfg(not(unix))]
+    sync_directory(&directory);
     verify_exact_file(&final_path, bytes, revision_fingerprint, max_bytes)?;
     Ok((final_path, false))
 }
@@ -574,7 +645,10 @@ fn write_unique_verified(path: &Path, bytes: &[u8], max_bytes: u64) -> io::Resul
     let parent = path.parent().ok_or_else(|| {
         io::Error::new(ErrorKind::InvalidInput, "manifest has no parent directory")
     })?;
+    #[cfg(unix)]
     sync_directory(parent)?;
+    #[cfg(not(unix))]
+    sync_directory(parent);
     let readback = read_bounded_file(path, max_bytes)?;
     if readback != bytes {
         return Err(io::Error::new(
@@ -593,28 +667,26 @@ fn render_manifest(
 ) -> io::Result<Vec<u8>> {
     let mut output = String::new();
     output.push_str("ELIOT_SEARCH_SNAPSHOT_V1\n");
-    output.push_str(&format!("snapshot_id={snapshot_id}\n"));
-    output.push_str(&format!("fingerprint_algorithm={FINGERPRINT_ALGORITHM}\n"));
-    output.push_str(&format!("source_roots={root_count}\n"));
-    output.push_str(&format!("entries={}\n", entries.len()));
-    output.push_str(&format!("total_bytes={}\n", stats.total_bytes));
-    output.push_str(&format!("capture_truncated={}\n", stats.truncated));
-    output.push_str(&format!("skipped_links={}\n", stats.skipped_links));
-    output.push_str(&format!("skipped_policy={}\n", stats.skipped_policy));
-    output.push_str(&format!("skipped_binary={}\n", stats.skipped_binary));
-    output.push_str(&format!("unreadable_files={}\n", stats.unreadable_files));
-    output.push_str(&format!("unstable_files={}\n", stats.unstable_files));
+    let _ = writeln!(output, "snapshot_id={snapshot_id}");
+    let _ = writeln!(output, "fingerprint_algorithm={FINGERPRINT_ALGORITHM}");
+    let _ = writeln!(output, "source_roots={root_count}");
+    let _ = writeln!(output, "entries={}", entries.len());
+    let _ = writeln!(output, "total_bytes={}", stats.total_bytes);
+    let _ = writeln!(output, "capture_truncated={}", stats.truncated);
+    let _ = writeln!(output, "skipped_links={}", stats.skipped_links);
+    let _ = writeln!(output, "skipped_policy={}", stats.skipped_policy);
+    let _ = writeln!(output, "skipped_binary={}", stats.skipped_binary);
+    let _ = writeln!(output, "unreadable_files={}", stats.unreadable_files);
+    let _ = writeln!(output, "unstable_files={}", stats.unstable_files);
     output.push_str("--\n");
     for entry in entries {
         let path_hex = hex_bytes(entry.relative_path.as_bytes());
-        output.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\n",
+        let _ = writeln!(output, "{}\t{}\t{}\t{}\t{}",
             entry.root_index,
             path_hex,
             hex32(entry.revision_fingerprint),
             entry.byte_length,
-            entry.line_count,
-        ));
+            entry.line_count);
         if output.len() > MAX_MANIFEST_BYTES {
             return Err(io::Error::new(
                 ErrorKind::InvalidData,
@@ -629,11 +701,13 @@ fn count_lines(bytes: &[u8]) -> usize {
     if bytes.is_empty() {
         0
     } else {
-        bytes
-            .iter()
-            .filter(|byte| **byte == b'\n')
-            .count()
-            .saturating_add(1)
+        let mut lines = 0_usize;
+        for byte in bytes {
+            if *byte == b'\n' {
+                lines += 1;
+            }
+        }
+        lines.saturating_add(1)
     }
 }
 
@@ -789,7 +863,7 @@ fn is_link_or_reparse(metadata: &fs::Metadata) -> bool {
     {
         use std::os::windows::fs::MetadataExt;
         const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
     }
     #[cfg(not(windows))]
     {
@@ -816,7 +890,7 @@ fn new_snapshot_id() -> io::Result<String> {
 }
 
 /// Deterministic 256-bit development fingerprint with independent lanes.
-pub(crate) fn fingerprint(bytes: &[u8]) -> [u8; 32] {
+pub fn fingerprint(bytes: &[u8]) -> [u8; 32] {
     let mut lanes = [
         0xcbf2_9ce4_8422_2325_u64,
         0x8422_2325_cbf2_9ce4,
@@ -848,7 +922,7 @@ pub(crate) fn fingerprint(bytes: &[u8]) -> [u8; 32] {
     output
 }
 
-fn avalanche(mut value: u64) -> u64 {
+const fn avalanche(mut value: u64) -> u64 {
     value ^= value >> 33;
     value = value.wrapping_mul(0xff51_afd7_ed55_8ccd);
     value ^= value >> 33;
@@ -856,7 +930,7 @@ fn avalanche(mut value: u64) -> u64 {
     value ^ (value >> 33)
 }
 
-pub(crate) fn hex32(bytes: [u8; 32]) -> String {
+pub fn hex32(bytes: [u8; 32]) -> String {
     hex_bytes(&bytes)
 }
 
@@ -876,9 +950,7 @@ fn sync_directory(path: &Path) -> io::Result<()> {
 }
 
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> io::Result<()> {
-    Ok(())
-}
+const fn sync_directory(_path: &Path) {}
 
 #[allow(dead_code)]
 fn path_has_parent_escape(path: &Path) -> bool {

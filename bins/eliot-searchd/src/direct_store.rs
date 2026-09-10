@@ -12,7 +12,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::development::{MAX_SCAN_INPUT_BYTES, ScanResult, scan_text};
+use crate::development::MAX_SCAN_INPUT_BYTES;
 use crate::sha256;
 
 #[path = "direct_store_ingest.rs"]
@@ -20,7 +20,7 @@ mod ingest;
 #[path = "direct_store_catalog.rs"]
 mod catalog;
 use catalog::{load_registry, read_namespace};
-pub(crate) use catalog::{RevisionMetadata, verify_revision_identity};
+pub use catalog::{RevisionMetadata, verify_revision_identity};
 
 const CONTROL_DIRECTORY: &str = "control";
 const REVISION_DIRECTORY: &str = "revisions";
@@ -33,8 +33,6 @@ const MAX_LOG_LINE_BYTES: usize = 256 * 1024;
 const MAX_SOURCE_EVENTS: usize = 2_000_000;
 const MAX_DIRECTORY_FILES: usize = 100_000;
 const MAX_DIRECTORY_DEPTH: usize = 128;
-const MAX_SEARCH_GAPS: usize = 100_000;
-const MAX_READ_RANGE_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SourceState {
@@ -43,7 +41,7 @@ enum SourceState {
 }
 
 impl SourceState {
-    fn tag(self) -> &'static str {
+    const fn tag(self) -> &'static str {
         match self {
             Self::Active => "A",
             Self::Retired => "R",
@@ -66,7 +64,7 @@ enum IdentityStrength {
 }
 
 impl IdentityStrength {
-    fn tag(self) -> &'static str {
+    const fn tag(self) -> &'static str {
         match self {
             Self::Native => "native",
             Self::PathBound => "path-bound",
@@ -147,7 +145,7 @@ struct RegistryState {
 
 /// Result of indexing one exact final-handle file snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct IndexedSource {
+pub struct IndexedSource {
     pub(crate) source_id: String,
     pub(crate) revision_id: String,
     pub(crate) content_digest: String,
@@ -159,7 +157,7 @@ pub(crate) struct IndexedSource {
 
 /// Exact source summary without persisted path text.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SourceSummary {
+pub struct SourceSummary {
     pub(crate) source_id: String,
     pub(crate) revision_id: String,
     pub(crate) content_digest: String,
@@ -172,7 +170,7 @@ pub(crate) struct SourceSummary {
 
 /// One source-backed exact match over an immutable verified revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct StoredMatch {
+pub struct StoredMatch {
     pub(crate) source_id: String,
     pub(crate) revision_id: String,
     pub(crate) content_digest: String,
@@ -186,7 +184,7 @@ pub(crate) struct StoredMatch {
 
 /// Explicit source-level gap during corpus search or verification.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct StoreGap {
+pub struct StoreGap {
     pub(crate) source_id: String,
     pub(crate) revision_id: String,
     pub(crate) reason: &'static str,
@@ -194,7 +192,7 @@ pub(crate) struct StoreGap {
 
 /// Truthful corpus-search result.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct StoreSearchResult {
+pub struct StoreSearchResult {
     pub(crate) matches: Vec<StoredMatch>,
     pub(crate) gaps: Vec<StoreGap>,
     pub(crate) registered_sources: usize,
@@ -206,7 +204,7 @@ pub(crate) struct StoreSearchResult {
 
 /// Exact readback-verification result over every referenced immutable revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct StoreVerification {
+pub struct StoreVerification {
     pub(crate) source_events: usize,
     pub(crate) registered_sources: usize,
     pub(crate) active_sources: usize,
@@ -217,7 +215,7 @@ pub(crate) struct StoreVerification {
 
 /// Exact bounded revision slice.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RevisionSlice {
+pub struct RevisionSlice {
     pub(crate) revision_id: String,
     pub(crate) content_digest: String,
     pub(crate) byte_start: u64,
@@ -227,7 +225,6 @@ pub(crate) struct RevisionSlice {
 
 #[derive(Clone, Debug)]
 struct FileSnapshot {
-    canonical_path: PathBuf,
     path_digest: String,
     file_identity_digest: String,
     identity_strength: IdentityStrength,
@@ -237,7 +234,7 @@ struct FileSnapshot {
 
 /// Development retained-revision corpus under one already locked data root.
 #[derive(Clone, Debug)]
-pub(crate) struct DirectStore {
+pub struct DirectStore {
     root: PathBuf,
     namespace_id: [u8; 32],
     registry: RegistryState,
@@ -270,18 +267,9 @@ impl DirectStore {
     }
 
     /// Indexes one exact same-handle snapshot using the development writer.
+    #[cfg(test)]
     pub(crate) fn index_file(&mut self, path: &Path) -> Result<IndexedSource, String> {
         self.index_file_with_writer(path, &mut |store, source, bytes| {
-            store.persist_revision(&source.revision_id, &source.content_digest, bytes)
-        })
-    }
-
-    /// Indexes a bounded directory batch using the development writer.
-    pub(crate) fn index_directory(
-        &mut self,
-        directory: &Path,
-    ) -> Result<Vec<IndexedSource>, String> {
-        self.index_directory_with_writer(directory, &mut |store, source, bytes| {
             store.persist_revision(&source.revision_id, &source.content_digest, bytes)
         })
     }
@@ -328,124 +316,8 @@ impl DirectStore {
         self.registry.latest.values().map(summary).collect()
     }
 
-    /// Searches every active immutable revision with exact readback verification.
-    pub(crate) fn search(
-        &self,
-        query: &str,
-        ascii_insensitive: bool,
-    ) -> Result<StoreSearchResult, String> {
-        if query.is_empty() {
-            return Err("DIRECT_QUERY_EMPTY".to_owned());
-        }
-        let active = self
-            .registry
-            .latest
-            .values()
-            .filter(|record| record.state == SourceState::Active)
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut matches = Vec::new();
-        let mut gaps = Vec::new();
-        let mut searched_sources = 0_usize;
-        let mut complete = true;
-        let mut match_limit_reached = false;
-
-        for record in &active {
-            if matches.len() >= crate::development::MAX_SCAN_MATCHES {
-                complete = false;
-                match_limit_reached = true;
-                break;
-            }
-            let bytes = match self.read_verified_revision(record) {
-                Ok(bytes) => bytes,
-                Err(reason) => {
-                    if gaps.len() >= MAX_SEARCH_GAPS {
-                        complete = false;
-                        break;
-                    }
-                    gaps.push(StoreGap {
-                        source_id: record.source_id.clone(),
-                        revision_id: record.revision_id.clone(),
-                        reason,
-                    });
-                    complete = false;
-                    continue;
-                }
-            };
-            let text = match String::from_utf8(bytes) {
-                Ok(text) => text,
-                Err(_) => {
-                    if gaps.len() >= MAX_SEARCH_GAPS {
-                        complete = false;
-                        break;
-                    }
-                    gaps.push(StoreGap {
-                        source_id: record.source_id.clone(),
-                        revision_id: record.revision_id.clone(),
-                        reason: "DIRECT_REVISION_NOT_UTF8",
-                    });
-                    complete = false;
-                    continue;
-                }
-            };
-            let ScanResult {
-                matches: source_matches,
-                coverage,
-            } = scan_text(&text, query, ascii_insensitive)?;
-            searched_sources = searched_sources.saturating_add(1);
-            if !coverage.complete {
-                complete = false;
-                match_limit_reached = coverage.match_limit_reached;
-            }
-            for item in source_matches {
-                if matches.len() >= crate::development::MAX_SCAN_MATCHES {
-                    complete = false;
-                    match_limit_reached = true;
-                    break;
-                }
-                let start = u64::try_from(item.byte_start)
-                    .map_err(|_| "DIRECT_MATCH_OFFSET_OVERFLOW".to_owned())?;
-                let end = u64::try_from(item.byte_end)
-                    .map_err(|_| "DIRECT_MATCH_OFFSET_OVERFLOW".to_owned())?;
-                let evidence_id = sha256::hex(&sha256::digest_parts(
-                    b"eliot-search/direct-evidence/v1",
-                    &[
-                        record.source_id.as_bytes(),
-                        record.revision_id.as_bytes(),
-                        record.content_digest.as_bytes(),
-                        &start.to_be_bytes(),
-                        &end.to_be_bytes(),
-                    ],
-                ));
-                matches.push(StoredMatch {
-                    source_id: record.source_id.clone(),
-                    revision_id: record.revision_id.clone(),
-                    content_digest: record.content_digest.clone(),
-                    path_digest: record.path_digest.clone(),
-                    evidence_id,
-                    byte_start: item.byte_start,
-                    byte_end: item.byte_end,
-                    line: item.line,
-                    column_bytes: item.column_bytes,
-                });
-            }
-            if match_limit_reached {
-                break;
-            }
-        }
-
-        Ok(StoreSearchResult {
-            matches,
-            gaps,
-            registered_sources: self.registry.latest.len(),
-            active_sources: active.len(),
-            searched_sources,
-            complete,
-            match_limit_reached,
-        })
-    }
-
     /// Verifies the log chain and every unique referenced immutable revision.
+    #[cfg(test)]
     pub(crate) fn verify(&self) -> Result<StoreVerification, String> {
         self.verify_control()?;
         let reloaded = &self.registry;
@@ -477,42 +349,7 @@ impl DirectStore {
         })
     }
 
-    /// Reads one bounded exact range from a verified immutable revision.
-    pub(crate) fn read_revision_range(
-        &self,
-        revision_id: &str,
-        byte_start: u64,
-        byte_end: u64,
-    ) -> Result<RevisionSlice, String> {
-        validate_digest_text(revision_id, "DIRECT_REVISION_ID_INVALID")?;
-        let record = self
-            .registry
-            .revisions
-            .get(revision_id)
-            .ok_or_else(|| "DIRECT_REVISION_NOT_FOUND".to_owned())?;
-        if byte_start >= byte_end || byte_end > record.byte_length {
-            return Err("DIRECT_REVISION_RANGE_INVALID".to_owned());
-        }
-        let length = byte_end - byte_start;
-        if length > u64::try_from(MAX_READ_RANGE_BYTES).unwrap_or(u64::MAX) {
-            return Err("DIRECT_REVISION_RANGE_TOO_LARGE".to_owned());
-        }
-        let bytes = self
-            .read_verified_revision(record)
-            .map_err(str::to_owned)?;
-        let start = usize::try_from(byte_start)
-            .map_err(|_| "DIRECT_REVISION_RANGE_INVALID".to_owned())?;
-        let end = usize::try_from(byte_end)
-            .map_err(|_| "DIRECT_REVISION_RANGE_INVALID".to_owned())?;
-        Ok(RevisionSlice {
-            revision_id: record.revision_id.clone(),
-            content_digest: record.content_digest.clone(),
-            byte_start,
-            byte_end,
-            bytes: bytes[start..end].to_vec(),
-        })
-    }
-
+    #[cfg(test)]
     fn persist_revision(
         &self,
         revision_id: &str,
@@ -561,7 +398,10 @@ impl DirectStore {
                 return Err(format!("DIRECT_REVISION_RENAME_ERROR:{error}"));
             }
         }
+        #[cfg(unix)]
         sync_directory(&shard)?;
+        #[cfg(not(unix))]
+        sync_directory(&shard);
         verify_revision_path(&path, expected_content_digest, bytes.len())
     }
 
@@ -631,13 +471,23 @@ impl DirectStore {
                 return Err("DIRECT_SOURCE_EVENT_TOO_LARGE".to_owned());
             }
             encoded.push_str(&line);
-            previous_digest = record.record_digest.clone();
+            record.record_digest.clone_into(&mut previous_digest);
             records.push(record);
         }
 
         if encoded.is_empty() {
             return Ok(records);
         }
+        self.append_encoded_records(&encoded, records)
+    }
+
+    /// Appends already validated encoded events to the control log and verifies
+    /// exact readback before replacing the in-memory registry.
+    fn append_encoded_records(
+        &mut self,
+        encoded: &str,
+        records: Vec<SourceRecord>,
+    ) -> Result<Vec<SourceRecord>, String> {
         let log_path = self.root.join(CONTROL_DIRECTORY).join(SOURCE_LOG_FILE);
         ensure_regular_file(&log_path)?;
         let mut file = OpenOptions::new()
@@ -655,7 +505,10 @@ impl DirectStore {
             .and_then(|()| file.sync_all())
             .map_err(|error| format!("DIRECT_CONTROL_LOG_WRITE_ERROR:{error}"))?;
         drop(file);
+        #[cfg(unix)]
         sync_directory(&self.root.join(CONTROL_DIRECTORY))?;
+        #[cfg(not(unix))]
+        sync_directory(&self.root.join(CONTROL_DIRECTORY));
 
         let reloaded = load_registry(&log_path)?;
         for record in &records {
@@ -671,6 +524,7 @@ impl DirectStore {
         Ok(records)
     }
 
+    #[cfg(test)]
     fn read_verified_revision(&self, record: &SourceRecord) -> Result<Vec<u8>, &'static str> {
         let path = revision_path(&self.root, &record.revision_id)
             .map_err(|_| "DIRECT_REVISION_ID_INVALID")?;
@@ -748,7 +602,10 @@ fn load_or_create_namespace(root: &Path, control: &Path) -> Result<[u8; 32], Str
         .and_then(|()| file.sync_all())
         .map_err(|error| format!("DIRECT_NAMESPACE_WRITE_ERROR:{error}"))?;
     drop(file);
+    #[cfg(unix)]
     sync_directory(control)?;
+    #[cfg(not(unix))]
+    sync_directory(control);
     ensure_regular_file(&path)?;
     Ok(namespace)
 }
@@ -829,7 +686,6 @@ fn read_file_snapshot(
     let path_digest = sha256::hex(&sha256::digest(&path_identity_bytes(&canonical_path)));
     let content_digest = sha256::hex(&sha256::digest(&bytes));
     Ok(FileSnapshot {
-        canonical_path,
         path_digest,
         file_identity_digest: before.file_identity_digest,
         identity_strength: before.identity_strength,
@@ -975,6 +831,7 @@ fn collect_regular_files(
     Ok(())
 }
 
+#[cfg(test)]
 fn revision_path(root: &Path, revision_id: &str) -> Result<PathBuf, String> {
     validate_digest_text(revision_id, "DIRECT_REVISION_ID_INVALID")?;
     Ok(root
@@ -983,6 +840,7 @@ fn revision_path(root: &Path, revision_id: &str) -> Result<PathBuf, String> {
         .join(format!("{revision_id}.bin")))
 }
 
+#[cfg(test)]
 fn verify_revision_path(
     path: &Path,
     expected_content_digest: &str,
@@ -996,7 +854,7 @@ fn verify_revision_path(
     }
     let mut bytes = Vec::with_capacity(expected_length);
     File::open(path)
-        .and_then(|mut file| {
+        .and_then(|file| {
             file.take(u64::try_from(MAX_SCAN_INPUT_BYTES + 1).unwrap_or(u64::MAX))
                 .read_to_end(&mut bytes)
         })
@@ -1063,6 +921,4 @@ fn sync_directory(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
+const fn sync_directory(_path: &Path) {}

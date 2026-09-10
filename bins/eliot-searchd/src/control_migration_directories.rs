@@ -50,7 +50,7 @@ struct Page {
     bindings: Vec<(String, String, String)>,
 }
 impl Page {
-    fn wants(&self, ordinal: u64) -> bool {
+    const fn wants(&self, ordinal: u64) -> bool {
         ordinal >= self.after && self.rows.len() < PAGE_ROWS
     }
 }
@@ -74,7 +74,7 @@ impl DirectStore {
         let roots = source_roots::migration_input(&self.root).map_err(|error| error.code().to_owned())?;
         // A valid replacement or deleted registration file is not a new admitted
         // root set. Compare locators only: cached availability is not live authority.
-        if !roots.paths.iter().map(|path| path.as_path()).eq(
+        if !roots.paths.iter().map(std::path::PathBuf::as_path).eq(
             admitted.iter().map(|view| std::path::Path::new(&view.path)),
         ) {
             return Err("DIRECT_MIGRATION_ROOT_STATE_CHANGED".to_owned());

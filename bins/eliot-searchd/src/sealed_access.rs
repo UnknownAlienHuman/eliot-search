@@ -8,7 +8,7 @@
 #![cfg_attr(not(windows), allow(dead_code))]
 
 use core::fmt;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::sealed_access_codec::{
@@ -32,6 +32,7 @@ const SEALED_DIRECTORY: &str = "sealed-revisions";
 /// Closed access authority failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SealedAccessError {
+    #[cfg(not(windows))]
     /// The current platform cannot enumerate Windows sealed objects.
     UnsupportedPlatform,
     /// A fence has no generation.
@@ -73,6 +74,7 @@ impl SealedAccessError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_ACCESS_UNSUPPORTED_PLATFORM",
             Self::FenceNotFound => "SEALED_ACCESS_FENCE_NOT_FOUND",
             Self::AccessDenied => "SEALED_ACCESS_DENIED",
@@ -237,12 +239,6 @@ impl ActiveAccessFence {
     pub const fn record(&self) -> &AccessFenceRecord {
         &self.snapshot.record
     }
-
-    /// Digest of current exact record bytes.
-    #[must_use]
-    pub const fn record_sha256(&self) -> Sha256Digest {
-        self.snapshot.record_sha256
-    }
 }
 
 impl fmt::Debug for ActiveAccessFence {
@@ -274,24 +270,8 @@ pub fn append_fence(
     mutation.validate()?;
     let chain = load_chain(data_root, owner, &mutation.fence_id)?;
 
-    if let Some(existing) = chain
-        .iter()
-        .find(|entry| entry.snapshot.record.mutation_id == mutation.mutation_id)
-    {
-        if !record_matches_mutation(&existing.snapshot.record, &mutation) {
-            return Err(SealedAccessError::MutationConflict);
-        }
-        let current = chain
-            .last()
-            .ok_or(SealedAccessError::ChainInvalid)?
-            .snapshot
-            .clone();
-        return Ok(AccessFenceReceipt {
-            affected: existing.snapshot.clone(),
-            current,
-            disposition: AccessAppendDisposition::Replay,
-            readback_verified: true,
-        });
+    if let Some(receipt) = replay_existing_fence(&chain, &mutation)? {
+        return Ok(receipt);
     }
 
     let (generation, previous_generation, previous_sha, access_generation) =
@@ -353,7 +333,7 @@ pub fn append_fence(
         data_root,
         &transaction_id,
         &object_id,
-        SensitiveBytes::new(encoded.as_bytes().to_vec())?,
+        &SensitiveBytes::new(encoded.as_bytes().to_vec())?,
     )?;
     if transaction.object_id != object_id
         || transaction.operation_id != transaction_id
@@ -429,6 +409,34 @@ pub fn require_active_fence(
     Ok(ActiveAccessFence { snapshot })
 }
 
+/// Replays an already recorded mutation instead of appending a duplicate.
+/// Returns `Ok(None)` when the mutation is new and must be appended.
+fn replay_existing_fence(
+    chain: &[LoadedFence],
+    mutation: &AccessFenceMutation,
+) -> Result<Option<AccessFenceReceipt>, SealedAccessError> {
+    let Some(existing) = chain
+        .iter()
+        .find(|entry| entry.snapshot.record.mutation_id == mutation.mutation_id)
+    else {
+        return Ok(None);
+    };
+    if !record_matches_mutation(&existing.snapshot.record, mutation) {
+        return Err(SealedAccessError::MutationConflict);
+    }
+    let current = chain
+        .last()
+        .ok_or(SealedAccessError::ChainInvalid)?
+        .snapshot
+        .clone();
+    Ok(Some(AccessFenceReceipt {
+        affected: existing.snapshot.clone(),
+        current,
+        disposition: AccessAppendDisposition::Replay,
+        readback_verified: true,
+    }))
+}
+
 fn load_chain(
     data_root: &Path,
     owner: &OwnerEpochGuard,
@@ -472,7 +480,7 @@ fn load_chain(
             data_root,
             &transaction_id,
             &object_id,
-            SensitiveBytes::new(encoded.into_bytes())?,
+            &SensitiveBytes::new(encoded.into_bytes())?,
         )?;
         if transaction.plaintext_sha256 != record_sha256
             || transaction.object_id != object_id

@@ -23,7 +23,7 @@ use std::process::ExitCode;
 use sealed_owner_epoch::OwnerEpochGuard;
 use sealed_recovery::recover_all;
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-search-sealed-recover\n\n",
         "USAGE:\n",

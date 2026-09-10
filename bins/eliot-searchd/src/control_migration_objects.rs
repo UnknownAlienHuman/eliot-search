@@ -254,10 +254,10 @@ fn read_revision_objects_at(
     if let Some(bytes) = plaintext_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
     let plaintext = plaintext_bytes.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
     if let Some(bytes) = protected_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
-    if let (Some(protected), Some(plaintext)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref()) {
-        if protected.as_slice() != plaintext.as_slice() {
-            return Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned());
-        }
+    if let (Some(protected), Some(plaintext)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref())
+        && protected.as_slice() != plaintext.as_slice()
+    {
+        return Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned());
     }
     let bytes = match (protected_bytes.take(), plaintext_bytes) {
         (Some(bytes), _) => bytes,

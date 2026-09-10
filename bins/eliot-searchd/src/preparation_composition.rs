@@ -8,7 +8,7 @@ use crate::direct_store::{PreparationBatch, PreparationCursor};
 use crate::service_output::{json_string, write_line};
 
 /// Shared argument validation runs before a service command arms its mutation fence.
-pub(crate) fn validate_revision(revision: &str) -> Result<(), String> {
+pub fn validate_revision(revision: &str) -> Result<(), String> {
     if sha256::decode_digest(revision).is_none() {
         Err("DIRECT_REVISION_ID_INVALID".to_owned())
     } else {
@@ -18,7 +18,7 @@ pub(crate) fn validate_revision(revision: &str) -> Result<(), String> {
 
 /// A stored record may describe an unsupported-input gap, not a searchable layout.
 /// This response acknowledges storage only; it does not grant access or completeness.
-pub(crate) fn emit_prepared(
+pub fn emit_prepared(
     writer: &mut impl Write,
     revision: &str,
     invalidated: (usize, usize),
@@ -38,7 +38,7 @@ pub(crate) fn emit_prepared(
 
 /// A finite page summary, not an assertion that a caller processed every earlier page.
 /// One event-first frame works unchanged through the existing proxy response boundary.
-pub(crate) fn emit_batch(
+pub fn emit_batch(
     writer: &mut impl Write, batch: &PreparationBatch, invalidated: (usize, usize),
 ) -> Result<(), String> {
     let gaps = batch.gaps.iter().map(|(revision, reason)| format!(
@@ -60,7 +60,7 @@ pub(crate) fn emit_batch(
     ))
 }
 
-pub(crate) fn maybe_run() -> Option<ExitCode> {
+pub fn maybe_run() -> Option<ExitCode> {
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
     let command = args.first()?.to_str()?;
     if !matches!(command, "--prepare-revision" | "--prepare-root") { return None; }
@@ -80,7 +80,7 @@ pub(crate) fn maybe_run() -> Option<ExitCode> {
         };
         let owner = DataRootGuard::acquire(Path::new(&args[1]))?;
         crate::catalog_presence::require_existing(owner.canonical_root())?;
-        let mut store = DirectStore::open(owner.canonical_root())?;
+        let store = DirectStore::open(owner.canonical_root())?;
         let mut output = std::io::stdout().lock();
         if let Some(revision) = revision {
             let gap = store.prepare_revision(revision)?;

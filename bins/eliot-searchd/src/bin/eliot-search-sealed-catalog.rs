@@ -20,7 +20,7 @@ mod sealed_transaction;
 mod sealed_transaction_guard;
 
 use std::env;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -31,7 +31,7 @@ use sealed_root_lock::SealedRootLease;
 use sealed_transaction::transaction_status;
 use sealed_transaction_guard::put_idempotent_verified;
 
-fn help() -> &'static str {
+const fn help() -> &'static str {
     concat!(
         "eliot-search-sealed-catalog\n\n",
         "USAGE:\n",
@@ -127,75 +127,7 @@ fn run() -> Result<(), String> {
 
     match command {
         "ingest-file" if arguments.len() == 9 => {
-            let data_root = Path::new(&arguments[1]);
-            let _root_lease = acquire_root(data_root)?;
-            let content_operation_id = utf8_argument(
-                &arguments[2],
-                "SEALED_TRANSACTION_OPERATION_ID_INVALID",
-            )?;
-            let content_object_id =
-                utf8_argument(&arguments[3], "SEALED_STORE_OBJECT_ID_INVALID")?;
-            let catalog_operation_id = utf8_argument(
-                &arguments[4],
-                "SEALED_TRANSACTION_OPERATION_ID_INVALID",
-            )?;
-            let catalog_object_id =
-                utf8_argument(&arguments[5], "SEALED_STORE_OBJECT_ID_INVALID")?;
-            let source_id =
-                utf8_argument(&arguments[6], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
-            let source_revision_id =
-                utf8_argument(&arguments[7], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
-            let final_read = read_final_file(Path::new(&arguments[8]))
-                .map_err(|error| error.code().to_owned())?;
-            let same_handle_receipt = final_read.receipt.clone();
-            let content_transaction = put_idempotent_verified(
-                data_root,
-                content_operation_id,
-                content_object_id,
-                final_read.plaintext,
-            )
-            .map_err(|error| error.code().to_owned())?;
-            let catalog = bind_revision(
-                data_root,
-                content_operation_id,
-                content_object_id,
-                catalog_operation_id,
-                catalog_object_id,
-                source_id,
-                source_revision_id,
-            )
-            .map_err(|error| error.code().to_owned())?;
-            println!(
-                concat!(
-                    "{{\"status\":\"CATALOG_COMMITTED\",",
-                    "\"source_id\":\"{}\",\"source_revision_id\":\"{}\",",
-                    "\"content_object_id\":\"{}\",",
-                    "\"catalog_object_id\":\"{}\",",
-                    "\"content_sha256\":\"{}\",",
-                    "\"content_disposition\":\"{}\",",
-                    "\"catalog_disposition\":\"{}\",",
-                    "\"plaintext_bytes\":{},\"ciphertext_bytes\":{},",
-                    "\"same_handle_verified\":{},\"reparse_free\":{},",
-                    "\"content_readback_verified\":{},",
-                    "\"catalog_readback_verified\":{},",
-                    "\"sealed_object_backed\":true,\"catalog_bound\":true,",
-                    "\"data_root_lock_held\":true,\"owner_epoch_bound\":false,",
-                    "\"scope_bound\":false,\"production_ready\":false}}"
-                ),
-                catalog.binding.source_id,
-                catalog.binding.source_revision_id,
-                catalog.binding.content_object_id,
-                catalog.catalog_object_id,
-                catalog.binding.content_sha256,
-                content_transaction.disposition.as_str(),
-                catalog.catalog_transaction.disposition.as_str(),
-                catalog.binding.content_plaintext_bytes,
-                catalog.binding.content_ciphertext_bytes,
-                same_handle_receipt.same_handle_verified,
-                same_handle_receipt.reparse_free,
-                catalog.content_transaction.sealed_readback_verified,
-                catalog.catalog_readback_verified,
-            );
+            run_ingest_file(&arguments)?;
         }
         "search" | "search-ascii-insensitive" if arguments.len() == 6 => {
             let data_root = Path::new(&arguments[1]);
@@ -230,42 +162,7 @@ fn run() -> Result<(), String> {
             );
         }
         "verify" if arguments.len() == 5 => {
-            let data_root = Path::new(&arguments[1]);
-            let _root_lease = acquire_root(data_root)?;
-            let catalog_object_id =
-                utf8_argument(&arguments[2], "SEALED_STORE_OBJECT_ID_INVALID")?;
-            let source_id =
-                utf8_argument(&arguments[3], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
-            let source_revision_id =
-                utf8_argument(&arguments[4], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
-            let receipt = verify_revision(
-                data_root,
-                catalog_object_id,
-                source_id,
-                source_revision_id,
-            )
-            .map_err(|error| error.code().to_owned())?;
-            println!(
-                concat!(
-                    "{{\"status\":\"CATALOG_VERIFIED\",",
-                    "\"catalog_object_id\":\"{}\",\"source_id\":\"{}\",",
-                    "\"source_revision_id\":\"{}\",",
-                    "\"content_object_id\":\"{}\",",
-                    "\"content_sha256\":\"{}\",",
-                    "\"plaintext_bytes\":{},\"ciphertext_bytes\":{},",
-                    "\"authenticated\":{},\"catalog_bound\":true,",
-                    "\"data_root_lock_held\":true,\"owner_epoch_bound\":false,",
-                    "\"scope_bound\":false,\"production_ready\":false}}"
-                ),
-                receipt.catalog_object_id,
-                receipt.source_id,
-                receipt.source_revision_id,
-                receipt.content_object_id,
-                receipt.content_sha256,
-                receipt.content_plaintext_bytes,
-                receipt.content_ciphertext_bytes,
-                receipt.authenticated,
-            );
+            run_verify(&arguments)?;
         }
         "transaction-status" if arguments.len() == 3 => {
             let data_root = Path::new(&arguments[1]);
@@ -287,6 +184,119 @@ fn run() -> Result<(), String> {
         }
         _ => return Err("SEALED_CATALOG_USAGE_ERROR".to_owned()),
     }
+    Ok(())
+}
+
+fn run_ingest_file(arguments: &[OsString]) -> Result<(), String> {
+    let data_root = Path::new(&arguments[1]);
+    let _root_lease = acquire_root(data_root)?;
+    let content_operation_id = utf8_argument(
+        &arguments[2],
+        "SEALED_TRANSACTION_OPERATION_ID_INVALID",
+    )?;
+    let content_object_id =
+        utf8_argument(&arguments[3], "SEALED_STORE_OBJECT_ID_INVALID")?;
+    let catalog_operation_id = utf8_argument(
+        &arguments[4],
+        "SEALED_TRANSACTION_OPERATION_ID_INVALID",
+    )?;
+    let catalog_object_id =
+        utf8_argument(&arguments[5], "SEALED_STORE_OBJECT_ID_INVALID")?;
+    let source_id =
+        utf8_argument(&arguments[6], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
+    let source_revision_id =
+        utf8_argument(&arguments[7], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
+    let final_read = read_final_file(Path::new(&arguments[8]))
+        .map_err(|error| error.code().to_owned())?;
+    let same_handle_receipt = final_read.receipt;
+    let content_transaction = put_idempotent_verified(
+        data_root,
+        content_operation_id,
+        content_object_id,
+        &final_read.plaintext,
+    )
+    .map_err(|error| error.code().to_owned())?;
+    let catalog = bind_revision(
+        data_root,
+        content_operation_id,
+        content_object_id,
+        catalog_operation_id,
+        catalog_object_id,
+        source_id,
+        source_revision_id,
+    )
+    .map_err(|error| error.code().to_owned())?;
+    println!(
+        concat!(
+            "{{\"status\":\"CATALOG_COMMITTED\",",
+            "\"source_id\":\"{}\",\"source_revision_id\":\"{}\",",
+            "\"content_object_id\":\"{}\",",
+            "\"catalog_object_id\":\"{}\",",
+            "\"content_sha256\":\"{}\",",
+            "\"content_disposition\":\"{}\",",
+            "\"catalog_disposition\":\"{}\",",
+            "\"plaintext_bytes\":{},\"ciphertext_bytes\":{},",
+            "\"same_handle_verified\":{},\"reparse_free\":{},",
+            "\"content_readback_verified\":{},",
+            "\"catalog_readback_verified\":{},",
+            "\"sealed_object_backed\":true,\"catalog_bound\":true,",
+            "\"data_root_lock_held\":true,\"owner_epoch_bound\":false,",
+            "\"scope_bound\":false,\"production_ready\":false}}"
+        ),
+        catalog.binding.source_id,
+        catalog.binding.source_revision_id,
+        catalog.binding.content_object_id,
+        catalog.catalog_object_id,
+        catalog.binding.content_sha256,
+        content_transaction.disposition.as_str(),
+        catalog.catalog_transaction.disposition.as_str(),
+        catalog.binding.content_plaintext_bytes,
+        catalog.binding.content_ciphertext_bytes,
+                same_handle_receipt.integrity.same_handle_verified,
+                same_handle_receipt.integrity.reparse_free,
+        catalog.content_transaction.sealed_readback_verified,
+        catalog.catalog_readback_verified,
+    );
+    Ok(())
+}
+
+fn run_verify(arguments: &[OsString]) -> Result<(), String> {
+    let data_root = Path::new(&arguments[1]);
+    let _root_lease = acquire_root(data_root)?;
+    let catalog_object_id =
+        utf8_argument(&arguments[2], "SEALED_STORE_OBJECT_ID_INVALID")?;
+    let source_id =
+        utf8_argument(&arguments[3], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
+    let source_revision_id =
+        utf8_argument(&arguments[4], "SEALED_CATALOG_IDENTIFIER_INVALID")?;
+    let receipt = verify_revision(
+        data_root,
+        catalog_object_id,
+        source_id,
+        source_revision_id,
+    )
+    .map_err(|error| error.code().to_owned())?;
+    println!(
+        concat!(
+            "{{\"status\":\"CATALOG_VERIFIED\",",
+            "\"catalog_object_id\":\"{}\",\"source_id\":\"{}\",",
+            "\"source_revision_id\":\"{}\",",
+            "\"content_object_id\":\"{}\",",
+            "\"content_sha256\":\"{}\",",
+            "\"plaintext_bytes\":{},\"ciphertext_bytes\":{},",
+            "\"authenticated\":{},\"catalog_bound\":true,",
+            "\"data_root_lock_held\":true,\"owner_epoch_bound\":false,",
+            "\"scope_bound\":false,\"production_ready\":false}}"
+        ),
+        receipt.catalog_object_id,
+        receipt.source_id,
+        receipt.source_revision_id,
+        receipt.content_object_id,
+        receipt.content_sha256,
+        receipt.content_plaintext_bytes,
+        receipt.content_ciphertext_bytes,
+        receipt.authenticated,
+    );
     Ok(())
 }
 

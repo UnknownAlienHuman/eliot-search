@@ -19,6 +19,7 @@ pub const MAX_OPERATION_ID_BYTES: usize = 128;
 /// Closed transaction failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SealedTransactionError {
+    #[cfg(not(windows))]
     /// The current platform does not provide the required adapter.
     UnsupportedPlatform,
     /// Operation identity is malformed.
@@ -33,8 +34,6 @@ pub enum SealedTransactionError {
     ObjectConflict,
     /// Existing decrypted bytes differ from retry input.
     ReplayContentMismatch,
-    /// External effect cannot be classified safely.
-    OutcomeUnknown,
     /// Filesystem operation failed.
     IoFailure,
     /// Exact metadata readback failed.
@@ -50,6 +49,7 @@ impl SealedTransactionError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_TRANSACTION_UNSUPPORTED_PLATFORM",
             Self::InvalidOperationId => "SEALED_TRANSACTION_OPERATION_ID_INVALID",
             Self::OperationBusy => "SEALED_TRANSACTION_OPERATION_BUSY",
@@ -57,7 +57,6 @@ impl SealedTransactionError {
             Self::ReceiptConflict => "SEALED_TRANSACTION_RECEIPT_CONFLICT",
             Self::ObjectConflict => "SEALED_TRANSACTION_OBJECT_CONFLICT",
             Self::ReplayContentMismatch => "SEALED_TRANSACTION_REPLAY_CONTENT_MISMATCH",
-            Self::OutcomeUnknown => "SEALED_TRANSACTION_OUTCOME_UNKNOWN",
             Self::IoFailure => "SEALED_TRANSACTION_IO_FAILURE",
             Self::ReadbackMismatch => "SEALED_TRANSACTION_READBACK_MISMATCH",
             Self::Digest(error) => error.code(),
@@ -193,7 +192,7 @@ pub fn put_idempotent(
     data_root: &Path,
     operation_id: &str,
     object_id: &str,
-    plaintext: SensitiveBytes,
+    plaintext: &SensitiveBytes,
 ) -> Result<SealedTransactionReceipt, SealedTransactionError> {
     platform::put_idempotent(data_root, operation_id, object_id, plaintext)
 }
@@ -243,7 +242,7 @@ mod platform {
         _data_root: &Path,
         _operation_id: &str,
         _object_id: &str,
-        _plaintext: SensitiveBytes,
+        _plaintext: &SensitiveBytes,
     ) -> Result<SealedTransactionReceipt, SealedTransactionError> {
         Err(SealedTransactionError::UnsupportedPlatform)
     }
@@ -315,7 +314,7 @@ mod platform {
         data_root: &Path,
         operation_id: &str,
         object_id: &str,
-        plaintext: SensitiveBytes,
+        plaintext: &SensitiveBytes,
     ) -> Result<SealedTransactionReceipt, SealedTransactionError> {
         validate_operation_id(operation_id)?;
         let directory = ensure_transaction_directory(data_root, true)?;
@@ -338,7 +337,7 @@ mod platform {
             }
             let receipt = read_receipt(&receipt_path)?;
             require_receipt_matches(&receipt, &intent)?;
-            require_exact_plaintext(data_root, object_id, &plaintext)?;
+            require_exact_plaintext(data_root, object_id, plaintext)?;
             return Ok(public_receipt(receipt, PutDisposition::Replay));
         }
 
@@ -531,6 +530,7 @@ mod platform {
         let path = metadata_path(directory, operation_id, "lock");
         let file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(path)

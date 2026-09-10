@@ -25,6 +25,7 @@ pub const MAX_RECOVERY_ISSUES: usize = 4_096;
 /// Closed structural recovery failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SealedRecoveryError {
+    #[cfg(not(windows))]
     /// Windows recovery is unavailable on the current platform.
     UnsupportedPlatform,
     /// Recovery was attempted without a live owner/root-lock guard.
@@ -50,6 +51,7 @@ impl SealedRecoveryError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_RECOVERY_UNSUPPORTED_PLATFORM",
             Self::OwnerGuardRequired => "SEALED_RECOVERY_OWNER_GUARD_REQUIRED",
             Self::TransactionDirectoryInvalid => {
@@ -158,7 +160,7 @@ pub struct SealedRecoveryReport {
 }
 
 impl SealedRecoveryReport {
-    fn new(owner_epoch: u64) -> Self {
+    const fn new(owner_epoch: u64) -> Self {
         Self {
             owner_epoch,
             scanned_operations: 0,
@@ -214,7 +216,7 @@ mod platform {
     use crate::sealed_digest::sha256;
     use crate::sealed_store::{SealedStoreError, open_sealed, verify_sealed};
     use crate::sealed_transaction::{
-        TransactionBinding, TransactionStatus, inspect_transaction,
+        TransactionBinding, TransactionObservation, TransactionStatus, inspect_transaction,
     };
     use crate::sealed_transaction_guard::put_idempotent_verified;
     use std::collections::BTreeSet;
@@ -254,82 +256,11 @@ mod platform {
                     report.issue(operation_id, RecoveryIssueCode::TransactionConflict);
                 }
                 TransactionStatus::Prepared => {
-                    let Some(binding) = observation.binding else {
-                        report.issue(operation_id, RecoveryIssueCode::TransactionConflict);
-                        continue;
-                    };
-                    match verify_binding(data_root, &binding) {
-                        Ok(plaintext) => {
-                            put_idempotent_verified(
-                                data_root,
-                                &binding.operation_id,
-                                &binding.object_id,
-                                plaintext,
-                            )?;
-                            report.reconciled_operations =
-                                report.reconciled_operations.saturating_add(1);
-                        }
-                        Err(BindingFailure::Missing) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::PreparedObjectMissing,
-                        ),
-                        Err(BindingFailure::PlaintextLength) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::PlaintextLengthMismatch,
-                        ),
-                        Err(BindingFailure::CiphertextLength) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::CiphertextLengthMismatch,
-                        ),
-                        Err(BindingFailure::Digest) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::PlaintextDigestMismatch,
-                        ),
-                        Err(BindingFailure::Fatal(error)) => return Err(error),
-                    }
+                    reconcile_operation(data_root, operation_id, observation, false, &mut report)?;
                 }
                 TransactionStatus::Committed
                 | TransactionStatus::CommittedCleanupPending => {
-                    let Some(binding) = observation.binding else {
-                        report.issue(operation_id, RecoveryIssueCode::TransactionConflict);
-                        continue;
-                    };
-                    match verify_binding(data_root, &binding) {
-                        Ok(plaintext) => {
-                            put_idempotent_verified(
-                                data_root,
-                                &binding.operation_id,
-                                &binding.object_id,
-                                plaintext,
-                            )?;
-                            if observation.status
-                                == TransactionStatus::CommittedCleanupPending
-                            {
-                                report.reconciled_operations =
-                                    report.reconciled_operations.saturating_add(1);
-                            } else {
-                                report.verified_committed =
-                                    report.verified_committed.saturating_add(1);
-                            }
-                        }
-                        Err(BindingFailure::Missing) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::CommittedObjectMissing,
-                        ),
-                        Err(BindingFailure::PlaintextLength) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::PlaintextLengthMismatch,
-                        ),
-                        Err(BindingFailure::CiphertextLength) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::CiphertextLengthMismatch,
-                        ),
-                        Err(BindingFailure::Digest) => report.issue(
-                            operation_id,
-                            RecoveryIssueCode::PlaintextDigestMismatch,
-                        ),
-                        Err(BindingFailure::Fatal(error)) => return Err(error),
-                    }
+                    reconcile_operation(data_root, operation_id, observation, true, &mut report)?;
                 }
             }
         }
@@ -343,6 +274,62 @@ mod platform {
         CiphertextLength,
         Digest,
         Fatal(SealedRecoveryError),
+    }
+
+    /// Reconciles one prepared or committed operation, recording recovery
+    /// issues instead of failing the whole pass. `committed` selects the
+    /// committed issue code and counter; prepared operations always count as
+    /// reconciled.
+    fn reconcile_operation(
+        data_root: &Path,
+        operation_id: String,
+        observation: TransactionObservation,
+        committed: bool,
+        report: &mut SealedRecoveryReport,
+    ) -> Result<(), SealedRecoveryError> {
+        let Some(binding) = observation.binding else {
+            report.issue(operation_id, RecoveryIssueCode::TransactionConflict);
+            return Ok(());
+        };
+        let missing = if committed {
+            RecoveryIssueCode::CommittedObjectMissing
+        } else {
+            RecoveryIssueCode::PreparedObjectMissing
+        };
+        match verify_binding(data_root, &binding) {
+            Ok(plaintext) => {
+                put_idempotent_verified(
+                    data_root,
+                    &binding.operation_id,
+                    &binding.object_id,
+                    &plaintext,
+                )?;
+                if committed
+                    && observation.status != TransactionStatus::CommittedCleanupPending
+                {
+                    report.verified_committed =
+                        report.verified_committed.saturating_add(1);
+                } else {
+                    report.reconciled_operations =
+                        report.reconciled_operations.saturating_add(1);
+                }
+            }
+            Err(BindingFailure::Missing) => report.issue(operation_id, missing),
+            Err(BindingFailure::PlaintextLength) => report.issue(
+                operation_id,
+                RecoveryIssueCode::PlaintextLengthMismatch,
+            ),
+            Err(BindingFailure::CiphertextLength) => report.issue(
+                operation_id,
+                RecoveryIssueCode::CiphertextLengthMismatch,
+            ),
+            Err(BindingFailure::Digest) => report.issue(
+                operation_id,
+                RecoveryIssueCode::PlaintextDigestMismatch,
+            ),
+            Err(BindingFailure::Fatal(error)) => return Err(error),
+        }
+        Ok(())
     }
 
     fn verify_binding(
@@ -440,7 +427,9 @@ mod platform {
 
     fn is_private_temporary(file_name: &str) -> bool {
         file_name.starts_with(".transaction-")
-            && file_name.ends_with(".tmp")
+            && file_name.len() >= ".tmp".len()
+            && file_name.as_bytes()[file_name.len() - ".tmp".len()..]
+                .eq_ignore_ascii_case(b".tmp")
             && file_name.len() <= 256
             && file_name.bytes().all(|byte| {
                 byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')

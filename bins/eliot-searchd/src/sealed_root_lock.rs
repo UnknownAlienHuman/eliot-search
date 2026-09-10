@@ -12,6 +12,7 @@ use std::path::Path;
 /// Closed sealed-root lease failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SealedRootLockError {
+    #[cfg(not(windows))]
     /// The current platform does not provide the Windows adapter.
     UnsupportedPlatform,
     /// Data root is absent or not a directory.
@@ -31,6 +32,7 @@ impl SealedRootLockError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
+            #[cfg(not(windows))]
             Self::UnsupportedPlatform => "SEALED_ROOT_LOCK_UNSUPPORTED_PLATFORM",
             Self::InvalidDataRoot => "SEALED_ROOT_LOCK_DATA_ROOT_INVALID",
             Self::ReparsePointDenied => "SEALED_ROOT_LOCK_REPARSE_POINT_DENIED",
@@ -66,7 +68,7 @@ impl SealedRootLease {
 
     /// Whether the OS exclusion primitive remains held by this process.
     #[must_use]
-    pub fn is_held(&self) -> bool {
+    pub const fn is_held(&self) -> bool {
         self.inner.is_held()
     }
 }
@@ -131,14 +133,13 @@ mod platform {
             }
 
             let lock_path = data_root.join(LOCK_FILE);
-            if let Ok(metadata) = fs::symlink_metadata(&lock_path) {
-                if metadata.file_type().is_symlink()
+            if let Ok(metadata) = fs::symlink_metadata(&lock_path)
+                && (metadata.file_type().is_symlink()
                     || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-                    || !metadata.is_file()
+                    || !metadata.is_file())
                 {
                     return Err(SealedRootLockError::ReparsePointDenied);
                 }
-            }
             let mut file = OpenOptions::new()
                 .create(true)
                 .read(true)

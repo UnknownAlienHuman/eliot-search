@@ -7,7 +7,7 @@ use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
 use crate::directory_manifest::sync_directory;
 
-pub(crate) fn run(arguments: &[String]) -> Result<(), String> {
+pub fn run(arguments: &[String]) -> Result<(), String> {
     let command = arguments.first().map(String::as_str).unwrap_or_default();
     let expected = match command {
         "--source-roots" | "--sync-source-roots" => 2,
@@ -97,14 +97,13 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
         }
     }
     println!(
-        "{{\"event\":\"source_roots_synced\",\"completed_roots\":{},\"complete\":true,\"current_workspace_proven\":false,\"qdrant_available\":false}}",
-        completed,
+        "{{\"event\":\"source_roots_synced\",\"completed_roots\":{completed},\"complete\":true,\"current_workspace_proven\":false,\"qdrant_available\":false}}",
     );
     Ok(())
 }
 
 /// Escapes JSON string contents, including Windows separators and control bytes.
-pub(crate) fn escape_json(value: &str) -> String {
+pub fn escape_json(value: &str) -> String {
     let mut escaped = String::new();
     for character in value.chars() {
         match character {
