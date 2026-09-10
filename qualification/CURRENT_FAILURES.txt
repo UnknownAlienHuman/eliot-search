@@ -1,104 +1,104 @@
-Status: PASS (measured scope only — check-all + eliot-searchd package tests + clippy of 3 packages; full qualification NOT claimed, see NOT-MEASURED)
-Tested base commit: a734c9357db305fd28f3c16bd8f3a04b39f565f1 (main, short a734c93) + DIRTY worktree — NOT a clean HEAD, NOT 78c70d0
-Worktree: dirty — 22 modified + 1 untracked (git status --short at verify time); uncommitted edits: clippy search-continuation (46->0), clippy search-publication (34->0), credential-leak guards in bins/eliot-searchd, re-applied #144 owner-lock fix, 32 clippy guard-file fixes; full list in Windows tail
-Verified at: 2026-09-10T05:29:20Z
+Status: PASS (measured scope only — check-all + eliot-searchd/contracts/domain package tests + clippy of 7 packages; full qualification NOT claimed, see NOT-MEASURED)
+Tested base commit: 5581da959bc26afc01e4f90071fcf282e7f5c580 (main, short 5581da9) — CLEAN worktree
+Worktree: clean — `nothing to commit, working tree clean` before and after all runs (porcelain -b shows the branch line only, zero modified/untracked)
+Verified at: 2026-09-10T07:01:11Z
 Linux job/result: unavailable/UNAVAILABLE
 Windows job/result: local/measured-scope-pass
 Branch cleanup failed: false
 
-Scope of this record (step 4 of docs/audit/SPRINT_2026-09-10_HANDOFF.md line 167):
-replaces the stale 78c70d0 (2026-09-05) record. Numbers below are controller-verified
-measurements at base a734c93 + dirty worktree listed here; long runs were NOT re-executed
-while writing this file. Anything not listed under MEASURED is under NOT-MEASURED.
+Scope of this record (T04 slice — clean-head evidence for the reproducible Windows gate):
+replaces the stale a734c93 + DIRTY-worktree record (2026-09-10). Every number below was
+freshly measured at clean HEAD 5581da9 in this session: toolchain 1.98.0, --locked on
+every cargo invocation, --no-fail-fast on the eliot-searchd run. Anything not listed
+under MEASURED is under NOT-MEASURED.
 
-MEASURED (controller-verified, this session):
+MEASURED (fresh at clean 5581da9, this session):
 - cargo +1.98.0 check --workspace --all-targets --all-features --locked -> exit 0
-- cargo +1.98.0 test -p eliot-searchd --all-targets --locked --no-fail-fast -> 182 passed / 0 failed / 1 ignored, 15/15 targets ok, exit 0 (was 178 passed / 4 failed on b28e36b; --no-fail-fast is mandatory here, plain run stops after 2/15 targets)
-- clippy -D warnings honest count (message.level == "error" AND some span is_primary, via --message-format=json): search-continuation 0 (was 46), search-publication 0 (was 34), eliot-searchd 0
-- cmdkey credential leak: 0 before / 0 after across two full eliot-searchd runs (guards run on pass and panic paths)
-- Qdrant data plane: still absent (search-qdrant-bridge is an in-memory model, no Qdrant client dependency); no gate G0-G6 closed — carried over honestly from the handoff
+- cargo +1.98.0 test -p eliot-searchd --all-targets --locked --no-fail-fast -> 182 passed / 0 failed / 1 ignored, 15/15 targets ok, exit 0
+  (--no-fail-fast is mandatory here; a plain run stops after 2/15 targets and hides the rest)
+- cargo +1.98.0 test --locked -p search-contracts -> 56 passed (0 lib + 50 conformance + 4 publication_guards + 2 doc-tests) / 0 failed, exit 0
+- cargo +1.98.0 test --locked -p search-domain -> 23 passed / 0 failed, exit 0
+- clippy -D warnings honest count (message.level == "error" AND some span is_primary, via --message-format=json, one JSON run per package, each exit 0):
+  search-continuation 0 / search-publication 0 / eliot-searchd 0 / search-domain 0 / search-ports 0 / search-config 0 / search-contracts 0
+- cmdkey credential leak ('revision-key' pattern): 0 before / 0 after the full eliot-searchd run; zero 'ELIOT Search' entries at both points
+- git rev-parse HEAD -> 5581da959bc26afc01e4f90071fcf282e7f5c580 (short 5581da9, matches the expected head)
 
 NOT-MEASURED (recorded as UNAVAILABLE, never as zero/pass):
 - Linux CI: not run locally -> UNAVAILABLE
 - Full workspace test (cargo test --workspace): not run in this session -> UNAVAILABLE
-- Full workspace clippy (cargo clippy-all / --workspace): not run in this session -> UNAVAILABLE
+- Full workspace clippy (cargo clippy --workspace): not run in this session -> UNAVAILABLE
 - Workspace rustdoc: not run in this session -> UNAVAILABLE
 - Daemon / cli / model-worker / document-worker self-tests and diff-whitespace check: not run in this session -> UNAVAILABLE
 
-Note on handoff corrections retained: search-control-redb DOES depend on real redb (=2.6.3);
+Carry-over (not re-measured in this session, stated exactly once each):
+- Qdrant data plane absent: search-qdrant-bridge is an in-memory model with no Qdrant client dependency (FUNCTIONS.md: no server/client pair accepted yet).
+- Gates G0-G6: all open; this record closes none.
+- T02 / audit #99 (isolate legacy entrypoints, restore micromodular ownership): NOT_STARTED — packet/draft only, no code or evidence.
+- T04 / audit #101 (reproducible Windows/Linux build+regression gate, M0 exit): still open — this record is only its clean-head Windows evidence slice, not the gate.
+
+Note on prior record retained: search-control-redb DOES depend on real redb (=2.6.3);
 workspace has zero todo!()/unimplemented!(); only the Qdrant bridge documents itself as a model.
 
 ===== Linux bounded log tail =====
 UNAVAILABLE — Linux CI was not run locally in this session.
 Per repository rule, unavailable checks are recorded as unavailable, never as zero/pass.
-No Linux log tail was captured; the stale 78c70d0 Linux tail is discarded, not carried over.
+No Linux log tail was captured; the stale a734c93 Linux tail is discarded, not carried over.
 
 ===== workspace tests =====
 UNAVAILABLE for the full workspace run (not executed in this session — no result invented).
-Measured package run only:
+Measured package runs only (all --locked, exit 0):
   cargo +1.98.0 test -p eliot-searchd --all-targets --locked --no-fail-fast
-  -> 182 passed / 0 failed / 1 ignored, 15/15 targets ok, exit 0
-  (baseline b28e36b per handoff: 178 passed / 4 failed — the 4 direct_store failures,
-  3x ERROR_LOCK_VIOLATION/33 on .eliot-search-owner.lock plus 1 counting/plaintext-vs-ciphertext
-  confusion, fixed by the re-applied #144 owner-lock skip + count_objects helper in the dirty worktree)
-Bounded tail: no fresh full-workspace tail captured in this writing session (long runs not re-executed).
+  -> 182 passed / 0 failed / 1 ignored, 15/15 targets ok
+  (lib 8, entry 87 + 1 ignored, catalog_loss 5, direct_preparation 6, sealed-authority 18,
+  sealed-catalog 11, sealed-direct 8, sealed-recover 15, sealed-store 4,
+  sealed-transaction 8, snapshotd-main 0, persistent_roots 5, product_targets 2,
+  service_failure 4, stable_native_identity_api 1; total 182)
+  cargo +1.98.0 test --locked -p search-contracts -> 56 passed / 0 failed
+  cargo +1.98.0 test --locked -p search-domain -> 23 passed / 0 failed
+Bounded tail: no full-workspace tail captured in this session (workspace run not executed).
 
 ===== workspace clippy =====
 UNAVAILABLE for the full-workspace clippy run (not executed in this session — no result invented).
-Measured per-package honest counts (level == "error" AND is_primary via --message-format=json, -D warnings):
-  search-continuation: 0 (was 46 on b28e36b: 36 missing_const_for_fn, 4 missing_panics_doc, 2 struct_excessive_bools, 2 needless_pass_by_value, 2 unused_self)
-  search-publication:  0 (was 34 on b28e36b: 12 doc_markdown, 10 too_long_first_doc_paragraph, 4 redundant_pub_crate, 2 suspicious_operation_groupings, 2 collapsible_if, 2 too_many_lines, 2 nonminimal_bool)
+Measured per-package honest counts (level == "error" AND is_primary via --message-format=json, -D warnings, each run exit 0):
+  search-continuation: 0 (was 46 on b28e36b; cleared with zero allows per history)
+  search-publication:  0 (was 34 on b28e36b; cleared with zero allows per history)
   eliot-searchd:       0
-Counting rule retained from handoff: never count from text output (grep -c '^error' overcounts
+  search-domain:        0
+  search-ports:         0
+  search-config:        0
+  search-contracts:     0
+Counting rule: never count from text output (grep -c '^error' overcounts
 'could not compile' lines); a plain run aborts at the first failing crate and hides the rest.
 Bounded tail: no fresh workspace tail captured in this writing session.
 
 ===== workspace rustdoc =====
-UNAVAILABLE — not run in this session. No result invented; stale 78c70d0 rustdoc errors discarded.
+UNAVAILABLE — not run in this session. No result invented; stale a734c93 rustdoc state discarded.
 
 ===== daemon self-test =====
-UNAVAILABLE — not run in this session. No result invented; stale 78c70d0 failure discarded.
+UNAVAILABLE — not run in this session. No result invented; stale a734c93 failure discarded.
 
 ===== cli self-test =====
-UNAVAILABLE — not run in this session. No result invented; stale 78c70d0 failure discarded.
+UNAVAILABLE — not run in this session. No result invented; stale a734c93 failure discarded.
 
 ===== model worker self-test =====
-UNAVAILABLE — not run in this session. Prior 78c70d0 PASS is stale and is NOT carried over.
+UNAVAILABLE — not run in this session. Prior PASS claims are stale and are NOT carried over.
 
 ===== document worker self-test =====
-UNAVAILABLE — not run in this session. Prior 78c70d0 PASS is stale and is NOT carried over.
+UNAVAILABLE — not run in this session. Prior PASS claims are stale and are NOT carried over.
 
 ===== diff whitespace =====
-UNAVAILABLE — not run in this session. Prior 78c70d0 PASS is stale and is NOT carried over.
+UNAVAILABLE — not run in this session. Prior PASS claims are stale and are NOT carried over.
 
 ===== Windows bounded log tail =====
-Measured-scope local PASS (base a734c93 + dirty worktree, Windows, controller-verified):
+Measured-scope local PASS (clean HEAD 5581da9, Windows, toolchain 1.98.0, --locked everywhere):
   cargo +1.98.0 check --workspace --all-targets --all-features --locked -> exit 0
   cargo +1.98.0 test -p eliot-searchd --all-targets --locked --no-fail-fast -> 182 passed / 0 failed / 1 ignored, 15/15 targets ok, exit 0
-  clippy -D warnings (honest JSON count): search-continuation 0 / search-publication 0 / eliot-searchd 0
-  cmdkey 'ELIOT Search/revision-key/' count: 0 before / 0 after x2 full runs
-Dirty worktree at verify time (git status --short; NOT a clean HEAD):
-  M bins/eliot-searchd/src/immutable_object_tests.rs
-  M bins/eliot-searchd/src/protected_ingest_tests.rs
-  M bins/eliot-searchd/src/revision_protection.rs
-  M bins/eliot-searchd/src/revision_protection_windows.rs
-  M bins/eliot-searchd/src/secure_revision_writer_tests.rs
-  M bins/eliot-searchd/tests/catalog_loss_process.rs
-  M bins/eliot-searchd/tests/direct_preparation_process.rs
-  M bins/eliot-searchd/tests/persistent_roots_process.rs
-  M bins/eliot-searchd/tests/service_failure_process.rs
-  M crates/search-index-qdrant/search-publication/src/lib.rs
-  M crates/search-index-qdrant/search-publication/src/machine.rs
-  M crates/search-index-qdrant/search-publication/src/machine/abort.rs
-  M crates/search-index-qdrant/search-publication/src/machine/restore.rs
-  M crates/search-index-qdrant/search-publication/src/model.rs
-  M crates/search-index-qdrant/search-publication/src/recovery.rs
-  M crates/search-index-qdrant/search-publication/tests/recovery_invariants.rs
-  M crates/search-index-qdrant/search-publication/tests/recovery_invariants/abort_finalization.rs
-  M crates/search-index-qdrant/search-publication/tests/recovery_invariants/identity_conflicts.rs
-  M crates/search-index-qdrant/search-publication/tests/restore_inflight.rs
-  M crates/search-index-qdrant/search-publication/tests/shared_publication_guards.rs
-  M crates/search-index-qdrant/search-publication/tests/support/abort_finalization.rs
-  M crates/search-query/search-continuation/src/lib.rs
-  ?? bins/eliot-searchd/tests/common/
+  cargo +1.98.0 test --locked -p search-contracts -> 56 passed / 0 failed, exit 0
+  cargo +1.98.0 test --locked -p search-domain -> 23 passed / 0 failed, exit 0
+  clippy -D warnings (honest JSON count): continuation 0 / publication 0 / eliot-searchd 0 / domain 0 / ports 0 / config 0 / contracts 0
+  cmdkey 'revision-key' count: 0 before / 0 after the full eliot-searchd run (zero 'ELIOT Search' entries)
+Prior dirty state closed: the a734c93 record's uncommitted work (clippy clears, credential
+guards, owner-lock skip) is landed in commits 77235d2 / 3e02afd / 5f915a4 — git status is clean.
 Gates: Qdrant data plane absent (in-memory model); G0-G6 all open, none closed by this record.
+
+(End of file - total 104 lines)
