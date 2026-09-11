@@ -8,6 +8,7 @@
 //! xtask validate w2-agent-drafts [--json]
 //! xtask validate w3-agent-drafts [--json]
 //! xtask validate w4-agent-drafts [--json]
+//! xtask validate w1-milestone-packets [--json]
 //! xtask validate implementation-program [--json]
 //! xtask validate p00-foundation-acceptance [--json]
 //! xtask validate qdrant-boundary [--json]
@@ -31,6 +32,11 @@ use xtask::impl_program::{
     exit_code as program_exit_code,
     render_report_json as render_program_json,
     validate_implementation_program,
+};
+use xtask::milestone_packets::{
+    exit_code as milestone_packet_exit_code,
+    render_report_json as render_milestone_packet_json,
+    validate_w1_milestone_packets,
 };
 use xtask::p00_acceptance::{
     exit_code as acceptance_exit_code,
@@ -59,6 +65,7 @@ const USAGE: &str = "usage:\n\
   xtask validate w2-agent-drafts [--json]\n\
   xtask validate w3-agent-drafts [--json]\n\
   xtask validate w4-agent-drafts [--json]\n\
+  xtask validate w1-milestone-packets [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -135,6 +142,15 @@ fn run_w4_agent_drafts() -> ExitCode {
     ExitCode::from(u8::try_from(w4_exit_code(&report)).unwrap_or(1))
 }
 
+fn run_w1_milestone_packets() -> ExitCode {
+    let root = PathBuf::from(".");
+    let report = validate_w1_milestone_packets(&root);
+    println!("{}", render_milestone_packet_json(&report));
+    ExitCode::from(
+        u8::try_from(milestone_packet_exit_code(&report)).unwrap_or(1),
+    )
+}
+
 fn run_impl_program() -> ExitCode {
     let root = PathBuf::from(".");
     let report = validate_implementation_program(&root);
@@ -191,6 +207,11 @@ fn main() -> ExitCode {
             || rest == ["w4-agent-drafts", "--json"]
         {
             return run_w4_agent_drafts();
+        }
+        if rest == ["w1-milestone-packets"]
+            || rest == ["w1-milestone-packets", "--json"]
+        {
+            return run_w1_milestone_packets();
         }
         if rest == ["implementation-program"]
             || rest == ["implementation-program", "--json"]

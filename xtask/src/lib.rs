@@ -10,6 +10,7 @@ pub mod context_artifact;
 pub mod context_materialization;
 pub mod coverage_graph;
 pub mod impl_program;
+pub mod milestone_packets;
 pub mod p00_acceptance;
 pub mod package_maps;
 pub mod qdrant_boundary;
