@@ -9,6 +9,7 @@ pub mod context_artifact;
 pub mod context_materialization;
 pub mod coverage_graph;
 pub mod impl_program;
+pub mod p00_acceptance;
 pub mod package_maps;
 pub mod ticket_drafts;
 pub mod ticket_planner;

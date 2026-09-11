@@ -24,7 +24,9 @@ jobs:
 
       - name: Compile acceptance validator
         shell: pwsh
-        run: python -m py_compile tools/validate-p00-foundation-acceptance.py
+        run: |
+          cargo build --locked -p xtask
+          cargo test --locked -p xtask --no-run
 
       - name: Validate repository topology
         shell: pwsh

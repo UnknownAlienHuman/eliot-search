@@ -1,25 +1,9 @@
 [CmdletBinding()]
-param(
-    [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
-    [switch]$Json,
-    [string]$Python = 'python'
-)
+param([switch]$Json)
 
-$ErrorActionPreference = 'Stop'
-Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+$argsList = @()
+if ($Json) { $argsList += "--json" }
 
-$validator = Join-Path $Root 'tools/validate-p00-foundation-acceptance.py'
-if (-not (Test-Path $validator -PathType Leaf)) {
-    throw "Missing validator: $validator"
-}
-
-$arguments = [System.Collections.Generic.List[string]]::new()
-$arguments.Add($validator)
-$arguments.Add('--root')
-$arguments.Add($Root)
-if ($Json) {
-    $arguments.Add('--json')
-}
-
-& $Python @arguments
+& cargo run --locked --quiet -p xtask -- validate p00-foundation-acceptance @argsList
 exit $LASTEXITCODE

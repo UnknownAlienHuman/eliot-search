@@ -5,6 +5,7 @@
 //! xtask compute accepted-evidence-digest <record> [--json-array]
 //! xtask validate p00-ticket-drafts [--json]
 //! xtask validate implementation-program [--json]
+//! xtask validate p00-foundation-acceptance [--json]
 //! ```
 //!
 //! Small explicit surface only; not a swarm controller.
@@ -17,6 +18,10 @@ use xtask::impl_program::{
     exit_code as program_exit_code, render_report_json as render_program_json,
     validate_implementation_program,
 };
+use xtask::p00_acceptance::{
+    exit_code as acceptance_exit_code, render_report_json as render_acceptance_json,
+    validate_p00_foundation_acceptance,
+};
 use xtask::ticket_drafts::{
     exit_code as drafts_exit_code, render_report_json as render_drafts_json,
     validate_p00_ticket_drafts,
@@ -25,7 +30,7 @@ use xtask::validate_accepted_evidence::{
     exit_code, render_report_json, validate_accepted_evidence_digest,
 };
 
-const USAGE: &str = "usage:\n  xtask validate accepted-evidence-digest\n  xtask compute accepted-evidence-digest <record> [--json-array]\n  xtask validate p00-ticket-drafts [--json]\n  xtask validate implementation-program [--json]\n";
+const USAGE: &str = "usage:\n  xtask validate accepted-evidence-digest\n  xtask compute accepted-evidence-digest <record> [--json-array]\n  xtask validate p00-ticket-drafts [--json]\n  xtask validate implementation-program [--json]\n  xtask validate p00-foundation-acceptance [--json]\n";
 
 fn usage_error() -> ExitCode {
     eprint!("{USAGE}");
@@ -80,6 +85,13 @@ fn run_impl_program() -> ExitCode {
     ExitCode::from(u8::try_from(program_exit_code(&report)).unwrap_or(1))
 }
 
+fn run_p00_acceptance() -> ExitCode {
+    let root = PathBuf::from(".");
+    let report = validate_p00_foundation_acceptance(&root);
+    println!("{}", render_acceptance_json(&report));
+    ExitCode::from(u8::try_from(acceptance_exit_code(&report)).unwrap_or(1))
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [command, rest @ ..] = args.as_slice() else {
@@ -94,6 +106,10 @@ fn main() -> ExitCode {
         }
         if rest == ["implementation-program"] || rest == ["implementation-program", "--json"] {
             return run_impl_program();
+        }
+        if rest == ["p00-foundation-acceptance"] || rest == ["p00-foundation-acceptance", "--json"]
+        {
+            return run_p00_acceptance();
         }
         return usage_error();
     }
