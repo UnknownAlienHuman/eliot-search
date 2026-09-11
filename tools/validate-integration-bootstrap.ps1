@@ -6,8 +6,17 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$args = @("$PSScriptRoot/validate-integration-bootstrap.py", "--root", $root)
-if ($AllowMissingLock) { $args += "--allow-missing-lock" }
-if ($Json) { $args += "--json" }
-python @args
-exit $LASTEXITCODE
+Push-Location $root
+try {
+    $cargoArgs = @('run')
+    if (-not $AllowMissingLock) { $cargoArgs += '--locked' }
+    $cargoArgs += @('-p', 'xtask', '--', 'validate', 'integration-bootstrap', '--root', $root)
+    if ($AllowMissingLock) { $cargoArgs += '--allow-missing-lock' }
+    if ($Json) { $cargoArgs += '--json' }
+    & cargo @cargoArgs
+    $exitCode = $LASTEXITCODE
+}
+finally {
+    Pop-Location
+}
+exit $exitCode

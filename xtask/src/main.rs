@@ -11,6 +11,7 @@
 //! xtask validate w1-milestone-packets [--json]
 //! xtask validate w2-milestone-packets [--json]
 //! xtask validate w3-milestone-packets [--json]
+//! xtask validate integration-bootstrap [--root <path>] [--allow-missing-lock] [--json]
 //! xtask validate implementation-program [--json]
 //! xtask validate p00-foundation-acceptance [--json]
 //! xtask validate qdrant-boundary [--json]
@@ -34,6 +35,12 @@ use xtask::impl_program::{
     exit_code as program_exit_code,
     render_report_json as render_program_json,
     validate_implementation_program,
+};
+use xtask::integration_bootstrap::{
+    exit_code as bootstrap_exit_code,
+    render_report_json as render_bootstrap_json,
+    render_report_text as render_bootstrap_text,
+    validate_integration_bootstrap,
 };
 use xtask::milestone_packets::{
     MilestonePacketReport, exit_code as milestone_packet_exit_code,
@@ -72,6 +79,7 @@ const USAGE: &str = "usage:\n\
   xtask validate w1-milestone-packets [--json]\n\
   xtask validate w2-milestone-packets [--json]\n\
   xtask validate w3-milestone-packets [--json]\n\
+  xtask validate integration-bootstrap [--root <path>] [--allow-missing-lock] [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -168,6 +176,36 @@ fn run_w3_milestone_packets() -> ExitCode {
     )
 }
 
+fn run_integration_bootstrap(args: &[String]) -> ExitCode {
+    let mut root = PathBuf::from(".");
+    let mut allow_missing_lock = false;
+    let mut json = false;
+    let mut index = 0_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--root" => {
+                index += 1;
+                let Some(path) = args.get(index) else {
+                    return usage_error();
+                };
+                root = PathBuf::from(path);
+            }
+            "--allow-missing-lock" => allow_missing_lock = true,
+            "--json" => json = true,
+            _ => return usage_error(),
+        }
+        index += 1;
+    }
+    let root = std::fs::canonicalize(&root).unwrap_or(root);
+    let report = validate_integration_bootstrap(&root, allow_missing_lock);
+    if json {
+        println!("{}", render_bootstrap_json(&report));
+    } else {
+        println!("{}", render_bootstrap_text(&report));
+    }
+    ExitCode::from(u8::try_from(bootstrap_exit_code(&report)).unwrap_or(1))
+}
+
 fn run_impl_program() -> ExitCode {
     let root = PathBuf::from(".");
     let report = validate_implementation_program(&root);
@@ -239,6 +277,11 @@ fn main() -> ExitCode {
             || rest == ["w3-milestone-packets", "--json"]
         {
             return run_w3_milestone_packets();
+        }
+        if let [target, options @ ..] = rest {
+            if target == "integration-bootstrap" {
+                return run_integration_bootstrap(options);
+            }
         }
         if rest == ["implementation-program"]
             || rest == ["implementation-program", "--json"]

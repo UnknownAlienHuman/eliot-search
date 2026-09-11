@@ -41,8 +41,12 @@ jobs:
       - name: Compile and run bootstrap qualification corpus
         shell: pwsh
         run: |
-          python -m py_compile tools/validate-integration-bootstrap.py qualification/integration-bootstrap/test_integration_bootstrap_v1.py
-          python qualification/integration-bootstrap/test_integration_bootstrap_v1.py
+          if ('${{ inputs.mode }}' -eq 'verify') {
+            cargo test --locked -p xtask integration_bootstrap
+          }
+          else {
+            cargo test -p xtask integration_bootstrap
+          }
 
       - name: Validate bootstrap structure
         if: inputs.mode == 'verify'
