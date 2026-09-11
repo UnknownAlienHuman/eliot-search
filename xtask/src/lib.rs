@@ -8,6 +8,7 @@ pub mod compute_accepted_evidence;
 pub mod context_artifact;
 pub mod context_materialization;
 pub mod coverage_graph;
+pub mod impl_program;
 pub mod package_maps;
 pub mod ticket_drafts;
 pub mod ticket_planner;

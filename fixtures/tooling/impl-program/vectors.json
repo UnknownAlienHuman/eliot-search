@@ -1,0 +1,18 @@
+{
+  "program_current": {
+    "baseline_release_requirements": 7,
+    "cargo_lock_present": true,
+    "current_stage": "P00",
+    "current_wave": 0,
+    "errors": [
+      "Cargo.lock presence is reported incorrectly"
+    ],
+    "integration_steps": 5,
+    "next_steps": 7,
+    "packages": 45,
+    "stages": 11,
+    "status": "FAIL",
+    "targets": 6,
+    "warnings": []
+  }
+}

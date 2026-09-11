@@ -23,7 +23,7 @@ jobs:
 
       - name: Validate implementation program against live registries
         shell: pwsh
-        run: python tools/validate-implementation-program.py --json
+        run: cargo run --locked --quiet -p xtask -- validate implementation-program --json
 
       - name: Revalidate architecture and bounded package maps
         shell: pwsh
@@ -43,7 +43,9 @@ jobs:
 
       - name: Compile implementation program validator
         shell: pwsh
-        run: python -m py_compile tools/validate-implementation-program.py
+        run: |
+          cargo build --locked -p xtask
+          cargo test --locked -p xtask --no-run
 
       - name: Verify clean checkout
         shell: pwsh
