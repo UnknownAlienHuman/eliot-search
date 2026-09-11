@@ -30,6 +30,12 @@ use search_query_planner::{
     CompiledPlanDigest, CompiledSearchPlan, LegBudget, PlannedLeg,
 };
 
+/// Single pinned route/epoch indexed retrieval over one accepted contract.
+///
+/// See [`indexed`] for the T28 execution path; the items below remain the
+/// nomination-only admission/scheduling/fusion core.
+pub mod indexed;
+
 /// Closed execution failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ExecuteError {
@@ -282,6 +288,13 @@ impl LegPinSet {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.epoch_pins.is_empty()
+    }
+
+    /// Borrows the pinned route/epoch guards so indexed execution can prove
+    /// the single pin binds the leg route before dispatch.
+    #[must_use]
+    pub fn epoch_pins(&self) -> &[EpochPinGuard] {
+        &self.epoch_pins
     }
 }
 
