@@ -132,13 +132,24 @@ is rejected.
 
 ## Current disposition
 
+The selected adapter pair has been exercised, but W3 as a whole has not been
+accepted. The 2026-09-10 bridge run recorded 13 `PASS` probes and left 11
+mandatory probes `UNAVAILABLE`; therefore the probe registry is
+`PARTIALLY_EXECUTED`, the artifact is still `UNQUALIFIED`, and indexed mode
+remains disabled.
+
 ```text
-server artifact: UNSELECTED
-server digest: UNSET
-Rust client: UNSELECTED
+server artifact: SELECTED qdrant.exe 1.19.0 / build 74f3e85b
+server digest: PINNED in artifact.toml
+Rust client: SELECTED qdrant-client 1.19.0
 collection schema: DESIGNED_NOT_EXECUTED
-capability probes: NOT_EXECUTED
+capability probes: PARTIALLY_EXECUTED (13 PASS / 11 UNAVAILABLE)
 lexical profile: UNQUALIFIED
 Windows containment: NOT_EXECUTED
 indexed mode: DISABLED
 ```
+
+The selected versions are upgrade inputs, not public service contracts. The
+workspace must consume Qdrant only through `search-qdrant-bridge`; the adapter
+boundary and upgrade procedure are defined in
+[`../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).

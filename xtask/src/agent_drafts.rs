@@ -7,12 +7,18 @@
 #[allow(unused_imports)]
 mod w1;
 mod w2;
+mod w3;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde_json::json;
 use toml::Value;
+
+pub use w3::{
+    W3AgentDraftReport, exit_code as w3_exit_code,
+    render_report_json as render_w3_report_json, validate_w3_agent_drafts,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AgentDraftReport {

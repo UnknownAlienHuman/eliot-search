@@ -6,6 +6,7 @@
 //! xtask validate p00-ticket-drafts [--json]
 //! xtask validate w1-agent-drafts [--json]
 //! xtask validate w2-agent-drafts [--json]
+//! xtask validate w3-agent-drafts [--json]
 //! xtask validate implementation-program [--json]
 //! xtask validate p00-foundation-acceptance [--json]
 //! xtask validate qdrant-boundary [--json]
@@ -19,7 +20,8 @@ use std::process::ExitCode;
 use xtask::agent_drafts::{
     AgentDraftReport, exit_code as agent_drafts_exit_code,
     render_report_json as render_agent_drafts_json,
-    validate_w1_agent_drafts, validate_w2_agent_drafts,
+    render_w3_report_json, validate_w1_agent_drafts,
+    validate_w2_agent_drafts, validate_w3_agent_drafts, w3_exit_code,
 };
 use xtask::compute_accepted_evidence::compute_from_record_file;
 use xtask::impl_program::{
@@ -52,6 +54,7 @@ const USAGE: &str = "usage:\n\
   xtask validate p00-ticket-drafts [--json]\n\
   xtask validate w1-agent-drafts [--json]\n\
   xtask validate w2-agent-drafts [--json]\n\
+  xtask validate w3-agent-drafts [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -112,6 +115,13 @@ fn run_agent_drafts(validator: fn(&std::path::Path) -> AgentDraftReport) -> Exit
     )
 }
 
+fn run_w3_agent_drafts() -> ExitCode {
+    let root = PathBuf::from(".");
+    let report = validate_w3_agent_drafts(&root);
+    println!("{}", render_w3_report_json(&report));
+    ExitCode::from(u8::try_from(w3_exit_code(&report)).unwrap_or(1))
+}
+
 fn run_impl_program() -> ExitCode {
     let root = PathBuf::from(".");
     let report = validate_implementation_program(&root);
@@ -158,6 +168,11 @@ fn main() -> ExitCode {
             || rest == ["w2-agent-drafts", "--json"]
         {
             return run_agent_drafts(validate_w2_agent_drafts);
+        }
+        if rest == ["w3-agent-drafts"]
+            || rest == ["w3-agent-drafts", "--json"]
+        {
+            return run_w3_agent_drafts();
         }
         if rest == ["implementation-program"]
             || rest == ["implementation-program", "--json"]

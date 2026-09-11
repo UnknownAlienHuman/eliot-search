@@ -1,7 +1,7 @@
 schema_version = 1
 project = "eliot-search"
 architecture_version = "8.4"
-status = "NOT_EXECUTED"
+status = "PARTIALLY_EXECUTED"
 result_values = ["PASS", "FAIL", "UNAVAILABLE"]
 all_mandatory_must_pass = true
 prose_only_evidence = "reject"
