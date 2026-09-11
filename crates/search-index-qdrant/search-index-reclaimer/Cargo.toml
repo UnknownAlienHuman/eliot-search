@@ -17,5 +17,11 @@ search-ports.workspace = true
 search-config.workspace = true
 search-epoch-pins.workspace = true
 
+[dev-dependencies]
+# Live rebuild/reclaim suite: disposable server plus the real data plane.
+# Exact pins of already-locked workspace versions: zero new packages.
+search-qdrant-bridge.workspace = true
+tokio = { version = "=1.53.1", features = ["macros", "rt", "rt-multi-thread", "time"] }
+
 [lints]
 workspace = true

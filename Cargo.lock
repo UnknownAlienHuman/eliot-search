@@ -1194,6 +1194,8 @@ dependencies = [
  "search-domain",
  "search-epoch-pins",
  "search-ports",
+ "search-qdrant-bridge",
+ "tokio",
 ]
 
 [[package]]

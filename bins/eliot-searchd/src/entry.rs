@@ -40,6 +40,9 @@ mod query_composition;
 mod public_runtime_service;
 #[allow(dead_code)] // T27: proven through publication_fault_process; daemon CLI wiring pending.
 mod publication_composition;
+#[cfg(feature = "wave3-index")]
+#[allow(dead_code)] // T29: proven through rebuild_process; daemon CLI wiring pending.
+mod rebuild_composition;
 mod result_handles;
 mod revision_protection;
 mod safe_reader_adapter;

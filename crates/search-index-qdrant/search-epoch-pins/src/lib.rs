@@ -609,6 +609,17 @@ pub fn compute_reclamation_watermark(
     }
 }
 
+/// Returns true only when no active pin can observe the retired state.
+///
+/// Convenience over [`compute_reclamation_watermark`] for the single
+/// `can_reclaim(route, retired_epoch)` gate: the caller supplies the exact
+/// retired route and retirement epoch, and the current registry snapshot
+/// proves that no live epoch or route pin observes them.
+#[must_use]
+pub fn can_reclaim(retired: RetiredVisibilityFence, snapshot: &PinRegistrySnapshot) -> bool {
+    compute_reclamation_watermark(retired, snapshot).reclaimable
+}
+
 /// Explicit pin release receipt.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PinReleaseReceipt {

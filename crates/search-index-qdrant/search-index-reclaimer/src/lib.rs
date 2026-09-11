@@ -9,11 +9,15 @@
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
 mod error;
+mod execute;
 mod manifest;
 mod plan;
 mod receipt;
 
 pub use error::ReclaimError;
+pub use execute::{
+    AdminDeleteAck, AdminError, AdminMutation, AdminReadback, IndexAdmin, execute_batch,
+};
 pub use manifest::{
     CommittedRetiredManifest, PublicationCommitProof, ReclaimPointId,
     RetiredPointManifest, validate_retired_manifest,
