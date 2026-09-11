@@ -5,4 +5,5 @@
 
 pub mod accepted_evidence;
 pub mod compute_accepted_evidence;
+pub mod coverage_graph;
 pub mod validate_accepted_evidence;
