@@ -1,31 +1,33 @@
-//! Port of `tools/validate-accepted-evidence-digest.py` (T41, family E).
+//! Rust validator for the accepted-evidence digest profile (T41, family E).
 //!
-//! Same causal invariants and exit codes. Migration delta: the `REQUIRED`
-//! tool paths now name the kept Python library plus the Rust sources and
-//! parity tests instead of the retired Python entrypoints (see T41 report).
+//! Same causal invariants and exit codes as the retired Python validator.
+//! The required closure is now Rust/Cargo-only and backed by frozen parity
+//! vectors plus the qualification case inventory.
 
 use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
+const PROFILE_PATH: &str = "swarm/accepted-evidence-digest-v1.toml";
+const TYPE_RULE_PATH: &str = "swarm/type-rule-profiles-v1.toml";
+const CASES_PATH: &str = "qualification/accepted-evidence/cases-v1.toml";
+const WORKFLOW: &str = ".github/workflows/accepted-evidence-digest.yml";
+
 /// Files that must exist for the digest profile closure.
-pub const REQUIRED: [&str; 8] = [
-    "swarm/accepted-evidence-digest-v1.toml",
-    "swarm/type-rule-profiles-v1.toml",
+pub const REQUIRED: [&str; 7] = [
+    PROFILE_PATH,
+    TYPE_RULE_PATH,
     "docs/handoff/ACCEPTED_EVIDENCE_DIGEST_V1.md",
-    "tools/accepted_evidence_digest_v1.py",
     "xtask/src/accepted_evidence.rs",
     "xtask/src/main.rs",
-    "qualification/accepted-evidence/cases-v1.toml",
+    CASES_PATH,
     "xtask/tests/accepted_evidence_parity.rs",
 ];
 
-const WORKFLOW: &str = ".github/workflows/accepted-evidence-digest.yml";
-
-/// Validation outcome mirroring the Python result dict.
+/// Validation outcome mirroring the retired Python result dict.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationReport {
-    /// `"PASS"` or `"FAIL"`.
+    /// ```"PASS"`` or ```"FAIL"``.
     pub status: &'static str,
     /// Number of required files checked.
     pub required_files: usize,
@@ -37,7 +39,7 @@ pub struct ValidationReport {
     pub errors: Vec<String>,
 }
 
-/// Exit code mirroring the Python validator (`0` pass, `1` fail).
+/// Exit code matching the retired Python validator (`0` pass, `1` fail).
 #[must_use]
 pub const fn exit_code(report: &ValidationReport) -> i32 {
     (!report.errors.is_empty()) as i32
@@ -224,9 +226,9 @@ pub fn validate_accepted_evidence_digest(root: &Path) -> ValidationReport {
             errors.push(format!("missing: {relative}"));
         }
     }
-    let profile = parse_toml_file(root, REQUIRED[0], &mut errors);
-    let mapping = parse_toml_file(root, REQUIRED[1], &mut errors);
-    let cases = parse_toml_file(root, REQUIRED[6], &mut errors);
+    let profile = parse_toml_file(root, PROFILE_PATH, &mut errors);
+    let mapping = parse_toml_file(root, TYPE_RULE_PATH, &mut errors);
+    let cases = parse_toml_file(root, CASES_PATH, &mut errors);
 
     check_profile_identity(profile.as_ref(), &mut errors);
     let bindings = check_bindings(mapping.as_ref(), &mut errors);
