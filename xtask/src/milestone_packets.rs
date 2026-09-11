@@ -4,6 +4,7 @@
 //! tickets, leases, handoffs, gates or launch authority.
 
 mod w1;
+mod w2;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -44,6 +45,11 @@ impl MilestonePacketReport {
 #[must_use]
 pub fn validate_w1_milestone_packets(root: &Path) -> MilestonePacketReport {
     w1::validate_w1_milestone_packets(root)
+}
+
+#[must_use]
+pub fn validate_w2_milestone_packets(root: &Path) -> MilestonePacketReport {
+    w2::validate_w2_milestone_packets(root)
 }
 
 #[must_use]
