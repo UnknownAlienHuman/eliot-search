@@ -88,10 +88,10 @@ where
     S: EndpointKeySource,
 {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
-        .map_err(|error| format!("ENDPOINT_BIND_ERROR:{error}"))?;
+        .map_err(|error| redacted_io_error("ENDPOINT_BIND_ERROR", &error))?;
     let local = listener
         .local_addr()
-        .map_err(|error| format!("ENDPOINT_LOCAL_ADDRESS_ERROR:{error}"))?;
+        .map_err(|error| redacted_io_error("ENDPOINT_LOCAL_ADDRESS_ERROR", &error))?;
     if !local.ip().is_loopback() {
         return Err("ENDPOINT_NON_LOOPBACK_BIND_DENIED".to_owned());
     }
@@ -131,7 +131,7 @@ where
             .ok_or_else(|| "ENDPOINT_CONNECTION_SEQUENCE_EXHAUSTED".to_owned())?;
         let peer = stream
             .peer_addr()
-            .map_err(|error| format!("ENDPOINT_PEER_ADDRESS_ERROR:{error}"))?;
+            .map_err(|error| redacted_io_error("ENDPOINT_PEER_ADDRESS_ERROR", &error))?;
         if !peer.ip().is_loopback() {
             let _ = write_line(&mut stream, "{\"error\":\"ENDPOINT_LOOPBACK_REQUIRED\"}");
             continue;
@@ -139,7 +139,7 @@ where
         stream
             .set_read_timeout(Some(READ_TIMEOUT))
             .and_then(|()| stream.set_write_timeout(Some(WRITE_TIMEOUT)))
-            .map_err(|error| format!("ENDPOINT_TIMEOUT_CONFIGURATION_ERROR:{error}"))?;
+            .map_err(|error| redacted_io_error("ENDPOINT_TIMEOUT_CONFIGURATION_ERROR", &error))?;
 
         match serve_connection(
             stream,
@@ -191,14 +191,14 @@ where
                 &mut stream,
                 "{\"event\":\"request_complete\",\"ok\":false,\"error\":\"ENDPOINT_REQUEST_LIMIT_EXCEEDED\"}",
             )
-            .map_err(|error| format!("ENDPOINT_WRITE_ERROR:{error}"))?;
+            .map_err(|error| redacted_io_error("ENDPOINT_WRITE_ERROR", &error))?;
             return Ok(EndpointAction::Continue);
         }
         write_line(
             &mut stream,
             &format!("{{\"event\":\"request_started\",\"sequence\":{request_sequence}}}"),
         )
-        .map_err(|error| format!("ENDPOINT_WRITE_ERROR:{error}"))?;
+        .map_err(|error| redacted_io_error("ENDPOINT_WRITE_ERROR", &error))?;
         let outcome = handler(&command, &mut stream);
         match complete_request(&mut stream, outcome, request_sequence) {
             EndpointAction::Continue => {
@@ -303,10 +303,10 @@ where
         stream,
         &encode_challenge(binding, session, &nonce, &challenge),
     )
-    .map_err(|error| format!("ENDPOINT_CHALLENGE_WRITE_ERROR:{error}"))?;
+    .map_err(|error| redacted_io_error("ENDPOINT_CHALLENGE_WRITE_ERROR", &error))?;
     let read_stream = stream
         .try_clone()
-        .map_err(|error| format!("ENDPOINT_STREAM_CLONE_ERROR:{error}"))?;
+        .map_err(|error| redacted_io_error("ENDPOINT_STREAM_CLONE_ERROR", &error))?;
     let mut reader = BufReader::new(read_stream);
     let authentication = read_bounded_line(&mut reader, MAX_AUTH_LINE_BYTES)?
         .ok_or_else(|| "ENDPOINT_AUTHENTICATION_MISSING".to_owned())?;
@@ -345,7 +345,7 @@ where
             hex_encode(verified.provider_proof().as_bytes())
         ),
     )
-    .map_err(|error| format!("ENDPOINT_READY_WRITE_ERROR:{error}"))?;
+    .map_err(|error| redacted_io_error("ENDPOINT_READY_WRITE_ERROR", &error))?;
     write_line(
         stream,
         concat!(
@@ -354,7 +354,7 @@ where
             "\"authentication\":\"pairing_blake3_v1\"}"
         ),
     )
-    .map_err(|error| format!("ENDPOINT_READY_WRITE_ERROR:{error}"))?;
+    .map_err(|error| redacted_io_error("ENDPOINT_READY_WRITE_ERROR", &error))?;
     Ok(reader)
 }
 
@@ -626,7 +626,7 @@ fn read_bounded_line(
             io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => {
                 "ENDPOINT_READ_TIMEOUT".to_owned()
             }
-            _ => format!("ENDPOINT_READ_ERROR:{error}"),
+            _ => redacted_io_error("ENDPOINT_READ_ERROR", &error),
         })?;
     if read == 0 {
         return Ok(None);
@@ -647,6 +647,16 @@ fn write_line(stream: &mut impl Write, value: &str) -> io::Result<()> {
     stream.write_all(value.as_bytes())?;
     stream.write_all(b"\n")?;
     stream.flush()
+}
+
+/// T40: closed transport error with a redacted OS detail.
+///
+/// The [`std::io::ErrorKind`] `Debug` token (`AddrInUse`, `TimedOut`, …) is a
+/// closed vocabulary: unlike the `Display` message it never carries paths,
+/// peer text or platform free-form. Verbose OS prose stays out of daemon
+/// diagnostics by construction.
+fn redacted_io_error(code: &str, error: &io::Error) -> String {
+    format!("{code}:{:?}", error.kind())
 }
 
 fn sanitize_code(error: &str) -> String {
@@ -1086,6 +1096,23 @@ mod tests {
         assert_eq!(status, Err("ENDPOINT_HANDLER_ABORTED".to_owned()));
         assert_eq!(calls, 1);
         assert!(TcpStream::connect_timeout(&address, timeout).is_err());
+    }
+
+    #[test]
+    fn io_errors_carry_closed_kind_tokens_without_os_prose() {
+        // T40: transport errors name the closed code plus the ErrorKind
+        // token only. The verbose Display message (which on some platforms
+        // embeds paths or peer text) never reaches diagnostics.
+        let refused = io::Error::new(io::ErrorKind::ConnectionRefused, "some 127.0.0.1 prose");
+        let redacted = redacted_io_error("ENDPOINT_BIND_ERROR", &refused);
+        assert_eq!(redacted, "ENDPOINT_BIND_ERROR:ConnectionRefused");
+        assert!(!redacted.contains("127.0.0.1"));
+        assert!(!redacted.contains(' '));
+        let timeout = io::Error::from(io::ErrorKind::TimedOut);
+        assert_eq!(
+            redacted_io_error("ENDPOINT_READ_ERROR", &timeout),
+            "ENDPOINT_READ_ERROR:TimedOut"
+        );
     }
 
     #[test]
