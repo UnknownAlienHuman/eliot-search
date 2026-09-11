@@ -5,5 +5,5 @@ $ErrorActionPreference = "Stop"
 $argsList = @()
 if ($Json) { $argsList += "--json" }
 
-python "$PSScriptRoot/validate-p00-ticket-drafts.py" @argsList
+& cargo run --locked --quiet -p xtask -- validate p00-ticket-drafts @argsList
 exit $LASTEXITCODE

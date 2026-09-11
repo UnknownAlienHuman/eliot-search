@@ -7,4 +7,6 @@ pub mod accepted_evidence;
 pub mod compute_accepted_evidence;
 pub mod coverage_graph;
 pub mod package_maps;
+pub mod ticket_drafts;
+pub mod ticket_planner;
 pub mod validate_accepted_evidence;
