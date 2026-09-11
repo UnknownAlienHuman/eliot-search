@@ -4,6 +4,7 @@
 //! This crate is not a swarm controller and never issues control records.
 
 pub mod accepted_evidence;
+pub mod agent_drafts;
 pub mod compute_accepted_evidence;
 pub mod context_artifact;
 pub mod context_materialization;
