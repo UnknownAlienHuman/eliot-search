@@ -24,6 +24,13 @@ use search_contracts::{
     PurgeFenceRevision, ReceiptRef, SourceMembershipId, SourceRevisionId,
 };
 
+/// Ordinary CAS retention sweep decisions.
+///
+/// Durable roots, pinned evidence and safe collection planning live here.
+/// Enforcement (object-store deletion, tombstone fencing) stays with its
+/// owning adapters; this module only decides.
+pub mod sweep;
+
 /// Closed retention/purge/restore failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RetentionError {
@@ -83,6 +90,26 @@ pub enum RetentionError {
     Quarantined,
     /// Shared revision/epoch space is exhausted.
     ContractExhausted,
+    /// Durable retention roots are missing, unordered, duplicated or unbounded.
+    RootIncomplete,
+    /// Control, root, pin or publication generation drifted mid-sweep.
+    RootGenerationChanged,
+    /// Active pin protection snapshot is stale, mismatched or unknown.
+    PinProtectionUnknown,
+    /// Sweep intent, mark, plan or batch identity/generation mismatched.
+    SweepGenerationMismatch,
+    /// Mark traversal is partial, corrupt or exceeded its finite budget.
+    MarkIncomplete,
+    /// Mark manifest is malformed, unordered or unpaired with its intent.
+    MarkManifestInvalid,
+    /// Sweep plan inventory is malformed, unordered or exceeds finite limits.
+    SweepPlanInvalid,
+    /// CAS deletion may have committed; only an exact readback resolves it.
+    SweepDeleteOutcomeUnknown,
+    /// CAS deletion applied partially and needs exact resume.
+    SweepDeletePartial,
+    /// A protected, pinned, leased or tombstoned object would be deleted.
+    SweepProtectedObjectConflict,
 }
 
 impl RetentionError {
@@ -118,6 +145,16 @@ impl RetentionError {
             Self::SecureEraseEvidenceMissing => "PURGE_SECURE_ERASE_EVIDENCE_MISSING",
             Self::Quarantined => "RETENTION_QUARANTINED",
             Self::ContractExhausted => "RETENTION_CONTRACT_EXHAUSTED",
+            Self::RootIncomplete => "RETENTION_ROOT_INCOMPLETE",
+            Self::RootGenerationChanged => "RETENTION_ROOT_GENERATION_CHANGED",
+            Self::PinProtectionUnknown => "PIN_PROTECTION_UNKNOWN",
+            Self::SweepGenerationMismatch => "SWEEP_GENERATION_MISMATCH",
+            Self::MarkIncomplete => "MARK_INCOMPLETE",
+            Self::MarkManifestInvalid => "MARK_MANIFEST_INVALID",
+            Self::SweepPlanInvalid => "SWEEP_PLAN_INVALID",
+            Self::SweepDeleteOutcomeUnknown => "SWEEP_DELETE_OUTCOME_UNKNOWN",
+            Self::SweepDeletePartial => "SWEEP_DELETE_PARTIAL",
+            Self::SweepProtectedObjectConflict => "SWEEP_PROTECTED_OBJECT_CONFLICT",
         }
     }
 }
