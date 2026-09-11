@@ -31,6 +31,14 @@ use search_contracts::{
 /// owning adapters; this module only decides.
 pub mod sweep;
 
+/// Security purge barriers across storage and result planes.
+///
+/// Deny fences commit before any deletion; the purge lifecycle stays separate
+/// from ordinary reclaim; every plane resolves with exact readback; deletion
+/// claims logical non-accessibility plus absence only, never physical secure
+/// erasure. T37 sweep decisions are reused, never duplicated.
+pub mod purge;
+
 /// Closed retention/purge/restore failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RetentionError {
@@ -54,6 +62,12 @@ pub enum RetentionError {
     InvalidPurgeManifest,
     /// Purge-fence revision is stale or non-contiguous.
     PurgeFenceMismatch,
+    /// Purge lacks an authenticated authorized mutation.
+    PurgeNotAuthorized,
+    /// Purge scope, domain or operation identity drifted; deletion never widens.
+    PurgeScopeStale,
+    /// At least one required purge plane is unresolved or unknown.
+    PurgePartial,
     /// Purge phase transition is invalid.
     InvalidPurgeTransition,
     /// Required restrictive live-deny receipt is missing or mismatched.
@@ -127,6 +141,9 @@ impl RetentionError {
             Self::OperationConflict => "RETENTION_OPERATION_CONFLICT",
             Self::InvalidPurgeManifest => "PURGE_MANIFEST_INVALID",
             Self::PurgeFenceMismatch => "PURGE_FENCE_MISMATCH",
+            Self::PurgeNotAuthorized => "PURGE_NOT_AUTHORIZED",
+            Self::PurgeScopeStale => "PURGE_SCOPE_STALE",
+            Self::PurgePartial => "PURGE_PARTIAL",
             Self::InvalidPurgeTransition => "PURGE_TRANSITION_INVALID",
             Self::LiveDenyReceiptMissing => "PURGE_LIVE_DENY_RECEIPT_MISSING",
             Self::InvalidationIncomplete => "PURGE_INVALIDATION_INCOMPLETE",
