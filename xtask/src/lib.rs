@@ -11,6 +11,7 @@ pub mod coverage_graph;
 pub mod impl_program;
 pub mod p00_acceptance;
 pub mod package_maps;
+pub mod qdrant_boundary;
 pub mod ticket_drafts;
 pub mod ticket_planner;
 pub mod validate_accepted_evidence;

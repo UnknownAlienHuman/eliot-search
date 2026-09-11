@@ -46,9 +46,9 @@ members = [
     "bins/eliot-search",
     "bins/eliot-search-model-worker",
     "bins/eliot-search-doc-worker",
-  "crates/search-runtime/search-revision-crypto",
-  "crates/search-runtime/search-os-secrets-windows",
-  "xtask",
+    "crates/search-runtime/search-revision-crypto",
+    "crates/search-runtime/search-os-secrets-windows",
+    "xtask",
 ]
 
 [workspace.package]
@@ -100,6 +100,10 @@ search-eval = { path = "crates/search-eval" }
 search-provider-protocol = { path = "crates/search-provider-protocol" }
 search-eliot-adapter = { path = "crates/search-eliot-adapter" }
 search-research-export-adapter = { path = "crates/search-research-export-adapter" }
+
+# Single vendor-SDK pin. Only search-qdrant-bridge may inherit this
+# dependency; its exact version must match the qualified client receipt.
+qdrant-client = { version = "=1.19.0", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
