@@ -35,9 +35,14 @@ Run the structural gate from the repository root:
 cargo run --locked -p xtask -- validate qdrant-boundary --json
 ```
 
-The gate scans every Cargo manifest and Rust source file. It also requires the
-workspace client pin, `Cargo.lock`, `qualified.rs` and
-`qualification/qdrant/artifact.toml` to name the same client version, and
+The gate scans every Cargo manifest and Rust source file. Its source scanner
+removes comments and string/character literals, resolves direct SDK imports and
+private type aliases, and checks multiline public signatures, public trait
+contracts and enum variants. Renaming `qdrant_client::Qdrant` to a local alias
+therefore cannot conceal a vendor type in the bridge API.
+
+The gate also requires the workspace client pin, `Cargo.lock`, `qualified.rs`
+and `qualification/qdrant/artifact.toml` to name the same client version, and
 requires the qualified server version to match the artifact manifest.
 
 ## Upgrade procedure
