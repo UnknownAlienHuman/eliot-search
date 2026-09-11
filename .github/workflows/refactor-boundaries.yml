@@ -1,0 +1,38 @@
+name: Refactor boundaries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  structural-boundaries:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.0
+
+      - name: Rust-only validator entrypoints
+        shell: pwsh
+        run: cargo test --locked -p xtask --test tooling_runtime_boundary
+
+      - name: Qdrant dependency and public API boundary
+        shell: pwsh
+        run: cargo run --locked -p xtask -- validate qdrant-boundary --json
+
+      - name: Qdrant vendor locality
+        shell: pwsh
+        run: cargo test --locked -p xtask --test qdrant_vendor_locality
+
+      - name: Qdrant upgrade blast radius
+        shell: pwsh
+        run: cargo test --locked -p xtask --test qdrant_upgrade_blast_radius
