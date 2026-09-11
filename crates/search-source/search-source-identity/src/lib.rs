@@ -18,6 +18,7 @@ pub mod binding;
 pub mod current;
 pub mod error;
 pub mod evidence;
+pub mod legacy_digest;
 pub mod lineage;
 pub mod redaction;
 pub mod resolution;
@@ -42,6 +43,12 @@ pub use evidence::{
     MAX_IDENTITY_PATH_BYTES, MissingIdentityEvidence, ObservationConfidence, PathObservation,
     ReparseBehavior, StableFieldPolicy, StableIdentityEvidence, StableIdentityKey, UnicodeBehavior,
     ValidatedIdentityObservation, derive_canonical_path_key, validate_identity_observation,
+};
+pub use legacy_digest::{
+    LEGACY_DIRECT_REVISION_ID_DOMAIN, LEGACY_DIRECT_SOURCE_ID_DOMAIN,
+    LegacyDigestIdentityError, LegacyDigestIdentityResolution, LegacyDigestPriorIdentity,
+    LegacyIdentityDigest, MAX_LEGACY_DIGEST_CANDIDATES, derive_legacy_digest_revision_id,
+    derive_legacy_digest_source_id, resolve_legacy_digest_identity,
 };
 pub use lineage::{
     LineageProof, MAX_LINEAGE_CANDIDATES, MAX_REMOTE_FINGERPRINTS, PriorRepositoryLineage,
