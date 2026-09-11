@@ -32,8 +32,8 @@ jobs:
             tools/context_materialization_planner_v1/core.py `
             tools/context_materialization_planner_v1/manifest.py `
             tools/context_materialization_planner_v1/plan.py `
-            tools/validate-context-materialization-plan.py `
             qualification/context-materialization/test_context_materialization_plan_v1.py
+          cargo build --locked -p xtask
 
       - name: Run twelve-case materialization-plan corpus
         shell: pwsh

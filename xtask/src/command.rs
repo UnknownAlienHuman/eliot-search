@@ -18,6 +18,7 @@ const USAGE: &str = "usage:\n\
   xtask validate w2-milestone-packets [--json]\n\
   xtask validate w3-milestone-packets [--json]\n\
   xtask validate integration-bootstrap [--root <path>] [--allow-missing-lock] [--json]\n\
+  xtask validate context-materialization-plan [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -65,6 +66,9 @@ fn run_validate(args: &[String]) -> ExitCode {
     }
     if let Some(options) = options_for(args, "integration-bootstrap") {
         return bootstrap::validate(options);
+    }
+    if is_optional_json(args, "context-materialization-plan") {
+        return structural::validate_context_materialization_plan();
     }
     if is_optional_json(args, "implementation-program") {
         return structural::validate_implementation_program();

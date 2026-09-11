@@ -1,6 +1,11 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+use xtask::context_materialization_validation::{
+    exit_code as materialization_exit_code,
+    render_report_json as render_materialization_json,
+    validate_context_materialization_plan as validate_materialization,
+};
 use xtask::impl_program::{
     exit_code as program_exit_code,
     render_report_json as render_program_json,
@@ -16,6 +21,12 @@ use xtask::qdrant_boundary::{
     render_report_json as render_qdrant_json,
     validate_qdrant_boundary as validate_qdrant,
 };
+
+pub(super) fn validate_context_materialization_plan() -> ExitCode {
+    let report = validate_materialization(Path::new("."));
+    println!("{}", render_materialization_json(&report));
+    code(materialization_exit_code(&report))
+}
 
 pub(super) fn validate_implementation_program() -> ExitCode {
     let report = validate_program(Path::new("."));
