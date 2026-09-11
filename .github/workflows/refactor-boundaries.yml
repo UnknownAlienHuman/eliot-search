@@ -9,7 +9,7 @@ permissions:
 jobs:
   structural-boundaries:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
@@ -28,6 +28,12 @@ jobs:
       - name: Implementation-program module ownership
         shell: pwsh
         run: cargo test --locked -p xtask --test impl_program_module_ownership
+
+      - name: Control migration marker ownership
+        shell: pwsh
+        run: |
+          cargo test --locked -p search-control-redb cutover
+          cargo test --locked -p eliot-searchd --test control_migration_owner_boundary
 
       - name: Qdrant dependency and public API boundary
         shell: pwsh

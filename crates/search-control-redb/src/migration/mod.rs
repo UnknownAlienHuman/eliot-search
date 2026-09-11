@@ -10,12 +10,19 @@ use crate::ControlError;
 
 mod codec;
 mod content;
+mod cutover;
 mod mapping;
 mod model;
 mod readback;
 mod writer;
 
 pub use content::SourceContentManifest;
+pub use cutover::{
+    CONTROL_CUTOVER_MARKER_FILE, CONTROL_CUTOVER_STAGED_DATABASE_SCHEMA,
+    ControlCutoverMarker, ControlCutoverMarkerError,
+    ControlCutoverReplayDecision, MAX_CONTROL_CUTOVER_MARKER_BYTES,
+    classify_control_cutover_replay,
+};
 pub use mapping::{
     LegacySourceMappingEvent, LegacySourceMappingState, MappedSourceEvent,
     SourceMappingError, SourceMappingHeader, SourceMappingPlanner,
