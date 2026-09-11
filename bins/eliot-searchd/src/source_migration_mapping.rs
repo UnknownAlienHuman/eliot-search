@@ -1,320 +1,268 @@
-//! Compile legacy transitions into imported-source and revision-occurrence mappings.
-//! This is a migration draft, not admission, a stability receipt, or a `SourceRevision`.
-//! Content SHA-256, unavailable timestamps, and residency are never relabelled.
+//! Adapt the legacy DIRECT source journal to the control-owned deterministic
+//! source/revision mapping planner.
+//!
+//! The daemon still owns legacy replay, source-log validation and textual
+//! migration output. Pure UUID derivation, occurrence accounting and redb row
+//! construction live in `search-control-redb::migration`.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Instant;
 
-use search_contracts::{Sha256Digest32, SourceId, SourceNamespaceId, SourceRevisionId};
+use search_contracts::{Sha256Digest32, SourceNamespaceId};
 use search_control_redb::migration::{
-    SourceImportBinding, SourceImportCounts, SourceImportRow, SourceLifecycleFlags,
+    LegacySourceMappingEvent, LegacySourceMappingState, MappedSourceEvent,
+    SourceImportRow, SourceMappingError, SourceMappingHeader,
+    SourceMappingPlanner, SourceMappingSummary, source_mapping_profile_digest,
 };
 
 use super::{
-    DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, SOURCE_LOG_FILE, SourceRecord,
-    SourceState, CONTROL_DIRECTORY, event_json, read_namespace, replay_registry,
-    sha256, snapshot_digest, validate_legacy_event,
+    CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
+    SOURCE_LOG_FILE, SourceRecord, SourceState, event_json, read_namespace,
+    replay_registry, sha256, snapshot_digest, validate_legacy_event,
 };
 
-const PROFILE: &[u8] = b"eliot/source-mapping/v1;imported-object;uuid8-sha256;active-content-change-or-reactivation=new-occurrence;path-only=retain;retirement=retain";
-
-/// Proposed graph edge. Missing canonical evidence is deliberately unrepresentable
-/// here; only the importer with real readback/policy inputs may create a `SourceRevision`.
-pub struct MappedSourceEvent {
-    pub(crate) source_id: SourceId,
-    pub(crate) revision_id: SourceRevisionId,
-    pub(crate) occurrence_sequence: u64,
-    pub(crate) previous_revision_id: Option<SourceRevisionId>,
-    pub(crate) source_event_ordinal: u64,
-    pub(crate) opens_source: bool,
-    pub(crate) opens_revision: bool,
-    pub(crate) retires_source: bool,
+fn mapping_error(error: SourceMappingError) -> String {
+    error.code().to_owned()
 }
 
-impl MappedSourceEvent {
-    fn import_row(&self, record: &SourceRecord, previous: Option<&SourceRecord>) -> Result<SourceImportRow, String> {
-        let digest = |value: &str| sha256::decode_digest(value).map(Sha256Digest32::from_bytes)
-            .ok_or_else(|| "DIRECT_MIGRATION_MAPPING_DIGEST_INVALID".to_owned());
-        Ok(SourceImportRow {
-            sequence: record.sequence, source: self.source_id, revision: self.revision_id,
-            previous_revision: self.previous_revision_id, occurrence: self.occurrence_sequence,
-            source_event: self.source_event_ordinal, source_bytes: record.byte_length,
-            lifecycle: SourceLifecycleFlags::new([
-                self.opens_source,
-                self.opens_revision,
-                self.retires_source,
-                record.identity_strength.tag() == "native",
-            ]),
-            operation: digest(&record.operation_id)?, legacy_source: digest(&record.source_id)?,
-            legacy_revision: digest(&record.revision_id)?, content: digest(&record.content_digest)?,
-            file_identity: digest(&record.file_identity_digest)?, path: digest(&record.path_digest)?,
-            event: digest(&record.record_digest)?, previous_event: digest(&record.previous_digest)?,
-            previous_source_event: previous.map(|row| digest(&row.record_digest)).transpose()?
-                .unwrap_or(Sha256Digest32::from_bytes([0; 32])),
-        })
-    }
+fn digest(value: &str) -> Result<Sha256Digest32, String> {
+    sha256::decode_digest(value)
+        .map(Sha256Digest32::from_bytes)
+        .ok_or_else(|| "DIRECT_MIGRATION_MAPPING_DIGEST_INVALID".to_owned())
+}
 
-    fn encode(&self, record: &SourceRecord, previous: Option<&SourceRecord>) -> String {
-        let predecessor = self.previous_revision_id.map_or_else(
-            || "null".to_owned(), |id| format!("\"{id}\""),
-        );
-        // Everything interpolated is a typed UUID, validated legacy hex/tag, or integer.
-        format!(concat!(
+fn legacy_event(
+    record: &SourceRecord,
+    previous: Option<&SourceRecord>,
+) -> Result<LegacySourceMappingEvent, String> {
+    Ok(LegacySourceMappingEvent {
+        sequence: record.sequence,
+        operation: digest(&record.operation_id)?,
+        legacy_source: digest(&record.source_id)?,
+        legacy_revision: digest(&record.revision_id)?,
+        content: digest(&record.content_digest)?,
+        file_identity: digest(&record.file_identity_digest)?,
+        path: digest(&record.path_digest)?,
+        event: digest(&record.record_digest)?,
+        previous_event: digest(&record.previous_digest)?,
+        previous_source_event: previous
+            .map(|predecessor| digest(&predecessor.record_digest))
+            .transpose()?,
+        source_bytes: record.byte_length,
+        state: match record.state {
+            SourceState::Active => LegacySourceMappingState::Active,
+            SourceState::Retired => LegacySourceMappingState::Retired,
+        },
+        native_identity: record.identity_strength.tag() == "native",
+    })
+}
+
+fn encode_mapped(
+    mapped: &MappedSourceEvent,
+    record: &SourceRecord,
+    previous: Option<&SourceRecord>,
+) -> String {
+    let predecessor = mapped.previous_revision_id.map_or_else(
+        || "null".to_owned(),
+        |id| format!("\"{id}\""),
+    );
+    format!(
+        concat!(
             "{{\"kind\":\"source_event_mapping\",\"source_id\":\"{}\",",
             "\"revision_id\":\"{}\",\"occurrence_sequence\":{},",
-            "\"previous_revision_id\":{},\"opens_source\":{},\"opens_revision\":{},",
-            "\"retires_source\":{},\"legacy\":{}}}\n"
-        ), self.source_id, self.revision_id, self.occurrence_sequence, predecessor,
-            self.opens_source, self.opens_revision, self.retires_source,
-            event_json(record, previous, self.source_event_ordinal))
-    }
+            "\"previous_revision_id\":{},\"opens_source\":{},",
+            "\"opens_revision\":{},\"retires_source\":{},\"legacy\":{}}}\n"
+        ),
+        mapped.source_id,
+        mapped.revision_id,
+        mapped.occurrence_sequence,
+        predecessor,
+        mapped.opens_source,
+        mapped.opens_revision,
+        mapped.retires_source,
+        event_json(record, previous, mapped.source_event_ordinal),
+    )
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub struct SourceMappingHeader {
-    pub(crate) namespace: SourceNamespaceId,
-    pub(crate) legacy_namespace: [u8; 32],
-    pub(crate) catalog_snapshot: [u8; 32],
-    pub(crate) expected_events: u64,
-    pub(crate) expected_sources: u64,
-}
-
-impl SourceMappingHeader {
-    pub(crate) fn import_binding(self, plan_chain: [u8; 32]) -> SourceImportBinding {
-        SourceImportBinding {
-            target_namespace: self.namespace, legacy_namespace: Sha256Digest32::from_bytes(self.legacy_namespace),
-            catalog_snapshot: Sha256Digest32::from_bytes(self.catalog_snapshot),
-            mapping_profile: Sha256Digest32::from_bytes(sha256::digest(PROFILE)),
-            plan_chain: Sha256Digest32::from_bytes(plan_chain), events: self.expected_events, sources: self.expected_sources,
-        }
-    }
-
-    pub(crate) fn encode(self) -> String {
-        format!(concat!(
-            "{{\"kind\":\"source_mapping_header\",\"schema\":\"eliot.source-mapping.v1\",",
-            "\"target_namespace_id\":\"{}\",\"legacy_namespace_sha256\":\"{}\",",
-            "\"catalog_snapshot_sha256\":\"{}\",\"mapping_profile_sha256\":\"{}\",",
+fn encode_header(header: SourceMappingHeader) -> String {
+    format!(
+        concat!(
+            "{{\"kind\":\"source_mapping_header\",",
+            "\"schema\":\"eliot.source-mapping.v1\",",
+            "\"target_namespace_id\":\"{}\",",
+            "\"legacy_namespace_sha256\":\"{}\",",
+            "\"catalog_snapshot_sha256\":\"{}\",",
+            "\"mapping_profile_sha256\":\"{}\",",
             "\"expected_events\":{},\"expected_sources\":{},",
-            "\"identity_kind\":\"imported_object\",\"acquisition_kind\":\"imported\",",
+            "\"identity_kind\":\"imported_object\",",
+            "\"acquisition_kind\":\"imported\",",
             "\"draft_only\":true,\"cutover_authorized\":false}}\n"
-        ), self.namespace, sha256::hex(&self.legacy_namespace), sha256::hex(&self.catalog_snapshot),
-            sha256::hex(&sha256::digest(PROFILE)), self.expected_events, self.expected_sources)
-    }
+        ),
+        header.namespace,
+        sha256::hex(&header.legacy_namespace),
+        sha256::hex(&header.catalog_snapshot),
+        sha256::hex(&source_mapping_profile_digest()),
+        header.expected_events,
+        header.expected_sources,
+    )
 }
 
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
-pub struct SourceMappingSummary {
-    pub(crate) events: u64,
-    pub(crate) sources: u64,
-    pub(crate) occurrences: u64,
-    pub(crate) path_only_events: u64,
-    pub(crate) retirements: u64,
-}
-
-impl SourceMappingSummary {
-    pub(crate) const fn import_counts(self) -> SourceImportCounts {
-        SourceImportCounts { events: self.events, sources: self.sources, occurrences: self.occurrences,
-            retained_events: self.path_only_events, retirements: self.retirements }
-    }
-
-    pub(crate) fn encode(self) -> String {
-        format!(concat!(
-            "{{\"kind\":\"source_mapping_end\",\"events\":{},\"sources\":{},",
-            "\"revision_occurrences\":{},\"retained_revision_events\":{},\"retirements\":{},",
-            "\"required_import_inputs\":[\"content_blake3_readback\",\"import_observation_and_stability\",",
-            "\"residency_policy\",\"root_and_membership_bindings\",\"namespace_owner_cutover\"],",
+fn encode_summary(summary: SourceMappingSummary) -> String {
+    format!(
+        concat!(
+            "{{\"kind\":\"source_mapping_end\",\"events\":{},",
+            "\"sources\":{},\"revision_occurrences\":{},",
+            "\"retained_revision_events\":{},\"retirements\":{},",
+            "\"required_import_inputs\":[",
+            "\"content_blake3_readback\",",
+            "\"import_observation_and_stability\",",
+            "\"residency_policy\",\"root_and_membership_bindings\",",
+            "\"namespace_owner_cutover\"],",
             "\"canonical_records_materialized\":false}}\n"
-        ), self.events, self.sources, self.occurrences, self.path_only_events, self.retirements)
-    }
-}
-
-struct SourcePosition {
-    id: SourceId,
-    revision: SourceRevisionId,
-    occurrence: u64,
-    ordinal: u64,
-    last_event: String,
-}
-
-struct Mapper {
-    header: SourceMappingHeader,
-    sources: BTreeMap<String, SourcePosition>,
-    // Keep full derivation identities to reject truncation/UUID-bit collisions.
-    ids: BTreeMap<[u8; 16], [u8; 32]>,
-    summary: SourceMappingSummary,
-}
-
-impl Mapper {
-    fn new(header: SourceMappingHeader) -> Self {
-        Self { header, sources: BTreeMap::new(), ids: BTreeMap::new(), summary: SourceMappingSummary::default() }
-    }
-
-    fn allocate_id(&mut self, domain: &[u8], parts: &[&[u8]]) -> Result<[u8; 16], String> {
-        if self.ids.len() >= MAX_SOURCE_EVENTS.saturating_mul(2) {
-            return Err("DIRECT_MIGRATION_MAPPING_LIMIT".to_owned());
-        }
-        let full = sha256::digest_parts(domain, parts);
-        let mut id = [0; 16];
-        id.copy_from_slice(&full[..16]);
-        id[6] = (id[6] & 0x0f) | 0x80; // UUID version 8, explicit application-defined profile.
-        id[8] = (id[8] & 0x3f) | 0x80;
-        if let Some(previous) = self.ids.insert(id, full) {
-            if previous != full { return Err("DIRECT_MIGRATION_MAPPING_ID_COLLISION".to_owned()); }
-            // New allocations must correspond to a new source or occurrence.
-            return Err("DIRECT_MIGRATION_MAPPING_ID_REUSED".to_owned());
-        }
-        Ok(id)
-    }
-
-    fn map(&mut self, record: &SourceRecord, previous: Option<&SourceRecord>) -> Result<MappedSourceEvent, String> {
-        validate_legacy_event(&self.header.legacy_namespace, record, previous)?;
-        if record.sequence != self.summary.events + 1 {
-            return Err("DIRECT_MIGRATION_MAPPING_ORDER_INVALID".to_owned());
-        }
-        let prior = self.sources.get(&record.source_id);
-        if prior.is_some() != previous.is_some()
-            || prior.zip(previous).is_some_and(|(a, b)| a.last_event != b.record_digest)
-        {
-            return Err("DIRECT_MIGRATION_MAPPING_PREDECESSOR_INVALID".to_owned());
-        }
-        let opens_source = prior.is_none();
-        let old_revision = prior.map(|value| value.revision);
-        let old_occurrence = prior.map_or(0, |value| value.occurrence);
-        let ordinal = prior.map_or(0, |value| value.ordinal).checked_add(1)
-            .ok_or_else(|| "DIRECT_MIGRATION_ORDINAL_EXHAUSTED".to_owned())?;
-        let existing_id = prior.map(|value| value.id);
-        let target = *self.header.namespace.as_bytes();
-        let legacy_namespace = self.header.legacy_namespace;
-        let source_id = match existing_id {
-            Some(id) => id,
-            None => SourceId::from_bytes(self.allocate_id(b"eliot-search/imported-source-uuid/v1", &[
-                &target, &legacy_namespace, record.source_id.as_bytes(),
-            ])?),
-        };
-        let opens_revision = record.state == SourceState::Active && previous.is_none_or(|old| {
-            old.state == SourceState::Retired || old.revision_id != record.revision_id
-        });
-        let occurrence_sequence = if opens_revision {
-            old_occurrence.checked_add(1).ok_or_else(|| "DIRECT_MIGRATION_ORDINAL_EXHAUSTED".to_owned())?
-        } else { old_occurrence };
-        let revision_id = if opens_revision {
-            SourceRevisionId::from_bytes(self.allocate_id(b"eliot-search/imported-revision-uuid/v1", &[
-                &target, source_id.as_bytes(), record.record_digest.as_bytes(), &occurrence_sequence.to_be_bytes(),
-            ])?)
-        } else {
-            old_revision.ok_or_else(|| "DIRECT_MIGRATION_RETIREMENT_INVALID".to_owned())?
-        };
-        let retires_source = record.state == SourceState::Retired;
-        self.sources.insert(record.source_id.clone(), SourcePosition {
-            id: source_id, revision: revision_id, occurrence: occurrence_sequence,
-            ordinal, last_event: record.record_digest.clone(),
-        });
-        self.summary.events += 1; // bounded by replay's MAX_SOURCE_EVENTS
-        self.summary.sources += u64::from(opens_source);
-        self.summary.occurrences += u64::from(opens_revision);
-        self.summary.retirements += u64::from(retires_source);
-        self.summary.path_only_events += u64::from(!opens_revision && !retires_source);
-        Ok(MappedSourceEvent {
-            source_id, revision_id, occurrence_sequence, previous_revision_id: old_revision,
-            source_event_ordinal: ordinal, opens_source, opens_revision, retires_source,
-        })
-    }
+        ),
+        summary.events,
+        summary.sources,
+        summary.occurrences,
+        summary.path_only_events,
+        summary.retirements,
+    )
 }
 
 impl DirectStore {
-    /// The header is provisional until the complete disk replay returns this state.
-    pub(crate) fn source_mapping_header(&self, namespace: SourceNamespaceId) -> Result<SourceMappingHeader, String> {
-        if namespace.as_bytes() == &[0; 16] {
-            return Err("DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned());
-        }
-        Ok(SourceMappingHeader {
-            namespace, legacy_namespace: self.namespace_id,
-            catalog_snapshot: snapshot_digest(&self.namespace_id, self.registry.last_sequence, &self.registry.last_digest),
-            expected_events: self.registry.event_count as u64,
-            expected_sources: self.registry.latest.len() as u64,
-        })
+    /// Provisional typed header for the complete admitted legacy snapshot.
+    pub(crate) fn source_mapping_header(
+        &self,
+        namespace: SourceNamespaceId,
+    ) -> Result<SourceMappingHeader, String> {
+        SourceMappingHeader::new(
+            namespace,
+            self.namespace_id,
+            snapshot_digest(
+                &self.namespace_id,
+                self.registry.last_sequence,
+                &self.registry.last_digest,
+            ),
+            self.registry.event_count as u64,
+            self.registry.latest.len() as u64,
+            MAX_SOURCE_EVENTS as u64,
+        )
+        .map_err(mapping_error)
     }
 
-    /// A complete mapping pass, shared by staging and its exact-byte readback.
-    /// No second source-log parser, per-page replay, payload read or durable owner is created.
-    /// The callback may only stage provisional bytes; its effects are not accepted before Ok.
+    /// Compile the same complete mapping stream used by staging/readback.
     pub(crate) fn compile_source_mapping(
-        &self, namespace: SourceNamespaceId, deadline: Instant,
+        &self,
+        namespace: SourceNamespaceId,
+        deadline: Instant,
         emit: impl FnMut(&[u8]) -> Result<(), String>,
     ) -> Result<SourceMappingSummary, String> {
         self.compile_source_mapping_inner(namespace, deadline, emit, None)
     }
 
-    /// Import and exact target readback consume the same typed mappings as the
-    /// textual plan. They never parse arbitrary JSON into supposedly trusted rows.
+    /// Compile textual mapping output and the exact typed import rows in one pass.
     pub(crate) fn compile_source_mapping_with_rows(
-        &self, namespace: SourceNamespaceId, deadline: Instant,
+        &self,
+        namespace: SourceNamespaceId,
+        deadline: Instant,
         emit: impl FnMut(&[u8]) -> Result<(), String>,
         mut mapped: impl FnMut(SourceImportRow) -> Result<(), String>,
     ) -> Result<SourceMappingSummary, String> {
-        self.compile_source_mapping_inner(namespace, deadline, emit, Some(&mut mapped))
+        self.compile_source_mapping_inner(
+            namespace,
+            deadline,
+            emit,
+            Some(&mut mapped),
+        )
     }
 
     fn compile_source_mapping_inner(
-        &self, namespace: SourceNamespaceId, deadline: Instant,
+        &self,
+        namespace: SourceNamespaceId,
+        deadline: Instant,
         mut emit: impl FnMut(&[u8]) -> Result<(), String>,
         mut imported: Option<&mut dyn FnMut(SourceImportRow) -> Result<(), String>>,
     ) -> Result<SourceMappingSummary, String> {
-        let check = || if Instant::now() >= deadline {
-            Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
-        } else { Ok(()) };
+        let check = || {
+            if Instant::now() >= deadline {
+                Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+            } else {
+                Ok(())
+            }
+        };
         check()?;
         let header = self.source_mapping_header(namespace)?;
         let control = self.root.join(CONTROL_DIRECTORY);
         if read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
-        emit(header.encode().as_bytes())?;
-        let mut mapper = Mapper::new(header);
-        let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
-            check()?;
-            let mapped_entry = mapper.map(record, previous)?;
-            if let Some(imported) = imported.as_mut() { imported(mapped_entry.import_row(record, previous)?)?; }
-            emit(mapped_entry.encode(record, previous).as_bytes())
-        })?;
+        emit(encode_header(header).as_bytes())?;
+        let mut planner = SourceMappingPlanner::new(header, MAX_SOURCE_EVENTS)
+            .map_err(mapping_error)?;
+        let state = replay_registry(
+            &control.join(SOURCE_LOG_FILE),
+            |record, previous| {
+                check()?;
+                validate_legacy_event(&header.legacy_namespace, record, previous)?;
+                let mapped = planner
+                    .map(legacy_event(record, previous)?)
+                    .map_err(mapping_error)?;
+                if let Some(imported) = imported.as_mut() {
+                    imported(mapped.import_row())?;
+                }
+                emit(encode_mapped(&mapped, record, previous).as_bytes())
+            },
+        )?;
         check()?;
-        if state != self.registry || read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id
-            || mapper.summary.events != header.expected_events || mapper.summary.sources != header.expected_sources
-            || mapper.summary.events != mapper.summary.occurrences + mapper.summary.path_only_events + mapper.summary.retirements
+        let summary = planner.finish().map_err(mapping_error)?;
+        if state != self.registry
+            || read_namespace(&control.join(NAMESPACE_FILE))?
+                != self.namespace_id
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        emit(mapper.summary.encode().as_bytes())?;
+        emit(encode_summary(summary).as_bytes())?;
         check()?;
-        Ok(mapper.summary)
+        Ok(summary)
     }
 
-    /// Open only the existing journal as an immutable input to a mapping operation.
-    /// The caller holds the ordinary root lock for this entire callback. Neither
-    /// `DirectStore::open` nor its initialization/protection/recovery path is invoked.
-    /// The callback borrows the admitted snapshot; no mutable store is returned.
+    /// Borrow only the existing immutable legacy source snapshot for mapping.
     pub(crate) fn with_existing_mapping_source<T>(
-        root: &Path, deadline: Instant,
+        root: &Path,
+        deadline: Instant,
         inspect: impl FnOnce(&Self) -> Result<T, String>,
     ) -> Result<T, String> {
-        let check = || if Instant::now() >= deadline {
-            Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
-        } else { Ok(()) };
+        let check = || {
+            if Instant::now() >= deadline {
+                Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+            } else {
+                Ok(())
+            }
+        };
         check()?;
         crate::catalog_presence::require_existing(root)?;
         let control = root.join(CONTROL_DIRECTORY);
         let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))?;
-        let registry = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
-            check()?;
-            validate_legacy_event(&namespace_id, record, previous)
-        })?;
+        let registry = replay_registry(
+            &control.join(SOURCE_LOG_FILE),
+            |record, previous| {
+                check()?;
+                validate_legacy_event(&namespace_id, record, previous)
+            },
+        )?;
         check()?;
         if read_namespace(&control.join(NAMESPACE_FILE))? != namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
-        let source = Self { root: root.to_path_buf(), namespace_id, registry };
-        let expected = snapshot_digest(&source.namespace_id, source.registry.last_sequence, &source.registry.last_digest);
+        let source = Self {
+            root: root.to_path_buf(),
+            namespace_id,
+            registry,
+        };
+        let expected = snapshot_digest(
+            &source.namespace_id,
+            source.registry.last_sequence,
+            &source.registry.last_digest,
+        );
         let result = inspect(&source)?;
         if source.verify_migration_snapshot(deadline)? != expected {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());

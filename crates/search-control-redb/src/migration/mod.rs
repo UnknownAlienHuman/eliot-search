@@ -10,11 +10,17 @@ use crate::ControlError;
 
 mod codec;
 mod content;
+mod mapping;
 mod model;
 mod readback;
 mod writer;
 
 pub use content::SourceContentManifest;
+pub use mapping::{
+    LegacySourceMappingEvent, LegacySourceMappingState, MappedSourceEvent,
+    SourceMappingError, SourceMappingHeader, SourceMappingPlanner,
+    SourceMappingSummary, source_mapping_profile_digest,
+};
 pub use model::{
     SourceImportBinding, SourceImportCounts, SourceImportRow,
     SourceLifecycleFlags,
