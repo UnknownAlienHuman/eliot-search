@@ -4,7 +4,9 @@
 //! portfolios, coherent source/workspace views and source-namespace owner
 //! transitions. It persists accepted identity/admission decisions through the
 //! vendor-neutral [`error::RegistryControlPort`] and never reimplements those
-//! semantics. All public operations enter through [`api`].
+//! semantics. Canonical product operations enter through [`api`]. The bounded
+//! legacy DIRECT journal compatibility surface is re-exported at the crate root;
+//! the daemon remains the bounded filesystem integration owner.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -37,6 +39,9 @@ pub mod snapshot;
 pub mod source;
 pub mod view;
 
+#[path = "source/legacy_direct.rs"]
+mod source_legacy_direct;
+
 pub use api::{
     DEFAULT_REGISTRY_LIMITS, InMemoryRegistryJournal, JournalEntryKind, RegistryControlPort,
     RegistryError, RegistryJournalEntry, RegistryLimits, RegistryPortError,
@@ -48,6 +53,12 @@ pub use recovery::{
     SourceRegistry,
 };
 pub use source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
+pub use source_legacy_direct::{
+    LEGACY_DIRECT_LOG_HEADER, LEGACY_DIRECT_ZERO_DIGEST, LegacyDirectAppendPlan,
+    LegacyDirectDigest, LegacyDirectIdentityStrength, LegacyDirectJournalError,
+    LegacyDirectRecordDraft, LegacyDirectRegistryState, LegacyDirectSourceRecord,
+    LegacyDirectSourceState, verify_legacy_direct_revision_identity,
+};
 
 #[cfg(test)]
 mod tests;

@@ -35,6 +35,14 @@ jobs:
           cargo test --locked -p search-control-redb cutover
           cargo test --locked -p eliot-searchd --test control_migration_owner_boundary
 
+      - name: Legacy DIRECT journal ownership
+        shell: pwsh
+        run: |
+          cargo test --locked -p search-source-registry legacy_direct
+          cargo test --locked -p eliot-searchd --test direct_store_registry_owner_boundary
+          cargo check --locked -p eliot-searchd --bin eliot-searchd
+          cargo test --locked -p eliot-searchd --bin eliot-searchd plaintext_direct_store
+
       - name: Qdrant dependency and public API boundary
         shell: pwsh
         run: cargo run --locked -p xtask -- validate qdrant-boundary --json

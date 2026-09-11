@@ -1,8 +1,8 @@
 //! One replay of the legacy source journal owns live sources and retained revisions.
 //!
-//! This is the existing DIRECT catalog, not another store or a canonical redb
-//! migration. Readers borrow its accepted state; they do not maintain a second
-//! revision map or infer event counts by counting unvalidated lines.
+//! Filesystem framing and stable-file checks remain in the daemon. Event schema,
+//! digest-chain, idempotency and immutable-identity replay semantics are delegated
+//! to `search-source-registry`; readers never maintain a second revision map.
 
 use std::io::{BufRead, BufReader, Read};
 
@@ -10,11 +10,10 @@ use std::io::{BufRead, BufReader, Read};
 mod migration;
 
 use super::{
-    CONTROL_DIRECTORY, DirectStore, File, IdentityStrength, MAX_LOG_BYTES,
+    CONTROL_DIRECTORY, DirectDigest, DirectStore, File, MAX_LOG_BYTES,
     MAX_LOG_LINE_BYTES, MAX_SCAN_INPUT_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
     Path, RegistryState, SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord,
     SourceState, ZERO_DIGEST, ensure_regular_file, is_reparse, sha256,
-    validate_digest_text,
 };
 
 /// Exact immutable object binding. Global event sequence is not a source revision.
@@ -39,30 +38,42 @@ impl From<&SourceRecord> for RevisionMetadata {
 
 impl DirectStore {
     /// Projects the sole accepted revision inventory without retaining another map.
-    pub(crate) fn retained_revisions(&self) -> impl ExactSizeIterator<Item = RevisionMetadata> + '_ {
+    pub(crate) fn retained_revisions(
+        &self,
+    ) -> impl ExactSizeIterator<Item = RevisionMetadata> + '_ {
         self.registry.revisions.values().map(RevisionMetadata::from)
     }
 
     /// Ordered continuation over the same inventory, without cloning or rescanning its prefix.
     pub(crate) fn retained_revisions_after(
-        &self, after: Option<&str>,
+        &self,
+        after: Option<&str>,
     ) -> impl Iterator<Item = RevisionMetadata> + '_ {
         use std::ops::Bound::{Excluded, Unbounded};
         let lower = after.map_or(Unbounded, |value| Excluded(value.to_owned()));
-        self.registry.revisions.range::<String, _>((lower, Unbounded))
+        self.registry
+            .revisions
+            .range::<String, _>((lower, Unbounded))
             .map(|(_, record)| RevisionMetadata::from(record))
     }
 
     /// Snapshot identity for resumable preparation, not an authorization receipt.
     pub(crate) fn preparation_catalog_digest(&self) -> [u8; 32] {
-        sha256::digest_parts(b"eliot-search/direct-preparation-catalog/v1", &[
-            &self.namespace_id, &self.registry.last_sequence.to_be_bytes(),
-            self.registry.last_digest.as_bytes(),
-        ])
+        sha256::digest_parts(
+            b"eliot-search/direct-preparation-catalog/v1",
+            &[
+                &self.namespace_id,
+                &self.registry.last_sequence.to_be_bytes(),
+                self.registry.last_digest.as_bytes(),
+            ],
+        )
     }
 
     pub(crate) fn retained_revision(&self, revision_id: &str) -> Option<RevisionMetadata> {
-        self.registry.revisions.get(revision_id).map(RevisionMetadata::from)
+        self.registry
+            .revisions
+            .get(revision_id)
+            .map(RevisionMetadata::from)
     }
 
     pub(crate) const fn source_event_count(&self) -> usize {
@@ -84,15 +95,16 @@ impl DirectStore {
 
 pub(super) fn read_namespace(path: &Path) -> Result<[u8; 32], String> {
     ensure_regular_file(path)?;
-    let file = File::open(path)
-        .map_err(|error| format!("DIRECT_NAMESPACE_READ_ERROR:{error}"))?;
-    let metadata = file.metadata()
+    let file = File::open(path).map_err(|error| format!("DIRECT_NAMESPACE_READ_ERROR:{error}"))?;
+    let metadata = file
+        .metadata()
         .map_err(|error| format!("DIRECT_NAMESPACE_READ_ERROR:{error}"))?;
     if !metadata.is_file() || is_reparse(&metadata) || metadata.len() > 256 {
         return Err("DIRECT_NAMESPACE_INVALID".to_owned());
     }
     let mut value = String::new();
-    file.take(257).read_to_string(&mut value)
+    file.take(257)
+        .read_to_string(&mut value)
         .map_err(|error| format!("DIRECT_NAMESPACE_READ_ERROR:{error}"))?;
     if value.len() > 256 || u64::try_from(value.len()).ok() != Some(metadata.len()) {
         return Err("DIRECT_NAMESPACE_INVALID".to_owned());
@@ -101,72 +113,29 @@ pub(super) fn read_namespace(path: &Path) -> Result<[u8; 32], String> {
 }
 
 pub fn verify_revision_identity(metadata: &RevisionMetadata) -> Result<(), String> {
-    let content_digest = sha256::decode_digest(&metadata.content_digest)
-        .ok_or_else(|| "DIRECT_REVISION_CONTENT_MISMATCH".to_owned())?;
-    let expected = sha256::hex(&sha256::digest_parts(
-        b"eliot-search/direct-revision-id/v1",
-        &[
-            metadata.source_id.as_bytes(),
-            &content_digest,
-            &metadata.byte_length.to_be_bytes(),
-        ],
-    ));
-    if expected == metadata.revision_id {
-        Ok(())
-    } else {
-        Err("DIRECT_REVISION_ID_MISMATCH".to_owned())
-    }
+    search_source_registry::verify_legacy_direct_revision_identity::<DirectDigest>(
+        &metadata.source_id,
+        &metadata.revision_id,
+        &metadata.content_digest,
+        metadata.byte_length,
+    )
+    .map_err(|error| error.code().to_owned())
 }
 
 pub(super) fn load_registry(path: &Path) -> Result<RegistryState, String> {
     replay_registry(path, |_, _| Ok(()))
 }
 
-/// Parses and validates one already chained log event into its record.
-fn parse_event_record(fields: &[&str], sequence: u64) -> Result<SourceRecord, String> {
-    for index in [2_usize, 3, 5, 6, 7, 9, 10, 12] {
-        validate_digest_text(fields[index], "DIRECT_CONTROL_LOG_DIGEST_INVALID")?;
-    }
-    let state_value = SourceState::parse(fields[4])
-        .ok_or_else(|| "DIRECT_CONTROL_LOG_STATE_INVALID".to_owned())?;
-    let byte_length = fields[8].parse::<u64>()
-        .map_err(|_| "DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned())?;
-    if byte_length > u64::try_from(MAX_SCAN_INPUT_BYTES).unwrap_or(u64::MAX) {
-        return Err("DIRECT_CONTROL_LOG_LENGTH_INVALID".to_owned());
-    }
-    let identity_strength = IdentityStrength::parse(fields[11])
-        .ok_or_else(|| "DIRECT_CONTROL_LOG_IDENTITY_INVALID".to_owned())?;
-    let canonical = fields[..12].join("\t");
-    let record_digest = sha256::hex(&sha256::digest(canonical.as_bytes()));
-    if record_digest != fields[12] {
-        return Err("DIRECT_CONTROL_LOG_RECORD_DIGEST_INVALID".to_owned());
-    }
-    Ok(SourceRecord {
-        sequence,
-        previous_digest: fields[2].to_owned(),
-        operation_id: fields[3].to_owned(),
-        state: state_value,
-        source_id: fields[5].to_owned(),
-        revision_id: fields[6].to_owned(),
-        content_digest: fields[7].to_owned(),
-        byte_length,
-        file_identity_digest: fields[9].to_owned(),
-        path_digest: fields[10].to_owned(),
-        identity_strength,
-        record_digest: fields[12].to_owned(),
-    })
-}
-
-/// A read-only migration observer shares the full ordinary replay validator.
+/// A read-only migration observer shares the full owner replay validator.
 /// Observed entries remain provisional until this function returns successfully.
 fn replay_registry(
     path: &Path,
     mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
 ) -> Result<RegistryState, String> {
     ensure_regular_file(path)?;
-    let file = File::open(path)
-        .map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
-    let before = file.metadata()
+    let file = File::open(path).map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
+    let before = file
+        .metadata()
         .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?;
     if !before.is_file() || is_reparse(&before) {
         return Err("DIRECT_FILE_INVALID".to_owned());
@@ -181,10 +150,7 @@ fn replay_registry(
     if line.trim_end_matches(['\r', '\n']) != SOURCE_LOG_HEADER {
         return Err("DIRECT_CONTROL_LOG_HEADER_INVALID".to_owned());
     }
-    let mut state = RegistryState {
-        last_digest: ZERO_DIGEST.to_owned(),
-        ..RegistryState::default()
-    };
+    let mut state = RegistryState::default();
     while read_log_line(&mut reader, &mut line, &mut consumed)? != 0 {
         if state.event_count >= MAX_SOURCE_EVENTS {
             return Err("DIRECT_SOURCE_EVENT_LIMIT_EXCEEDED".to_owned());
@@ -193,49 +159,24 @@ fn replay_registry(
         if trimmed.is_empty() {
             return Err("DIRECT_CONTROL_LOG_EMPTY_EVENT".to_owned());
         }
-        // Bound field allocation even for a line consisting entirely of tabs.
-        let fields = trimmed.splitn(14, '\t').collect::<Vec<_>>();
-        if fields.len() != 13 || fields[0] != "V1" {
-            return Err("DIRECT_CONTROL_LOG_EVENT_INVALID".to_owned());
-        }
-        let sequence = fields[1].parse::<u64>()
-            .map_err(|_| "DIRECT_CONTROL_LOG_SEQUENCE_INVALID".to_owned())?;
-        let expected_sequence = state.last_sequence.checked_add(1)
-            .ok_or_else(|| "DIRECT_SOURCE_SEQUENCE_EXHAUSTED".to_owned())?;
-        if sequence != expected_sequence || fields[2] != state.last_digest {
-            return Err("DIRECT_CONTROL_LOG_CHAIN_INVALID".to_owned());
-        }
-        let record = parse_event_record(&fields, sequence)?;
-        if state.operations.contains_key(fields[3]) {
-            return Err("DIRECT_CONTROL_LOG_OPERATION_DUPLICATE".to_owned());
-        }
-        verify_revision_identity(&RevisionMetadata::from(&record))?;
-        if let Some(previous) = state.latest.get(&record.source_id)
-            && previous.file_identity_digest != record.file_identity_digest
-        {
-            return Err("DIRECT_CONTROL_LOG_SOURCE_COLLISION".to_owned());
-        }
-        if let Some(previous) = state.revisions.get(&record.revision_id) {
-            // Repeated A/B/A occurrences retain their original history; only the
-            // immutable object binding must agree, not operation/path/sequence.
-            if previous.source_id != record.source_id
-                || previous.content_digest != record.content_digest
-                || previous.byte_length != record.byte_length
-            {
-                return Err("DIRECT_CONTROL_LOG_REVISION_COLLISION".to_owned());
-            }
-        }
+        let record = state
+            .parse_record::<DirectDigest>(
+                trimmed,
+                u64::try_from(MAX_SCAN_INPUT_BYTES).unwrap_or(u64::MAX),
+            )
+            .map_err(|error| error.code().to_owned())?;
+        state
+            .validate_record::<DirectDigest>(&record)
+            .map_err(|error| error.code().to_owned())?;
         observe(&record, state.latest.get(&record.source_id))?;
-        state.operations.insert(record.operation_id.clone(), record.record_digest.clone());
-        state.revisions.entry(record.revision_id.clone()).or_insert_with(|| record.clone());
-        state.last_sequence = sequence;
-        record.record_digest.clone_into(&mut state.last_digest);
-        state.latest.insert(record.source_id.clone(), record);
-        state.event_count += 1;
+        state.commit_record(record);
     }
-    let after = reader.get_ref().metadata()
+    let after = reader
+        .get_ref()
+        .metadata()
         .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?;
-    if consumed != before.len() || before.len() != after.len()
+    if consumed != before.len()
+        || before.len() != after.len()
         || before.modified().ok() != after.modified().ok()
     {
         return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
@@ -249,10 +190,17 @@ fn read_log_line(
     consumed: &mut u64,
 ) -> Result<usize, String> {
     line.clear();
-    let read = Read::take(&mut *reader, MAX_LOG_LINE_BYTES as u64 + 1)
+    let line_limit = u64::try_from(MAX_LOG_LINE_BYTES)
+        .ok()
+        .and_then(|value| value.checked_add(1))
+        .ok_or_else(|| "DIRECT_CONTROL_LOG_LINE_TOO_LARGE".to_owned())?;
+    let read = Read::take(&mut *reader, line_limit)
         .read_line(line)
         .map_err(|error| format!("DIRECT_CONTROL_LOG_READ_ERROR:{error}"))?;
-    *consumed = consumed.checked_add(read as u64)
+    let read_bytes = u64::try_from(read)
+        .map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
+    *consumed = consumed
+        .checked_add(read_bytes)
         .filter(|total| *total <= MAX_LOG_BYTES)
         .ok_or_else(|| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
     if read > MAX_LOG_LINE_BYTES {
