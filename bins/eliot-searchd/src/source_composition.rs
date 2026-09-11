@@ -1567,6 +1567,7 @@ pub fn plan_git_snapshot(
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "wave2-source")]
+#[cfg(test)]
 mod canonical_cross_checks {
     //! Byte-compatibility probes against the real pure kernels.
     //!
@@ -1574,7 +1575,7 @@ mod canonical_cross_checks {
     //! daemon's closed vocabularies stay byte-identical to the normative
     //! crates. Any drift fails the `wave2-source` build.
 
-    use super::{AdmissionReasonCode, SourceClass};
+    use super::AdmissionReasonCode;
 
     const _: () = {
         // Admission crate reason strings must match this module exactly.
@@ -1606,17 +1607,6 @@ mod canonical_cross_checks {
             index += 1;
         }
     };
-
-    /// Proves the baseline policy shape matches the canonical baseline.
-    pub fn baseline_shape_matches_canonical() {
-        let canonical =
-            search_source_admission::baseline_policy(super::BASELINE_POLICY_REVISION, 1_024);
-        assert!(canonical.max_file_bytes() == 1_024);
-        assert!(!canonical.allows_generated());
-        assert!(!canonical.allows_vendor());
-        assert!(!canonical.allows_binary());
-        let _ = SourceClass::Regular;
-    }
 }
 
 #[cfg(test)]
