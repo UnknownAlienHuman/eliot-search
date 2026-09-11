@@ -34,6 +34,8 @@ mod projection_composition;
 mod protocol_io;
 mod provider_composition;
 mod public_runtime_service;
+#[allow(dead_code)] // T27: proven through publication_fault_process; daemon CLI wiring pending.
+mod publication_composition;
 mod result_handles;
 mod revision_protection;
 mod safe_reader_adapter;

@@ -10,6 +10,7 @@ mod persistent;
 mod snapshot_guard;
 mod conditions;
 pub mod policy_codec;
+pub mod publication_codec;
 pub mod migration;
 
 pub use reference::*;
