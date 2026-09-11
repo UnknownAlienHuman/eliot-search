@@ -5,6 +5,7 @@
 //! xtask compute accepted-evidence-digest <record> [--json-array]
 //! xtask validate p00-ticket-drafts [--json]
 //! xtask validate w1-agent-drafts [--json]
+//! xtask validate w2-agent-drafts [--json]
 //! xtask validate implementation-program [--json]
 //! xtask validate p00-foundation-acceptance [--json]
 //! xtask validate qdrant-boundary [--json]
@@ -16,9 +17,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use xtask::agent_drafts::{
-    exit_code as agent_drafts_exit_code,
+    AgentDraftReport, exit_code as agent_drafts_exit_code,
     render_report_json as render_agent_drafts_json,
-    validate_w1_agent_drafts,
+    validate_w1_agent_drafts, validate_w2_agent_drafts,
 };
 use xtask::compute_accepted_evidence::compute_from_record_file;
 use xtask::impl_program::{
@@ -50,6 +51,7 @@ const USAGE: &str = "usage:\n\
   xtask compute accepted-evidence-digest <record> [--json-array]\n\
   xtask validate p00-ticket-drafts [--json]\n\
   xtask validate w1-agent-drafts [--json]\n\
+  xtask validate w2-agent-drafts [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -101,9 +103,9 @@ fn run_ticket_drafts() -> ExitCode {
     ExitCode::from(u8::try_from(drafts_exit_code(&report)).unwrap_or(1))
 }
 
-fn run_w1_agent_drafts() -> ExitCode {
+fn run_agent_drafts(validator: fn(&std::path::Path) -> AgentDraftReport) -> ExitCode {
     let root = PathBuf::from(".");
-    let report = validate_w1_agent_drafts(&root);
+    let report = validator(&root);
     println!("{}", render_agent_drafts_json(&report));
     ExitCode::from(
         u8::try_from(agent_drafts_exit_code(&report)).unwrap_or(1),
@@ -150,7 +152,12 @@ fn main() -> ExitCode {
         if rest == ["w1-agent-drafts"]
             || rest == ["w1-agent-drafts", "--json"]
         {
-            return run_w1_agent_drafts();
+            return run_agent_drafts(validate_w1_agent_drafts);
+        }
+        if rest == ["w2-agent-drafts"]
+            || rest == ["w2-agent-drafts", "--json"]
+        {
+            return run_agent_drafts(validate_w2_agent_drafts);
         }
         if rest == ["implementation-program"]
             || rest == ["implementation-program", "--json"]

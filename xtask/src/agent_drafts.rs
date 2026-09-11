@@ -4,7 +4,9 @@
 //! shape stays stable while common TOML/file-system handling lives here and
 //! wave-specific invariants remain in bounded modules.
 
+#[allow(unused_imports)]
 mod w1;
+mod w2;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -47,6 +49,11 @@ impl AgentDraftReport {
 #[must_use]
 pub fn validate_w1_agent_drafts(root: &Path) -> AgentDraftReport {
     w1::validate_w1_agent_drafts(root)
+}
+
+#[must_use]
+pub fn validate_w2_agent_drafts(root: &Path) -> AgentDraftReport {
+    w2::validate_w2_agent_drafts(root)
 }
 
 #[must_use]
