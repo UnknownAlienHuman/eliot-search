@@ -7,6 +7,7 @@
 //! xtask validate w1-agent-drafts [--json]
 //! xtask validate w2-agent-drafts [--json]
 //! xtask validate w3-agent-drafts [--json]
+//! xtask validate w4-agent-drafts [--json]
 //! xtask validate implementation-program [--json]
 //! xtask validate p00-foundation-acceptance [--json]
 //! xtask validate qdrant-boundary [--json]
@@ -20,8 +21,10 @@ use std::process::ExitCode;
 use xtask::agent_drafts::{
     AgentDraftReport, exit_code as agent_drafts_exit_code,
     render_report_json as render_agent_drafts_json,
-    render_w3_report_json, validate_w1_agent_drafts,
-    validate_w2_agent_drafts, validate_w3_agent_drafts, w3_exit_code,
+    render_w3_report_json, render_w4_report_json,
+    validate_w1_agent_drafts, validate_w2_agent_drafts,
+    validate_w3_agent_drafts, validate_w4_agent_drafts, w3_exit_code,
+    w4_exit_code,
 };
 use xtask::compute_accepted_evidence::compute_from_record_file;
 use xtask::impl_program::{
@@ -55,6 +58,7 @@ const USAGE: &str = "usage:\n\
   xtask validate w1-agent-drafts [--json]\n\
   xtask validate w2-agent-drafts [--json]\n\
   xtask validate w3-agent-drafts [--json]\n\
+  xtask validate w4-agent-drafts [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -106,7 +110,9 @@ fn run_ticket_drafts() -> ExitCode {
     ExitCode::from(u8::try_from(drafts_exit_code(&report)).unwrap_or(1))
 }
 
-fn run_agent_drafts(validator: fn(&std::path::Path) -> AgentDraftReport) -> ExitCode {
+fn run_agent_drafts(
+    validator: fn(&std::path::Path) -> AgentDraftReport,
+) -> ExitCode {
     let root = PathBuf::from(".");
     let report = validator(&root);
     println!("{}", render_agent_drafts_json(&report));
@@ -120,6 +126,13 @@ fn run_w3_agent_drafts() -> ExitCode {
     let report = validate_w3_agent_drafts(&root);
     println!("{}", render_w3_report_json(&report));
     ExitCode::from(u8::try_from(w3_exit_code(&report)).unwrap_or(1))
+}
+
+fn run_w4_agent_drafts() -> ExitCode {
+    let root = PathBuf::from(".");
+    let report = validate_w4_agent_drafts(&root);
+    println!("{}", render_w4_report_json(&report));
+    ExitCode::from(u8::try_from(w4_exit_code(&report)).unwrap_or(1))
 }
 
 fn run_impl_program() -> ExitCode {
@@ -173,6 +186,11 @@ fn main() -> ExitCode {
             || rest == ["w3-agent-drafts", "--json"]
         {
             return run_w3_agent_drafts();
+        }
+        if rest == ["w4-agent-drafts"]
+            || rest == ["w4-agent-drafts", "--json"]
+        {
+            return run_w4_agent_drafts();
         }
         if rest == ["implementation-program"]
             || rest == ["implementation-program", "--json"]

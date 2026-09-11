@@ -8,6 +8,7 @@
 mod w1;
 mod w2;
 mod w3;
+mod w4;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -18,6 +19,10 @@ use toml::Value;
 pub use w3::{
     W3AgentDraftReport, exit_code as w3_exit_code,
     render_report_json as render_w3_report_json, validate_w3_agent_drafts,
+};
+pub use w4::{
+    W4AgentDraftReport, exit_code as w4_exit_code,
+    render_report_json as render_w4_report_json, validate_w4_agent_drafts,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -142,7 +147,11 @@ pub(crate) fn string_list(value: &Value, key: &str) -> Option<Vec<String>> {
         .collect()
 }
 
-pub(crate) fn child<'a>(value: &'a Value, table: &str, key: &str) -> Option<&'a Value> {
+pub(crate) fn child<'a>(
+    value: &'a Value,
+    table: &str,
+    key: &str,
+) -> Option<&'a Value> {
     value.get(table)?.as_table()?.get(key)
 }
 
@@ -154,7 +163,11 @@ pub(crate) fn child_string<'a>(
     child(value, table, key).and_then(Value::as_str)
 }
 
-pub(crate) fn child_bool(value: &Value, table: &str, key: &str) -> Option<bool> {
+pub(crate) fn child_bool(
+    value: &Value,
+    table: &str,
+    key: &str,
+) -> Option<bool> {
     child(value, table, key).and_then(Value::as_bool)
 }
 

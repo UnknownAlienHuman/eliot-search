@@ -1,6 +1,12 @@
 # W4 agent draft qualification
 
-Run:
+Run the Rust validator directly:
+
+```powershell
+cargo run --locked -p xtask -- validate w4-agent-drafts --json
+```
+
+The PowerShell compatibility entrypoint invokes the same Cargo command:
 
 ```powershell
 pwsh -NoProfile -File tools/validate-w4-agent-drafts.ps1 -Json

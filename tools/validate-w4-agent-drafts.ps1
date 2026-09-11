@@ -1,7 +1,15 @@
 [CmdletBinding()]
 param([switch]$Json)
 $ErrorActionPreference = "Stop"
-$argsList = @()
-if ($Json) { $argsList += "--json" }
-python "$PSScriptRoot/validate-w4-agent-drafts.py" @argsList
-exit $LASTEXITCODE
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $repoRoot
+try {
+    $argsList = @("run", "--locked", "-p", "xtask", "--", "validate", "w4-agent-drafts")
+    if ($Json) { $argsList += "--json" }
+    & cargo @argsList
+    $exitCode = $LASTEXITCODE
+}
+finally {
+    Pop-Location
+}
+exit $exitCode
