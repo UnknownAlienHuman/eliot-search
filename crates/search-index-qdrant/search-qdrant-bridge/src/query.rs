@@ -1,0 +1,160 @@
+use core::cmp::Ordering;
+use std::collections::BTreeSet;
+
+use search_contracts::{Blake3Digest32, Epoch, OpaqueId};
+
+use crate::{
+    BridgeError, CollectionRoute, CollectionSchema, PointPayload, QdrantBridge,
+    QdrantPointId, VectorSchema,
+};
+
+/// Closed indexed eligibility filter.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EligibilityFilter {
+    pub access_partition_digest: Blake3Digest32,
+    pub allowed_source_memberships: BTreeSet<OpaqueId>,
+    pub visible_epoch: Epoch,
+}
+
+impl EligibilityFilter {
+    pub const INDEXED_FIELDS: [&'static str; 4] = [
+        "access_partition_digest",
+        "source_membership_id",
+        "valid_from_epoch",
+        "valid_until_epoch_exclusive",
+    ];
+
+    pub(crate) fn matches(&self, payload: &PointPayload) -> bool {
+        payload.access_partition_digest == self.access_partition_digest
+            && self
+                .allowed_source_memberships
+                .contains(&payload.source_membership_id)
+            && payload.valid_from_epoch <= self.visible_epoch
+            && payload
+                .valid_until_epoch_exclusive
+                .is_none_or(|until| self.visible_epoch < until)
+    }
+}
+
+/// One bounded nomination returned by filtered retrieval.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CandidateNomination {
+    pub point_id: QdrantPointId,
+    pub score: f32,
+    pub payload_digest: Blake3Digest32,
+    pub identity_digest: Blake3Digest32,
+}
+
+impl QdrantBridge {
+    /// Returns bounded filtered nominations. These are not evidence until exact
+    /// candidate readback and access revalidation occur outside the bridge.
+    pub fn query_filtered(
+        &self,
+        route: &CollectionRoute,
+        filter: &EligibilityFilter,
+        vector_name: &str,
+        query: &[(u32, f32)],
+        limit: usize,
+    ) -> Result<Vec<CandidateNomination>, BridgeError> {
+        validate_filter(filter)?;
+        if limit == 0 || limit > self.limits.max_query_candidates {
+            return Err(BridgeError::QueryBudgetExceeded);
+        }
+        let collection = self
+            .collections
+            .get(route)
+            .ok_or(BridgeError::CollectionNotFound)?;
+        ensure_filter_indexes(&collection.schema)?;
+        let vector_schema = collection
+            .schema
+            .named_vectors
+            .get(vector_name)
+            .ok_or(BridgeError::NamedVectorMissing)?;
+        validate_query_vector(query, *vector_schema)?;
+
+        let mut candidates = Vec::new();
+        for point in collection.points.values() {
+            if !filter.matches(&point.payload) {
+                continue;
+            }
+            let vector = point
+                .vectors
+                .get(vector_name)
+                .ok_or(BridgeError::NamedVectorMissing)?;
+            let score = dot_sparse(query, &vector.values);
+            if !score.is_finite() {
+                return Err(BridgeError::InvalidScore);
+            }
+            candidates.push(CandidateNomination {
+                point_id: point.point_id,
+                score,
+                payload_digest: point.payload.payload_digest,
+                identity_digest: point.payload.identity_digest,
+            });
+        }
+        candidates.sort_by(|left, right| {
+            right
+                .score
+                .partial_cmp(&left.score)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| left.point_id.cmp(&right.point_id))
+        });
+        candidates.truncate(limit);
+        Ok(candidates)
+    }
+}
+
+pub(crate) fn validate_filter(filter: &EligibilityFilter) -> Result<(), BridgeError> {
+    if filter.allowed_source_memberships.is_empty() {
+        return Err(BridgeError::InvalidFilter);
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_filter_indexes(
+    schema: &CollectionSchema,
+) -> Result<(), BridgeError> {
+    for field in EligibilityFilter::INDEXED_FIELDS {
+        if !schema.indexed_payload_fields.contains(field) {
+            return Err(BridgeError::UnindexedFilter);
+        }
+    }
+    Ok(())
+}
+
+fn validate_query_vector(
+    query: &[(u32, f32)],
+    schema: VectorSchema,
+) -> Result<(), BridgeError> {
+    if query.is_empty()
+        || query.iter().any(|(_, value)| !value.is_finite())
+        || query.windows(2).any(|pair| pair[0].0 >= pair[1].0)
+        || query
+            .last()
+            .is_some_and(|(index, _)| *index >= schema.dimensions)
+    {
+        return Err(BridgeError::VectorDimensionMismatch);
+    }
+    Ok(())
+}
+
+fn dot_sparse(left: &[(u32, f32)], right: &[(u32, f32)]) -> f32 {
+    let mut left_index = 0;
+    let mut right_index = 0;
+    let mut score = 0.0_f32;
+    while left_index < left.len() && right_index < right.len() {
+        match left[left_index].0.cmp(&right[right_index].0) {
+            Ordering::Less => left_index += 1,
+            Ordering::Greater => right_index += 1,
+            Ordering::Equal => {
+                // Single-rounding FMA may differ in the last ulp from a
+                // separate multiply-then-add; ranking stays deterministic via
+                // the point_id tiebreak below.
+                score = left[left_index].1.mul_add(right[right_index].1, score);
+                left_index += 1;
+                right_index += 1;
+            }
+        }
+    }
+    score
+}
