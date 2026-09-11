@@ -25,6 +25,10 @@ jobs:
         shell: pwsh
         run: cargo test --locked -p xtask --test tooling_runtime_boundary
 
+      - name: Implementation-program module ownership
+        shell: pwsh
+        run: cargo test --locked -p xtask --test impl_program_module_ownership
+
       - name: Qdrant dependency and public API boundary
         shell: pwsh
         run: cargo run --locked -p xtask -- validate qdrant-boundary --json
