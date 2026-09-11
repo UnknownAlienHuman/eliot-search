@@ -1,22 +1,22 @@
-Status: PASS (measured scope only — full workspace check+test, eliot-searchd package, clippy of core packages; full qualification NOT claimed, see NOT-MEASURED)
-Tested base commit: e1f82f41ad389b622359cc496adc6331280e8913 (main, short e1f82f4) — CLEAN worktree
+Status: PASS (measured scope only — full workspace check+test, clippy of core packages; full qualification NOT claimed, see NOT-MEASURED)
+Tested base commit: e911e03c292fd4dc9aedbd9dbd3e4c269f92e60c (main, short e911e03) — CLEAN worktree
 Worktree: clean — `nothing to commit, working tree clean` before and after all runs
-Verified at: 2026-09-10T12:00:00Z
+Verified at: 2026-09-10T14:00:00Z
 Linux job/result: unavailable/UNAVAILABLE
 Windows job/result: local/measured-scope-pass
 Branch cleanup failed: false
 
 Scope of this record (T04 slice — clean-head evidence for the reproducible Windows gate):
-replaces the stale 5581da9 record. Every number below was freshly measured
-at clean HEAD e1f82f4 in this session: toolchain 1.98.0, --locked on every
+replaces the stale e1f82f4 record. Every number below was freshly measured
+at clean HEAD e911e03 in this session: toolchain 1.98.0, --locked on every
 cargo invocation, --all-features + --no-fail-fast on the workspace run.
 Anything not listed under MEASURED is under NOT-MEASURED.
 
-MEASURED (fresh at clean e1f82f4, this session):
+MEASURED (fresh at clean e911e03, this session):
 - cargo +1.98.0 check --workspace --all-targets --all-features --locked -> exit 0
-- cargo +1.98.0 test --workspace --all-targets --all-features --locked --no-fail-fast -> 1468 passed / 0 failed / 6 ignored, 92/92 targets ok, exit 0, failing tests NONE, failing targets NONE (00:01:40 run; 9 passing-test names contain the word 'failed' — e.g. failed_writer_cannot_publish_a_revision — those are green negatives, not failures)
-- cargo +1.98.0 test -p eliot-searchd --all-targets --locked --no-fail-fast -> 566 passed / 0 failed / 1 ignored, 29/29 targets ok, exit 0 (T02 Ph1 + T36 included)
-  (--no-fail-fast is mandatory here; a plain run stops after 2/29 targets and hides the rest)
+- cargo +1.98.0 test --workspace --all-targets --all-features --locked --no-fail-fast -> 1735 passed / 0 failed / 6 ignored, 112/112 targets ok, exit 0, failing tests NONE, failing targets NONE (00:04:10 run)
+- cargo +1.98.0 test -p eliot-searchd --all-targets --all-features --locked --no-fail-fast -> 649 passed / 0 failed (T39 included; 36 targets)
+  (--no-fail-fast is mandatory here; a plain run stops early and hides the rest)
 - clippy -D warnings honest count (message.level == "error" AND some span is_primary, via --message-format=json): eliot-searchd 0 / eliot-search 0 / search-access 0 / search-control-redb 0 / search-exact 0 / search-candidate-validator 0 (5 packages, each exit 0)
 - cmdkey credential leak ('revision-key' pattern): 0 before / 0 after the full runs; machine baseline 74 unrelated system entries unchanged (delta 0)
 - git rev-parse HEAD -> e1f82f41ad389b622359cc496adc6331280e8913 (short e1f82f4, matches the expected head)
