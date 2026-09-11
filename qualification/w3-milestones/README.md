@@ -1,6 +1,12 @@
 # W3 milestone packet qualification
 
-Run:
+Run the Rust validator directly:
+
+```powershell
+cargo run --locked -p xtask -- validate w3-milestone-packets --json
+```
+
+The PowerShell compatibility entrypoint invokes the same Cargo command:
 
 ```powershell
 pwsh -NoProfile -File tools/validate-w3-milestone-packets.ps1 -Json
