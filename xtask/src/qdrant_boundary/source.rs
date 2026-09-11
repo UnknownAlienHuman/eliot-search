@@ -16,14 +16,19 @@ pub(super) fn rust_string_constant(
 }
 
 pub(super) fn contains_vendor_sdk_reference(source: &str) -> bool {
-    source.contains("qdrant_client::")
-        || source.contains("use qdrant_client")
-        || source.contains("extern crate qdrant_client")
+    let path_prefix = format!("{VENDOR_MODULE}::");
+    let use_prefix = format!("use {VENDOR_MODULE}");
+    let extern_prefix = format!("extern crate {VENDOR_MODULE}");
+    source.contains(&path_prefix)
+        || source.contains(&use_prefix)
+        || source.contains(&extern_prefix)
 }
 
 pub(super) fn public_vendor_surface_lines(source: &str) -> Vec<usize> {
     let mut violations = Vec::new();
     let mut public_signature: Option<(usize, String)> = None;
+    let public_use_prefix = format!("pub use {VENDOR_MODULE}");
+    let public_extern_prefix = format!("pub extern crate {VENDOR_MODULE}");
 
     for (index, line) in source.lines().enumerate() {
         let line_number = index + 1;
@@ -48,8 +53,8 @@ pub(super) fn public_vendor_surface_lines(source: &str) -> Vec<usize> {
             public_signature = None;
         }
 
-        if trimmed.starts_with("pub use qdrant_client")
-            || trimmed.starts_with("pub extern crate qdrant_client")
+        if trimmed.starts_with(&public_use_prefix)
+            || trimmed.starts_with(&public_extern_prefix)
             || (trimmed.starts_with("pub ")
                 && trimmed.contains(VENDOR_MODULE))
         {
