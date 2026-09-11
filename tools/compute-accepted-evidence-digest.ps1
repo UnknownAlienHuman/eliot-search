@@ -4,7 +4,7 @@ param(
     [switch]$JsonArray
 )
 $ErrorActionPreference = "Stop"
-$args = @("tools/compute-accepted-evidence-digest.py", $Record)
+$args = @("run", "--locked", "--quiet", "-p", "xtask", "--", "compute", "accepted-evidence-digest", $Record)
 if ($JsonArray) { $args += "--json-array" }
-& python @args
+& cargo @args
 exit $LASTEXITCODE

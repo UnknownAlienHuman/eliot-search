@@ -20,15 +20,12 @@ jobs:
       - name: Compile implementation and qualification
         shell: pwsh
         run: |
-          python -m py_compile `
-            tools/accepted_evidence_digest_v1.py `
-            tools/compute-accepted-evidence-digest.py `
-            tools/validate-accepted-evidence-digest.py `
-            qualification/accepted-evidence/test_accepted_evidence_digest_v1.py
+          cargo build --locked -p xtask
+          cargo test --locked -p xtask --no-run
 
       - name: Run semantic digest corpus
         shell: pwsh
-        run: python qualification/accepted-evidence/test_accepted_evidence_digest_v1.py
+        run: cargo test --locked -p xtask
 
       - name: Validate registry and workflow closure
         shell: pwsh
