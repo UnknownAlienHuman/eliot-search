@@ -127,7 +127,7 @@ fn validate_assignments(
         };
         require(
             errors,
-            text.contains(package),
+            text.contains(package.as_str()),
             format!("{package}: assignment does not identify package"),
         );
         require(
@@ -177,7 +177,7 @@ fn validate_delivery(
     }
 
     let expected: BTreeSet<String> =
-        (0..19).map(|index| format!("P{index:02}" )).collect();
+        (0..19).map(|index| format!("P{index:02}")).collect();
     let actual: BTreeSet<String> = delivery.keys().cloned().collect();
     require(
         errors,
@@ -214,7 +214,7 @@ fn validate_qualification_roots(
         .unwrap_or_default();
     require(
         errors,
-        roots == ["qualification".to_owned(), "tests".to_owned()],
+        roots == vec!["qualification".to_owned(), "tests".to_owned()],
         "qualification task roots mismatch",
     );
     for relative in &roots {
