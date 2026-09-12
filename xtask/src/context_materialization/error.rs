@@ -11,7 +11,7 @@ pub struct MaterializationPlanError {
 }
 
 impl MaterializationPlanError {
-    pub(super) fn new(
+    pub(crate) fn new(
         reason: &'static str,
         message: impl Into<String>,
     ) -> Self {

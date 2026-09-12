@@ -1,6 +1,7 @@
 mod bootstrap;
 mod context_artifact;
 mod context_artifact_build;
+mod context_materialization_build;
 mod drafts;
 mod evidence;
 mod milestones;
@@ -13,6 +14,7 @@ const USAGE: &str = "usage:\n\
   xtask validate accepted-evidence-digest\n\
   xtask compute accepted-evidence-digest <record> [--json-array]\n\
   xtask build context-artifact-candidate --package <name> --base-commit <algorithm:oid> [--root <path>] [--accepted-handoff <path>]... [--output-root <path>] [--print-result]\n\
+  xtask build context-materialization-plan --candidate <path> [--root <path>] [--bundle <path>] [--selection <path>] [--output-root <path>] [--write] [--require-ready]\n\
   xtask validate p00-ticket-drafts [--json]\n\
   xtask validate w1-agent-drafts [--json]\n\
   xtask validate w2-agent-drafts [--json]\n\
@@ -113,6 +115,9 @@ fn run_build(args: &[String]) -> ExitCode {
     };
     if target == "context-artifact-candidate" {
         return context_artifact_build::build(options);
+    }
+    if target == "context-materialization-plan" {
+        return context_materialization_build::build(options);
     }
     usage_error()
 }

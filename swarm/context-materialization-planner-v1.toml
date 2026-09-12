@@ -1,6 +1,6 @@
 schema_version = 1
 component = "context_materialization_planner_v1"
-status = "ADVISORY_NON_AUTHORITATIVE"
+status = "EXECUTABLE_ADVISORY_NON_AUTHORITATIVE"
 owner = "integration-owner-tooling"
 operation_kind = "materialize_context_v1"
 operation_domain_separator_ascii = "eliot-search/materialize-context/v1\\0"
@@ -10,6 +10,16 @@ instance_profile = "swarm/context-manifest-instance-v1.toml"
 renderer_profile = "swarm/context-manifest-renderer-v1.toml"
 evidence_digest_profile = "swarm/accepted-evidence-digest-v1.toml"
 candidate_schema = "swarm/context-artifact-candidate-schema-v1.toml"
+implementation = "xtask/src/context_materialization_builder.rs"
+implementation_modules = [
+  "xtask/src/context_materialization_builder/assemble.rs",
+  "xtask/src/context_materialization_builder/input.rs",
+  "xtask/src/context_materialization_builder/manifest.rs",
+  "xtask/src/context_materialization_builder/model.rs",
+  "xtask/src/context_materialization_builder/write.rs",
+]
+powershell_wrapper = "tools/plan-context-materialization.ps1"
+qualification_tests = "xtask/tests/context_materialization_builder.rs"
 output_root = "artifacts/context-materialization-plans"
 selection_input_root = "artifacts/context-materialization-inputs"
 control_record_root = "swarm/context-manifests"

@@ -17,27 +17,18 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Stabilize fixture Git line endings
-        shell: pwsh
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.0
 
-      - name: Compile planner and corpus
+      - name: Test captured helper parity vectors
         shell: pwsh
-        run: |
-          python -m py_compile `
-            tools/plan-context-materialization.py `
-            tools/context_materialization_planner_v1/__init__.py `
-            tools/context_materialization_planner_v1/core.py `
-            tools/context_materialization_planner_v1/manifest.py `
-            tools/context_materialization_planner_v1/plan.py `
-            qualification/context-materialization/test_context_materialization_plan_v1.py
-          cargo build --locked -p xtask
+        run: cargo test --locked -p xtask --test context_materialization_parity
 
-      - name: Run twelve-case materialization-plan corpus
+      - name: Run Rust materialization-plan behavioral corpus
         shell: pwsh
-        run: python qualification/context-materialization/test_context_materialization_plan_v1.py
+        run: cargo test --locked -p xtask --test context_materialization_builder
 
       - name: Validate planner registry and authority ceiling
         shell: pwsh

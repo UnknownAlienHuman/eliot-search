@@ -11,6 +11,7 @@ pub mod context_artifact_builder;
 pub mod context_artifact_io;
 pub mod context_artifact_validation;
 pub mod context_materialization;
+pub mod context_materialization_builder;
 pub mod context_materialization_validation;
 pub mod coverage_graph;
 pub mod git_tree;

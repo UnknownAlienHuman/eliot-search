@@ -1,20 +1,38 @@
 # Context materialization plan qualification
 
-Run the existing twelve-case planner corpus, then the Rust structural validator:
+The planner and behavioral corpus are Rust-owned.
 
 ```powershell
-python qualification/context-materialization/test_context_materialization_plan_v1.py
+cargo test --locked -p xtask --test context_materialization_parity
+cargo test --locked -p xtask --test context_materialization_builder
 cargo run --locked -p xtask -- validate context-materialization-plan --json
 ```
 
-The PowerShell compatibility entrypoint invokes the same Rust validation command:
+The PowerShell entrypoints invoke the same locked Cargo tooling:
 
 ```powershell
 pwsh -NoProfile -File tools/validate-context-materialization-plan.ps1 -Json
+pwsh -NoProfile -File tools/plan-context-materialization.ps1 `
+  -Candidate artifacts/context-artifact-candidates/<package>/<candidate>.json
 ```
 
-The corpus covers missing selection, payload generation, complete dual-signature proposal, partial and mismatched signatures, actor conflict, artifact mismatch, candidate/bundle tampering, idempotent local writes and accepted-handoff evidence projection.
+The behavioral corpus covers:
 
-The structural validator itself no longer requires Python. The planner and its twelve-case behavioral corpus remain Python-owned until their complete candidate assembly, rendering and write semantics are ported; they must not be deleted piecemeal.
+- missing external selection;
+- payload generation with both signatures absent;
+- stable operation identity across signature collection;
+- complete dual-signature proposal;
+- partial signature blocking;
+- actor conflict;
+- artifact/readback mismatch;
+- signature payload mismatch;
+- candidate/bundle tampering;
+- idempotent ordinary output and conflict rejection;
+- accepted-handoff evidence projection.
 
-Passing proves proposal/compiler conformance only. It does not store an artifact, commit a `context_manifest_v1`, issue a ticket/lease or create implementation authority.
+The planner reads canonical local candidate/bundle/selection artifacts, renders the prospective
+`context_manifest_v1` payload and writes only ignored artifacts under
+`artifacts/context-materialization-plans/`. It never writes under `swarm/context-manifests/`.
+
+Passing proves proposal/compiler conformance only. It does not store an artifact, commit a context
+manifest, issue a ticket or lease, accept a package/gate/wave or create implementation authority.

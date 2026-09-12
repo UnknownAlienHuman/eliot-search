@@ -41,9 +41,14 @@ jobs:
           cargo test --locked -p xtask --test context_artifact_validation
           cargo run --locked --quiet -p xtask -- validate context-artifact-candidate --json
 
-      - name: Context materialization module ownership
+      - name: Context materialization Rust planner and boundary
         shell: pwsh
-        run: cargo test --locked -p xtask --test context_materialization_module_ownership
+        run: |
+          cargo test --locked -p xtask --test context_materialization_module_ownership
+          cargo test --locked -p xtask --test context_materialization_runtime_boundary
+          cargo test --locked -p xtask --test context_materialization_parity
+          cargo test --locked -p xtask --test context_materialization_builder
+          cargo run --locked --quiet -p xtask -- validate context-materialization-plan --json
 
       - name: Implementation-program module ownership
         shell: pwsh
