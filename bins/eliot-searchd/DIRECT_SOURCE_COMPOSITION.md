@@ -1,13 +1,14 @@
-# DIRECT source-composition boundary
+# DIRECT and Git source-composition boundary
 
-The live plaintext DIRECT path enters canonical source-owner kernels before any
-revision bytes reach storage or any journal event is appended.
+Live plaintext DIRECT ingestion and no-execute Git qualification now enter the
+same canonical source-owner kernels before any revision bytes reach storage or
+any journal event is appended.
 
 ```text
-safe-reader observation
+safe-reader observation / validated loose Git object
         |
         v
-daemon path classifier
+daemon bounded classifier
         |
         v
 search-source-admission
@@ -15,7 +16,7 @@ search-source-admission
         |
         v
 search-source-identity
-  resolve stable identity -> derive source/revision IDs
+  stable identity -> source/revision IDs
         |
         v
 search-source-registry legacy append plan
@@ -26,27 +27,34 @@ daemon durable write/sync/readback
 
 Ownership is strict:
 
-- `eliot-searchd` owns filesystem observation, bounded path classification,
-  data-root exclusion, storage publication, sync, readback and quarantine;
+- `eliot-searchd` owns filesystem/Git observation adapters, bounded path
+  classification, data-root exclusion, storage publication, sync, readback and
+  quarantine;
 - `search-source-admission` owns canonical policy normalization, observation
   validation, decisions, reason ordering and immutable receipt verification;
-- `search-source-identity` owns stable-identity matching and the legacy DIRECT
-  source/revision identifier formulas;
+- `search-source-identity` owns stable-identity matching, legacy DIRECT
+  source/revision formulas and the repository-plus-object Git stable digest;
 - `search-source-registry` owns the legacy journal schema, chain validation,
-  collision checks and idempotent append planning.
+  collision checks and idempotent append planning;
+- `search-safe-reader` owns no-execute Git object validation and never invokes
+  hooks, filters, credential helpers, shell commands or network fetches.
 
-The old `source_composition.rs` remains temporarily isolated as
-`git_source_composition` because the Git object-process qualification imports
-its bounded no-execute helpers. It is not the live DIRECT ingestion module.
-Removing that remaining compatibility surface is a separate source-acquisition
-ownership slice.
+`source_composition.rs` is now a bounded Git adapter only. It imports the same
+canonical composition used by live DIRECT ingestion and contains no private
+admission policy, receipt implementation, source-ID formula, revision-ID
+formula or registry state machine. Git paths classify admission only; durable
+identity is the admitted repository digest plus the exact object ID. Lineage
+kind/evidence is retained as metadata and does not silently fork identity.
 
 Manual checks:
 
 ```powershell
 cargo test --locked -p search-source-admission default_deny
 cargo test --locked -p search-source-identity legacy_digest
+cargo test --locked -p search-source-identity git_digest
 cargo test --locked -p eliot-searchd --test source_composition_owner_boundary
+cargo test --locked -p eliot-searchd --test git_source_owner_boundary
+cargo test --locked -p eliot-searchd --test git_source_process
 cargo check --locked -p eliot-searchd --bin eliot-searchd
 cargo test --locked -p eliot-searchd --bin eliot-searchd denied_sources_never_reach_cas
 cargo test --locked -p eliot-searchd --bin eliot-searchd rename_preserves_stable_identity

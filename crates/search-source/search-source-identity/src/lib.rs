@@ -18,6 +18,7 @@ pub mod binding;
 pub mod current;
 pub mod error;
 pub mod evidence;
+pub mod git_digest;
 pub mod legacy_digest;
 pub mod lineage;
 pub mod redaction;
@@ -43,6 +44,9 @@ pub use evidence::{
     MAX_IDENTITY_PATH_BYTES, MissingIdentityEvidence, ObservationConfidence, PathObservation,
     ReparseBehavior, StableFieldPolicy, StableIdentityEvidence, StableIdentityKey, UnicodeBehavior,
     ValidatedIdentityObservation, derive_canonical_path_key, validate_identity_observation,
+};
+pub use git_digest::{
+    GIT_STABLE_IDENTITY_DOMAIN, GitIdentityDigest, derive_git_stable_identity_digest,
 };
 pub use legacy_digest::{
     LEGACY_DIRECT_REVISION_ID_DOMAIN, LEGACY_DIRECT_SOURCE_ID_DOMAIN,

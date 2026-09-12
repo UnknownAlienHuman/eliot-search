@@ -1,9 +1,9 @@
 //! Adapter from the daemon's qualified SHA-256 primitive to identity ownership.
 
 use search_source_identity::{
-    LegacyDigestPriorIdentity, LegacyIdentityDigest,
-    derive_legacy_digest_revision_id, derive_legacy_digest_source_id,
-    resolve_legacy_digest_identity,
+    GitIdentityDigest, LegacyDigestPriorIdentity, LegacyIdentityDigest,
+    derive_git_stable_identity_digest, derive_legacy_digest_revision_id,
+    derive_legacy_digest_source_id, resolve_legacy_digest_identity,
 };
 
 use crate::sha256;
@@ -11,6 +11,12 @@ use crate::sha256;
 pub(super) struct DirectIdentityDigest;
 
 impl LegacyIdentityDigest for DirectIdentityDigest {
+    fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+        sha256::digest_parts(domain, parts)
+    }
+}
+
+impl GitIdentityDigest for DirectIdentityDigest {
     fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
         sha256::digest_parts(domain, parts)
     }
@@ -49,6 +55,16 @@ pub(super) fn derive_revision_id(
     .map_err(|error| error.code().to_owned())
 }
 
+pub(crate) fn derive_git_stable_digest(
+    repository_identity_digest: &[u8; 32],
+    object_id: &[u8; 20],
+) -> [u8; 32] {
+    derive_git_stable_identity_digest::<DirectIdentityDigest>(
+        repository_identity_digest,
+        object_id,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,5 +94,15 @@ mod tests {
         )
         .expect("exact prior identity");
         assert_eq!(source, "33".repeat(32));
+    }
+
+    #[test]
+    fn git_stable_digest_changes_with_repository_or_object() {
+        let repository = [0x11_u8; 32];
+        let object = [0x22_u8; 20];
+        let first = derive_git_stable_digest(&repository, &object);
+        assert_eq!(first, derive_git_stable_digest(&repository, &object));
+        assert_ne!(first, derive_git_stable_digest(&[0x12_u8; 32], &object));
+        assert_ne!(first, derive_git_stable_digest(&repository, &[0x23_u8; 20]));
     }
 }

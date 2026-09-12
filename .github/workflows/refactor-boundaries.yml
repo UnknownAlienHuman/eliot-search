@@ -55,12 +55,15 @@ jobs:
           cargo check --locked -p eliot-searchd --bin eliot-searchd
           cargo test --locked -p eliot-searchd --bin eliot-searchd plaintext_direct_store
 
-      - name: Canonical DIRECT admission and identity ownership
+      - name: Canonical DIRECT and Git source ownership
         shell: pwsh
         run: |
           cargo test --locked -p search-source-admission default_deny
           cargo test --locked -p search-source-identity legacy_digest
+          cargo test --locked -p search-source-identity git_digest
           cargo test --locked -p eliot-searchd --test source_composition_owner_boundary
+          cargo test --locked -p eliot-searchd --test git_source_owner_boundary
+          cargo test --locked -p eliot-searchd --test git_source_process
           cargo check --locked -p eliot-searchd --bin eliot-searchd
           cargo test --locked -p eliot-searchd --bin eliot-searchd denied_sources_never_reach_cas
           cargo test --locked -p eliot-searchd --bin eliot-searchd rename_preserves_stable_identity

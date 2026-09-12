@@ -12,4 +12,5 @@ mod registry;
 pub(crate) use admission::{
     AdmissionPolicy, SOURCE_ADMISSION_DENIED, SourceAdmissionConfig,
 };
+pub(crate) use identity::derive_git_stable_digest;
 pub(crate) use registry::{PriorSourceView, RegistryView, plan_snapshot};
