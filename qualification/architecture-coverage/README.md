@@ -1,22 +1,22 @@
 # Architecture ownership coverage qualification
 
-Run the combined compatibility entrypoint:
+Run the Rust-only compatibility entrypoint:
 
 ```powershell
 pwsh -NoProfile -File tools/validate-architecture-coverage.ps1 -Json
 ```
 
-The broad graph/type/schema validator is still the remaining Python-owned half.
-The operation/task/qualification contract closure now runs in Rust and can be
-invoked directly:
+The two bounded Rust validators can also be invoked directly:
 
 ```powershell
+cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
 cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
+cargo test --locked -p xtask --test architecture_coverage_runtime
 cargo test --locked -p xtask --test architecture_coverage_contracts_runtime
 pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1 -Json
 ```
 
-The coverage validators close the static ownership graph from Architecture 8.4 Part I to:
+The validators close the static ownership graph from Architecture 8.4 Part I to:
 
 ```text
 45 packages and assignments

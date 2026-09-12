@@ -13,14 +13,26 @@ fn read(root: &Path, relative: &str) -> String {
 }
 
 #[test]
-fn architecture_contract_closure_is_rust_owned() {
+fn full_architecture_coverage_is_rust_owned_and_split() {
     let root = repository_root();
     assert!(
-        !root
-            .join("tools/validate-architecture-coverage-contracts.py")
-            .exists(),
-        "retired Python contract validator returned"
+        !root.join("tools/validate-architecture-coverage.py").exists(),
+        "retired Python validator returned"
     );
+
+    let facade = read(&root, "xtask/src/architecture_coverage.rs");
+    assert!(facade.len() < 7_000, "facade grew to {} bytes", facade.len());
+    for module in ["control", "load", "markdown", "schemas", "topology"] {
+        assert!(facade.contains(&format!("mod {module};")));
+    }
+    assert!(!facade.contains("std::fs"));
+    assert!(!facade.contains("fn operation_names"));
+    assert!(!facade.contains("fn exact_type_registry_symbols"));
+
+    let topology = read(&root, "xtask/src/architecture_coverage/topology.rs");
+    for module in ["packages", "ports", "relations"] {
+        assert!(topology.contains(&format!("mod {module};")));
+    }
 
     let wrapper = read(&root, "tools/validate-architecture-coverage.ps1");
     let lower = wrapper.to_ascii_lowercase();
@@ -30,19 +42,6 @@ fn architecture_contract_closure_is_rust_owned() {
     assert!(lower.contains("architecture-coverage-contracts"));
     assert!(!lower.contains("python"));
 
-    let facade = read(&root, "xtask/src/architecture_coverage_contracts.rs");
-    for module in ["operations", "qualification", "tasks"] {
-        assert!(facade.contains(&format!("mod {module};")));
-    }
-    assert!(!facade.contains("fn operation_names"));
-
-    let operations = read(
-        &root,
-        "xtask/src/architecture_coverage_contracts/operations.rs",
-    );
-    assert!(operations.contains("operation_names"));
-    assert!(operations.contains("package-qualified operation"));
-
     for workflow in std::fs::read_dir(root.join(".github/workflows"))
         .expect("workflow directory")
     {
@@ -51,7 +50,7 @@ fn architecture_contract_closure_is_rust_owned() {
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
             assert!(
-                !text.contains("validate-architecture-coverage-contracts.py"),
+                !text.contains("validate-architecture-coverage.py"),
                 "{} references the retired validator",
                 path.display()
             );

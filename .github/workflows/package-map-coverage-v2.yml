@@ -32,7 +32,8 @@ jobs:
       - name: Revalidate architecture, swarm and function registries
         shell: pwsh
         run: |
-          python tools/validate-architecture-coverage.py --json
+          cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
+          cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
           ./tools/validate-swarm.ps1 -Json
           ./tools/validate-function-packets.ps1 -Json
 

@@ -1,6 +1,11 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+use xtask::architecture_coverage::{
+    exit_code as full_architecture_exit_code,
+    render_report_json as render_full_architecture_json,
+    validate_architecture_coverage as validate_full_architecture,
+};
 use xtask::architecture_coverage_contracts::{
     exit_code as architecture_exit_code,
     render_report_json as render_architecture_json,
@@ -26,6 +31,12 @@ use xtask::qdrant_boundary::{
     render_report_json as render_qdrant_json,
     validate_qdrant_boundary as validate_qdrant,
 };
+
+pub(super) fn validate_architecture_coverage() -> ExitCode {
+    let report = validate_full_architecture(Path::new("."));
+    println!("{}", render_full_architecture_json(&report));
+    code(full_architecture_exit_code(&report))
+}
 
 pub(super) fn validate_architecture_coverage_contracts() -> ExitCode {
     let report = validate_architecture(Path::new("."));

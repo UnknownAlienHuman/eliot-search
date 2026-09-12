@@ -25,11 +25,13 @@ jobs:
         shell: pwsh
         run: cargo test --locked -p xtask --test tooling_runtime_boundary
 
-      - name: Architecture coverage contract closure
+      - name: Architecture coverage Rust closure
         shell: pwsh
         run: |
+          cargo test --locked -p xtask --test architecture_coverage_runtime
           cargo test --locked -p xtask --test architecture_coverage_contracts_runtime
           cargo test --locked -p xtask --test architecture_coverage_python_boundary
+          cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
           cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
 
       - name: Ticket issuance structural validator

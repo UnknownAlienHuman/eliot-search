@@ -36,7 +36,8 @@ python tools/generate-coverage-graph-v2.py --check
 python tools/generate-package-maps-v2.py --check
 python tools/validate-coverage-graph-v2.py --json
 python tools/validate-package-maps-v2.py --json
-python tools/validate-architecture-coverage.py --json
+cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
+cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
 ```
 
 The validators reject missing or orphan operations, stale documentation headings, cross-package module

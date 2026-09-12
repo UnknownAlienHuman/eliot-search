@@ -32,7 +32,8 @@ jobs:
           python tools/generate-package-maps-v2.py --check --json
           python tools/validate-coverage-graph-v2.py --json
           python tools/validate-package-maps-v2.py --json
-          python tools/validate-architecture-coverage.py --json
+          cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
+          cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
 
       - name: Revalidate swarm and function packet topology
         shell: pwsh
