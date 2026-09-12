@@ -18,7 +18,7 @@ implementation_modules = [
   "tools/context_artifact_builder_v1/build.py",
 ]
 powershell_wrapper = "tools/build-context-artifact-candidate.ps1"
-structural_validator = "tools/validate-context-artifact-candidate.py"
+structural_validator = "xtask/src/context_artifact_validation.rs"
 structural_validator_wrapper = "tools/validate-context-artifact-candidate.ps1"
 qualification_readme = "qualification/context-artifact/README.md"
 qualification_cases = "qualification/context-artifact/cases-v1.toml"

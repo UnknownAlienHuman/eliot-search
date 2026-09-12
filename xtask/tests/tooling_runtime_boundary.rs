@@ -20,6 +20,11 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         retired_python: "tools/accepted_evidence_digest_v1.py",
     },
     MigratedEntrypoint {
+        wrapper: "tools/validate-context-artifact-candidate.ps1",
+        command: "context-artifact-candidate",
+        retired_python: "tools/validate-context-artifact-candidate.py",
+    },
+    MigratedEntrypoint {
         wrapper: "tools/validate-p00-ticket-drafts.ps1",
         command: "p00-ticket-drafts",
         retired_python: "tools/validate-p00-ticket-drafts.py",

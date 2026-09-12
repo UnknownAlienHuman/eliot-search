@@ -1,4 +1,5 @@
 mod bootstrap;
+mod context_artifact;
 mod drafts;
 mod evidence;
 mod milestones;
@@ -19,6 +20,7 @@ const USAGE: &str = "usage:\n\
   xtask validate w2-milestone-packets [--json]\n\
   xtask validate w3-milestone-packets [--json]\n\
   xtask validate integration-bootstrap [--root <path>] [--allow-missing-lock] [--json]\n\
+  xtask validate context-artifact-candidate [--root <path>] [--json]\n\
   xtask validate context-materialization-plan [--json]\n\
   xtask validate ticket-issuance-plan [--root <path>] [--json]\n\
   xtask validate implementation-program [--json]\n\
@@ -68,6 +70,9 @@ fn run_validate(args: &[String]) -> ExitCode {
     }
     if let Some(options) = options_for(args, "integration-bootstrap") {
         return bootstrap::validate(options);
+    }
+    if let Some(options) = options_for(args, "context-artifact-candidate") {
+        return context_artifact::validate(options);
     }
     if is_optional_json(args, "context-materialization-plan") {
         return structural::validate_context_materialization_plan();

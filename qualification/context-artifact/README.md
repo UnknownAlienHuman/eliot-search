@@ -11,14 +11,21 @@ python -m py_compile `
   tools/context_artifact_builder_v1/bundle.py `
   tools/context_artifact_builder_v1/extract.py `
   tools/context_artifact_builder_v1/build.py `
-  tools/validate-context-artifact-candidate.py `
   qualification/context-artifact/test_context_artifact_candidate_v1.py
 
 python qualification/context-artifact/test_context_artifact_candidate_v1.py
-python tools/validate-context-artifact-candidate.py --json
+cargo test --locked -p xtask --test context_artifact_validation
+cargo run --locked --quiet -p xtask -- validate context-artifact-candidate --json
 ```
 
-The current repository check builds `search-contracts` against exact `HEAD`. Expected output:
+The Rust structural validator checks component registry, schema, digest profile,
+twenty-case inventory, manual workflow policy, artifact-root fencing and the
+all-false authority boundary. It does not invoke the Python builder or write a
+candidate. The separate twenty-case corpus and workflow build continue to
+exercise immutable Git-tree extraction, bundle construction and idempotent
+artifact writes until the full builder is ported.
+
+The workflow still builds `search-contracts` against an exact commit. Expected output:
 
 ```text
 status = ARTIFACT_CANDIDATE_NOT_STORED_NOT_SIGNED

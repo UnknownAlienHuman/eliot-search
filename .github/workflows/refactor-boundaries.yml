@@ -31,6 +31,12 @@ jobs:
           cargo test --locked -p xtask --test ticket_issuance_validation
           cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json
 
+      - name: Context artifact structural validator
+        shell: pwsh
+        run: |
+          cargo test --locked -p xtask --test context_artifact_validation
+          cargo run --locked --quiet -p xtask -- validate context-artifact-candidate --json
+
       - name: Implementation-program module ownership
         shell: pwsh
         run: cargo test --locked -p xtask --test impl_program_module_ownership

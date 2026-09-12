@@ -10,16 +10,17 @@
 
 ## Executable tooling
 
-- [`../../tools/build-context-artifact-candidate.py`](../../tools/build-context-artifact-candidate.py) — Python CLI.
+- [`../../tools/build-context-artifact-candidate.py`](../../tools/build-context-artifact-candidate.py) — Python builder CLI pending full Rust port.
 - [`../../tools/context_artifact_builder_v1/`](../../tools/context_artifact_builder_v1/) — bounded core, bundle, extraction and build modules.
-- [`../../tools/build-context-artifact-candidate.ps1`](../../tools/build-context-artifact-candidate.ps1) — Windows wrapper.
-- [`../../tools/validate-context-artifact-candidate.py`](../../tools/validate-context-artifact-candidate.py) — structural/current-tree validator.
-- [`../../tools/validate-context-artifact-candidate.ps1`](../../tools/validate-context-artifact-candidate.ps1) — Windows validator wrapper.
+- [`../../tools/build-context-artifact-candidate.ps1`](../../tools/build-context-artifact-candidate.ps1) — Windows builder wrapper.
+- [`../../xtask/src/context_artifact_validation.rs`](../../xtask/src/context_artifact_validation.rs) — Rust registry/schema/digest/authority structural validator.
+- [`../../tools/validate-context-artifact-candidate.ps1`](../../tools/validate-context-artifact-candidate.ps1) — locked Cargo validator wrapper.
 
 ## Qualification
 
 - [`../../qualification/context-artifact/cases-v1.toml`](../../qualification/context-artifact/cases-v1.toml) — twenty-case inventory.
-- [`../../qualification/context-artifact/test_context_artifact_candidate_v1.py`](../../qualification/context-artifact/test_context_artifact_candidate_v1.py) — committed-Git conformance suite.
+- [`../../qualification/context-artifact/test_context_artifact_candidate_v1.py`](../../qualification/context-artifact/test_context_artifact_candidate_v1.py) — committed-Git builder conformance suite.
+- [`../../xtask/tests/context_artifact_validation.rs`](../../xtask/tests/context_artifact_validation.rs) — Rust structural-validator regression.
 - [`../../qualification/context-artifact/README.md`](../../qualification/context-artifact/README.md) — commands and evidence ceiling.
 - [`../../.github/workflows/context-artifact-candidate.yml`](../../.github/workflows/context-artifact-candidate.yml) — manual Windows qualification.
 
