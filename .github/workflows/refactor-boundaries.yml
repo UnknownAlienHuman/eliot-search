@@ -51,6 +51,7 @@ jobs:
         shell: pwsh
         run: |
           cargo test --locked -p xtask --test context_materialization_module_ownership
+          cargo test --locked -p xtask --test context_materialization_validation_ownership
           cargo test --locked -p xtask --test context_materialization_runtime_boundary
           cargo test --locked -p xtask --test context_materialization_parity
           cargo test --locked -p xtask --test context_materialization_builder
