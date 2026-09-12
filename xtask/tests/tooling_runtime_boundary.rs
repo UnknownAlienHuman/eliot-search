@@ -25,6 +25,11 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         retired_python: "tools/validate-architecture-coverage.py",
     },
     MigratedEntrypoint {
+        wrapper: "tools/validate-package-maps-v2.ps1",
+        command: "package-maps",
+        retired_python: "tools/validate-package-maps-v2.py",
+    },
+    MigratedEntrypoint {
         wrapper: "tools/validate-context-artifact-candidate.ps1",
         command: "context-artifact-candidate",
         retired_python: "tools/validate-context-artifact-candidate.py",

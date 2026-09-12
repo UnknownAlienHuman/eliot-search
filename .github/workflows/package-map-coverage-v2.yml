@@ -27,7 +27,7 @@ jobs:
           python tools/generate-coverage-graph-v2.py --check --json
           python tools/generate-package-maps-v2.py --check --json
           python tools/validate-coverage-graph-v2.py --json
-          python tools/validate-package-maps-v2.py --json
+          cargo run --locked --quiet -p xtask -- validate package-maps --json
 
       - name: Revalidate architecture, swarm and function registries
         shell: pwsh

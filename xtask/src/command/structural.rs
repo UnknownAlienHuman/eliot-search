@@ -26,6 +26,11 @@ use xtask::p00_acceptance::{
     render_report_json as render_acceptance_json,
     validate_p00_foundation_acceptance,
 };
+use xtask::package_maps::{
+    exit_code as package_maps_exit_code,
+    render_report_json as render_package_maps_json,
+    validate_package_maps,
+};
 use xtask::qdrant_boundary::{
     exit_code as qdrant_exit_code,
     render_report_json as render_qdrant_json,
@@ -60,6 +65,12 @@ pub(super) fn validate_p00_acceptance() -> ExitCode {
     let report = validate_p00_foundation_acceptance(Path::new("."));
     println!("{}", render_acceptance_json(&report));
     code(acceptance_exit_code(&report))
+}
+
+pub(super) fn validate_package_map_closure() -> ExitCode {
+    let report = validate_package_maps(Path::new("."));
+    println!("{}", render_package_maps_json(&report));
+    code(package_maps_exit_code(&report))
 }
 
 pub(super) fn validate_qdrant_boundary() -> ExitCode {
