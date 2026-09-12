@@ -9,11 +9,12 @@ Neither layer materializes context, issues a ticket or lease, authorizes impleme
 
 ## Advisory planner v2
 
-The required planner and validator are Rust-only:
+The required planner, the complete 30-case fixture corpus and the structural validator are Rust-only:
 
 ```powershell
 cargo check --locked -p xtask --all-targets
 cargo test --locked -p xtask --test ticket_issuance_builder
+cargo test --locked -p xtask --test ticket_issuance_conformance
 cargo test --locked -p xtask --test ticket_issuance_builder_runtime_boundary
 cargo test --locked -p xtask --test ticket_issuance_validation
 cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json
@@ -49,7 +50,9 @@ advances_launch_state = false
 
 That result is expected while no immutable base/writer/reviewer selection exists.
 
-`cases-v2.toml` inventories 30 cases covering immutable Git-tree reads, selection validation, schema-v2 fields, context ceilings, source and selector checks, prerequisite handoffs, control-record conflicts, manual-only workflow policy, artifact-root fencing, deterministic JSON and zero authority. The complete 30-case Rust fixture port remains pending; no case is marked executed merely because the required implementation moved from Python to Rust.
+`cases-v2.toml` inventories the 30 Rust conformance cases exercised by `xtask/tests/ticket_issuance_conformance.rs`. The fixture creates an isolated Git repository and covers immutable-tree reads, working-tree exclusion, exact and conditional selections, malformed actors and commits, closed draft schemas, source ceilings, missing/symlink/non-UTF-8/forbidden sources, selectors, accepted handoff signatures and supersession inputs, control-record conflicts, workflow policy, artifact-root fencing, deterministic JSON and zero authority.
+
+The corpus is executable verification only. It is not accepted evidence until a run has immutable raw output and independent reviewer receipt.
 
 ## Operation conformance corpus
 

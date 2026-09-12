@@ -54,6 +54,7 @@ jobs:
         run: |
           cargo test --locked -p xtask --test ticket_planner_module_ownership
           cargo test --locked -p xtask --test ticket_issuance_builder
+          cargo test --locked -p xtask --test ticket_issuance_conformance
           cargo test --locked -p xtask --test ticket_issuance_builder_runtime_boundary
           cargo test --locked -p xtask --test ticket_issuance_validation
           cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json

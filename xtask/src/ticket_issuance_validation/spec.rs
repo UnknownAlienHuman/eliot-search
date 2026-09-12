@@ -1,6 +1,6 @@
 pub(super) const REGISTRY_PATH: &str = "swarm/ticket-issuance-planner-v2.toml";
 pub(super) const SCHEMA_PATH: &str = "swarm/ticket-issuance-plan-schema-v2.toml";
-pub(super) const DIGEST_PATH: &str = "swarm/ticket-issuance-plan-digest-v2.toml";
+pub(super) const DIGEST_PATH: &str = "swarm/ticket_issuance-plan-digest-v2.toml";
 pub(super) const CASES_PATH: &str = "qualification/ticket-issuance/cases-v2.toml";
 
 pub(super) const EXPECTED_PATHS: [(&str, &str); 15] = [
@@ -32,11 +32,11 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 15] = [
     ("qualification_cases", CASES_PATH),
     (
         "qualification_fixture",
-        "xtask/tests/ticket_issuance_builder.rs",
+        "xtask/tests/support/ticket_issuance_fixture.rs",
     ),
     (
         "qualification_tests",
-        "xtask/tests/ticket_issuance_builder_runtime_boundary.rs",
+        "xtask/tests/ticket_issuance_conformance.rs",
     ),
     (
         "manual_workflow",

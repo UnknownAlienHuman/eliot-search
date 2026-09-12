@@ -18,9 +18,11 @@
 
 ## Qualification
 
-- [`../../qualification/ticket-issuance/cases-v2.toml`](../../qualification/ticket-issuance/cases-v2.toml) — 30-case inventory.
-- [`../../xtask/tests/ticket_issuance_builder.rs`](../../xtask/tests/ticket_issuance_builder.rs) — deterministic zero-state, selection and output-boundary regression.
-- [`../../xtask/tests/ticket_issuance_builder_runtime_boundary.rs`](../../xtask/tests/ticket_issuance_builder_runtime_boundary.rs) — Rust-only runtime and module-ownership guard.
+- [`../../qualification/ticket-issuance/cases-v2.toml`](../../qualification/ticket-issuance/cases-v2.toml) — exact 30-case inventory.
+- [`../../xtask/tests/support/ticket_issuance_fixture.rs`](../../xtask/tests/support/ticket_issuance_fixture.rs) — isolated committed-Git fixture and canonical accepted-handoff builder.
+- [`../../xtask/tests/ticket_issuance_conformance.rs`](../../xtask/tests/ticket_issuance_conformance.rs) — complete 30-case Rust planner corpus.
+- [`../../xtask/tests/ticket_issuance_builder.rs`](../../xtask/tests/ticket_issuance_builder.rs) — focused current-repository regressions.
+- [`../../xtask/tests/ticket_issuance_builder_runtime_boundary.rs`](../../xtask/tests/ticket_issuance_builder_runtime_boundary.rs) — Rust-only runtime, retired-Python and module-ownership guard.
 - [`../../xtask/tests/ticket_issuance_validation.rs`](../../xtask/tests/ticket_issuance_validation.rs) — structural-validator regression.
 - [`../../qualification/ticket-issuance/README.md`](../../qualification/ticket-issuance/README.md) — evidence boundary and exact commands.
 - [`../../.github/workflows/ticket-issuance-plan.yml`](../../.github/workflows/ticket-issuance-plan.yml) — manual Windows qualification.

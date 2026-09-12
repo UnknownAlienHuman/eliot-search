@@ -1,8 +1,8 @@
 schema_version = 2
 suite = "ticket_issuance_planner_v2"
-status = "STRUCTURAL_CONFORMANCE_NOT_AUTHORITY"
+status = "RUST_CONFORMANCE_NOT_AUTHORITY"
 contract = "docs/handoff/TICKET_ISSUANCE_PLANNER_V2.md"
-planner = "tools/plan-ticket-issuance.py"
+planner = "xtask/src/ticket_issuance_builder.rs"
 plan_schema = "swarm/ticket-issuance-plan-schema-v2.toml"
 digest_profile = "swarm/ticket-issuance-plan-digest-v2.toml"
 case_count = 30

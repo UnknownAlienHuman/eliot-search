@@ -141,10 +141,14 @@ fn validate_cases(cases: &Value, validation: &mut Validation) {
     let rows = cases.get("case").and_then(Value::as_array);
     validation.require(
         integer(cases, "schema_version") == Some(2)
+            && string(cases, "suite") == Some("ticket_issuance_planner_v2")
+            && string(cases, "status") == Some("RUST_CONFORMANCE_NOT_AUTHORITY")
+            && string(cases, "planner")
+                == Some("xtask/src/ticket_issuance_builder.rs")
             && integer(cases, "case_count") == Some(30)
             && rows.is_some_and(|value| value.len() == 30),
-        "cases-count",
-        "30 schema-v2 cases",
+        "cases-identity",
+        "30-case Rust conformance inventory is registered",
     );
     let ids: Vec<Option<&str>> = rows
         .map(|value| {

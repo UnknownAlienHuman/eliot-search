@@ -44,6 +44,7 @@ fn required_ticket_planner_entrypoint_is_locked_rust() {
     assert!(workflow.contains("contents: read"));
     assert!(workflow.contains("persist-credentials: false"));
     assert!(workflow.contains("ticket_issuance_builder"));
+    assert!(workflow.contains("ticket_issuance_conformance"));
     assert!(!workflow.to_ascii_lowercase().contains("python"));
 
     let registry = read(&root, "swarm/ticket-issuance-planner-v2.toml");
@@ -56,9 +57,36 @@ fn required_ticket_planner_entrypoint_is_locked_rust() {
     assert!(registry.contains(
         "xtask/src/ticket_issuance_builder/assemble/plan.rs"
     ));
+    assert!(registry.contains(
+        "qualification_fixture = \"xtask/tests/support/ticket_issuance_fixture.rs\""
+    ));
+    assert!(registry.contains(
+        "qualification_tests = \"xtask/tests/ticket_issuance_conformance.rs\""
+    ));
     assert!(!registry.contains(
         "implementation = \"tools/plan-ticket-issuance.py\""
     ));
+}
+
+#[test]
+fn retired_python_ticket_planner_is_absent() {
+    let root = repository_root();
+    for relative in [
+        "tools/plan-ticket-issuance.py",
+        "tools/ticket_issuance_planner_v2/__init__.py",
+        "tools/ticket_issuance_planner_v2/core.py",
+        "tools/ticket_issuance_planner_v2/drafts.py",
+        "tools/ticket_issuance_planner_v2/context.py",
+        "tools/ticket_issuance_planner_v2/control.py",
+        "tools/ticket_issuance_planner_v2/plan.py",
+        "qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py",
+        "qualification/ticket-issuance/test_plan_ticket_issuance_v2.py",
+    ] {
+        assert!(
+            !root.join(relative).exists(),
+            "retired Python planner file returned: {relative}"
+        );
+    }
 }
 
 #[test]

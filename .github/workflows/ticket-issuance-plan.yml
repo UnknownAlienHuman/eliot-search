@@ -22,11 +22,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Compile Rust planner and structural validator
+      - name: Compile Rust planner and run conformance corpus
         shell: pwsh
         run: |
           cargo check --locked -p xtask --all-targets
           cargo test --locked -p xtask --test ticket_issuance_builder
+          cargo test --locked -p xtask --test ticket_issuance_conformance
           cargo test --locked -p xtask --test ticket_issuance_builder_runtime_boundary
           cargo test --locked -p xtask --test ticket_issuance_validation
 
