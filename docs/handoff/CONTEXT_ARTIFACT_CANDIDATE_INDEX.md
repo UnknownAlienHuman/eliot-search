@@ -10,17 +10,21 @@
 
 ## Executable tooling
 
-- [`../../tools/build-context-artifact-candidate.py`](../../tools/build-context-artifact-candidate.py) — Python builder CLI pending full Rust port.
-- [`../../tools/context_artifact_builder_v1/`](../../tools/context_artifact_builder_v1/) — bounded core, bundle, extraction and build modules.
-- [`../../tools/build-context-artifact-candidate.ps1`](../../tools/build-context-artifact-candidate.ps1) — Windows builder wrapper.
-- [`../../xtask/src/context_artifact_validation.rs`](../../xtask/src/context_artifact_validation.rs) — Rust registry/schema/digest/authority structural validator.
+- [`../../xtask/src/context_artifact_builder.rs`](../../xtask/src/context_artifact_builder.rs) — Rust builder facade.
+- [`../../xtask/src/context_artifact_builder/`](../../xtask/src/context_artifact_builder/) — immutable-tree preflight, extraction, assembly and exact local publication.
+- [`../../xtask/src/context_artifact.rs`](../../xtask/src/context_artifact.rs) — canonical candidate/bundle primitives.
+- [`../../xtask/src/context_artifact_io.rs`](../../xtask/src/context_artifact_io.rs) — output-root fencing and idempotent write/readback.
+- [`../../tools/build-context-artifact-candidate.ps1`](../../tools/build-context-artifact-candidate.ps1) — Windows wrapper for the locked Cargo command.
+- [`../../xtask/src/context_artifact_validation.rs`](../../xtask/src/context_artifact_validation.rs) — registry/schema/digest/authority structural validator.
 - [`../../tools/validate-context-artifact-candidate.ps1`](../../tools/validate-context-artifact-candidate.ps1) — locked Cargo validator wrapper.
 
 ## Qualification
 
 - [`../../qualification/context-artifact/cases-v1.toml`](../../qualification/context-artifact/cases-v1.toml) — twenty-case inventory.
-- [`../../qualification/context-artifact/test_context_artifact_candidate_v1.py`](../../qualification/context-artifact/test_context_artifact_candidate_v1.py) — committed-Git builder conformance suite.
-- [`../../xtask/tests/context_artifact_validation.rs`](../../xtask/tests/context_artifact_validation.rs) — Rust structural-validator regression.
+- [`../../xtask/tests/context_artifact_builder.rs`](../../xtask/tests/context_artifact_builder.rs) — exact-commit current candidate regression.
+- [`../../xtask/tests/context_artifact_parity.rs`](../../xtask/tests/context_artifact_parity.rs) — captured compatibility vectors executed entirely in Rust.
+- [`../../xtask/tests/context_artifact_rust_io.rs`](../../xtask/tests/context_artifact_rust_io.rs) — output-root and idempotent publication regression.
+- [`../../xtask/tests/context_artifact_validation.rs`](../../xtask/tests/context_artifact_validation.rs) — structural-validator regression.
 - [`../../qualification/context-artifact/README.md`](../../qualification/context-artifact/README.md) — commands and evidence ceiling.
 - [`../../.github/workflows/context-artifact-candidate.yml`](../../.github/workflows/context-artifact-candidate.yml) — manual Windows qualification.
 
@@ -41,7 +45,7 @@ manifest artifacts, never mutates `swarm/context-manifests/**`, and leaves every
 ## Current disposition
 
 ```text
-search-contracts artifact candidate: buildable at an exact commit
+search-contracts artifact candidate: buildable at an exact commit through Rust
 accepted-handoff evidence profile:    specified; no accepted handoff currently exists
 materialization plan compiler:         available; external store/actor/signature inputs absent
 immutable artifact store/ref:         unselected / absent

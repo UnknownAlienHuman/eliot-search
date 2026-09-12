@@ -12,10 +12,7 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 13] = [
     ("index", "docs/handoff/CONTEXT_ARTIFACT_CANDIDATE_INDEX.md"),
     ("candidate_schema", SCHEMA_PATH),
     ("digest_profile", DIGEST_PATH),
-    (
-        "implementation",
-        "tools/build-context-artifact-candidate.py",
-    ),
+    ("implementation", "xtask/src/context_artifact_builder.rs"),
     (
         "powershell_wrapper",
         "tools/build-context-artifact-candidate.ps1",
@@ -35,7 +32,7 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 13] = [
     ("qualification_cases", CASES_PATH),
     (
         "qualification_tests",
-        "qualification/context-artifact/test_context_artifact_candidate_v1.py",
+        "xtask/tests/context_artifact_builder.rs",
     ),
     (
         "manual_workflow",
@@ -44,11 +41,11 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 13] = [
 ];
 
 pub(super) const IMPLEMENTATION_MODULES: [&str; 5] = [
-    "tools/context_artifact_builder_v1/__init__.py",
-    "tools/context_artifact_builder_v1/core.py",
-    "tools/context_artifact_builder_v1/bundle.py",
-    "tools/context_artifact_builder_v1/extract.py",
-    "tools/context_artifact_builder_v1/build.py",
+    "xtask/src/context_artifact_builder/assemble.rs",
+    "xtask/src/context_artifact_builder/extract.rs",
+    "xtask/src/context_artifact_builder/model.rs",
+    "xtask/src/context_artifact_builder/preflight.rs",
+    "xtask/src/context_artifact_builder/write.rs",
 ];
 
 pub(super) const EXECUTION_TRUE_KEYS: [&str; 7] = [

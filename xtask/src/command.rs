@@ -1,5 +1,6 @@
 mod bootstrap;
 mod context_artifact;
+mod context_artifact_build;
 mod drafts;
 mod evidence;
 mod milestones;
@@ -11,6 +12,7 @@ use std::process::ExitCode;
 const USAGE: &str = "usage:\n\
   xtask validate accepted-evidence-digest\n\
   xtask compute accepted-evidence-digest <record> [--json-array]\n\
+  xtask build context-artifact-candidate --package <name> --base-commit <algorithm:oid> [--root <path>] [--accepted-handoff <path>]... [--output-root <path>] [--print-result]\n\
   xtask validate p00-ticket-drafts [--json]\n\
   xtask validate w1-agent-drafts [--json]\n\
   xtask validate w2-agent-drafts [--json]\n\
@@ -36,6 +38,9 @@ pub(super) fn run(args: &[String]) -> ExitCode {
     }
     if command == "compute" {
         return run_compute(rest);
+    }
+    if command == "build" {
+        return run_build(rest);
     }
     usage_error()
 }
@@ -98,6 +103,16 @@ fn run_compute(args: &[String]) -> ExitCode {
     };
     if target == "accepted-evidence-digest" {
         return evidence::compute_digest(options);
+    }
+    usage_error()
+}
+
+fn run_build(args: &[String]) -> ExitCode {
+    let Some((target, options)) = args.split_first() else {
+        return usage_error();
+    };
+    if target == "context-artifact-candidate" {
+        return context_artifact_build::build(options);
     }
     usage_error()
 }

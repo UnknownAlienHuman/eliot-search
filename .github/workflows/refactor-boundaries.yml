@@ -31,11 +31,13 @@ jobs:
           cargo test --locked -p xtask --test ticket_issuance_validation
           cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json
 
-      - name: Context artifact Rust I/O and structural boundary
+      - name: Context artifact Rust builder and boundary
         shell: pwsh
         run: |
           cargo test --locked -p xtask --test context_artifact_module_ownership
+          cargo test --locked -p xtask --test context_artifact_builder_runtime_boundary
           cargo test --locked -p xtask --test context_artifact_rust_io
+          cargo test --locked -p xtask --test context_artifact_builder
           cargo test --locked -p xtask --test context_artifact_validation
           cargo run --locked --quiet -p xtask -- validate context-artifact-candidate --json
 

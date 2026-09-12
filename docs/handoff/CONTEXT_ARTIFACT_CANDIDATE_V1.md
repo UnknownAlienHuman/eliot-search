@@ -50,17 +50,18 @@ output root              artifacts/context-artifact-candidates or a descendant
 Every repository input is loaded with Git object reads from `base_commit`. The working tree, index,
 branch name, wall clock and random state do not affect candidate bytes or identities.
 
-Before building, the tool reuses the schema-v2 planner checks for:
+Before building, the tool checks:
 
 - package/function/stage/launch parity;
 - exact non-claimable ticket/context draft pair;
 - manifest-owned 16/24 source ceilings, six selector ceiling and one handoff-slot ceiling;
-- exact manifest-closed `search-contracts` source pack;
-- regular committed UTF-8 source blobs and forbidden-path fencing;
-- exactly-one closed selector resolution;
+- exact committed sources and closed selector paths;
+- strict UTF-8 source blobs and forbidden-path fencing;
+- exactly-one selector resolution;
 - accepted prerequisite handoff identity/signature/supersession checks;
 - current-package control-record conflicts and an existing W0 receipt;
-- control-schema versions and manual/read-only/credential-free workflows.
+- component/schema/digest-profile coherence;
+- manual/read-only/credential-free workflows.
 
 Any failed preflight stops before output.
 
@@ -89,11 +90,12 @@ implementation `src/**` trees and issued control roots remain forbidden.
 
 ## 4. Registry fragments
 
-The closed selector grammar remains:
+The closed selector grammar is:
 
 ```text
 swarm/crates.toml::package[name=<package>]
 swarm/function-packets.toml::foundation[package=<package>]
+swarm/modules/w0.toml::package[name=<package>]
 swarm/stages.toml::stage[id=W0]
 swarm/launch-state.toml::authorized_packages[<package>]
 swarm/launch-state.toml::conditional_packages[<package>]
@@ -117,9 +119,9 @@ SHA-256 and fragment length.
 ## 5. Accepted handoffs
 
 `search-domain` and `search-ports` require the exact accepted `search-contracts` handoff declared by their
-drafts. The builder verifies it with the planner and embeds its exact canonical UTF-8/LF record bytes as a
-length-framed block. A branch, API sketch, implementation source tree, bad signature, wrong path,
-missing final commit or superseded handoff fails closed.
+drafts. The builder verifies it and embeds its exact canonical UTF-8/LF record bytes as a length-framed
+block. A branch, API sketch, implementation source tree, bad signature, wrong path, missing final commit
+or superseded handoff fails closed.
 
 `search-contracts` accepts no prerequisite handoff and rejects extras.
 
@@ -214,7 +216,7 @@ The adjacent JSON includes:
 - exact selector source and fragment identities;
 - accepted handoff inputs;
 - bundle path, digest, size and format;
-- complete planner preflight checks;
+- complete preflight checks;
 - required unavailable checks;
 - a non-schema-instance `context_manifest_v1` projection;
 - the exact unresolved field list;
@@ -228,13 +230,18 @@ Successful candidates have `reason_codes = []`.
 $format = git rev-parse --show-object-format
 $base = "${format}:$(git rev-parse HEAD)"
 
+cargo run --locked --quiet -p xtask -- build context-artifact-candidate `
+  --package search-contracts `
+  --base-commit $base `
+  --print-result
+
 pwsh -NoProfile -File tools/build-context-artifact-candidate.ps1 `
   -Package search-contracts `
   -BaseCommit $base `
   -PrintResult
 
+cargo test --locked -p xtask --test context_artifact_builder
 pwsh -NoProfile -File tools/validate-context-artifact-candidate.ps1 -Json
-python qualification/context-artifact/test_context_artifact_candidate_v1.py
 ```
 
 A ready candidate means only that exact writer-context bytes have been constructed and checked. It does

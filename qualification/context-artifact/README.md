@@ -5,33 +5,37 @@ This suite qualifies only the deterministic non-authoritative candidate builder.
 ## Commands
 
 ```powershell
+cargo test --locked -p xtask --test context_artifact_parity
+cargo test --locked -p xtask --test context_artifact_module_ownership
 cargo test --locked -p xtask --test context_artifact_rust_io
+cargo test --locked -p xtask --test context_artifact_builder
 cargo test --locked -p xtask --test context_artifact_validation
 cargo run --locked --quiet -p xtask -- validate context-artifact-candidate --json
 
-python -m py_compile `
-  tools/build-context-artifact-candidate.py `
-  tools/context_artifact_builder_v1/core.py `
-  tools/context_artifact_builder_v1/bundle.py `
-  tools/context_artifact_builder_v1/extract.py `
-  tools/context_artifact_builder_v1/build.py `
-  qualification/context-artifact/test_context_artifact_candidate_v1.py
-
-python qualification/context-artifact/test_context_artifact_candidate_v1.py
+$format = git rev-parse --show-object-format
+$commit = git rev-parse HEAD
+cargo run --locked --quiet -p xtask -- build context-artifact-candidate `
+  --package search-contracts `
+  --base-commit "${format}:${commit}" `
+  --output-root artifacts/context-artifact-candidates/qualification `
+  --print-result
 ```
 
-Rust now owns the immutable Git-tree reader, exact bounded blob readback,
-candidate output-root fencing and idempotent temp/write/sync/rename/readback
-publication. The structural validator separately checks component registry,
-schema, digest profile, twenty-case inventory, manual workflow policy and the
-all-false authority boundary.
+Rust owns the complete candidate path:
 
-The Python build orchestration remains temporarily responsible for draft
-preflight, accepted-handoff extraction and final candidate assembly. It uses the
-same bundle/digest contract while those remaining operations are moved into
-`xtask`; no new Python functionality may be added to that compatibility path.
+- immutable Git-tree preflight and exact bounded blob readback;
+- schema-v2 ticket/context draft checks and zero-authority fences;
+- accepted-handoff verification and supersession checks;
+- UTF-8/LF source materialization;
+- canonical registry-fragment extraction, including the W0 module packet;
+- length-framed bundle rendering plus strict inverse parsing;
+- domain-separated bundle/candidate digests;
+- candidate assembly;
+- output-root fencing and idempotent temp/write/sync/rename/readback publication.
 
-The workflow builds `search-contracts` against an exact commit. Expected output:
+No Python runtime is required for this builder. Captured CPython parity vectors remain ordinary fixtures used by Rust tests; they are not executed.
+
+The workflow builds `search-contracts` against one exact algorithm-tagged commit. Expected output:
 
 ```text
 status = ARTIFACT_CANDIDATE_NOT_STORED_NOT_SIGNED

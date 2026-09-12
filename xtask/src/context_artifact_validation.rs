@@ -1,9 +1,10 @@
 //! Read-only structural validation for context-artifact candidate builder v1.
 //!
-//! The Python builder and twenty-case corpus remain separate until the full
-//! immutable-tree extraction/write pipeline is ported. This validator owns
-//! registry/schema/digest/workflow closure and the zero-authority boundary; it
-//! does not build or write a candidate.
+//! The executable builder, immutable-tree extraction and idempotent ordinary
+//! artifact publication are Rust-owned. This validator checks the registered
+//! implementation closure, schema/digest contract, twenty-case inventory,
+//! manual workflow policy and zero-authority boundary; it does not itself build
+//! or publish a candidate.
 
 mod registry;
 mod repository;
@@ -86,7 +87,7 @@ impl Validation {
     }
 }
 
-/// Validate the checked-in builder closure without executing Python.
+/// Validate the checked-in Rust builder closure without executing it.
 #[must_use]
 pub fn validate_context_artifact_candidate(
     root: &Path,

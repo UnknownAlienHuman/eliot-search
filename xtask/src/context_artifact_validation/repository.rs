@@ -151,42 +151,58 @@ fn validate_pure_candidate_ceiling(validation: &mut Validation) {
 }
 
 fn validate_implementation_sentinels(root: &Path, validation: &mut Validation) {
-    let build = std::fs::read_to_string(
-        root.join("tools/context_artifact_builder_v1/build.py"),
+    let assemble = std::fs::read_to_string(
+        root.join("xtask/src/context_artifact_builder/assemble.rs"),
     )
     .unwrap_or_default();
-    for (id, token, detail) in [
+    let write = std::fs::read_to_string(
+        root.join("xtask/src/context_artifact_builder/write.rs"),
+    )
+    .unwrap_or_default();
+    for (id, source, token, detail) in [
         (
             "implementation-status",
+            assemble.as_str(),
             "\"status\": STATUS",
             "builder emits the closed candidate status",
         ),
         (
             "implementation-reasons",
+            assemble.as_str(),
             "\"reason_codes\": []",
             "builder emits no success reason codes",
         ),
         (
             "implementation-mutations",
+            assemble.as_str(),
             "\"control_record_mutations\": []",
             "builder emits no control-record mutations",
         ),
         (
             "implementation-authority",
+            assemble.as_str(),
             "\"authority\": authority_map()",
             "builder uses the all-false authority map",
         ),
         (
             "implementation-digest",
-            "candidate[\"candidate_sha256\"] = candidate_metadata_digest(candidate)",
+            assemble.as_str(),
+            "let digest = candidate_metadata_digest(&candidate);",
             "builder embeds the non-self-referential metadata digest",
         ),
         (
             "implementation-roundtrip",
-            "parsed_preamble, parsed_blocks = parse_bundle(bundle_bytes)",
+            assemble.as_str(),
+            "parse_bundle(&bundle_bytes)",
             "builder performs bundle round-trip validation",
         ),
+        (
+            "implementation-readback",
+            write.as_str(),
+            "candidate local readback failed",
+            "builder verifies exact local output readback",
+        ),
     ] {
-        validation.require(build.contains(token), id, detail);
+        validation.require(source.contains(token), id, detail);
     }
 }

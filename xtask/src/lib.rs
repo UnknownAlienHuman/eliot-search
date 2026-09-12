@@ -7,6 +7,7 @@ pub mod accepted_evidence;
 pub mod agent_drafts;
 pub mod compute_accepted_evidence;
 pub mod context_artifact;
+pub mod context_artifact_builder;
 pub mod context_artifact_io;
 pub mod context_artifact_validation;
 pub mod context_materialization;

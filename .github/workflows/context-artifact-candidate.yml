@@ -28,25 +28,21 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.eol lf
 
-      - name: Compile Python compatibility builder and operation corpus
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.0
+
+      - name: Test Rust candidate primitives and captured parity vectors
         shell: pwsh
         run: |
-          python -m py_compile `
-            tools/build-context-artifact-candidate.py `
-            tools/context_artifact_builder_v1/__init__.py `
-            tools/context_artifact_builder_v1/core.py `
-            tools/context_artifact_builder_v1/bundle.py `
-            tools/context_artifact_builder_v1/extract.py `
-            tools/context_artifact_builder_v1/build.py `
-            qualification/context-artifact/test_context_artifact_candidate_v1.py
+          cargo test --locked -p xtask --test context_artifact_parity
+          cargo test --locked -p xtask --test context_artifact_module_ownership
+          cargo test --locked -p xtask --test context_artifact_rust_io
 
-      - name: Run twenty-case compatibility corpus
+      - name: Build current committed search-contracts candidate in memory
         shell: pwsh
-        run: python qualification/context-artifact/test_context_artifact_candidate_v1.py
-
-      - name: Test Rust immutable-tree and candidate-output boundaries
-        shell: pwsh
-        run: cargo test --locked -p xtask --test context_artifact_rust_io
+        run: cargo test --locked -p xtask --test context_artifact_builder
 
       - name: Test Rust structural validator
         shell: pwsh
