@@ -5,6 +5,8 @@ audited_base_commit = "73ab0c415960ec1322f4b367a2325ce7916301b0"
 architecture_master = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
 architecture_section_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
 status = "STATIC_OWNERSHIP_AND_RELATION_COVERAGE_CLOSED_NOT_IMPLEMENTED"
+route_assignment_policy = "reviewed_registry_only"
+heuristic_route_generation_allowed = false
 
 package_registry = "swarm/crates.toml"
 function_registry = "swarm/function-packets.toml"

@@ -2,6 +2,7 @@ mod bootstrap;
 mod context_artifact;
 mod context_artifact_build;
 mod context_materialization_build;
+mod coverage_graph;
 mod drafts;
 mod evidence;
 mod milestones;
@@ -17,6 +18,7 @@ const USAGE: &str = "usage:\n\
   xtask build context-artifact-candidate --package <name> --base-commit <algorithm:oid> [--root <path>] [--accepted-handoff <path>]... [--output-root <path>] [--print-result]\n\
   xtask build context-materialization-plan --candidate <path> [--root <path>] [--bundle <path>] [--selection <path>] [--output-root <path>] [--write] [--require-ready]\n\
   xtask build ticket-issuance-plan --package <name> [--root <path>] [--base-commit <algorithm:oid>] [--writer <actor>] [--reviewer <actor>] [--accepted-handoff <path>]... [--output <path>|-] [--require-ready]\n\
+  xtask generate coverage-graph [--check] [--json]\n\
   xtask generate package-maps [--check] [--json]\n\
   xtask validate p00-ticket-drafts [--json]\n\
   xtask validate w1-agent-drafts [--json]\n\
@@ -151,6 +153,9 @@ fn run_generate(args: &[String]) -> ExitCode {
     let Some((target, options)) = args.split_first() else {
         return usage_error();
     };
+    if target == "coverage-graph" {
+        return coverage_graph::generate(options);
+    }
     if target == "package-maps" {
         return package_maps::generate(options);
     }

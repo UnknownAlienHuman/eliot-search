@@ -28,7 +28,7 @@ jobs:
       - name: Revalidate architecture and bounded package maps
         shell: pwsh
         run: |
-          python tools/generate-coverage-graph-v2.py --check --json
+          cargo run --locked --quiet -p xtask -- generate coverage-graph --check --json
           cargo run --locked --quiet -p xtask -- generate package-maps --check --json
           cargo run --locked --quiet -p xtask -- validate coverage-graph --json
           cargo run --locked --quiet -p xtask -- validate package-maps --json

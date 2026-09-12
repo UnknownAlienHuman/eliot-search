@@ -21,10 +21,18 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Compile and inspect Rust coverage generation boundary
+        shell: pwsh
+        run: |
+          cargo test --locked -p xtask --test coverage_graph_parity
+          cargo test --locked -p xtask --test coverage_graph_generation_boundary
+          cargo test --locked -p xtask --test coverage_graph_generator
+          cargo test --locked -p xtask --test coverage_graph_validation_boundary
+
       - name: Validate generated graph and bounded package maps
         shell: pwsh
         run: |
-          python tools/generate-coverage-graph-v2.py --check --json
+          cargo run --locked --quiet -p xtask -- generate coverage-graph --check --json
           cargo run --locked --quiet -p xtask -- generate package-maps --check --json
           cargo run --locked --quiet -p xtask -- validate coverage-graph --json
           cargo run --locked --quiet -p xtask -- validate package-maps --json

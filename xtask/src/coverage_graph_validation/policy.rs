@@ -51,6 +51,15 @@ fn validate_manifest(
     {
         errors.push("coverage manifest status changed".to_owned());
     }
+    if string(manifest, "route_assignment_policy")
+        != Some("reviewed_registry_only")
+        || boolean(manifest, "heuristic_route_generation_allowed") != Some(false)
+    {
+        errors.push(
+            "coverage routes must be reviewed registry inputs; heuristic assignment is forbidden"
+                .to_owned(),
+        );
+    }
     for (key, expected) in REQUIRED_PATHS {
         if string(manifest, key) != Some(expected) {
             errors.push(format!("coverage manifest path mismatch: {key}"));
@@ -146,8 +155,15 @@ fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
             ));
         }
     }
-    if workflow.contains("validate-coverage-graph-v2.py") {
-        errors.push("coverage workflow still invokes retired Python validator".to_owned());
+    let lower = workflow.to_ascii_lowercase();
+    if lower.contains("python")
+        || lower.contains("generate-coverage-graph-v2.py")
+        || lower.contains("validate-coverage-graph-v2.py")
+    {
+        errors.push("coverage workflow invokes retired Python tooling".to_owned());
+    }
+    if !workflow.contains("generate coverage-graph --check --json") {
+        errors.push("coverage workflow does not invoke Rust graph reconciliation".to_owned());
     }
     if !workflow.contains("validate coverage-graph --json") {
         errors.push("coverage workflow does not invoke Rust coverage validator".to_owned());

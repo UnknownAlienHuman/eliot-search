@@ -12,10 +12,13 @@ packages and package-local logical modules. It does not claim Rust implementatio
 - **698 governance/navigation nodes** explicitly classified as non-crate-owned rather than forced into a fake product crate;
 - **206 Cargo dependency edges** mapped from a consumer module to the producer public entry;
 - **30 later-wave dependency edges** bound to exact progressive stage re-entry records;
-- all 20 configuration sections bound to an owner module;
-- all 11 recipes bound to one execution module per primary execution package;
-- all 23 shared ports and 80 port methods bound to package-local modules;
 - **0 weak implementation modules** after relation aggregation.
+
+## Route ownership policy
+
+Operation, documentation and dependency routes in `swarm/coverage/*.toml` are reviewed machine inputs.
+The Rust generator reconciles their derived counts and report; it does not guess ownership from names,
+word similarity or package heuristics. New or changed routes require an explicit reviewed registry change.
 
 ## Operation routing quality
 
@@ -29,19 +32,16 @@ packages and package-local logical modules. It does not claim Rust implementatio
 `public_facade` and `semantic_low` routes are merge-blocking. The committed operation registry records
 the exact source file, source section, selected module, routing class and score for review.
 
-## Validation
+## Reconciliation and validation
 
 ```powershell
-python tools/generate-coverage-graph-v2.py --check
+cargo run --locked --quiet -p xtask -- generate coverage-graph --check --json
 cargo run --locked --quiet -p xtask -- generate package-maps --check --json
 cargo run --locked --quiet -p xtask -- validate coverage-graph --json
 cargo run --locked --quiet -p xtask -- validate package-maps --json
 cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
 cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
 ```
-
-Graph derivation/generation is the only remaining Python step in this family. Validation of the committed
-coverage graph and bounded package maps is Rust-owned.
 
 The validators reject missing or orphan operations, stale documentation headings, cross-package module
 routes, configuration/recipe/port owner drift, missing dependency or re-entry edges, weak implementation

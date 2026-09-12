@@ -1,21 +1,21 @@
 # Package-map and relationship coverage v2
 
-Regenerate and validate the relation graph with the bounded tooling entrypoints:
+Reconcile and validate the reviewed relation graph with the bounded Rust tooling:
 
 ```powershell
-python tools/generate-coverage-graph-v2.py
-cargo run --locked --quiet -p xtask -- generate package-maps
+cargo run --locked --quiet -p xtask -- generate coverage-graph --check --json
+cargo run --locked --quiet -p xtask -- generate package-maps --check --json
 cargo run --locked --quiet -p xtask -- validate coverage-graph --json
 cargo run --locked --quiet -p xtask -- validate package-maps --json
 ```
 
-The Python command is temporarily retained only for graph derivation/generation. Coverage-graph and package-map validation are Rust-owned and require no Python runtime.
+Coverage routes are explicit reviewed registries. The generator updates only derived manifest metadata and the human report; it does not assign ownership through lexical similarity or package-name heuristics. A new or changed operation, documentation node or dependency route requires an explicit registry change and review.
 
 The suite checks the complete bidirectional path:
 
 ```text
 document / principle / operation
-→ exact package-local module
+→ exact reviewed package-local module
 → Cargo package
 → Cargo dependency and accepted public handoff
 → architecture / configuration / recipe / port / schema relations

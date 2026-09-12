@@ -27,6 +27,7 @@ fn coverage_graph_validation_is_rust_owned_and_bounded() {
     let command = read(&root, "xtask/src/command.rs");
     assert!(command.contains("validate coverage-graph [--json]"));
     assert!(command.contains("structural::validate_coverage_graph()"));
+    assert!(command.contains("generate coverage-graph [--check] [--json]"));
 
     let wrapper = read(&root, "tools/validate-coverage-graph-v2.ps1");
     assert!(wrapper.contains("cargo"));
@@ -35,12 +36,14 @@ fn coverage_graph_validation_is_rust_owned_and_bounded() {
     assert!(!wrapper.to_ascii_lowercase().contains("python"));
 
     assert!(!root.join("tools/validate-coverage-graph-v2.py").exists());
+    assert!(!root.join("tools/generate-coverage-graph-v2.py").exists());
+    assert!(!root.join("tools/coverage_graph_v2.py").exists());
 
     let workflow = read(
         &root,
         ".github/workflows/package-map-coverage-v2.yml",
     );
+    assert!(workflow.contains("generate coverage-graph --check --json"));
     assert!(workflow.contains("validate coverage-graph --json"));
-    assert!(!workflow.contains("validate-coverage-graph-v2.py"));
-    assert!(workflow.contains("generate-coverage-graph-v2.py --check"));
+    assert!(!workflow.to_ascii_lowercase().contains("python"));
 }
