@@ -20,7 +20,7 @@ implementation_modules = [
   "tools/ticket_issuance_planner_v2/plan.py",
 ]
 powershell_wrapper = "tools/plan-ticket-issuance.ps1"
-structural_validator = "tools/validate-ticket-issuance-plan.py"
+structural_validator = "xtask/src/ticket_issuance_validation.rs"
 structural_validator_wrapper = "tools/validate-ticket-issuance-plan.ps1"
 qualification_readme = "qualification/ticket-issuance/README.md"
 qualification_cases = "qualification/ticket-issuance/cases-v2.toml"

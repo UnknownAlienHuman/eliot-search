@@ -3,6 +3,7 @@ mod drafts;
 mod evidence;
 mod milestones;
 mod structural;
+mod ticket_issuance;
 
 use std::process::ExitCode;
 
@@ -19,6 +20,7 @@ const USAGE: &str = "usage:\n\
   xtask validate w3-milestone-packets [--json]\n\
   xtask validate integration-bootstrap [--root <path>] [--allow-missing-lock] [--json]\n\
   xtask validate context-materialization-plan [--json]\n\
+  xtask validate ticket-issuance-plan [--root <path>] [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -69,6 +71,9 @@ fn run_validate(args: &[String]) -> ExitCode {
     }
     if is_optional_json(args, "context-materialization-plan") {
         return structural::validate_context_materialization_plan();
+    }
+    if let Some(options) = options_for(args, "ticket-issuance-plan") {
+        return ticket_issuance::validate(options);
     }
     if is_optional_json(args, "implementation-program") {
         return structural::validate_implementation_program();

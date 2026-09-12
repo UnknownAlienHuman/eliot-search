@@ -1,25 +1,20 @@
 [CmdletBinding()]
 param(
     [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
-    [switch]$Json,
-    [string]$Python = 'python'
+    [switch]$Json
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$validator = Join-Path $Root 'tools/validate-ticket-issuance-plan.py'
-if (-not (Test-Path $validator -PathType Leaf)) {
-    throw "Missing validator: $validator"
+Push-Location $Root
+try {
+    $arguments = @('run', '--locked', '--quiet', '-p', 'xtask', '--', 'validate', 'ticket-issuance-plan', '--root', $Root)
+    if ($Json) { $arguments += '--json' }
+    & cargo @arguments
+    $exitCode = $LASTEXITCODE
 }
-
-$arguments = [System.Collections.Generic.List[string]]::new()
-$arguments.Add($validator)
-$arguments.Add('--root')
-$arguments.Add($Root)
-if ($Json) {
-    $arguments.Add('--json')
+finally {
+    Pop-Location
 }
-
-& $Python @arguments
-exit $LASTEXITCODE
+exit $exitCode

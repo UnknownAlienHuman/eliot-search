@@ -35,6 +35,11 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         retired_python: "tools/validate-implementation-program.py",
     },
     MigratedEntrypoint {
+        wrapper: "tools/validate-ticket-issuance-plan.ps1",
+        command: "ticket-issuance-plan",
+        retired_python: "tools/validate-ticket-issuance-plan.py",
+    },
+    MigratedEntrypoint {
         wrapper: "tools/validate-w1-agent-drafts.ps1",
         command: "w1-agent-drafts",
         retired_python: "tools/validate-w1-agent-drafts.py",

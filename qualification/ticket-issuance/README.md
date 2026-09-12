@@ -19,16 +19,23 @@ python -m py_compile `
   tools/ticket_issuance_planner_v2/context.py `
   tools/ticket_issuance_planner_v2/control.py `
   tools/ticket_issuance_planner_v2/plan.py `
-  tools/validate-ticket-issuance-plan.py `
   qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
   qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
 
 python qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
-python tools/validate-ticket-issuance-plan.py --json
+cargo test --locked -p xtask --test ticket_issuance_validation
+cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json
 python tools/plan-ticket-issuance.py `
   --package search-contracts `
   --output artifacts/ticket-issuance-plans/search-contracts.json
 ```
+
+The Rust structural validator checks registry/schema/digest/corpus closure,
+manual read-only workflow policy, artifact-root fencing, the zero-state P00/W0
+disposition, closed decision/reason registries and all-false authority fields.
+It does not invoke the Python planner. The separate 30-case corpus and the
+workflow's generated-plan inspection continue to validate the advisory planner
+until that implementation is ported as its own bounded slice.
 
 The current zero-state repository run must produce:
 

@@ -25,6 +25,12 @@ jobs:
         shell: pwsh
         run: cargo test --locked -p xtask --test tooling_runtime_boundary
 
+      - name: Ticket issuance structural validator
+        shell: pwsh
+        run: |
+          cargo test --locked -p xtask --test ticket_issuance_validation
+          cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json
+
       - name: Implementation-program module ownership
         shell: pwsh
         run: cargo test --locked -p xtask --test impl_program_module_ownership
