@@ -38,6 +38,10 @@ jobs:
           cargo test --locked -p xtask --test context_artifact_validation
           cargo run --locked --quiet -p xtask -- validate context-artifact-candidate --json
 
+      - name: Context materialization module ownership
+        shell: pwsh
+        run: cargo test --locked -p xtask --test context_materialization_module_ownership
+
       - name: Implementation-program module ownership
         shell: pwsh
         run: cargo test --locked -p xtask --test impl_program_module_ownership
