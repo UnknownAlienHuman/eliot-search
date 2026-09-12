@@ -1,9 +1,10 @@
-//! Rust ownership for bounded package-map helpers and validation.
+//! Rust ownership for bounded package-map generation and validation.
 //!
 //! Package maps consume the canonical checked-in coverage registries. They do
 //! not rebuild a second architecture graph and never issue implementation,
 //! ticket, lease, handoff, gate, wave, or product authority.
 
+mod generator;
 mod helpers;
 mod load;
 mod validation;
@@ -12,6 +13,11 @@ use std::path::Path;
 
 use serde_json::json;
 
+pub use generator::{
+    PackageMapGenerationMode, PackageMapGenerationReport,
+    generate_package_maps, generation_exit_code,
+    render_generation_report_json,
+};
 pub use helpers::{
     DOC_INDEX_PATH, HUMAN_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH, MAP_ROOT,
     PackagePaths, bool_text, dependency_cycle, package_paths,

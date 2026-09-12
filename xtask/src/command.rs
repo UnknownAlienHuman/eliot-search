@@ -5,6 +5,7 @@ mod context_materialization_build;
 mod drafts;
 mod evidence;
 mod milestones;
+mod package_maps;
 mod structural;
 mod ticket_issuance;
 
@@ -15,6 +16,7 @@ const USAGE: &str = "usage:\n\
   xtask compute accepted-evidence-digest <record> [--json-array]\n\
   xtask build context-artifact-candidate --package <name> --base-commit <algorithm:oid> [--root <path>] [--accepted-handoff <path>]... [--output-root <path>] [--print-result]\n\
   xtask build context-materialization-plan --candidate <path> [--root <path>] [--bundle <path>] [--selection <path>] [--output-root <path>] [--write] [--require-ready]\n\
+  xtask generate package-maps [--check] [--json]\n\
   xtask validate p00-ticket-drafts [--json]\n\
   xtask validate w1-agent-drafts [--json]\n\
   xtask validate w2-agent-drafts [--json]\n\
@@ -46,6 +48,9 @@ pub(super) fn run(args: &[String]) -> ExitCode {
     }
     if command == "build" {
         return run_build(rest);
+    }
+    if command == "generate" {
+        return run_generate(rest);
     }
     usage_error()
 }
@@ -130,6 +135,16 @@ fn run_build(args: &[String]) -> ExitCode {
     }
     if target == "context-materialization-plan" {
         return context_materialization_build::build(options);
+    }
+    usage_error()
+}
+
+fn run_generate(args: &[String]) -> ExitCode {
+    let Some((target, options)) = args.split_first() else {
+        return usage_error();
+    };
+    if target == "package-maps" {
+        return package_maps::generate(options);
     }
     usage_error()
 }

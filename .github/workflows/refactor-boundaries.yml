@@ -34,11 +34,13 @@ jobs:
           cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
           cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
 
-      - name: Package-map Rust validation boundary
+      - name: Package-map Rust generation and validation boundary
         shell: pwsh
         run: |
           cargo test --locked -p xtask --test package_maps_parity
           cargo test --locked -p xtask --test package_maps_module_ownership
+          cargo test --locked -p xtask --test package_maps_generator
+          cargo run --locked --quiet -p xtask -- generate package-maps --check --json
           cargo run --locked --quiet -p xtask -- validate package-maps --json
 
       - name: Ticket issuance structural validator

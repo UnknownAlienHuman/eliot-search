@@ -40,14 +40,21 @@ pub(super) struct Inputs {
     pub(super) index: Value,
     pub(super) index_rows: RowMap,
     pub(super) module_rows: RowMap,
+    pub(super) module_values: Vec<Value>,
     pub(super) operation_rows: RowMap,
+    pub(super) operation_values: Vec<Value>,
     pub(super) document_rows: RowMap,
+    pub(super) document_values: Vec<Value>,
     pub(super) dependency_rows: RowMap,
+    pub(super) dependency_values: Vec<Value>,
     pub(super) integration_rows: RowMap,
     pub(super) port_document: Value,
     pub(super) port_rows: RowMap,
+    pub(super) port_values: Vec<Value>,
     pub(super) config_rows: RowMap,
+    pub(super) config_values: Vec<Value>,
     pub(super) recipe_rows: RowMap,
+    pub(super) recipe_values: Vec<Value>,
     pub(super) override_rows: RowMap,
     pub(super) architecture: Vec<ArchitectureRelation>,
     pub(super) schemas: Vec<SchemaRelation>,
@@ -111,6 +118,14 @@ impl Inputs {
         let architecture = load_architecture(root, &manifest)?;
         let schemas = load_schemas(root, &manifest)?;
 
+        let module_values = required_rows(&module_document, "module")?;
+        let operation_values = required_rows(&operation_document, "operation")?;
+        let document_values = required_rows(&document_document, "node")?;
+        let dependency_values = required_rows(&dependency_document, "edge")?;
+        let port_values = required_rows(&port_document, "port")?;
+        let config_values = required_rows(&config_document, "section")?;
+        let recipe_values = required_rows(&recipe_document, "recipe")?;
+
         Ok(Self {
             manifest,
             root_cargo,
@@ -118,19 +133,32 @@ impl Inputs {
             index_rows: indexed_rows(&index, "package", "name")?,
             index,
             module_rows: indexed_rows(&module_document, "module", "id")?,
+            module_values,
             operation_rows: indexed_rows(&operation_document, "operation", "id")?,
+            operation_values,
             document_rows: indexed_rows(&document_document, "node", "id")?,
+            document_values,
             dependency_rows: indexed_rows(&dependency_document, "edge", "id")?,
+            dependency_values,
             integration_rows: indexed_rows(&integration_document, "node", "id")?,
             port_rows: indexed_rows(&port_document, "port", "name")?,
             port_document,
+            port_values,
             config_rows: indexed_rows(&config_document, "section", "name")?,
+            config_values,
             recipe_rows: indexed_rows(&recipe_document, "recipe", "id")?,
+            recipe_values,
             override_rows: indexed_rows(&stage_readsets, "override", "id")?,
             architecture,
             schemas,
         })
     }
+}
+
+fn required_rows(document: &Value, key: &str) -> Result<Vec<Value>, String> {
+    array(document, key)
+        .map(|rows| rows.to_vec())
+        .ok_or_else(|| format!("{key} must be an array of tables"))
 }
 
 fn manifest_path<'a>(manifest: &'a Value, key: &str, fallback: &'a str) -> &'a str {
@@ -170,19 +198,20 @@ fn load_architecture(
     let mut result = Vec::new();
     for (kind, manifest_key, fallback, table) in specs {
         let document = load_toml(root, manifest_path(manifest, manifest_key, fallback))?;
-        for (id, row) in indexed_rows(&document, table, "id")? {
+        let rows = array(&document, table)
+            .ok_or_else(|| format!("{table} must be an array of tables"))?;
+        for row in rows {
+            let id = string(row, "id")
+                .ok_or_else(|| format!("{table}: missing id"))?;
             result.push(ArchitectureRelation {
                 kind: kind.to_owned(),
-                id,
-                modules: strings(&row, "modules"),
-                required_outputs: strings(&row, "required_outputs"),
-                exit_evidence: strings(&row, "exit_evidence"),
+                id: id.to_owned(),
+                modules: strings(row, "modules"),
+                required_outputs: strings(row, "required_outputs"),
+                exit_evidence: strings(row, "exit_evidence"),
             });
         }
     }
-    result.sort_by(|left, right| {
-        (&left.kind, &left.id).cmp(&(&right.kind, &right.id))
-    });
     Ok(result)
 }
 
@@ -225,9 +254,6 @@ fn load_schemas(root: &Path, manifest: &Value) -> Result<Vec<SchemaRelation>, St
             });
         }
     }
-    result.sort_by(|left, right| {
-        (&left.packet, &left.group).cmp(&(&right.packet, &right.group))
-    });
     Ok(result)
 }
 
