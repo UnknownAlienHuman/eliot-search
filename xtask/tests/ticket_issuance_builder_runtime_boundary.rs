@@ -139,3 +139,30 @@ fn ticket_builder_stays_bounded_and_non_authoritative() {
     assert!(!plan.contains("swarm/tickets/"));
     assert!(!plan.contains("swarm/leases/"));
 }
+
+#[test]
+fn ticket_fixture_stays_split_and_bounded() {
+    let root = repository_root();
+    let facade = read(&root, "xtask/tests/support/ticket_issuance_fixture.rs");
+    assert!(
+        facade.len() < 4_000,
+        "fixture facade grew to {} bytes",
+        facade.len()
+    );
+    for module in ["git", "handoff", "repository", "templates"] {
+        assert!(facade.contains(&format!("mod {module};")));
+    }
+    for relative in [
+        "xtask/tests/support/ticket_issuance_fixture/git.rs",
+        "xtask/tests/support/ticket_issuance_fixture/handoff.rs",
+        "xtask/tests/support/ticket_issuance_fixture/repository.rs",
+        "xtask/tests/support/ticket_issuance_fixture/templates.rs",
+    ] {
+        let source = read(&root, relative);
+        assert!(
+            source.len() < 9_000,
+            "fixture module {relative} grew to {} bytes",
+            source.len()
+        );
+    }
+}

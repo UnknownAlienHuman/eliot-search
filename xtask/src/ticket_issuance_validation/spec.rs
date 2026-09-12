@@ -1,6 +1,6 @@
 pub(super) const REGISTRY_PATH: &str = "swarm/ticket-issuance-planner-v2.toml";
 pub(super) const SCHEMA_PATH: &str = "swarm/ticket-issuance-plan-schema-v2.toml";
-pub(super) const DIGEST_PATH: &str = "swarm/ticket_issuance-plan-digest-v2.toml";
+pub(super) const DIGEST_PATH: &str = "swarm/ticket-issuance-plan-digest-v2.toml";
 pub(super) const CASES_PATH: &str = "qualification/ticket-issuance/cases-v2.toml";
 
 pub(super) const EXPECTED_PATHS: [(&str, &str); 15] = [
