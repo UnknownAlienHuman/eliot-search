@@ -52,6 +52,7 @@ jobs:
       - name: Ticket issuance structural validator
         shell: pwsh
         run: |
+          cargo test --locked -p xtask --test ticket_planner_module_ownership
           cargo test --locked -p xtask --test ticket_issuance_validation
           cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json
 
