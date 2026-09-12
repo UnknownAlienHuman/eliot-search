@@ -10,26 +10,26 @@
 
 ## Executable tooling
 
-- [`../../tools/plan-ticket-issuance.py`](../../tools/plan-ticket-issuance.py) — dependency-free advisory planner CLI and compatibility entrypoint.
-- [`../../tools/ticket_issuance_planner_v2/`](../../tools/ticket_issuance_planner_v2/) — bounded immutable-tree, draft, context, control and plan modules.
-- [`../../tools/plan-ticket-issuance.ps1`](../../tools/plan-ticket-issuance.ps1) — Windows planner wrapper.
-- [`../../xtask/src/ticket_issuance_validation.rs`](../../xtask/src/ticket_issuance_validation.rs) — Rust registry/schema/digest/current-state structural validator.
+- [`../../xtask/src/ticket_issuance_builder.rs`](../../xtask/src/ticket_issuance_builder.rs) — Rust advisory planner facade.
+- [`../../xtask/src/ticket_issuance_builder/`](../../xtask/src/ticket_issuance_builder/) — immutable-tree selection, drafts, sources/selectors, handoffs, assembly and bounded output modules.
+- [`../../tools/plan-ticket-issuance.ps1`](../../tools/plan-ticket-issuance.ps1) — locked Cargo compatibility entrypoint.
+- [`../../xtask/src/ticket_issuance_validation.rs`](../../xtask/src/ticket_issuance_validation.rs) — registry/schema/digest/current-state structural validator.
 - [`../../tools/validate-ticket-issuance-plan.ps1`](../../tools/validate-ticket-issuance-plan.ps1) — locked Cargo validator wrapper.
 
 ## Qualification
 
 - [`../../qualification/ticket-issuance/cases-v2.toml`](../../qualification/ticket-issuance/cases-v2.toml) — 30-case inventory.
-- [`../../qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py`](../../qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py) — deterministic committed-Git fixture.
-- [`../../qualification/ticket-issuance/test_plan_ticket_issuance_v2.py`](../../qualification/ticket-issuance/test_plan_ticket_issuance_v2.py) — substantive advisory-planner conformance suite.
-- [`../../xtask/tests/ticket_issuance_validation.rs`](../../xtask/tests/ticket_issuance_validation.rs) — Rust structural validator regression.
-- [`../../qualification/ticket-issuance/README.md`](../../qualification/ticket-issuance/README.md) — evidence boundary.
+- [`../../xtask/tests/ticket_issuance_builder.rs`](../../xtask/tests/ticket_issuance_builder.rs) — deterministic zero-state, selection and output-boundary regression.
+- [`../../xtask/tests/ticket_issuance_builder_runtime_boundary.rs`](../../xtask/tests/ticket_issuance_builder_runtime_boundary.rs) — Rust-only runtime and module-ownership guard.
+- [`../../xtask/tests/ticket_issuance_validation.rs`](../../xtask/tests/ticket_issuance_validation.rs) — structural-validator regression.
+- [`../../qualification/ticket-issuance/README.md`](../../qualification/ticket-issuance/README.md) — evidence boundary and exact commands.
 - [`../../.github/workflows/ticket-issuance-plan.yml`](../../.github/workflows/ticket-issuance-plan.yml) — manual Windows qualification.
 
 ## Current disposition
 
 ```text
 expected search-contracts decision: BLOCKED_MISSING_SELECTION
-context materializer:              absent
+context materializer:              present as advisory tooling only
 issued tickets:                    0
 active leases:                     0
 accepted package handoffs:         0

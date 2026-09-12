@@ -77,10 +77,12 @@ fn validate_workflow(root: &Path, validation: &mut Validation) {
     .any(|trigger| workflow.contains(trigger));
     let read_only = workflow.contains("\n  contents: read");
     let no_credentials = workflow.contains("persist-credentials: false");
+    let rust_only = !workflow.to_ascii_lowercase().contains("python")
+        && workflow.contains("ticket_issuance_builder");
     validation.require(
-        manual && !automatic && read_only && no_credentials,
+        manual && !automatic && read_only && no_credentials && rust_only,
         "workflow-policy",
-        "planner workflow is manual/read-only/credential-free",
+        "planner workflow is manual/read-only/credential-free/Rust-only",
     );
 }
 
@@ -151,40 +153,39 @@ fn validate_zero_state_projection(root: &Path, validation: &mut Validation) {
         "Rust planner digest is non-circular and exact",
     );
 
-    // Preserve one explicit tie to the checked-in implementation until the
-    // remaining advisory planner itself is ported to Rust.
-    let plan_source = std::fs::read_to_string(
-        root.join("tools/ticket_issuance_planner_v2/plan.py"),
+    let source = std::fs::read_to_string(
+        root.join("xtask/src/ticket_issuance_builder/assemble.rs"),
     )
     .unwrap_or_default();
     validation.require(
-        plan_source.contains("decision = choose_decision(state, checks.reasons)"),
+        source.contains("let decision = choose_decision("),
         "actual-planner-decision",
-        "planner derives the decision through the closed decision function",
+        "Rust planner derives the decision through the closed decision function",
     );
 }
 
 fn validate_implementation_sentinels(root: &Path, validation: &mut Validation) {
     let source = std::fs::read_to_string(
-        root.join("tools/ticket_issuance_planner_v2/plan.py"),
+        root.join("xtask/src/ticket_issuance_builder/assemble.rs"),
     )
     .unwrap_or_default();
     validation.require(
         source.contains("\"mutations\": []"),
         "implementation-mutations-empty",
-        "planner implementation emits an empty mutation list",
+        "Rust planner emits an empty mutation list",
     );
     for field in PLAN_AUTHORITY_FIELDS {
-        let needle = format!("\"{field}\": False");
+        let needle = format!("\"{field}\": false");
         validation.require(
             source.contains(&needle),
             &format!("implementation:{field}"),
-            &format!("planner implementation keeps {field} false"),
+            &format!("Rust planner keeps {field} false"),
         );
     }
     validation.require(
-        source.contains("plan[\"plan_sha256\"] = plan_digest(plan)"),
+        source.contains("let digest = plan_digest(&plan);")
+            && source.contains("\"plan_sha256\""),
         "implementation-digest",
-        "planner embeds the non-self-referential plan digest",
+        "Rust planner embeds the non-self-referential plan digest",
     );
 }

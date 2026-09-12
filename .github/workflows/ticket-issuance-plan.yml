@@ -22,27 +22,13 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Compile Python planner and operation corpus
+      - name: Compile Rust planner and structural validator
         shell: pwsh
         run: |
-          python -m py_compile `
-            tools/plan-ticket-issuance.py `
-            tools/ticket_issuance_planner_v2/__init__.py `
-            tools/ticket_issuance_planner_v2/core.py `
-            tools/ticket_issuance_planner_v2/drafts.py `
-            tools/ticket_issuance_planner_v2/context.py `
-            tools/ticket_issuance_planner_v2/control.py `
-            tools/ticket_issuance_planner_v2/plan.py `
-            qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py `
-            qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
-
-      - name: Run 30-case planner conformance corpus
-        shell: pwsh
-        run: python qualification/ticket-issuance/test_plan_ticket_issuance_v2.py
-
-      - name: Test Rust structural validator
-        shell: pwsh
-        run: cargo test --locked -p xtask --test ticket_issuance_validation
+          cargo check --locked -p xtask --all-targets
+          cargo test --locked -p xtask --test ticket_issuance_builder
+          cargo test --locked -p xtask --test ticket_issuance_builder_runtime_boundary
+          cargo test --locked -p xtask --test ticket_issuance_validation
 
       - name: Validate planner registry, schema and current result
         shell: pwsh
@@ -93,3 +79,7 @@ jobs:
               throw "Planner enabled authority field: $field"
             }
           }
+
+      - name: Verify repository remains clean
+        shell: pwsh
+        run: git diff --exit-code

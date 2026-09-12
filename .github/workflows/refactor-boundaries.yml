@@ -49,12 +49,15 @@ jobs:
           cargo test --locked -p xtask --test coverage_graph_validation_boundary
           cargo run --locked --quiet -p xtask -- validate coverage-graph --json
 
-      - name: Ticket issuance structural validator
+      - name: Ticket issuance Rust planner and validator
         shell: pwsh
         run: |
           cargo test --locked -p xtask --test ticket_planner_module_ownership
+          cargo test --locked -p xtask --test ticket_issuance_builder
+          cargo test --locked -p xtask --test ticket_issuance_builder_runtime_boundary
           cargo test --locked -p xtask --test ticket_issuance_validation
           cargo run --locked --quiet -p xtask -- validate ticket-issuance-plan --json
+          cargo run --locked --quiet -p xtask -- build ticket-issuance-plan --package search-contracts --output -
 
       - name: Context artifact Rust builder and boundary
         shell: pwsh

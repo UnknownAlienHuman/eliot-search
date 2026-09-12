@@ -16,6 +16,7 @@ const USAGE: &str = "usage:\n\
   xtask compute accepted-evidence-digest <record> [--json-array]\n\
   xtask build context-artifact-candidate --package <name> --base-commit <algorithm:oid> [--root <path>] [--accepted-handoff <path>]... [--output-root <path>] [--print-result]\n\
   xtask build context-materialization-plan --candidate <path> [--root <path>] [--bundle <path>] [--selection <path>] [--output-root <path>] [--write] [--require-ready]\n\
+  xtask build ticket-issuance-plan --package <name> [--root <path>] [--base-commit <algorithm:oid>] [--writer <actor>] [--reviewer <actor>] [--accepted-handoff <path>]... [--output <path>|-] [--require-ready]\n\
   xtask generate package-maps [--check] [--json]\n\
   xtask validate p00-ticket-drafts [--json]\n\
   xtask validate w1-agent-drafts [--json]\n\
@@ -139,6 +140,9 @@ fn run_build(args: &[String]) -> ExitCode {
     }
     if target == "context-materialization-plan" {
         return context_materialization_build::build(options);
+    }
+    if target == "ticket-issuance-plan" {
+        return ticket_issuance::build(options);
     }
     usage_error()
 }

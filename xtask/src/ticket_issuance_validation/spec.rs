@@ -12,7 +12,10 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 15] = [
     ("index", "docs/handoff/TICKET_ISSUANCE_PLANNER_INDEX.md"),
     ("plan_schema", SCHEMA_PATH),
     ("digest_profile", DIGEST_PATH),
-    ("implementation", "tools/plan-ticket-issuance.py"),
+    (
+        "implementation",
+        "xtask/src/ticket_issuance_builder.rs",
+    ),
     ("powershell_wrapper", "tools/plan-ticket-issuance.ps1"),
     (
         "structural_validator",
@@ -29,11 +32,11 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 15] = [
     ("qualification_cases", CASES_PATH),
     (
         "qualification_fixture",
-        "qualification/ticket-issuance/fixture_plan_ticket_issuance_v2.py",
+        "xtask/tests/ticket_issuance_builder.rs",
     ),
     (
         "qualification_tests",
-        "qualification/ticket-issuance/test_plan_ticket_issuance_v2.py",
+        "xtask/tests/ticket_issuance_builder_runtime_boundary.rs",
     ),
     (
         "manual_workflow",
@@ -42,13 +45,15 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 15] = [
     ("artifact_root", "artifacts/ticket-issuance-plans"),
 ];
 
-pub(super) const IMPLEMENTATION_MODULES: [&str; 6] = [
-    "tools/ticket_issuance_planner_v2/__init__.py",
-    "tools/ticket_issuance_planner_v2/core.py",
-    "tools/ticket_issuance_planner_v2/drafts.py",
-    "tools/ticket_issuance_planner_v2/context.py",
-    "tools/ticket_issuance_planner_v2/control.py",
-    "tools/ticket_issuance_planner_v2/plan.py",
+pub(super) const IMPLEMENTATION_MODULES: [&str; 8] = [
+    "xtask/src/ticket_issuance_builder/assemble.rs",
+    "xtask/src/ticket_issuance_builder/context.rs",
+    "xtask/src/ticket_issuance_builder/control.rs",
+    "xtask/src/ticket_issuance_builder/drafts.rs",
+    "xtask/src/ticket_issuance_builder/model.rs",
+    "xtask/src/ticket_issuance_builder/repository.rs",
+    "xtask/src/ticket_issuance_builder/util.rs",
+    "xtask/src/ticket_issuance_builder/write.rs",
 ];
 
 pub(super) const REGISTRY_AUTHORITY_KEYS: [&str; 11] = [
