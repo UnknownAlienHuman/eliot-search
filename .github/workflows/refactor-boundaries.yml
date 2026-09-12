@@ -29,6 +29,7 @@ jobs:
         shell: pwsh
         run: |
           cargo test --locked -p xtask --test architecture_coverage_contracts_runtime
+          cargo test --locked -p xtask --test architecture_coverage_python_boundary
           cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
 
       - name: Ticket issuance structural validator
