@@ -27,16 +27,8 @@ fn parse_heading(line: &str) -> Option<(u8, String)> {
     if !first.is_whitespace() {
         return None;
     }
-    let after = &rest[first.len_utf8()..];
-    let stripped = after.trim_start().trim_end();
+    let stripped = rest[first.len_utf8()..].trim();
     if stripped.is_empty() {
-        let characters: Vec<char> = rest.chars().collect();
-        if characters.len() >= 2 && characters.iter().all(|value| value.is_whitespace()) {
-            return Some((
-                u8::try_from(hashes).ok()?,
-                characters.last().map_or_else(String::new, ToString::to_string),
-            ));
-        }
         return None;
     }
     Some((u8::try_from(hashes).ok()?, stripped.to_owned()))

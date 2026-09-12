@@ -43,10 +43,14 @@ jobs:
           cargo run --locked --quiet -p xtask -- generate package-maps --check --json
           cargo run --locked --quiet -p xtask -- validate package-maps --json
 
-      - name: Coverage graph Rust validation boundary
+      - name: Coverage graph Rust generation and validation boundary
         shell: pwsh
         run: |
+          cargo test --locked -p xtask --test coverage_graph_parity
+          cargo test --locked -p xtask --test coverage_graph_generation_boundary
+          cargo test --locked -p xtask --test coverage_graph_generator
           cargo test --locked -p xtask --test coverage_graph_validation_boundary
+          cargo run --locked --quiet -p xtask -- generate coverage-graph --check --json
           cargo run --locked --quiet -p xtask -- validate coverage-graph --json
 
       - name: Ticket issuance Rust planner and validator

@@ -38,12 +38,32 @@ fn coverage_graph_generation_is_rust_owned_and_review_only() {
     assert!(!facade.contains("MODULE_ALIASES"));
 
     let derivation = read(&root, "xtask/src/coverage_graph_generation/derive.rs");
-    assert!(derivation.contains("source-derived operation"));
-    assert!(derivation.contains("documentation heading"));
-    assert!(derivation.contains("package dependency"));
-    assert!(derivation.contains("logical module"));
+    for module in ["documentation", "operations", "registry", "source"] {
+        assert!(derivation.contains(&format!("mod {module};")));
+    }
     assert!(!derivation.contains("choose_module"));
     assert!(!derivation.contains("semantic score"));
+
+    let operations = read(
+        &root,
+        "xtask/src/coverage_graph_generation/derive/operations.rs",
+    );
+    assert!(operations.contains("source-derived operation"));
+    assert!(operations.contains("pub(crate) async fn scoped_call"));
+    assert!(!operations.contains("choose_module"));
+
+    let documentation = read(
+        &root,
+        "xtask/src/coverage_graph_generation/derive/documentation.rs",
+    );
+    assert!(documentation.contains("documentation heading"));
+
+    let registry = read(
+        &root,
+        "xtask/src/coverage_graph_generation/derive/registry.rs",
+    );
+    assert!(registry.contains("package dependency"));
+    assert!(registry.contains("logical module"));
 
     let helper_facade = read(&root, "xtask/src/coverage_graph.rs");
     for module in ["digest", "markdown", "text"] {
@@ -57,6 +77,7 @@ fn coverage_graph_generation_is_rust_owned_and_review_only() {
     for workflow in [
         ".github/workflows/package-map-coverage-v2.yml",
         ".github/workflows/implementation-program.yml",
+        ".github/workflows/refactor-boundaries.yml",
     ] {
         let text = read(&root, workflow);
         assert!(text.contains("generate coverage-graph --check --json"));
