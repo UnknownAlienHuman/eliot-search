@@ -34,6 +34,7 @@ jobs:
       - name: Context artifact Rust I/O and structural boundary
         shell: pwsh
         run: |
+          cargo test --locked -p xtask --test context_artifact_module_ownership
           cargo test --locked -p xtask --test context_artifact_rust_io
           cargo test --locked -p xtask --test context_artifact_validation
           cargo run --locked --quiet -p xtask -- validate context-artifact-candidate --json
