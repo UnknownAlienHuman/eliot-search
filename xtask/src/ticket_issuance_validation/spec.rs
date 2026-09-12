@@ -45,8 +45,9 @@ pub(super) const EXPECTED_PATHS: [(&str, &str); 15] = [
     ("artifact_root", "artifacts/ticket-issuance-plans"),
 ];
 
-pub(super) const IMPLEMENTATION_MODULES: [&str; 8] = [
+pub(super) const IMPLEMENTATION_MODULES: [&str; 9] = [
     "xtask/src/ticket_issuance_builder/assemble.rs",
+    "xtask/src/ticket_issuance_builder/assemble/plan.rs",
     "xtask/src/ticket_issuance_builder/context.rs",
     "xtask/src/ticket_issuance_builder/control.rs",
     "xtask/src/ticket_issuance_builder/drafts.rs",

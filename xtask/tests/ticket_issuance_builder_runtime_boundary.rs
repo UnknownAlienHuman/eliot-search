@@ -26,7 +26,13 @@ fn required_ticket_planner_entrypoint_is_locked_rust() {
     ] {
         assert!(lower.contains(token), "wrapper missing {token}");
     }
-    for forbidden in ["python", "plan-ticket-issuance.py", "py -", "node", "npx"] {
+    for forbidden in [
+        "python",
+        "plan-ticket-issuance.py",
+        "py -",
+        "node",
+        "npx",
+    ] {
         assert!(
             !lower.contains(forbidden),
             "wrapper restored forbidden runtime token {forbidden}"
@@ -41,16 +47,29 @@ fn required_ticket_planner_entrypoint_is_locked_rust() {
     assert!(!workflow.to_ascii_lowercase().contains("python"));
 
     let registry = read(&root, "swarm/ticket-issuance-planner-v2.toml");
-    assert!(registry.contains("implementation = \"xtask/src/ticket_issuance_builder.rs\""));
-    assert!(registry.contains("xtask/src/ticket_issuance_builder/assemble.rs"));
-    assert!(!registry.contains("implementation = \"tools/plan-ticket-issuance.py\""));
+    assert!(registry.contains(
+        "implementation = \"xtask/src/ticket_issuance_builder.rs\""
+    ));
+    assert!(registry.contains(
+        "xtask/src/ticket_issuance_builder/assemble.rs"
+    ));
+    assert!(registry.contains(
+        "xtask/src/ticket_issuance_builder/assemble/plan.rs"
+    ));
+    assert!(!registry.contains(
+        "implementation = \"tools/plan-ticket-issuance.py\""
+    ));
 }
 
 #[test]
 fn ticket_builder_stays_bounded_and_non_authoritative() {
     let root = repository_root();
     let facade = read(&root, "xtask/src/ticket_issuance_builder.rs");
-    assert!(facade.len() < 2_000, "builder facade grew to {} bytes", facade.len());
+    assert!(
+        facade.len() < 2_000,
+        "builder facade grew to {} bytes",
+        facade.len()
+    );
     for module in [
         "assemble",
         "context",
@@ -66,8 +85,19 @@ fn ticket_builder_stays_bounded_and_non_authoritative() {
     assert!(!facade.contains("std::fs"));
     assert!(!facade.contains("Command::new"));
 
-    let assemble = read(&root, "xtask/src/ticket_issuance_builder/assemble.rs");
-    assert!(assemble.contains("\"mutations\": []"));
+    let assemble = read(
+        &root,
+        "xtask/src/ticket_issuance_builder/assemble.rs",
+    );
+    assert!(assemble.contains("mod plan;"));
+    assert!(assemble.contains("let decision = choose_decision("));
+    assert!(!assemble.contains("\"mutations\": []"));
+
+    let plan = read(
+        &root,
+        "xtask/src/ticket_issuance_builder/assemble/plan.rs",
+    );
+    assert!(plan.contains("\"mutations\": []"));
     for field in [
         "authorizes_context_materialization",
         "authorizes_ticket_issuance",
@@ -76,8 +106,8 @@ fn ticket_builder_stays_bounded_and_non_authoritative() {
         "publishes_package_handoff",
         "advances_launch_state",
     ] {
-        assert!(assemble.contains(&format!("\"{field}\": false")));
+        assert!(plan.contains(&format!("\"{field}\": false")));
     }
-    assert!(!assemble.contains("swarm/tickets/") );
-    assert!(!assemble.contains("swarm/leases/") );
+    assert!(!plan.contains("swarm/tickets/"));
+    assert!(!plan.contains("swarm/leases/"));
 }

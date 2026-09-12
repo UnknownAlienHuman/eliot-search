@@ -166,7 +166,7 @@ fn validate_zero_state_projection(root: &Path, validation: &mut Validation) {
 
 fn validate_implementation_sentinels(root: &Path, validation: &mut Validation) {
     let source = std::fs::read_to_string(
-        root.join("xtask/src/ticket_issuance_builder/assemble.rs"),
+        root.join("xtask/src/ticket_issuance_builder/assemble/plan.rs"),
     )
     .unwrap_or_default();
     validation.require(

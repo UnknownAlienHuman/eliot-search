@@ -13,6 +13,7 @@ digest_profile = "swarm/ticket-issuance-plan-digest-v2.toml"
 implementation = "xtask/src/ticket_issuance_builder.rs"
 implementation_modules = [
   "xtask/src/ticket_issuance_builder/assemble.rs",
+  "xtask/src/ticket_issuance_builder/assemble/plan.rs",
   "xtask/src/ticket_issuance_builder/context.rs",
   "xtask/src/ticket_issuance_builder/control.rs",
   "xtask/src/ticket_issuance_builder/drafts.rs",
