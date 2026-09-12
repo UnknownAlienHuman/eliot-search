@@ -64,11 +64,7 @@ test = true
 [features]
 default = ["wave1-shell"]
 wave1-shell = []
-wave2-source = [
-    "dep:search-source-admission",
-    "dep:search-source-identity",
-    "dep:search-revision-store",
-]
+wave2-source = ["dep:search-revision-store"]
 wave3-index = [
     "wave2-source",
     "dep:search-projection-planner",
@@ -122,11 +118,12 @@ zeroize = "=1.9.0"
 # `pure` excludes C/assembly hashing implementations; see SOURCE_MAPPING.md.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 
-search-source-admission = { workspace = true, optional = true }
-# The live plaintext DIRECT catalog imports its legacy journal state machine
-# from the canonical source-registry owner even in the baseline shell.
+# Live plaintext DIRECT ingestion always enters the canonical admission,
+# identity and legacy-registry owners. These are architecture boundaries, not
+# optional wave acceptance claims.
+search-source-admission.workspace = true
 search-source-registry.workspace = true
-search-source-identity = { workspace = true, optional = true }
+search-source-identity.workspace = true
 search-source-reconcile = { workspace = true, optional = true }
 # Shared final-handle byte mechanics are mandatory for DIRECT ingestion, not a
 # wave/gate acceptance: primary file reads go through the safe-reader kernel.

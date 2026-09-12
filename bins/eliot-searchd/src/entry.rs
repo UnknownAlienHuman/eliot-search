@@ -71,6 +71,13 @@ mod secret_composition;
 mod secure_commands;
 mod service_output;
 mod sha256;
+// Legacy Git compatibility helpers remain isolated until their dedicated
+// source-acquisition owner replaces them. They are not the live DIRECT path.
+#[allow(dead_code)]
+#[path = "source_composition.rs"]
+mod git_source_composition;
+// Live DIRECT ingestion enters canonical admission/identity owners here.
+#[path = "direct_store/composition.rs"]
 mod source_composition;
 mod source_fence;
 mod source_migration_command;
