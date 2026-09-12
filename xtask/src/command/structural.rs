@@ -16,6 +16,11 @@ use xtask::context_materialization_validation::{
     render_report_json as render_materialization_json,
     validate_context_materialization_plan as validate_materialization,
 };
+use xtask::coverage_graph_validation::{
+    exit_code as coverage_graph_exit_code,
+    render_report_json as render_coverage_graph_json,
+    validate_coverage_graph as validate_coverage,
+};
 use xtask::impl_program::{
     exit_code as program_exit_code,
     render_report_json as render_program_json,
@@ -47,6 +52,12 @@ pub(super) fn validate_architecture_coverage_contracts() -> ExitCode {
     let report = validate_architecture(Path::new("."));
     println!("{}", render_architecture_json(&report));
     code(architecture_exit_code(&report))
+}
+
+pub(super) fn validate_coverage_graph() -> ExitCode {
+    let report = validate_coverage(Path::new("."));
+    println!("{}", render_coverage_graph_json(&report));
+    code(coverage_graph_exit_code(&report))
 }
 
 pub(super) fn validate_context_materialization_plan() -> ExitCode {

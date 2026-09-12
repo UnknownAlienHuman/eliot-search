@@ -33,12 +33,15 @@ the exact source file, source section, selected module, routing class and score 
 
 ```powershell
 python tools/generate-coverage-graph-v2.py --check
-python tools/generate-package-maps-v2.py --check
-python tools/validate-coverage-graph-v2.py --json
-python tools/validate-package-maps-v2.py --json
+cargo run --locked --quiet -p xtask -- generate package-maps --check --json
+cargo run --locked --quiet -p xtask -- validate coverage-graph --json
+cargo run --locked --quiet -p xtask -- validate package-maps --json
 cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
 cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
 ```
+
+Graph derivation/generation is the only remaining Python step in this family. Validation of the committed
+coverage graph and bounded package maps is Rust-owned.
 
 The validators reject missing or orphan operations, stale documentation headings, cross-package module
 routes, configuration/recipe/port owner drift, missing dependency or re-entry edges, weak implementation

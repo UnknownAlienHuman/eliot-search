@@ -26,7 +26,7 @@ jobs:
         run: |
           python tools/generate-coverage-graph-v2.py --check --json
           cargo run --locked --quiet -p xtask -- generate package-maps --check --json
-          python tools/validate-coverage-graph-v2.py --json
+          cargo run --locked --quiet -p xtask -- validate coverage-graph --json
           cargo run --locked --quiet -p xtask -- validate package-maps --json
 
       - name: Revalidate architecture, swarm and function registries
