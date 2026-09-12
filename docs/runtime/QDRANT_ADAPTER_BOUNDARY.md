@@ -33,6 +33,7 @@ Run the structural gate from the repository root:
 
 ```powershell
 cargo run --locked -p xtask -- validate qdrant-boundary --json
+cargo test --locked -p xtask --test qdrant_qualification_module_ownership
 ```
 
 The gate scans every Cargo manifest and Rust source file. Its source scanner
@@ -44,6 +45,13 @@ therefore cannot conceal a vendor type in the bridge API.
 The gate also requires the workspace client pin, `Cargo.lock`, `qualified.rs`
 and `qualification/qdrant/artifact.toml` to name the same client version, and
 requires the qualified server version to match the artifact manifest.
+
+`qualified.rs` is the single upgrade identity facade: server version/build,
+artifact digest/size/platform and client version/checksum/VCS identity remain
+there together. Bounded `qualified/{artifact,client,error,gate,idf}.rs` modules
+verify those identities and admission rules but may not duplicate or own the
+pins. This keeps both human updates and the structural validator pointed at one
+file while preventing the qualification gate from becoming another monolith.
 
 ## Upgrade procedure
 
@@ -57,8 +65,9 @@ A Qdrant upgrade is an adapter qualification change, not a service rewrite.
    `qualification/qdrant/artifact.toml`.
 4. Adapt only private translation code under `search-qdrant-bridge` when the
    vendor protobuf/API changed.
-5. Run `xtask validate qdrant-boundary`, bridge unit/contract tests and the live
-   disposable-server qualification.
+5. Run `xtask validate qdrant-boundary`, the qualification module-ownership
+   test, bridge unit/contract tests and the live disposable-server
+   qualification.
 6. Update the qualification receipt only from executed evidence.
 
 No daemon, query, publication or control-store module may be changed merely to

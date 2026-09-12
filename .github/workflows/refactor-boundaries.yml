@@ -115,9 +115,11 @@ jobs:
           cargo test --locked -p eliot-searchd --bin eliot-searchd denied_sources_never_reach_cas
           cargo test --locked -p eliot-searchd --bin eliot-searchd rename_preserves_stable_identity
 
-      - name: Qdrant dependency and public API boundary
+      - name: Qdrant dependency, qualification and public API boundary
         shell: pwsh
-        run: cargo run --locked -p xtask -- validate qdrant-boundary --json
+        run: |
+          cargo run --locked -p xtask -- validate qdrant-boundary --json
+          cargo test --locked -p xtask --test qdrant_qualification_module_ownership
 
       - name: Qdrant vendor locality
         shell: pwsh
