@@ -1,6 +1,11 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+use xtask::architecture_coverage_contracts::{
+    exit_code as architecture_exit_code,
+    render_report_json as render_architecture_json,
+    validate_architecture_coverage_contracts as validate_architecture,
+};
 use xtask::context_materialization_validation::{
     exit_code as materialization_exit_code,
     render_report_json as render_materialization_json,
@@ -21,6 +26,12 @@ use xtask::qdrant_boundary::{
     render_report_json as render_qdrant_json,
     validate_qdrant_boundary as validate_qdrant,
 };
+
+pub(super) fn validate_architecture_coverage_contracts() -> ExitCode {
+    let report = validate_architecture(Path::new("."));
+    println!("{}", render_architecture_json(&report));
+    code(architecture_exit_code(&report))
+}
 
 pub(super) fn validate_context_materialization_plan() -> ExitCode {
     let report = validate_materialization(Path::new("."));

@@ -1,13 +1,22 @@
 # Architecture ownership coverage qualification
 
-Run:
+Run the combined compatibility entrypoint:
 
 ```powershell
 pwsh -NoProfile -File tools/validate-architecture-coverage.ps1 -Json
+```
+
+The broad graph/type/schema validator is still the remaining Python-owned half.
+The operation/task/qualification contract closure now runs in Rust and can be
+invoked directly:
+
+```powershell
+cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
+cargo test --locked -p xtask --test architecture_coverage_contracts_runtime
 pwsh -NoProfile -File tools/validate-p00-ticket-drafts.ps1 -Json
 ```
 
-The first validator closes the static ownership graph from Architecture 8.4 Part I to:
+The coverage validators close the static ownership graph from Architecture 8.4 Part I to:
 
 ```text
 45 packages and assignments
@@ -25,7 +34,7 @@ INV-01..INV-30 invariants
 P00-P18 delivery slices
 ```
 
-The second validator ensures the five named type completions are part of the manifest-closed P00 contract
+The P00 validator ensures the five named type completions are part of the manifest-closed P00 contract
 pack and every bounded W0 context remains non-claimable.
 
 A PASS proves only static ownership and source-registry closure. It does **not** prove that Rust modules or
