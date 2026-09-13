@@ -46,6 +46,12 @@ depending on Qdrant's unspecified ordering among equal-score candidates.
 The suite keeps one explicit mandatory probe order and emits no product
 authority.
 
+The real data-plane read surface is split into exact readback, count, scroll and
+filtered-search operation files behind the existing `RealDataPlane` methods.
+Exact readback rejects duplicate vendor IDs and returns points, missing IDs and
+unexpected IDs in deterministic point-ID order. Filtered nominations preserve
+Qdrant ranking order but reject duplicate point IDs and non-finite scores.
+
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 
@@ -55,6 +61,7 @@ Validate it from the repository root:
 cargo run --locked -p xtask -- validate qdrant-boundary --json
 cargo test --locked -p search-qdrant-bridge --test live_server_module_ownership
 cargo test --locked -p search-qdrant-bridge --test live_probe_module_ownership
+cargo test --locked -p search-qdrant-bridge --test real_query_module_ownership
 ```
 
 - **Delivery wave:** W3 / P05
