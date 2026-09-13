@@ -95,7 +95,15 @@ jobs:
           cargo test --locked -p search-unitizer --test manifest_module_ownership
           cargo test --locked -p search-unitizer --test unitization_module_ownership
           cargo test --locked -p search-unitizer --test regression_corpus_ownership
+          cargo test --locked -p search-unitizer --test layout_codec_module_ownership
           cargo test --locked -p search-unitizer
+
+      - name: Evaluation module ownership
+        shell: pwsh
+        run: |
+          cargo test --locked -p search-eval --test metrics_module_ownership
+          cargo test --locked -p search-eval --test audits_module_ownership
+          cargo test --locked -p search-eval
 
       - name: Control migration marker ownership
         shell: pwsh
