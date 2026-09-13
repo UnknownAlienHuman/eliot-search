@@ -2,7 +2,7 @@
 
 **C08 — Materialization.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** baseline text/source-code materialization, profile validation, coordinate/loss maps, assurance classification, and the optional-provider qualification seam are implemented. Concrete optional document-provider qualification remains gated and no provider acceptance is implied.
 
 Convert an exact retained revision into a canonical representation with explicit coordinate and loss maps.
 
