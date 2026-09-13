@@ -101,6 +101,7 @@ jobs:
       - name: Evaluation module ownership
         shell: pwsh
         run: |
+          cargo test --locked -p search-eval --test core_module_ownership
           cargo test --locked -p search-eval --test metrics_module_ownership
           cargo test --locked -p search-eval --test audits_module_ownership
           cargo test --locked -p search-eval
