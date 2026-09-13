@@ -73,6 +73,11 @@ Read transport loss remains `QDRANT_TRANSPORT_FAILED`; mutation and possible
 schema-write loss remain `QDRANT_MUTATION_OUTCOME_UNKNOWN`. Exact server schema
 verification is isolated from transport-error classification.
 
+Private identity translation is split into deterministic collection-route
+naming, 32-byte digest hex and full 128-bit point-ID/UUID conversion. The
+collection name remains the fixed 28-byte domain-separated form and point IDs
+retain all 128 bits across numeric/UUID vendor responses.
+
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 
@@ -86,6 +91,7 @@ cargo test --locked -p search-qdrant-bridge --test real_query_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_codec_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_schema_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_error_schema_module_ownership
+cargo test --locked -p search-qdrant-bridge --test real_identity_module_ownership
 ```
 
 - **Delivery wave:** W3 / P05
