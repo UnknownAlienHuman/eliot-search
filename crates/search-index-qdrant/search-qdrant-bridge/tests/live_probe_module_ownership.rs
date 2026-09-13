@@ -56,6 +56,15 @@ fn live_probe_families_stay_split_by_responsibility() {
     assert!(!search.contains("UpsertPoints"));
     assert!(!search.contains("CountPoints"));
 
+    let suite = read(&root, "src/live/suite.rs");
+    assert!(suite.len() < 1_000, "suite facade grew to {} bytes", suite.len());
+    for module in ["client", "report", "run", "state"] {
+        assert!(suite.contains(&format!("mod {module};")));
+    }
+    assert!(!suite.contains("health_check"));
+    assert!(!suite.contains("MANDATORY_LIVE_PROBES"));
+    assert!(!suite.contains("LiveProbeOutcome"));
+
     for relative in [
         "src/live/probes/setup/collection.rs",
         "src/live/probes/setup/identity.rs",
@@ -71,6 +80,10 @@ fn live_probe_families_stay_split_by_responsibility() {
         "src/live/fixtures/filter.rs",
         "src/live/fixtures/points.rs",
         "src/live/fixtures/spec.rs",
+        "src/live/suite/client.rs",
+        "src/live/suite/report.rs",
+        "src/live/suite/run.rs",
+        "src/live/suite/state.rs",
     ] {
         let source = read(&root, relative);
         assert!(
@@ -89,12 +102,17 @@ fn live_probe_families_stay_split_by_responsibility() {
     let query = read(&root, "src/live/probes/search/query.rs");
     assert!(query.contains("fn same_scores"));
     assert!(query.contains("sort_unstable_by"));
+
+    let state = read(&root, "src/live/suite/state.rs");
+    assert!(state.contains("fn finish"));
+    assert!(state.contains("MANDATORY_LIVE_PROBES"));
+    assert!(!state.contains("outcomes: self.outcomes.clone()"));
 }
 
 #[test]
 fn mandatory_probe_order_remains_explicit() {
     let root = package_root();
-    let suite = read(&root, "src/live/suite.rs");
+    let run = read(&root, "src/live/suite/run.rs");
     let ordered = [
         "probe_server_identity(&mut suite).await?;",
         "probe_create_and_topology(&mut suite).await?;",
@@ -110,7 +128,7 @@ fn mandatory_probe_order_remains_explicit() {
     ];
     let mut previous = None;
     for call in ordered {
-        let position = suite
+        let position = run
             .find(call)
             .unwrap_or_else(|| panic!("suite lost mandatory call: {call}"));
         if let Some(previous) = previous {
