@@ -102,6 +102,8 @@ jobs:
         shell: pwsh
         run: |
           cargo test --locked -p search-eval --test core_module_ownership
+          cargo test --locked -p search-eval --test report_module_ownership
+          cargo test --locked -p search-eval --test evidence_module_ownership
           cargo test --locked -p search-eval --test metrics_module_ownership
           cargo test --locked -p search-eval --test audits_module_ownership
           cargo test --locked -p search-eval
