@@ -127,6 +127,7 @@ jobs:
           cargo test --locked -p search-qdrant-bridge --lib --test oracle_contracts
           cargo test --locked -p search-qdrant-bridge --test live_server_module_ownership
           cargo test --locked -p search-qdrant-bridge --test live_probe_module_ownership
+          cargo test --locked -p search-qdrant-bridge --test real_query_module_ownership
 
       - name: Qdrant vendor locality
         shell: pwsh
