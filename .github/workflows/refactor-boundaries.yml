@@ -88,6 +88,15 @@ jobs:
         shell: pwsh
         run: cargo test --locked -p xtask --test impl_program_module_ownership
 
+      - name: Materializer and unitizer module ownership
+        shell: pwsh
+        run: |
+          cargo test --locked -p search-materializer --test legacy_direct_module_ownership
+          cargo test --locked -p search-unitizer --test manifest_module_ownership
+          cargo test --locked -p search-unitizer --test unitization_module_ownership
+          cargo test --locked -p search-unitizer --test regression_corpus_ownership
+          cargo test --locked -p search-unitizer
+
       - name: Control migration marker ownership
         shell: pwsh
         run: |
