@@ -35,6 +35,12 @@ rather than adopting the fixture lifecycle.
 Startup diagnostics read at most the final 1 KiB from each captured Qdrant log.
 They never load an unbounded log and use lossy UTF-8 only for failure evidence.
 
+Live probe setup is also split by responsibility: exact server identity,
+collection topology/index creation, wait=true ingest/readback, strict-mode
+negative behavior and signed-range transport. Fixture constants, eligibility
+filters and point/payload construction are separate private modules. The suite
+keeps one explicit mandatory probe order and emits no product authority.
+
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 
@@ -43,6 +49,7 @@ Validate it from the repository root:
 ```powershell
 cargo run --locked -p xtask -- validate qdrant-boundary --json
 cargo test --locked -p search-qdrant-bridge --test live_server_module_ownership
+cargo test --locked -p search-qdrant-bridge --test live_probe_module_ownership
 ```
 
 - **Delivery wave:** W3 / P05
