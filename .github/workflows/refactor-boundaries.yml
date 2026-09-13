@@ -123,7 +123,9 @@ jobs:
 
       - name: Qdrant shared validation and bounded oracle
         shell: pwsh
-        run: cargo test --locked -p search-qdrant-bridge --lib --test oracle_contracts
+        run: |
+          cargo test --locked -p search-qdrant-bridge --lib --test oracle_contracts
+          cargo test --locked -p search-qdrant-bridge --test live_server_module_ownership
 
       - name: Qdrant vendor locality
         shell: pwsh
