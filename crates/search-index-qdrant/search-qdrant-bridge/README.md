@@ -57,6 +57,12 @@ codec, sparse-vector codec and point assembly. The split preserves all exact
 payload field names, digest fields, sparse ordering, finite-value and dimension
 checks; no vendor type is exported by the codec surface.
 
+Connection admission, collection creation/index setup and schema readback are
+separate private operation files. Connection still requires the exact executed
+qualified gate and rechecks server version/build; creation still installs all
+mandatory indexes with wait=true and strong ordering before exact schema
+readback.
+
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 
@@ -68,6 +74,7 @@ cargo test --locked -p search-qdrant-bridge --test live_server_module_ownership
 cargo test --locked -p search-qdrant-bridge --test live_probe_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_query_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_codec_module_ownership
+cargo test --locked -p search-qdrant-bridge --test real_schema_module_ownership
 ```
 
 - **Delivery wave:** W3 / P05
