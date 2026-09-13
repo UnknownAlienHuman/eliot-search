@@ -52,6 +52,11 @@ Exact readback rejects duplicate vendor IDs and returns points, missing IDs and
 unexpected IDs in deterministic point-ID order. Filtered nominations preserve
 Qdrant ranking order but reject duplicate point IDs and non-finite scores.
 
+Private vendor codecs are split into update-status/order translation, payload
+codec, sparse-vector codec and point assembly. The split preserves all exact
+payload field names, digest fields, sparse ordering, finite-value and dimension
+checks; no vendor type is exported by the codec surface.
+
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 
@@ -62,6 +67,7 @@ cargo run --locked -p xtask -- validate qdrant-boundary --json
 cargo test --locked -p search-qdrant-bridge --test live_server_module_ownership
 cargo test --locked -p search-qdrant-bridge --test live_probe_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_query_module_ownership
+cargo test --locked -p search-qdrant-bridge --test real_codec_module_ownership
 ```
 
 - **Delivery wave:** W3 / P05
