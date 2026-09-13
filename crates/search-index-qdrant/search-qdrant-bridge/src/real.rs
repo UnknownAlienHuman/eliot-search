@@ -171,7 +171,7 @@ pub struct RealDataPlane {
 }
 
 include!("real/connect_schema.rs");
-include!("real/mutations.rs");
+mod mutations;
 include!("real/queries.rs");
 include!("real/ledger.rs");
 include!("real/tests.rs");
