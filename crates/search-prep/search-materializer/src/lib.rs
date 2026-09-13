@@ -17,6 +17,7 @@ pub mod api;
 mod assurance;
 mod decode;
 mod error;
+mod legacy_direct;
 mod maps;
 mod normalize;
 mod product;

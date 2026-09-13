@@ -2,6 +2,11 @@
 
 use search_exact::literal::LiteralLimits;
 use search_materializer::MaterializationLimits;
+pub use search_materializer::api::{
+    CONTENT_DIGEST_ALGORITHM, DIGEST_ALGORITHM_BLAKE3_256,
+    DIGEST_ALGORITHM_SHA256, MANIFEST_DIGEST_ALGORITHM,
+    REPRESENTATION_DIGEST_ALGORITHM,
+};
 use search_unitizer::UnitizationLimits;
 
 use crate::development::{
@@ -67,18 +72,6 @@ pub const CANONICAL_MATERIALIZER_REVISION: u64 = 1;
 pub const CANONICAL_UNITIZER_NAME: &str = "direct-exact-units";
 /// Canonical DIRECT unitizer profile revision.
 pub const CANONICAL_UNITIZER_REVISION: u64 = 1;
-
-/// BLAKE3-256 wire tag matching `search-contracts::DigestAlgorithm`.
-pub const DIGEST_ALGORITHM_BLAKE3_256: u8 = 1;
-/// SHA-256 wire tag matching `search-contracts::DigestAlgorithm`.
-pub const DIGEST_ALGORITHM_SHA256: u8 = 2;
-
-/// Source content uses SHA-256 hex identities from the existing DIRECT catalog.
-pub const CONTENT_DIGEST_ALGORITHM: u8 = DIGEST_ALGORITHM_SHA256;
-/// Representation identities use real BLAKE3, never SHA-256 relabelled.
-pub const REPRESENTATION_DIGEST_ALGORITHM: u8 = DIGEST_ALGORITHM_BLAKE3_256;
-/// Manifest-envelope digests retain the existing SHA-256 profile.
-pub const MANIFEST_DIGEST_ALGORITHM: u8 = DIGEST_ALGORITHM_SHA256;
 
 /// Builds the validated canonical materializer profile for DIRECT.
 ///

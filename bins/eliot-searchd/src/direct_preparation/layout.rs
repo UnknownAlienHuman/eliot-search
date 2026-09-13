@@ -1,6 +1,11 @@
 //! Exact DIRECT layout encoding, decoding and literal scanning.
 
 use search_exact::literal::{self, LiteralLimits};
+use search_materializer::api::{
+    LegacyDirectPreparationFrame, LegacyDirectPreparationGap,
+    decode_legacy_direct_preparation, encode_legacy_direct_gap,
+    encode_legacy_direct_layout,
+};
 use search_materializer::{LineSpan, MaterializationError, materialize_utf8};
 #[cfg(test)]
 use search_materializer::MaterializationLimits;
@@ -24,12 +29,22 @@ pub fn validate_query(query: &str) -> Result<(), &'static str> {
 /// Storage failures are never encoded as content outcomes.
 pub fn encode_preparation(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
     if std::str::from_utf8(bytes).is_err() {
-        return Ok(vec![1]);
+        return Ok(encode_legacy_direct_gap(
+            LegacyDirectPreparationGap::RevisionNotUtf8,
+        ));
     }
     let prepared = match materialize_utf8(bytes.to_vec(), MATERIALIZATION) {
         Ok(value) => value,
-        Err(MaterializationError::BinaryContent) => return Ok(vec![2]),
-        Err(MaterializationError::TooManyLines) => return Ok(vec![3]),
+        Err(MaterializationError::BinaryContent) => {
+            return Ok(encode_legacy_direct_gap(
+                LegacyDirectPreparationGap::BinaryContent,
+            ));
+        }
+        Err(MaterializationError::TooManyLines) => {
+            return Ok(encode_legacy_direct_gap(
+                LegacyDirectPreparationGap::TooManyLines,
+            ));
+        }
         Err(error) => return Err(error.code()),
     };
     let encoded = match UNITIZATION.encode_layout(
@@ -38,14 +53,19 @@ pub fn encode_preparation(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
         MAX_LAYOUT_BYTES,
     ) {
         Ok(value) => value,
-        Err(UnitizationError::TooManyUnits) => return Ok(vec![4]),
-        Err(UnitizationError::InputTooLarge) => return Ok(vec![5]),
+        Err(UnitizationError::TooManyUnits) => {
+            return Ok(encode_legacy_direct_gap(
+                LegacyDirectPreparationGap::TooManyUnits,
+            ));
+        }
+        Err(UnitizationError::InputTooLarge) => {
+            return Ok(encode_legacy_direct_gap(
+                LegacyDirectPreparationGap::LayoutTooLarge,
+            ));
+        }
         Err(error) => return Err(error.code()),
     };
-    let mut output = Vec::with_capacity(encoded.len() + 1);
-    output.push(0);
-    output.extend_from_slice(&encoded);
-    Ok(output)
+    encode_legacy_direct_layout(&encoded).map_err(|error| error.code())
 }
 
 /// Searches verified bytes using the saved exact layout without rebuilding it.
@@ -56,10 +76,12 @@ pub fn scan_prepared(
     ascii_insensitive: bool,
 ) -> Result<ScanResult, &'static str> {
     validate_query(query)?;
-    if let Some(reason) = preparation_gap(encoded)? {
-        return Err(reason);
-    }
-    let layout = encoded.get(1..).ok_or("DIRECT_PREPARATION_INVALID")?;
+    let frame = decode_legacy_direct_preparation(encoded).map_err(|error| error.code())?;
+    let LegacyDirectPreparationFrame::Layout(layout) = frame else {
+        return Err(frame
+            .gap_reason()
+            .ok_or("DIRECT_PREPARATION_INVALID")?);
+    };
     let (lines, units) = UNITIZATION
         .decode_layout(text, layout, MAX_LAYOUT_BYTES)
         .map_err(UnitizationError::code)?;
@@ -68,15 +90,9 @@ pub fn scan_prepared(
 
 /// Decodes only the outcome framing; source/layout validation remains mandatory.
 pub const fn preparation_gap(encoded: &[u8]) -> Result<Option<&'static str>, &'static str> {
-    match encoded {
-        [0, layout @ ..] if !layout.is_empty() => Ok(None),
-        [1] => Ok(Some("DIRECT_REVISION_NOT_UTF8")),
-        [2] => Ok(Some("MATERIALIZATION_BINARY_CONTENT")),
-        [3] => Ok(Some("MATERIALIZATION_TOO_MANY_LINES")),
-        [4] => Ok(Some("UNITIZATION_TOO_MANY_UNITS")),
-        [5] => Ok(Some("DIRECT_PREPARATION_LAYOUT_TOO_LARGE")),
-        [6] => Ok(Some("DIRECT_REVISION_HAS_BOM")),
-        _ => Err("DIRECT_PREPARATION_INVALID"),
+    match decode_legacy_direct_preparation(encoded) {
+        Ok(frame) => Ok(frame.gap_reason()),
+        Err(error) => Err(error.code()),
     }
 }
 
