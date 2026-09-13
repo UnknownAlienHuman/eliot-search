@@ -68,6 +68,11 @@ collection may exist, cancellation, transport loss or unusable readback returns
 `QDRANT_MUTATION_OUTCOME_UNKNOWN`; the bridge never reports a definite no-write
 outcome after possible durable schema effects.
 
+Vendor failure mapping is split by read, mutation and schema-creation class.
+Read transport loss remains `QDRANT_TRANSPORT_FAILED`; mutation and possible
+schema-write loss remain `QDRANT_MUTATION_OUTCOME_UNKNOWN`. Exact server schema
+verification is isolated from transport-error classification.
+
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 
@@ -80,6 +85,7 @@ cargo test --locked -p search-qdrant-bridge --test live_probe_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_query_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_codec_module_ownership
 cargo test --locked -p search-qdrant-bridge --test real_schema_module_ownership
+cargo test --locked -p search-qdrant-bridge --test real_error_schema_module_ownership
 ```
 
 - **Delivery wave:** W3 / P05
