@@ -2,7 +2,7 @@
 
 **C09 — Deterministic unitization.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** deterministic exact-range unitization and durable profile-bound manifest behavior are implemented; Rust execution and qualification evidence remain pending.
 
 Turn a materialization into deterministic unit occurrences and an immutable unit manifest.
 
