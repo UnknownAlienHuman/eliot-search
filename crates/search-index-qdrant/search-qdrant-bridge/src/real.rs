@@ -44,22 +44,27 @@ use std::time::Duration;
 
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
-    CollectionInfo, Condition, CountPoints, CreateCollection, CreateFieldIndexCollection,
-    DeletePoints, FieldCondition, FieldType, Filter, GetPoints, IdfParams, Match, Modifier,
-    PointId, PointStruct, PointsIdsList, PointsSelector, Query, QueryPoints, Range,
-    RepeatedStrings, ScrollPoints, SearchParams, SetPayloadPoints, SparseVectorConfig,
-    SparseVectorParams, StrictModeConfig, UpdateStatus, UpsertPoints, Value, Vector, VectorInput,
-    Vectors, WriteOrdering, WriteOrderingType, condition, r#match, point_id, points_selector,
-    value, vector_output, vectors, vectors_output,
+    CollectionInfo, Condition, CountPoints, CreateCollection,
+    CreateFieldIndexCollection, DeletePoints, FieldCondition, FieldType,
+    Filter, GetPoints, IdfParams, Match, Modifier, PointId, PointStruct,
+    PointsIdsList, PointsSelector, Query, QueryPoints, Range, RepeatedStrings,
+    ScrollPoints, SearchParams, SetPayloadPoints, SparseVectorConfig,
+    SparseVectorParams, StrictModeConfig, UpdateStatus, UpsertPoints, Value,
+    Vector, VectorInput, Vectors, WriteOrdering, WriteOrderingType, condition,
+    point_id, points_selector, r#match, value, vector_output, vectors,
+    vectors_output,
 };
 use search_contracts::{OpaqueId, ReceiptRef};
 
 use crate::live::LiveEndpoint;
-use crate::qualified::{QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate};
+use crate::qualified::{
+    QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate,
+};
 use crate::{
-    BoundedPointReadback, BridgeError, BridgeLimits, BridgeMutation, CandidateNomination,
-    CollectionRoute, CollectionSchema, EligibilityFilter, ExactCount, MutationReceipt,
-    PointPayload, PointRecord, QdrantPointId, StoredVector,
+    BoundedPointReadback, BridgeError, BridgeLimits, BridgeMutation,
+    CandidateNomination, CollectionRoute, CollectionSchema, EligibilityFilter,
+    ExactCount, MutationReceipt, PointPayload, PointRecord, QdrantPointId,
+    StoredVector,
 };
 
 /// gRPC canonical status numbers (`google.rpc.Code`), matched without a
@@ -98,7 +103,10 @@ impl OpContext {
 
     /// Builds a context with a finite deadline and a shared cancellation flag.
     #[must_use]
-    pub const fn with_cancel(deadline: Duration, cancelled: Arc<AtomicBool>) -> Self {
+    pub const fn with_cancel(
+        deadline: Duration,
+        cancelled: Arc<AtomicBool>,
+    ) -> Self {
         Self {
             deadline,
             cancelled: Some(cancelled),
@@ -174,4 +182,7 @@ include!("real/connect_schema.rs");
 mod mutations;
 include!("real/queries.rs");
 include!("real/ledger.rs");
-include!("real/tests.rs");
+
+#[cfg(test)]
+#[path = "real/tests.rs"]
+mod tests;
