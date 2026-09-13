@@ -1,6 +1,24 @@
+fn post_create_check(context: &OpContext) -> Result<(), BridgeError> {
+    context.check().map_err(map_post_create_error)
+}
+
+const fn map_post_create_error(error: BridgeError) -> BridgeError {
+    match error {
+        BridgeError::Cancelled
+        | BridgeError::TransportFailed
+        | BridgeError::MalformedResponse => BridgeError::MutationOutcomeUnknown,
+        other => other,
+    }
+}
+
 impl RealDataPlane {
     /// Creates one new opaque physical generation with mandatory payload
     /// indexes, strict-mode floors and post-creation schema verification.
+    ///
+    /// Before the collection create dispatch, cancellation is definite. Once
+    /// the collection may exist, cancellation, transport loss or unusable
+    /// readback reports [`BridgeError::MutationOutcomeUnknown`] because a
+    /// partial schema may be durable and must be reconciled explicitly.
     pub async fn create_collection(
         &mut self,
         route: &CollectionRoute,
@@ -64,13 +82,14 @@ impl RealDataPlane {
         if !created.result {
             return Err(BridgeError::MutationOutcomeUnknown);
         }
+
         for (field, field_type) in [
             (EligibilityFilter::INDEXED_FIELDS[0], FieldType::Keyword),
             (EligibilityFilter::INDEXED_FIELDS[1], FieldType::Keyword),
             (EligibilityFilter::INDEXED_FIELDS[2], FieldType::Integer),
             (EligibilityFilter::INDEXED_FIELDS[3], FieldType::Integer),
         ] {
-            context.check()?;
+            post_create_check(context)?;
             let indexed = tokio::time::timeout(
                 context.deadline(),
                 self.client.create_field_index(CreateFieldIndexCollection {
@@ -83,20 +102,51 @@ impl RealDataPlane {
                 }),
             )
             .await
-            .map_err(|_| BridgeError::TransportFailed)?
-            .map_err(|_| BridgeError::TransportFailed)?;
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)?
+            .map_err(map_create_error)
+            .map_err(map_post_create_error)?;
             if !indexed
                 .result
                 .as_ref()
                 .is_some_and(|result| update_completed(result.status))
             {
-                return Err(BridgeError::TransportFailed);
+                return Err(BridgeError::MutationOutcomeUnknown);
             }
         }
-        context.check()?;
-        self.verify_server_schema(&name, schema, context).await?;
+
+        post_create_check(context)?;
+        self.verify_server_schema(&name, schema, context)
+            .await
+            .map_err(map_post_create_error)?;
         self.schemas.insert(name.clone(), schema.clone());
         ReceiptRef::new(format!("qdrant:collection:{name}"))
             .map_err(|_| BridgeError::CollectionSchemaMismatch)
+    }
+}
+
+#[cfg(test)]
+mod create_tests {
+    use super::*;
+
+    #[test]
+    fn possible_collection_effects_never_return_definite_no_write_errors() {
+        for error in [
+            BridgeError::Cancelled,
+            BridgeError::TransportFailed,
+            BridgeError::MalformedResponse,
+        ] {
+            assert_eq!(
+                map_post_create_error(error),
+                BridgeError::MutationOutcomeUnknown
+            );
+        }
+        assert_eq!(
+            map_post_create_error(BridgeError::CollectionSchemaMismatch),
+            BridgeError::CollectionSchemaMismatch
+        );
+        assert_eq!(
+            map_post_create_error(BridgeError::AuthenticationInvalid),
+            BridgeError::AuthenticationInvalid
+        );
     }
 }

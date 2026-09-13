@@ -63,6 +63,11 @@ qualified gate and rechecks server version/build; creation still installs all
 mandatory indexes with wait=true and strong ordering before exact schema
 readback.
 
+Before collection creation is dispatched, cancellation is definite. After the
+collection may exist, cancellation, transport loss or unusable readback returns
+`QDRANT_MUTATION_OUTCOME_UNKNOWN`; the bridge never reports a definite no-write
+outcome after possible durable schema effects.
+
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 

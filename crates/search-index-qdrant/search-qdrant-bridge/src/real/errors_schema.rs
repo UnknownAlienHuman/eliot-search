@@ -56,9 +56,11 @@ const fn map_mutation_status(code: i32) -> BridgeError {
     }
 }
 
-/// Maps a vendor failure on collection creation. Creation carries no mutation
-/// identity, so loss reports `MutationOutcomeUnknown`; a retry then converges
-/// through `CollectionAlreadyExists` plus [`RealDataPlane::verify_schema`].
+/// Maps a vendor failure on collection or payload-index creation. These writes
+/// carry no mutation identity, so transport loss reports
+/// `MutationOutcomeUnknown`; callers must reconcile the exact server schema
+/// before admitting the collection. Existing collections are never silently
+/// adopted by this mapper.
 fn map_create_error(error: qdrant_client::QdrantError) -> BridgeError {
     match error {
         qdrant_client::QdrantError::ResponseError { status }
@@ -69,14 +71,18 @@ fn map_create_error(error: qdrant_client::QdrantError) -> BridgeError {
                 CODE_INVALID_ARGUMENT | CODE_FAILED_PRECONDITION | CODE_OUT_OF_RANGE => {
                     BridgeError::CollectionSchemaMismatch
                 }
-                CODE_PERMISSION_DENIED | CODE_UNAUTHENTICATED => BridgeError::AuthenticationInvalid,
+                CODE_PERMISSION_DENIED | CODE_UNAUTHENTICATED => {
+                    BridgeError::AuthenticationInvalid
+                }
                 CODE_RESOURCE_EXHAUSTED => BridgeError::MutationTooLarge,
                 _ => BridgeError::MutationOutcomeUnknown,
             }
         }
         qdrant_client::QdrantError::ConversionError(_)
         | qdrant_client::QdrantError::InvalidUri(_)
-        | qdrant_client::QdrantError::NoSnapshotFound(_) => BridgeError::CollectionSchemaMismatch,
+        | qdrant_client::QdrantError::NoSnapshotFound(_) => {
+            BridgeError::CollectionSchemaMismatch
+        }
         qdrant_client::QdrantError::Io(_) => BridgeError::MutationOutcomeUnknown,
     }
 }

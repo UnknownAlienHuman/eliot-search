@@ -48,6 +48,9 @@ fn real_connection_and_schema_operations_stay_split() {
     assert!(create.contains("CreateFieldIndexCollection"));
     assert!(create.contains("wait: Some(true)"));
     assert!(create.contains("ordering: Some(strong_ordering())"));
+    assert!(create.contains("fn post_create_check"));
+    assert!(create.contains("fn map_post_create_error"));
+    assert!(create.contains("BridgeError::MutationOutcomeUnknown"));
     assert!(!create.contains("health_check()"));
 
     let verify = read(&root, "src/real/connect_schema/verify.rs");
@@ -74,4 +77,20 @@ fn real_connection_and_schema_operations_stay_split() {
             );
         }
     }
+}
+
+#[test]
+fn post_create_no_write_errors_are_not_returned_after_possible_effects() {
+    let root = package_root();
+    let create = read(&root, "src/real/connect_schema/create.rs");
+    for error in [
+        "BridgeError::Cancelled",
+        "BridgeError::TransportFailed",
+        "BridgeError::MalformedResponse",
+    ] {
+        assert!(create.contains(error), "missing post-create mapping for {error}");
+    }
+    assert!(create.contains("=> BridgeError::MutationOutcomeUnknown"));
+    assert!(create.contains("post_create_check(context)?;"));
+    assert!(create.contains(".map_err(map_post_create_error)?;"));
 }
