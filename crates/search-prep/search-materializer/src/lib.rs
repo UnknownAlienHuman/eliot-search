@@ -18,6 +18,8 @@ mod assurance;
 mod decode;
 mod error;
 mod legacy_direct;
+mod legacy_direct_profile;
+mod legacy_direct_receipt;
 mod maps;
 mod normalize;
 mod product;

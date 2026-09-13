@@ -4,8 +4,9 @@ use search_exact::literal::LiteralLimits;
 use search_materializer::MaterializationLimits;
 pub use search_materializer::api::{
     CONTENT_DIGEST_ALGORITHM, DIGEST_ALGORITHM_BLAKE3_256,
-    DIGEST_ALGORITHM_SHA256, MANIFEST_DIGEST_ALGORITHM,
-    REPRESENTATION_DIGEST_ALGORITHM,
+    DIGEST_ALGORITHM_SHA256, LEGACY_DIRECT_MATERIALIZER_NAME as CANONICAL_MATERIALIZER_NAME,
+    LEGACY_DIRECT_MATERIALIZER_REVISION as CANONICAL_MATERIALIZER_REVISION,
+    MANIFEST_DIGEST_ALGORITHM, REPRESENTATION_DIGEST_ALGORITHM,
 };
 use search_unitizer::UnitizationLimits;
 
@@ -64,10 +65,6 @@ pub fn profile_digest() -> [u8; 32] {
     )
 }
 
-/// Canonical DIRECT materializer profile name: exact UTF-8 preservation only.
-pub const CANONICAL_MATERIALIZER_NAME: &str = "direct-exact-utf8";
-/// Canonical DIRECT materializer profile revision.
-pub const CANONICAL_MATERIALIZER_REVISION: u64 = 1;
 /// Canonical DIRECT unitizer profile name.
 pub const CANONICAL_UNITIZER_NAME: &str = "direct-exact-units";
 /// Canonical DIRECT unitizer profile revision.
@@ -75,17 +72,12 @@ pub const CANONICAL_UNITIZER_REVISION: u64 = 1;
 
 /// Builds the validated canonical materializer profile for DIRECT.
 ///
-/// The profile accepts exact UTF-8 only, rejects BOM-bearing input, preserves
-/// line endings and rejects every lossy transform. DIRECT has no coordinate
-/// reprojection fallback.
+/// The materializer owner closes all behavioral fields. The daemon supplies
+/// only the live finite byte ceiling and real BLAKE3 golden-fixture digest.
 pub fn canonical_materializer_profile()
 -> Result<search_materializer::api::ValidatedMaterializerProfile, &'static str> {
     use search_contracts::Blake3Digest32;
-    use search_materializer::api::{
-        BomPolicy, CoordinateSpace, InvalidSequencePolicy, LossBehavior,
-        MaterializationProfileLimits, MaterializerProfileDescriptor, NewlinePolicy,
-        SourceEncoding, SourceKind, UnicodeNormalization, validate_materializer_profile,
-    };
+    use search_materializer::api::legacy_direct_materializer_profile;
 
     let golden = Blake3Digest32::from_bytes(
         *blake3::hash(
@@ -93,34 +85,9 @@ pub fn canonical_materializer_profile()
         )
         .as_bytes(),
     );
-    let descriptor = MaterializerProfileDescriptor {
-        profile_name: CANONICAL_MATERIALIZER_NAME.to_owned(),
-        profile_revision: CANONICAL_MATERIALIZER_REVISION,
-        source_kinds: vec![SourceKind::Text, SourceKind::Code],
-        encodings: vec![SourceEncoding::Utf8],
-        bom_policy: BomPolicy::RejectWhenPresent,
-        invalid_sequence_policy: InvalidSequencePolicy::Reject,
-        newline_policy: NewlinePolicy::PreserveExact,
-        unicode_normalization: UnicodeNormalization::None,
-        loss_behavior: LossBehavior::RejectOnAnyLoss,
-        limits: MaterializationProfileLimits {
-            max_input_bytes: u64::try_from(MAX_SCAN_INPUT_BYTES)
-                .map_err(|_| "DIRECT_PREPARATION_PROFILE_INVALID")?,
-            max_output_bytes: u64::try_from(MAX_SCAN_INPUT_BYTES)
-                .map_err(|_| "DIRECT_PREPARATION_PROFILE_INVALID")?,
-            max_lines: 1_000_000,
-            max_map_segments: 1_000_032,
-            max_loss_records: 1_000_032,
-            max_steps: 64 * 1024 * 1024,
-        },
-        coordinate_spaces: vec![
-            CoordinateSpace::NativeBytes,
-            CoordinateSpace::DecodedScalar,
-            CoordinateSpace::CanonicalScalar,
-        ],
-        golden_fixture_digest: golden,
-    };
-    validate_materializer_profile(&descriptor)
+    let max_input_bytes = u64::try_from(MAX_SCAN_INPUT_BYTES)
+        .map_err(|_| "DIRECT_PREPARATION_PROFILE_INVALID")?;
+    legacy_direct_materializer_profile(max_input_bytes, golden)
         .map_err(|_| "DIRECT_PREPARATION_PROFILE_INVALID")
 }
 

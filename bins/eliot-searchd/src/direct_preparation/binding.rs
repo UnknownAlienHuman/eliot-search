@@ -1,5 +1,6 @@
 //! Durable DIRECT preparation representation binding.
 
+pub use search_materializer::api::LegacyDirectPreparationReceipt as CanonicalPreparationReceipt;
 use search_materializer::api::{
     LegacyDirectPreparationBinding, LegacyDirectPreparationGap,
     LegacyDirectRepresentationDigest, decode_legacy_direct_preparation,
@@ -106,25 +107,6 @@ pub fn encode_canonical_preparation(
         frame.identity_marker(),
     );
     Ok((representation, body))
-}
-
-/// Canonical preparation receipt carrying real provenance for one durable object.
-pub struct CanonicalPreparationReceipt {
-    /// BLAKE3 representation identity bound to source, body and profiles.
-    pub representation_id: [u8; 32],
-    /// Canonical materializer profile digest bytes.
-    pub materializer_digest: [u8; 32],
-    /// Canonical unitizer profile digest bytes.
-    pub unitizer_digest: [u8; 32],
-    /// Closed preparation gap, if the source is not layout-searchable.
-    pub gap: Option<&'static str>,
-}
-
-impl CanonicalPreparationReceipt {
-    /// Representation identity as lowercase hexadecimal.
-    pub fn representation_hex(&self) -> String {
-        crate::sha256::hex(&self.representation_id)
-    }
 }
 
 /// Verifies that a stored representation binds the live source bytes and the

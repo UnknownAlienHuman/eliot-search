@@ -35,6 +35,11 @@ pub use crate::legacy_direct::{
     derive_legacy_direct_representation_id, encode_legacy_direct_gap,
     encode_legacy_direct_layout, verify_legacy_direct_representation,
 };
+pub use crate::legacy_direct_profile::{
+    LEGACY_DIRECT_MATERIALIZER_NAME, LEGACY_DIRECT_MATERIALIZER_REVISION,
+    legacy_direct_materializer_profile,
+};
+pub use crate::legacy_direct_receipt::LegacyDirectPreparationReceipt;
 pub use crate::maps::{
     COORDINATE_MAP_VERSION, CoordinateMap, CoordinateSegment, LossKind, LossMap, LossRecord,
     MapBundle, MapIdentities, MapValidationReceipt, SegmentRelation, build_coordinate_map,
