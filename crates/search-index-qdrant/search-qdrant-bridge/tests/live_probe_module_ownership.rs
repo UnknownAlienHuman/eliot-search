@@ -10,7 +10,7 @@ fn read(root: &Path, relative: &str) -> String {
 }
 
 #[test]
-fn live_probe_setup_and_fixtures_stay_split_by_responsibility() {
+fn live_probe_families_stay_split_by_responsibility() {
     let root = package_root();
 
     let setup = read(&root, "src/live/probes/setup.rs");
@@ -41,12 +41,33 @@ fn live_probe_setup_and_fixtures_stay_split_by_responsibility() {
     assert!(!fixtures.contains("FieldCondition"));
     assert!(!fixtures.contains("PointStruct"));
 
+    let readback = read(&root, "src/live/probes/readback.rs");
+    assert!(readback.len() < 1_000);
+    assert!(readback.contains("mod exact;"));
+    assert!(readback.contains("mod schema;"));
+    assert!(!readback.contains("DeletePoints"));
+    assert!(!readback.contains("CollectionStatus"));
+
+    let search = read(&root, "src/live/probes/search.rs");
+    assert!(search.len() < 1_000);
+    for module in ["idf", "modifier", "open_end", "query"] {
+        assert!(search.contains(&format!("mod {module};")));
+    }
+    assert!(!search.contains("UpsertPoints"));
+    assert!(!search.contains("CountPoints"));
+
     for relative in [
         "src/live/probes/setup/collection.rs",
         "src/live/probes/setup/identity.rs",
         "src/live/probes/setup/ingest.rs",
         "src/live/probes/setup/range.rs",
         "src/live/probes/setup/strict_mode.rs",
+        "src/live/probes/readback/exact.rs",
+        "src/live/probes/readback/schema.rs",
+        "src/live/probes/search/idf.rs",
+        "src/live/probes/search/modifier.rs",
+        "src/live/probes/search/open_end.rs",
+        "src/live/probes/search/query.rs",
         "src/live/fixtures/filter.rs",
         "src/live/fixtures/points.rs",
         "src/live/fixtures/spec.rs",
@@ -64,10 +85,14 @@ fn live_probe_setup_and_fixtures_stay_split_by_responsibility() {
             );
         }
     }
+
+    let query = read(&root, "src/live/probes/search/query.rs");
+    assert!(query.contains("fn same_scores"));
+    assert!(query.contains("sort_unstable_by"));
 }
 
 #[test]
-fn mandatory_setup_probe_order_remains_explicit() {
+fn mandatory_probe_order_remains_explicit() {
     let root = package_root();
     let suite = read(&root, "src/live/suite.rs");
     let ordered = [
@@ -77,13 +102,20 @@ fn mandatory_setup_probe_order_remains_explicit() {
         "probe_ingest_batch_a(&mut suite).await?;",
         "probe_strict_negatives(&mut suite).await?;",
         "probe_signed_range(&mut suite).await?;",
+        "probe_independent_idf(&mut suite).await?;",
+        "probe_sparse_modifier(&mut suite).await?;",
+        "probe_missing_upper_bound(&mut suite).await?;",
+        "probe_count_and_readback(&mut suite).await?;",
+        "probe_schema_digest(&mut suite).await?;",
     ];
-    let mut previous = 0;
+    let mut previous = None;
     for call in ordered {
         let position = suite
             .find(call)
             .unwrap_or_else(|| panic!("suite lost mandatory call: {call}"));
-        assert!(position >= previous, "mandatory setup probes were reordered");
-        previous = position;
+        if let Some(previous) = previous {
+            assert!(position > previous, "mandatory probes were reordered");
+        }
+        previous = Some(position);
     }
 }

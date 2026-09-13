@@ -35,11 +35,16 @@ rather than adopting the fixture lifecycle.
 Startup diagnostics read at most the final 1 KiB from each captured Qdrant log.
 They never load an unbounded log and use lossy UTF-8 only for failure evidence.
 
-Live probe setup is also split by responsibility: exact server identity,
+Live probes are split by responsibility: exact server identity,
 collection topology/index creation, wait=true ingest/readback, strict-mode
-negative behavior and signed-range transport. Fixture constants, eligibility
-filters and point/payload construction are separate private modules. The suite
-keeps one explicit mandatory probe order and emits no product authority.
+negative behavior, signed-range transport, independent IDF, sparse modifier,
+missing-upper-bound semantics, exact CRUD readback and schema readback. Fixture
+constants, eligibility filters and point/payload construction are separate
+private modules. IDF noninterference compares exact ID/score populations without
+depending on Qdrant's unspecified ordering among equal-score candidates.
+
+The suite keeps one explicit mandatory probe order and emits no product
+authority.
 
 The dependency and upgrade boundary is defined in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
