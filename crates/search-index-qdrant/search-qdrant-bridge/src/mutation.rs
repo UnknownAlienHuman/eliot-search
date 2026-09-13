@@ -1,10 +1,13 @@
-use std::collections::{BTreeMap, BTreeSet};
+//! Vendor-neutral mutation records and pure validation shared with the live adapter.
+
+mod oracle;
+
+use std::collections::BTreeMap;
 
 use search_contracts::{Blake3Digest32, Epoch, OpaqueId};
 
 use crate::{
-    BridgeError, BridgeLimits, CollectionRoute, CollectionSchema, QdrantBridge,
-    VectorSchema,
+    BridgeError, BridgeLimits, CollectionRoute, CollectionSchema, VectorSchema,
 };
 
 /// Provider-neutral exact 128-bit point ID.
@@ -76,137 +79,6 @@ pub struct MutationReceipt {
     pub route: CollectionRoute,
     pub affected_ids: Vec<QdrantPointId>,
     pub replayed: bool,
-}
-
-impl QdrantBridge {
-    /// Upserts only explicit point IDs with exact idempotency.
-    pub fn upsert_exact(
-        &mut self,
-        route: &CollectionRoute,
-        points: Vec<PointRecord>,
-        mutation: BridgeMutation,
-    ) -> Result<MutationReceipt, BridgeError> {
-        if let Some(replay) = self.replay(&mutation)? {
-            return Ok(replay);
-        }
-        if points.is_empty() || points.len() > self.limits.max_points_per_mutation {
-            return Err(BridgeError::MutationTooLarge);
-        }
-        let collection = self
-            .collections
-            .get_mut(route)
-            .ok_or(BridgeError::CollectionNotFound)?;
-        let mut seen = BTreeSet::new();
-        for point in &points {
-            if !seen.insert(point.point_id) {
-                return Err(BridgeError::DuplicatePointId);
-            }
-            validate_point(point, &collection.schema, self.limits)?;
-        }
-        let mut affected_ids = Vec::with_capacity(points.len());
-        for point in points {
-            affected_ids.push(point.point_id);
-            collection.points.insert(point.point_id, point);
-        }
-        affected_ids.sort();
-        self.record_mutation(route.clone(), mutation, affected_ids)
-    }
-
-    /// Sets the exact exclusive upper epoch on explicit point IDs.
-    ///
-    /// # Panics
-    ///
-    /// Never panics on valid input: the first loop returns `PointNotFound`
-    /// before mutation, so the validated point exists under `&mut self` in the
-    /// second loop and the `expect` is an unreachable invariant.
-    pub fn close_exact(
-        &mut self,
-        route: &CollectionRoute,
-        ids: Vec<QdrantPointId>,
-        valid_until_epoch_exclusive: Epoch,
-        mutation: BridgeMutation,
-    ) -> Result<MutationReceipt, BridgeError> {
-        if let Some(replay) = self.replay(&mutation)? {
-            return Ok(replay);
-        }
-        let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
-        let collection = self
-            .collections
-            .get_mut(route)
-            .ok_or(BridgeError::CollectionNotFound)?;
-        for id in &ids {
-            let point = collection.points.get(id).ok_or(BridgeError::PointNotFound)?;
-            if valid_until_epoch_exclusive <= point.payload.valid_from_epoch {
-                return Err(BridgeError::ExactReadbackMismatch);
-            }
-        }
-        for id in &ids {
-            collection
-                .points
-                .get_mut(id)
-                .expect("validated point exists")
-                .payload
-                .valid_until_epoch_exclusive = Some(valid_until_epoch_exclusive);
-        }
-        self.record_mutation(route.clone(), mutation, ids)
-    }
-
-    /// Deletes only explicit exact point IDs.
-    pub fn delete_exact(
-        &mut self,
-        route: &CollectionRoute,
-        ids: Vec<QdrantPointId>,
-        mutation: BridgeMutation,
-    ) -> Result<MutationReceipt, BridgeError> {
-        if let Some(replay) = self.replay(&mutation)? {
-            return Ok(replay);
-        }
-        let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
-        let collection = self
-            .collections
-            .get_mut(route)
-            .ok_or(BridgeError::CollectionNotFound)?;
-        for id in &ids {
-            collection.points.remove(id);
-        }
-        self.record_mutation(route.clone(), mutation, ids)
-    }
-
-    fn replay(
-        &self,
-        mutation: &BridgeMutation,
-    ) -> Result<Option<MutationReceipt>, BridgeError> {
-        let Some(existing) = self.operations.get(&mutation.operation_id) else {
-            return Ok(None);
-        };
-        if existing.canonical_input_digest != mutation.canonical_input_digest {
-            return Err(BridgeError::OperationConflict);
-        }
-        let mut replay = existing.clone();
-        replay.replayed = true;
-        Ok(Some(replay))
-    }
-
-    fn record_mutation(
-        &mut self,
-        route: CollectionRoute,
-        mutation: BridgeMutation,
-        affected_ids: Vec<QdrantPointId>,
-    ) -> Result<MutationReceipt, BridgeError> {
-        if self.operations.len() >= self.limits.max_operation_receipts {
-            return Err(BridgeError::MutationTooLarge);
-        }
-        let receipt = MutationReceipt {
-            operation_id: mutation.operation_id.clone(),
-            canonical_input_digest: mutation.canonical_input_digest,
-            route,
-            affected_ids,
-            replayed: false,
-        };
-        self.operations
-            .insert(mutation.operation_id, receipt.clone());
-        Ok(receipt)
-    }
 }
 
 pub(crate) fn validate_point(

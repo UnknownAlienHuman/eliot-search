@@ -1,3 +1,6 @@
+use crate::mutation::validate_exact_ids;
+use crate::query::validate_query_vector;
+
 fn keyword_condition(key: &str, text: String) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
@@ -89,61 +92,8 @@ fn validate_point(
     schema: &CollectionSchema,
     limits: BridgeLimits,
 ) -> Result<(), BridgeError> {
-    if point.vectors.len() != schema.named_vectors.len() {
-        return Err(BridgeError::NamedVectorMissing);
-    }
-    let mut stored_values = 0_usize;
-    for (name, vector_schema) in &schema.named_vectors {
-        let vector = point
-            .vectors
-            .get(name)
-            .ok_or(BridgeError::NamedVectorMissing)?;
-        if vector.dimensions != vector_schema.dimensions || vector.sparse != vector_schema.sparse {
-            return Err(BridgeError::VectorDimensionMismatch);
-        }
-        if vector.values.is_empty()
-            || vector.values.iter().any(|(_, score)| !score.is_finite())
-            || vector.values.windows(2).any(|pair| pair[0].0 >= pair[1].0)
-            || vector
-                .values
-                .last()
-                .is_some_and(|(index, _)| *index >= vector_schema.dimensions)
-        {
-            return Err(BridgeError::VectorDimensionMismatch);
-        }
-        stored_values = stored_values
-            .checked_add(vector.values.len())
-            .ok_or(BridgeError::MutationTooLarge)?;
-    }
-    if stored_values > limits.max_vector_values_per_point {
-        return Err(BridgeError::MutationTooLarge);
-    }
+    crate::mutation::validate_point(point, schema, limits)?;
+    // Vendor payload encoding has additional representability constraints.
     encode_payload(point)?;
-    Ok(())
-}
-
-fn validate_exact_ids(
-    ids: Vec<QdrantPointId>,
-    limit: usize,
-) -> Result<Vec<QdrantPointId>, BridgeError> {
-    if ids.is_empty() || ids.len() > limit {
-        return Err(BridgeError::MutationTooLarge);
-    }
-    let mut sorted = ids;
-    sorted.sort();
-    if sorted.windows(2).any(|pair| pair[0] == pair[1]) {
-        return Err(BridgeError::DuplicatePointId);
-    }
-    Ok(sorted)
-}
-
-fn validate_query_vector(query: &[(u32, f32)], dimensions: u32) -> Result<(), BridgeError> {
-    if query.is_empty()
-        || query.iter().any(|(_, score)| !score.is_finite())
-        || query.windows(2).any(|pair| pair[0].0 >= pair[1].0)
-        || query.last().is_some_and(|(index, _)| *index >= dimensions)
-    {
-        return Err(BridgeError::VectorDimensionMismatch);
-    }
     Ok(())
 }

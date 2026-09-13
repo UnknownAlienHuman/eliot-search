@@ -121,6 +121,10 @@ jobs:
           cargo run --locked -p xtask -- validate qdrant-boundary --json
           cargo test --locked -p xtask --test qdrant_qualification_module_ownership
 
+      - name: Qdrant shared validation and bounded oracle
+        shell: pwsh
+        run: cargo test --locked -p search-qdrant-bridge --lib --test oracle_contracts
+
       - name: Qdrant vendor locality
         shell: pwsh
         run: cargo test --locked -p xtask --test qdrant_vendor_locality
