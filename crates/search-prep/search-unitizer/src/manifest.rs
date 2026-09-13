@@ -24,6 +24,7 @@ pub use profile::{
     validate_unitizer_profile,
 };
 pub use spec::{
-    UNIT_MANIFEST_DIGEST_ALGORITHM, UNIT_MANIFEST_FORMAT, UNIT_MANIFEST_VERSION,
+    MAX_UNITIZER_PROFILE_NAME_BYTES, UNIT_MANIFEST_DIGEST_ALGORITHM, UNIT_MANIFEST_FORMAT,
+    UNIT_MANIFEST_VERSION,
 };
 pub use verify::{diff_unit_manifests, manifest_digest, verify_unit_manifest};
