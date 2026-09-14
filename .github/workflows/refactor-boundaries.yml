@@ -98,6 +98,12 @@ jobs:
           cargo test --locked -p search-unitizer --test layout_codec_module_ownership
           cargo test --locked -p search-unitizer
 
+      - name: Revision store module ownership
+        shell: pwsh
+        run: |
+          cargo test --locked -p search-revision-store --test revision_store_module_ownership
+          cargo test --locked -p search-revision-store
+
       - name: Evaluation module ownership
         shell: pwsh
         run: |
