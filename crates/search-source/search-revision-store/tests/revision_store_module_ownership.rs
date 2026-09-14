@@ -108,9 +108,72 @@ fn revision_store_responsibilities_stay_separated() {
     }
 
     let store = read(&root, "src/kernel/store.rs");
-    assert!(store.contains("fn validate_intent"));
-    assert!(store.contains("fn record_from_readback"));
-    assert!(!store.contains("pub trait RevisionObjectBackend"));
+    assert!(store.len() < 8_000, "store facade grew to {} bytes", store.len());
+    for module in ["append", "lifecycle", "recovery", "support"] {
+        assert!(store.contains(&format!("mod {module};")));
+    }
+    for forbidden in [
+        "pub fn prepare_append(",
+        "pub fn confirm_append(",
+        "pub fn recover_unknown(",
+        "pub fn install_purge_tombstone(",
+        "pub fn apply_exact_object_deletion(",
+        "fn validate_intent(",
+        "fn record_from_readback(",
+    ] {
+        assert!(
+            !store.contains(forbidden),
+            "store facade reacquired {forbidden}"
+        );
+    }
+
+    let append = read(&root, "src/kernel/store/append.rs");
+    assert!(append.contains("pub fn prepare_append("));
+    assert!(append.contains("pub fn confirm_append("));
+    assert!(!append.contains("pub fn recover_unknown("));
+    assert!(!append.contains("pub fn install_purge_tombstone("));
+
+    let recovery = read(&root, "src/kernel/store/recovery.rs");
+    assert!(recovery.contains("pub fn mark_outcome_unknown("));
+    assert!(recovery.contains("pub fn recover_unknown("));
+    assert!(!recovery.contains("pub fn prepare_append("));
+
+    let lifecycle = read(&root, "src/kernel/store/lifecycle.rs");
+    assert!(lifecycle.contains("pub fn install_purge_tombstone("));
+    assert!(lifecycle.contains("pub fn apply_exact_object_deletion("));
+    assert!(!lifecycle.contains("pub fn recover_unknown("));
+
+    let support = read(&root, "src/kernel/store/support.rs");
+    assert!(support.contains("fn validate_intent("));
+    assert!(support.contains("fn record_from_readback("));
+    assert!(support.contains("fn reuse_conflict("));
+    assert!(!support.contains("impl RevisionStore"));
+
+    for relative in [
+        "src/kernel/store/append.rs",
+        "src/kernel/store/lifecycle.rs",
+        "src/kernel/store/recovery.rs",
+        "src/kernel/store/support.rs",
+    ] {
+        let source = read(&root, relative);
+        assert!(
+            source.len() < 15_000,
+            "store owner {relative} grew to {} bytes",
+            source.len()
+        );
+        for forbidden in [
+            "std::fs",
+            "std::process",
+            "qdrant_client",
+            "reqwest::",
+            "tokio::",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{relative} acquired forbidden token {forbidden}"
+            );
+        }
+    }
 
     let model = read(&root, "src/kernel/model.rs");
     assert!(model.contains("<{} encrypted bytes>"));
