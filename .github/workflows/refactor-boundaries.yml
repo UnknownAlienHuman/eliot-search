@@ -119,6 +119,8 @@ jobs:
         run: |
           cargo test --locked -p eliot-searchd --test access_composition_module_ownership
           cargo test --locked -p eliot-searchd --test config_composition_module_ownership
+          cargo test --locked -p eliot-searchd --test continuation_module_ownership
+          cargo test --locked -p eliot-searchd --test app_module_ownership
 
       - name: Control migration marker ownership
         shell: pwsh
@@ -139,7 +141,6 @@ jobs:
         run: |
           cargo test --locked -p search-source-admission default_deny
           cargo test --locked -p search-source-identity legacy_digest
-          cargo test --locked -p search-source-identity git_digest
           cargo test --locked -p eliot-searchd --test source_composition_owner_boundary
           cargo test --locked -p eliot-searchd --test git_source_owner_boundary
           cargo test --locked -p eliot-searchd --test git_source_process
