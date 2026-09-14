@@ -114,9 +114,11 @@ jobs:
           cargo test --locked -p search-eval --test audits_module_ownership
           cargo test --locked -p search-eval
 
-      - name: Daemon access composition ownership
+      - name: Daemon composition ownership
         shell: pwsh
-        run: cargo test --locked -p eliot-searchd --test access_composition_module_ownership
+        run: |
+          cargo test --locked -p eliot-searchd --test access_composition_module_ownership
+          cargo test --locked -p eliot-searchd --test config_composition_module_ownership
 
       - name: Control migration marker ownership
         shell: pwsh
