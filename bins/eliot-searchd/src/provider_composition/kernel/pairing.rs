@@ -23,6 +23,21 @@ pub const MAX_TOKEN_FILE_BYTES: usize = 4096;
 /// Minimum trimmed token bytes accepted for the development-compat key.
 pub const MIN_TOKEN_BYTES: usize = 32;
 
+/// Temporary token-file bytes that are cleared on every return path.
+struct SecretBytes(Vec<u8>);
+
+impl SecretBytes {
+    fn with_capacity(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
+}
+
+impl Drop for SecretBytes {
+    fn drop(&mut self) {
+        self.0.fill(0);
+    }
+}
+
 /// Recomputes the expected keyed proof over the exact envelope transcript.
 ///
 /// The key never leaves this call; only the digest is compared, in
@@ -142,7 +157,7 @@ pub fn shim_key_from_bytes(trimmed: &[u8]) -> Result<[u8; 32], &'static str> {
 /// Reads a token file and derives the development-compat pairing key.
 ///
 /// Regular files only (symlinks refused), bounded size, ASCII-trimmed,
-/// minimum length enforced. The raw buffer is zeroed before return.
+/// minimum length enforced. The raw buffer is zeroed on every return path.
 pub fn read_shim_key_file(path: &std::path::Path) -> Result<[u8; 32], String> {
     use std::fs::File;
     use std::io::Read;
@@ -156,26 +171,25 @@ pub fn read_shim_key_file(path: &std::path::Path) -> Result<[u8; 32], String> {
         return Err(PROVIDER_TOKEN_INVALID.to_owned());
     }
     let mut file = File::open(path).map_err(|error| format!("{PROVIDER_TOKEN_INVALID}:{error}"))?;
-    let mut bytes = Vec::with_capacity(
+    let mut bytes = SecretBytes::with_capacity(
         usize::try_from(metadata.len()).map_err(|_| PROVIDER_TOKEN_INVALID.to_owned())?,
     );
     (&mut file)
         .take(u64::try_from(MAX_TOKEN_FILE_BYTES + 1).unwrap_or(u64::MAX))
-        .read_to_end(&mut bytes)
+        .read_to_end(&mut bytes.0)
         .map_err(|error| format!("{PROVIDER_TOKEN_INVALID}:{error}"))?;
-    if bytes.len() > MAX_TOKEN_FILE_BYTES {
-        bytes.fill(0);
+    if bytes.0.len() > MAX_TOKEN_FILE_BYTES {
         return Err(PROVIDER_TOKEN_INVALID.to_owned());
     }
     let start = bytes
+        .0
         .iter()
         .position(|byte| !byte.is_ascii_whitespace())
-        .unwrap_or(bytes.len());
+        .unwrap_or(bytes.0.len());
     let end = bytes
+        .0
         .iter()
         .rposition(|byte| !byte.is_ascii_whitespace())
         .map_or(start, |index| index + 1);
-    let key = shim_key_from_bytes(&bytes[start..end]).map_err(str::to_owned)?;
-    bytes.fill(0);
-    Ok(key)
+    shim_key_from_bytes(&bytes.0[start..end]).map_err(str::to_owned)
 }

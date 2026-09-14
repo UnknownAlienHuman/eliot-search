@@ -97,7 +97,9 @@ fn provider_responsibilities_remain_bounded_and_vendor_free() {
     let pairing = read(&root, "src/provider_composition/kernel/pairing.rs");
     assert!(pairing.contains("std::fs::symlink_metadata"));
     assert!(pairing.contains("File::open"));
-    assert!(pairing.contains("bytes.fill(0)"));
+    assert!(pairing.contains("struct SecretBytes"));
+    assert!(pairing.contains("impl Drop for SecretBytes"));
+    assert!(pairing.contains("self.0.fill(0)"));
     assert!(!pairing.contains("ProviderRouter"));
 
     let router = read(&root, "src/provider_composition/kernel/router.rs");
