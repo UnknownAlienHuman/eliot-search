@@ -128,6 +128,58 @@ fn private_cross_file_import_cannot_enter_a_public_signature() {
 }
 
 #[test]
+fn literal_include_cannot_hide_a_vendor_alias() {
+    let fixture = Fixture::new();
+    fixture.write(
+        &format!("{BRIDGE}/src/real.rs"),
+        concat!(
+            "include!(\"real/hidden.rs\");\n",
+            "pub fn client() -> IncludedClient;\n",
+        ),
+    );
+    fixture.write(
+        &format!("{BRIDGE}/src/real/hidden.rs"),
+        "type IncludedClient = qdrant_client::Qdrant;\n",
+    );
+
+    assert_cross_file_failure(&fixture, &format!("{BRIDGE}/src/real.rs"), 2);
+}
+
+#[test]
+fn path_override_cannot_hide_the_declared_module_identity() {
+    let fixture = Fixture::new();
+    fixture.write(
+        &format!("{BRIDGE}/src/lib.rs"),
+        concat!(
+            "#[path = \"hidden.rs\"]\n",
+            "mod private;\n",
+            "pub use crate::private::VendorClient;\n",
+        ),
+    );
+    fixture.write(
+        &format!("{BRIDGE}/src/hidden.rs"),
+        "pub(crate) type VendorClient = qdrant_client::Qdrant;\n",
+    );
+
+    assert_cross_file_failure(&fixture, &format!("{BRIDGE}/src/lib.rs"), 3);
+}
+
+#[test]
+fn public_glob_cannot_reexport_a_vendor_type() {
+    let fixture = Fixture::new();
+    fixture.write(
+        &format!("{BRIDGE}/src/private.rs"),
+        "pub type VendorClient = qdrant_client::Qdrant;\n",
+    );
+    fixture.write(
+        &format!("{BRIDGE}/src/lib.rs"),
+        "mod private;\npub use crate::private::*;\n",
+    );
+
+    assert_cross_file_failure(&fixture, &format!("{BRIDGE}/src/lib.rs"), 2);
+}
+
+#[test]
 fn an_unrelated_same_named_bridge_type_remains_allowed() {
     let fixture = Fixture::new();
     fixture.write(
@@ -145,4 +197,34 @@ fn an_unrelated_same_named_bridge_type_remains_allowed() {
 
     let report = validate_qdrant_boundary(&fixture.root);
     assert!(report.passed(), "{:?}", report.errors);
+}
+
+#[test]
+fn public_glob_with_only_private_vendor_bindings_remains_allowed() {
+    let fixture = Fixture::new();
+    fixture.write(
+        &format!("{BRIDGE}/src/private.rs"),
+        concat!(
+            "use qdrant_client::Qdrant;\n",
+            "type InternalClient = Qdrant;\n",
+        ),
+    );
+    fixture.write(
+        &format!("{BRIDGE}/src/lib.rs"),
+        "mod private;\npub use crate::private::*;\n",
+    );
+
+    let report = validate_qdrant_boundary(&fixture.root);
+    assert!(report.passed(), "{:?}", report.errors);
+}
+
+#[test]
+fn unresolved_literal_include_fails_closed() {
+    let fixture = Fixture::new();
+    fixture.write(
+        &format!("{BRIDGE}/src/lib.rs"),
+        "include!(\"missing.rs\");\n",
+    );
+
+    assert_cross_file_failure(&fixture, &format!("{BRIDGE}/src/lib.rs"), 1);
 }

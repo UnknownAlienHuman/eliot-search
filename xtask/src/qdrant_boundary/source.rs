@@ -1,6 +1,7 @@
 mod cross_file;
 mod imports;
 mod lexer;
+mod module_graph;
 mod surface;
 
 #[cfg(test)]

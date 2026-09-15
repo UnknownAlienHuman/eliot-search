@@ -1,8 +1,16 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
-use super::imports::{contains_any_identifier, vendor_identifiers};
 use super::lexer::code_only;
+use super::module_graph::semantic_modules;
 use super::surface::find_public_vendor_surfaces;
+
+mod use_tree;
+
+use use_tree::{
+    DirectTaint, UseLeaf, collect_use_statements, direct_tainted_bindings,
+    expand_local_aliases,
+};
 
 /// One bridge source retained from the bounded repository walk.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -15,26 +23,23 @@ impl BridgeSource {
     pub(super) fn new(relative: String, source: String) -> Self {
         Self { relative, source }
     }
+
+    #[must_use]
+    pub(super) fn relative(&self) -> &str {
+        &self.relative
+    }
+
+    #[must_use]
+    pub(super) fn source(&self) -> &str {
+        &self.source
+    }
 }
 
 #[derive(Clone, Debug)]
 struct SourceUnit {
-    relative: String,
+    relative: Arc<str>,
     module: Vec<String>,
-    code: String,
-}
-
-#[derive(Clone, Debug)]
-struct UseStatement {
-    line: usize,
-    public: bool,
-    tree: String,
-}
-
-#[derive(Clone, Debug)]
-struct UseLeaf {
-    path: Vec<String>,
-    binding: String,
+    code: Arc<str>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -43,58 +48,144 @@ struct ResolvedItem {
     name: String,
 }
 
+#[derive(Clone, Debug, Default)]
+struct TaintInfo {
+    all: BTreeSet<Arc<str>>,
+    exportable: BTreeSet<Arc<str>>,
+}
+
+type TaintedItems = BTreeMap<Vec<String>, BTreeMap<String, TaintInfo>>;
+
 /// Finds vendor-tainted aliases imported or publicly re-exported across bridge
 /// source files.
 ///
 /// The file-local scanner owns direct SDK references. This pass closes the
 /// standard Rust module-path escape where a private alias is defined in one
 /// file, then imported into a public signature or re-exported by another file.
+/// Literal `include!`, direct `#[path]` module overrides and glob imports are
+/// resolved inside the bounded bridge source inventory.
 pub(super) fn find_cross_file_vendor_surfaces(
     sources: &[BridgeSource],
     bridge_root: &str,
     vendor_module: &str,
 ) -> Vec<(String, usize)> {
-    let units = sources
-        .iter()
-        .filter_map(|source| {
-            let module = module_path(&source.relative, bridge_root)?;
-            Some(SourceUnit {
-                relative: source.relative.clone(),
-                module,
-                code: code_only(&source.source),
-            })
-        })
-        .collect::<Vec<_>>();
+    let Some(units) = source_units(sources, bridge_root) else {
+        return fail_closed_source_findings(sources);
+    };
+    let mut findings = BTreeSet::new();
+    let mut tainted_items =
+        seed_tainted_items(&units, vendor_module, &mut findings);
+    propagate_public_reexports(
+        &units,
+        &mut tainted_items,
+        &mut findings,
+    );
+    collect_public_surface_findings(
+        &units,
+        &tainted_items,
+        &mut findings,
+    );
+    findings.into_iter().collect()
+}
 
-    let mut tainted_items = BTreeSet::new();
-    for unit in &units {
-        for binding in direct_tainted_bindings(&unit.code, vendor_module) {
-            tainted_items.insert(item_key(&unit.module, &binding));
+fn fail_closed_source_findings(
+    sources: &[BridgeSource],
+) -> Vec<(String, usize)> {
+    let mut findings = sources
+        .iter()
+        .map(|source| (source.relative().to_owned(), 1))
+        .collect::<Vec<_>>();
+    findings.sort();
+    findings.dedup();
+    findings
+}
+
+fn source_units(
+    sources: &[BridgeSource],
+    bridge_root: &str,
+) -> Option<Vec<SourceUnit>> {
+    let semantic = semantic_modules(sources, bridge_root)?;
+    let mut units = Vec::new();
+    for source in sources {
+        let Some(modules) = semantic.get(source.relative()) else {
+            continue;
+        };
+        let relative = Arc::<str>::from(source.relative());
+        let code = Arc::<str>::from(code_only(source.source()));
+        for module in modules {
+            units.push(SourceUnit {
+                relative: Arc::clone(&relative),
+                module: module.clone(),
+                code: Arc::clone(&code),
+            });
         }
     }
+    Some(units)
+}
 
-    let mut findings = BTreeSet::new();
+fn seed_tainted_items(
+    units: &[SourceUnit],
+    vendor_module: &str,
+    findings: &mut BTreeSet<(String, usize)>,
+) -> TaintedItems {
+    let mut tainted_items = TaintedItems::new();
+    let mut direct_by_source = BTreeMap::<Arc<str>, DirectTaint>::new();
+    for unit in units {
+        let direct = direct_by_source
+            .entry(Arc::clone(&unit.relative))
+            .or_insert_with(|| {
+                direct_tainted_bindings(&unit.code, vendor_module)
+            });
+        for line in &direct.wildcard_lines {
+            findings.insert((unit.relative.to_string(), *line));
+        }
+        for (binding, exportable) in &direct.bindings {
+            insert_taint(
+                &mut tainted_items,
+                &unit.module,
+                binding.clone(),
+                &unit.relative,
+                *exportable,
+            );
+        }
+    }
+    tainted_items
+}
+
+fn propagate_public_reexports(
+    units: &[SourceUnit],
+    tainted_items: &mut TaintedItems,
+    findings: &mut BTreeSet<(String, usize)>,
+) {
     loop {
         let mut changed = false;
-        for unit in &units {
+        for unit in units {
             for statement in collect_use_statements(&unit.code) {
                 if !statement.public {
                     continue;
                 }
-                for leaf in expand_use_tree(&statement.tree) {
-                    let Some(resolved) = resolve_item(&unit.module, &leaf.path)
-                    else {
-                        continue;
-                    };
-                    if resolved.module == unit.module
-                        || !tainted_items
-                            .contains(&item_key(&resolved.module, &resolved.name))
-                    {
-                        continue;
+                let Some(leaves) = &statement.leaves else {
+                    findings.insert((unit.relative.to_string(), statement.line));
+                    continue;
+                };
+                for leaf in leaves {
+                    if leaf.glob {
+                        changed |= propagate_public_glob(
+                            unit,
+                            statement.line,
+                            leaf,
+                            tainted_items,
+                            findings,
+                        );
+                    } else {
+                        changed |= propagate_public_item(
+                            unit,
+                            statement.line,
+                            leaf,
+                            tainted_items,
+                            findings,
+                        );
                     }
-                    findings.insert((unit.relative.clone(), statement.line));
-                    changed |= tainted_items
-                        .insert(item_key(&unit.module, &leaf.binding));
                 }
             }
         }
@@ -102,262 +193,138 @@ pub(super) fn find_cross_file_vendor_surfaces(
             break;
         }
     }
+}
 
-    for unit in &units {
-        let mut imported_tainted_names = BTreeSet::new();
-        for statement in collect_use_statements(&unit.code) {
-            for leaf in expand_use_tree(&statement.tree) {
-                let Some(resolved) = resolve_item(&unit.module, &leaf.path)
-                else {
-                    continue;
-                };
-                if resolved.module != unit.module
-                    && tainted_items
-                        .contains(&item_key(&resolved.module, &resolved.name))
-                {
-                    imported_tainted_names.insert(resolved.name);
-                    imported_tainted_names.insert(leaf.binding);
-                }
-            }
-        }
-        if imported_tainted_names.is_empty() {
+fn propagate_public_glob(
+    unit: &SourceUnit,
+    line: usize,
+    leaf: &UseLeaf,
+    tainted_items: &mut TaintedItems,
+    findings: &mut BTreeSet<(String, usize)>,
+) -> bool {
+    let Some(source_module) = resolve_module(&unit.module, &leaf.path) else {
+        return false;
+    };
+    if source_module == unit.module {
+        return false;
+    }
+    let names = tainted_names(tainted_items, &source_module, None, true);
+    if names.is_empty() {
+        return false;
+    }
+    findings.insert((unit.relative.to_string(), line));
+    let mut changed = false;
+    for name in names {
+        changed |= insert_taint(
+            tainted_items,
+            &unit.module,
+            name,
+            &unit.relative,
+            true,
+        );
+    }
+    changed
+}
+
+fn propagate_public_item(
+    unit: &SourceUnit,
+    line: usize,
+    leaf: &UseLeaf,
+    tainted_items: &mut TaintedItems,
+    findings: &mut BTreeSet<(String, usize)>,
+) -> bool {
+    let Some(resolved) = resolve_item(&unit.module, &leaf.path) else {
+        return false;
+    };
+    if resolved.module == unit.module
+        || !is_tainted(tainted_items, &resolved.module, &resolved.name)
+    {
+        return false;
+    }
+    findings.insert((unit.relative.to_string(), line));
+    insert_taint(
+        tainted_items,
+        &unit.module,
+        leaf.binding.clone(),
+        &unit.relative,
+        true,
+    )
+}
+
+fn collect_public_surface_findings(
+    units: &[SourceUnit],
+    tainted_items: &TaintedItems,
+    findings: &mut BTreeSet<(String, usize)>,
+) {
+    for unit in units {
+        let mut visible_tainted_names = tainted_names(
+            tainted_items,
+            &unit.module,
+            Some(unit.relative.as_ref()),
+            false,
+        );
+        add_imported_taint(
+            unit,
+            tainted_items,
+            &mut visible_tainted_names,
+            findings,
+        );
+        expand_local_aliases(&unit.code, &mut visible_tainted_names);
+        if visible_tainted_names.is_empty() {
             continue;
         }
         for line in
-            find_public_vendor_surfaces(&unit.code, &imported_tainted_names)
+            find_public_vendor_surfaces(&unit.code, &visible_tainted_names)
         {
-            findings.insert((unit.relative.clone(), line));
+            findings.insert((unit.relative.to_string(), line));
         }
     }
-
-    findings.into_iter().collect()
 }
 
-fn direct_tainted_bindings(code: &str, vendor_module: &str) -> BTreeSet<String> {
-    let identifiers = vendor_identifiers(code, vendor_module);
-    let mut bindings = BTreeSet::new();
-    let mut vendor_roots = BTreeSet::from([vendor_module.to_owned()]);
+fn add_imported_taint(
+    unit: &SourceUnit,
+    tainted_items: &TaintedItems,
+    visible: &mut BTreeSet<String>,
+    findings: &mut BTreeSet<(String, usize)>,
+) {
+    for statement in collect_use_statements(&unit.code) {
+        let Some(leaves) = &statement.leaves else {
+            findings.insert((unit.relative.to_string(), statement.line));
+            continue;
+        };
+        for leaf in leaves {
+            if leaf.glob {
+                let Some(source_module) =
+                    resolve_module(&unit.module, &leaf.path)
+                else {
+                    continue;
+                };
+                if source_module != unit.module {
+                    visible.extend(tainted_names(
+                        tainted_items,
+                        &source_module,
+                        None,
+                        statement.public,
+                    ));
+                }
+                continue;
+            }
 
-    for (_, statement) in collect_semicolon_statements(code) {
-        let tokens = identifier_tokens(&statement);
-        if is_extern_crate_statement(&tokens) {
-            let Some(vendor_index) = tokens
-                .iter()
-                .position(|token| token == vendor_module)
-            else {
+            let Some(resolved) = resolve_item(&unit.module, &leaf.path) else {
                 continue;
             };
-            let binding = tokens
-                .get(vendor_index + 1)
-                .filter(|token| token.as_str() == "as")
-                .and_then(|_| tokens.get(vendor_index + 2))
-                .cloned()
-                .unwrap_or_else(|| vendor_module.to_owned());
-            vendor_roots.insert(binding.clone());
-            bindings.insert(binding);
-        }
-    }
-
-    for statement in collect_use_statements(code) {
-        for leaf in expand_use_tree(&statement.tree) {
-            if leaf
-                .path
-                .first()
-                .is_some_and(|root| vendor_roots.contains(root))
+            if resolved.module != unit.module
+                && is_tainted(
+                    tainted_items,
+                    &resolved.module,
+                    &resolved.name,
+                )
             {
-                bindings.insert(leaf.binding);
+                visible.insert(resolved.name);
+                visible.insert(leaf.binding);
             }
         }
     }
-
-    for (_, statement) in collect_semicolon_statements(code) {
-        let Some((left, right)) = statement.split_once('=') else {
-            continue;
-        };
-        let left_tokens = identifier_tokens(left);
-        let Some(type_index) = left_tokens.iter().position(|token| token == "type")
-        else {
-            continue;
-        };
-        let Some(alias) = left_tokens.get(type_index + 1) else {
-            continue;
-        };
-        if identifiers.contains(alias)
-            && contains_any_identifier(right, &identifiers)
-        {
-            bindings.insert(alias.clone());
-        }
-    }
-
-    bindings
-}
-
-fn module_path(relative: &str, bridge_root: &str) -> Option<Vec<String>> {
-    let prefix = format!("{bridge_root}/src/");
-    let local = relative.strip_prefix(&prefix)?;
-    let mut components = local.split('/').map(str::to_owned).collect::<Vec<_>>();
-    let file = components.pop()?;
-    if file == "lib.rs" {
-        return components.is_empty().then_some(Vec::new());
-    }
-    if file == "mod.rs" {
-        return Some(components);
-    }
-    let stem = file.strip_suffix(".rs")?;
-    components.push(stem.to_owned());
-    Some(components)
-}
-
-fn collect_use_statements(code: &str) -> Vec<UseStatement> {
-    let mut statements = Vec::new();
-    let mut current: Option<(usize, String)> = None;
-    let mut pending_public_line: Option<usize> = None;
-
-    for (index, line) in code.lines().enumerate() {
-        let line_number = index + 1;
-        let trimmed = line.trim();
-        if let Some((_, statement)) = current.as_mut() {
-            statement.push(' ');
-            statement.push_str(trimmed);
-        } else if trimmed == "pub" {
-            pending_public_line = Some(line_number);
-            continue;
-        } else if let Some(public_line) = pending_public_line {
-            if trimmed.is_empty() || trimmed.starts_with("#[") {
-                continue;
-            }
-            pending_public_line = None;
-            if trimmed == "use" || trimmed.starts_with("use ") {
-                current = Some((public_line, format!("pub {trimmed}")));
-            } else if starts_use_statement(trimmed) {
-                current = Some((line_number, trimmed.to_owned()));
-            }
-        } else if starts_use_statement(trimmed) {
-            current = Some((line_number, trimmed.to_owned()));
-        }
-
-        let complete = current
-            .as_ref()
-            .is_some_and(|(_, statement)| statement.contains(';'));
-        if !complete {
-            continue;
-        }
-        let (line, statement) = current.take().expect("complete statement");
-        if let Some((public, tree)) = strip_use_prefix(&statement) {
-            statements.push(UseStatement {
-                line,
-                public,
-                tree: tree.trim_end_matches(';').trim().to_owned(),
-            });
-        }
-    }
-    statements
-}
-
-fn starts_use_statement(line: &str) -> bool {
-    line == "use"
-        || line.starts_with("use ")
-        || line.starts_with("pub use ")
-        || (line.starts_with("pub(") && line.contains(") use "))
-}
-
-fn strip_use_prefix(statement: &str) -> Option<(bool, &str)> {
-    let statement = statement.trim();
-    if let Some(rest) = statement.strip_prefix("pub use ") {
-        return Some((true, rest));
-    }
-    if let Some(rest) = statement.strip_prefix("use ") {
-        return Some((false, rest));
-    }
-    if statement.starts_with("pub(") {
-        let end = statement.find(')')?;
-        let rest = statement[end + 1..].trim_start().strip_prefix("use ")?;
-        return Some((false, rest));
-    }
-    None
-}
-
-fn expand_use_tree(tree: &str) -> Vec<UseLeaf> {
-    let mut leaves = Vec::new();
-    expand_use_fragment(tree.trim(), &[], &mut leaves);
-    leaves
-}
-
-fn expand_use_fragment(fragment: &str, prefix: &[String], leaves: &mut Vec<UseLeaf>) {
-    let fragment = fragment.trim().trim_end_matches(';').trim();
-    if fragment.is_empty() {
-        return;
-    }
-    if let Some(open) = fragment.find('{') {
-        let Some(close) = matching_brace(fragment, open) else {
-            return;
-        };
-        let mut next_prefix = prefix.to_vec();
-        next_prefix.extend(identifier_tokens(
-            fragment[..open].trim_end_matches(':').trim(),
-        ));
-        for item in split_top_level_commas(&fragment[open + 1..close]) {
-            expand_use_fragment(item, &next_prefix, leaves);
-        }
-        return;
-    }
-
-    let tokens = identifier_tokens(fragment);
-    if tokens.is_empty() || fragment.contains('*') {
-        return;
-    }
-    let alias_index = tokens.iter().position(|token| token == "as");
-    let path_tokens = alias_index.map_or(tokens.as_slice(), |index| &tokens[..index]);
-    let alias = alias_index.and_then(|index| tokens.get(index + 1)).cloned();
-    if path_tokens.is_empty() {
-        return;
-    }
-    let mut path = prefix.to_vec();
-    path.extend(path_tokens.iter().cloned());
-    let source_name = path.last().cloned().unwrap_or_default();
-    if source_name == "self" {
-        return;
-    }
-    leaves.push(UseLeaf {
-        path,
-        binding: alias.unwrap_or(source_name),
-    });
-}
-
-fn matching_brace(text: &str, open: usize) -> Option<usize> {
-    let mut depth = 0_usize;
-    for (offset, character) in text[open..].char_indices() {
-        match character {
-            '{' => depth = depth.checked_add(1)?,
-            '}' => {
-                depth = depth.checked_sub(1)?;
-                if depth == 0 {
-                    return Some(open + offset);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn split_top_level_commas(text: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0_isize;
-    let mut start = 0_usize;
-    for (index, character) in text.char_indices() {
-        match character {
-            '{' | '(' | '[' => depth += 1,
-            '}' | ')' | ']' => depth -= 1,
-            ',' if depth == 0 => {
-                parts.push(&text[start..index]);
-                start = index + character.len_utf8();
-            }
-            _ => {}
-        }
-    }
-    parts.push(&text[start..]);
-    parts
 }
 
 fn resolve_item(current_module: &[String], path: &[String]) -> Option<ResolvedItem> {
@@ -365,10 +332,16 @@ fn resolve_item(current_module: &[String], path: &[String]) -> Option<ResolvedIt
     if name == "self" || name == "super" || name == "crate" {
         return None;
     }
+    Some(ResolvedItem {
+        module: resolve_module(current_module, prefix)?,
+        name: name.clone(),
+    })
+}
 
+fn resolve_module(current_module: &[String], path: &[String]) -> Option<Vec<String>> {
     let mut module = Vec::new();
     let mut index = 0_usize;
-    match prefix.first().map(String::as_str) {
+    match path.first().map(String::as_str) {
         Some("crate") => index = 1,
         Some("self") => {
             module.extend_from_slice(current_module);
@@ -376,87 +349,66 @@ fn resolve_item(current_module: &[String], path: &[String]) -> Option<ResolvedIt
         }
         Some("super") => {
             module.extend_from_slice(current_module);
-            while prefix.get(index).map(String::as_str) == Some("super") {
+            while path.get(index).map(String::as_str) == Some("super") {
                 module.pop()?;
                 index += 1;
             }
         }
         _ => {}
     }
-    module.extend(prefix[index..].iter().cloned());
-    Some(ResolvedItem {
-        module,
-        name: name.clone(),
-    })
+    module.extend(path[index..].iter().cloned());
+    Some(module)
 }
 
-fn item_key(module: &[String], name: &str) -> String {
-    let mut key = String::from("crate");
-    for segment in module {
-        key.push_str("::");
-        key.push_str(segment);
+fn insert_taint(
+    tainted: &mut TaintedItems,
+    module: &[String],
+    name: String,
+    origin: &Arc<str>,
+    exportable: bool,
+) -> bool {
+    let info = tainted
+        .entry(module.to_vec())
+        .or_default()
+        .entry(name)
+        .or_default();
+    let mut changed = info.all.insert(Arc::clone(origin));
+    if exportable {
+        changed |= info.exportable.insert(Arc::clone(origin));
     }
-    key.push_str("::");
-    key.push_str(name);
-    key
+    changed
 }
 
-fn collect_semicolon_statements(code: &str) -> Vec<(usize, String)> {
-    let mut statements = Vec::new();
-    let mut current: Option<(usize, String)> = None;
-    for (index, line) in code.lines().enumerate() {
-        let trimmed = line.trim();
-        if let Some((_, statement)) = current.as_mut() {
-            statement.push(' ');
-            statement.push_str(trimmed);
-        } else if starts_semicolon_statement(trimmed) {
-            current = Some((index + 1, trimmed.to_owned()));
-        }
-        if current
-            .as_ref()
-            .is_some_and(|(_, statement)| statement.contains(';'))
-        {
-            statements.push(current.take().expect("complete statement"));
-        }
-    }
-    statements
+fn is_tainted(tainted: &TaintedItems, module: &[String], name: &str) -> bool {
+    tainted
+        .get(module)
+        .is_some_and(|names| names.contains_key(name))
 }
 
-fn starts_semicolon_statement(line: &str) -> bool {
-    line.starts_with("use ")
-        || line.starts_with("pub use ")
-        || line.starts_with("extern crate ")
-        || line.starts_with("pub extern crate ")
-        || line.starts_with("type ")
-        || line.starts_with("pub type ")
-        || (line.starts_with("pub(") && line.contains(") type "))
-}
-
-fn is_extern_crate_statement(tokens: &[String]) -> bool {
-    tokens
-        .windows(2)
-        .any(|pair| pair[0] == "extern" && pair[1] == "crate")
-}
-
-fn identifier_tokens(text: &str) -> Vec<String> {
-    let mut identifiers = Vec::new();
-    let mut current = String::new();
-    let mut characters = text.chars().peekable();
-    while let Some(character) = characters.next() {
-        if character == 'r' && characters.peek() == Some(&'#') {
-            characters.next();
-            continue;
-        }
-        if character.is_ascii_alphanumeric() || character == '_' {
-            current.push(character);
-        } else if !current.is_empty() {
-            identifiers.push(std::mem::take(&mut current));
-        }
-    }
-    if !current.is_empty() {
-        identifiers.push(current);
-    }
-    identifiers
+fn tainted_names(
+    tainted: &TaintedItems,
+    module: &[String],
+    exclude_origin: Option<&str>,
+    exportable_only: bool,
+) -> BTreeSet<String> {
+    let Some(names) = tainted.get(module) else {
+        return BTreeSet::new();
+    };
+    names
+        .iter()
+        .filter(|(_, info)| {
+            let origins = if exportable_only {
+                &info.exportable
+            } else {
+                &info.all
+            };
+            !origins.is_empty()
+                && exclude_origin.is_none_or(|excluded| {
+                    origins.iter().any(|origin| origin.as_ref() != excluded)
+                })
+        })
+        .map(|(name, _)| name.clone())
+        .collect()
 }
 
 #[cfg(test)]
