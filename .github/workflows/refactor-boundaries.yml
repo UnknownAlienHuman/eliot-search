@@ -149,6 +149,8 @@ jobs:
           cargo test --locked -p eliot-searchd --test legacy_snapshot_isolation
           cargo test --locked -p eliot-searchd --test proxy_child_module_ownership
           cargo test --locked -p eliot-searchd --test proxy_exchange_module_ownership
+          cargo test --locked -p eliot-searchd --test secure_commands_module_ownership
+          cargo test --locked -p eliot-searchd --test service_output_module_ownership
 
       - name: Control migration marker ownership
         shell: pwsh
