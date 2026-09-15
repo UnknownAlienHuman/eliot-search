@@ -1,9 +1,14 @@
+mod cross_file;
 mod imports;
 mod lexer;
 mod surface;
 
 #[cfg(test)]
 mod tests;
+
+pub(super) use cross_file::{
+    BridgeSource, find_cross_file_vendor_surfaces,
+};
 
 use super::VENDOR_MODULE;
 use imports::vendor_identifiers;

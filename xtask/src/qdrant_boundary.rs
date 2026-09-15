@@ -21,7 +21,8 @@ use manifests::{
     validate_bridge_dependency, validate_workspace_dependency, value_at,
 };
 use source::{
-    contains_vendor_sdk_reference, public_vendor_surface_lines,
+    BridgeSource, contains_vendor_sdk_reference,
+    find_cross_file_vendor_surfaces, public_vendor_surface_lines,
     rust_string_constant,
 };
 
@@ -97,6 +98,7 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
 
     let mut root_manifest: Option<Value> = None;
     let mut bridge_manifest: Option<Value> = None;
+    let mut bridge_sources = Vec::new();
 
     for path in &files {
         let relative = relative_path(root, path);
@@ -161,7 +163,20 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
                     ));
                 }
             }
+            if relative.starts_with(&format!("{BRIDGE_ROOT}/src/")) {
+                bridge_sources.push(BridgeSource::new(relative, text));
+            }
         }
+    }
+
+    for (relative, line) in find_cross_file_vendor_surfaces(
+        &bridge_sources,
+        BRIDGE_ROOT,
+        VENDOR_MODULE,
+    ) {
+        report.errors.push(format!(
+            "{relative}:{line}: vendor SDK type reaches a public surface through a cross-file alias"
+        ));
     }
 
     report.sdk_source_files.sort();

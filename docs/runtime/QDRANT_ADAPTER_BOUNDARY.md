@@ -35,6 +35,7 @@ Run the structural gate from the repository root:
 cargo run --locked -p xtask -- validate qdrant-boundary --json
 cargo test --locked -p xtask --lib qdrant_boundary::source::tests
 cargo test --locked -p xtask --test qdrant_boundary_regressions
+cargo test --locked -p xtask --test qdrant_cross_file_boundary
 cargo test --locked -p xtask --test qdrant_qualification_module_ownership
 ```
 
@@ -47,12 +48,21 @@ workspace pin and source/feature overrides on bridge inheritance.
 The source guard masks comments and string/character literals before matching
 complete reference tokens. Spaces, newlines, intervening comments, grouped
 imports and raw identifiers do not hide a direct SDK reference; similarly named
-modules such as `qdrant_client_helpers` are not the vendor crate. The existing
-file-local public-surface check follows direct imports and private type aliases
-and checks multiline signatures, public trait contracts, enum variants,
-split visibility/qualifier layouts and exported macro definitions. Both
+modules such as `qdrant_client_helpers` are not the vendor crate. The file-local
+public-surface check follows direct imports and private type aliases and checks
+multiline signatures, public trait contracts, enum variants, split
+visibility/qualifier layouts and exported macro definitions. Both
 `#[macro_export] macro_rules!` and `pub macro` token trees are bounded by their
 balanced delimiters; private macros remain adapter internals.
+
+A second bounded pass resolves standard bridge source-module paths. A vendor
+import or type alias defined in one file cannot be publicly re-exported by
+another module, hidden behind a renamed/grouped `use`, propagated through a
+re-export chain or privately imported into another file's public signature.
+The pass distinguishes module-qualified items, so an unrelated Eliot-owned type
+with the same leaf name does not become tainted. It covers canonical `lib.rs`,
+`mod.rs` and nested `*.rs` layouts plus `crate`, `self` and repeated `super`
+paths.
 
 The gate also requires the workspace client pin, exactly one `qdrant-client`
 record in `Cargo.lock`, `qualified.rs` and `qualification/qdrant/artifact.toml`
@@ -70,12 +80,12 @@ outside the scan. Exceeding a limit is a validation failure, never a partial
 `PASS`; the validator does not follow a link or continue after exhausting an
 aggregate limit.
 
-This remains a lexical structural check, not Rust name resolution, Cargo
-compilation or live qualification. Arbitrary macro invocation expansion,
-cross-file re-export/alias resolution and compiler-derived public reachability
-still require complementary compiled checks and independent review. A
-structural PASS alone must not be represented as complete boundary or product
-acceptance.
+This remains a lexical structural check, not complete Rust name resolution,
+Cargo compilation or live qualification. Arbitrary macro invocation expansion,
+noncanonical `#[path]` module graphs, public glob reachability and direct
+fully-qualified cross-file paths that do not pass through a `use` still require
+complementary compiled checks and independent review. A structural PASS alone
+must not be represented as complete boundary or product acceptance.
 
 `qualified.rs` is the single upgrade identity facade: server version/build,
 artifact digest/size/platform and client version/checksum/VCS identity remain
