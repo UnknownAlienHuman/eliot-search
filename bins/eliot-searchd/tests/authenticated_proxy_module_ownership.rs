@@ -97,8 +97,14 @@ fn authenticated_proxy_responsibilities_stay_separated() {
     assert!(server.contains("DirectChild::spawn"));
     assert!(!server.contains("decode_envelope_frame"));
 
-    let legacy_child = read(&root, "src/proxy_child.rs");
-    assert!(legacy_child.contains("use super::{Terminal, MAX_PROXY_COMMAND_BYTES};"));
-    let legacy_exchange = read(&root, "src/proxy_exchange.rs");
-    assert!(legacy_exchange.contains("pub(super) struct ExchangeFence"));
+    let child_adapter = read(&root, "src/proxy_child.rs");
+    assert!(child_adapter.contains("use super::{Terminal, MAX_PROXY_COMMAND_BYTES};"));
+    assert!(child_adapter.contains("pub(super) use lifecycle::ChildIo;"));
+    assert!(child_adapter.contains("pub(super) use spec::ChildLimits;"));
+
+    let exchange_adapter = read(&root, "src/proxy_exchange.rs");
+    assert!(exchange_adapter.contains("pub(super) use fence::ExchangeFence;"));
+    assert!(exchange_adapter.contains("pub(super) use forward::forward_reply;"));
+    assert!(exchange_adapter.contains("pub(super) use parser::event_name;"));
+    assert!(exchange_adapter.contains("pub(super) use reply::Reply;"));
 }
