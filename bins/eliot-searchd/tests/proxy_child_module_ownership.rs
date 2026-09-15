@@ -22,7 +22,7 @@ fn proxy_child_facade_is_thin() {
     assert!(facade.contains("mod tests;"));
     assert!(facade.len() < 2_000, "proxy child facade grew to {} bytes", facade.len());
     for forbidden in [
-        "pub(super) struct ChildIo {",
+        "struct ChildIo {",
         "Command::new",
         "forward_reply(",
         "read_child_line(",
@@ -39,12 +39,18 @@ fn proxy_child_facade_is_thin() {
 fn proxy_child_owners_remain_bounded_and_vendor_free() {
     let root = crate_root();
     let owners = [
-        ("src/proxy_child/spec.rs", "pub(super) struct ChildLimits"),
+        (
+            "src/proxy_child/spec.rs",
+            "pub(in super::super) struct ChildLimits",
+        ),
         ("src/proxy_child/model.rs", "pub(super) struct Exchange"),
         ("src/proxy_child/pipe.rs", "pub(super) struct DeadlineWriter"),
         ("src/proxy_child/time.rs", "pub(super) fn deadline("),
         ("src/proxy_child/worker.rs", "pub(super) fn spawn_worker("),
-        ("src/proxy_child/lifecycle.rs", "pub(super) struct ChildIo"),
+        (
+            "src/proxy_child/lifecycle.rs",
+            "pub(in super::super) struct ChildIo",
+        ),
     ];
     for (relative, marker) in owners {
         let source = read(&root, relative);
@@ -69,12 +75,15 @@ fn proxy_child_owners_remain_bounded_and_vendor_free() {
     assert!(spec.contains("startup: Duration::from_secs(30)"));
     assert!(spec.contains("request: Duration::from_secs(120)"));
     assert!(spec.contains("cleanup: Duration::from_secs(5)"));
+    assert!(spec.contains("pub(in super::super) const DEFAULT"));
 
     let lifecycle = read(&root, "src/proxy_child/lifecycle.rs");
     assert!(lifecycle.contains("spawn_worker"));
     assert!(lifecycle.contains("self.child.kill()"));
     assert!(lifecycle.contains("self.wait_child"));
     assert!(lifecycle.contains("socket.shutdown(Shutdown::Both)"));
+    assert!(lifecycle.contains("pub(in super::super) fn spawn("));
+    assert!(lifecycle.contains("pub(in super::super) fn exchange("));
     assert!(!lifecycle.contains("forward_reply("));
     assert!(!lifecycle.contains("BufReader"));
 

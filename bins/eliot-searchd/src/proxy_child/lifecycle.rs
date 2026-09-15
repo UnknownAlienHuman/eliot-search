@@ -12,7 +12,7 @@ use super::time::{deadline, pause, receive, remaining};
 use super::worker::spawn_worker;
 use super::{MAX_PROXY_COMMAND_BYTES, Reply, Terminal};
 
-pub(super) struct ChildIo {
+pub(in super::super) struct ChildIo {
     child: Child,
     commands: Option<SyncSender<Exchange>>,
     worker: Option<JoinHandle<()>>,
@@ -24,7 +24,10 @@ pub(super) struct ChildIo {
 }
 
 impl ChildIo {
-    pub(super) fn spawn(command: Command, limits: ChildLimits) -> Result<Self, String> {
+    pub(in super::super) fn spawn(
+        command: Command,
+        limits: ChildLimits,
+    ) -> Result<Self, String> {
         let deadline = deadline(limits.startup)?;
         let service = Self::launch(command, limits)?;
         receive(&service.ready, deadline)??;
@@ -72,7 +75,7 @@ impl ChildIo {
         Ok(service)
     }
 
-    pub(super) fn exchange(
+    pub(in super::super) fn exchange(
         &mut self,
         command: &str,
         socket: &TcpStream,
@@ -142,7 +145,7 @@ impl ChildIo {
         outcome
     }
 
-    pub(super) fn abort(&mut self) {
+    pub(in super::super) fn abort(&mut self) {
         if self.cleanup_attempted {
             return;
         }
@@ -161,7 +164,7 @@ impl ChildIo {
         // protected by the child or OS lock.
     }
 
-    pub(super) fn finish(&mut self) -> Result<(), String> {
+    pub(in super::super) fn finish(&mut self) -> Result<(), String> {
         self.commands.take();
         if self.aborted {
             return Err("LOOPBACK_DIRECT_OUTCOME_UNKNOWN_CHANNEL_CLOSED".to_owned());
