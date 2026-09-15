@@ -157,5 +157,10 @@ search-continuation = { workspace = true, optional = true }
 search-retention = { workspace = true, optional = true }
 search-eval = { workspace = true, optional = true }
 
+[dev-dependencies]
+# Windows/all-features daemon parity lane over the exact already-locked
+# qdrant-client transport. This adds no production runtime or new package.
+tokio = { version = "=1.53.1", features = ["macros", "rt-multi-thread", "time"] }
+
 [lints]
 workspace = true
