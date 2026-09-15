@@ -1,8 +1,8 @@
-//! Structural regression gate for validator entrypoints already migrated to Rust.
+//! Exact ownership regression for validators migrated to Rust.
 //!
-//! This test is intentionally narrower than the unfinished repository-wide T41
-//! migration: it freezes completed slices so a later change cannot silently
-//! restore Python or Node as the required runtime.
+//! The companion `tooling_runtime_inventory` test scans the complete required
+//! tooling roots. This test keeps the explicit retired-validator-to-`xtask`
+//! ownership map and user-facing documentation from drifting independently.
 
 use std::fs;
 use std::path::Path;
@@ -160,4 +160,28 @@ fn workflows_do_not_reference_retired_validator_files() {
             );
         }
     }
+}
+
+#[test]
+fn tooling_documentation_does_not_advertise_retired_validators() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask must be a workspace member");
+    let readme_path = root.join("tools/README.md");
+    let readme = fs::read_to_string(&readme_path)
+        .unwrap_or_else(|error| panic!("{}: {error}", readme_path.display()));
+
+    for migrated in MIGRATED {
+        assert!(
+            !readme.contains(migrated.retired_python),
+            "{} advertises retired {}",
+            readme_path.display(),
+            migrated.retired_python
+        );
+    }
+    assert!(
+        readme.contains("Required repository tooling has no Python or Node runtime dependency"),
+        "{} must state the current T41 runtime boundary",
+        readme_path.display()
+    );
 }
