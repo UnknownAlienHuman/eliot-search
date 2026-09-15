@@ -144,6 +144,8 @@ jobs:
           cargo test --locked -p eliot-searchd --test sealed_access_module_ownership
           cargo test --locked -p eliot-searchd --test sealed_owner_epoch_module_ownership
           cargo test --locked -p eliot-searchd --test revision_protection_windows_module_ownership
+          cargo test --locked -p eliot-searchd --test sealed_catalog_module_ownership
+          cargo test --locked -p eliot-searchd --test sealed_recovery_module_ownership
 
       - name: Control migration marker ownership
         shell: pwsh
