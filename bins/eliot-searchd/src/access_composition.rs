@@ -1,11 +1,15 @@
-//! Mandatory pre-retrieval access gate and live-barrier path (T20).
+//! Mandatory pre-retrieval access gate, live barriers and grant composition.
 //!
 //! The public daemon composition surface is kept stable here. The production
-//! gate owns no provider transport, Qdrant SDK type, persistence, or local
-//! authority shortcut; the regression corpus is isolated from production code.
+//! modules own no provider transport, Qdrant SDK type, persistence, local
+//! authority shortcut, CSPRNG or clock. Exact grant identity/time material is
+//! supplied only through the injected standalone-grant issuer boundary.
 
 mod gate;
+mod grant;
+
 pub use gate::*;
+pub use grant::*;
 
 #[cfg(test)]
 mod tests;
