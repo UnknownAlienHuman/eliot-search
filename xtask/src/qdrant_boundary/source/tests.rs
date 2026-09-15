@@ -1,4 +1,7 @@
-use super::{contains_vendor_sdk_reference, public_vendor_surface_lines};
+use super::{
+    contains_vendor_sdk_reference, public_vendor_surface_lines,
+    rust_string_constant,
+};
 
 #[test]
 fn catches_imported_alias_in_multiline_public_function() {
@@ -53,4 +56,82 @@ const RAW: &str = r#"qdrant_client::Qdrant"#;
 "##;
     assert!(public_vendor_surface_lines(private_source).is_empty());
     assert!(!contains_vendor_sdk_reference(inert_source));
+}
+
+#[test]
+fn catches_sdk_paths_with_arbitrary_token_spacing() {
+    for source in [
+        "type Client = qdrant_client :: Qdrant;",
+        "type Client = qdrant_client\n::\nQdrant;",
+        "type Client = qdrant_client/* boundary */::Qdrant;",
+        "type Client = ::r#qdrant_client :: Qdrant;",
+    ] {
+        assert!(contains_vendor_sdk_reference(source), "{source}");
+    }
+}
+
+#[test]
+fn catches_multiline_grouped_and_renamed_crate_imports() {
+    for source in [
+        "use\nqdrant_client\nas sdk;",
+        "use /* comment */ ::qdrant_client;",
+        "use { qdrant_client as sdk };",
+        "pub use { r#qdrant_client };",
+        "extern\ncrate\nqdrant_client as sdk;",
+        "extern crate r#qdrant_client as sdk;",
+    ] {
+        assert!(contains_vendor_sdk_reference(source), "{source}");
+    }
+}
+
+#[test]
+fn sdk_name_must_be_a_complete_reference_token() {
+    for source in [
+        "use qdrant_client_helpers::Client;",
+        "use my_qdrant_client::Client;",
+        "type Client = my_qdrant_client::Qdrant;",
+        "fn flag(qdrant_client: bool) -> bool { qdrant_client }",
+        "fn flag() { let r#use = 1; let qdrant_client = true; }",
+        "use local::Client; fn flag() { let qdrant_client = true; }",
+    ] {
+        assert!(!contains_vendor_sdk_reference(source), "{source}");
+    }
+}
+
+#[test]
+fn version_extraction_ignores_commented_and_quoted_declarations() {
+    let source = r##"
+/*
+pub const QUALIFIED_CLIENT_VERSION: &str = "9.9.9";
+*/
+const NOTE: &str = r#"
+pub const QUALIFIED_CLIENT_VERSION: &str = "8.8.8";
+"#;
+pub const QUALIFIED_CLIENT_VERSION: &str = "1.2.3";
+"##;
+    assert_eq!(
+        rust_string_constant(source, "QUALIFIED_CLIENT_VERSION"),
+        Some("1.2.3".to_owned())
+    );
+}
+
+#[test]
+fn version_extraction_rejects_missing_or_duplicate_active_declarations() {
+    for source in [
+        "/*\npub const QUALIFIED_CLIENT_VERSION: &str = \"1.2.3\";\n*/",
+        concat!(
+            "pub const QUALIFIED_CLIENT_VERSION: &str = \"1.2.3\";\n",
+            "pub const QUALIFIED_CLIENT_VERSION: &str = \"1.2.3\";\n",
+        ),
+        concat!(
+            "pub const QUALIFIED_CLIENT_VERSION: &str = \"1.2.3\";\n",
+            "pub const QUALIFIED_CLIENT_VERSION: &str = \"9.9.9\";\n",
+        ),
+    ] {
+        assert_eq!(
+            rust_string_constant(source, "QUALIFIED_CLIENT_VERSION"),
+            None,
+            "{source}"
+        );
+    }
 }

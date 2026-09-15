@@ -33,18 +33,38 @@ Run the structural gate from the repository root:
 
 ```powershell
 cargo run --locked -p xtask -- validate qdrant-boundary --json
+cargo test --locked -p xtask --lib qdrant_boundary::source::tests
+cargo test --locked -p xtask --test qdrant_boundary_regressions
 cargo test --locked -p xtask --test qdrant_qualification_module_ownership
 ```
 
-The gate scans every Cargo manifest and Rust source file. Its source scanner
-removes comments and string/character literals, resolves direct SDK imports and
-private type aliases, and checks multiline public signatures, public trait
-contracts and enum variants. Renaming `qdrant_client::Qdrant` to a local alias
-therefore cannot conceal a vendor type in the bridge API.
+The manifest guard checks both dependency keys and Cargo's `package` rename
+field, including target/dev/build/workspace declarations. A renamed SDK
+workspace dependency cannot create another allowed consumer. Qdrant `patch`
+and `replace` entries are rejected, as are alternate source selectors on the
+workspace pin and source/feature overrides on bridge inheritance.
 
-The gate also requires the workspace client pin, `Cargo.lock`, `qualified.rs`
-and `qualification/qdrant/artifact.toml` to name the same client version, and
-requires the qualified server version to match the artifact manifest.
+The source guard masks comments and string/character literals before matching
+complete reference tokens. Spaces, newlines, intervening comments, grouped
+imports and raw identifiers do not hide a direct SDK reference; similarly named
+modules such as `qdrant_client_helpers` are not the vendor crate. The existing
+file-local public-surface check follows direct imports and private type aliases
+and checks multiline signatures, public trait contracts and enum variants.
+
+The gate also requires the workspace client pin, exactly one `qdrant-client`
+record in `Cargo.lock`, `qualified.rs` and `qualification/qdrant/artifact.toml`
+to name the same client version, and requires the qualified server version to
+match the artifact manifest. Version extraction ignores commented/quoted
+lookalike declarations and rejects duplicate active canonical declarations.
+The version constants retain their canonical single-line `pub const` string
+literal format; unsupported forms fail the comparison instead of being guessed.
+
+This is a lexical structural check, not Rust name resolution, Cargo compilation
+or live qualification. Macro expansion, cross-file re-export/alias resolution
+and adversarial public-surface layouts still require further guard work and
+independent review. The filesystem scanner also still needs explicit aggregate
+entry/depth/byte limits and a fail-closed linked-input policy. A structural PASS
+alone must not be represented as complete boundary or product acceptance.
 
 `qualified.rs` is the single upgrade identity facade: server version/build,
 artifact digest/size/platform and client version/checksum/VCS identity remain

@@ -11,15 +11,27 @@ pub(super) fn collect_vendor_dependency_declarations(
         return;
     };
     for (key, child) in table {
-        if is_dependency_section(key)
-            && child.as_table().is_some_and(|dependencies| {
-                dependencies.contains_key(VENDOR_CRATE)
-            })
-        {
-            let mut location = path.clone();
-            location.push(key.clone());
-            location.push(VENDOR_CRATE.to_owned());
-            declarations.push(location.join("."));
+        let dependency_table = is_dependency_section(key)
+            || key == "replace"
+            || path.last().is_some_and(|parent| parent == "patch");
+        if dependency_table && let Some(dependencies) = child.as_table() {
+            for (name, specification) in dependencies {
+                let package = specification
+                    .as_table()
+                    .and_then(|entry| entry.get("package"))
+                    .and_then(Value::as_str);
+                // `replace` keys include the version; renamed dependencies
+                // identify their real crate through `package`, not the key.
+                let replaced_name = name.split(':').next();
+                if replaced_name == Some(VENDOR_CRATE)
+                    || package == Some(VENDOR_CRATE)
+                {
+                    let mut location = path.clone();
+                    location.push(key.clone());
+                    location.push(name.clone());
+                    declarations.push(location.join("."));
+                }
+            }
         }
         path.push(key.clone());
         collect_vendor_dependency_declarations(child, path, declarations);
@@ -66,6 +78,22 @@ pub(super) fn validate_workspace_dependency(
         ));
         return None;
     }
+    for key in SOURCE_OVERRIDE_KEYS {
+        if table.contains_key(*key) {
+            errors.push(format!(
+                "{ROOT_MANIFEST}: workspace {VENDOR_CRATE} must not \
+                 override the qualified registry source with {key}"
+            ));
+        }
+    }
+    if table.get("package").is_some_and(|package| {
+        package.as_str() != Some(VENDOR_CRATE)
+    }) {
+        errors.push(format!(
+            "{ROOT_MANIFEST}: workspace {VENDOR_CRATE} must name the \
+             qualified package"
+        ));
+    }
     if table.get("default-features").and_then(Value::as_bool) != Some(false) {
         errors.push(format!(
             "{ROOT_MANIFEST}: workspace {VENDOR_CRATE} must keep \
@@ -104,11 +132,19 @@ pub(super) fn validate_bridge_dependency(
              workspace version"
         ));
     }
-    if table.contains_key("default-features") {
+    if table.contains_key("default-features") || table.contains_key("features") {
         errors.push(format!(
             "{BRIDGE_MANIFEST}: {VENDOR_CRATE} must not override workspace \
              features"
         ));
+    }
+    for key in SOURCE_OVERRIDE_KEYS.iter().copied().chain(["package"]) {
+        if table.contains_key(key) {
+            errors.push(format!(
+                "{BRIDGE_MANIFEST}: {VENDOR_CRATE} must not override \
+                 the workspace source with {key}"
+            ));
+        }
     }
 }
 
@@ -116,14 +152,17 @@ pub(super) fn lockfile_package_version(
     document: &Value,
     package: &str,
 ) -> Option<String> {
-    value_at(document, &["package"])?
+    let mut packages = value_at(document, &["package"])?
         .as_array()?
         .iter()
         .filter_map(Value::as_table)
-        .find(|row| row.get("name").and_then(Value::as_str) == Some(package))
-        .and_then(|row| row.get("version"))
-        .and_then(Value::as_str)
-        .map(str::to_owned)
+        .filter(|row| row.get("name").and_then(Value::as_str) == Some(package));
+    let record = packages.next()?;
+    // Even equal versions from different sources are not one qualified client.
+    if packages.next().is_some() {
+        return None;
+    }
+    record.get("version")?.as_str().map(str::to_owned)
 }
 
 pub(super) fn value_at<'a>(
@@ -143,3 +182,7 @@ fn is_dependency_section(key: &str) -> bool {
         "dependencies" | "dev-dependencies" | "build-dependencies"
     )
 }
+
+const SOURCE_OVERRIDE_KEYS: &[&str] = &[
+    "git", "path", "registry", "registry-index", "branch", "tag", "rev",
+];
