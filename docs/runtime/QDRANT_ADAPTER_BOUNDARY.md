@@ -49,7 +49,10 @@ complete reference tokens. Spaces, newlines, intervening comments, grouped
 imports and raw identifiers do not hide a direct SDK reference; similarly named
 modules such as `qdrant_client_helpers` are not the vendor crate. The existing
 file-local public-surface check follows direct imports and private type aliases
-and checks multiline signatures, public trait contracts and enum variants.
+and checks multiline signatures, public trait contracts, enum variants,
+split visibility/qualifier layouts and exported macro definitions. Both
+`#[macro_export] macro_rules!` and `pub macro` token trees are bounded by their
+balanced delimiters; private macros remain adapter internals.
 
 The gate also requires the workspace client pin, exactly one `qdrant-client`
 record in `Cargo.lock`, `qualified.rs` and `qualification/qdrant/artifact.toml`
@@ -68,10 +71,11 @@ outside the scan. Exceeding a limit is a validation failure, never a partial
 aggregate limit.
 
 This remains a lexical structural check, not Rust name resolution, Cargo
-compilation or live qualification. Macro expansion, cross-file re-export/alias
-resolution and adversarial public-surface layouts still require complementary
-compiled checks and independent review. A structural PASS alone must not be
-represented as complete boundary or product acceptance.
+compilation or live qualification. Arbitrary macro invocation expansion,
+cross-file re-export/alias resolution and compiler-derived public reachability
+still require complementary compiled checks and independent review. A
+structural PASS alone must not be represented as complete boundary or product
+acceptance.
 
 `qualified.rs` is the single upgrade identity facade: server version/build,
 artifact digest/size/platform and client version/checksum/VCS identity remain

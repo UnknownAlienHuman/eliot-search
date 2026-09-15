@@ -135,3 +135,51 @@ fn version_extraction_rejects_missing_or_duplicate_active_declarations() {
         );
     }
 }
+
+#[test]
+fn catches_vendor_types_in_exported_macros() {
+    let direct = r#"
+#[macro_export]
+macro_rules! leaked {
+    () => { qdrant_client::qdrant::PointId };
+}
+"#;
+    let imported = r#"
+use qdrant_client::qdrant::PointId;
+#[macro_export(local_inner_macros)] macro_rules! leaked {
+    [] => [PointId];
+}
+"#;
+    let declarative = r#"
+use qdrant_client::qdrant::PointId;
+pub macro leaked() {
+    PointId
+}
+"#;
+    assert_eq!(public_vendor_surface_lines(direct), vec![2]);
+    assert_eq!(public_vendor_surface_lines(imported), vec![3]);
+    assert_eq!(public_vendor_surface_lines(declarative), vec![3]);
+}
+
+#[test]
+fn private_macros_do_not_become_public_surfaces() {
+    let source = r#"
+use qdrant_client::qdrant::PointId;
+macro_rules! private_adapter {
+    () => { PointId };
+}
+"#;
+    assert!(public_vendor_surface_lines(source).is_empty());
+}
+
+#[test]
+fn catches_visibility_and_qualifiers_split_across_lines() {
+    let source = r#"
+use qdrant_client::qdrant::PointId;
+pub
+async
+unsafe
+fn leaked() -> PointId { unreachable!() }
+"#;
+    assert_eq!(public_vendor_surface_lines(source), vec![3]);
+}

@@ -9,10 +9,40 @@ pub(super) fn find_public_vendor_surfaces(
     let mut violations = Vec::new();
     let mut public_signature: Option<(usize, String)> = None;
     let mut public_block: Option<PublicBlock> = None;
+    let mut macro_export_attribute: Option<usize> = None;
+    let mut public_macro: Option<PublicBlock> = None;
 
     for (index, line) in code.lines().enumerate() {
         let line_number = index + 1;
         let trimmed = line.trim();
+
+        if let Some(item) = macro_export_suffix(trimmed) {
+            macro_export_attribute = Some(line_number);
+            if starts_macro_rules(item) {
+                public_macro = Some(PublicBlock::new(line_number));
+                macro_export_attribute = None;
+            }
+        } else if let Some(attribute_line) = macro_export_attribute {
+            if starts_macro_rules(trimmed) {
+                public_macro = Some(PublicBlock::new(attribute_line));
+                macro_export_attribute = None;
+            } else if !trimmed.is_empty() && !trimmed.starts_with("#[") {
+                macro_export_attribute = None;
+            }
+        }
+
+        if public_macro.is_none() && starts_public_macro(trimmed) {
+            public_macro = Some(PublicBlock::new(line_number));
+        }
+        if let Some(block) = public_macro.as_mut() {
+            if contains_any_identifier(trimmed, vendor_identifiers) {
+                violations.push(block.start);
+            }
+            block.observe_tokens(trimmed);
+            if block.finished() {
+                public_macro = None;
+            }
+        }
 
         if public_block.is_none() && starts_public_block(trimmed) {
             public_block = Some(PublicBlock::new(line_number));
@@ -21,7 +51,7 @@ pub(super) fn find_public_vendor_surfaces(
             if contains_any_identifier(trimmed, vendor_identifiers) {
                 violations.push(block.start);
             }
-            block.observe(trimmed);
+            block.observe_braces(trimmed);
             if block.finished() {
                 public_block = None;
             }
@@ -74,9 +104,25 @@ impl PublicBlock {
         }
     }
 
-    fn observe(&mut self, line: &str) {
-        let opens = line.bytes().filter(|byte| *byte == b'{').count();
-        let closes = line.bytes().filter(|byte| *byte == b'}').count();
+    fn observe_braces(&mut self, line: &str) {
+        self.observe_counts(
+            line.bytes().filter(|byte| *byte == b'{').count(),
+            line.bytes().filter(|byte| *byte == b'}').count(),
+        );
+    }
+
+    fn observe_tokens(&mut self, line: &str) {
+        self.observe_counts(
+            line.bytes()
+                .filter(|byte| matches!(*byte, b'{' | b'(' | b'['))
+                .count(),
+            line.bytes()
+                .filter(|byte| matches!(*byte, b'}' | b')' | b']'))
+                .count(),
+        );
+    }
+
+    fn observe_counts(&mut self, opens: usize, closes: usize) {
         if opens > 0 {
             self.opened = true;
         }
@@ -89,6 +135,25 @@ impl PublicBlock {
     }
 }
 
+fn macro_export_suffix(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix("#[macro_export")?;
+    if !rest.starts_with(']') && !rest.starts_with('(') {
+        return None;
+    }
+    let end = rest.find(']')?;
+    Some(rest[end + 1..].trim_start())
+}
+
+fn starts_macro_rules(line: &str) -> bool {
+    let compact = line.replace(char::is_whitespace, "");
+    compact.starts_with("macro_rules!")
+}
+
+fn starts_public_macro(line: &str) -> bool {
+    line.strip_prefix("pub ")
+        .is_some_and(|rest| rest.starts_with("macro "))
+}
+
 fn starts_public_block(line: &str) -> bool {
     line.starts_with("pub trait ")
         || line.starts_with("pub unsafe trait ")
@@ -97,18 +162,19 @@ fn starts_public_block(line: &str) -> bool {
 }
 
 fn starts_public_signature(line: &str) -> bool {
-    line.starts_with("pub fn ")
-        || line.starts_with("pub async fn ")
-        || line.starts_with("pub unsafe fn ")
-        || line.starts_with("pub const fn ")
-        || line.starts_with("pub extern ")
-        || line.starts_with("pub type ")
-        || line.starts_with("pub static ")
-        || line.starts_with("pub const ")
-        || line.starts_with("pub struct ")
-        || line.starts_with("pub union ")
-        || line.starts_with("pub use ")
-        || line.starts_with("pub extern crate ")
+    if line == "pub" {
+        return true;
+    }
+    let Some(rest) = line.strip_prefix("pub ") else {
+        return false;
+    };
+    matches!(
+        rest.split_whitespace().next(),
+        Some(
+            "fn" | "async" | "unsafe" | "const" | "extern" | "type"
+                | "static" | "struct" | "union" | "use"
+        )
+    )
 }
 
 fn signature_ended(line: &str) -> bool {
