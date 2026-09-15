@@ -1,16 +1,16 @@
 //! Import the typed source mapping into an inactive redb artifact. The source
 //! mapper is replayed for exact verification; no JSON parser or live catalog is added.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::path::Path;
 use std::time::Instant;
 
 use search_contracts::{Sha256Digest32, SourceNamespaceId};
 use search_control_redb::migration::{
     SourceContentManifest, SourceImportBinding, SourceImportCounts,
-    SourceImportOutputLock, SourceImportOutputLockError,
-    SourceImportOutputLockPlatform, SourceMappingImport,
-    SourceMappingReadback,
+    SourceImportOutputArtifact, SourceImportOutputArtifactError,
+    SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform,
+    SourceMappingImport, SourceMappingReadback,
 };
 
 use super::{
@@ -20,7 +20,7 @@ use super::{
 use super::content_readback::ContentArtifact;
 use crate::plaintext_direct_store::DirectStore;
 
-type ImportOutputGuard = SourceImportOutputLock<DaemonImportOutputPlatform>;
+type ImportOutput = SourceImportOutputArtifact<DaemonImportOutputPlatform>;
 
 /// The caller retains source exclusion and has already verified the text plan.
 /// A complete existing database is rechecked, not overwritten or treated as live control.
@@ -52,85 +52,55 @@ pub(super) fn store(
         source_bytes: content.source_bytes,
     };
     verify_content(directory, content, deadline)?;
-    // Different content profiles/manifests cannot reuse an unbound v1 target or
-    // each other's pending prefix. The complete reference is checked inside redb.
+
     let target_digest = sha256::digest_parts(
         b"eliot-search/source-content-import/v2",
         &[&plan_chain, &content.chain],
     );
     let name = format!("{}.source-map.v2.redb", sha256::hex(&target_digest));
-    let final_path = directory.join(&name);
-    let pending_path = directory.join(format!(".{name}.pending"));
-    // The source-root lock does not serialize two restored copies that publish
-    // this same plan into a shared output directory. The control adapter owns
-    // the logical per-target lock across close/reopen, readback, publication,
-    // and pending cleanup; this daemon supplies only platform observations.
-    let output = ImportOutputGuard::acquire(
+    let output = ImportOutput::acquire(
         directory,
         &name,
         DaemonImportOutputPlatform,
         deadline,
     )
-    .map_err(output_lock_reason)?;
-    match fs::symlink_metadata(&final_path) {
-        Ok(metadata) => {
-            if !regular(&metadata) {
-                return Err("DIRECT_MIGRATION_IMPORT_OBJECT_INVALID".to_owned());
-            }
-            let final_file = verify(
-                source,
-                &final_path,
-                binding,
-                content_binding,
-                expected,
-                deadline,
-            )?;
-            verify_content(directory, content, deadline)?;
-            // Resolve a crash after hard-link publication but before unlinking
-            // pending. Only the same native object is disposable here; a distinct
-            // pending database, even byte-identical, remains untouched.
-            cleanup_published_alias(
-                &pending_path,
-                &final_path,
-                final_file,
-                &output,
-                deadline,
-            )?;
-            output.verify(deadline).map_err(output_lock_reason)?;
-            return Ok((name, true));
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err("DIRECT_MIGRATION_IMPORT_OPEN_FAILED".to_owned()),
-    }
-    // A deterministic pending locator lets an interrupted invocation find the
-    // same transactionally committed prefix. It is not a usable/final artifact.
-    // Keep it on every error, including unknown native commit outcomes. Never
-    // truncate, replace, or guess completion from the filename or file length.
-    let (file, created) = match OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .open(&pending_path)
+    .map_err(output_artifact_reason)?;
+
+    if let Some(final_artifact) = output
+        .open_final(deadline)
+        .map_err(output_artifact_reason)?
     {
-        Ok(file) => (file, true),
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            (open_existing(&pending_path)?, false)
-        }
-        Err(_) => return Err("DIRECT_MIGRATION_IMPORT_CREATE_FAILED".to_owned()),
-    };
-    let pending_identity = native_identity(&file)?;
-    verify_locator(&file, &pending_path)?;
-    output.verify(deadline).map_err(output_lock_reason)?;
+        let final_identity = *final_artifact.identity();
+        verify_mapping(
+            source,
+            final_artifact.into_file(),
+            binding,
+            content_binding,
+            expected,
+            deadline,
+        )?;
+        verify_content(directory, content, deadline)?;
+        output
+            .cleanup_verified_alias(&final_identity, deadline)
+            .map_err(output_artifact_reason)?;
+        return Ok((name, true));
+    }
+
+    let pending = output
+        .open_or_create_pending(deadline)
+        .map_err(output_artifact_reason)?;
+    let pending_identity = *pending.identity();
+    let created = pending.created();
     let mut writer = if created {
         SourceMappingImport::create_with_content(
-            file,
+            pending.into_file(),
             binding,
             content_binding,
             deadline,
         )
     } else {
         SourceMappingImport::resume_with_content(
-            file,
+            pending.into_file(),
             binding,
             content_binding,
             deadline,
@@ -138,15 +108,12 @@ pub(super) fn store(
     }
     .map_err(|error| error.code().to_owned())?;
     if created {
-        #[cfg(unix)]
-        sync_directory(directory)?;
-        #[cfg(not(unix))]
-        sync_directory(directory);
+        output
+            .sync_pending_creation(deadline)
+            .map_err(output_artifact_reason)?;
     }
+
     let mut hash = PlanDigest::new();
-    // Replay from event one even on resume: the adapter compares every already
-    // committed row and index before dispatching the first new batch. Neither
-    // the caller nor a cursor can skip verification of the persisted prefix.
     let summary = source.compile_source_mapping_with_rows(
         target,
         deadline,
@@ -156,77 +123,50 @@ pub(super) fn store(
     if summary.import_counts() != expected || hash.finish() != plan_chain {
         return Err("DIRECT_MIGRATION_IMPORT_SOURCE_CHANGED".to_owned());
     }
-    // Consume/drop the native writer before reopening or publishing its file.
     writer
         .finish(expected, deadline)
         .map_err(|error| error.code().to_owned())?;
-    let pending_file = verify(
+
+    let pending = output
+        .open_pending_matching(&pending_identity, deadline)
+        .map_err(output_artifact_reason)?;
+    verify_mapping(
         source,
-        &pending_path,
+        pending.into_file(),
         binding,
         content_binding,
         expected,
         deadline,
     )?;
-    if native_identity(&pending_file)? != pending_identity {
-        return Err("DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned());
-    }
-    output.verify(deadline).map_err(output_lock_reason)?;
-    verify_locator(&pending_file, &pending_path)?;
-    let reused = match fs::hard_link(&pending_path, &final_path) {
-        Ok(()) => false,
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
-        Err(_) => {
-            return Err("DIRECT_MIGRATION_IMPORT_PUBLISH_OUTCOME_UNKNOWN".to_owned());
-        }
-    };
-    #[cfg(unix)]
-    sync_directory(directory)?;
-    #[cfg(not(unix))]
-    sync_directory(directory);
-    // A competing existing target must match too. The final name never grants
-    // integrity, complete accounting, or permission to activate the imported namespace.
-    let final_file = verify(
+
+    let published = output
+        .publish_pending(&pending_identity, deadline)
+        .map_err(output_artifact_reason)?;
+    let reused = published.reused();
+    let final_identity = *published.identity();
+    verify_mapping(
         source,
-        &final_path,
+        published.into_file(),
         binding,
         content_binding,
         expected,
         deadline,
     )?;
     verify_content(directory, content, deadline)?;
-    // A newly created hard link must identify the same object whose rows were
-    // verified. For an existing final object, exact readback above is mandatory.
-    if !reused && native_identity(&final_file)? != pending_identity {
-        return Err("DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned());
-    }
-    output.verify(deadline).map_err(output_lock_reason)?;
-    verify_locator(&pending_file, &pending_path)?;
-    verify_locator(&final_file, &final_path)?;
-    // The candidate may differ from an already-published target. Preserve
-    // independent pending state even when both databases have equivalent rows.
-    drop(pending_file);
-    cleanup_published_alias(
-        &pending_path,
-        &final_path,
-        final_file,
-        &output,
-        deadline,
-    )?;
-    output.verify(deadline).map_err(output_lock_reason)?;
+    output
+        .cleanup_verified_alias(&final_identity, deadline)
+        .map_err(output_artifact_reason)?;
     Ok((name, reused))
 }
 
-fn verify(
+fn verify_mapping(
     source: &DirectStore,
-    path: &Path,
+    file: File,
     binding: SourceImportBinding,
     content: SourceContentManifest,
     expected: SourceImportCounts,
     deadline: Instant,
-) -> Result<File, String> {
-    let file = open_existing(path)?;
-    let identity = native_identity(&file)?;
+) -> Result<(), String> {
     let mut reader = SourceMappingReadback::open_with_content(
         file,
         binding,
@@ -250,14 +190,7 @@ fn verify(
     reader
         .finish(deadline)
         .map_err(|error| error.code().to_owned())?;
-    // Native redb is closed before this descriptor is opened. Holding this file
-    // pins the observed object through publication without retaining a database.
-    let pinned = open_existing(path)?;
-    if native_identity(&pinned)? != identity {
-        return Err("DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned());
-    }
-    check_deadline(Some(deadline))?;
-    Ok(pinned)
+    check_deadline(Some(deadline))
 }
 
 fn verify_content(
@@ -265,8 +198,6 @@ fn verify_content(
     content: &ContentArtifact,
     deadline: Instant,
 ) -> Result<(), String> {
-    // A verified producer result is still re-read at the import boundary and after
-    // final publication. Never accept a client path or parse JSON into authority.
     let expected = format!("{}.source-content.v1", sha256::hex(&content.chain));
     if content.name != expected
         || fingerprint(&directory.join(&expected), content.encoded_bytes, deadline)?
@@ -275,30 +206,6 @@ fn verify_content(
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
     Ok(())
-}
-
-fn open_existing(path: &Path) -> Result<File, String> {
-    let invalid = || "DIRECT_MIGRATION_IMPORT_OBJECT_INVALID".to_owned();
-    ensure_directory(path.parent().ok_or_else(invalid)?)?;
-    let before = fs::symlink_metadata(path).map_err(|_| invalid())?;
-    if !regular(&before) || before.len() == 0 {
-        return Err(invalid());
-    }
-    // redb may recover native metadata of this *target*, never the source journal.
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(path)
-        .map_err(|_| invalid())?;
-    let opened = file.metadata().map_err(|_| invalid())?;
-    if !regular(&opened)
-        || opened.len() != before.len()
-        || opened.modified().ok() != before.modified().ok()
-    {
-        return Err(invalid());
-    }
-    verify_locator(&file, path)?;
-    Ok(file)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -332,13 +239,24 @@ impl SourceImportOutputLockPlatform for DaemonImportOutputPlatform {
     }
 }
 
-fn output_lock_reason(error: SourceImportOutputLockError<String>) -> String {
+impl SourceImportOutputArtifactPlatform for DaemonImportOutputPlatform {
+    type Identity = (u64, u64);
+
+    fn identity(
+        &self,
+        file: &File,
+    ) -> Result<Self::Identity, Self::Error> {
+        native_identity(file)
+    }
+}
+
+fn output_artifact_reason(
+    error: SourceImportOutputArtifactError<String>,
+) -> String {
     error.into_reason()
 }
 
-/// Native identity, never an mtime/length substitute. The platform observer is the
-/// existing package-owned Windows boundary; no unsafe or new dependency is added.
-pub(super) fn native_identity(file: &File) -> Result<(u64, u64), String> {
+fn native_identity(file: &File) -> Result<(u64, u64), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     let metadata = file.metadata().map_err(|_| invalid())?;
     if !regular(&metadata) {
@@ -361,7 +279,7 @@ pub(super) fn native_identity(file: &File) -> Result<(u64, u64), String> {
     }
 }
 
-pub(super) fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
+fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     ensure_directory(path.parent().ok_or_else(invalid)?)?;
     if !regular(&fs::symlink_metadata(path).map_err(|_| invalid())?) {
@@ -372,42 +290,4 @@ pub(super) fn verify_locator(expected: &File, path: &Path) -> Result<(), String>
         return Err(invalid());
     }
     Ok(())
-}
-
-fn cleanup_published_alias(
-    pending: &Path,
-    final_path: &Path,
-    published: File,
-    guard: &ImportOutputGuard,
-    deadline: Instant,
-) -> Result<(), String> {
-    guard.verify(deadline).map_err(output_lock_reason)?;
-    // Revalidate the final locator even if there is no pending name to clean.
-    verify_locator(&published, final_path)?;
-    match fs::symlink_metadata(pending) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(());
-        }
-        Err(_) => return Err("DIRECT_MIGRATION_IMPORT_OPEN_FAILED".to_owned()),
-        Ok(metadata) if !regular(&metadata) => {
-            return Err("DIRECT_MIGRATION_IMPORT_OBJECT_INVALID".to_owned());
-        }
-        Ok(_) => {}
-    }
-    let pending_file = open_existing(pending)?;
-    if native_identity(&pending_file)? == native_identity(&published)? {
-        verify_locator(&pending_file, pending)?;
-        verify_locator(&published, final_path)?;
-        guard.verify(deadline).map_err(output_lock_reason)?;
-        drop(pending_file);
-        drop(published);
-        fs::remove_file(pending)
-            .map_err(|_| "DIRECT_MIGRATION_IMPORT_CLEANUP_FAILED".to_owned())?;
-        #[cfg(unix)]
-        sync_directory(guard.directory())?;
-        #[cfg(not(unix))]
-        sync_directory(guard.directory());
-    }
-    // Independent pending state is not an alias and is never discarded by this path.
-    guard.verify(deadline).map_err(output_lock_reason)
 }
