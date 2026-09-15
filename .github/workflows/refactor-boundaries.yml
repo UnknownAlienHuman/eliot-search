@@ -140,6 +140,9 @@ jobs:
           cargo test --locked -p eliot-searchd --test rebuild_composition_module_ownership
           cargo test --locked -p eliot-searchd --test secure_direct_store_module_ownership
           cargo test --locked -p eliot-searchd --test direct_store_ingest_module_ownership
+          cargo test --locked -p eliot-searchd --test directory_manifest_module_ownership
+          cargo test --locked -p eliot-searchd --test sealed_access_module_ownership
+          cargo test --locked -p eliot-searchd --test sealed_owner_epoch_module_ownership
 
       - name: Control migration marker ownership
         shell: pwsh
