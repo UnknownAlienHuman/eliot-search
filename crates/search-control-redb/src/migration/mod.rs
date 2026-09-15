@@ -1,8 +1,10 @@
 //! Inactive, typed source-mapping imports. This file format is deliberately not
 //! a `ControlJournal`: it carries no live owner, admission, visibility or H5 receipt.
 //!
-//! The caller owns input exclusion and the admitted output file. Resuming an
-//! incomplete target verifies its entire committed prefix before appending rows.
+//! The caller owns input exclusion and the admitted output file. This module
+//! owns the per-artifact logical output lock and import/readback state machines.
+//! Resuming an incomplete target verifies its entire committed prefix before
+//! appending rows.
 
 use redb::TableDefinition;
 
@@ -13,6 +15,7 @@ mod content;
 mod cutover;
 mod mapping;
 mod model;
+mod output_lock;
 mod readback;
 mod writer;
 
@@ -31,6 +34,10 @@ pub use mapping::{
 pub use model::{
     SourceImportBinding, SourceImportCounts, SourceImportRow,
     SourceLifecycleFlags,
+};
+pub use output_lock::{
+    SourceImportOutputLock, SourceImportOutputLockError,
+    SourceImportOutputLockPlatform,
 };
 pub use readback::SourceMappingReadback;
 pub use writer::SourceMappingImport;
