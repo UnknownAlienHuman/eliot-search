@@ -59,12 +59,19 @@ lookalike declarations and rejects duplicate active canonical declarations.
 The version constants retain their canonical single-line `pub const` string
 literal format; unsupported forms fail the comparison instead of being guessed.
 
-This is a lexical structural check, not Rust name resolution, Cargo compilation
-or live qualification. Macro expansion, cross-file re-export/alias resolution
-and adversarial public-surface layouts still require further guard work and
-independent review. The filesystem scanner also still needs explicit aggregate
-entry/depth/byte limits and a fail-closed linked-input policy. A structural PASS
-alone must not be represented as complete boundary or product acceptance.
+The repository walk is deterministic and fail-closed. It rejects observed
+symbolic links and unsupported entry types, stops above 64 directory levels or
+200,000 entries, and reads at most 16 MiB from one source file and 256 MiB in
+total. `.git`, `target`, `.venv`, `__pycache__` and `node_modules` are explicitly
+outside the scan. Exceeding a limit is a validation failure, never a partial
+`PASS`; the validator does not follow a link or continue after exhausting an
+aggregate limit.
+
+This remains a lexical structural check, not Rust name resolution, Cargo
+compilation or live qualification. Macro expansion, cross-file re-export/alias
+resolution and adversarial public-surface layouts still require complementary
+compiled checks and independent review. A structural PASS alone must not be
+represented as complete boundary or product acceptance.
 
 `qualified.rs` is the single upgrade identity facade: server version/build,
 artifact digest/size/platform and client version/checksum/VCS identity remain

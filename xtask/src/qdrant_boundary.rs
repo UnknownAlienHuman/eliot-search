@@ -13,7 +13,9 @@ use std::path::Path;
 use serde_json::json;
 use toml::Value;
 
-use filesystem::{collect_files, read_text, read_toml, relative_path};
+use filesystem::{
+    ScanBudget, collect_files, read_text, read_toml, relative_path,
+};
 use manifests::{
     collect_vendor_dependency_declarations, lockfile_package_version,
     validate_bridge_dependency, validate_workspace_dependency, value_at,
@@ -81,8 +83,16 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
         qualified_server_version: None,
     };
 
+    let mut budget = ScanBudget::default();
     let mut files = Vec::new();
-    collect_files(root, root, &mut files, &mut report.errors);
+    collect_files(
+        root,
+        root,
+        0,
+        &mut budget,
+        &mut files,
+        &mut report.errors,
+    );
     files.sort();
 
     let mut root_manifest: Option<Value> = None;
@@ -95,7 +105,8 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
             .is_some_and(|name| name == std::ffi::OsStr::new("Cargo.toml"))
         {
             report.manifests_scanned += 1;
-            let Some(document) = read_toml(path, &relative, &mut report.errors)
+            let Some(document) =
+                read_toml(path, &relative, &mut budget, &mut report.errors)
             else {
                 continue;
             };
@@ -131,7 +142,8 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
             .is_some_and(|extension| extension == std::ffi::OsStr::new("rs"))
         {
             report.rust_files_scanned += 1;
-            let Some(text) = read_text(path, &relative, &mut report.errors)
+            let Some(text) =
+                read_text(path, &relative, &mut budget, &mut report.errors)
             else {
                 continue;
             };
@@ -171,6 +183,7 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
     let lock_version = read_toml(
         &root.join(LOCKFILE),
         LOCKFILE,
+        &mut budget,
         &mut report.errors,
     )
     .and_then(|document| lockfile_package_version(&document, VENDOR_CRATE));
@@ -178,6 +191,7 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
     let qualified_text = read_text(
         &root.join(QUALIFIED_SOURCE),
         QUALIFIED_SOURCE,
+        &mut budget,
         &mut report.errors,
     );
     let qualified_client_version = qualified_text
@@ -193,6 +207,7 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
     let artifact = read_toml(
         &root.join(ARTIFACT_MANIFEST),
         ARTIFACT_MANIFEST,
+        &mut budget,
         &mut report.errors,
     );
     let artifact_client_crate =
