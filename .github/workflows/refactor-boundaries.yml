@@ -136,6 +136,7 @@ jobs:
           cargo test --locked -p eliot-searchd --test preparation_store_module_ownership
           cargo test --locked -p eliot-searchd --test sealed_store_module_ownership
           cargo test --locked -p eliot-searchd --test sealed_transaction_module_ownership
+          cargo test --locked -p eliot-searchd --test publication_composition_module_ownership
 
       - name: Control migration marker ownership
         shell: pwsh
