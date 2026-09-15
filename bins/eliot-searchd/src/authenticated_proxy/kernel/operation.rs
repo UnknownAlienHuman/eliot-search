@@ -29,9 +29,21 @@ pub(super) fn do_op(
             crate::provider_composition::PROVIDER_HELLO_REQUIRED,
         );
     };
-    if let Err(denial) =
+
+    let indexed_query = match crate::provider_composition::classify_indexed_query(
+        operation,
+        &argument,
+    ) {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(reason) => return fail_with_provider_error(stream, reason),
+    };
+    let admission = if indexed_query {
+        crate::provider_composition::gate_indexed_query(capabilities)
+    } else {
         crate::provider_composition::gate_operation(operation, capabilities)
-    {
+    };
+    if let Err(denial) = admission {
         let line = match crate::provider_composition::render_op_response(
             operation,
             crate::provider_composition::OpStatus::Unavailable,

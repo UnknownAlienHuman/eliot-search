@@ -112,6 +112,10 @@ pub const PROVIDER_OK: &str = "PROVIDER_OK";
 pub const PROVIDER_INGEST_UNAVAILABLE: &str = "PROVIDER_INGEST_UNAVAILABLE";
 /// Query is validated but unavailable without search acceptance.
 pub const PROVIDER_QUERY_UNAVAILABLE: &str = "PROVIDER_QUERY_UNAVAILABLE";
+/// Indexed query marker was recognized but its framed query is malformed.
+pub const PROVIDER_INDEXED_QUERY_INVALID: &str = "PROVIDER_INDEXED_QUERY_INVALID";
+/// Indexed query lacks accepted query and qualified indexed-route readiness.
+pub const PROVIDER_INDEXED_QUERY_UNAVAILABLE: &str = "PROVIDER_INDEXED_QUERY_UNAVAILABLE";
 /// Expansion is validated but unavailable without search acceptance.
 pub const PROVIDER_EXPAND_UNAVAILABLE: &str = "PROVIDER_EXPAND_UNAVAILABLE";
 /// Cancellation found no live in-flight identity (idempotent, not an error).

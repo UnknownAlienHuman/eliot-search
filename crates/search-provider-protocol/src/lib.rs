@@ -52,6 +52,7 @@ pub mod cleanup;
 pub mod config;
 pub mod error;
 pub mod frame;
+mod indexed;
 pub mod negotiation;
 pub mod pairing;
 pub mod progress;

@@ -9,8 +9,8 @@
 //! [`binding`](crate::binding) (session composition and admission order),
 //! plus [`session`](crate::session), [`progress`](crate::progress),
 //! [`terminal`](crate::terminal), [`cancel`](crate::cancel),
-//! [`cleanup`](crate::cleanup), [`config`](crate::config) and
-//! [`error`](crate::error).
+//! [`cleanup`](crate::cleanup), [`config`](crate::config), the private
+//! indexed-query framing layer, and [`error`](crate::error).
 
 pub use crate::binding::{
     BindingContext, BindingSession, BoundSession, NegotiatedHello, TransportPeer,
@@ -21,6 +21,10 @@ pub use crate::cleanup::{DisconnectReceipt, disconnect_all};
 pub use crate::config::{DEFAULT_PROTOCOL_LIMITS, FRAME_PREFIX_BYTES, ProtocolLimits};
 pub use crate::error::ProtocolError;
 pub use crate::frame::{FrameCodec, decode_frame, encode_frame};
+pub use crate::indexed::{
+    INDEXED_QUERY_MARKER, IndexedQueryFrameError, STRICT_QUERY_PREFIX,
+    decode_indexed_query, encode_indexed_query,
+};
 pub use crate::negotiation::{negotiate_hello, negotiate_version, validate_envelope_version};
 pub use crate::pairing::{
     BindingKey, ClientNonce, PAIRING_CLIENT_DOMAIN, PAIRING_SERVER_DOMAIN, PairingChallenge,
