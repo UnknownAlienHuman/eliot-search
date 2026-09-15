@@ -116,6 +116,51 @@ impl StandaloneGrantIssuer for FakeIssuer {
     }
 }
 
+#[derive(Debug, Default)]
+struct CounterEntropy {
+    next: u8,
+}
+
+impl GrantEntropySource for CounterEntropy {
+    fn fill_random(&mut self, output: &mut [u8]) -> Result<(), GrantIssuerError> {
+        self.next = self
+            .next
+            .checked_add(1)
+            .ok_or(GrantIssuerError::Unavailable)?;
+        output.fill(self.next);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+struct ConstantEntropy;
+
+impl GrantEntropySource for ConstantEntropy {
+    fn fill_random(&mut self, output: &mut [u8]) -> Result<(), GrantIssuerError> {
+        output.fill(1);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+struct FixedTime;
+
+impl GrantTimeSource for FixedTime {
+    fn issue_window(
+        &mut self,
+        requested_ttl_ms: u64,
+    ) -> Result<GrantTimeWindow, GrantIssuerError> {
+        if requested_ttl_ms != 30_000 {
+            return Err(GrantIssuerError::Unavailable);
+        }
+        GrantTimeWindow::new(
+            timestamp("2026-09-15T10:00:00.000000Z"),
+            timestamp("2026-09-15T10:00:30.000000Z"),
+            requested_ttl_ms,
+        )
+    }
+}
+
 #[test]
 fn minted_claims_are_exactly_the_requested_authorized_subset() {
     let policy = policy();
@@ -157,6 +202,32 @@ fn minted_claims_are_exactly_the_requested_authorized_subset() {
     );
     assert!(grant.source_read_permission);
     assert!(!grant.exact_scan_permission);
+    assert_eq!(grant.reference_portfolio_revision, None);
+}
+
+#[test]
+fn portfolio_revision_is_retained_only_for_requested_portfolio_scope() {
+    let policy = policy();
+    let mut request = request();
+    request.requested_corpus_or_portfolio_ids = set([CorpusOrPortfolioId::Portfolio(
+        ReferencePortfolioId::from_bytes([21; 16]),
+    )]);
+    let mut issuer = FakeIssuer::default();
+
+    let grant = mint_standalone_grant(&mut issuer, &request, &policy).expect("portfolio grant");
+    assert_eq!(
+        grant.reference_portfolio_revision,
+        policy.reference_portfolio_revision
+    );
+
+    let mut invalid_policy = policy;
+    invalid_policy.reference_portfolio_revision = None;
+    let mut issuer = FakeIssuer::default();
+    assert_eq!(
+        mint_standalone_grant(&mut issuer, &request, &invalid_policy),
+        Err(GrantMintError::PolicyInvalid)
+    );
+    assert_eq!(issuer.calls, 0);
 }
 
 #[test]
@@ -235,4 +306,54 @@ fn stale_generation_and_foreign_receipt_fail_closed() {
         mint_standalone_grant(&mut issuer, &request(), &policy),
         Err(GrantMintError::IssuerReceiptMismatch)
     );
+}
+
+#[test]
+fn bounded_issuer_replays_exactly_and_never_evicts_operation_identity() {
+    let policy = policy();
+    let request = request();
+    let mut issuer = BoundedStandaloneGrantIssuer::new(
+        CounterEntropy::default(),
+        FixedTime,
+        2,
+        4,
+    )
+    .expect("issuer");
+
+    let first = mint_standalone_grant(&mut issuer, &request, &policy).expect("first");
+    let replay = mint_standalone_grant(&mut issuer, &request, &policy).expect("replay");
+    assert_eq!(first, replay);
+    assert_eq!(issuer.retained_operations(), 1);
+
+    let mut second_request = request.clone();
+    second_request.operation_id = OpaqueId::new("operation-2").expect("operation");
+    let second = mint_standalone_grant(&mut issuer, &second_request, &policy).expect("second");
+    assert_ne!(first.grant_id, second.grant_id);
+    assert_ne!(first.nonce, second.nonce);
+    assert_eq!(issuer.retained_operations(), 2);
+
+    let mut third_request = request;
+    third_request.operation_id = OpaqueId::new("operation-3").expect("operation");
+    assert_eq!(
+        mint_standalone_grant(&mut issuer, &third_request, &policy),
+        Err(GrantMintError::IssuerCapacityExceeded)
+    );
+    assert_eq!(issuer.retained_operations(), 2);
+}
+
+#[test]
+fn bounded_issuer_rejects_repeated_entropy_instead_of_reusing_identity() {
+    let policy = policy();
+    let request = request();
+    let mut issuer = BoundedStandaloneGrantIssuer::new(ConstantEntropy, FixedTime, 2, 2)
+        .expect("issuer");
+    mint_standalone_grant(&mut issuer, &request, &policy).expect("first");
+
+    let mut second_request = request;
+    second_request.operation_id = OpaqueId::new("operation-2").expect("operation");
+    assert_eq!(
+        mint_standalone_grant(&mut issuer, &second_request, &policy),
+        Err(GrantMintError::IssuerUnavailable)
+    );
+    assert_eq!(issuer.retained_operations(), 1);
 }

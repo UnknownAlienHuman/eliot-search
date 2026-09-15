@@ -2,9 +2,15 @@
 //!
 //! The CLI request is never authority. This module narrows it against one
 //! captured binding/policy snapshot, then delegates operation identity,
-//! randomness and trusted time to an injected issuer. The issuer may persist
-//! or recover an idempotent receipt, but it cannot widen the template supplied
-//! by composition.
+//! randomness and trusted time to an injected issuer. The issuer may retain
+//! an idempotent process-incarnation receipt, but it cannot widen the template
+//! supplied by composition.
+
+mod issuer;
+
+pub use issuer::{
+    BoundedStandaloneGrantIssuer, GrantEntropySource, GrantTimeSource, GrantTimeWindow,
+};
 
 use search_contracts::{
     AccessPartitionId, BindingId, BoundedSet, CorpusOrPortfolioId, DisclosureCeiling, GrantId,
@@ -115,6 +121,7 @@ pub struct StandaloneGrantMaterial {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GrantIssuerError {
     Unavailable,
+    CapacityExceeded,
     OperationConflict,
     OutcomeUnknown,
 }
@@ -142,6 +149,7 @@ pub enum GrantMintError {
     RequestedCeilingWidening,
     RequestedTtlInvalid,
     IssuerUnavailable,
+    IssuerCapacityExceeded,
     IssuerOperationConflict,
     IssuerOutcomeUnknown,
     IssuerReceiptMismatch,
@@ -162,6 +170,7 @@ impl GrantMintError {
             Self::RequestedCeilingWidening => "DAEMON_GRANT_CEILING_WIDENING",
             Self::RequestedTtlInvalid => "DAEMON_GRANT_TTL_INVALID",
             Self::IssuerUnavailable => "DAEMON_GRANT_ISSUER_UNAVAILABLE",
+            Self::IssuerCapacityExceeded => "DAEMON_GRANT_ISSUER_CAPACITY_EXCEEDED",
             Self::IssuerOperationConflict => "DAEMON_GRANT_OPERATION_CONFLICT",
             Self::IssuerOutcomeUnknown => "DAEMON_GRANT_OUTCOME_UNKNOWN",
             Self::IssuerReceiptMismatch => "DAEMON_GRANT_RECEIPT_MISMATCH",
@@ -225,6 +234,8 @@ fn validate_request(
         || policy.binding_generation == 0
         || policy.policy_generation == 0
         || (policy.exact_scan_permission && !policy.source_read_permission)
+        || (has_portfolio(&request.requested_corpus_or_portfolio_ids)
+            && policy.reference_portfolio_revision.is_none())
     {
         return Err(GrantMintError::PolicyInvalid);
     }
@@ -296,7 +307,13 @@ fn build_template(
         allowed_corpus_or_portfolio_ids: request
             .requested_corpus_or_portfolio_ids
             .clone(),
-        reference_portfolio_revision: policy.reference_portfolio_revision,
+        reference_portfolio_revision: if has_portfolio(
+            &request.requested_corpus_or_portfolio_ids,
+        ) {
+            policy.reference_portfolio_revision
+        } else {
+            None
+        },
         allowed_access_partitions: request.requested_access_partitions.clone(),
         allowed_modalities: request.requested_modalities.clone(),
         permitted_recipe_families: request.requested_recipe_families.clone(),
@@ -338,6 +355,7 @@ fn validate_material(
 fn map_issuer_error(error: GrantIssuerError) -> GrantMintError {
     match error {
         GrantIssuerError::Unavailable => GrantMintError::IssuerUnavailable,
+        GrantIssuerError::CapacityExceeded => GrantMintError::IssuerCapacityExceeded,
         GrantIssuerError::OperationConflict => GrantMintError::IssuerOperationConflict,
         GrantIssuerError::OutcomeUnknown => GrantMintError::IssuerOutcomeUnknown,
     }
@@ -348,6 +366,12 @@ fn is_subset<T: Ord, const LIMIT: usize>(
     allowed: &BoundedSet<T, LIMIT>,
 ) -> bool {
     requested.iter().all(|item| allowed.contains(item))
+}
+
+fn has_portfolio<const LIMIT: usize>(values: &BoundedSet<CorpusOrPortfolioId, LIMIT>) -> bool {
+    values
+        .iter()
+        .any(|item| matches!(item, CorpusOrPortfolioId::Portfolio(_)))
 }
 
 #[cfg(test)]
