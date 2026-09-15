@@ -86,7 +86,9 @@ does not fabricate accepted gates or independent review.
 [redb adapter](docs/runtime/CONTROL_REDB.md) ·
 [catalog/proxy guards](docs/runtime/CATALOG_LOSS_AND_CHANNEL_FAILURE.md)
 
-Python remains in some development validators; no Python product service is part
-of the architecture. Migrating that tooling does not replace finishing the runtime.
+Required repository tooling is Rust/Cargo-owned. PowerShell compatibility
+wrappers and manual workflows may invoke the locked `xtask` commands, but no
+required Python or Node runtime remains. This does not replace finishing or
+qualifying the product runtime.
 
 MIT. See [LICENSE](LICENSE).
