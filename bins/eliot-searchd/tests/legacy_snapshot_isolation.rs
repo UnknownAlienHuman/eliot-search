@@ -34,7 +34,7 @@ fn legacy_snapshot_target_is_harness_only() {
 }
 
 #[test]
-fn legacy_snapshot_entry_is_a_thin_isolation_facade() {
+fn legacy_snapshot_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/snapshot.rs");
     assert!(entry.contains("#[path = \"snapshot/kernel.rs\"]"));
@@ -54,30 +54,88 @@ fn legacy_snapshot_entry_is_a_thin_isolation_facade() {
     }
 
     let kernel = read(&root, "src/snapshot/kernel.rs");
-    assert!(kernel.len() < 35_000, "legacy kernel grew to {} bytes", kernel.len());
-    for marker in [
-        "pub struct SnapshotLimits",
-        "pub struct SnapshotIndex",
-        "pub struct SnapshotSearchResult",
-        "pub fn fingerprint(",
-        "pub fn hex32(",
-        "ELIOT_SEARCH_SNAPSHOT_V1",
-        "eliot-fnv4-v1",
+    for module in [
+        "capture",
+        "fingerprint",
+        "manifest",
+        "model",
+        "policy",
+        "search",
+        "spec",
+        "storage",
     ] {
-        assert!(kernel.contains(marker), "legacy snapshot lost {marker}");
+        assert!(kernel.contains(&format!("mod {module};")));
     }
-    for forbidden in [
-        "qdrant_client",
-        "search_qdrant",
-        "reqwest::",
-        "tokio::",
-        "std::process::Command",
-    ] {
+    assert!(kernel.contains("pub use fingerprint::{fingerprint, hex32};"));
+    assert!(kernel.contains("SnapshotIndex, SnapshotLimits"));
+    assert!(kernel.len() < 1_500, "snapshot kernel grew to {} bytes", kernel.len());
+}
+
+#[test]
+fn legacy_snapshot_responsibilities_remain_bounded() {
+    let root = crate_root();
+    let owners = [
+        ("src/snapshot/kernel/spec.rs", "FINGERPRINT_ALGORITHM"),
+        ("src/snapshot/kernel/model.rs", "pub struct SnapshotIndex"),
+        ("src/snapshot/kernel/capture.rs", "pub(crate) fn capture("),
+        (
+            "src/snapshot/kernel/manifest.rs",
+            "pub(super) fn publish_manifest(",
+        ),
+        (
+            "src/snapshot/kernel/storage.rs",
+            "pub(super) fn store_revision(",
+        ),
+        ("src/snapshot/kernel/search.rs", "pub(crate) fn search("),
+        ("src/snapshot/kernel/fingerprint.rs", "pub fn fingerprint("),
+        (
+            "src/snapshot/kernel/policy.rs",
+            "pub(super) fn policy_denies_file(",
+        ),
+    ];
+    for (relative, marker) in owners {
+        let source = read(&root, relative);
+        assert!(source.contains(marker), "{relative} lost owner {marker}");
         assert!(
-            !kernel.contains(forbidden),
-            "legacy snapshot acquired production/vendor dependency {forbidden}"
+            source.len() < 14_000,
+            "{relative} grew to {} bytes",
+            source.len()
         );
+        for forbidden in [
+            "qdrant_client",
+            "search_qdrant",
+            "reqwest::",
+            "tokio::",
+            "std::process::Command",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{relative} acquired production/vendor dependency {forbidden}"
+            );
+        }
     }
+
+    let spec = read(&root, "src/snapshot/kernel/spec.rs");
+    assert!(spec.contains("eliot-fnv4-v1"));
+    assert!(spec.contains("MAX_MANIFEST_BYTES: usize = 64 * 1024 * 1024"));
+
+    let manifest = read(&root, "src/snapshot/kernel/manifest.rs");
+    assert!(manifest.contains("ELIOT_SEARCH_SNAPSHOT_V1"));
+    assert!(manifest.contains("write_unique_verified"));
+
+    let search = read(&root, "src/snapshot/kernel/search.rs");
+    assert!(search.contains("read_verified_revision"));
+    assert!(!search.contains("std::fs"));
+    assert!(!search.contains("OpenOptions"));
+
+    let storage = read(&root, "src/snapshot/kernel/storage.rs");
+    assert!(storage.contains("create_new(true)"));
+    assert!(storage.contains("revision fingerprint collision or durable readback mismatch"));
+
+    let capture = read(&root, "src/snapshot/kernel/capture.rs");
+    assert!(capture.contains("symlink_metadata"));
+    assert!(capture.contains("policy_denies_file"));
+    assert!(capture.contains("publish_manifest"));
 }
 
 #[test]
