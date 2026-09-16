@@ -21,7 +21,7 @@ The package-owned adapter covers opaque `.bin` and `.dpapi` bytes and owns:
 - exact final readback and identity comparison;
 - byte-identical idempotent reuse;
 - immutable conflict refusal without overwrite;
-- removal of only the exact original temporary object;
+- identity-bound temporary cleanup on success and every early exit;
 - publication/durability outcome-unknown classification.
 
 The package accepts platform observations through
@@ -41,10 +41,10 @@ or handle preparation/materialization artifacts.
 - historical `DIRECT_*` reason mapping.
 
 Normal DIRECT revision publication and readback now enter
-`publish_legacy_revision_object` / `read_legacy_revision_object`. The existing
-preparation-store `persist_immutable_object` and generic bounded reader remain
-separate until the accepted `search-materializer` slice; they are deliberately
-not routed through `search-revision-store`.
+`publish_legacy_revision_object` / `read_legacy_revision_object`.
+Preparation object/reference I/O is separately routed to
+`search-materializer`; the two capabilities share only qualified daemon
+platform observations and do not import one another's package internals.
 
 `search-revision-store` is now a mandatory daemon dependency. `wave2-source`
 remains as a compatibility stage marker but no longer controls whether the
@@ -55,12 +55,14 @@ baseline DIRECT revision owner is linked.
 The legacy final paths, `.bin` / `.dpapi` extensions, maximum object ceiling,
 empty-file support and stable daemon reason namespace remain unchanged.
 
-The new package owner adds stronger locator fencing than the former helper:
+The package owner adds stronger locator fencing than the former helper:
 
 - native identity is checked before and after reads;
 - the temporary object is read back completely before publication;
 - directory creation validates the already admitted parent;
 - a temporary locator is deleted only when its native identity still matches;
+- RAII cleanup covers conflict, readback and durability failures without ever
+  unlinking a replacement locator;
 - a racing final object is reused only after exact byte comparison;
 - a directory-sync failure after publication is explicitly outcome-unknown.
 
@@ -74,27 +76,26 @@ Package tests cover:
 
 - publish/read/exact replay;
 - valid empty revisions;
-- conflicting final bytes without replacement;
+- conflicting final state without replacement or temporary residue;
 - changing native identity during read;
-- invalid names and oversize rejection before mutation/allocation.
+- invalid names and oversize before mutation/allocation;
+- two racing, different-byte publications with one immutable winner and no temp residue.
 
 `legacy_immutable_object_ownership` verifies that:
 
 - filesystem mechanics stay in `search-revision-store`;
-- secret and source-registry responsibilities do not enter the package;
+- secret, registry and preparation responsibilities do not enter the package;
 - secure revision writer uses the package-backed read/publish path;
-- preparation objects remain on their separate owner path;
+- preparation I/O uses the distinct `search-materializer` owner;
 - the daemon dependency is non-optional.
 
 ## Remaining Phase 3 work
 
-The package still does not own the full legacy source-registry occurrence model,
-canonical residency-aware path derivation, DPAPI transition orchestration or
-preparation/materialization storage. Subsequent bounded slices must move:
-
-1. remaining revision path/model/inventory semantics to `search-revision-store`;
-2. preparation object/reference lifecycle to `search-materializer`;
-3. then Phase 4 secret protection to `search-os-secrets`.
+Phase 3 now has separate package owners for retained revision-object I/O and
+preparation artifact I/O. The remaining slices move legacy revision layout,
+model and inventory semantics into `search-revision-store`, and preparation
+path/reference-layout/inventory semantics into `search-materializer`. Phase 4
+then moves DPAPI/secret protection to `search-os-secrets`.
 
 The legacy file journal and registry remain preserved; marker presence or a
 content digest alone cannot fabricate revision authority.
@@ -104,11 +105,12 @@ content digest alone cannot fabricate revision authority.
 ```text
 cargo +1.98.0 test --locked -p search-revision-store immutable_object
 cargo +1.98.0 test --locked -p search-revision-store --test legacy_immutable_object_ownership
+cargo +1.98.0 test --locked -p search-materializer --test legacy_preparation_artifact_ownership
 cargo +1.98.0 test --locked -p eliot-searchd --test secure_direct_store_process
 cargo +1.98.0 test --locked -p eliot-searchd --test control_migration_process
-cargo +1.98.0 check --locked -p search-revision-store -p eliot-searchd --all-targets
+cargo +1.98.0 check --locked -p search-revision-store -p search-materializer -p eliot-searchd --all-targets
 cargo +1.98.0 fmt --all -- --check
-cargo +1.98.0 clippy --locked -p search-revision-store -p eliot-searchd --all-targets -- -D warnings
+cargo +1.98.0 clippy --locked -p search-revision-store -p search-materializer -p eliot-searchd --all-targets -- -D warnings
 ```
 
 Execution status in the current environment: **NOT_RUN**. `cargo`, `rustc` and
