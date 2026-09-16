@@ -1,40 +1,38 @@
-# Source-content manifest and record-chain ownership move
+# Source-content manifest, record-chain and artifact ownership move
 
 Date: 2026-09-16  
 Tracking: issue #189 / PR #193 / T02 control-migration ownership
 
 ## Result
 
-The frozen `eliot.source-content.v1` line schema, exact accounting state machine
-and shared source-import SHA-256 record chain now belong to
-`search-control-redb::migration`.
+The frozen `eliot.source-content.v1` schema, exact accounting state machine,
+shared source-import SHA-256 record chain and immutable record-artifact
+lifecycle now belong to `search-control-redb::migration`.
 
 The package owns:
 
-- the immutable manifest header shape;
-- exact object-row rendering and contiguous ordinals;
-- the fixed content profile digest;
-- exact declared-versus-observed object accounting;
-- checked plaintext byte totals;
-- the final content-manifest summary row;
+- immutable manifest header/object/end rows and contiguous ordinals;
+- the fixed content profile digest and exact object/source-byte accounting;
 - the 512 MiB artifact and 8 KiB row ceilings;
 - the frozen empty/row/end SHA-256 record-chain domains;
-- stable legacy reason codes for invalid rows, state, count and bounds.
+- no-clobber temporary artifact creation;
+- exact second-pass row comparison against regenerated source replay;
+- native-identity and locator revalidation through an injected platform;
+- hard-link publication without replacement;
+- full final record-chain readback, matching-final reuse and conflict refusal;
+- deletion of only the exact original temporary object;
+- typed state, I/O, identity, outcome-unknown and immutable-conflict failures.
 
-`eliot-searchd::control_migration_content` now composes those owners. It retains
-only the responsibilities that cannot enter the control package:
+`eliot-searchd` now composes those owners. It retains only responsibilities that
+cannot enter the control package:
 
-- opening the existing protected/plaintext retained revision through the source
-  adapter;
-- rereading the exact retained bytes;
-- computing BLAKE3 from those bytes;
-- native staging/publication I/O that has not yet moved;
-- translating already validated legacy digest strings to canonical digest
-  newtypes.
-
-`eliot-searchd::control_migration_plan` also uses the package record-chain
-accumulator. The chain domains and implementation no longer exist in daemon
-source.
+- replaying the legacy source registry;
+- opening the existing protected/plaintext retained revision;
+- rereading exact retained bytes and computing BLAKE3;
+- providing qualified native identity, locator and directory-sync observations;
+- generating a non-authoritative temporary basename;
+- rendering the historical operator report and mapping typed failures to the
+  existing stable reason namespace.
 
 No source body, path, credential, protector or BLAKE3 hasher crosses into
 `search-control-redb`.
@@ -47,14 +45,14 @@ The emitted UTF-8 JSON lines remain byte-for-byte the existing format:
 2. one `source_content_readback` row per retained object;
 3. `source_content_end`.
 
-Field order, spelling, lower-case digest encoding, booleans, newline framing and
-the content profile are unchanged. The profile SHA-256 remains:
+Field order, spelling, lower-case digest encoding, booleans, newline framing,
+artifact names and the content profile are unchanged. The profile SHA-256 is:
 
 ```text
 8d99f177a1cf8134710dc7b586c36f2e0229060755e33089e04e492f667af29f
 ```
 
-The shared chain remains the exact historical multipart profile:
+The shared record chain remains:
 
 ```text
 eliot-search/sha256-parts/v1\0
@@ -63,44 +61,53 @@ eliot-search/source-map-row/v1
 eliot-search/source-map-end/v1
 ```
 
-The frozen two-row fixture still ends at:
+The frozen two-row fixture remains:
 
 ```text
 a2a8dc044d640c9c5d91dea46b338425c6d1f457d3eee7693ce0b8da4ee51966
 ```
 
-The external file names, redb binding, cutover marker and persisted database
-schema are unchanged. No dependency or lockfile changed.
+The redb binding, cutover marker and persisted database schema are unchanged.
+No dependency, lockfile or workflow changed.
+
+The new owner additionally closes the previous staging race: after the exact
+second replay and immediately before publication, it reopens the temporary
+locator, requires the original native identity and recomputes the complete
+record chain. A replaced temporary object is not published under the
+content-addressed final name.
 
 ## Regression seams
 
-Package tests freeze the exact header/object/end bytes, profile digest and
-record-chain known answer. They reject:
+Package tests freeze the exact schema/profile/chain values and cover:
 
-- end before header;
-- early end before the declared object count;
-- rows after the declared count;
-- repeated header/end transitions;
-- empty, embedded-newline or missing-newline records;
-- per-row and aggregate chain bounds;
-- invalid target/cardinality bounds.
+- exact second-pass comparison and final inspection;
+- changed regenerated rows before publication;
+- existing conflicting final state without overwrite;
+- changed temporary native identity;
+- nonlocal temporary names;
+- invalid row framing and aggregate bounds.
 
-`control_migration_owner_boundary` verifies that the daemon no longer contains
-the manifest schema strings or record-chain domains while the control package
-receives no source-byte or secret dependencies.
+`control_migration_owner_boundary` now requires the package owner to contain
+`hard_link`, temporary cleanup and record readback. It rejects restoration of
+`StagingFile`, `OpenOptions`, `BufReader`, `BufWriter`, `hard_link`,
+`remove_file`, `read_until` or daemon-local record-chain state in the plan and
+content adapters.
 
-## Remaining ownership move
+## Remaining ownership work
 
-The daemon still owns the temporary-file, immutable hard-link publication and
-record-chain file readback lifecycle. A later slice should move that filesystem
-state machine behind an injected platform boundary in
-`search-control-redb::migration`, while leaving retained-byte acquisition in the
-source adapter.
+This completes the mapping-plan/source-content immutable record-artifact slice.
+The inactive redb `.pending`/final lifecycle is already package-owned. Remaining
+PR #193 work is in adjacent control-migration orchestration and cutover/native
+marker I/O, followed by the accepted T02 direct-store and source-root moves.
+Those slices must preserve the single source-registry owner and must not move
+retained bytes or credential handling into the control package.
 
 ## Required execution
 
 ```text
-cargo +1.98.0 test --locked -p search-control-redb migration
+cargo +1.98.0 test --locked -p search-control-redb migration::record_artifact
+cargo +1.98.0 test --locked -p search-control-redb migration::record_chain
+cargo +1.98.0 test --locked -p search-control-redb migration::content
 cargo +1.98.0 test --locked -p eliot-searchd --test control_migration_owner_boundary
 cargo +1.98.0 test --locked -p eliot-searchd --test control_migration_process
 cargo +1.98.0 check --locked -p search-control-redb -p eliot-searchd --all-targets
