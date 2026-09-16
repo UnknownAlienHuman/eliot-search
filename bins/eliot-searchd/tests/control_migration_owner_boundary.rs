@@ -14,18 +14,39 @@ fn read(root: &Path, relative: &str) -> String {
 }
 
 #[test]
-fn cutover_marker_semantics_belong_to_control_owner() {
+fn cutover_marker_semantics_and_file_lifecycle_belong_to_control_owner() {
     let root = repository_root();
-    let owner = read(
+    let schema_owner = read(
         &root,
         "crates/search-control-redb/src/migration/cutover.rs",
     );
-    assert!(owner.contains("pub struct ControlCutoverMarker"));
-    assert!(owner.contains("ELIOT-SEARCH-CONTROL-CUTOVER-V1"));
-    assert!(owner.contains("classify_control_cutover_replay"));
-    assert!(!owner.contains("std::fs"));
-    assert!(!owner.contains("catalog_quarantine"));
-    assert!(!owner.contains("impl DirectStore"));
+    assert!(schema_owner.contains("pub struct ControlCutoverMarker"));
+    assert!(schema_owner.contains("ELIOT-SEARCH-CONTROL-CUTOVER-V1"));
+    assert!(schema_owner.contains("classify_control_cutover_replay"));
+    assert!(!schema_owner.contains("std::fs"));
+    assert!(!schema_owner.contains("catalog_quarantine"));
+    assert!(!schema_owner.contains("impl DirectStore"));
+
+    let artifact_owner = read(
+        &root,
+        "crates/search-control-redb/src/migration/cutover_artifact.rs",
+    );
+    for required in [
+        "pub enum ControlCutoverMarkerFileState",
+        "pub fn resolve_control_cutover_marker",
+        "pub fn publish_control_cutover_marker",
+        "OpenOptions",
+        "write_all",
+        "fs::rename",
+        "read_to_end",
+    ] {
+        assert!(
+            artifact_owner.contains(required),
+            "control owner is missing cutover artifact behavior {required}"
+        );
+    }
+    assert!(!artifact_owner.contains("catalog_quarantine"));
+    assert!(!artifact_owner.contains("impl DirectStore"));
 
     let facade = read(
         &root,
@@ -43,9 +64,23 @@ fn cutover_marker_semantics_belong_to_control_owner() {
         &root,
         "bins/eliot-searchd/src/control_migration_cutover/marker_io.rs",
     );
-    assert!(marker_io.contains("search_control_redb::migration"));
-    assert!(marker_io.contains("OpenOptions"));
+    assert!(marker_io.contains("resolve_control_cutover_marker"));
+    assert!(marker_io.contains("publish_control_cutover_marker"));
+    assert!(marker_io.contains("catalog_quarantine"));
     assert!(!marker_io.contains("impl DirectStore"));
+    for forbidden in [
+        "OpenOptions",
+        "write_all",
+        "fs::rename",
+        "fs::read",
+        "sync_all",
+        "read_to_end",
+    ] {
+        assert!(
+            !marker_io.contains(forbidden),
+            "daemon restored package-owned marker I/O: {forbidden}"
+        );
+    }
 
     let operation = read(
         &root,
