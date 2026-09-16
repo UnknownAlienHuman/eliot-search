@@ -7,10 +7,12 @@
 
 mod gate;
 mod grant;
+mod grant_authority;
 mod system_grant;
 
 pub use gate::*;
 pub use grant::*;
+pub use grant_authority::*;
 pub use system_grant::*;
 
 #[cfg(test)]
