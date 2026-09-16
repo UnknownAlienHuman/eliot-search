@@ -15,7 +15,7 @@ use search_control_redb::migration::{
 use super::super::redb_import::DaemonImportOutputPlatform;
 
 pub(super) use search_control_redb::migration::{
-    ControlCutoverMarkerFile as ValidMarker,
+    CONTROL_CUTOVER_MARKER_TEMP_FILE as CUTOVER_MARKER_TMP,
     ControlCutoverMarkerFileState as MarkerState,
     ControlCutoverMarkerPublishOutcome as PublishOutcome,
 };
