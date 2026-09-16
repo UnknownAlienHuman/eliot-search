@@ -35,12 +35,14 @@ pub use plaintext::{
     StoreVerification, StoredMatch,
 };
 
-// Compatibility surface for existing store-owned children. These names stay
-// private to the DIRECT module and do not widen the daemon API.
+// Compatibility surface for existing store-owned revision children. Generic
+// preparation-file reads continue to import `storage_io::read_regular_file`
+// directly; legacy revision children receive the package-owned exact reader.
 use kernel::{
     MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY, verify_plaintext,
 };
 use storage_io::{
-    legacy_path, protected_path, read_plaintext_path, read_regular_file,
-    read_revision_object, remove_plaintext_after_readback,
+    legacy_path, protected_path, read_plaintext_path,
+    read_revision_object as read_regular_file,
+    remove_plaintext_after_readback,
 };
