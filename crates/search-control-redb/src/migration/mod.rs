@@ -64,6 +64,7 @@ pub use output_lock::{
 };
 pub use readback::SourceMappingReadback;
 pub use receipts::{
+    ControlCutoverStatusProjection, ControlCutoverStatusState,
     SourceMigrationPlanLocation, SourceMigrationStagedPlan,
     render_control_cutover_committed_receipt,
     render_control_cutover_rollback_receipt,
