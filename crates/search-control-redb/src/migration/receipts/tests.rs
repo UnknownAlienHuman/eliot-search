@@ -112,3 +112,41 @@ fn rollback_projection_is_byte_exact() {
         )
     );
 }
+
+#[test]
+fn cutover_status_projection_preserves_closed_states() {
+    let absent = ControlCutoverStatusProjection {
+        state: ControlCutoverStatusState::FileJournal,
+        quarantined: false,
+    }
+    .render_json();
+    assert!(absent.contains("\"authority\":\"file-journal\""));
+    assert!(absent.contains("\"marker_present\":false"));
+    assert!(absent.contains("\"complete\":true"));
+
+    let corrupt = ControlCutoverStatusProjection {
+        state: ControlCutoverStatusState::MarkerCorrupt,
+        quarantined: true,
+    }
+    .render_json();
+    assert!(corrupt.contains("\"authority\":\"marker-corrupt\""));
+    assert!(corrupt.contains("\"marker_present\":true"));
+    assert!(corrupt.contains("\"complete\":false"));
+
+    let committed = ControlCutoverStatusProjection {
+        state: ControlCutoverStatusState::Committed {
+            marker: marker(),
+            database_present: true,
+            database_bytes: 4096,
+        },
+        quarantined: false,
+    }
+    .render_json();
+    assert!(committed.contains(
+        "\"authority\":\"redb-control-marker-v1\""
+    ));
+    assert!(committed.contains("\"staged_database_present\":true"));
+    assert!(committed.contains("\"staged_database_bytes\":4096"));
+    assert!(committed.contains("\"complete\":true"));
+    assert!(committed.ends_with("\"read_only\":true}"));
+}
