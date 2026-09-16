@@ -1,10 +1,11 @@
 //! Atomic cutover of the primary control authority from the file journal to
 //! the verified redb mapping.
 //!
-//! Canonical marker schema, codec and replay classification are owned by
-//! `search-control-redb::migration`. This daemon module owns only data-root
-//! filesystem publication, quarantine interaction, status rendering and the
-//! `DirectStore` orchestration that binds live legacy readback to that marker.
+//! Canonical marker schema, codec, filesystem lifecycle and replay
+//! classification are owned by `search-control-redb::migration`. This daemon
+//! module supplies qualified data-root platform observations and owns only
+//! quarantine policy, status projection and the `DirectStore` orchestration
+//! that binds live legacy readback to that marker.
 //!
 //! The file journal stays on disk as preserved evidence. Serve-path query and
 //! mutation rerouting consumes the marker in a follow-up wiring step; until
