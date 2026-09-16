@@ -8,13 +8,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
     SourceImportRecordArtifact, SourceImportRecordArtifactError,
+    SourceMigrationPlanLocation, SourceMigrationStagedPlan,
     inspect_source_import_record_artifact,
 };
 
 use super::super::storage_io::{
     ensure_child_directory, ensure_directory, sync_directory,
 };
-use super::{DirectStore, check_deadline, json_string, sha256};
+use super::{DirectStore, check_deadline, sha256};
 use crate::development::DataRootGuard;
 
 #[path = "control_migration_redb.rs"]
@@ -25,31 +26,6 @@ mod content_readback;
 mod cutover;
 
 const PLAN_DEADLINE: Duration = Duration::from_secs(120);
-
-/// Typed result of one deterministic staging pass. The JSON report rendered
-/// from it is byte-identical to the historical T10 output; the struct lets the
-/// atomic cutover bind exact chains without reparsing its own receipt.
-pub(super) struct StagedPlan {
-    pub(super) target: SourceNamespaceId,
-    pub(super) catalog_snapshot: [u8; 32],
-    pub(super) plan_name: String,
-    pub(super) plan_chain: [u8; 32],
-    pub(super) plan_bytes: u64,
-    pub(super) plan_reused: bool,
-    pub(super) events: u64,
-    pub(super) sources: u64,
-    pub(super) occurrences: u64,
-    pub(super) path_only_events: u64,
-    pub(super) retirements: u64,
-    pub(super) locator_prefix: &'static str,
-    pub(super) location: &'static str,
-    pub(super) database_name: String,
-    pub(super) database_reused: bool,
-    pub(super) content_name: String,
-    pub(super) content_chain: [u8; 32],
-    pub(super) content_records: u64,
-    pub(super) content_source_bytes: u64,
-}
 
 impl DirectStore {
     /// Store a deterministic, content-free source mapping draft. The explicit UUID
@@ -113,12 +89,13 @@ impl DirectStore {
             locator_prefix,
             deadline,
         )?;
-        Ok(staged_plan_json(&plan))
+        Ok(plan.render_json())
     }
 
     /// Typed staging pass shared by the verify-only report and the atomic
-    /// cutover. Artifact I/O and exact second-pass comparison are owned by
-    /// `search-control-redb`; this composition root supplies source replay.
+    /// cutover. Artifact I/O, exact second-pass comparison and the canonical
+    /// receipt schema are owned by `search-control-redb`; this composition root
+    /// supplies source replay and qualified filesystem observations.
     pub(super) fn stage_mapping_artifact_typed(
         source: &crate::plaintext_direct_store::DirectStore,
         source_root: &Path,
@@ -126,10 +103,13 @@ impl DirectStore {
         directory: &Path,
         locator_prefix: &'static str,
         deadline: Instant,
-    ) -> Result<StagedPlan, String> {
+    ) -> Result<SourceMigrationStagedPlan, String> {
         let location = match locator_prefix {
-            "" => "explicit_output_directory",
-            "control/migration-plans/" | "control/" => "data_root",
+            "" => SourceMigrationPlanLocation::ExplicitOutputDirectory,
+            "control/migration-plans/" => {
+                SourceMigrationPlanLocation::DataRootMigrationPlans
+            }
+            "control/" => SourceMigrationPlanLocation::DataRootControl,
             _ => return Err("DIRECT_MIGRATION_OUTPUT_INVALID".to_owned()),
         };
         check_deadline(Some(deadline))?;
@@ -223,19 +203,14 @@ impl DirectStore {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
         check_deadline(Some(deadline))?;
-        Ok(StagedPlan {
+        Ok(SourceMigrationStagedPlan {
             target,
             catalog_snapshot: header.catalog_snapshot,
             plan_name: name,
             plan_chain: digest,
             plan_bytes: bytes,
             plan_reused: reused,
-            events: summary.events,
-            sources: summary.sources,
-            occurrences: summary.occurrences,
-            path_only_events: summary.path_only_events,
-            retirements: summary.retirements,
-            locator_prefix,
+            summary,
             location,
             database_name,
             database_reused,
@@ -245,51 +220,6 @@ impl DirectStore {
             content_source_bytes: content.source_bytes,
         })
     }
-}
-
-fn staged_plan_json(plan: &StagedPlan) -> String {
-    format!(
-        concat!(
-            "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
-            "\"target_namespace_id\":\"{}\",\"catalog_snapshot_sha256\":\"{}\",",
-            "\"plan_locator\":{},\"plan_chain_sha256\":\"{}\",\"digest_scheme\":\"sha256-record-chain-v1\",\"plan_bytes\":{},\"reused\":{},",
-            "\"events\":{},\"sources\":{},\"revision_occurrences\":{},\"retained_revision_events\":{},",
-            "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
-            "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
-            "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
-            "\"staged_database_schema\":\"source-map-content-v2\",\"content_manifest_bound_to_redb\":true,",
-            "\"content_manifest_locator\":{},\"content_manifest_chain_sha256\":\"{}\",",
-            "\"content_objects_verified\":{},\"content_bytes_verified\":{},\"content_blake3_verified\":true,",
-            "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"
-        ),
-        plan.target,
-        sha256::hex(&plan.catalog_snapshot),
-        json_string(&format!(
-            "{}{}",
-            plan.locator_prefix, plan.plan_name
-        )),
-        sha256::hex(&plan.plan_chain),
-        plan.plan_bytes,
-        plan.plan_reused,
-        plan.events,
-        plan.sources,
-        plan.occurrences,
-        plan.path_only_events,
-        plan.retirements,
-        plan.location,
-        json_string(&format!(
-            "{}{}",
-            plan.locator_prefix, plan.database_name
-        )),
-        plan.database_reused,
-        json_string(&format!(
-            "{}{}",
-            plan.locator_prefix, plan.content_name
-        )),
-        sha256::hex(&plan.content_chain),
-        plan.content_records,
-        plan.content_source_bytes
-    )
 }
 
 pub(super) fn temporary_staging_name() -> Result<String, String> {
