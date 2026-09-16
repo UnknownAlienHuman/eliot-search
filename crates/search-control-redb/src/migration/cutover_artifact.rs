@@ -116,12 +116,12 @@ where
 }
 
 /// Publishes one canonical marker by temporary write, file sync, directory
-/// sync, atomic rename and exact post-publication readback.
+/// sync, no-clobber hard-link publication and exact post-publication readback.
 ///
 /// A byte-identical existing marker is an idempotent replay. A different valid
-/// marker is never overwritten. After an unclassified rename error, observing
-/// the proposed bytes cannot prove which attempt committed and therefore
-/// remains outcome-unknown.
+/// marker is never overwritten. After an unclassified hard-link error,
+/// observing the proposed bytes cannot prove which attempt committed and
+/// therefore remains outcome-unknown.
 ///
 /// # Errors
 ///
@@ -152,6 +152,9 @@ where
         .validate_directory(&control)
         .map_err(|_| ControlCutoverMarkerArtifactError::CreateFailed)?;
 
+    let temporary = control.join(CONTROL_CUTOVER_MARKER_TEMP_FILE);
+    let marker = control.join(CONTROL_CUTOVER_MARKER_FILE);
+    let _ = fs::remove_file(&temporary);
     match resolve_control_cutover_marker(platform, data_root) {
         ControlCutoverMarkerFileState::Valid(existing) => {
             return classify_existing(&existing, expected);
@@ -162,9 +165,6 @@ where
         ControlCutoverMarkerFileState::Absent => {}
     }
 
-    let temporary = control.join(CONTROL_CUTOVER_MARKER_TEMP_FILE);
-    let marker = control.join(CONTROL_CUTOVER_MARKER_FILE);
-    let _ = fs::remove_file(&temporary);
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -193,8 +193,17 @@ where
     drop(file);
     let _ = platform.sync_directory(&control);
 
-    match fs::rename(&temporary, &marker) {
+    match read_marker(platform, &temporary) {
+        Ok(staged) if staged.bytes == expected => {}
+        _ => {
+            let _ = fs::remove_file(&temporary);
+            return Err(ControlCutoverMarkerArtifactError::CreateFailed);
+        }
+    }
+
+    match fs::hard_link(&temporary, &marker) {
         Ok(()) => {
+            let _ = fs::remove_file(&temporary);
             let _ = platform.sync_directory(&control);
             match read_marker(platform, &marker) {
                 Ok(readback) if readback.bytes == expected => {
