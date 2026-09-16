@@ -9,7 +9,7 @@
 #![deny(unsafe_code)]
 
 #[cfg(feature = "wave4-query")]
-#[allow(dead_code)] // T20: proven by access_composition unit tests; provider-query wiring pending grant-issuing authority.
+#[allow(dead_code)] // T20: access/grant kernels are proven; provider wiring still needs authenticated policy and connection binding.
 mod access_composition;
 mod app;
 mod authenticated_proxy;
@@ -34,6 +34,7 @@ mod preparation_composition;
 mod projection_composition;
 mod protocol_io;
 mod provider_composition;
+mod qualified_entropy;
 #[cfg(feature = "wave4-query")]
 #[allow(dead_code)] // T28: provider-query wiring pending; proven by indexed_query_process.
 mod query_composition;
