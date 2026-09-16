@@ -3,13 +3,13 @@
 use std::fs;
 use std::path::Path;
 
-use super::marker_io::{MarkerState, regular, resolve_marker};
+use super::marker_io::{MarkerState, resolve_marker};
 use super::super::{json_string, sha256};
 
 /// Renders bounded read-only authority status.
 ///
-/// The operation performs one marker read plus at most one staged-database
-/// stat. It never replays the journal and never writes or repairs state.
+/// The operation performs one package-owned marker read plus at most one staged
+/// database stat. It never replays the journal and never writes or repairs state.
 pub(super) fn cutover_status_json(data_root: &Path) -> String {
     let quarantined = crate::catalog_quarantine::is_quarantined(data_root);
     let (
@@ -98,4 +98,21 @@ pub(super) fn cutover_status_json(data_root: &Path) -> String {
         quarantined,
         complete,
     )
+}
+
+fn regular(metadata: &fs::Metadata) -> bool {
+    metadata.is_file() && !is_link(metadata)
+}
+
+fn is_link(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_type().is_symlink()
+            || metadata.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        metadata.file_type().is_symlink()
+    }
 }
