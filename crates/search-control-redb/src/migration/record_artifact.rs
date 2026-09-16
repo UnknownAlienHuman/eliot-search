@@ -7,6 +7,8 @@
 //! temporary cleanup. The injected platform owns only native identity,
 //! locator admission and directory durability observations.
 
+#![allow(clippy::module_name_repetitions)]
+
 use core::fmt;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
@@ -63,21 +65,49 @@ impl<E: fmt::Display> fmt::Display for SourceImportRecordArtifactError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Platform(error) => error.fmt(formatter),
-            Self::DeadlineExceeded => formatter.write_str("record artifact deadline exceeded"),
-            Self::TemporaryNameInvalid => formatter.write_str("record artifact temporary name invalid"),
-            Self::FinalNameInvalid => formatter.write_str("record artifact final name invalid"),
-            Self::CreateFailed => formatter.write_str("record artifact create failed"),
+            Self::DeadlineExceeded => {
+                formatter.write_str("record artifact deadline exceeded")
+            }
+            Self::TemporaryNameInvalid => {
+                formatter.write_str("record artifact temporary name invalid")
+            }
+            Self::FinalNameInvalid => {
+                formatter.write_str("record artifact final name invalid")
+            }
+            Self::CreateFailed => {
+                formatter.write_str("record artifact create failed")
+            }
             Self::Closed => formatter.write_str("record artifact closed"),
-            Self::WriteFailed => formatter.write_str("record artifact write failed"),
-            Self::SyncFailed => formatter.write_str("record artifact sync failed"),
-            Self::ObjectInvalid => formatter.write_str("record artifact object invalid"),
-            Self::ReadFailed => formatter.write_str("record artifact read failed"),
-            Self::ComparisonReadFailed => formatter.write_str("record artifact comparison read failed"),
-            Self::ReadbackMismatch => formatter.write_str("record artifact readback mismatch"),
-            Self::PublishOutcomeUnknown => formatter.write_str("record artifact publish outcome unknown"),
-            Self::ImmutableConflict => formatter.write_str("record artifact immutable conflict"),
-            Self::IdentityChanged => formatter.write_str("record artifact identity changed"),
-            Self::CleanupFailed => formatter.write_str("record artifact cleanup failed"),
+            Self::WriteFailed => {
+                formatter.write_str("record artifact write failed")
+            }
+            Self::SyncFailed => {
+                formatter.write_str("record artifact sync failed")
+            }
+            Self::ObjectInvalid => {
+                formatter.write_str("record artifact object invalid")
+            }
+            Self::ReadFailed => {
+                formatter.write_str("record artifact read failed")
+            }
+            Self::ComparisonReadFailed => {
+                formatter.write_str("record artifact comparison read failed")
+            }
+            Self::ReadbackMismatch => {
+                formatter.write_str("record artifact readback mismatch")
+            }
+            Self::PublishOutcomeUnknown => {
+                formatter.write_str("record artifact publish outcome unknown")
+            }
+            Self::ImmutableConflict => {
+                formatter.write_str("record artifact immutable conflict")
+            }
+            Self::IdentityChanged => {
+                formatter.write_str("record artifact identity changed")
+            }
+            Self::CleanupFailed => {
+                formatter.write_str("record artifact cleanup failed")
+            }
             Self::RecordChain(error) => error.fmt(formatter),
         }
     }
@@ -167,34 +197,6 @@ impl<P> OwnedStaging<P>
 where
     P: SourceImportOutputArtifactPlatform,
 {
-    fn verify(
-        &self,
-        deadline: Instant,
-    ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
-        check_deadline(deadline)?;
-        self.platform
-            .validate_directory(&self.directory)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        let metadata = fs::symlink_metadata(&self.path)
-            .map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
-        if !regular(&metadata) {
-            return Err(SourceImportRecordArtifactError::ObjectInvalid);
-        }
-        let file = File::open(&self.path)
-            .map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
-        self.platform
-            .verify_locator(&file, &self.path)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        let identity = self
-            .platform
-            .identity(&file)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        if identity != self.identity {
-            return Err(SourceImportRecordArtifactError::IdentityChanged);
-        }
-        check_deadline(deadline)
-    }
-
     fn cleanup(
         &mut self,
     ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
@@ -288,7 +290,6 @@ where
         let identity = platform
             .identity(&file)
             .map_err(SourceImportRecordArtifactError::Platform)?;
-        check_deadline(deadline)?;
         Ok(Self {
             writer: Some(BufWriter::new(file)),
             owned: Some(OwnedStaging {
@@ -500,8 +501,9 @@ where
             .frozen
             .as_ref()
             .ok_or(SourceImportRecordArtifactError::Closed)?;
-        if self.observed.encoded_bytes() != frozen.encoded_bytes
-            || self.observed.finish() != frozen.chain
+        let observed = core::mem::take(&mut self.observed);
+        if observed.encoded_bytes() != frozen.encoded_bytes
+            || observed.finish() != frozen.chain
         {
             return Err(SourceImportRecordArtifactError::ReadbackMismatch);
         }
@@ -659,10 +661,9 @@ where
     inspect_record_file(platform, path, expected_bytes, None, deadline)
 }
 
-struct OpenedRecord<I> {
+struct OpenedRecord {
     file: File,
     modified: Option<SystemTime>,
-    identity: I,
 }
 
 fn open_record_file<P>(
@@ -671,7 +672,7 @@ fn open_record_file<P>(
     expected_bytes: u64,
     expected_identity: Option<&P::Identity>,
     deadline: Instant,
-) -> Result<OpenedRecord<P::Identity>, SourceImportRecordArtifactError<P::Error>>
+) -> Result<OpenedRecord, SourceImportRecordArtifactError<P::Error>>
 where
     P: SourceImportOutputArtifactPlatform,
 {
@@ -714,7 +715,6 @@ where
     Ok(OpenedRecord {
         file,
         modified: opened.modified().ok(),
-        identity,
     })
 }
 
