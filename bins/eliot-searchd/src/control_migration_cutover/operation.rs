@@ -4,11 +4,12 @@ use std::time::{Duration, Instant};
 
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
-    CONTROL_CUTOVER_MARKER_FILE as CUTOVER_MARKER_FILE,
     CONTROL_CUTOVER_STAGED_DATABASE_SCHEMA as STAGED_DATABASE_SCHEMA,
     ControlCutoverMarker as CutoverMarker,
     ControlCutoverReplayDecision as ReplayDecision,
     classify_control_cutover_replay as check_replay,
+    render_control_cutover_committed_receipt,
+    render_control_cutover_rollback_receipt,
 };
 
 use super::marker_io::{
@@ -17,7 +18,7 @@ use super::marker_io::{
     publish_marker, quarantined, resolve_marker,
 };
 use super::status::cutover_status_json;
-use super::super::{DirectStore, StagedPlan, check_deadline, json_string, sha256};
+use super::super::{DirectStore, check_deadline};
 use crate::development::DataRootGuard;
 
 const CUTOVER_DEADLINE: Duration = Duration::from_secs(120);
@@ -102,7 +103,11 @@ impl DirectStore {
         if let MarkerState::Valid(committed) = resolve_marker(root) {
             match check_replay(&committed.marker, &proposed) {
                 ReplayDecision::Identical => {
-                    return Ok(cutover_receipt(&committed.marker, &staged, true));
+                    return Ok(render_control_cutover_committed_receipt(
+                        &committed.marker,
+                        staged.database_reused,
+                        true,
+                    ));
                 }
                 ReplayDecision::Diverged => {
                     return Err(CUTOVER_ALREADY_COMMITTED.to_owned());
@@ -130,7 +135,11 @@ impl DirectStore {
             return Err(quarantined(root, "DIRECT_CONTROL_READBACK_MISMATCH"));
         }
         check_deadline(Some(deadline))?;
-        Ok(cutover_receipt(&proposed, &staged, replayed))
+        Ok(render_control_cutover_committed_receipt(
+            &proposed,
+            staged.database_reused,
+            replayed,
+        ))
     }
 
     /// Performs explicit rollback before cutover.
@@ -154,15 +163,7 @@ impl DirectStore {
         check_rollback(root)?;
         let snapshot = self.inner.verify_migration_snapshot(deadline)?;
         check_deadline(Some(deadline))?;
-        Ok(format!(
-            concat!(
-                "{{\"event\":\"control_cutover_rollback\",\"schema\":\"eliot.control-cutover.v1\",",
-                "\"marker_present\":false,\"action\":\"noop-verified-file-snapshot\",",
-                "\"catalog_snapshot_sha256\":\"{}\",\"cutover_authorized\":false,",
-                "\"primary_authority\":\"file-journal\"}}"
-            ),
-            sha256::hex(&snapshot),
-        ))
+        Ok(render_control_cutover_rollback_receipt(&snapshot))
     }
 
     /// Returns read-only cutover status suitable for high-frequency polling.
@@ -170,39 +171,4 @@ impl DirectStore {
     pub(crate) fn inspect_control_cutover_status(&self) -> String {
         cutover_status_json(&self.root)
     }
-}
-
-fn cutover_receipt(
-    marker: &CutoverMarker,
-    staged: &StagedPlan,
-    replayed: bool,
-) -> String {
-    let locator = ["control/", marker.database_file_name.as_str()].concat();
-    format!(
-        concat!(
-            "{{\"event\":\"control_cutover_committed\",\"schema\":\"eliot.control-cutover.v1\",",
-            "\"target_namespace_id\":\"{}\",\"catalog_snapshot_sha256\":\"{}\",",
-            "\"plan_chain_sha256\":\"{}\",\"content_manifest_chain_sha256\":\"{}\",",
-            "\"marker_locator\":\"control/{}\",\"marker_digest\":\"{}\",",
-            "\"staged_database_locator\":{},\"staged_database_schema\":{},",
-            "\"staged_database_reused\":{},\"installation_incarnation_id\":\"{}\",",
-            "\"data_root_id\":\"{}\",\"owner_epoch\":{},\"replayed\":{},",
-            "\"cutover_authorized\":true,\"file_journal_preserved\":true,",
-            "\"primary_authority\":\"redb-control-marker-v1\",",
-            "\"serve_path_reroute\":\"pending-integration-wiring\"}}"
-        ),
-        marker.target,
-        sha256::hex(&marker.catalog_snapshot),
-        sha256::hex(&marker.plan_chain),
-        sha256::hex(&marker.content_chain),
-        CUTOVER_MARKER_FILE,
-        sha256::hex(&marker.record_digest()),
-        json_string(&locator),
-        json_string(&marker.database_schema),
-        staged.database_reused,
-        marker.incarnation,
-        marker.root,
-        marker.epoch,
-        replayed,
-    )
 }
