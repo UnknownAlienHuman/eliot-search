@@ -19,6 +19,8 @@ Convert an exact retained revision into a canonical representation with explicit
 - assurance ceiling classification
 - provider qualification seam for optional documents
 - bounded immutable legacy preparation-object/reference I/O during T02 migration
+- canonical legacy preparation binding, reference and manifest wire schema
+- frozen preparation digest preimages, protection tags, bounds and locator names
 
 ## Forbidden ownership
 
@@ -30,6 +32,7 @@ Convert an exact retained revision into a canonical representation with explicit
 - retained revision CAS or revision-object publication owned by `search-revision-store`
 - secret acquisition, DPAPI/keyring operations or plaintext source verification
 - source-registry or control-journal mutation
+- daemon data-root ownership, native identity observation or path traversal
 
 ## Allowed dependencies
 
@@ -47,6 +50,12 @@ is improved:
 - `qualify_provider(descriptor, fixtures) -> ProviderQualification`
 - `read_legacy_preparation_artifact(platform, path, maximum_bytes)`
 - `publish_legacy_preparation_artifact(platform, directory, final_name, temporary_name, bytes, maximum_bytes)`
+- `encode_legacy_preparation_binding(binding)`
+- `decode_legacy_preparation_reference(encoded, lookup_key)`
+- `encode_legacy_preparation_manifest(binding, representation, revisions, body)`
+- `verify_legacy_preparation_manifest(manifest, binding, revisions)`
+- `derive_legacy_preparation_lookup_key(binding, backend)`
+- `derive_legacy_preparation_object_id(binding, backend, manifest_digest)`
 
 The compatibility artifact adapter treats bytes as opaque. Native identity,
 locator and directory-durability observations are injected. It cannot infer a
@@ -54,10 +63,20 @@ materialization profile, decrypt bytes, authorize source access or publish a
 revision. A racing final artifact is reusable only after exact readback; a
 conflicting artifact is never overwritten.
 
+The legacy store schema is pure. Concrete SHA-256/BLAKE3 implementations are
+injected; DPAPI and filesystem operations remain composition responsibilities.
+The package owns field order, fixed sizes, algorithm tags, profile revisions,
+digest domains and canonical local names. Any format change requires an
+explicit compatibility review rather than daemon-local reinterpretation.
+
 ## Failure surface
 
 Use typed errors/reason codes. Relevant public reasons: `MATERIALIZATION_LOSS`, `MATERIALIZER_UNAVAILABLE`, `COORDINATE_MAP_INVALID`. Never turn a degraded or partial
 state into an apparent success. Possible publication followed by failed directory durability is outcome-unknown.
+
+Legacy preparation schema failures preserve the stable `DIRECT_PREPARATION_*`
+namespace. Malformed binding/reference/manifest bytes, profile or algorithm
+drift, digest mismatch and representation mismatch fail closed.
 
 ## Test seams and exit evidence
 
@@ -70,6 +89,10 @@ state into an apparent success. Possible publication followed by failed director
 - `legacy preparation conflict preserves existing bytes and removes only its own temporary`
 - `legacy read rejects changed identity and oversize before allocation`
 - `daemon preparation paths compose this package while revision paths do not`
+- `ELSPRP02 binding and ELSPRF01 reference layouts remain byte exact`
+- `lookup/object digest preimages and lower-case locator names remain frozen`
+- `manifest algorithm/profile tags and representation identity are verified together`
+- `daemon contains no duplicate preparation schema constants, offsets or digest domains`
 
 Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
 but the writer does not edit another package opportunistically.

@@ -194,3 +194,55 @@ The package owns no durable mutation and has no unknown commit outcome.
 - optional provider descriptor remains gated/unselected and removal falls back explicitly;
 - content/path absent from technical receipts/debug/log fixtures;
 - fake revision/artifact/cancellation ports and no registry/index/ranking dependency.
+
+## Legacy DIRECT preparation-store compatibility
+
+The temporary T02 compatibility surface owns the frozen persisted preparation
+schema and immutable artifact mechanics without widening materializer authority.
+
+### `encode_legacy_preparation_binding(binding) -> [u8; 208]`
+
+Emits exactly `ELSPRP02`, namespace/source/revision/content digest identities,
+byte length and both profile digests in fixed order. No path, key material,
+source body or authority receipt enters the record.
+
+### `derive_legacy_preparation_lookup_key(binding, backend) -> [u8; 32]`
+
+Uses the fixed `eliot-search/direct-preparation-ref/v2` ordered-parts preimage.
+The concrete SHA-256 implementation is injected by daemon composition.
+
+### `derive_legacy_preparation_object_id(binding, backend, manifest_digest) -> [u8; 32]`
+
+Uses the fixed `eliot-search/direct-preparation-object/v2` preimage. Equal
+manifest bytes under a different binding or protection backend cannot share an
+object identity accidentally.
+
+### `encode_legacy_preparation_reference(key, manifest_digest, manifest_bytes, protection) -> [u8; 81]`
+
+Emits exactly `ELSPRF01`, lookup key, decoded manifest SHA-256, decoded manifest
+length and the closed plaintext/protected tag. Noncanonical length/tag/key
+shapes fail closed.
+
+### `encode_legacy_preparation_manifest(binding, representation, profile_revisions, frame) -> Vec<u8>`
+
+Emits the exact binding, representation ID, fixed digest-algorithm tags,
+materializer/unitizer revisions and one bounded legacy preparation frame.
+Unknown, zero or oversized shape is rejected before publication.
+
+### `verify_legacy_preparation_manifest(manifest, binding, profile_revisions) -> LegacyPreparationManifestView`
+
+Requires exact binding bytes, fixed algorithm tags, exact expected profile
+revisions, valid frame and representation identity derived from that same
+binding/frame marker. It returns a borrowed typed view rather than exposing
+hard-coded daemon offsets.
+
+### `read_legacy_preparation_artifact` / `publish_legacy_preparation_artifact`
+
+Perform bounded exact read and same-directory no-clobber immutable publication
+through injected native identity/locator/durability observations. Filesystem
+state, DPAPI and source verification remain outside this package.
+
+Compatibility tests freeze magic, sizes, field order, digest domains, locator
+names, profile/algorithm tags, closed gaps, payload digest/length binding,
+identity fencing and conflict behavior. This surface is not a provider
+qualification, source admission, revision receipt or launch gate.
