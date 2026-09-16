@@ -10,14 +10,15 @@ use search_control_redb::migration::{
     SourceContentManifest, SourceImportBinding, SourceImportCounts,
     SourceImportOutputArtifact, SourceImportOutputArtifactError,
     SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform,
+    SourceImportRecordChain, SourceImportRecordChainError,
     SourceMappingImport, SourceMappingReadback,
 };
 
+use super::content_readback::ContentArtifact;
 use super::{
-    PlanDigest, check_deadline, ensure_directory, fingerprint, regular, sha256,
+    check_deadline, ensure_directory, fingerprint, regular, sha256,
     sync_directory,
 };
-use super::content_readback::ContentArtifact;
 use crate::plaintext_direct_store::DirectStore;
 
 type ImportOutput = SourceImportOutputArtifact<DaemonImportOutputPlatform>;
@@ -113,12 +114,16 @@ pub(super) fn store(
             .map_err(output_artifact_reason)?;
     }
 
-    let mut hash = PlanDigest::new();
+    let mut hash = SourceImportRecordChain::new();
     let summary = source.compile_source_mapping_with_rows(
         target,
         deadline,
-        |encoded| hash.push(encoded),
-        |row| writer.push(row, deadline).map_err(|error| error.code().to_owned()),
+        |encoded| hash.push(encoded).map_err(record_chain_reason),
+        |row| {
+            writer
+                .push(row, deadline)
+                .map_err(|error| error.code().to_owned())
+        },
     )?;
     if summary.import_counts() != expected || hash.finish() != plan_chain {
         return Err("DIRECT_MIGRATION_IMPORT_SOURCE_CHANGED".to_owned());
@@ -175,12 +180,16 @@ fn verify_mapping(
         deadline,
     )
     .map_err(|error| error.code().to_owned())?;
-    let mut hash = PlanDigest::new();
+    let mut hash = SourceImportRecordChain::new();
     let summary = source.compile_source_mapping_with_rows(
         binding.target_namespace,
         deadline,
-        |encoded| hash.push(encoded),
-        |row| reader.compare(&row, deadline).map_err(|error| error.code().to_owned()),
+        |encoded| hash.push(encoded).map_err(record_chain_reason),
+        |row| {
+            reader
+                .compare(&row, deadline)
+                .map_err(|error| error.code().to_owned())
+        },
     )?;
     if summary.import_counts() != expected
         || hash.finish() != *binding.plan_chain.as_bytes()
@@ -200,8 +209,11 @@ fn verify_content(
 ) -> Result<(), String> {
     let expected = format!("{}.source-content.v1", sha256::hex(&content.chain));
     if content.name != expected
-        || fingerprint(&directory.join(&expected), content.encoded_bytes, deadline)?
-            != content.chain
+        || fingerprint(
+            &directory.join(&expected),
+            content.encoded_bytes,
+            deadline,
+        )? != content.chain
     {
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
@@ -256,7 +268,11 @@ fn output_artifact_reason(
     error.into_reason()
 }
 
-fn native_identity(file: &File) -> Result<(u64, u64), String> {
+fn record_chain_reason(error: SourceImportRecordChainError) -> String {
+    error.code().to_owned()
+}
+
+pub(super) fn native_identity(file: &File) -> Result<(u64, u64), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     let metadata = file.metadata().map_err(|_| invalid())?;
     if !regular(&metadata) {
@@ -279,7 +295,10 @@ fn native_identity(file: &File) -> Result<(u64, u64), String> {
     }
 }
 
-fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
+pub(super) fn verify_locator(
+    expected: &File,
+    path: &Path,
+) -> Result<(), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     ensure_directory(path.parent().ok_or_else(invalid)?)?;
     if !regular(&fs::symlink_metadata(path).map_err(|_| invalid())?) {
