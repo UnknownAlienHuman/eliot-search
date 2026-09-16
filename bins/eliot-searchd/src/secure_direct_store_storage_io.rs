@@ -1,9 +1,9 @@
-//! Qualified daemon adapter for package-owned legacy revision-object I/O.
+//! Qualified daemon adapters for package-owned immutable object I/O.
 //!
-//! `search-revision-store` owns bounded exact reads, no-clobber publication,
-//! native-identity fencing and temporary cleanup for revision objects. Generic
-//! preparation artifacts retain their existing local helper until the separate
-//! `search-materializer` ownership slice.
+//! `search-revision-store` owns revision-object reads/publication and
+//! `search-materializer` owns preparation-object/reference reads/publication.
+//! This module retains legacy path derivation, native platform observations,
+//! temporary-name entropy and stable DIRECT reason mapping.
 
 #![allow(
     clippy::missing_errors_doc,
@@ -12,11 +12,14 @@
     clippy::too_many_lines
 )]
 
-use std::fs::{self, File, Metadata, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::{self, File, Metadata};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use search_materializer::{
+    LegacyPreparationArtifactError, LegacyPreparationArtifactPlatform,
+    publish_legacy_preparation_artifact, read_legacy_preparation_artifact,
+};
 use search_revision_store::{
     LegacyRevisionObjectError, LegacyRevisionObjectPlatform,
     publish_legacy_revision_object, read_legacy_revision_object,
@@ -44,35 +47,14 @@ pub(super) fn read_plaintext_path(
     Ok(bytes)
 }
 
-/// Generic bounded read retained for preparation-store and other non-revision
-/// artifacts. Revision-object callers use [`read_revision_object`].
 pub(super) fn read_regular_file(
     path: &Path,
     max_bytes: usize,
     error_prefix: &'static str,
 ) -> Result<Vec<u8>, String> {
-    ensure_regular_file(path)?;
-    let metadata = fs::metadata(path)
-        .map_err(|error| format!("{error_prefix}:{error}"))?;
-    if metadata.len() > u64::try_from(max_bytes).unwrap_or(u64::MAX) {
-        return Err(format!("{error_prefix}:TOO_LARGE"));
-    }
-    let mut bytes = Vec::with_capacity(
-        usize::try_from(metadata.len())
-            .map_err(|_| format!("{error_prefix}:TOO_LARGE"))?,
-    );
-    File::open(path)
-        .and_then(|file| {
-            file.take(u64::try_from(max_bytes + 1).unwrap_or(u64::MAX))
-                .read_to_end(&mut bytes)
-        })
-        .map_err(|error| format!("{error_prefix}:{error}"))?;
-    if bytes.len() > max_bytes
-        || bytes.len() != usize::try_from(metadata.len()).unwrap_or(usize::MAX)
-    {
-        return Err(format!("{error_prefix}:LENGTH_MISMATCH"));
-    }
-    Ok(bytes)
+    read_legacy_preparation_artifact(&DaemonImmutableObjectPlatform, path, max_bytes)
+        .map(|observed| observed.into_bytes())
+        .map_err(|error| preparation_read_reason(error, error_prefix))
 }
 
 pub(super) fn read_revision_object(
@@ -80,13 +62,11 @@ pub(super) fn read_revision_object(
     max_bytes: usize,
     error_prefix: &'static str,
 ) -> Result<Vec<u8>, String> {
-    read_legacy_revision_object(&DaemonRevisionObjectPlatform, path, max_bytes)
+    read_legacy_revision_object(&DaemonImmutableObjectPlatform, path, max_bytes)
         .map(|observed| observed.into_bytes())
-        .map_err(|error| read_reason(error, error_prefix))
+        .map_err(|error| revision_read_reason(error, error_prefix))
 }
 
-/// Existing generic immutable publication retained for preparation references
-/// and objects until the separate materializer ownership move.
 pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > MAX_REVISION_OBJECT_BYTES {
         return Err("DIRECT_REVISION_PROTECTED_SIZE_INVALID".to_owned());
@@ -94,55 +74,30 @@ pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), 
     let parent = path
         .parent()
         .ok_or_else(|| "DIRECT_REVISION_PARENT_MISSING".to_owned())?;
-    ensure_child_directory(parent)?;
-    match fs::symlink_metadata(path) {
-        Ok(_) => return verify_encoded_object(path, bytes),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err("DIRECT_REVISION_OBJECT_INSPECTION_FAILED".to_owned()),
-    }
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "DIRECT_REVISION_CLOCK_INVALID".to_owned())?
-        .as_nanos();
-    let file_name = path
+    let final_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "DIRECT_REVISION_FILENAME_INVALID".to_owned())?;
+    let file_stem = path
         .file_stem()
         .and_then(|value| value.to_str())
         .ok_or_else(|| "DIRECT_REVISION_FILENAME_INVALID".to_owned())?;
-    let temporary = parent.join(format!(
-        ".{file_name}.{}.{}.dpapi.tmp",
-        std::process::id(),
-        timestamp,
-    ));
-    let mut file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&temporary)
-        .map_err(|error| format!("DIRECT_REVISION_PROTECTED_CREATE_ERROR:{error}"))?;
-    if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
-        drop(file);
-        let _ = fs::remove_file(&temporary);
-        return Err(format!("DIRECT_REVISION_PROTECTED_WRITE_ERROR:{error}"));
+    let temporary_name = temporary_name(file_stem)?;
+    let receipt = publish_legacy_preparation_artifact(
+        &DaemonImmutableObjectPlatform,
+        parent,
+        final_name,
+        &temporary_name,
+        bytes,
+        MAX_REVISION_OBJECT_BYTES,
+    )
+    .map_err(preparation_publish_reason)?;
+    if receipt.encoded_bytes()
+        != u64::try_from(bytes.len()).unwrap_or(u64::MAX)
+    {
+        return Err("DIRECT_REVISION_PROTECTED_READ_ERROR:LENGTH_MISMATCH".to_owned());
     }
-    drop(file);
-    match fs::hard_link(&temporary, path) {
-        Ok(()) => {
-            fs::remove_file(&temporary)
-                .map_err(|error| format!("DIRECT_REVISION_TEMP_CLEANUP_ERROR:{error}"))?;
-            #[cfg(unix)]
-            sync_directory(parent)?;
-            #[cfg(not(unix))]
-            sync_directory(parent);
-            verify_encoded_object(path, bytes)
-        }
-        Err(error) => {
-            let _ = fs::remove_file(&temporary);
-            if error.kind() == std::io::ErrorKind::AlreadyExists {
-                verify_encoded_object(path, bytes)
-            } else {
-                Err(format!("DIRECT_REVISION_PROTECTED_PUBLISH_ERROR:{error}"))
-            }
-        }
-    }
+    Ok(())
 }
 
 pub(super) fn persist_revision_object(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -160,23 +115,16 @@ pub(super) fn persist_revision_object(path: &Path, bytes: &[u8]) -> Result<(), S
         .file_stem()
         .and_then(|value| value.to_str())
         .ok_or_else(|| "DIRECT_REVISION_FILENAME_INVALID".to_owned())?;
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "DIRECT_REVISION_CLOCK_INVALID".to_owned())?
-        .as_nanos();
-    let temporary_name = format!(
-        ".{file_stem}.{}.{timestamp}.dpapi.tmp",
-        std::process::id()
-    );
+    let temporary_name = temporary_name(file_stem)?;
     let receipt = publish_legacy_revision_object(
-        &DaemonRevisionObjectPlatform,
+        &DaemonImmutableObjectPlatform,
         parent,
         final_name,
         &temporary_name,
         bytes,
         MAX_REVISION_OBJECT_BYTES,
     )
-    .map_err(publish_reason)?;
+    .map_err(revision_publish_reason)?;
     if receipt.encoded_bytes()
         != u64::try_from(bytes.len()).unwrap_or(u64::MAX)
     {
@@ -185,17 +133,15 @@ pub(super) fn persist_revision_object(path: &Path, bytes: &[u8]) -> Result<(), S
     Ok(())
 }
 
-fn verify_encoded_object(path: &Path, expected: &[u8]) -> Result<(), String> {
-    let existing = read_regular_file(
-        path,
-        MAX_REVISION_OBJECT_BYTES,
-        "DIRECT_REVISION_PROTECTED_READ_ERROR",
-    )?;
-    if existing == expected {
-        Ok(())
-    } else {
-        Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned())
-    }
+fn temporary_name(file_stem: &str) -> Result<String, String> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "DIRECT_REVISION_CLOCK_INVALID".to_owned())?
+        .as_nanos();
+    Ok(format!(
+        ".{file_stem}.{}.{timestamp}.dpapi.tmp",
+        std::process::id()
+    ))
 }
 
 pub(super) fn remove_plaintext_after_readback(path: &Path) -> Result<(), String> {
@@ -268,9 +214,9 @@ fn ensure_regular_file(path: &Path) -> Result<(), String> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct DaemonRevisionObjectPlatform;
+struct DaemonImmutableObjectPlatform;
 
-impl LegacyRevisionObjectPlatform for DaemonRevisionObjectPlatform {
+impl LegacyRevisionObjectPlatform for DaemonImmutableObjectPlatform {
     type Identity = (u64, u64);
     type Error = String;
 
@@ -283,17 +229,7 @@ impl LegacyRevisionObjectPlatform for DaemonRevisionObjectPlatform {
         expected: &File,
         path: &Path,
     ) -> Result<(), Self::Error> {
-        let parent = path
-            .parent()
-            .ok_or_else(|| "DIRECT_REVISION_PARENT_MISSING".to_owned())?;
-        ensure_directory(parent)?;
-        ensure_regular_file(path)?;
-        let current = File::open(path)
-            .map_err(|error| format!("DIRECT_REVISION_OBJECT_READ_FAILED:{error}"))?;
-        if native_identity(&current)? != native_identity(expected)? {
-            return Err("DIRECT_REVISION_OBJECT_CHANGED".to_owned());
-        }
-        Ok(())
+        verify_locator(expected, path)
     }
 
     fn identity(&self, file: &File) -> Result<Self::Identity, Self::Error> {
@@ -301,16 +237,47 @@ impl LegacyRevisionObjectPlatform for DaemonRevisionObjectPlatform {
     }
 
     fn sync_directory(&self, path: &Path) -> Result<(), Self::Error> {
-        #[cfg(unix)]
-        {
-            sync_directory(path)
-        }
-        #[cfg(not(unix))]
-        {
-            sync_directory(path);
-            Ok(())
-        }
+        sync_directory_result(path)
     }
+}
+
+impl LegacyPreparationArtifactPlatform for DaemonImmutableObjectPlatform {
+    type Identity = (u64, u64);
+    type Error = String;
+
+    fn validate_directory(&self, path: &Path) -> Result<(), Self::Error> {
+        ensure_directory(path)
+    }
+
+    fn verify_locator(
+        &self,
+        expected: &File,
+        path: &Path,
+    ) -> Result<(), Self::Error> {
+        verify_locator(expected, path)
+    }
+
+    fn identity(&self, file: &File) -> Result<Self::Identity, Self::Error> {
+        native_identity(file)
+    }
+
+    fn sync_directory(&self, path: &Path) -> Result<(), Self::Error> {
+        sync_directory_result(path)
+    }
+}
+
+fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "DIRECT_REVISION_PARENT_MISSING".to_owned())?;
+    ensure_directory(parent)?;
+    ensure_regular_file(path)?;
+    let current = File::open(path)
+        .map_err(|error| format!("DIRECT_REVISION_OBJECT_READ_FAILED:{error}"))?;
+    if native_identity(&current)? != native_identity(expected)? {
+        return Err("DIRECT_REVISION_OBJECT_CHANGED".to_owned());
+    }
+    Ok(())
 }
 
 fn native_identity(file: &File) -> Result<(u64, u64), String> {
@@ -337,7 +304,7 @@ fn native_identity(file: &File) -> Result<(u64, u64), String> {
     }
 }
 
-fn read_reason(
+fn revision_read_reason(
     error: LegacyRevisionObjectError<String>,
     prefix: &str,
 ) -> String {
@@ -375,7 +342,7 @@ fn read_reason(
     }
 }
 
-fn publish_reason(error: LegacyRevisionObjectError<String>) -> String {
+fn revision_publish_reason(error: LegacyRevisionObjectError<String>) -> String {
     match error {
         LegacyRevisionObjectError::Platform(reason) => reason,
         LegacyRevisionObjectError::ParentMissing => {
@@ -422,6 +389,93 @@ fn publish_reason(error: LegacyRevisionObjectError<String>) -> String {
     }
 }
 
+fn preparation_read_reason(
+    error: LegacyPreparationArtifactError<String>,
+    prefix: &str,
+) -> String {
+    match error {
+        LegacyPreparationArtifactError::Platform(reason) => reason,
+        LegacyPreparationArtifactError::ParentMissing => {
+            "DIRECT_REVISION_PARENT_MISSING".to_owned()
+        }
+        LegacyPreparationArtifactError::LocalNameInvalid => {
+            "DIRECT_REVISION_FILENAME_INVALID".to_owned()
+        }
+        LegacyPreparationArtifactError::SizeInvalid => format!("{prefix}:TOO_LARGE"),
+        LegacyPreparationArtifactError::DirectoryCreate(error) => {
+            format!("DIRECT_DIRECTORY_CREATE_ERROR:{error}")
+        }
+        LegacyPreparationArtifactError::ObjectInspect(error) => {
+            format!("DIRECT_FILE_METADATA_ERROR:{error}")
+        }
+        LegacyPreparationArtifactError::ObjectInvalid => "DIRECT_FILE_INVALID".to_owned(),
+        LegacyPreparationArtifactError::ObjectRead(error) => format!("{prefix}:{error}"),
+        LegacyPreparationArtifactError::ReadbackMismatch => {
+            format!("{prefix}:LENGTH_MISMATCH")
+        }
+        LegacyPreparationArtifactError::IdentityChanged => {
+            "DIRECT_REVISION_OBJECT_CHANGED".to_owned()
+        }
+        LegacyPreparationArtifactError::Create(error)
+        | LegacyPreparationArtifactError::Write(error)
+        | LegacyPreparationArtifactError::PublishOutcomeUnknown(error)
+        | LegacyPreparationArtifactError::Cleanup(error) => format!("{prefix}:{error}"),
+        LegacyPreparationArtifactError::PublishPlatformOutcomeUnknown(reason) => reason,
+        LegacyPreparationArtifactError::ImmutableConflict => {
+            "DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned()
+        }
+    }
+}
+
+fn preparation_publish_reason(
+    error: LegacyPreparationArtifactError<String>,
+) -> String {
+    match error {
+        LegacyPreparationArtifactError::Platform(reason) => reason,
+        LegacyPreparationArtifactError::ParentMissing => {
+            "DIRECT_REVISION_PARENT_MISSING".to_owned()
+        }
+        LegacyPreparationArtifactError::LocalNameInvalid => {
+            "DIRECT_REVISION_FILENAME_INVALID".to_owned()
+        }
+        LegacyPreparationArtifactError::SizeInvalid => {
+            "DIRECT_REVISION_PROTECTED_SIZE_INVALID".to_owned()
+        }
+        LegacyPreparationArtifactError::DirectoryCreate(error) => {
+            format!("DIRECT_DIRECTORY_CREATE_ERROR:{error}")
+        }
+        LegacyPreparationArtifactError::ObjectInspect(_) => {
+            "DIRECT_REVISION_OBJECT_INSPECTION_FAILED".to_owned()
+        }
+        LegacyPreparationArtifactError::ObjectInvalid => "DIRECT_FILE_INVALID".to_owned(),
+        LegacyPreparationArtifactError::ObjectRead(error) => {
+            format!("DIRECT_REVISION_PROTECTED_READ_ERROR:{error}")
+        }
+        LegacyPreparationArtifactError::ReadbackMismatch => {
+            "DIRECT_REVISION_PROTECTED_READ_ERROR:LENGTH_MISMATCH".to_owned()
+        }
+        LegacyPreparationArtifactError::Create(error) => {
+            format!("DIRECT_REVISION_PROTECTED_CREATE_ERROR:{error}")
+        }
+        LegacyPreparationArtifactError::Write(error) => {
+            format!("DIRECT_REVISION_PROTECTED_WRITE_ERROR:{error}")
+        }
+        LegacyPreparationArtifactError::PublishOutcomeUnknown(error) => {
+            format!("DIRECT_REVISION_PROTECTED_PUBLISH_ERROR:{error}")
+        }
+        LegacyPreparationArtifactError::PublishPlatformOutcomeUnknown(reason) => {
+            format!("DIRECT_REVISION_PROTECTED_PUBLISH_ERROR:{reason}")
+        }
+        LegacyPreparationArtifactError::ImmutableConflict
+        | LegacyPreparationArtifactError::IdentityChanged => {
+            "DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned()
+        }
+        LegacyPreparationArtifactError::Cleanup(error) => {
+            format!("DIRECT_REVISION_TEMP_CLEANUP_ERROR:{error}")
+        }
+    }
+}
+
 #[cfg(windows)]
 fn is_reparse(metadata: &Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
@@ -432,6 +486,18 @@ fn is_reparse(metadata: &Metadata) -> bool {
 #[cfg(not(windows))]
 fn is_reparse(_metadata: &Metadata) -> bool {
     false
+}
+
+fn sync_directory_result(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        sync_directory(path)
+    }
+    #[cfg(not(unix))]
+    {
+        sync_directory(path);
+        Ok(())
+    }
 }
 
 #[cfg(unix)]
