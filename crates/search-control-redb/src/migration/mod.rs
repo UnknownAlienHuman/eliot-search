@@ -14,6 +14,7 @@ use crate::ControlError;
 mod codec;
 mod content;
 mod cutover;
+#[allow(clippy::module_name_repetitions)]
 mod cutover_artifact;
 mod mapping;
 mod model;
