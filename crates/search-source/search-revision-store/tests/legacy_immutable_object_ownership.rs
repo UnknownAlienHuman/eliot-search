@@ -52,6 +52,7 @@ fn immutable_revision_object_filesystem_lifecycle_has_one_package_owner() {
         "verify_plaintext",
         "SourceRegistry",
         "ControlJournal",
+        "LegacyPreparationArtifact",
     ] {
         assert!(
             !owner.contains(forbidden),
@@ -61,7 +62,7 @@ fn immutable_revision_object_filesystem_lifecycle_has_one_package_owner() {
 }
 
 #[test]
-fn daemon_composes_revision_owner_without_moving_preparation_objects() {
+fn daemon_composes_revision_owner_and_keeps_materializer_distinct() {
     let root = repository_root();
     let adapter = read(
         &root,
@@ -69,13 +70,10 @@ fn daemon_composes_revision_owner_without_moving_preparation_objects() {
     );
     assert!(adapter.contains("read_legacy_revision_object"));
     assert!(adapter.contains("publish_legacy_revision_object"));
-    assert!(adapter.contains("struct DaemonRevisionObjectPlatform"));
     assert!(adapter.contains("pub(super) fn persist_revision_object"));
     assert!(adapter.contains("pub(super) fn read_revision_object"));
-    assert!(
-        adapter.contains("pub(super) fn persist_immutable_object"),
-        "preparation artifacts retain their separate temporary owner until the materializer slice"
-    );
+    assert!(adapter.contains("read_legacy_preparation_artifact"));
+    assert!(adapter.contains("publish_legacy_preparation_artifact"));
 
     let writer = read(
         &root,
