@@ -3,9 +3,9 @@
 //!
 //! The caller owns input exclusion and source replay. This module owns the
 //! per-artifact output lock, immutable record and cutover-marker publication,
-//! pending/final database lifecycle and exact import/readback state machines.
-//! Resuming an incomplete target verifies its entire committed prefix before
-//! appending rows.
+//! canonical migration receipts, pending/final database lifecycle and exact
+//! import/readback state machines. Resuming an incomplete target verifies its
+//! entire committed prefix before appending rows.
 
 use redb::TableDefinition;
 
@@ -21,6 +21,7 @@ mod model;
 mod output_artifact;
 mod output_lock;
 mod readback;
+mod receipts;
 mod record_artifact;
 mod record_chain;
 mod writer;
@@ -62,6 +63,11 @@ pub use output_lock::{
     SourceImportOutputLockPlatform,
 };
 pub use readback::SourceMappingReadback;
+pub use receipts::{
+    SourceMigrationPlanLocation, SourceMigrationStagedPlan,
+    render_control_cutover_committed_receipt,
+    render_control_cutover_rollback_receipt,
+};
 pub use record_artifact::{
     SourceImportFrozenRecordArtifact, SourceImportPublishedRecordArtifact,
     SourceImportRecordArtifact, SourceImportRecordArtifactError,
