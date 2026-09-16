@@ -20,6 +20,7 @@ Persist only bounded technical control state and publish immutable snapshots for
 - corruption quarantine and write counters
 - inactive source-import schema, output lifecycle and exact readback state machines
 - canonical bounded source-import record chains and content-manifest metadata rows
+- immutable source-import record artifact staging, second-pass comparison, no-clobber publication and cleanup
 
 ## Forbidden ownership
 
@@ -47,10 +48,15 @@ is improved:
 - `Journal::write_counters() -> JournalWriteCounters`
 - `SourceImportRecordChain::push(row) -> Result<(), SourceImportRecordChainError>`
 - `SourceContentManifestEncoder::{header_row, object_row, finish}`
+- `SourceImportRecordArtifact::{create, push, freeze}`
+- `SourceImportRecordReadback::{compare, finish}`
+- `SourceImportVerifiedRecordArtifact::publish`
+- `inspect_source_import_record_artifact`
 
 The content-manifest encoder accepts only bounded identities, digests and lengths.
 The source adapter remains responsible for reading exact retained bytes and supplying
-the verified BLAKE3 digest; source bytes never enter this package.
+the verified BLAKE3 digest; source bytes never enter this package. Temporary-name
+entropy/time and native file identity are injected observations, never authority.
 
 ## Failure surface
 
@@ -64,6 +70,8 @@ state into an apparent success.
 - `source import record-chain known answers remain frozen`
 - `source-content header/object/end rows remain byte exact`
 - `source-content accounting rejects order, count and byte overflow`
+- `immutable record artifact rejects changed second replay, changed identity and conflicting final state`
+- `immutable record artifact never overwrites an existing final locator`
 - `power_loss_reopen_preserves committed control state only`
 - `hot_query_does_not_mutate_redb after 10,000 admissions`
 - `mismatched incarnation or collection route quarantines`
