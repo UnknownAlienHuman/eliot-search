@@ -37,7 +37,7 @@ fn cutover_marker_semantics_and_file_lifecycle_belong_to_control_owner() {
         "pub fn publish_control_cutover_marker",
         "OpenOptions",
         "write_all",
-        "fs::rename",
+        "fs::hard_link",
         "read_to_end",
     ] {
         assert!(
@@ -45,6 +45,7 @@ fn cutover_marker_semantics_and_file_lifecycle_belong_to_control_owner() {
             "control owner is missing cutover artifact behavior {required}"
         );
     }
+    assert!(!artifact_owner.contains("fs::rename"));
     assert!(!artifact_owner.contains("catalog_quarantine"));
     assert!(!artifact_owner.contains("impl DirectStore"));
 
@@ -72,6 +73,7 @@ fn cutover_marker_semantics_and_file_lifecycle_belong_to_control_owner() {
         "OpenOptions",
         "write_all",
         "fs::rename",
+        "fs::hard_link",
         "fs::read",
         "sync_all",
         "read_to_end",
