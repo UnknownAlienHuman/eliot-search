@@ -2,15 +2,13 @@
 //! Canonical IDs/occurrences are compiled once per pass through the existing replay.
 //! No original file, policy, namespace owner or visible source state is modified.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
-    MAX_SOURCE_IMPORT_RECORD_BYTES, MAX_SOURCE_IMPORT_ROW_BYTES,
-    SourceImportRecordChain, SourceImportRecordChainError,
+    SourceImportRecordArtifact, SourceImportRecordArtifactError,
+    inspect_source_import_record_artifact,
 };
 
 use super::super::storage_io::{
@@ -26,91 +24,7 @@ mod content_readback;
 #[path = "control_migration_cutover.rs"]
 mod cutover;
 
-const MAX_PLAN_BYTES: u64 = MAX_SOURCE_IMPORT_RECORD_BYTES;
-const MAX_ROW_BYTES: usize = MAX_SOURCE_IMPORT_ROW_BYTES;
 const PLAN_DEADLINE: Duration = Duration::from_secs(120);
-
-/// Temp names are not evidence or state. An error never removes a published plan.
-struct StagingFile {
-    path: PathBuf,
-    file: Option<File>,
-    identity: (u64, u64),
-    cleanup_armed: bool,
-}
-
-impl StagingFile {
-    fn create(directory: &Path) -> Result<Self, String> {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| "DIRECT_MIGRATION_CLOCK_INVALID".to_owned())?
-            .as_nanos();
-        let path = directory.join(format!(
-            ".source-map.{}.{stamp}.tmp",
-            std::process::id()
-        ));
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(|_| "DIRECT_MIGRATION_PLAN_CREATE_FAILED".to_owned())?;
-        let identity = redb_import::native_identity(&file)?;
-        redb_import::verify_locator(&file, &path)?;
-        Ok(Self {
-            path,
-            file: Some(file),
-            identity,
-            cleanup_armed: true,
-        })
-    }
-
-    fn file_mut(&mut self) -> Result<&mut File, String> {
-        self.file
-            .as_mut()
-            .ok_or_else(|| "DIRECT_MIGRATION_PLAN_CLOSED".to_owned())
-    }
-
-    fn remove(mut self) -> Result<(), String> {
-        self.discard_owned()
-    }
-
-    fn discard_owned(&mut self) -> Result<(), String> {
-        // Disarm before any fallible cleanup. Explicit removal and Drop must
-        // never unlink the same locator twice or retry a failed identity check.
-        if !std::mem::replace(&mut self.cleanup_armed, false) {
-            return Ok(());
-        }
-        drop(self.file.take());
-        let invalid = || {
-            "DIRECT_MIGRATION_PLAN_CLEANUP_IDENTITY_CHANGED".to_owned()
-        };
-        let metadata = match fs::symlink_metadata(&self.path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(());
-            }
-            Err(_) => return Err(invalid()),
-        };
-        if !regular(&metadata) {
-            return Err(invalid());
-        }
-        let current = File::open(&self.path).map_err(|_| invalid())?;
-        if redb_import::native_identity(&current)? != self.identity {
-            return Err(invalid());
-        }
-        redb_import::verify_locator(&current, &self.path)?;
-        drop(current);
-        fs::remove_file(&self.path)
-            .map_err(|_| "DIRECT_MIGRATION_PLAN_CLEANUP_FAILED".to_owned())
-    }
-}
-
-impl Drop for StagingFile {
-    fn drop(&mut self) {
-        // An ambiguous replacement is retained, not deleted by its old name.
-        let _ = self.discard_owned();
-    }
-}
 
 /// Typed result of one deterministic staging pass. The JSON report rendered
 /// from it is byte-identical to the historical T10 output; the struct lets the
@@ -155,7 +69,6 @@ impl DirectStore {
         }
         crate::catalog_presence::require_existing(&self.root)?;
         let header = self.inner.source_mapping_header(target)?;
-        // Check admitted identity/history before creating even an inert artifact.
         if self.inner.verify_migration_snapshot(deadline)?
             != header.catalog_snapshot
         {
@@ -184,7 +97,6 @@ impl DirectStore {
     /// No source store is initialized. Payload readback resolves existing Windows
     /// credentials only; no credential or source object is created or converted.
     /// A returned locator is relative to the explicitly named location scope.
-    /// The typed form below carries the same values for the atomic cutover.
     pub(crate) fn stage_mapping_artifact(
         source: &crate::plaintext_direct_store::DirectStore,
         source_root: &Path,
@@ -205,8 +117,8 @@ impl DirectStore {
     }
 
     /// Typed staging pass shared by the verify-only report and the atomic
-    /// cutover. Every byte guarantee of the historical writer holds here; only
-    /// the final JSON rendering moves to [`staged_plan_json`].
+    /// cutover. Artifact I/O and exact second-pass comparison are owned by
+    /// `search-control-redb`; this composition root supplies source replay.
     pub(super) fn stage_mapping_artifact_typed(
         source: &crate::plaintext_direct_store::DirectStore,
         source_root: &Path,
@@ -228,103 +140,53 @@ impl DirectStore {
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        // A committed cutover freezes the migrated history: restaging the same
-        // target/snapshot reproduces evidence, anything else is superseded and
-        // a torn marker quarantines instead of staging over it silently.
         cutover::gate_staging_against_marker(
             source_root,
             target,
             header.catalog_snapshot,
         )?;
-        let mut staging = StagingFile::create(directory)?;
-        let mut bytes = 0_u64;
-        let mut hash = SourceImportRecordChain::new();
-        let summary = {
-            let mut writer = BufWriter::new(staging.file_mut()?);
-            let summary = source.compile_source_mapping(
-                target,
-                deadline,
-                |row| {
-                    check_deadline(Some(deadline))?;
-                    bytes = reserve(bytes, row.len())?;
-                    writer.write_all(row).map_err(|_| {
-                        "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned()
-                    })?;
-                    hash.push(row).map_err(record_chain_reason)
-                },
-            )?;
-            writer
-                .flush()
-                .map_err(|_| "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned())?;
-            summary
-        };
-        staging
-            .file_mut()?
-            .sync_all()
-            .map_err(|_| "DIRECT_MIGRATION_PLAN_SYNC_FAILED".to_owned())?;
-        drop(staging.file.take());
-        let digest = hash.finish();
 
-        // Recompile from the fully revalidated source history and compare exact
-        // encoded bytes. No generated-record parser is allowed to weaken replay.
-        let mut reader = BufReader::new(open_plan(&staging.path, bytes)?);
-        let mut compared = 0_u64;
-        let mut buffer = [0_u8; MAX_ROW_BYTES];
-        let readback = source.compile_source_mapping(target, deadline, |row| {
-            compared = reserve(compared, row.len())?;
-            reader
-                .read_exact(&mut buffer[..row.len()])
-                .map_err(|_| {
-                    "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned()
-                })?;
-            if buffer[..row.len()] != *row {
-                return Err(
-                    "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned(),
-                );
-            }
-            Ok(())
+        let temporary_name = temporary_staging_name()?;
+        let mut artifact = SourceImportRecordArtifact::create(
+            directory,
+            &temporary_name,
+            redb_import::DaemonImportOutputPlatform,
+            deadline,
+        )
+        .map_err(plan_artifact_reason)?;
+        let summary = source.compile_source_mapping(target, deadline, |row| {
+            artifact
+                .push(row, deadline)
+                .map_err(plan_artifact_reason)
         })?;
-        let mut extra = [0_u8; 1];
-        if compared != bytes
-            || readback != summary
-            || reader
-                .read(&mut extra)
-                .map_err(|_| {
-                    "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned()
-                })?
-                != 0
+        let frozen = artifact.freeze(deadline).map_err(plan_artifact_reason)?;
+        let digest = *frozen.chain();
+        let bytes = frozen.encoded_bytes();
+
+        let mut readback = frozen
+            .begin_readback(deadline)
+            .map_err(plan_artifact_reason)?;
+        let replayed = source.compile_source_mapping(target, deadline, |row| {
+            readback
+                .compare(row, deadline)
+                .map_err(plan_artifact_reason)
+        })?;
+        if replayed != summary {
+            return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
+        }
+        let verified = readback.finish(deadline).map_err(plan_artifact_reason)?;
+        let name = format!("{}.source-map.v1", sha256::hex(&digest));
+        let published = verified
+            .publish(&name, deadline)
+            .map_err(plan_artifact_reason)?;
+        if published.chain() != &digest
+            || published.encoded_bytes() != bytes
+            || published.name() != name
         {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
-        drop(reader);
-        check_deadline(Some(deadline))?;
-        let name = format!("{}.source-map.v1", sha256::hex(&digest));
-        let path = directory.join(&name);
-        // Hard-link publication is no-clobber, unlike rename on Unix. A prior
-        // artifact is reused only after exact encoded fingerprint/length readback.
-        let reused = match fs::hard_link(&staging.path, &path) {
-            Ok(()) => false,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                true
-            }
-            Err(_) => {
-                return Err(
-                    "DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN".to_owned(),
-                );
-            }
-        };
-        #[cfg(unix)]
-        sync_directory(directory)?;
-        #[cfg(not(unix))]
-        sync_directory(directory);
-        if fingerprint(&path, bytes, deadline)? != digest {
-            return Err("DIRECT_MIGRATION_PLAN_IMMUTABLE_CONFLICT".to_owned());
-        }
-        staging.remove()?;
-        #[cfg(unix)]
-        sync_directory(directory)?;
-        #[cfg(not(unix))]
-        sync_directory(directory);
+        let reused = published.reused();
+
         let content = content_readback::stage(
             source,
             source_root,
@@ -347,10 +209,12 @@ impl DirectStore {
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        // Source replay and target import can take substantial time. Do not
-        // acknowledge text/content locators only checked before those steps.
-        if fingerprint(&path, bytes, deadline)? != digest
-            || fingerprint(
+        if verify_record_artifact(
+            &directory.join(&name),
+            bytes,
+            deadline,
+        )? != digest
+            || verify_record_artifact(
                 &directory.join(&content.name),
                 content.encoded_bytes,
                 deadline,
@@ -428,95 +292,80 @@ fn staged_plan_json(plan: &StagedPlan) -> String {
     )
 }
 
-fn reserve(current: u64, next: usize) -> Result<u64, String> {
-    if next > MAX_ROW_BYTES {
-        return Err("DIRECT_MIGRATION_PLAN_ROW_TOO_LARGE".to_owned());
-    }
-    current
-        .checked_add(
-            u64::try_from(next)
-                .map_err(|_| "DIRECT_MIGRATION_PLAN_TOO_LARGE".to_owned())?,
-        )
-        .filter(|total| *total <= MAX_PLAN_BYTES)
-        .ok_or_else(|| "DIRECT_MIGRATION_PLAN_TOO_LARGE".to_owned())
+pub(super) fn temporary_staging_name() -> Result<String, String> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "DIRECT_MIGRATION_CLOCK_INVALID".to_owned())?
+        .as_nanos();
+    Ok(format!(
+        ".source-map.{}.{stamp}.tmp",
+        std::process::id()
+    ))
 }
 
-fn open_plan(path: &Path, expected: u64) -> Result<File, String> {
-    let invalid = || "DIRECT_MIGRATION_PLAN_OBJECT_INVALID".to_owned();
-    ensure_directory(path.parent().ok_or_else(invalid)?)?;
-    let before = fs::symlink_metadata(path).map_err(|_| invalid())?;
-    if !regular(&before)
-        || before.len() != expected
-        || expected > MAX_PLAN_BYTES
-    {
-        return Err(invalid());
-    }
-    let file = File::open(path).map_err(|_| invalid())?;
-    let opened = file.metadata().map_err(|_| invalid())?;
-    if !regular(&opened)
-        || opened.len() != expected
-        || opened.modified().ok() != before.modified().ok()
-    {
-        return Err(invalid());
-    }
-    redb_import::verify_locator(&file, path)?;
-    Ok(file)
-}
-
-fn regular(metadata: &fs::Metadata) -> bool {
-    #[cfg(windows)]
-    let reparse = {
-        use std::os::windows::fs::MetadataExt;
-        metadata.file_attributes() & 0x400 != 0
-    };
-    #[cfg(not(windows))]
-    let reparse = false;
-    metadata.is_file() && !metadata.file_type().is_symlink() && !reparse
-}
-
-fn fingerprint(
+pub(super) fn verify_record_artifact(
     path: &Path,
-    length: u64,
+    encoded_bytes: u64,
     deadline: Instant,
 ) -> Result<[u8; 32], String> {
-    let file = open_plan(path, length)?;
-    let before = file
-        .metadata()
-        .map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
-    let mut reader = BufReader::new(file);
-    let mut row = Vec::new();
-    let mut digest = SourceImportRecordChain::new();
-    loop {
-        check_deadline(Some(deadline))?;
-        row.clear();
-        let read = Read::take(
-            &mut reader,
-            u64::try_from(MAX_ROW_BYTES)
-                .unwrap_or(u64::MAX)
-                .saturating_add(1),
-        )
-        .read_until(b'\n', &mut row)
-        .map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
-        if read == 0 {
-            break;
-        }
-        digest.push(&row).map_err(record_chain_reason)?;
-    }
-    let after = reader
-        .get_ref()
-        .metadata()
-        .map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
-    if digest.encoded_bytes() != length
-        || after.len() != length
-        || before.modified().ok() != after.modified().ok()
-    {
-        return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
-    }
-    redb_import::verify_locator(reader.get_ref(), path)?;
-    check_deadline(Some(deadline))?;
-    Ok(digest.finish())
+    let observed = inspect_source_import_record_artifact(
+        &redb_import::DaemonImportOutputPlatform,
+        path,
+        encoded_bytes,
+        deadline,
+    )
+    .map_err(plan_artifact_reason)?;
+    Ok(*observed.chain())
 }
 
-fn record_chain_reason(error: SourceImportRecordChainError) -> String {
-    error.code().to_owned()
+fn plan_artifact_reason(
+    error: SourceImportRecordArtifactError<String>,
+) -> String {
+    match error {
+        SourceImportRecordArtifactError::Platform(reason) => reason,
+        SourceImportRecordArtifactError::DeadlineExceeded => {
+            "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned()
+        }
+        SourceImportRecordArtifactError::TemporaryNameInvalid
+        | SourceImportRecordArtifactError::CreateFailed => {
+            "DIRECT_MIGRATION_PLAN_CREATE_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::FinalNameInvalid
+        | SourceImportRecordArtifactError::ObjectInvalid => {
+            "DIRECT_MIGRATION_PLAN_OBJECT_INVALID".to_owned()
+        }
+        SourceImportRecordArtifactError::Closed => {
+            "DIRECT_MIGRATION_PLAN_CLOSED".to_owned()
+        }
+        SourceImportRecordArtifactError::WriteFailed => {
+            "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::SyncFailed => {
+            "DIRECT_MIGRATION_PLAN_SYNC_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::ReadFailed => {
+            "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::ComparisonReadFailed => {
+            "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::ReadbackMismatch => {
+            "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned()
+        }
+        SourceImportRecordArtifactError::PublishOutcomeUnknown => {
+            "DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN".to_owned()
+        }
+        SourceImportRecordArtifactError::ImmutableConflict => {
+            "DIRECT_MIGRATION_PLAN_IMMUTABLE_CONFLICT".to_owned()
+        }
+        SourceImportRecordArtifactError::IdentityChanged => {
+            "DIRECT_MIGRATION_PLAN_CLEANUP_IDENTITY_CHANGED".to_owned()
+        }
+        SourceImportRecordArtifactError::CleanupFailed => {
+            "DIRECT_MIGRATION_PLAN_CLEANUP_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::RecordChain(error) => {
+            error.code().to_owned()
+        }
+    }
 }
