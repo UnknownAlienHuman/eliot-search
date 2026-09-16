@@ -19,6 +19,8 @@ Implement the generic local transport, binding and capability edge shared by CLI
 - capability descriptor projection
 - request/result/progress envelope lifecycle
 - canonical bounded standalone-grant request bodies containing requested ceilings only
+- exact body-digest admission before mutable session state
+- single terminal ownership and in-flight release for bound requests
 
 ## Forbidden ownership
 
@@ -42,6 +44,8 @@ is improved:
 - `FrameCodec::encode(envelope, limits) -> Result<Bytes, ProtocolError>`
 - `BindingSession::accept_hello(hello, peer) -> Result<BoundSession, ProtocolError>`
 - `BoundSession::admit(envelope) -> Result<AdmittedRequest, ProtocolError>`
+- `BoundSession::admit_body_bound(envelope, proof, body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
+- `BoundSession::complete_request(request_id, terminal) -> Result<RequestStatus, ProtocolError>`
 - `BoundSession::cancel(request_id) -> CancelOutcome`
 - `encode_standalone_grant_request(request) -> Result<Vec<u8>, ProtocolError>`
 - `decode_standalone_grant_request(bytes) -> Result<StandaloneGrantRequestV1, ProtocolError>`
@@ -50,6 +54,12 @@ is improved:
 The grant request body never carries binding, principal, installation,
 operation or issued-grant identity. It becomes meaningful only after an
 authenticated session and server-side authority composition.
+
+A body-bearing request must not consume sequence, replay or in-flight state
+until the adapter-computed digest of the exact bytes equals the digest covered
+by the authenticated envelope proof. The request guard remains connection-owned
+until one terminal completion, cancellation or disconnect. Cancellation cannot
+be relabelled success.
 
 ## Failure surface
 
@@ -60,6 +70,9 @@ state into an apparent success.
 
 - `u32-LE framing and 8 MiB cap`
 - `canonical standalone-grant body round trip; alternate encoding/duplicates/oversize rejected`
+- `body mismatch rejected before sequence/replay/in-flight mutation`
+- `request guard retained until exactly one terminal release`
+- `cancelled request cannot complete as success`
 - `maximum 32 in-flight requests and bounded queues`
 - `monotonic sequence/replay rejection`
 - `idempotent cancellation releases request resources`
