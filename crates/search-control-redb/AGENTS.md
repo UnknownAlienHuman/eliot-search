@@ -17,10 +17,11 @@ Persist only bounded technical control state and publish immutable snapshots for
 - publication intents/receipts and route metadata
 - source/control references, cursors and fences
 - atomic Arc<ControlSnapshot> publication
-- corruption quarantine and write counters
+- corruption quarantine records and write counters
 - inactive source-import schema, output lifecycle and exact readback state machines
 - canonical bounded source-import record chains and content-manifest metadata rows
 - immutable source-import record artifact staging, second-pass comparison, no-clobber publication and cleanup
+- canonical control-cutover marker readback, temporary write, publication classification and exact verification
 
 ## Forbidden ownership
 
@@ -29,6 +30,7 @@ Persist only bounded technical control state and publish immutable snapshots for
 - ranked candidate/query history storage
 - reverse-engineering currentness from orphaned Qdrant data
 - retained-byte acquisition, source decryption/protection or content hashing from bodies
+- daemon data-root ownership, quarantine policy decisions or serve-path rerouting
 
 ## Allowed dependencies
 
@@ -52,11 +54,15 @@ is improved:
 - `SourceImportRecordReadback::{compare, finish}`
 - `SourceImportVerifiedRecordArtifact::publish`
 - `inspect_source_import_record_artifact`
+- `resolve_control_cutover_marker`
+- `publish_control_cutover_marker`
 
 The content-manifest encoder accepts only bounded identities, digests and lengths.
 The source adapter remains responsible for reading exact retained bytes and supplying
 the verified BLAKE3 digest; source bytes never enter this package. Temporary-name
 entropy/time and native file identity are injected observations, never authority.
+The package classifies marker state and publication outcomes; the daemon decides
+whether a corrupt result must arm quarantine under the current root owner.
 
 ## Failure surface
 
@@ -72,6 +78,8 @@ state into an apparent success.
 - `source-content accounting rejects order, count and byte overflow`
 - `immutable record artifact rejects changed second replay, changed identity and conflicting final state`
 - `immutable record artifact never overwrites an existing final locator`
+- `cutover marker exact replay is idempotent and different valid state is never overwritten`
+- `cutover marker missing/corrupt/readback states remain distinct and fail closed`
 - `power_loss_reopen_preserves committed control state only`
 - `hot_query_does_not_mutate_redb after 10,000 admissions`
 - `mismatched incarnation or collection route quarantines`
