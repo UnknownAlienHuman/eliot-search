@@ -2,9 +2,9 @@
 //! a `ControlJournal`: it carries no live owner, admission, visibility or H5 receipt.
 //!
 //! The caller owns input exclusion and source replay. This module owns the
-//! per-artifact output lock, pending/final publication lifecycle and exact
-//! import/readback state machines. Resuming an incomplete target verifies its
-//! entire committed prefix before appending rows.
+//! per-artifact output lock, immutable record publication, pending/final
+//! database lifecycle and exact import/readback state machines. Resuming an
+//! incomplete target verifies its entire committed prefix before appending rows.
 
 use redb::TableDefinition;
 
@@ -18,6 +18,7 @@ mod model;
 mod output_artifact;
 mod output_lock;
 mod readback;
+mod record_artifact;
 mod record_chain;
 mod writer;
 
@@ -52,6 +53,12 @@ pub use output_lock::{
     SourceImportOutputLockPlatform,
 };
 pub use readback::SourceMappingReadback;
+pub use record_artifact::{
+    SourceImportFrozenRecordArtifact, SourceImportPublishedRecordArtifact,
+    SourceImportRecordArtifact, SourceImportRecordArtifactError,
+    SourceImportRecordArtifactObservation, SourceImportRecordReadback,
+    SourceImportVerifiedRecordArtifact, inspect_source_import_record_artifact,
+};
 pub use record_chain::{
     MAX_SOURCE_IMPORT_RECORD_BYTES, MAX_SOURCE_IMPORT_ROW_BYTES,
     SourceImportRecordChain, SourceImportRecordChainError,
