@@ -225,9 +225,11 @@ where
             if existing.bytes() != bytes {
                 return Err(LegacyRevisionObjectError::ImmutableConflict);
             }
+            let encoded_bytes = existing.encoded_bytes();
+            let identity = existing.identity;
             return Ok(LegacyRevisionObjectReceipt {
-                identity: existing.identity,
-                encoded_bytes: existing.encoded_bytes(),
+                identity,
+                encoded_bytes,
                 reused: true,
             });
         }
@@ -290,14 +292,16 @@ where
     if !reused && final_object.identity() != &temporary_identity {
         return Err(LegacyRevisionObjectError::IdentityChanged);
     }
+    let encoded_bytes = final_object.encoded_bytes();
+    let identity = final_object.identity;
 
     cleanup_exact(platform, &temporary_path, &temporary_identity)?;
     platform
         .sync_directory(directory)
-        .map_err(LegacyRevisionObjectError::Platform)?;
+        .map_err(LegacyRevisionObjectError::PublishPlatformOutcomeUnknown)?;
     Ok(LegacyRevisionObjectReceipt {
-        identity: final_object.identity,
-        encoded_bytes: final_object.encoded_bytes(),
+        identity,
+        encoded_bytes,
         reused,
     })
 }
