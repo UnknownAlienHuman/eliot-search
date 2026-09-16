@@ -21,6 +21,7 @@ mod decode;
 mod error;
 mod legacy_artifact;
 mod legacy_direct;
+mod legacy_store;
 mod legacy_direct_profile;
 mod legacy_direct_receipt;
 mod maps;
@@ -33,6 +34,7 @@ mod utf8;
 
 pub use error::MaterializationError;
 pub use legacy_artifact::*;
+pub use legacy_store::*;
 pub use utf8::{
     DEFAULT_MATERIALIZATION_LIMITS, LineEnding, LineEndingEvidence, LineSpan,
     MaterializationLimits, MaterializationReceipt, MaterializedRevision, MaterializedText,

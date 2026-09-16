@@ -5,21 +5,23 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::time::Instant;
 
+use search_materializer::api::{
+    LEGACY_PREPARATION_DIRECTORY, LEGACY_PREPARATION_OBJECTS_DIRECTORY,
+    LEGACY_PREPARATION_REFERENCES_DIRECTORY,
+    legacy_preparation_reference_file_name, legacy_preparation_shard,
+};
 use zeroize::Zeroizing;
 
 use super::codec::{
-    binding, decode_object, decode_reference, extension, lookup_key, object_id,
-    verify_manifest,
+    binding, decode_object, decode_reference, extension, lookup_key,
+    object_file_name, object_id, object_shard, verify_manifest,
 };
-use super::spec::{
-    BINDING_BYTES, HEADER_BYTES, MAX_OBJECT_BYTES, REF_BYTES,
+use super::spec::{MAX_OBJECT_BYTES, REF_BYTES};
+use super::super::super::storage_io::{
+    ensure_directory, read_regular_file,
 };
-use super::super::super::storage_io::{ensure_directory, read_regular_file};
 use super::super::super::{
     RevisionMetadata, RevisionProtector, verify_plaintext,
-};
-use crate::direct_preparation::{
-    CANONICAL_MATERIALIZER_REVISION, CANONICAL_UNITIZER_REVISION,
 };
 use crate::sha256;
 
@@ -69,9 +71,9 @@ pub(crate) fn inspect(
     };
 
     ensure_directory(root)?;
-    let base = root.join("preparation");
-    let refs = base.join("refs");
-    let shard = refs.join(&hex[..2]);
+    let base = root.join(LEGACY_PREPARATION_DIRECTORY);
+    let refs = base.join(LEGACY_PREPARATION_REFERENCES_DIRECTORY);
+    let shard = refs.join(legacy_preparation_shard(&key));
     for path in [&base, &refs, &shard] {
         check()?;
         match fs::symlink_metadata(path) {
@@ -87,7 +89,7 @@ pub(crate) fn inspect(
         }
     }
 
-    let ref_path = shard.join(format!("{hex}.ref"));
+    let ref_path = shard.join(legacy_preparation_reference_file_name(&key));
     match fs::symlink_metadata(&ref_path) {
         Ok(_) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -107,12 +109,12 @@ pub(crate) fn inspect(
     let (digest, length) =
         decode_reference(&saved, &key, protector).map_err(str::to_owned)?;
     let id = object_id(&binding, protector, &digest);
-    let objects = base.join("objects");
+    let objects = base.join(LEGACY_PREPARATION_OBJECTS_DIRECTORY);
     ensure_directory(&objects)?;
-    let object_shard = objects.join(&id[..2]);
-    ensure_directory(&object_shard)?;
+    let object_shard_path = objects.join(object_shard(&id)?);
+    ensure_directory(&object_shard_path)?;
     let object_path =
-        object_shard.join(format!("{id}.{}", extension(protector)));
+        object_shard_path.join(object_file_name(&id, protector)?);
 
     check()?;
     let encoded = Zeroizing::new(read_regular_file(
@@ -124,11 +126,27 @@ pub(crate) fn inspect(
     let raw_length = encoded.len() as u64;
     let manifest = decode_object(&encoded, protector, &id, digest, length)?;
     drop(encoded);
-    verify_manifest(&manifest, &binding, metadata, namespace)
-        .map_err(str::to_owned)?;
+    let (
+        body,
+        stored_representation,
+        materializer_digest,
+        unitizer_digest,
+        materializer_revision,
+        unitizer_revision,
+    ) = {
+        let verified =
+            verify_manifest(&manifest, &binding).map_err(str::to_owned)?;
+        (
+            verified.body().to_vec(),
+            *verified.representation_id(),
+            verified.binding().materializer_digest,
+            verified.binding().unitizer_digest,
+            verified.materializer_revision(),
+            verified.unitizer_revision(),
+        )
+    };
 
     check()?;
-    let body = manifest[HEADER_BYTES..].to_vec();
     let expected = {
         use crate::direct_preparation::encode_canonical_preparation;
 
@@ -166,44 +184,9 @@ pub(crate) fn inspect(
         .map_err(str::to_owned)?;
     drop(expected);
 
-    let stored_representation: [u8; 32] = manifest
-        [BINDING_BYTES..BINDING_BYTES + 32]
-        .try_into()
-        .map_err(|_| "DIRECT_PREPARATION_OBJECT_INVALID".to_owned())?;
-    {
-        use crate::direct_preparation::verify_canonical_representation;
-
-        let namespace_bytes = sha256::decode_digest(namespace)
-            .ok_or_else(|| {
-                "DIRECT_PREPARATION_BINDING_INVALID".to_owned()
-            })?;
-        let source_bytes = sha256::decode_digest(&metadata.source_id)
-            .ok_or_else(|| {
-                "DIRECT_PREPARATION_BINDING_INVALID".to_owned()
-            })?;
-        let revision_bytes = sha256::decode_digest(&metadata.revision_id)
-            .ok_or_else(|| {
-                "DIRECT_PREPARATION_BINDING_INVALID".to_owned()
-            })?;
-        let content_bytes = sha256::decode_digest(&metadata.content_digest)
-            .ok_or_else(|| {
-                "DIRECT_PREPARATION_BINDING_INVALID".to_owned()
-            })?;
-        verify_canonical_representation(
-            &stored_representation,
-            source,
-            &namespace_bytes,
-            &source_bytes,
-            &revision_bytes,
-            &content_bytes,
-            metadata.byte_length,
-        )
-        .map_err(str::to_owned)?;
-    }
-
     let representation_hex = sha256::hex(&stored_representation);
-    let materializer_hex = sha256::hex(&manifest[144..176]);
-    let unitizer_hex = sha256::hex(&manifest[176..208]);
+    let materializer_hex = sha256::hex(&materializer_digest);
+    let unitizer_hex = sha256::hex(&unitizer_digest);
     drop(manifest);
 
     check()?;
@@ -269,8 +252,8 @@ pub(crate) fn inspect(
             representation_hex,
             materializer_hex,
             unitizer_hex,
-            CANONICAL_MATERIALIZER_REVISION,
-            CANONICAL_UNITIZER_REVISION,
+            materializer_revision,
+            unitizer_revision,
         ),
     })
 }

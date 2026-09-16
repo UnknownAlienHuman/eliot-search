@@ -40,6 +40,7 @@ pub use crate::legacy_direct_profile::{
     legacy_direct_materializer_profile,
 };
 pub use crate::legacy_direct_receipt::LegacyDirectPreparationReceipt;
+pub use crate::legacy_store::*;
 pub use crate::maps::{
     COORDINATE_MAP_VERSION, CoordinateMap, CoordinateSegment, LossKind, LossMap, LossRecord,
     MapBundle, MapIdentities, MapValidationReceipt, SegmentRelation, build_coordinate_map,

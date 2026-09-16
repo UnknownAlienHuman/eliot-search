@@ -61,6 +61,133 @@ fn preparation_artifact_filesystem_lifecycle_has_one_package_owner() {
 }
 
 #[test]
+fn preparation_store_wire_schema_has_one_package_owner() {
+    let root = repository_root();
+    let facade = read(
+        &root,
+        "crates/search-prep/search-materializer/src/lib.rs",
+    );
+    assert!(facade.contains("mod legacy_store;"));
+    assert!(facade.contains("pub use legacy_store::*;"));
+
+    let owner = read(
+        &root,
+        "crates/search-prep/search-materializer/src/legacy_store.rs",
+    );
+    for required in [
+        "pub const LEGACY_PREPARATION_MAGIC",
+        "pub const LEGACY_PREPARATION_REFERENCE_MAGIC",
+        "pub const LEGACY_PREPARATION_BINDING_BYTES",
+        "pub const LEGACY_PREPARATION_REFERENCE_BYTES",
+        "pub const LEGACY_PREPARATION_MAX_MANIFEST_BYTES",
+        "pub enum LegacyPreparationProtection",
+        "pub trait LegacyPreparationStoreDigest",
+        "pub fn encode_legacy_preparation_binding",
+        "pub fn decode_legacy_preparation_binding",
+        "pub fn derive_legacy_preparation_lookup_key",
+        "pub fn derive_legacy_preparation_object_id",
+        "pub fn encode_legacy_preparation_reference",
+        "pub fn decode_legacy_preparation_reference",
+        "pub fn encode_legacy_preparation_manifest",
+        "pub fn verify_legacy_preparation_manifest",
+        "pub fn verify_legacy_preparation_payload",
+        "eliot-search/direct-preparation-ref/v2",
+        "eliot-search/direct-preparation-object/v2",
+    ] {
+        assert!(
+            owner.contains(required),
+            "materializer lost preparation-store schema {required}"
+        );
+    }
+    for forbidden in [
+        "std::fs",
+        "RevisionProtector",
+        "DPAPI",
+        "search_os_secrets",
+        "SourceRegistry",
+        "ControlJournal",
+        "verify_plaintext",
+    ] {
+        assert!(
+            !owner.contains(forbidden),
+            "preparation schema acquired foreign responsibility {forbidden}"
+        );
+    }
+
+    let spec = read(
+        &root,
+        "bins/eliot-searchd/src/preparation_store/kernel/spec.rs",
+    );
+    assert!(spec.contains("LEGACY_PREPARATION_MAX_OBJECT_BYTES as MAX_OBJECT_BYTES"));
+    assert!(spec.contains("LEGACY_PREPARATION_REFERENCE_BYTES as REF_BYTES"));
+    for forbidden in [
+        "ELSPRP02",
+        "ELSPRF01",
+        "BINDING_BYTES: usize = 208",
+        "OLD_BINDING_BYTES: usize = 176",
+        "REF_BYTES: usize = 81",
+        "MAX_OBJECT_BYTES: usize = 65 * 1024 * 1024",
+    ] {
+        assert!(
+            !spec.contains(forbidden),
+            "daemon restored preparation schema literal {forbidden}"
+        );
+    }
+
+    let codec = read(
+        &root,
+        "bins/eliot-searchd/src/preparation_store/kernel/codec.rs",
+    );
+    for required in [
+        "encode_legacy_preparation_binding",
+        "decode_legacy_preparation_reference",
+        "derive_legacy_preparation_lookup_key",
+        "derive_legacy_preparation_object_id",
+        "verify_legacy_preparation_manifest",
+        "verify_legacy_preparation_payload",
+    ] {
+        assert!(codec.contains(required));
+    }
+    for forbidden in [
+        "ELSPRP02",
+        "ELSPRF01",
+        "eliot-search/direct-preparation-ref/v2",
+        "eliot-search/direct-preparation-object/v2",
+        "manifest[144..176]",
+        "manifest[176..208]",
+    ] {
+        assert!(
+            !codec.contains(forbidden),
+            "daemon restored preparation wire behavior {forbidden}"
+        );
+    }
+
+    let persist = read(
+        &root,
+        "bins/eliot-searchd/src/preparation_store/kernel/persist.rs",
+    );
+    assert!(persist.contains("encode_legacy_preparation_manifest"));
+    assert!(!persist.contains("manifest.extend_from_slice(&representation)"));
+    assert!(!persist.contains("CONTENT_DIGEST_ALGORITHM"));
+
+    let load = read(
+        &root,
+        "bins/eliot-searchd/src/preparation_store/kernel/load.rs",
+    );
+    assert!(load.contains("verified.body().to_vec()"));
+    assert!(!load.contains("manifest[HEADER_BYTES..]"));
+
+    let inspect = read(
+        &root,
+        "bins/eliot-searchd/src/preparation_store/kernel/inspect.rs",
+    );
+    assert!(inspect.contains("verified.binding().materializer_digest"));
+    assert!(inspect.contains("verified.materializer_revision()"));
+    assert!(!inspect.contains("manifest[144..176]"));
+    assert!(!inspect.contains("manifest[176..208]"));
+}
+
+#[test]
 fn daemon_generic_preparation_io_composes_materializer_owner() {
     let root = repository_root();
     let adapter = read(

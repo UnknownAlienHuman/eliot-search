@@ -45,7 +45,7 @@ fn preparation_store_responsibilities_stay_bounded() {
     let owners = [
         (
             "src/preparation_store/kernel/spec.rs",
-            "pub(crate) const REF_BYTES: usize = 81;",
+            "LEGACY_PREPARATION_REFERENCE_BYTES as REF_BYTES",
         ),
         (
             "src/preparation_store/kernel/codec.rs",
@@ -90,37 +90,73 @@ fn preparation_store_responsibilities_stay_bounded() {
 
     let spec = read(&root, "src/preparation_store/kernel/spec.rs");
     for exact in [
-        "b\"ELSPRP02\"",
-        "b\"ELSPRF01\"",
+        "LEGACY_PREPARATION_MAX_OBJECT_BYTES as MAX_OBJECT_BYTES",
+        "LEGACY_PREPARATION_REFERENCE_BYTES as REF_BYTES",
+        "MAX_BATCH_REVISIONS: usize = 64",
+        "MAX_BATCH_SOURCE_BYTES: u64 = 256 * 1024 * 1024",
+    ] {
+        assert!(spec.contains(exact), "spec lost {exact}");
+    }
+    for forbidden in [
+        "ELSPRP02",
+        "ELSPRF01",
         "BINDING_BYTES: usize = 208",
         "OLD_BINDING_BYTES: usize = 176",
         "REF_BYTES: usize = 81",
-        "MAX_BATCH_REVISIONS: usize = 64",
     ] {
-        assert!(spec.contains(exact), "spec lost {exact}");
+        assert!(!spec.contains(forbidden), "daemon spec restored {forbidden}");
     }
 
     let codec = read(&root, "src/preparation_store/kernel/codec.rs");
     for exact in [
-        "eliot-search/direct-preparation-ref/v2",
-        "eliot-search/direct-preparation-object/v2",
-        "DIRECT_PREPARATION_REFERENCE_INVALID",
-        "DIRECT_PREPARATION_DIGEST_ALGORITHM_MISMATCH",
-        "DIRECT_PREPARATION_PROFILE_MISMATCH",
+        "encode_legacy_preparation_binding",
+        "decode_legacy_preparation_reference",
+        "derive_legacy_preparation_lookup_key",
+        "derive_legacy_preparation_object_id",
+        "verify_legacy_preparation_manifest",
+        "verify_legacy_preparation_payload",
+        "legacy_preparation_object_file_name",
+        "legacy_preparation_shard",
     ] {
         assert!(codec.contains(exact), "codec lost {exact}");
     }
+    for forbidden in [
+        "ELSPRP02",
+        "ELSPRF01",
+        "eliot-search/direct-preparation-ref/v2",
+        "eliot-search/direct-preparation-object/v2",
+        "manifest[144..176]",
+        "manifest[176..208]",
+    ] {
+        assert!(!codec.contains(forbidden), "codec restored {forbidden}");
+    }
     assert!(!codec.contains("persist_immutable_object"));
 
+    let paths = read(&root, "src/preparation_store/kernel/paths.rs");
+    assert!(paths.contains("LEGACY_PREPARATION_DIRECTORY"));
+    assert!(paths.contains("legacy_preparation_reference_file_name"));
+    assert!(paths.contains("legacy_preparation_shard"));
+    assert!(!paths.contains("root.join(\"preparation\")"));
+
     let persist = read(&root, "src/preparation_store/kernel/persist.rs");
+    assert!(persist.contains("encode_legacy_preparation_manifest"));
     assert!(persist.contains("persist_immutable_object(&object_path"));
     assert!(persist.contains("persist_immutable_object(&reference_path"));
     assert!(persist.contains("DIRECT_PREPARATION_OBJECT_CONFLICT"));
     assert!(!persist.contains("PreparationCursor"));
+    assert!(!persist.contains("manifest.extend_from_slice(&representation)"));
 
     let load = read(&root, "src/preparation_store/kernel/load.rs");
+    assert!(load.contains("verified.body().to_vec()"));
+    assert!(!load.contains("manifest[HEADER_BYTES..]"));
     assert!(!load.contains("persist_immutable_object"));
     assert!(!load.contains("create_dir_all"));
+
+    let inspect = read(&root, "src/preparation_store/kernel/inspect.rs");
+    assert!(inspect.contains("verified.binding().materializer_digest"));
+    assert!(inspect.contains("verified.materializer_revision()"));
+    assert!(!inspect.contains("manifest[144..176]"));
+    assert!(!inspect.contains("manifest[176..208]"));
 
     let batch = read(&root, "src/preparation_store/kernel/batch.rs");
     assert!(batch.contains("eliot-search/direct-preparation-cursor/v2"));

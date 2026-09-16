@@ -4,13 +4,15 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
 
+use search_materializer::api::encode_legacy_preparation_manifest;
 use zeroize::Zeroizing;
 
 use super::codec::{
-    binding, extension, lookup_key, object_id, read_object, reference,
+    binding, lookup_key, object_file_name, object_id, object_shard, read_object,
+    reference,
 };
 use super::paths::directories;
-use super::spec::{MAX_MANIFEST_BYTES, REF_BYTES};
+use super::spec::REF_BYTES;
 use super::super::super::storage_io::{
     ensure_child_directory, persist_immutable_object, read_regular_file,
     sync_directory,
@@ -20,9 +22,8 @@ use super::super::super::{
 };
 use crate::direct_preparation::{
     CANONICAL_MATERIALIZER_REVISION, CANONICAL_UNITIZER_REVISION,
-    CONTENT_DIGEST_ALGORITHM, CanonicalPreparationReceipt,
-    MANIFEST_DIGEST_ALGORITHM, REPRESENTATION_DIGEST_ALGORITHM,
-    canonical_materializer_digest, canonical_unitizer_digest,
+    CanonicalPreparationReceipt, canonical_materializer_digest,
+    canonical_unitizer_digest,
 };
 use crate::sha256;
 
@@ -83,7 +84,8 @@ pub(crate) fn persist_canonical(
         .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
     let materializer_digest =
         canonical_materializer_digest().map_err(str::to_owned)?;
-    let unitizer_digest = canonical_unitizer_digest().map_err(str::to_owned)?;
+    let unitizer_digest =
+        canonical_unitizer_digest().map_err(str::to_owned)?;
     let (representation, body) = encode_canonical_preparation(
         source,
         &namespace_bytes,
@@ -95,32 +97,37 @@ pub(crate) fn persist_canonical(
     .map_err(str::to_owned)?;
     let gap = gap_of(&body).map_err(str::to_owned)?;
 
-    let mut manifest = Zeroizing::new(binding.to_vec());
-    manifest.extend_from_slice(&representation);
-    manifest.push(CONTENT_DIGEST_ALGORITHM);
-    manifest.push(REPRESENTATION_DIGEST_ALGORITHM);
-    manifest.extend_from_slice(&CANONICAL_MATERIALIZER_REVISION.to_be_bytes());
-    manifest.extend_from_slice(&CANONICAL_UNITIZER_REVISION.to_be_bytes());
-    manifest.push(MANIFEST_DIGEST_ALGORITHM);
-    manifest.extend_from_slice(&body);
-    if manifest.len() > MAX_MANIFEST_BYTES {
-        return Err("DIRECT_PREPARATION_TOO_LARGE".to_owned());
-    }
+    let manifest = Zeroizing::new(
+        encode_legacy_preparation_manifest(
+            &binding,
+            &representation,
+            CANONICAL_MATERIALIZER_REVISION,
+            CANONICAL_UNITIZER_REVISION,
+            &body,
+        )
+        .map_err(|error| error.code().to_owned())?,
+    );
 
     let digest = sha256::digest(&manifest);
     let key = lookup_key(&binding, protector);
     let (reference_path, objects) = directories(root, &key, true)?;
     let object_id = object_id(&binding, protector, &digest);
-    let object_shard = objects.join(&object_id[..2]);
-    ensure_child_directory(&object_shard)?;
+    let object_shard_path = objects.join(object_shard(&object_id)?);
+    ensure_child_directory(&object_shard_path)?;
     #[cfg(unix)]
     sync_directory(&objects)?;
     #[cfg(not(unix))]
     sync_directory(&objects);
-    let object_path =
-        object_shard.join(format!("{object_id}.{}", extension(protector)));
-    let expected_ref =
-        reference(&key, digest, manifest.len() as u64, protector);
+    let object_path = object_shard_path.join(object_file_name(
+        &object_id,
+        protector,
+    )?);
+    let expected_ref = reference(
+        &key,
+        digest,
+        manifest.len() as u64,
+        protector,
+    )?;
 
     match fs::symlink_metadata(&reference_path) {
         Ok(_) => {

@@ -4,8 +4,10 @@ use search_exact::literal::LiteralLimits;
 use search_materializer::MaterializationLimits;
 pub use search_materializer::api::{
     CONTENT_DIGEST_ALGORITHM, DIGEST_ALGORITHM_BLAKE3_256,
-    DIGEST_ALGORITHM_SHA256, LEGACY_DIRECT_MATERIALIZER_NAME as CANONICAL_MATERIALIZER_NAME,
+    DIGEST_ALGORITHM_SHA256,
+    LEGACY_DIRECT_MATERIALIZER_NAME as CANONICAL_MATERIALIZER_NAME,
     LEGACY_DIRECT_MATERIALIZER_REVISION as CANONICAL_MATERIALIZER_REVISION,
+    LEGACY_DIRECT_MAX_LAYOUT_BYTES as MAX_LAYOUT_BYTES,
     MANIFEST_DIGEST_ALGORITHM, REPRESENTATION_DIGEST_ALGORITHM,
 };
 use search_unitizer::UnitizationLimits;
@@ -14,9 +16,6 @@ use crate::development::{
     MAX_SCAN_INPUT_BYTES, MAX_SCAN_MATCHES, MAX_SCAN_QUERY_BYTES,
 };
 use crate::sha256;
-
-/// Maximum encoded exact layout bytes retained by the DIRECT adapter.
-pub const MAX_LAYOUT_BYTES: usize = 64 * 1024 * 1024 - 512;
 
 pub(super) const MATERIALIZATION: MaterializationLimits = MaterializationLimits {
     max_input_bytes: MAX_SCAN_INPUT_BYTES,
@@ -81,7 +80,10 @@ pub fn canonical_materializer_profile()
 
     let golden = Blake3Digest32::from_bytes(
         *blake3::hash(
-            format!("{CANONICAL_MATERIALIZER_NAME}:{CANONICAL_MATERIALIZER_REVISION}").as_bytes(),
+            format!(
+                "{CANONICAL_MATERIALIZER_NAME}:{CANONICAL_MATERIALIZER_REVISION}"
+            )
+            .as_bytes(),
         )
         .as_bytes(),
     );
