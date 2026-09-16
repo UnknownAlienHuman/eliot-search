@@ -2,7 +2,7 @@
 
 **C08 — Materialization.**
 
-**Status:** baseline text/source-code materialization, profile validation, coordinate/loss maps, assurance classification, and the optional-provider qualification seam are implemented. Concrete optional document-provider qualification remains gated and no provider acceptance is implied.
+**Status:** baseline text/source-code materialization, profile validation, coordinate/loss maps, assurance classification, and the optional-provider qualification seam are implemented. The package also owns bounded legacy DIRECT preparation-object/reference I/O during T02 migration. Concrete optional document-provider qualification remains gated and no provider acceptance is implied.
 
 Convert an exact retained revision into a canonical representation with explicit coordinate and loss maps.
 
@@ -13,6 +13,8 @@ Convert an exact retained revision into a canonical representation with explicit
 - coordinate map and loss map production
 - assurance ceiling classification
 - provider qualification seam for optional documents
+- bounded exact legacy preparation-object/reference reads
+- no-clobber immutable preparation publication with native-identity fencing
 
 ## Must not own
 
@@ -21,6 +23,13 @@ Convert an exact retained revision into a canonical representation with explicit
 - executing macros, archive members or remote resources
 - claiming exact coordinates after lossy transforms
 - opening source stores directly instead of consuming immutable contract inputs
+- revision CAS / revision-object storage
+- DPAPI, keyring or secret ownership
+- source-registry or control-journal mutation
+
+The compatibility filesystem adapter treats bytes as opaque. It neither proves a
+materialization profile nor authorizes a source; it only preserves exact bounded
+artifacts under qualified platform observations.
 
 - **Delivery wave:** W2 baseline / P04; optional P17
 - **Soft source-line target:** 7,000
