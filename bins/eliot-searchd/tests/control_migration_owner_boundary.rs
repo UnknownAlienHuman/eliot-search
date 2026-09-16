@@ -97,7 +97,10 @@ fn cutover_marker_semantics_and_file_lifecycle_belong_to_control_owner() {
         &root,
         "bins/eliot-searchd/src/control_migration_cutover/status.rs",
     );
-    assert!(status.contains("read_only"));
+    assert!(status.contains("ControlCutoverStatusProjection"));
+    assert!(status.contains("ControlCutoverStatusState"));
+    assert!(!status.contains("control_cutover_status"));
+    assert!(!status.contains("read_only"));
     assert!(!status.contains("OpenOptions"));
     assert!(!status.contains("impl DirectStore"));
 }
@@ -233,7 +236,10 @@ fn staged_plan_and_cutover_receipt_schemas_belong_to_control_owner() {
     for required in [
         "pub struct SourceMigrationStagedPlan",
         "pub enum SourceMigrationPlanLocation",
+        "pub struct ControlCutoverStatusProjection",
+        "pub enum ControlCutoverStatusState",
         "source_migration_plan_staged",
+        "control_cutover_status",
         "control_cutover_committed",
         "control_cutover_rollback",
         "render_control_cutover_committed_receipt",
@@ -267,4 +273,13 @@ fn staged_plan_and_cutover_receipt_schemas_belong_to_control_owner() {
     assert!(!operation.contains("control_cutover_committed"));
     assert!(!operation.contains("control_cutover_rollback"));
     assert!(!operation.contains("fn cutover_receipt"));
+
+    let status = read(
+        &root,
+        "bins/eliot-searchd/src/control_migration_cutover/status.rs",
+    );
+    assert!(status.contains("ControlCutoverStatusProjection"));
+    assert!(status.contains("ControlCutoverStatusState"));
+    assert!(!status.contains("control_cutover_status"));
+    assert!(!status.contains("control-cutover-status-v1"));
 }
