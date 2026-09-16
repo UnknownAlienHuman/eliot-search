@@ -6,6 +6,7 @@
 //! [`negotiation`](crate::negotiation) (exact major/minor),
 //! [`pairing`](crate::pairing) (mutual-authentication ceremony),
 //! [`request`](crate::request) (authenticated envelopes),
+//! [`grant`](crate::grant) (bounded standalone-grant request body),
 //! [`binding`](crate::binding) (session composition and admission order),
 //! plus [`session`](crate::session), [`progress`](crate::progress),
 //! [`terminal`](crate::terminal), [`cancel`](crate::cancel),
@@ -21,6 +22,11 @@ pub use crate::cleanup::{DisconnectReceipt, disconnect_all};
 pub use crate::config::{DEFAULT_PROTOCOL_LIMITS, FRAME_PREFIX_BYTES, ProtocolLimits};
 pub use crate::error::ProtocolError;
 pub use crate::frame::{FrameCodec, decode_frame, encode_frame};
+pub use crate::grant::{
+    MAX_STANDALONE_GRANT_REQUEST_BYTES, STANDALONE_GRANT_REQUEST_VERSION,
+    StandaloneGrantRequestV1, decode_standalone_grant_request,
+    encode_standalone_grant_request,
+};
 pub use crate::indexed::{
     INDEXED_QUERY_MARKER, IndexedQueryFrameError, STRICT_QUERY_PREFIX,
     decode_indexed_query, encode_indexed_query,

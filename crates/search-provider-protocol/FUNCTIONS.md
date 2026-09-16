@@ -1,6 +1,8 @@
 # Function contract — `search-provider-protocol`
 
-**Status:** W1 transport/session contract with W4 end-to-end qualification; no implementation exists yet.
+**Status:** bounded framing, pairing, binding, request lifecycle and
+standalone-grant request-body kernels are implemented; complete W8 live
+integration/qualification remains open.
 
 The protocol is local, versioned, bounded and authenticated. It owns framing/session/request lifecycle,
 not client authority, source/index stores or search planning.
@@ -26,6 +28,24 @@ fields. Capability availability grants no authority.
 
 Requires pairing proof plus installation/incarnation/peer binding. Named-pipe ACL or loopback location
 alone is insufficient authentication.
+
+## Standalone grant request body
+
+### `encode_standalone_grant_request(request) -> Result<Vec<u8>, ProtocolError>`
+
+Emits one fixed-order canonical UTF-8 JSON body containing requested scope,
+recipe, budget, disclosure/sensitivity, permission and TTL ceilings. Binding,
+principal, installation, operation and grant identities are absent by design.
+
+### `decode_standalone_grant_request(bytes) -> Result<StandaloneGrantRequestV1, ProtocolError>`
+
+Rejects non-canonical order/spelling, whitespace, escapes, duplicate or oversized
+sets, invalid enum/profile values, zero generations/TTL, permission widening
+shape and trailing bytes. Re-encoding must equal the exact input bytes.
+
+These bytes are intended to be bound by an authenticated envelope body digest.
+Decoding creates no grant and no authority; daemon composition supplies the
+session binding, operation identity and server policy.
 
 ## Connection and request lifecycle
 
@@ -68,6 +88,7 @@ message transition.
 ## Required fixtures
 
 Frame golden; oversize rejected before body allocation; malformed/unknown tags; major/minor negotiation;
-pairing required beyond ACL; sequence replay; 32-in-flight; duplicate terminal rejection; progress
-ordering/content minimization; idempotent cancel; disconnect cleanup; protocol public API has no store,
-Qdrant or client-authority path.
+pairing required beyond ACL; canonical grant-body round trip and non-canonical/duplicate/oversize
+rejection; sequence replay; 32-in-flight; duplicate terminal rejection; progress ordering/content
+minimization; idempotent cancel; disconnect cleanup; protocol public API has no store, Qdrant or
+client-authority path.

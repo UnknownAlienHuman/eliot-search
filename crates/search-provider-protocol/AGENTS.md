@@ -18,10 +18,12 @@ Implement the generic local transport, binding and capability edge shared by CLI
 - sequence/replay/cancellation/flow control
 - capability descriptor projection
 - request/result/progress envelope lifecycle
+- canonical bounded standalone-grant request bodies containing requested ceilings only
 
 ## Forbidden ownership
 
-- Qdrant/redb access
+- Qdrant/redb/CAS access
+- binding/access-policy persistence or grant authority
 - client canonical writes or authority
 - raw vendor plans/filters/point IDs
 - compression or unbounded fragmentation in baseline
@@ -41,7 +43,13 @@ is improved:
 - `BindingSession::accept_hello(hello, peer) -> Result<BoundSession, ProtocolError>`
 - `BoundSession::admit(envelope) -> Result<AdmittedRequest, ProtocolError>`
 - `BoundSession::cancel(request_id) -> CancelOutcome`
+- `encode_standalone_grant_request(request) -> Result<Vec<u8>, ProtocolError>`
+- `decode_standalone_grant_request(bytes) -> Result<StandaloneGrantRequestV1, ProtocolError>`
 - `project_capability_descriptor(snapshot, binding) -> SearchProviderCapabilityDescriptor`
+
+The grant request body never carries binding, principal, installation,
+operation or issued-grant identity. It becomes meaningful only after an
+authenticated session and server-side authority composition.
 
 ## Failure surface
 
@@ -51,6 +59,7 @@ state into an apparent success.
 ## Test seams and exit evidence
 
 - `u32-LE framing and 8 MiB cap`
+- `canonical standalone-grant body round trip; alternate encoding/duplicates/oversize rejected`
 - `maximum 32 in-flight requests and bounded queues`
 - `monotonic sequence/replay rejection`
 - `idempotent cancellation releases request resources`

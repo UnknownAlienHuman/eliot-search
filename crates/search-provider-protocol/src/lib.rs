@@ -19,7 +19,9 @@
 //! 4. [`request`] — authenticated envelopes (#89): per-request proof bound
 //!    to version, server nonce, request ID, closed command and body digest,
 //!    strict fixed-size decoding, 32-in-flight registry, explicit deadlines.
-//! 5. [`binding`] — session composition: pairing-first sequencing enforced
+//! 5. [`grant`] — canonical bounded standalone-grant request body containing
+//!    requested ceilings only; binding and operation identity remain server-side.
+//! 6. [`binding`] — session composition: pairing-first sequencing enforced
 //!    in code; envelope admission requires the ceremony token.
 //!
 //! The public entry module is [`api`]; the crate root re-exports the same
@@ -52,6 +54,7 @@ pub mod cleanup;
 pub mod config;
 pub mod error;
 pub mod frame;
+pub mod grant;
 mod indexed;
 pub mod negotiation;
 pub mod pairing;
