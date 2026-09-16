@@ -2,7 +2,7 @@
 
 **C08 — Materialization.**
 
-**Status:** baseline text/source-code materialization, profile validation, coordinate/loss maps, assurance classification, and the optional-provider qualification seam are implemented. During T02 migration the package also owns the bounded legacy DIRECT preparation-object/reference filesystem lifecycle and the frozen binding/reference/manifest schema. Concrete optional document-provider qualification remains gated and no provider acceptance is implied.
+**Status:** baseline text/source-code materialization, profile validation, coordinate/loss maps, assurance classification, and the optional-provider qualification seam are implemented. During T02 migration the package also owns the bounded legacy DIRECT preparation-object/reference filesystem lifecycle, frozen binding/reference/manifest schema, and physical-inventory filename/classification grammar. Concrete optional document-provider qualification remains gated and no provider acceptance is implied.
 
 Convert an exact retained revision into a canonical representation with explicit coordinate and loss maps.
 
@@ -18,6 +18,8 @@ Convert an exact retained revision into a canonical representation with explicit
 - exact `ELSPRP02` binding and `ELSPRF01` reference layouts
 - legacy manifest framing, fixed algorithm/profile tags and validation
 - lookup/object digest preimages, bounds and canonical lower-case locator names
+- closed `refs`/`objects` tree and final/temporary basename grammar
+- stable physical/current inventory classification tags and relative locators
 
 ## Must not own
 
@@ -29,13 +31,14 @@ Convert an exact retained revision into a canonical representation with explicit
 - revision CAS / revision-object storage
 - DPAPI, keyring or secret ownership
 - source-registry or control-journal mutation
-- daemon data-root ownership or platform identity observation
+- daemon data-root traversal, metadata or platform identity observation
 
 The compatibility filesystem adapter treats bytes as opaque. It neither proves a
 materialization profile nor authorizes a source; it only preserves exact bounded
-artifacts under qualified platform observations. The pure legacy-store codec owns
-persisted bytes and digest/name derivation while concrete SHA-256, BLAKE3, secret
-protection and filesystem observations remain injected by daemon composition.
+artifacts under qualified platform observations. The pure legacy-store codec and
+inventory grammar own persisted bytes, digest/name derivation and closed physical
+classification while concrete hashing, DPAPI, filesystem traversal and catalog
+overlay remain injected by daemon composition.
 
 - **Delivery wave:** W2 baseline / P04; optional P17
 - **Soft source-line target:** 7,000

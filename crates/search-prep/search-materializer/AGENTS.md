@@ -21,6 +21,7 @@ Convert an exact retained revision into a canonical representation with explicit
 - bounded immutable legacy preparation-object/reference I/O during T02 migration
 - canonical legacy preparation binding, reference and manifest wire schema
 - frozen preparation digest preimages, protection tags, bounds and locator names
+- legacy preparation tree/name grammar and physical/current inventory classification tags
 
 ## Forbidden ownership
 
@@ -32,7 +33,7 @@ Convert an exact retained revision into a canonical representation with explicit
 - retained revision CAS or revision-object publication owned by `search-revision-store`
 - secret acquisition, DPAPI/keyring operations or plaintext source verification
 - source-registry or control-journal mutation
-- daemon data-root ownership, native identity observation or path traversal
+- daemon data-root ownership, native identity observation, directory traversal or metadata acquisition
 
 ## Allowed dependencies
 
@@ -56,6 +57,9 @@ is improved:
 - `verify_legacy_preparation_manifest(manifest, binding, revisions)`
 - `derive_legacy_preparation_lookup_key(binding, backend)`
 - `derive_legacy_preparation_object_id(binding, backend, manifest_digest)`
+- `classify_legacy_preparation_inventory_name(tree, name)`
+- `legacy_preparation_reference_relative_locator(key)`
+- `legacy_preparation_object_relative_locator(id, protection)`
 
 The compatibility artifact adapter treats bytes as opaque. Native identity,
 locator and directory-durability observations are injected. It cannot infer a
@@ -63,11 +67,13 @@ materialization profile, decrypt bytes, authorize source access or publish a
 revision. A racing final artifact is reusable only after exact readback; a
 conflicting artifact is never overwritten.
 
-The legacy store schema is pure. Concrete SHA-256/BLAKE3 implementations are
-injected; DPAPI and filesystem operations remain composition responsibilities.
-The package owns field order, fixed sizes, algorithm tags, profile revisions,
-digest domains and canonical local names. Any format change requires an
-explicit compatibility review rather than daemon-local reinterpretation.
+The legacy store schema and inventory grammar are pure. Concrete SHA-256/BLAKE3
+implementations, data-root traversal, metadata and file bytes are injected;
+DPAPI and filesystem operations remain composition responsibilities. The
+package owns field order, fixed sizes, algorithm tags, profile revisions,
+digest domains, admitted tree/final/temporary names, classification tags and
+canonical relative locators. Any format/grammar change requires explicit
+compatibility review rather than daemon-local reinterpretation.
 
 ## Failure surface
 
@@ -76,7 +82,9 @@ state into an apparent success. Possible publication followed by failed director
 
 Legacy preparation schema failures preserve the stable `DIRECT_PREPARATION_*`
 namespace. Malformed binding/reference/manifest bytes, profile or algorithm
-drift, digest mismatch and representation mismatch fail closed.
+drift, digest mismatch and representation mismatch fail closed. Unknown tree,
+upper-case/nonhex ID, unrecognized extension or malformed temporary name is not
+silently reclassified as an orphan.
 
 ## Test seams and exit evidence
 
@@ -92,7 +100,9 @@ drift, digest mismatch and representation mismatch fail closed.
 - `ELSPRP02 binding and ELSPRF01 reference layouts remain byte exact`
 - `lookup/object digest preimages and lower-case locator names remain frozen`
 - `manifest algorithm/profile tags and representation identity are verified together`
-- `daemon contains no duplicate preparation schema constants, offsets or digest domains`
+- `refs/objects tree and final/temporary filename grammar remain closed`
+- `inventory classification tags and canonical relative locators remain frozen`
+- `daemon contains no duplicate preparation schema constants, offsets, digest domains or filename parser`
 
 Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
 but the writer does not edit another package opportunistically.
