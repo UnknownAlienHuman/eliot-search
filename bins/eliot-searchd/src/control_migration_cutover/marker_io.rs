@@ -8,13 +8,17 @@ use std::path::Path;
 
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
-    ControlCutoverMarkerArtifactError,
-    ControlCutoverMarkerFileState as MarkerState,
-    ControlCutoverMarkerPublishOutcome as PublishOutcome,
-    publish_control_cutover_marker, resolve_control_cutover_marker,
+    ControlCutoverMarkerArtifactError, publish_control_cutover_marker,
+    resolve_control_cutover_marker,
 };
 
 use super::super::redb_import::DaemonImportOutputPlatform;
+
+pub(super) use search_control_redb::migration::{
+    ControlCutoverMarkerFile as ValidMarker,
+    ControlCutoverMarkerFileState as MarkerState,
+    ControlCutoverMarkerPublishOutcome as PublishOutcome,
+};
 
 pub(super) const CUTOVER_ALREADY_COMMITTED: &str =
     "DIRECT_MIGRATION_CUTOVER_ALREADY_COMMITTED";
@@ -27,8 +31,6 @@ pub(super) const CUTOVER_OUTCOME_UNKNOWN: &str =
     "DIRECT_MIGRATION_CUTOVER_PUBLISH_OUTCOME_UNKNOWN";
 pub(super) const CUTOVER_READBACK_MISMATCH: &str =
     "DIRECT_MIGRATION_CUTOVER_READBACK_MISMATCH";
-
-pub(super) use search_control_redb::migration::ControlCutoverMarkerFile as ValidMarker;
 
 /// Resolves the single authority file without mutation or repair.
 pub(super) fn resolve_marker(data_root: &Path) -> MarkerState {
