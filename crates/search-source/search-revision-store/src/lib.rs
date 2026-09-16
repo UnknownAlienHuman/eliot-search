@@ -8,6 +8,11 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+#[allow(
+    clippy::missing_errors_doc,
+    clippy::similar_names,
+    clippy::too_many_lines
+)]
 mod immutable_object;
 mod kernel;
 
