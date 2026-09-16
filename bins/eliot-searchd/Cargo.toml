@@ -64,7 +64,9 @@ test = true
 [features]
 default = ["wave1-shell"]
 wave1-shell = []
-wave2-source = ["dep:search-revision-store"]
+# Revision-store ownership is a baseline DIRECT boundary, not optional wave
+# acceptance. The feature marker remains for graph compatibility only.
+wave2-source = []
 wave3-index = [
     "wave2-source",
     "dep:search-projection-planner",
@@ -119,17 +121,17 @@ zeroize = "=1.9.0"
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 
 # Live plaintext DIRECT ingestion always enters the canonical admission,
-# identity and legacy-registry owners. These are architecture boundaries, not
-# optional wave acceptance claims.
+# identity, registry and revision-store owners. These are architecture
+# boundaries, not optional wave acceptance claims.
 search-source-admission.workspace = true
 search-source-registry.workspace = true
 search-source-identity.workspace = true
+search-revision-store.workspace = true
 search-source-reconcile = { workspace = true, optional = true }
 # Shared final-handle byte mechanics are mandatory for DIRECT ingestion, not a
 # wave/gate acceptance: primary file reads go through the safe-reader kernel.
 search-safe-reader.workspace = true
-search-revision-store = { workspace = true, optional = true }
-# Shared byte mechanics are mandatory for DIRECT, not a wave/gate acceptance.
+# Shared preparation mechanics are mandatory for DIRECT, not a wave/gate acceptance.
 search-materializer.workspace = true
 search-unitizer.workspace = true
 search-code-enricher = { workspace = true, optional = true }
