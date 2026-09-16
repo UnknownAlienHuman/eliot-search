@@ -21,7 +21,8 @@ The package owns:
 - hard-link publication without replacement;
 - full final record-chain readback, matching-final reuse and conflict refusal;
 - deletion of only the exact original temporary object;
-- typed state, I/O, identity, outcome-unknown and immutable-conflict failures.
+- typed state, I/O, identity, outcome-unknown and immutable-conflict failures;
+- the canonical staged-plan projection that reports these verified artifacts.
 
 `eliot-searchd` now composes those owners. It retains only responsibilities that
 cannot enter the control package:
@@ -31,11 +32,11 @@ cannot enter the control package:
 - rereading exact retained bytes and computing BLAKE3;
 - providing qualified native identity, locator and directory-sync observations;
 - generating a non-authoritative temporary basename;
-- rendering the historical operator report and mapping typed failures to the
-  existing stable reason namespace.
+- mapping typed integration failures to the existing stable reason namespace.
 
-No source body, path, credential, protector or BLAKE3 hasher crosses into
-`search-control-redb`.
+The package renders the historical staged-plan operator projection from typed
+verified state. No source body, path, credential, protector or BLAKE3 hasher
+crosses into `search-control-redb`.
 
 ## Compatibility
 
@@ -67,13 +68,13 @@ The frozen two-row fixture remains:
 a2a8dc044d640c9c5d91dea46b338425c6d1f457d3eee7693ce0b8da4ee51966
 ```
 
-The redb binding, cutover marker and persisted database schema are unchanged.
-No dependency, lockfile or workflow changed.
+The redb binding, cutover marker, staged-plan JSON and persisted database schema
+are unchanged. No dependency, lockfile or workflow changed.
 
-The new owner additionally closes the previous staging race: after the exact
-second replay and immediately before publication, it reopens the temporary
-locator, requires the original native identity and recomputes the complete
-record chain. A replaced temporary object is not published under the
+The package owner additionally closes the previous staging race: after the
+exact second replay and immediately before publication, it reopens the
+temporary locator, requires the original native identity and recomputes the
+complete record chain. A replaced temporary object is not published under the
 content-addressed final name.
 
 ## Regression seams
@@ -85,22 +86,24 @@ Package tests freeze the exact schema/profile/chain values and cover:
 - existing conflicting final state without overwrite;
 - changed temporary native identity;
 - nonlocal temporary names;
-- invalid row framing and aggregate bounds.
+- invalid row framing and aggregate bounds;
+- all staged-plan location/locator projections.
 
-`control_migration_owner_boundary` now requires the package owner to contain
-`hard_link`, temporary cleanup and record readback. It rejects restoration of
-`StagingFile`, `OpenOptions`, `BufReader`, `BufWriter`, `hard_link`,
-`remove_file`, `read_until` or daemon-local record-chain state in the plan and
-content adapters.
+`control_migration_owner_boundary` requires the package owner to contain
+`hard_link`, temporary cleanup, record readback and the staged-plan projection.
+It rejects restoration of `StagingFile`, `OpenOptions`, `BufReader`,
+`BufWriter`, `hard_link`, `remove_file`, `read_until`, daemon-local record-chain
+state or the `source_migration_plan_staged` schema in daemon composition.
 
 ## Remaining ownership work
 
-This completes the mapping-plan/source-content immutable record-artifact slice.
-The inactive redb `.pending`/final lifecycle is already package-owned. Remaining
-PR #193 work is in adjacent control-migration orchestration and cutover/native
-marker I/O, followed by the accepted T02 direct-store and source-root moves.
-Those slices must preserve the single source-registry owner and must not move
-retained bytes or credential handling into the control package.
+This completes the mapping-plan/source-content immutable record-artifact and
+projection slice. The inactive redb `.pending`/final lifecycle and cutover
+marker filesystem/projection lifecycle are also package-owned. Remaining issue
+#189 work is the accepted T02 direct-store/source-root/materialization sequence
+and actual primary-control serve-path integration. Those slices must preserve
+the single source-registry owner and must not move retained bytes or credential
+handling into the control package.
 
 ## Required execution
 
@@ -108,6 +111,7 @@ retained bytes or credential handling into the control package.
 cargo +1.98.0 test --locked -p search-control-redb migration::record_artifact
 cargo +1.98.0 test --locked -p search-control-redb migration::record_chain
 cargo +1.98.0 test --locked -p search-control-redb migration::content
+cargo +1.98.0 test --locked -p search-control-redb migration::receipts
 cargo +1.98.0 test --locked -p eliot-searchd --test control_migration_owner_boundary
 cargo +1.98.0 test --locked -p eliot-searchd --test control_migration_process
 cargo +1.98.0 check --locked -p search-control-redb -p eliot-searchd --all-targets
