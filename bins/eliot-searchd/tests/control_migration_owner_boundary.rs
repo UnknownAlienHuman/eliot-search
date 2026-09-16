@@ -222,3 +222,49 @@ fn source_import_record_chain_and_artifact_lifecycle_have_one_owner() {
         }
     }
 }
+
+#[test]
+fn staged_plan_and_cutover_receipt_schemas_belong_to_control_owner() {
+    let root = repository_root();
+    let owner = read(
+        &root,
+        "crates/search-control-redb/src/migration/receipts.rs",
+    );
+    for required in [
+        "pub struct SourceMigrationStagedPlan",
+        "pub enum SourceMigrationPlanLocation",
+        "source_migration_plan_staged",
+        "control_cutover_committed",
+        "control_cutover_rollback",
+        "render_control_cutover_committed_receipt",
+        "render_control_cutover_rollback_receipt",
+    ] {
+        assert!(
+            owner.contains(required),
+            "control owner is missing migration receipt boundary {required}"
+        );
+    }
+    assert!(!owner.contains("impl DirectStore"));
+    assert!(!owner.contains("catalog_quarantine"));
+    assert!(!owner.contains("RevisionProtector"));
+
+    let plan = read(
+        &root,
+        "bins/eliot-searchd/src/control_migration_plan.rs",
+    );
+    assert!(plan.contains("SourceMigrationStagedPlan"));
+    assert!(plan.contains("plan.render_json()"));
+    assert!(!plan.contains("struct StagedPlan"));
+    assert!(!plan.contains("source_migration_plan_staged"));
+    assert!(!plan.contains("fn staged_plan_json"));
+
+    let operation = read(
+        &root,
+        "bins/eliot-searchd/src/control_migration_cutover/operation.rs",
+    );
+    assert!(operation.contains("render_control_cutover_committed_receipt"));
+    assert!(operation.contains("render_control_cutover_rollback_receipt"));
+    assert!(!operation.contains("control_cutover_committed"));
+    assert!(!operation.contains("control_cutover_rollback"));
+    assert!(!operation.contains("fn cutover_receipt"));
+}
