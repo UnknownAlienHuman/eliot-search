@@ -218,3 +218,78 @@ fn daemon_generic_preparation_io_composes_materializer_owner() {
     assert!(revision_writer.contains("persist_revision_object"));
     assert!(!revision_writer.contains("persist_immutable_object"));
 }
+
+#[test]
+fn preparation_inventory_grammar_and_locators_have_one_package_owner() {
+    let root = repository_root();
+    let facade = read(
+        &root,
+        "crates/search-prep/search-materializer/src/lib.rs",
+    );
+    assert!(facade.contains("mod legacy_inventory;"));
+    assert!(facade.contains("pub use legacy_inventory::*;"));
+
+    let owner = read(
+        &root,
+        "crates/search-prep/search-materializer/src/legacy_inventory.rs",
+    );
+    for required in [
+        "pub enum LegacyPreparationInventoryTree",
+        "pub enum LegacyPreparationInventoryKind",
+        "pub fn classify_legacy_preparation_inventory_name",
+        "pub fn legacy_preparation_reference_relative_locator",
+        "pub fn legacy_preparation_object_relative_locator",
+        "pub fn legacy_preparation_rooted_locator",
+        "unmapped_profile_or_revision_reference",
+        "uncommitted_temporary_object",
+        ".dpapi.tmp",
+    ] {
+        assert!(
+            owner.contains(required),
+            "materializer lost inventory grammar {required}"
+        );
+    }
+    for forbidden in [
+        "std::fs",
+        "Metadata",
+        "read_dir",
+        "RevisionProtector",
+        "SourceRegistry",
+        "ControlJournal",
+    ] {
+        assert!(
+            !owner.contains(forbidden),
+            "inventory grammar acquired foreign responsibility {forbidden}"
+        );
+    }
+
+    let daemon = read(
+        &root,
+        "bins/eliot-searchd/src/control_migration_preparation.rs",
+    );
+    for required in [
+        "classify_legacy_preparation_inventory_name",
+        "legacy_preparation_reference_relative_locator",
+        "legacy_preparation_object_relative_locator",
+        "legacy_preparation_rooted_locator",
+        "LegacyPreparationInventoryKind as Kind",
+        "LegacyPreparationInventoryTree",
+    ] {
+        assert!(daemon.contains(required));
+    }
+    for forbidden in [
+        "enum Kind",
+        "fn generated(",
+        "fn hex_len(",
+        "fn decimal(",
+        "current_profile_reference\"",
+        "uncommitted_temporary_object\"",
+        "strip_suffix(\".ref\")",
+        "strip_suffix(\".dpapi.tmp\")",
+    ] {
+        assert!(
+            !daemon.contains(forbidden),
+            "daemon restored inventory grammar {forbidden}"
+        );
+    }
+}
