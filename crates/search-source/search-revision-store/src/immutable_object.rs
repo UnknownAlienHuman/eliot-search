@@ -12,7 +12,7 @@ use core::fmt;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Native observations required by the package-owned immutable-object lifecycle.
 pub trait LegacyRevisionObjectPlatform {
@@ -249,23 +249,28 @@ where
     if !regular(&metadata) {
         return Err(LegacyRevisionObjectError::ObjectInvalid);
     }
-    platform
-        .verify_locator(&temporary, &temporary_path)
-        .map_err(LegacyRevisionObjectError::Platform)?;
     let temporary_identity = platform
         .identity(&temporary)
+        .map_err(LegacyRevisionObjectError::Platform)?;
+    let mut staging = TemporaryObjectGuard {
+        platform,
+        path: temporary_path,
+        identity: temporary_identity.clone(),
+        cleanup_armed: true,
+    };
+    platform
+        .verify_locator(&temporary, &staging.path)
         .map_err(LegacyRevisionObjectError::Platform)?;
 
     if let Err(error) = temporary.write_all(bytes).and_then(|()| temporary.sync_all()) {
         drop(temporary);
-        let _ = cleanup_exact(platform, &temporary_path, &temporary_identity);
         return Err(LegacyRevisionObjectError::Write(error));
     }
     drop(temporary);
 
     let staged = read_object(
         platform,
-        &temporary_path,
+        &staging.path,
         maximum_bytes,
         Some(&temporary_identity),
     )?;
@@ -273,11 +278,10 @@ where
         return Err(LegacyRevisionObjectError::ReadbackMismatch);
     }
 
-    let reused = match fs::hard_link(&temporary_path, &final_path) {
+    let reused = match fs::hard_link(&staging.path, &final_path) {
         Ok(()) => false,
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => true,
         Err(error) => {
-            let _ = cleanup_exact(platform, &temporary_path, &temporary_identity);
             return Err(LegacyRevisionObjectError::PublishOutcomeUnknown(error));
         }
     };
@@ -295,7 +299,7 @@ where
     let encoded_bytes = final_object.encoded_bytes();
     let identity = final_object.identity;
 
-    cleanup_exact(platform, &temporary_path, &temporary_identity)?;
+    staging.cleanup()?;
     platform
         .sync_directory(directory)
         .map_err(LegacyRevisionObjectError::PublishPlatformOutcomeUnknown)?;
@@ -304,6 +308,37 @@ where
         encoded_bytes,
         reused,
     })
+}
+
+struct TemporaryObjectGuard<'a, P>
+where
+    P: LegacyRevisionObjectPlatform,
+{
+    platform: &'a P,
+    path: PathBuf,
+    identity: P::Identity,
+    cleanup_armed: bool,
+}
+
+impl<P> TemporaryObjectGuard<'_, P>
+where
+    P: LegacyRevisionObjectPlatform,
+{
+    fn cleanup(&mut self) -> Result<(), LegacyRevisionObjectError<P::Error>> {
+        if !core::mem::replace(&mut self.cleanup_armed, false) {
+            return Ok(());
+        }
+        cleanup_exact(self.platform, &self.path, &self.identity)
+    }
+}
+
+impl<P> Drop for TemporaryObjectGuard<'_, P>
+where
+    P: LegacyRevisionObjectPlatform,
+{
+    fn drop(&mut self) {
+        let _ = self.cleanup();
+    }
 }
 
 fn read_object<P>(
@@ -353,19 +388,19 @@ where
         return Err(LegacyRevisionObjectError::IdentityChanged);
     }
 
-    let mut bytes = Vec::with_capacity(before_len);
+    let mut object_bytes = Vec::with_capacity(before_len);
     let limit = u64::try_from(maximum_bytes)
         .unwrap_or(u64::MAX)
         .saturating_add(1);
     (&mut file)
         .take(limit)
-        .read_to_end(&mut bytes)
+        .read_to_end(&mut object_bytes)
         .map_err(LegacyRevisionObjectError::ObjectRead)?;
     let after = file
         .metadata()
         .map_err(LegacyRevisionObjectError::ObjectRead)?;
-    if bytes.len() != before_len
-        || bytes.len() > maximum_bytes
+    if object_bytes.len() != before_len
+        || object_bytes.len() > maximum_bytes
         || after.len() != before.len()
         || after.modified().ok() != before.modified().ok()
     {
@@ -380,7 +415,10 @@ where
     if after_identity != identity {
         return Err(LegacyRevisionObjectError::IdentityChanged);
     }
-    Ok(LegacyRevisionObjectRead { bytes, identity })
+    Ok(LegacyRevisionObjectRead {
+        bytes: object_bytes,
+        identity,
+    })
 }
 
 fn ensure_child_directory<P>(
