@@ -2,9 +2,10 @@
 //! a `ControlJournal`: it carries no live owner, admission, visibility or H5 receipt.
 //!
 //! The caller owns input exclusion and source replay. This module owns the
-//! per-artifact output lock, immutable record publication, pending/final
-//! database lifecycle and exact import/readback state machines. Resuming an
-//! incomplete target verifies its entire committed prefix before appending rows.
+//! per-artifact output lock, immutable record and cutover-marker publication,
+//! pending/final database lifecycle and exact import/readback state machines.
+//! Resuming an incomplete target verifies its entire committed prefix before
+//! appending rows.
 
 use redb::TableDefinition;
 
@@ -13,6 +14,7 @@ use crate::ControlError;
 mod codec;
 mod content;
 mod cutover;
+mod cutover_artifact;
 mod mapping;
 mod model;
 mod output_artifact;
@@ -33,6 +35,12 @@ pub use cutover::{
     ControlCutoverMarker, ControlCutoverMarkerError,
     ControlCutoverReplayDecision, MAX_CONTROL_CUTOVER_MARKER_BYTES,
     classify_control_cutover_replay,
+};
+pub use cutover_artifact::{
+    CONTROL_CUTOVER_MARKER_TEMP_FILE, ControlCutoverMarkerArtifactError,
+    ControlCutoverMarkerFile, ControlCutoverMarkerFileState,
+    ControlCutoverMarkerPublishOutcome, publish_control_cutover_marker,
+    resolve_control_cutover_marker,
 };
 pub use mapping::{
     LegacySourceMappingEvent, LegacySourceMappingState, MappedSourceEvent,
