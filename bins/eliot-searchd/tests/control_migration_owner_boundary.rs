@@ -96,6 +96,7 @@ fn content_manifest_schema_belongs_to_control_owner() {
         "bins/eliot-searchd/src/control_migration_content.rs",
     );
     assert!(adapter.contains("SourceContentManifestEncoder"));
+    assert!(adapter.contains("SourceImportRecordArtifact"));
     assert!(adapter.contains("RevisionProtector"));
     assert!(adapter.contains("read_import_revision"));
     assert!(adapter.contains("blake3::Hasher"));
@@ -114,9 +115,9 @@ fn content_manifest_schema_belongs_to_control_owner() {
 }
 
 #[test]
-fn source_import_record_chain_has_one_owner() {
+fn source_import_record_chain_and_artifact_lifecycle_have_one_owner() {
     let root = repository_root();
-    let owner = read(
+    let chain_owner = read(
         &root,
         "crates/search-control-redb/src/migration/record_chain.rs",
     );
@@ -129,8 +130,26 @@ fn source_import_record_chain_has_one_owner() {
         "eliot-search/source-map-end/v1",
     ] {
         assert!(
-            owner.contains(required),
+            chain_owner.contains(required),
             "control owner is missing record-chain boundary {required}"
+        );
+    }
+
+    let artifact_owner = read(
+        &root,
+        "crates/search-control-redb/src/migration/record_artifact.rs",
+    );
+    for required in [
+        "pub struct SourceImportRecordArtifact",
+        "pub struct SourceImportRecordReadback",
+        "inspect_source_import_record_artifact",
+        "fs::hard_link",
+        "fs::remove_file",
+        "read_until",
+    ] {
+        assert!(
+            artifact_owner.contains(required),
+            "control owner is missing immutable artifact behavior {required}"
         );
     }
 
@@ -142,18 +161,26 @@ fn source_import_record_chain_has_one_owner() {
         &root,
         "bins/eliot-searchd/src/control_migration_content.rs",
     );
-    assert!(plan.contains("SourceImportRecordChain"));
-    assert!(content.contains("SourceImportRecordChain"));
+    assert!(plan.contains("SourceImportRecordArtifact"));
+    assert!(content.contains("SourceImportRecordArtifact"));
     for daemon in [&plan, &content] {
         for forbidden in [
             "struct PlanDigest",
+            "struct StagingFile",
+            "SourceImportRecordChain::new",
+            "fs::hard_link",
+            "fs::remove_file",
+            "OpenOptions",
+            "BufReader",
+            "BufWriter",
+            "read_until",
             "eliot-search/source-map-chain/v1",
             "eliot-search/source-map-row/v1",
             "eliot-search/source-map-end/v1",
         ] {
             assert!(
                 !daemon.contains(forbidden),
-                "daemon restored package-owned record-chain logic: {forbidden}"
+                "daemon restored package-owned record-artifact logic: {forbidden}"
             );
         }
     }
