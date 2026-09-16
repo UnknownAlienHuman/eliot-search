@@ -6,7 +6,7 @@ use std::path::Path;
 use zeroize::Zeroizing;
 
 use super::storage_io::{
-    legacy_path, persist_immutable_object, protected_path,
+    legacy_path, persist_revision_object, protected_path,
     read_revision_object,
 };
 use super::{
@@ -31,7 +31,7 @@ pub(super) fn persist_before_publication(
         // publication primitive, including empty retained revisions.
         verify_plaintext(&metadata, plaintext)?;
         let path = legacy_path(root, &metadata.revision_id)?;
-        persist_immutable_object(&path, plaintext)?;
+        persist_revision_object(&path, plaintext)?;
         let observed = Zeroizing::new(read_revision_object(
             &path,
             MAX_REVISION_OBJECT_BYTES,
@@ -71,7 +71,7 @@ pub(super) fn persist_verified(
                 &metadata.content_digest,
                 plaintext,
             )?;
-            persist_immutable_object(&path, &protected)?;
+            persist_revision_object(&path, &protected)?;
         }
         Err(_) => return Err("DIRECT_REVISION_PROTECTED_METADATA_ERROR".to_owned()),
     }
