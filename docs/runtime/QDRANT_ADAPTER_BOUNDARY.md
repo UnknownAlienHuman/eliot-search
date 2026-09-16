@@ -36,6 +36,7 @@ cargo run --locked -p xtask -- validate qdrant-boundary --json
 cargo test --locked -p xtask --lib qdrant_boundary::source::tests
 cargo test --locked -p xtask --test qdrant_boundary_regressions
 cargo test --locked -p xtask --test qdrant_cross_file_boundary
+cargo test --locked -p xtask --test qdrant_qualified_path_boundary
 cargo test --locked -p xtask --test qdrant_qualification_module_ownership
 ```
 
@@ -67,14 +68,17 @@ identity growth, excessive module depth and malformed or oversized import trees
 fail closed rather than producing a partial PASS.
 
 The cross-file pass resolves `crate`, `self`, repeated `super` and Rust-2018
-crate-root paths. It follows renamed/grouped item imports, renamed vendor-crate roots, chained
-public re-exports, private imports used by public signatures, local type-alias
-chains, public glob re-exports and private glob imports. Public globs propagate only publicly
-exportable tainted names; an internal-only vendor binding does not create a
-false public leak. Direct vendor-SDK glob imports are rejected because a lexical
-validator cannot enumerate their introduced names. Taint keys include full
-semantic module path and item name, so
-an unrelated Eliot-owned type with the same leaf name remains valid.
+crate-root paths. It follows renamed/grouped item imports, renamed vendor-crate
+roots, chained public re-exports, private imports used by public signatures,
+local type-alias chains, public glob re-exports and private glob imports. It
+also inspects direct qualified paths in accumulated public signatures,
+trait/enum bodies and exported macros, including paths split across lines and
+`$crate` macro roots. Public globs propagate only publicly exportable tainted
+names; an internal-only vendor binding does not create a false public leak.
+Direct vendor-SDK glob imports are rejected because a lexical validator cannot
+enumerate their introduced names. Taint keys include full semantic module path
+and item name, so an unrelated Eliot-owned type with the same leaf name remains
+valid.
 
 The gate also requires the workspace client pin, exactly one `qdrant-client`
 record in `Cargo.lock`, `qualified.rs` and `qualification/qdrant/artifact.toml`
@@ -96,10 +100,9 @@ This remains a lexical structural check, not complete Rust name resolution,
 Cargo compilation or live qualification. Direct computed `include!`/`#[path]`
 forms are rejected rather than interpreted. Macro-generated directives,
 `cfg_attr`-selected module paths, conditional-compilation truth, module aliases
-used as path roots, direct fully-qualified cross-file paths that do not pass
-through an import, and compiler-derived visibility still require complementary
-compiled checks and independent review. A structural PASS alone must not be represented as complete
-boundary or product acceptance.
+used as path roots and compiler-derived visibility still require complementary
+compiled checks and independent review. A structural PASS alone must not be
+represented as complete boundary or product acceptance.
 
 `qualified.rs` is the single upgrade identity facade: server version/build,
 artifact digest/size/platform and client version/checksum/VCS identity remain

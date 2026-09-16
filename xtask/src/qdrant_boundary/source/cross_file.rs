@@ -3,10 +3,14 @@ use std::sync::Arc;
 
 use super::lexer::code_only;
 use super::module_graph::semantic_modules;
-use super::surface::find_public_vendor_surfaces;
+use super::surface::{
+    find_public_surfaces_matching, find_public_vendor_surfaces,
+};
 
+mod qualified_path;
 mod use_tree;
 
+use qualified_path::contains_tainted_qualified_path;
 use use_tree::{
     DirectTaint, UseLeaf, collect_use_statements, direct_tainted_bindings,
     expand_local_aliases,
@@ -62,8 +66,9 @@ type TaintedItems = BTreeMap<Vec<String>, BTreeMap<String, TaintInfo>>;
 /// The file-local scanner owns direct SDK references. This pass closes the
 /// standard Rust module-path escape where a private alias is defined in one
 /// file, then imported into a public signature or re-exported by another file.
-/// Literal `include!`, direct `#[path]` module overrides and glob imports are
-/// resolved inside the bounded bridge source inventory.
+/// Literal `include!`, direct `#[path]` module overrides, glob imports and
+/// fully qualified public paths are resolved inside the bounded bridge source
+/// inventory.
 pub(super) fn find_cross_file_vendor_surfaces(
     sources: &[BridgeSource],
     bridge_root: &str,
@@ -270,12 +275,20 @@ fn collect_public_surface_findings(
             findings,
         );
         expand_local_aliases(&unit.code, &mut visible_tainted_names);
-        if visible_tainted_names.is_empty() {
-            continue;
+        if !visible_tainted_names.is_empty() {
+            for line in
+                find_public_vendor_surfaces(&unit.code, &visible_tainted_names)
+            {
+                findings.insert((unit.relative.to_string(), line));
+            }
         }
-        for line in
-            find_public_vendor_surfaces(&unit.code, &visible_tainted_names)
-        {
+        for line in find_public_surfaces_matching(&unit.code, |surface| {
+            contains_tainted_qualified_path(
+                surface,
+                &unit.module,
+                |module, name| is_tainted(tainted_items, module, name),
+            )
+        }) {
             findings.insert((unit.relative.to_string(), line));
         }
     }
