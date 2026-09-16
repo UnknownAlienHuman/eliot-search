@@ -1,10 +1,10 @@
-//! Canonical bounded body for requesting one standalone read grant.
+//! Canonical standalone read-grant request protocol.
 //!
-//! This body carries requested ceilings only. It deliberately omits binding,
+//! The body carries requested ceilings only. It deliberately omits binding,
 //! installation, principal, operation and issued-grant identities: the daemon
 //! derives those from an already authenticated session and server-owned policy.
-//! The exact canonical bytes are intended to be committed by the authenticated
-//! envelope body digest before daemon composition.
+//! The dedicated authenticated envelope binds the exact canonical body digest
+//! under a grant-specific domain without extending the W1 shell-command registry.
 
 use search_contracts::{
     AccessPartitionId, BoundedSet, CorpusOrPortfolioId, DisclosureCeiling, Modality, ProfileId,
@@ -77,9 +77,17 @@ impl StandaloneGrantRequestV1 {
 }
 
 mod codec;
+mod envelope;
 
 pub use codec::{
     decode_standalone_grant_request, encode_standalone_grant_request,
+};
+pub use envelope::{
+    AuthenticatedStandaloneGrantEnvelope, MAX_STANDALONE_GRANT_ENVELOPE_JSON_BYTES,
+    STANDALONE_GRANT_ENVELOPE_DOMAIN, decode_standalone_grant_envelope,
+    decode_standalone_grant_envelope_json, encode_standalone_grant_envelope,
+    encode_standalone_grant_envelope_json, seal_standalone_grant_envelope,
+    standalone_grant_envelope_transcript, verify_standalone_grant_envelope_proof,
 };
 
 #[cfg(test)]

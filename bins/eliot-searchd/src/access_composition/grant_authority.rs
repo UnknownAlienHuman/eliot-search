@@ -47,11 +47,11 @@ pub enum GrantAuthorityError {
     SessionInactive,
     /// This operation is standalone-only and the authenticated role differs.
     PeerRoleDenied,
-    /// Current binding policy could not be read safely.
+    /// Initial current binding policy could not be read safely before issuance.
     PolicyUnavailable,
-    /// The policy record is not bound to the authenticated session.
+    /// Initial policy record is not bound to the authenticated session.
     PolicyBindingMismatch,
-    /// Binding or policy state changed while the grant was being issued.
+    /// Binding or policy state changed, disappeared or became unreadable after issuance began.
     PolicyChangedDuringIssuance,
     /// Canonical protocol request could not be mapped to server identities.
     ProtocolRequestInvalid,
@@ -169,8 +169,9 @@ where
         let after = self
             .policy_source
             .snapshot(binding)
-            .map_err(|_| GrantAuthorityError::PolicyUnavailable)?;
-        validate_policy_binding(binding, &after)?;
+            .map_err(|_| GrantAuthorityError::PolicyChangedDuringIssuance)?;
+        validate_policy_binding(binding, &after)
+            .map_err(|_| GrantAuthorityError::PolicyChangedDuringIssuance)?;
         if before != after {
             return Err(GrantAuthorityError::PolicyChangedDuringIssuance);
         }

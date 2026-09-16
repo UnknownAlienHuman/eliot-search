@@ -320,7 +320,7 @@ fn policy_change_or_second_read_failure_discards_issued_claims() {
     let mut authority = authority(source, Rc::clone(&issuer_calls));
     assert_eq!(
         authority.mint(&session, &request()),
-        Err(GrantAuthorityError::PolicyUnavailable)
+        Err(GrantAuthorityError::PolicyChangedDuringIssuance)
     );
     assert_eq!(source_calls.get(), 2);
     assert_eq!(issuer_calls.get(), 1);

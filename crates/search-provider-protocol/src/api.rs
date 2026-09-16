@@ -5,13 +5,14 @@
 //! to top: [`frame`](crate::frame) (canonical `u32`-LE/JSON),
 //! [`negotiation`](crate::negotiation) (exact major/minor),
 //! [`pairing`](crate::pairing) (mutual-authentication ceremony),
-//! [`request`](crate::request) (authenticated envelopes),
-//! [`grant`](crate::grant) (bounded standalone-grant request body),
-//! [`binding`](crate::binding) (session composition and admission order),
-//! plus [`session`](crate::session), [`progress`](crate::progress),
-//! [`terminal`](crate::terminal), [`cancel`](crate::cancel),
-//! [`cleanup`](crate::cleanup), [`config`](crate::config), the private
-//! indexed-query framing layer, and [`error`](crate::error).
+//! [`request`](crate::request) (authenticated shell envelopes),
+//! [`grant`](crate::grant) (bounded standalone-grant body and dedicated
+//! authenticated envelope), [`binding`](crate::binding) (session composition
+//! and admission order), plus [`session`](crate::session),
+//! [`progress`](crate::progress), [`terminal`](crate::terminal),
+//! [`cancel`](crate::cancel), [`cleanup`](crate::cleanup),
+//! [`config`](crate::config), the private indexed-query framing layer, and
+//! [`error`](crate::error).
 
 pub use crate::binding::{
     BindingContext, BindingSession, BoundSession, NegotiatedHello, TransportPeer,
@@ -23,9 +24,14 @@ pub use crate::config::{DEFAULT_PROTOCOL_LIMITS, FRAME_PREFIX_BYTES, ProtocolLim
 pub use crate::error::ProtocolError;
 pub use crate::frame::{FrameCodec, decode_frame, encode_frame};
 pub use crate::grant::{
-    MAX_STANDALONE_GRANT_REQUEST_BYTES, STANDALONE_GRANT_REQUEST_VERSION,
-    StandaloneGrantRequestV1, decode_standalone_grant_request,
-    encode_standalone_grant_request,
+    AuthenticatedStandaloneGrantEnvelope, MAX_STANDALONE_GRANT_ENVELOPE_JSON_BYTES,
+    MAX_STANDALONE_GRANT_REQUEST_BYTES, STANDALONE_GRANT_ENVELOPE_DOMAIN,
+    STANDALONE_GRANT_REQUEST_VERSION, StandaloneGrantRequestV1,
+    decode_standalone_grant_envelope, decode_standalone_grant_envelope_json,
+    decode_standalone_grant_request, encode_standalone_grant_envelope,
+    encode_standalone_grant_envelope_json, encode_standalone_grant_request,
+    seal_standalone_grant_envelope, standalone_grant_envelope_transcript,
+    verify_standalone_grant_envelope_proof,
 };
 pub use crate::indexed::{
     INDEXED_QUERY_MARKER, IndexedQueryFrameError, STRICT_QUERY_PREFIX,

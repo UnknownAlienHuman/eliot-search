@@ -2,8 +2,9 @@
 
 **C30 generic edge — Generic local provider protocol.**
 
-**Status:** bounded protocol/session kernel implemented; complete public generic-edge
-and standalone-grant round trips remain integration work.
+**Status:** bounded protocol/session kernel, canonical standalone-grant body,
+grant-specific authenticated envelope and terminal lifecycle are implemented;
+complete public generic-edge transport integration remains open.
 
 Provides the generic local transport, binding and capability edge shared by CLI and optional client adapters.
 
@@ -15,6 +16,8 @@ Provides the generic local transport, binding and capability edge shared by CLI 
 - capability descriptor projection
 - authenticated request/result/progress envelope lifecycle
 - canonical bounded standalone-grant request body (requested ceilings only)
+- dedicated standalone-grant proof domain and canonical envelope
+- exact body-digest admission and one terminal in-flight release owner
 
 ## Must not own
 
@@ -25,9 +28,14 @@ Provides the generic local transport, binding and capability edge shared by CLI 
 - compression or unbounded fragmentation in baseline
 
 The standalone-grant body cannot choose binding, installation, principal,
-operation or issued-grant identity. The daemon must derive those only after an
-authenticated session and current authoritative policy snapshot. The live grant
-command/response route remains unavailable until that complete chain is wired.
+operation or issued-grant identity. Its dedicated envelope binds only protocol
+version, server nonce, request identity and exact body digest. The daemon derives
+server identities only after an authenticated session and current authoritative
+policy snapshot.
+
+The development loopback command shim remains separate and cannot expose grants
+until it is replaced by the canonical `BoundSession` with a real durable binding
+and policy source. Token-file, ACL or loopback state alone cannot fill that role.
 
 - **Delivery wave:** W1 / P01 transport; W8 / P14 integration
 - **Soft source-line target:** 8,500

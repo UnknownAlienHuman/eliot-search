@@ -19,6 +19,7 @@ Implement the generic local transport, binding and capability edge shared by CLI
 - capability descriptor projection
 - request/result/progress envelope lifecycle
 - canonical bounded standalone-grant request bodies containing requested ceilings only
+- grant-specific authenticated envelope and proof transcript
 - exact body-digest admission before mutable session state
 - single terminal ownership and in-flight release for bound requests
 
@@ -45,15 +46,20 @@ is improved:
 - `BindingSession::accept_hello(hello, peer) -> Result<BoundSession, ProtocolError>`
 - `BoundSession::admit(envelope) -> Result<AdmittedRequest, ProtocolError>`
 - `BoundSession::admit_body_bound(envelope, proof, body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
+- `BoundSession::admit_standalone_grant(envelope, proof, body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
 - `BoundSession::complete_request(request_id, terminal) -> Result<RequestStatus, ProtocolError>`
 - `BoundSession::cancel(request_id) -> CancelOutcome`
 - `encode_standalone_grant_request(request) -> Result<Vec<u8>, ProtocolError>`
 - `decode_standalone_grant_request(bytes) -> Result<StandaloneGrantRequestV1, ProtocolError>`
+- `encode_standalone_grant_envelope(envelope, limits) -> Result<BoundedBytes, ProtocolError>`
+- `decode_standalone_grant_envelope(bytes, limits, versions) -> Result<AuthenticatedStandaloneGrantEnvelope, ProtocolError>`
 - `project_capability_descriptor(snapshot, binding) -> SearchProviderCapabilityDescriptor`
 
 The grant request body never carries binding, principal, installation,
 operation or issued-grant identity. It becomes meaningful only after an
-authenticated session and server-side authority composition.
+authenticated session and server-side authority composition. Its dedicated
+envelope uses a separate proof domain and does not extend or masquerade as a W1
+health/version/shutdown shell command.
 
 A body-bearing request must not consume sequence, replay or in-flight state
 until the adapter-computed digest of the exact bytes equals the digest covered
@@ -70,6 +76,7 @@ state into an apparent success.
 
 - `u32-LE framing and 8 MiB cap`
 - `canonical standalone-grant body round trip; alternate encoding/duplicates/oversize rejected`
+- `grant-specific envelope JSON/frame/proof transcript round trip`
 - `body mismatch rejected before sequence/replay/in-flight mutation`
 - `request guard retained until exactly one terminal release`
 - `cancelled request cannot complete as success`

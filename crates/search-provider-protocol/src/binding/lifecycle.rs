@@ -1,9 +1,12 @@
 //! Body-bound admission and terminal lifecycle for [`super::BoundSession`].
 
-use search_contracts::RequestId;
+use search_contracts::{ProtocolVersion, RequestId};
 
 use crate::error::ProtocolError;
-use crate::pairing::{ProofDigest, verify_proof};
+use crate::grant::{
+    AuthenticatedStandaloneGrantEnvelope, verify_standalone_grant_envelope_proof,
+};
+use crate::pairing::{ProofDigest, ServerNonce, verify_proof};
 use crate::request::{
     AuthenticatedEnvelope, InFlightEntry, MonotonicMillis, RequestGuard, RequestStatus,
     verify_envelope_proof,
@@ -14,7 +17,7 @@ use crate::terminal::TerminalKind;
 use super::BoundSession;
 
 impl BoundSession {
-    /// Admits one authenticated envelope and exact external body digest.
+    /// Admits one authenticated shell envelope and exact external body digest.
     ///
     /// The envelope proof is verified first. The adapter-observed digest of
     /// the exact body bytes must then equal the digest authenticated by the
@@ -42,7 +45,7 @@ impl BoundSession {
         )
     }
 
-    /// Admits one authenticated envelope, exact body digest and optional
+    /// Admits one authenticated shell envelope, exact body digest and optional
     /// relative deadline.
     ///
     /// Every check that can fail without recovery runs before session sequence
@@ -72,6 +75,61 @@ impl BoundSession {
         )
     }
 
+    /// Admits one dedicated authenticated standalone-grant envelope.
+    ///
+    /// The grant-specific proof domain and exact canonical body digest are
+    /// both verified before mutable session state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProtocolError`] when authentication, body binding, deadline,
+    /// sequence, replay or finite-capacity checks fail.
+    pub fn admit_standalone_grant(
+        &mut self,
+        envelope: &AuthenticatedStandaloneGrantEnvelope,
+        expected_proof: &ProofDigest,
+        observed_body_digest: &ProofDigest,
+        sequence: u64,
+        now: MonotonicMillis,
+    ) -> Result<RequestGuard, ProtocolError> {
+        self.admit_standalone_grant_with_deadline(
+            envelope,
+            expected_proof,
+            observed_body_digest,
+            sequence,
+            now,
+            None,
+        )
+    }
+
+    /// Admits one dedicated standalone-grant envelope with an optional
+    /// relative deadline.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProtocolError`] when authentication, body binding, deadline,
+    /// sequence, replay or finite-capacity checks fail.
+    pub fn admit_standalone_grant_with_deadline(
+        &mut self,
+        envelope: &AuthenticatedStandaloneGrantEnvelope,
+        expected_proof: &ProofDigest,
+        observed_body_digest: &ProofDigest,
+        sequence: u64,
+        now: MonotonicMillis,
+        relative_deadline_ms: Option<u64>,
+    ) -> Result<RequestGuard, ProtocolError> {
+        self.validate_session_header(envelope.version(), envelope.server_nonce())?;
+        verify_standalone_grant_envelope_proof(envelope, expected_proof)?;
+        self.commit_authenticated_request(
+            *envelope.request_id(),
+            envelope.body_digest(),
+            Some(observed_body_digest),
+            sequence,
+            now,
+            relative_deadline_ms,
+        )
+    }
+
     pub(super) fn admit_envelope_internal(
         &mut self,
         envelope: &AuthenticatedEnvelope,
@@ -81,6 +139,23 @@ impl BoundSession {
         now: MonotonicMillis,
         relative_deadline_ms: Option<u64>,
     ) -> Result<RequestGuard, ProtocolError> {
+        self.validate_session_header(envelope.version(), envelope.server_nonce())?;
+        verify_envelope_proof(envelope, expected_proof)?;
+        self.commit_authenticated_request(
+            *envelope.request_id(),
+            envelope.body_digest(),
+            observed_body_digest,
+            sequence,
+            now,
+            relative_deadline_ms,
+        )
+    }
+
+    fn validate_session_header(
+        &self,
+        version: ProtocolVersion,
+        nonce: &ServerNonce,
+    ) -> Result<(), ProtocolError> {
         if !self.is_active() {
             return Err(match self.session.state() {
                 SessionState::Draining => ProtocolError::SessionDraining,
@@ -89,21 +164,32 @@ impl BoundSession {
                 _ => ProtocolError::AuthenticationRequired,
             });
         }
-        if envelope.version() != self.pairing.version() {
+        if version != self.pairing.version() {
             return Err(ProtocolError::NoCompatibleVersion);
         }
-        if envelope.server_nonce() != &self.server_nonce {
+        if nonce != &self.server_nonce {
             return Err(ProtocolError::AuthenticationFailed);
         }
-        verify_envelope_proof(envelope, expected_proof)?;
+        Ok(())
+    }
+
+    fn commit_authenticated_request(
+        &mut self,
+        request_id: RequestId,
+        authenticated_body_digest: &ProofDigest,
+        observed_body_digest: Option<&ProofDigest>,
+        sequence: u64,
+        now: MonotonicMillis,
+        relative_deadline_ms: Option<u64>,
+    ) -> Result<RequestGuard, ProtocolError> {
         if observed_body_digest
-            .is_some_and(|observed| !verify_proof(envelope.body_digest(), observed))
+            .is_some_and(|observed| !verify_proof(authenticated_body_digest, observed))
         {
             return Err(ProtocolError::InvalidBody);
         }
 
         let guard = RequestGuard::new(
-            *envelope.request_id(),
+            request_id,
             sequence,
             now,
             relative_deadline_ms,
@@ -112,12 +198,11 @@ impl BoundSession {
         if self.inflight.len() >= self.limits.max_in_flight_requests {
             return Err(ProtocolError::ResourceExhausted);
         }
-        self.session
-            .admit_request(*envelope.request_id(), sequence)?;
+        self.session.admit_request(request_id, sequence)?;
         if self
             .inflight
             .insert(
-                *envelope.request_id(),
+                request_id,
                 InFlightEntry::new(sequence, now, guard.deadline()),
             )
             .is_err()
@@ -125,7 +210,7 @@ impl BoundSession {
             let _ = self.session.quarantine();
             return Err(ProtocolError::Quarantined);
         }
-        self.guards.insert(*envelope.request_id(), guard.clone());
+        self.guards.insert(request_id, guard.clone());
         Ok(guard)
     }
 

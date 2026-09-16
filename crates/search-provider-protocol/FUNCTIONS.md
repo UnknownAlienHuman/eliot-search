@@ -1,8 +1,9 @@
 # Function contract — `search-provider-protocol`
 
-**Status:** bounded framing, pairing, binding, body-bound admission, terminal
-request lifecycle and standalone-grant request-body kernels are implemented;
-complete W8 live integration/qualification remains open.
+**Status:** bounded framing, pairing, binding, grant-specific authenticated
+envelopes, body-bound admission, terminal request lifecycle and canonical grant
+request bodies are implemented; complete W8 live integration/qualification
+remains open.
 
 The protocol is local, versioned, bounded and authenticated. It owns framing/session/request lifecycle,
 not client authority, source/index stores or search planning.
@@ -29,7 +30,7 @@ fields. Capability availability grants no authority.
 Requires pairing proof plus installation/incarnation/peer binding. Named-pipe ACL or loopback location
 alone is insufficient authentication.
 
-## Standalone grant request body
+## Standalone grant protocol
 
 ### `encode_standalone_grant_request(request) -> Result<Vec<u8>, ProtocolError>`
 
@@ -43,9 +44,28 @@ Rejects non-canonical order/spelling, whitespace, escapes, duplicate or oversize
 sets, invalid enum/profile values, zero generations/TTL, permission widening
 shape and trailing bytes. Re-encoding must equal the exact input bytes.
 
-These bytes are intended to be bound by an authenticated envelope body digest.
-Decoding creates no grant and no authority; daemon composition supplies the
-session binding, operation identity and server policy.
+### `seal_standalone_grant_envelope(version, nonce, request_id, body_digest, proof) -> AuthenticatedStandaloneGrantEnvelope`
+
+Creates the dedicated grant header from adapter-supplied proof material. Its
+transcript uses `ELIOT-STANDALONE-GRANT-REQ-v1` and binds version, server nonce,
+request identity and exact body digest. It is distinct from the W1 shell-command
+envelope and carries no command substitution path.
+
+### `encode_standalone_grant_envelope(envelope, limits) -> Result<BoundedBytes, ProtocolError>`
+
+Emits the fixed-order canonical grant-envelope JSON through the standard
+length-prefixed frame. The JSON has an independent 512-byte ceiling and uses
+lower-case fixed-size hex for nonce, request, body digest and proof.
+
+### `decode_standalone_grant_envelope(bytes, limits, versions) -> Result<AuthenticatedStandaloneGrantEnvelope, ProtocolError>`
+
+Rejects alternate field order, whitespace, upper-case hex, zero nonce,
+unsupported versions, trailing bytes and malformed framing. Re-encoding must
+equal the exact JSON bytes.
+
+Request-body decoding and envelope decoding create no grant and no authority;
+daemon composition supplies the session binding, operation identity and server
+policy.
 
 ## Connection and request lifecycle
 
@@ -56,7 +76,7 @@ Sequences are monotonic; duplicate, replayed or regressed values fail closed.
 ### `admit_request(connection, envelope, limits) -> Result<RequestGuard, ProtocolError>`
 
 Checks authenticated binding, request ID uniqueness, relative deadline and the
-32-in-flight ceiling before forwarding a bodyless control request. This
+32-in-flight ceiling before forwarding a bodyless shell request. This
 compatibility surface does not prove possession of external body bytes.
 
 ### `admit_body_bound(connection, envelope, expected_proof, observed_body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
@@ -65,7 +85,11 @@ Checks active paired session, exact version and server nonce, keyed envelope
 proof and constant-work equality between the envelope body digest and the
 digest computed by the adapter from exact request bytes. Every body check,
 deadline and capacity check completes before sequence/replay/in-flight mutation.
-On success the connection retains the request guard until terminal completion,
+
+### `admit_standalone_grant(connection, grant_envelope, expected_proof, observed_body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
+
+Runs the same bound-session lifecycle under the grant-specific proof domain.
+The request guard remains connection-owned until terminal completion,
 cancellation or disconnect.
 
 ### `emit_progress(guard, event) -> Result<(), ProtocolError>`
@@ -102,8 +126,8 @@ cancellation and invalid message transition.
 ## Required fixtures
 
 Frame golden; oversize rejected before body allocation; malformed/unknown tags; major/minor negotiation;
-pairing required beyond ACL; canonical grant-body round trip and non-canonical/duplicate/oversize
-rejection; body mismatch before mutable admission state; sequence replay; 32-in-flight; guard retained
-until terminal release; duplicate terminal rejection; cancelled-to-success relabelling rejected;
-progress ordering/content minimization; idempotent cancel; disconnect cleanup; protocol public API has no
-store, Qdrant or client-authority path.
+pairing required beyond ACL; canonical grant-body and grant-envelope round trips; non-canonical,
+duplicate, alternate-case and oversize rejection; body mismatch before mutable admission state; sequence
+replay; 32-in-flight; guard retained until terminal release; duplicate terminal rejection;
+cancelled-to-success relabelling rejected; progress ordering/content minimization; idempotent cancel;
+disconnect cleanup; protocol public API has no store, Qdrant or client-authority path.
