@@ -10,15 +10,13 @@ use search_control_redb::migration::{
     SourceContentManifest, SourceImportBinding, SourceImportCounts,
     SourceImportOutputArtifact, SourceImportOutputArtifactError,
     SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform,
-    SourceImportRecordChain, SourceImportRecordChainError,
-    SourceMappingImport, SourceMappingReadback,
+    SourceImportRecordArtifactError, SourceImportRecordChain,
+    SourceImportRecordChainError, SourceMappingImport, SourceMappingReadback,
+    inspect_source_import_record_artifact,
 };
 
 use super::content_readback::ContentArtifact;
-use super::{
-    check_deadline, ensure_directory, fingerprint, regular, sha256,
-    sync_directory,
-};
+use super::{check_deadline, ensure_directory, sha256, sync_directory};
 use crate::plaintext_direct_store::DirectStore;
 
 type ImportOutput = SourceImportOutputArtifact<DaemonImportOutputPlatform>;
@@ -208,20 +206,24 @@ fn verify_content(
     deadline: Instant,
 ) -> Result<(), String> {
     let expected = format!("{}.source-content.v1", sha256::hex(&content.chain));
-    if content.name != expected
-        || fingerprint(
-            &directory.join(&expected),
-            content.encoded_bytes,
-            deadline,
-        )? != content.chain
-    {
+    if content.name != expected {
+        return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
+    }
+    let observed = inspect_source_import_record_artifact(
+        &DaemonImportOutputPlatform,
+        &directory.join(&expected),
+        content.encoded_bytes,
+        deadline,
+    )
+    .map_err(record_artifact_read_reason)?;
+    if observed.chain() != &content.chain {
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
     Ok(())
 }
 
 #[derive(Clone, Copy, Debug)]
-struct DaemonImportOutputPlatform;
+pub(super) struct DaemonImportOutputPlatform;
 
 impl SourceImportOutputLockPlatform for DaemonImportOutputPlatform {
     type Error = String;
@@ -272,7 +274,45 @@ fn record_chain_reason(error: SourceImportRecordChainError) -> String {
     error.code().to_owned()
 }
 
-pub(super) fn native_identity(file: &File) -> Result<(u64, u64), String> {
+fn record_artifact_read_reason(
+    error: SourceImportRecordArtifactError<String>,
+) -> String {
+    match error {
+        SourceImportRecordArtifactError::Platform(reason) => reason,
+        SourceImportRecordArtifactError::DeadlineExceeded => {
+            "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned()
+        }
+        SourceImportRecordArtifactError::ObjectInvalid
+        | SourceImportRecordArtifactError::FinalNameInvalid
+        | SourceImportRecordArtifactError::TemporaryNameInvalid
+        | SourceImportRecordArtifactError::CreateFailed => {
+            "DIRECT_MIGRATION_PLAN_OBJECT_INVALID".to_owned()
+        }
+        SourceImportRecordArtifactError::ReadFailed => {
+            "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::ReadbackMismatch
+        | SourceImportRecordArtifactError::ComparisonReadFailed => {
+            "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned()
+        }
+        SourceImportRecordArtifactError::IdentityChanged => {
+            "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned()
+        }
+        SourceImportRecordArtifactError::RecordChain(error) => {
+            error.code().to_owned()
+        }
+        SourceImportRecordArtifactError::Closed
+        | SourceImportRecordArtifactError::WriteFailed
+        | SourceImportRecordArtifactError::SyncFailed
+        | SourceImportRecordArtifactError::PublishOutcomeUnknown
+        | SourceImportRecordArtifactError::ImmutableConflict
+        | SourceImportRecordArtifactError::CleanupFailed => {
+            "DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()
+        }
+    }
+}
+
+fn native_identity(file: &File) -> Result<(u64, u64), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     let metadata = file.metadata().map_err(|_| invalid())?;
     if !regular(&metadata) {
@@ -295,10 +335,7 @@ pub(super) fn native_identity(file: &File) -> Result<(u64, u64), String> {
     }
 }
 
-pub(super) fn verify_locator(
-    expected: &File,
-    path: &Path,
-) -> Result<(), String> {
+fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
     let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
     ensure_directory(path.parent().ok_or_else(invalid)?)?;
     if !regular(&fs::symlink_metadata(path).map_err(|_| invalid())?) {
@@ -309,4 +346,15 @@ pub(super) fn verify_locator(
         return Err(invalid());
     }
     Ok(())
+}
+
+fn regular(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    let reparse = {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_attributes() & 0x400 != 0
+    };
+    #[cfg(not(windows))]
+    let reparse = false;
+    metadata.is_file() && !metadata.file_type().is_symlink() && !reparse
 }
