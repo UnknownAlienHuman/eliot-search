@@ -112,3 +112,49 @@ fn content_manifest_schema_belongs_to_control_owner() {
         );
     }
 }
+
+#[test]
+fn source_import_record_chain_has_one_owner() {
+    let root = repository_root();
+    let owner = read(
+        &root,
+        "crates/search-control-redb/src/migration/record_chain.rs",
+    );
+    for required in [
+        "pub struct SourceImportRecordChain",
+        "MAX_SOURCE_IMPORT_RECORD_BYTES",
+        "MAX_SOURCE_IMPORT_ROW_BYTES",
+        "eliot-search/source-map-chain/v1",
+        "eliot-search/source-map-row/v1",
+        "eliot-search/source-map-end/v1",
+    ] {
+        assert!(
+            owner.contains(required),
+            "control owner is missing record-chain boundary {required}"
+        );
+    }
+
+    let plan = read(
+        &root,
+        "bins/eliot-searchd/src/control_migration_plan.rs",
+    );
+    let content = read(
+        &root,
+        "bins/eliot-searchd/src/control_migration_content.rs",
+    );
+    assert!(plan.contains("SourceImportRecordChain"));
+    assert!(content.contains("SourceImportRecordChain"));
+    for daemon in [&plan, &content] {
+        for forbidden in [
+            "struct PlanDigest",
+            "eliot-search/source-map-chain/v1",
+            "eliot-search/source-map-row/v1",
+            "eliot-search/source-map-end/v1",
+        ] {
+            assert!(
+                !daemon.contains(forbidden),
+                "daemon restored package-owned record-chain logic: {forbidden}"
+            );
+        }
+    }
+}

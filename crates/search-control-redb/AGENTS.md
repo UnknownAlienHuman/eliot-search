@@ -18,6 +18,8 @@ Persist only bounded technical control state and publish immutable snapshots for
 - source/control references, cursors and fences
 - atomic Arc<ControlSnapshot> publication
 - corruption quarantine and write counters
+- inactive source-import schema, output lifecycle and exact readback state machines
+- canonical bounded source-import record chains and content-manifest metadata rows
 
 ## Forbidden ownership
 
@@ -25,6 +27,7 @@ Persist only bounded technical control state and publish immutable snapshots for
 - postings, vectors or term statistics
 - ranked candidate/query history storage
 - reverse-engineering currentness from orphaned Qdrant data
+- retained-byte acquisition, source decryption/protection or content hashing from bodies
 
 ## Allowed dependencies
 
@@ -42,6 +45,12 @@ is improved:
 - `Journal::transaction(command) -> Result<ControlCommit, JournalError>`
 - `Journal::quarantine(reason) -> Result<QuarantineReceipt, JournalError>`
 - `Journal::write_counters() -> JournalWriteCounters`
+- `SourceImportRecordChain::push(row) -> Result<(), SourceImportRecordChainError>`
+- `SourceContentManifestEncoder::{header_row, object_row, finish}`
+
+The content-manifest encoder accepts only bounded identities, digests and lengths.
+The source adapter remains responsible for reading exact retained bytes and supplying
+the verified BLAKE3 digest; source bytes never enter this package.
 
 ## Failure surface
 
@@ -52,6 +61,9 @@ state into an apparent success.
 
 - `required_table_set_matches H5.1`
 - `migration fixtures are deterministic and idempotent`
+- `source import record-chain known answers remain frozen`
+- `source-content header/object/end rows remain byte exact`
+- `source-content accounting rejects order, count and byte overflow`
 - `power_loss_reopen_preserves committed control state only`
 - `hot_query_does_not_mutate_redb after 10,000 admissions`
 - `mismatched incarnation or collection route quarantines`

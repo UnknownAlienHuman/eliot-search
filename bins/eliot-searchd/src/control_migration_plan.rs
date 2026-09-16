@@ -8,9 +8,15 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use search_contracts::SourceNamespaceId;
+use search_control_redb::migration::{
+    MAX_SOURCE_IMPORT_RECORD_BYTES, MAX_SOURCE_IMPORT_ROW_BYTES,
+    SourceImportRecordChain, SourceImportRecordChainError,
+};
 
+use super::super::storage_io::{
+    ensure_child_directory, ensure_directory, sync_directory,
+};
 use super::{DirectStore, check_deadline, json_string, sha256};
-use super::super::storage_io::{ensure_child_directory, ensure_directory, sync_directory};
 use crate::development::DataRootGuard;
 
 #[path = "control_migration_redb.rs"]
@@ -20,8 +26,8 @@ mod content_readback;
 #[path = "control_migration_cutover.rs"]
 mod cutover;
 
-const MAX_PLAN_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_ROW_BYTES: usize = 8 * 1024;
+const MAX_PLAN_BYTES: u64 = MAX_SOURCE_IMPORT_RECORD_BYTES;
+const MAX_ROW_BYTES: usize = MAX_SOURCE_IMPORT_ROW_BYTES;
 const PLAN_DEADLINE: Duration = Duration::from_secs(120);
 
 /// Temp names are not evidence or state. An error never removes a published plan.
@@ -34,18 +40,34 @@ struct StagingFile {
 
 impl StagingFile {
     fn create(directory: &Path) -> Result<Self, String> {
-        let stamp = SystemTime::now().duration_since(UNIX_EPOCH)
-            .map_err(|_| "DIRECT_MIGRATION_CLOCK_INVALID".to_owned())?.as_nanos();
-        let path = directory.join(format!(".source-map.{}.{stamp}.tmp", std::process::id()));
-        let file = OpenOptions::new().read(true).write(true).create_new(true).open(&path)
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "DIRECT_MIGRATION_CLOCK_INVALID".to_owned())?
+            .as_nanos();
+        let path = directory.join(format!(
+            ".source-map.{}.{stamp}.tmp",
+            std::process::id()
+        ));
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&path)
             .map_err(|_| "DIRECT_MIGRATION_PLAN_CREATE_FAILED".to_owned())?;
         let identity = redb_import::native_identity(&file)?;
         redb_import::verify_locator(&file, &path)?;
-        Ok(Self { path, file: Some(file), identity, cleanup_armed: true })
+        Ok(Self {
+            path,
+            file: Some(file),
+            identity,
+            cleanup_armed: true,
+        })
     }
 
     fn file_mut(&mut self) -> Result<&mut File, String> {
-        self.file.as_mut().ok_or_else(|| "DIRECT_MIGRATION_PLAN_CLOSED".to_owned())
+        self.file
+            .as_mut()
+            .ok_or_else(|| "DIRECT_MIGRATION_PLAN_CLOSED".to_owned())
     }
 
     fn remove(mut self) -> Result<(), String> {
@@ -55,20 +77,31 @@ impl StagingFile {
     fn discard_owned(&mut self) -> Result<(), String> {
         // Disarm before any fallible cleanup. Explicit removal and Drop must
         // never unlink the same locator twice or retry a failed identity check.
-        if !std::mem::replace(&mut self.cleanup_armed, false) { return Ok(()); }
+        if !std::mem::replace(&mut self.cleanup_armed, false) {
+            return Ok(());
+        }
         drop(self.file.take());
-        let invalid = || "DIRECT_MIGRATION_PLAN_CLEANUP_IDENTITY_CHANGED".to_owned();
+        let invalid = || {
+            "DIRECT_MIGRATION_PLAN_CLEANUP_IDENTITY_CHANGED".to_owned()
+        };
         let metadata = match fs::symlink_metadata(&self.path) {
             Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(());
+            }
             Err(_) => return Err(invalid()),
         };
-        if !regular(&metadata) { return Err(invalid()); }
+        if !regular(&metadata) {
+            return Err(invalid());
+        }
         let current = File::open(&self.path).map_err(|_| invalid())?;
-        if redb_import::native_identity(&current)? != self.identity { return Err(invalid()); }
+        if redb_import::native_identity(&current)? != self.identity {
+            return Err(invalid());
+        }
         redb_import::verify_locator(&current, &self.path)?;
         drop(current);
-        fs::remove_file(&self.path).map_err(|_| "DIRECT_MIGRATION_PLAN_CLEANUP_FAILED".to_owned())
+        fs::remove_file(&self.path)
+            .map_err(|_| "DIRECT_MIGRATION_PLAN_CLEANUP_FAILED".to_owned())
     }
 }
 
@@ -110,9 +143,12 @@ impl DirectStore {
     /// Same source history/target/profile gives the same file and IDs. No timestamps
     /// or random data enter its contents, so a lost acknowledgement can be retried.
     pub(crate) fn stage_source_migration_plan(
-        &self, owner: &DataRootGuard, target: SourceNamespaceId,
+        &self,
+        owner: &DataRootGuard,
+        target: SourceNamespaceId,
     ) -> Result<String, String> {
-        let deadline = Instant::now().checked_add(PLAN_DEADLINE)
+        let deadline = Instant::now()
+            .checked_add(PLAN_DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
         if owner.canonical_root() != self.root.as_path() {
             return Err("DIRECT_MIGRATION_ROOT_OWNER_MISMATCH".to_owned());
@@ -120,7 +156,9 @@ impl DirectStore {
         crate::catalog_presence::require_existing(&self.root)?;
         let header = self.inner.source_mapping_header(target)?;
         // Check admitted identity/history before creating even an inert artifact.
-        if self.inner.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+        if self.inner.verify_migration_snapshot(deadline)?
+            != header.catalog_snapshot
+        {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         let control = self.root.join("control");
@@ -131,7 +169,14 @@ impl DirectStore {
         sync_directory(&control)?;
         #[cfg(not(unix))]
         sync_directory(&control);
-        Self::stage_mapping_artifact(&self.inner, &self.root, target, &directory, "control/migration-plans/", deadline)
+        Self::stage_mapping_artifact(
+            &self.inner,
+            &self.root,
+            target,
+            &directory,
+            "control/migration-plans/",
+            deadline,
+        )
     }
 
     /// Shared artifact writer for the live owner and offline entrypoint. The caller
@@ -141,12 +186,20 @@ impl DirectStore {
     /// A returned locator is relative to the explicitly named location scope.
     /// The typed form below carries the same values for the atomic cutover.
     pub(crate) fn stage_mapping_artifact(
-        source: &crate::plaintext_direct_store::DirectStore, source_root: &Path,
-        target: SourceNamespaceId, directory: &Path, locator_prefix: &'static str,
+        source: &crate::plaintext_direct_store::DirectStore,
+        source_root: &Path,
+        target: SourceNamespaceId,
+        directory: &Path,
+        locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<String, String> {
         let plan = Self::stage_mapping_artifact_typed(
-            source, source_root, target, directory, locator_prefix, deadline,
+            source,
+            source_root,
+            target,
+            directory,
+            locator_prefix,
+            deadline,
         )?;
         Ok(staged_plan_json(&plan))
     }
@@ -155,8 +208,11 @@ impl DirectStore {
     /// cutover. Every byte guarantee of the historical writer holds here; only
     /// the final JSON rendering moves to [`staged_plan_json`].
     pub(super) fn stage_mapping_artifact_typed(
-        source: &crate::plaintext_direct_store::DirectStore, source_root: &Path,
-        target: SourceNamespaceId, directory: &Path, locator_prefix: &'static str,
+        source: &crate::plaintext_direct_store::DirectStore,
+        source_root: &Path,
+        target: SourceNamespaceId,
+        directory: &Path,
+        locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<StagedPlan, String> {
         let location = match locator_prefix {
@@ -167,28 +223,45 @@ impl DirectStore {
         check_deadline(Some(deadline))?;
         ensure_directory(directory)?;
         let header = source.source_mapping_header(target)?;
-        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+        if source.verify_migration_snapshot(deadline)?
+            != header.catalog_snapshot
+        {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         // A committed cutover freezes the migrated history: restaging the same
         // target/snapshot reproduces evidence, anything else is superseded and
         // a torn marker quarantines instead of staging over it silently.
-        cutover::gate_staging_against_marker(source_root, target, header.catalog_snapshot)?;
+        cutover::gate_staging_against_marker(
+            source_root,
+            target,
+            header.catalog_snapshot,
+        )?;
         let mut staging = StagingFile::create(directory)?;
         let mut bytes = 0_u64;
-        let mut hash = PlanDigest::new();
+        let mut hash = SourceImportRecordChain::new();
         let summary = {
             let mut writer = BufWriter::new(staging.file_mut()?);
-            let summary = source.compile_source_mapping(target, deadline, |row| {
-                check_deadline(Some(deadline))?;
-                bytes = reserve(bytes, row.len())?;
-                writer.write_all(row).map_err(|_| "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned())?;
-                hash.push(row)
-            })?;
-            writer.flush().map_err(|_| "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned())?;
+            let summary = source.compile_source_mapping(
+                target,
+                deadline,
+                |row| {
+                    check_deadline(Some(deadline))?;
+                    bytes = reserve(bytes, row.len())?;
+                    writer.write_all(row).map_err(|_| {
+                        "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned()
+                    })?;
+                    hash.push(row).map_err(record_chain_reason)
+                },
+            )?;
+            writer
+                .flush()
+                .map_err(|_| "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned())?;
             summary
         };
-        staging.file_mut()?.sync_all().map_err(|_| "DIRECT_MIGRATION_PLAN_SYNC_FAILED".to_owned())?;
+        staging
+            .file_mut()?
+            .sync_all()
+            .map_err(|_| "DIRECT_MIGRATION_PLAN_SYNC_FAILED".to_owned())?;
         drop(staging.file.take());
         let digest = hash.finish();
 
@@ -199,16 +272,27 @@ impl DirectStore {
         let mut buffer = [0_u8; MAX_ROW_BYTES];
         let readback = source.compile_source_mapping(target, deadline, |row| {
             compared = reserve(compared, row.len())?;
-            reader.read_exact(&mut buffer[..row.len()])
-                .map_err(|_| "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned())?;
+            reader
+                .read_exact(&mut buffer[..row.len()])
+                .map_err(|_| {
+                    "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned()
+                })?;
             if buffer[..row.len()] != *row {
-                return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
+                return Err(
+                    "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned(),
+                );
             }
             Ok(())
         })?;
         let mut extra = [0_u8; 1];
-        if compared != bytes || readback != summary
-            || reader.read(&mut extra).map_err(|_| "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned())? != 0
+        if compared != bytes
+            || readback != summary
+            || reader
+                .read(&mut extra)
+                .map_err(|_| {
+                    "DIRECT_MIGRATION_PLAN_READBACK_FAILED".to_owned()
+                })?
+                != 0
         {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
@@ -220,8 +304,14 @@ impl DirectStore {
         // artifact is reused only after exact encoded fingerprint/length readback.
         let reused = match fs::hard_link(&staging.path, &path) {
             Ok(()) => false,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
-            Err(_) => return Err("DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN".to_owned()),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                true
+            }
+            Err(_) => {
+                return Err(
+                    "DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN".to_owned(),
+                );
+            }
         };
         #[cfg(unix)]
         sync_directory(directory)?;
@@ -235,17 +325,36 @@ impl DirectStore {
         sync_directory(directory)?;
         #[cfg(not(unix))]
         sync_directory(directory);
-        let content = content_readback::stage(source, source_root, target, digest, directory, deadline)?;
-        let (database_name, database_reused) = redb_import::store(
-            source, target, directory, digest, summary.import_counts(), &content, deadline,
+        let content = content_readback::stage(
+            source,
+            source_root,
+            target,
+            digest,
+            directory,
+            deadline,
         )?;
-        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+        let (database_name, database_reused) = redb_import::store(
+            source,
+            target,
+            directory,
+            digest,
+            summary.import_counts(),
+            &content,
+            deadline,
+        )?;
+        if source.verify_migration_snapshot(deadline)?
+            != header.catalog_snapshot
+        {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         // Source replay and target import can take substantial time. Do not
         // acknowledge text/content locators only checked before those steps.
         if fingerprint(&path, bytes, deadline)? != digest
-            || fingerprint(&directory.join(&content.name), content.encoded_bytes, deadline)? != content.chain
+            || fingerprint(
+                &directory.join(&content.name),
+                content.encoded_bytes,
+                deadline,
+            )? != content.chain
         {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
@@ -275,33 +384,60 @@ impl DirectStore {
 }
 
 fn staged_plan_json(plan: &StagedPlan) -> String {
-    format!(concat!(
-        "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
-        "\"target_namespace_id\":\"{}\",\"catalog_snapshot_sha256\":\"{}\",",
-        "\"plan_locator\":{},\"plan_chain_sha256\":\"{}\",\"digest_scheme\":\"sha256-record-chain-v1\",\"plan_bytes\":{},\"reused\":{},",
-        "\"events\":{},\"sources\":{},\"revision_occurrences\":{},\"retained_revision_events\":{},",
-        "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
-        "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
-        "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
-        "\"staged_database_schema\":\"source-map-content-v2\",\"content_manifest_bound_to_redb\":true,",
-        "\"content_manifest_locator\":{},\"content_manifest_chain_sha256\":\"{}\",",
-        "\"content_objects_verified\":{},\"content_bytes_verified\":{},\"content_blake3_verified\":true,",
-        "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"
-    ), plan.target, sha256::hex(&plan.catalog_snapshot),
-        json_string(&format!("{}{}", plan.locator_prefix, plan.plan_name)),
-        sha256::hex(&plan.plan_chain), plan.plan_bytes, plan.plan_reused,
-        plan.events, plan.sources, plan.occurrences,
-        plan.path_only_events, plan.retirements, plan.location,
-        json_string(&format!("{}{}", plan.locator_prefix, plan.database_name)),
+    format!(
+        concat!(
+            "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
+            "\"target_namespace_id\":\"{}\",\"catalog_snapshot_sha256\":\"{}\",",
+            "\"plan_locator\":{},\"plan_chain_sha256\":\"{}\",\"digest_scheme\":\"sha256-record-chain-v1\",\"plan_bytes\":{},\"reused\":{},",
+            "\"events\":{},\"sources\":{},\"revision_occurrences\":{},\"retained_revision_events\":{},",
+            "\"retirements\":{},\"all_source_events_mapped\":true,\"canonical_records_materialized\":false,",
+            "\"plan_location\":\"{}\",\"staged_database_locator\":{},\"staged_database_reused\":{},",
+            "\"source_mapping_imported_to_redb\":true,\"staged_database_verified\":true,",
+            "\"staged_database_schema\":\"source-map-content-v2\",\"content_manifest_bound_to_redb\":true,",
+            "\"content_manifest_locator\":{},\"content_manifest_chain_sha256\":\"{}\",",
+            "\"content_objects_verified\":{},\"content_bytes_verified\":{},\"content_blake3_verified\":true,",
+            "\"redb_imported\":false,\"active_control_imported\":false,\"cutover_authorized\":false}}"
+        ),
+        plan.target,
+        sha256::hex(&plan.catalog_snapshot),
+        json_string(&format!(
+            "{}{}",
+            plan.locator_prefix, plan.plan_name
+        )),
+        sha256::hex(&plan.plan_chain),
+        plan.plan_bytes,
+        plan.plan_reused,
+        plan.events,
+        plan.sources,
+        plan.occurrences,
+        plan.path_only_events,
+        plan.retirements,
+        plan.location,
+        json_string(&format!(
+            "{}{}",
+            plan.locator_prefix, plan.database_name
+        )),
         plan.database_reused,
-        json_string(&format!("{}{}", plan.locator_prefix, plan.content_name)),
+        json_string(&format!(
+            "{}{}",
+            plan.locator_prefix, plan.content_name
+        )),
         sha256::hex(&plan.content_chain),
-        plan.content_records, plan.content_source_bytes)
+        plan.content_records,
+        plan.content_source_bytes
+    )
 }
 
 fn reserve(current: u64, next: usize) -> Result<u64, String> {
-    if next > MAX_ROW_BYTES { return Err("DIRECT_MIGRATION_PLAN_ROW_TOO_LARGE".to_owned()); }
-    current.checked_add(next as u64).filter(|total| *total <= MAX_PLAN_BYTES)
+    if next > MAX_ROW_BYTES {
+        return Err("DIRECT_MIGRATION_PLAN_ROW_TOO_LARGE".to_owned());
+    }
+    current
+        .checked_add(
+            u64::try_from(next)
+                .map_err(|_| "DIRECT_MIGRATION_PLAN_TOO_LARGE".to_owned())?,
+        )
+        .filter(|total| *total <= MAX_PLAN_BYTES)
         .ok_or_else(|| "DIRECT_MIGRATION_PLAN_TOO_LARGE".to_owned())
 }
 
@@ -309,10 +445,18 @@ fn open_plan(path: &Path, expected: u64) -> Result<File, String> {
     let invalid = || "DIRECT_MIGRATION_PLAN_OBJECT_INVALID".to_owned();
     ensure_directory(path.parent().ok_or_else(invalid)?)?;
     let before = fs::symlink_metadata(path).map_err(|_| invalid())?;
-    if !regular(&before) || before.len() != expected || expected > MAX_PLAN_BYTES { return Err(invalid()); }
+    if !regular(&before)
+        || before.len() != expected
+        || expected > MAX_PLAN_BYTES
+    {
+        return Err(invalid());
+    }
     let file = File::open(path).map_err(|_| invalid())?;
     let opened = file.metadata().map_err(|_| invalid())?;
-    if !regular(&opened) || opened.len() != expected || opened.modified().ok() != before.modified().ok() {
+    if !regular(&opened)
+        || opened.len() != expected
+        || opened.modified().ok() != before.modified().ok()
+    {
         return Err(invalid());
     }
     redb_import::verify_locator(&file, path)?;
@@ -330,50 +474,49 @@ fn regular(metadata: &fs::Metadata) -> bool {
     metadata.is_file() && !metadata.file_type().is_symlink() && !reparse
 }
 
-/// Canonical record-chain digest, explicitly not the raw file's SHA-256.
-/// Existing SHA-256/multipart primitives remain unchanged; no new hash algorithm.
-struct PlanDigest { chain: [u8; 32], rows: u64, bytes: u64 }
-impl PlanDigest {
-    fn new() -> Self {
-        Self { chain: sha256::digest_parts(b"eliot-search/source-map-chain/v1", &[]), rows: 0, bytes: 0 }
-    }
-    fn push(&mut self, row: &[u8]) -> Result<(), String> {
-        self.bytes = reserve(self.bytes, row.len())?;
-        if row.last() != Some(&b'\n') || row[..row.len() - 1].contains(&b'\n') {
-            return Err("DIRECT_MIGRATION_PLAN_ROW_INVALID".to_owned());
-        }
-        self.rows = self.rows.checked_add(1).ok_or_else(|| "DIRECT_MIGRATION_PLAN_TOO_LARGE".to_owned())?;
-        self.chain = sha256::digest_parts(b"eliot-search/source-map-row/v1", &[
-            &self.chain, &self.rows.to_be_bytes(), row,
-        ]);
-        Ok(())
-    }
-    fn finish(self) -> [u8; 32] {
-        sha256::digest_parts(b"eliot-search/source-map-end/v1", &[
-            &self.chain, &self.rows.to_be_bytes(), &self.bytes.to_be_bytes(),
-        ])
-    }
-}
-
-fn fingerprint(path: &Path, length: u64, deadline: Instant) -> Result<[u8; 32], String> {
+fn fingerprint(
+    path: &Path,
+    length: u64,
+    deadline: Instant,
+) -> Result<[u8; 32], String> {
     let file = open_plan(path, length)?;
-    let before = file.metadata().map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
+    let before = file
+        .metadata()
+        .map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
     let mut reader = BufReader::new(file);
     let mut row = Vec::new();
-    let mut digest = PlanDigest::new();
+    let mut digest = SourceImportRecordChain::new();
     loop {
         check_deadline(Some(deadline))?;
         row.clear();
-        let read = Read::take(&mut reader, MAX_ROW_BYTES as u64 + 1).read_until(b'\n', &mut row)
-            .map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
-        if read == 0 { break; }
-        digest.push(&row)?;
+        let read = Read::take(
+            &mut reader,
+            u64::try_from(MAX_ROW_BYTES)
+                .unwrap_or(u64::MAX)
+                .saturating_add(1),
+        )
+        .read_until(b'\n', &mut row)
+        .map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
+        if read == 0 {
+            break;
+        }
+        digest.push(&row).map_err(record_chain_reason)?;
     }
-    let after = reader.get_ref().metadata().map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
-    if digest.bytes != length || after.len() != length || before.modified().ok() != after.modified().ok() {
+    let after = reader
+        .get_ref()
+        .metadata()
+        .map_err(|_| "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned())?;
+    if digest.encoded_bytes() != length
+        || after.len() != length
+        || before.modified().ok() != after.modified().ok()
+    {
         return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
     }
     redb_import::verify_locator(reader.get_ref(), path)?;
     check_deadline(Some(deadline))?;
     Ok(digest.finish())
+}
+
+fn record_chain_reason(error: SourceImportRecordChainError) -> String {
+    error.code().to_owned()
 }

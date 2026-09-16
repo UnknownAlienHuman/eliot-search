@@ -1,9 +1,9 @@
 //! Persist canonical content fingerprints for the existing source-mapping plan.
 //! Read retained objects, never live paths. No source bodies enter the artifact.
 //!
-//! `search-control-redb::migration` owns the frozen manifest line schema and
-//! accounting state machine. This adapter owns only retained-byte readback,
-//! BLAKE3 computation and native artifact I/O composition.
+//! `search-control-redb::migration` owns the frozen manifest line schema,
+//! canonical record chain and accounting state machine. This adapter owns only
+//! retained-byte readback, BLAKE3 computation and native I/O composition.
 
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
@@ -15,7 +15,8 @@ use search_contracts::{
 use search_control_redb::migration::{
     SourceContentManifestEncoder, SourceContentManifestEncodingError,
     SourceContentManifestHeader, SourceContentManifestSummary,
-    SourceContentObjectReadback, source_content_profile_digest,
+    SourceContentObjectReadback, SourceImportRecordChain,
+    SourceImportRecordChainError, source_content_profile_digest,
 };
 use zeroize::Zeroizing;
 
@@ -24,8 +25,8 @@ use crate::revision_protection::RevisionProtector;
 
 use super::super::read_import_revision;
 use super::{
-    MAX_ROW_BYTES, PlanDigest, StagingFile, check_deadline, ensure_directory,
-    fingerprint, open_plan, reserve, sha256, sync_directory,
+    MAX_ROW_BYTES, StagingFile, check_deadline, ensure_directory, fingerprint,
+    open_plan, reserve, sha256, sync_directory,
 };
 
 pub(super) struct ContentArtifact {
@@ -52,7 +53,7 @@ pub(super) fn stage(
     ensure_directory(directory)?;
     let mut staging = StagingFile::create(directory)?;
     let mut length = 0;
-    let mut chain = PlanDigest::new();
+    let mut chain = SourceImportRecordChain::new();
     let counts = {
         let mut output = BufWriter::new(staging.file_mut()?);
         let counts = compile(
@@ -66,7 +67,7 @@ pub(super) fn stage(
                 output
                     .write_all(row)
                     .map_err(|_| "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned())?;
-                chain.push(row)
+                chain.push(row).map_err(record_chain_reason)
             },
         )?;
         output
@@ -235,5 +236,9 @@ fn legacy_digest(value: &str) -> Result<Sha256Digest32, String> {
 }
 
 fn encoding_reason(error: SourceContentManifestEncodingError) -> String {
+    error.code().to_owned()
+}
+
+fn record_chain_reason(error: SourceImportRecordChainError) -> String {
     error.code().to_owned()
 }

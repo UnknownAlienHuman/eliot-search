@@ -18,6 +18,7 @@ mod model;
 mod output_artifact;
 mod output_lock;
 mod readback;
+mod record_chain;
 mod writer;
 
 pub use content::{
@@ -51,6 +52,10 @@ pub use output_lock::{
     SourceImportOutputLockPlatform,
 };
 pub use readback::SourceMappingReadback;
+pub use record_chain::{
+    MAX_SOURCE_IMPORT_RECORD_BYTES, MAX_SOURCE_IMPORT_ROW_BYTES,
+    SourceImportRecordChain, SourceImportRecordChainError,
+};
 pub use writer::SourceMappingImport;
 
 const META: TableDefinition<&str, &[u8]> =
