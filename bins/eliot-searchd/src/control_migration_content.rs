@@ -1,19 +1,32 @@
 //! Persist canonical content fingerprints for the existing source-mapping plan.
 //! Read retained objects, never live paths. No source bodies enter the artifact.
+//!
+//! `search-control-redb::migration` owns the frozen manifest line schema and
+//! accounting state machine. This adapter owns only retained-byte readback,
+//! BLAKE3 computation and native artifact I/O composition.
 
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::time::Instant;
-use search_contracts::{Blake3Digest32, SourceNamespaceId};
+
+use search_contracts::{
+    Blake3Digest32, Sha256Digest32, SourceNamespaceId,
+};
+use search_control_redb::migration::{
+    SourceContentManifestEncoder, SourceContentManifestEncodingError,
+    SourceContentManifestHeader, SourceContentManifestSummary,
+    SourceContentObjectReadback, source_content_profile_digest,
+};
 use zeroize::Zeroizing;
 
 use crate::plaintext_direct_store::DirectStore;
 use crate::revision_protection::RevisionProtector;
-use super::{PlanDigest, StagingFile, MAX_ROW_BYTES, check_deadline, ensure_directory,
-    fingerprint, open_plan, reserve, sha256, sync_directory};
-use super::super::read_import_revision;
 
-const PROFILE: &[u8] = b"eliot/source-content/v1;retained-plaintext;sha256-verified;blake3-256;no-normalization";
+use super::super::read_import_revision;
+use super::{
+    MAX_ROW_BYTES, PlanDigest, StagingFile, check_deadline, ensure_directory,
+    fingerprint, open_plan, reserve, sha256, sync_directory,
+};
 
 pub(super) struct ContentArtifact {
     pub(super) name: String,
@@ -24,15 +37,16 @@ pub(super) struct ContentArtifact {
     pub(super) profile: [u8; 32],
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-struct Counts { records: u64, source_bytes: u64 }
-
 /// Publication is inert until the complete importer consumes its exact bindings.
 /// Each verification pass rereads every retained object with a fresh protector;
 /// no digest cache can hide a missing or changed source during the second pass.
 pub(super) fn stage(
-    source: &DirectStore, root: &Path, target: SourceNamespaceId,
-    source_plan: [u8; 32], directory: &Path, deadline: Instant,
+    source: &DirectStore,
+    root: &Path,
+    target: SourceNamespaceId,
+    source_plan: [u8; 32],
+    directory: &Path,
+    deadline: Instant,
 ) -> Result<ContentArtifact, String> {
     check_deadline(Some(deadline))?;
     ensure_directory(directory)?;
@@ -41,15 +55,29 @@ pub(super) fn stage(
     let mut chain = PlanDigest::new();
     let counts = {
         let mut output = BufWriter::new(staging.file_mut()?);
-        let counts = compile(source, root, target, source_plan, deadline, |row| {
-            length = reserve(length, row.len())?;
-            output.write_all(row).map_err(|_| "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned())?;
-            chain.push(row)
-        })?;
-        output.flush().map_err(|_| "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned())?;
+        let counts = compile(
+            source,
+            root,
+            target,
+            source_plan,
+            deadline,
+            |row| {
+                length = reserve(length, row.len())?;
+                output
+                    .write_all(row)
+                    .map_err(|_| "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned())?;
+                chain.push(row)
+            },
+        )?;
+        output
+            .flush()
+            .map_err(|_| "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned())?;
         counts
     };
-    staging.file_mut()?.sync_all().map_err(|_| "DIRECT_MIGRATION_CONTENT_SYNC_FAILED".to_owned())?;
+    staging
+        .file_mut()?
+        .sync_all()
+        .map_err(|_| "DIRECT_MIGRATION_CONTENT_SYNC_FAILED".to_owned())?;
     drop(staging.file.take());
     let digest = chain.finish();
 
@@ -58,18 +86,30 @@ pub(super) fn stage(
     let mut input = BufReader::new(open_plan(&staging.path, length)?);
     let mut compared = 0;
     let mut buffer = [0_u8; MAX_ROW_BYTES];
-    let observed = compile(source, root, target, source_plan, deadline, |row| {
-        compared = reserve(compared, row.len())?;
-        input.read_exact(&mut buffer[..row.len()])
-            .map_err(|_| "DIRECT_MIGRATION_CONTENT_READBACK_FAILED".to_owned())?;
-        if buffer[..row.len()] != *row {
-            return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
-        }
-        Ok(())
-    })?;
+    let observed = compile(
+        source,
+        root,
+        target,
+        source_plan,
+        deadline,
+        |row| {
+            compared = reserve(compared, row.len())?;
+            input
+                .read_exact(&mut buffer[..row.len()])
+                .map_err(|_| "DIRECT_MIGRATION_CONTENT_READBACK_FAILED".to_owned())?;
+            if buffer[..row.len()] != *row {
+                return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
+            }
+            Ok(())
+        },
+    )?;
     let mut extra = [0_u8; 1];
-    if observed != counts || compared != length
-        || input.read(&mut extra).map_err(|_| "DIRECT_MIGRATION_CONTENT_READBACK_FAILED".to_owned())? != 0
+    if observed != counts
+        || compared != length
+        || input
+            .read(&mut extra)
+            .map_err(|_| "DIRECT_MIGRATION_CONTENT_READBACK_FAILED".to_owned())?
+            != 0
     {
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
@@ -80,7 +120,11 @@ pub(super) fn stage(
     match std::fs::hard_link(&staging.path, &destination) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(_) => return Err("DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN".to_owned()),
+        Err(_) => {
+            return Err(
+                "DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN".to_owned(),
+            );
+        }
     }
     #[cfg(unix)]
     sync_directory(directory)?;
@@ -95,65 +139,101 @@ pub(super) fn stage(
     #[cfg(not(unix))]
     sync_directory(directory);
     check_deadline(Some(deadline))?;
-    Ok(ContentArtifact { name, chain: digest, records: counts.records, source_bytes: counts.source_bytes,
-        encoded_bytes: length, profile: sha256::digest(PROFILE) })
+    Ok(ContentArtifact {
+        name,
+        chain: digest,
+        records: counts.objects,
+        source_bytes: counts.source_bytes,
+        encoded_bytes: length,
+        profile: *source_content_profile_digest().as_bytes(),
+    })
 }
 
 fn compile(
-    source: &DirectStore, root: &Path, target: SourceNamespaceId,
-    source_plan: [u8; 32], deadline: Instant,
+    source: &DirectStore,
+    root: &Path,
+    target: SourceNamespaceId,
+    source_plan: [u8; 32],
+    deadline: Instant,
     mut emit: impl FnMut(&[u8]) -> Result<(), String>,
-) -> Result<Counts, String> {
+) -> Result<SourceContentManifestSummary, String> {
     check_deadline(Some(deadline))?;
-    let header = source.source_mapping_header(target)?;
-    if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+    let source_header = source.source_mapping_header(target)?;
+    if source.verify_migration_snapshot(deadline)?
+        != source_header.catalog_snapshot
+    {
         return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
     }
+
     // Offline planning can consume a legacy plaintext object without creating a
     // key. A protected object always requires the original available credential.
     #[cfg(windows)]
-    let protector = RevisionProtector::open_existing(header.legacy_namespace)?;
+    let protector = RevisionProtector::open_existing(source_header.legacy_namespace)?;
     #[cfg(not(windows))]
-    let protector = Some(RevisionProtector::open(header.legacy_namespace, &root.join("revisions"))?);
+    let protector = Some(RevisionProtector::open(
+        source_header.legacy_namespace,
+        &root.join("revisions"),
+    )?);
+
     let expected = source.retained_revisions().len() as u64;
-    emit(format!(concat!(
-        "{{\"kind\":\"source_content_header\",\"schema\":\"eliot.source-content.v1\",",
-        "\"target_namespace_id\":\"{}\",\"legacy_namespace_sha256\":\"{}\",",
-        "\"catalog_snapshot_sha256\":\"{}\",\"source_plan_chain_sha256\":\"{}\",",
-        "\"content_profile_sha256\":\"{}\",\"expected_objects\":{},",
-        "\"content_digest_algorithm\":\"blake3_256\",\"cutover_authorized\":false}}\n"
-    ), target, sha256::hex(&header.legacy_namespace), sha256::hex(&header.catalog_snapshot),
-        sha256::hex(&source_plan), sha256::hex(&sha256::digest(PROFILE)), expected).as_bytes())?;
-    let mut counts = Counts { records: 0, source_bytes: 0 };
+    let mut encoder = SourceContentManifestEncoder::new(
+        SourceContentManifestHeader {
+            target_namespace: target,
+            legacy_namespace: Sha256Digest32::from_bytes(
+                source_header.legacy_namespace,
+            ),
+            catalog_snapshot: Sha256Digest32::from_bytes(
+                source_header.catalog_snapshot,
+            ),
+            source_plan: Sha256Digest32::from_bytes(source_plan),
+            expected_objects: expected,
+        },
+    )
+    .map_err(encoding_reason)?;
+    let header_row = encoder.header_row().map_err(encoding_reason)?;
+    emit(&header_row)?;
+
     for metadata in source.retained_revisions() {
         check_deadline(Some(deadline))?;
         // Shared with ordinary DIRECT reads: both encodings, when present, must
         // agree. A damaged protected object never falls back to plaintext.
-        let bytes = read_import_revision(root, protector.as_ref(), &metadata, deadline)?;
+        let bytes =
+            read_import_revision(root, protector.as_ref(), &metadata, deadline)?;
         let mut hasher = Zeroizing::new(blake3::Hasher::new());
         for chunk in bytes.chunks(256 * 1024) {
             check_deadline(Some(deadline))?;
             hasher.update(chunk);
         }
-        let digest = Blake3Digest32::from_bytes(*hasher.finalize().as_bytes());
-        counts.records += 1; // bounded by the validated retained-revision inventory
-        counts.source_bytes = counts.source_bytes.checked_add(metadata.byte_length)
-            .ok_or_else(|| "DIRECT_MIGRATION_BYTES_EXCEEDED".to_owned())?;
-        emit(format!(concat!(
-            "{{\"kind\":\"source_content_readback\",\"ordinal\":{},",
-            "\"legacy_source_id\":\"{}\",\"legacy_revision_id\":\"{}\",",
-            "\"content_sha256\":\"{}\",\"byte_length\":{},\"content_blake3\":\"{}\"}}\n"
-        ), counts.records, metadata.source_id, metadata.revision_id, metadata.content_digest,
-            metadata.byte_length, sha256::hex(digest.as_bytes())).as_bytes())?;
+        let digest =
+            Blake3Digest32::from_bytes(*hasher.finalize().as_bytes());
+        let row = encoder
+            .object_row(SourceContentObjectReadback {
+                legacy_source_id: legacy_digest(&metadata.source_id)?,
+                legacy_revision_id: legacy_digest(&metadata.revision_id)?,
+                content_sha256: legacy_digest(&metadata.content_digest)?,
+                byte_length: metadata.byte_length,
+                content_blake3: digest,
+            })
+            .map_err(encoding_reason)?;
+        emit(&row)?;
     }
-    if counts.records != expected || source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+
+    if source.verify_migration_snapshot(deadline)?
+        != source_header.catalog_snapshot
+    {
         return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
     }
-    emit(format!(concat!(
-        "{{\"kind\":\"source_content_end\",\"objects\":{},\"source_bytes\":{},",
-        "\"legacy_sha256_verified\":true,\"blake3_computed_from_bytes\":true,",
-        "\"stability_receipt_issued\":false,\"residency_authorized\":false}}\n"
-    ), counts.records, counts.source_bytes).as_bytes())?;
+    let (end_row, summary) = encoder.finish().map_err(encoding_reason)?;
+    emit(&end_row)?;
     check_deadline(Some(deadline))?;
-    Ok(counts)
+    Ok(summary)
+}
+
+fn legacy_digest(value: &str) -> Result<Sha256Digest32, String> {
+    Sha256Digest32::parse_hex(value)
+        .map_err(|_| "DIRECT_CONTROL_READBACK_MISMATCH".to_owned())
+}
+
+fn encoding_reason(error: SourceContentManifestEncodingError) -> String {
+    error.code().to_owned()
 }

@@ -20,7 +20,12 @@ mod output_lock;
 mod readback;
 mod writer;
 
-pub use content::SourceContentManifest;
+pub use content::{
+    SourceContentManifest, SourceContentManifestEncoder,
+    SourceContentManifestEncodingError, SourceContentManifestHeader,
+    SourceContentManifestSummary, SourceContentObjectReadback,
+    source_content_profile_digest,
+};
 pub use cutover::{
     CONTROL_CUTOVER_MARKER_FILE, CONTROL_CUTOVER_STAGED_DATABASE_SCHEMA,
     ControlCutoverMarker, ControlCutoverMarkerError,
