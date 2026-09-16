@@ -22,6 +22,7 @@ Persist only bounded technical control state and publish immutable snapshots for
 - canonical bounded source-import record chains and content-manifest metadata rows
 - immutable source-import record artifact staging, second-pass comparison, no-clobber publication and cleanup
 - canonical control-cutover marker readback, temporary write, publication classification and exact verification
+- canonical staged-plan, cutover-commit and verified-rollback receipt projections
 
 ## Forbidden ownership
 
@@ -56,6 +57,9 @@ is improved:
 - `inspect_source_import_record_artifact`
 - `resolve_control_cutover_marker`
 - `publish_control_cutover_marker`
+- `SourceMigrationStagedPlan::render_json`
+- `render_control_cutover_committed_receipt`
+- `render_control_cutover_rollback_receipt`
 
 The content-manifest encoder accepts only bounded identities, digests and lengths.
 The source adapter remains responsible for reading exact retained bytes and supplying
@@ -63,6 +67,8 @@ the verified BLAKE3 digest; source bytes never enter this package. Temporary-nam
 entropy/time and native file identity are injected observations, never authority.
 The package classifies marker state and publication outcomes; the daemon decides
 whether a corrupt result must arm quarantine under the current root owner.
+Receipt projections consume already verified technical state and never authorize
+cutover, infer source truth, or switch a serving path.
 
 ## Failure surface
 
@@ -80,6 +86,8 @@ state into an apparent success.
 - `immutable record artifact never overwrites an existing final locator`
 - `cutover marker exact replay is idempotent and different valid state is never overwritten`
 - `cutover marker missing/corrupt/readback states remain distinct and fail closed`
+- `staged-plan and cutover receipts remain byte exact and content minimized`
+- `daemon composition contains no duplicate migration receipt schema`
 - `power_loss_reopen_preserves committed control state only`
 - `hot_query_does_not_mutate_redb after 10,000 admissions`
 - `mismatched incarnation or collection route quarantines`
