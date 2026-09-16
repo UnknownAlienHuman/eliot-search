@@ -26,10 +26,10 @@ use crate::development::MAX_SCAN_INPUT_BYTES;
 use crate::revision_protection::PROTECTED_OBJECT_EXTENSION;
 use crate::sha256;
 
-use super::{RevisionMetadata, verify_plaintext};
-
-const REVISION_DIRECTORY: &str = "revisions";
-const MAX_REVISION_OBJECT_BYTES: usize = 65 * 1024 * 1024;
+use super::{
+    MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY, RevisionMetadata,
+    verify_plaintext,
+};
 
 pub(super) fn read_plaintext_path(
     path: &Path,
@@ -358,9 +358,11 @@ fn read_reason(
         }
         LegacyRevisionObjectError::ObjectInvalid => "DIRECT_FILE_INVALID".to_owned(),
         LegacyRevisionObjectError::ObjectRead(error) => format!("{prefix}:{error}"),
-        LegacyRevisionObjectError::ReadbackMismatch
-        | LegacyRevisionObjectError::IdentityChanged => {
+        LegacyRevisionObjectError::ReadbackMismatch => {
             format!("{prefix}:LENGTH_MISMATCH")
+        }
+        LegacyRevisionObjectError::IdentityChanged => {
+            "DIRECT_REVISION_OBJECT_CHANGED".to_owned()
         }
         LegacyRevisionObjectError::Create(error)
         | LegacyRevisionObjectError::Write(error)
