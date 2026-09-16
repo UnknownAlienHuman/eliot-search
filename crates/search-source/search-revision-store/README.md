@@ -2,7 +2,7 @@
 
 **C07 — Immutable revision CAS.**
 
-**Status:** the pure vendor-neutral revision state machine is implemented. The package also owns the bounded no-clobber filesystem lifecycle for legacy DIRECT revision objects during T02 migration. Canonical residency-aware CAS integration, encryption/secret adapters, lifecycle inventory, and restore flows remain incomplete and must not be inferred from that compatibility adapter.
+**Status:** the pure vendor-neutral revision state machine is implemented. During T02 migration the package also owns the bounded no-clobber filesystem lifecycle and the closed layout/inventory filename grammar for legacy DIRECT revision objects. Canonical residency-aware CAS integration, encryption/secret adapters, lifecycle inventory, and restore flows remain incomplete and must not be inferred from that compatibility adapter.
 
 Admit, retain and reopen immutable source revisions under complete residency identities.
 
@@ -12,6 +12,8 @@ Admit, retain and reopen immutable source revisions under complete residency ide
 - immutable revision admission and exact readback contracts
 - bounded legacy `.bin` / `.dpapi` exact reads and no-clobber publication
 - stable native-identity and locator fencing through an injected platform
+- legacy `revisions/<shard>/<id>.<encoding>` layout and closed inventory grammar
+- stable referenced/orphan/temporary physical classification tags
 - replay fencing, unknown-outcome recovery, quarantine, and purge tombstones
 - retention/lifecycle enforcement surfaces
 - copy/re-encrypt transition contracts

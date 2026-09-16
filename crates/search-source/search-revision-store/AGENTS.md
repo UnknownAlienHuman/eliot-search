@@ -20,6 +20,8 @@ Admit, retain and reopen immutable source revisions under complete residency ide
 - retention leases and exact reopen
 - copy/re-encrypt transition receipts
 - bounded legacy DIRECT `.bin` / `.dpapi` object I/O during T02 migration
+- closed legacy revision root/shard/final/temporary filename grammar
+- stable physical inventory classification tags and canonical relative locators
 
 ## Forbidden ownership
 
@@ -48,12 +50,16 @@ is improved:
 - `enumerate_mark_roots(snapshot) -> MarkRootSet`
 - `read_legacy_revision_object(platform, path, maximum_bytes)`
 - `publish_legacy_revision_object(platform, directory, final_name, temporary_name, bytes, maximum_bytes)`
+- `classify_legacy_revision_inventory_name(name)`
+- `legacy_revision_inventory_relative_locator(shard, name)`
 
 The legacy adapter treats bytes as opaque and accepts qualified native identity,
 locator and directory-durability observations through an injected platform. It
 must never infer source identity, decrypt/protect bytes, authorize a revision or
-write a preparation artifact. A racing final object is reused only after exact
-readback; a conflicting object is never replaced.
+write a preparation artifact. The pure inventory grammar owns only admitted
+legacy names, protection suffixes, classification tags and relative locators;
+filesystem traversal and catalog overlay remain injected. A racing final object
+is reused only after exact readback; a conflicting object is never replaced.
 
 ## Failure surface
 
@@ -71,6 +77,8 @@ state into an apparent success. Possible publication followed by failed durabili
 - `legacy immutable object conflict preserves existing bytes`
 - `legacy read rejects changed native identity and oversize before allocation`
 - `DIRECT revision paths compose this package while preparation artifacts do not`
+- `legacy revision final/temporary names and shard grammar fail closed`
+- `daemon contains no duplicate revision filename parser or classification tags`
 
 Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
 but the writer does not edit another package opportunistically.

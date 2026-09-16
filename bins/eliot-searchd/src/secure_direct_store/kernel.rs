@@ -11,8 +11,10 @@ use std::path::PathBuf;
 use crate::plaintext_direct_store as plaintext;
 use crate::revision_protection::RevisionProtector;
 
-pub(super) const REVISION_DIRECTORY: &str = "revisions";
-pub(super) const MAX_REVISION_OBJECT_BYTES: usize = 65 * 1024 * 1024;
+pub(super) use search_revision_store::{
+    LEGACY_REVISION_DIRECTORY as REVISION_DIRECTORY,
+    LEGACY_REVISION_MAX_OBJECT_BYTES as MAX_REVISION_OBJECT_BYTES,
+};
 
 /// DIRECT catalog with a platform-specific prepublication revision writer.
 pub struct DirectStore {

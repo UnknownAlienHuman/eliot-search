@@ -109,3 +109,99 @@ fn revision_store_is_a_baseline_direct_dependency() {
     ));
     assert!(!manifest.contains("dep:search-revision-store"));
 }
+
+#[test]
+fn legacy_revision_layout_and_inventory_grammar_have_one_package_owner() {
+    let root = repository_root();
+    let facade = read(
+        &root,
+        "crates/search-source/search-revision-store/src/lib.rs",
+    );
+    assert!(facade.contains("mod legacy_inventory;"));
+    assert!(facade.contains("pub use legacy_inventory::*;"));
+
+    let owner = read(
+        &root,
+        "crates/search-source/search-revision-store/src/legacy_inventory.rs",
+    );
+    for required in [
+        "pub const LEGACY_REVISION_DIRECTORY",
+        "pub const LEGACY_REVISION_MAX_OBJECT_BYTES",
+        "pub const LEGACY_REVISION_MAX_INVENTORY_NAME_BYTES",
+        "pub enum LegacyRevisionProtection",
+        "pub enum LegacyRevisionInventoryKind",
+        "pub fn classify_legacy_revision_inventory_name",
+        "pub fn is_legacy_revision_inventory_shard",
+        "pub fn legacy_revision_inventory_relative_locator",
+        "pub fn legacy_revision_rooted_locator",
+        "catalog_referenced",
+        "unreferenced_revision_object",
+        "uncommitted_temporary_object",
+    ] {
+        assert!(
+            owner.contains(required),
+            "revision-store lost inventory grammar {required}"
+        );
+    }
+    for forbidden in [
+        "std::fs",
+        "Metadata",
+        "read_dir",
+        "RevisionProtector",
+        "SourceRegistry",
+        "ControlJournal",
+        "verify_plaintext",
+    ] {
+        assert!(
+            !owner.contains(forbidden),
+            "inventory grammar acquired foreign responsibility {forbidden}"
+        );
+    }
+
+    let daemon = read(
+        &root,
+        "bins/eliot-searchd/src/control_migration_orphans.rs",
+    );
+    for required in [
+        "classify_legacy_revision_inventory_name",
+        "is_legacy_revision_inventory_shard",
+        "legacy_revision_inventory_relative_locator",
+        "legacy_revision_rooted_locator",
+        "LegacyRevisionInventoryKind as Kind",
+    ] {
+        assert!(daemon.contains(required));
+    }
+    for forbidden in [
+        "enum Kind",
+        "fn generated_name(",
+        "fn lower_hex(",
+        "MAX_NAME_BYTES",
+        "Self::Referenced => \"catalog_referenced\"",
+        "unreferenced_revision_object\"",
+        "uncommitted_temporary_object\"",
+        "strip_suffix(\".bin\")",
+        "strip_suffix(\".dpapi\")",
+    ] {
+        assert!(
+            !daemon.contains(forbidden),
+            "daemon restored inventory grammar {forbidden}"
+        );
+    }
+
+    let kernel = read(
+        &root,
+        "bins/eliot-searchd/src/secure_direct_store/kernel.rs",
+    );
+    assert!(kernel.contains(
+        "LEGACY_REVISION_DIRECTORY as REVISION_DIRECTORY"
+    ));
+    assert!(kernel.contains(
+        "LEGACY_REVISION_MAX_OBJECT_BYTES as MAX_REVISION_OBJECT_BYTES"
+    ));
+    assert!(!kernel.contains(
+        "const REVISION_DIRECTORY: &str = \"revisions\""
+    ));
+    assert!(!kernel.contains(
+        "const MAX_REVISION_OBJECT_BYTES: usize = 65 * 1024 * 1024"
+    ));
+}

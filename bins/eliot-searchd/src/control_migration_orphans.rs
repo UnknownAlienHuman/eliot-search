@@ -5,6 +5,13 @@ use std::collections::BTreeMap;
 use std::fs::{self, Metadata};
 use std::path::Path;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use search_revision_store::{
+    LegacyRevisionInventoryKind as Kind,
+    classify_legacy_revision_inventory_name,
+    is_legacy_revision_inventory_shard,
+    legacy_revision_inventory_relative_locator,
+    legacy_revision_rooted_locator,
+};
 use zeroize::Zeroizing;
 
 use super::{DirectStore, DEADLINE, MAX_PAGE_BYTES, MAX_PAGE_STORED_BYTES,
@@ -13,19 +20,6 @@ use super::{DirectStore, DEADLINE, MAX_PAGE_BYTES, MAX_PAGE_STORED_BYTES,
 
 const MAX_FILES: usize = 65_536;
 const PAGE_FILES: usize = 32;
-const MAX_NAME_BYTES: usize = 192;
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum Kind { Referenced, Orphan, Temporary }
-impl Kind {
-    const fn tag(self) -> &'static str {
-        match self {
-            Self::Referenced => "catalog_referenced",
-            Self::Orphan => "unreferenced_revision_object",
-            Self::Temporary => "uncommitted_temporary_object",
-        }
-    }
-}
 
 #[derive(Eq, PartialEq)]
 struct Entry {
@@ -92,10 +86,12 @@ impl DirectStore {
             }
             let digest = fingerprint(&root, entry, deadline)?;
             encoded_bytes += entry.size;
+            let locator = legacy_revision_rooted_locator(&entry.relative)
+                .ok_or_else(inventory_error)?;
             rows.push(format!(concat!(
                 "{{\"object_locator\":{},\"kind\":{},\"encoded_bytes\":{},\"encoded_sha256\":\"{}\",",
                 "\"catalog_referenced\":false,\"source_binding_verified\":false,\"deletion_authorized\":false}}"
-            ), json_string(&format!("revisions/{}", entry.relative)), json_string(entry.kind.tag()),
+            ), json_string(&locator), json_string(entry.kind.tag()),
                 entry.size, sha256::hex(&digest)));
             fingerprints.push((entry, digest));
         }
@@ -149,7 +145,7 @@ impl DirectStore {
             if shards.len() >= 256 { return Err("DIRECT_MIGRATION_SHARD_LIMIT".to_owned()); }
             let item = item.map_err(|_| inventory_error())?;
             let name = item.file_name().into_string().map_err(|_| inventory_error())?;
-            if name.len() != 2 || !lower_hex(&name) { return Err(inventory_error()); }
+            if !is_legacy_revision_inventory_shard(&name) { return Err(inventory_error()); }
             ensure_directory(&item.path())?;
             if shards.insert(name, item.path()).is_some() { return Err(inventory_error()); }
         }
@@ -161,15 +157,16 @@ impl DirectStore {
                 if files.len() >= MAX_FILES { return Err("DIRECT_MIGRATION_OBJECT_LIMIT".to_owned()); }
                 let item = item.map_err(|_| inventory_error())?;
                 let name = item.file_name().into_string().map_err(|_| inventory_error())?;
-                if name.len() > MAX_NAME_BYTES || !name.is_ascii() { return Err(inventory_error()); }
-                let (id, temporary) = generated_name(&name).ok_or_else(inventory_error)?;
-                if !id.starts_with(shard) { return Err(inventory_error()); }
+                let classified = classify_legacy_revision_inventory_name(&name)
+                    .ok_or_else(inventory_error)?;
+                let id = classified.id();
+                let relative = legacy_revision_inventory_relative_locator(shard, &name)
+                    .ok_or_else(inventory_error)?;
                 let metadata = fs::symlink_metadata(item.path()).map_err(|_| inventory_error())?;
                 let (size, modified) = file_stamp(&metadata)?;
-                let kind = if temporary { Kind::Temporary }
-                    else if self.inner.retained_revision(id).is_some() { Kind::Referenced }
-                    else { Kind::Orphan };
-                let relative = format!("{shard}/{name}");
+                let kind = classified.inventory_kind(
+                    self.inner.retained_revision(id).is_some(),
+                );
                 if files.insert(relative.clone(), Entry { relative, size, modified, kind }).is_some() {
                     return Err(inventory_error());
                 }
@@ -202,33 +199,6 @@ impl DirectStore {
 }
 
 fn inventory_error() -> String { "DIRECT_MIGRATION_UNEXPECTED_REVISION_OBJECT".to_owned() }
-
-fn lower_hex(value: &str) -> bool {
-    value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-/// Accept only canonical writer-generated names. This is stricter admission than
-/// old GC's broad temporary-name recognizer; unknown names block rather than vanish.
-fn generated_name(name: &str) -> Option<(&str, bool)> {
-    for suffix in [".bin", ".dpapi"] {
-        if let Some(id) = name.strip_suffix(suffix)
-            && id.len() == 64
-            && lower_hex(id)
-        {
-            return Some((id, false));
-        }
-    }
-    let body = name.strip_prefix('.')?.strip_suffix(".tmp")?;
-    let parts = body.splitn(5, '.').collect::<Vec<_>>();
-    let id = *parts.first()?;
-    if id.len() != 64 || !lower_hex(id) { return None; }
-    let decimal = |value: &str| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
-    match parts.as_slice() {
-        [_, pid] if decimal(pid) => Some((id, true)),
-        [_, pid, stamp, "dpapi"] if decimal(pid) && decimal(stamp) => Some((id, true)),
-        _ => None,
-    }
-}
 
 fn file_stamp(metadata: &Metadata) -> Result<(u64, SystemTime), String> {
     #[cfg(windows)]

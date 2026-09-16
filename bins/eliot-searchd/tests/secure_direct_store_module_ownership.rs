@@ -142,8 +142,18 @@ fn direct_store_compatibility_and_query_regression_stay_closed() {
     }
 
     let kernel = read(&root, "src/secure_direct_store/kernel.rs");
-    assert!(kernel.contains("pub(super) const REVISION_DIRECTORY: &str = \"revisions\";"));
-    assert!(kernel.contains("pub(super) const MAX_REVISION_OBJECT_BYTES: usize = 65 * 1024 * 1024;"));
+    assert!(kernel.contains(
+        "LEGACY_REVISION_DIRECTORY as REVISION_DIRECTORY"
+    ));
+    assert!(kernel.contains(
+        "LEGACY_REVISION_MAX_OBJECT_BYTES as MAX_REVISION_OBJECT_BYTES"
+    ));
+    assert!(!kernel.contains(
+        "const REVISION_DIRECTORY: &str = \"revisions\""
+    ));
+    assert!(!kernel.contains(
+        "const MAX_REVISION_OBJECT_BYTES: usize = 65 * 1024 * 1024"
+    ));
 
     let tests = read(&root, "src/secure_direct_store/kernel/tests.rs");
     assert!(tests.contains("fn ten_thousand_bounded_queries_cause_no_durable_corpus_writes("));
