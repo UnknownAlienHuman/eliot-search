@@ -76,11 +76,129 @@ pub struct SourceMigrationStagedPlan {
     pub content_source_bytes: u64,
 }
 
+/// Closed read-only authority state for the cutover-status projection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ControlCutoverStatusState {
+    /// No cutover marker exists and the preserved file journal remains primary.
+    FileJournal,
+    /// A marker locator exists but cannot be read and decoded coherently.
+    MarkerCorrupt,
+    /// One valid marker names an observed staged database artifact.
+    Committed {
+        /// Exact canonical committed marker.
+        marker: ControlCutoverMarker,
+        /// Whether the named staged database is a nonempty admitted file.
+        database_present: bool,
+        /// Exact observed staged database byte length, or zero when absent.
+        database_bytes: u64,
+    },
+}
+
+/// Inputs for the historical bounded read-only cutover-status response.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ControlCutoverStatusProjection {
+    /// Read-only marker/database authority state.
+    pub state: ControlCutoverStatusState,
+    /// Whether daemon policy currently marks the data root quarantined.
+    pub quarantined: bool,
+}
+
+impl ControlCutoverStatusProjection {
+    /// Renders the historical byte-stable read-only cutover-status JSON.
+    #[must_use]
+    pub fn render_json(&self) -> String {
+        let (
+            authority,
+            marker_present,
+            marker_digest,
+            snapshot,
+            plan,
+            content,
+            locator,
+            database_present,
+            database_bytes,
+            complete,
+        ) = match &self.state {
+            ControlCutoverStatusState::FileJournal => (
+                "file-journal",
+                false,
+                "null".to_owned(),
+                "null".to_owned(),
+                "null".to_owned(),
+                "null".to_owned(),
+                "null".to_owned(),
+                false,
+                0,
+                !self.quarantined,
+            ),
+            ControlCutoverStatusState::MarkerCorrupt => (
+                "marker-corrupt",
+                true,
+                "null".to_owned(),
+                "null".to_owned(),
+                "null".to_owned(),
+                "null".to_owned(),
+                "null".to_owned(),
+                false,
+                0,
+                false,
+            ),
+            ControlCutoverStatusState::Committed {
+                marker,
+                database_present,
+                database_bytes,
+            } => {
+                let locator = [
+                    "control/",
+                    marker.database_file_name.as_str(),
+                ]
+                .concat();
+                (
+                    "redb-control-marker-v1",
+                    true,
+                    json_string(&hex(&marker.record_digest())),
+                    json_string(&hex(&marker.catalog_snapshot)),
+                    json_string(&hex(&marker.plan_chain)),
+                    json_string(&hex(&marker.content_chain)),
+                    json_string(&locator),
+                    *database_present,
+                    *database_bytes,
+                    *database_present && !self.quarantined,
+                )
+            }
+        };
+        format!(
+            concat!(
+                "{{\"event\":\"control_cutover_status\",\"schema\":\"control-cutover-status-v1\",",
+                "\"authority\":{},\"marker_present\":{},\"marker_digest\":{},",
+                "\"catalog_snapshot_sha256\":{},\"plan_chain_sha256\":{},",
+                "\"content_manifest_chain_sha256\":{},\"staged_database_locator\":{},",
+                "\"staged_database_present\":{},\"staged_database_bytes\":{},",
+                "\"quarantined\":{},\"complete\":{},\"read_only\":true}}"
+            ),
+            json_string(authority),
+            marker_present,
+            marker_digest,
+            snapshot,
+            plan,
+            content,
+            locator,
+            database_present,
+            database_bytes,
+            self.quarantined,
+            complete,
+        )
+    }
+}
+
 impl SourceMigrationStagedPlan {
     /// Renders the historical byte-stable staged-plan JSON receipt.
     #[must_use]
     pub fn render_json(&self) -> String {
         let prefix = self.location.locator_prefix();
+        let plan_locator = [prefix, self.plan_name.as_str()].concat();
+        let database_locator = [prefix, self.database_name.as_str()].concat();
+        let content_locator = [prefix, self.content_name.as_str()].concat();
         format!(
             concat!(
                 "{{\"event\":\"source_migration_plan_staged\",\"schema\":\"eliot.source-mapping.v1\",",
@@ -97,7 +215,7 @@ impl SourceMigrationStagedPlan {
             ),
             self.target,
             hex(&self.catalog_snapshot),
-            json_string(&format!("{prefix}{}", self.plan_name)),
+            json_string(&plan_locator),
             hex(&self.plan_chain),
             self.plan_bytes,
             self.plan_reused,
@@ -107,10 +225,10 @@ impl SourceMigrationStagedPlan {
             self.summary.path_only_events,
             self.summary.retirements,
             self.location.label(),
-            json_string(&format!("{prefix}{}", self.database_name)),
+            json_string(&database_locator),
             self.database_reused,
             CONTROL_CUTOVER_STAGED_DATABASE_SCHEMA,
-            json_string(&format!("{prefix}{}", self.content_name)),
+            json_string(&content_locator),
             hex(&self.content_chain),
             self.content_records,
             self.content_source_bytes,
