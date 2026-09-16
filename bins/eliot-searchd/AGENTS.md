@@ -10,6 +10,7 @@ The bounded packet is `swarm/assignments/eliot-searchd.md`.
 - progressive dependency injection/startup
 - concrete adapter construction and vendor-neutral port wiring
 - provider server, readiness, drain and shutdown coordination
+- qualified platform observations and stable integration reason mapping
 
 ## Forbidden ownership
 
@@ -17,10 +18,14 @@ The bounded packet is `swarm/assignments/eliot-searchd.md`.
 - shared store/vendor clients outside daemon composition
 - concrete adapter edges in query/lifecycle APIs
 - hidden fallback or second data-root owner
+- control-migration schemas, immutable artifact lifecycle or receipt projections
+- revision-object read/write/publication state machines owned by `search-revision-store`
+- preparation/materialization storage state machines owned by `search-materializer`
+- secret protection semantics owned by `search-os-secrets`
 
 ## Dependencies
 
-Only accepted packages for the active Cargo feature/wave. New artifacts require ADR and exact qualification.
+Only accepted packages for the active Cargo feature/wave. Baseline DIRECT owners such as source admission/registry/identity, safe reader, revision store and materializer are mandatory architecture boundaries, not optional acceptance claims. New artifacts require ADR and exact qualification.
 
 ## Size
 
