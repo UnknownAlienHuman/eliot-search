@@ -18,6 +18,7 @@ Convert an exact retained revision into a canonical representation with explicit
 - coordinate map and loss map production
 - assurance ceiling classification
 - provider qualification seam for optional documents
+- bounded immutable legacy preparation-object/reference I/O during T02 migration
 
 ## Forbidden ownership
 
@@ -26,6 +27,9 @@ Convert an exact retained revision into a canonical representation with explicit
 - executing macros, archive members or remote resources
 - claiming exact coordinates after lossy transforms
 - opening source stores directly instead of consuming immutable contract inputs
+- retained revision CAS or revision-object publication owned by `search-revision-store`
+- secret acquisition, DPAPI/keyring operations or plaintext source verification
+- source-registry or control-journal mutation
 
 ## Allowed dependencies
 
@@ -41,11 +45,19 @@ is improved:
 - `validate_coordinate_map(map, source, output) -> Result<(), MaterializeError>`
 - `derive_assurance_ceiling(loss_map) -> AssuranceCeiling`
 - `qualify_provider(descriptor, fixtures) -> ProviderQualification`
+- `read_legacy_preparation_artifact(platform, path, maximum_bytes)`
+- `publish_legacy_preparation_artifact(platform, directory, final_name, temporary_name, bytes, maximum_bytes)`
+
+The compatibility artifact adapter treats bytes as opaque. Native identity,
+locator and directory-durability observations are injected. It cannot infer a
+materialization profile, decrypt bytes, authorize source access or publish a
+revision. A racing final artifact is reusable only after exact readback; a
+conflicting artifact is never overwritten.
 
 ## Failure surface
 
 Use typed errors/reason codes. Relevant public reasons: `MATERIALIZATION_LOSS`, `MATERIALIZER_UNAVAILABLE`, `COORDINATE_MAP_INVALID`. Never turn a degraded or partial
-state into an apparent success.
+state into an apparent success. Possible publication followed by failed directory durability is outcome-unknown.
 
 ## Test seams and exit evidence
 
@@ -54,6 +66,10 @@ state into an apparent success.
 - `lossy output cannot claim exact_bytes`
 - `malformed and oversized input is bounded`
 - `provider absence does not block baseline text/code`
+- `legacy preparation object/reference exact replay reuses without replacement`
+- `legacy preparation conflict preserves existing bytes and removes only its own temporary`
+- `legacy read rejects changed identity and oversize before allocation`
+- `daemon preparation paths compose this package while revision paths do not`
 
 Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
 but the writer does not edit another package opportunistically.
