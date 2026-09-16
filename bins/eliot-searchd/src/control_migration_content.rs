@@ -2,10 +2,9 @@
 //! Read retained objects, never live paths. No source bodies enter the artifact.
 //!
 //! `search-control-redb::migration` owns the frozen manifest line schema,
-//! canonical record chain and accounting state machine. This adapter owns only
-//! retained-byte readback, BLAKE3 computation and native I/O composition.
+//! canonical record chain, immutable artifact lifecycle and accounting state
+//! machine. This adapter owns only retained-byte readback and BLAKE3 computation.
 
-use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::time::Instant;
 
@@ -15,8 +14,8 @@ use search_contracts::{
 use search_control_redb::migration::{
     SourceContentManifestEncoder, SourceContentManifestEncodingError,
     SourceContentManifestHeader, SourceContentManifestSummary,
-    SourceContentObjectReadback, SourceImportRecordChain,
-    SourceImportRecordChainError, source_content_profile_digest,
+    SourceContentObjectReadback, SourceImportRecordArtifact,
+    SourceImportRecordArtifactError, source_content_profile_digest,
 };
 use zeroize::Zeroizing;
 
@@ -25,8 +24,7 @@ use crate::revision_protection::RevisionProtector;
 
 use super::super::read_import_revision;
 use super::{
-    MAX_ROW_BYTES, StagingFile, check_deadline, ensure_directory, fingerprint,
-    open_plan, reserve, sha256, sync_directory,
+    check_deadline, ensure_directory, sha256, temporary_staging_name,
 };
 
 pub(super) struct ContentArtifact {
@@ -51,42 +49,37 @@ pub(super) fn stage(
 ) -> Result<ContentArtifact, String> {
     check_deadline(Some(deadline))?;
     ensure_directory(directory)?;
-    let mut staging = StagingFile::create(directory)?;
-    let mut length = 0;
-    let mut chain = SourceImportRecordChain::new();
-    let counts = {
-        let mut output = BufWriter::new(staging.file_mut()?);
-        let counts = compile(
-            source,
-            root,
-            target,
-            source_plan,
-            deadline,
-            |row| {
-                length = reserve(length, row.len())?;
-                output
-                    .write_all(row)
-                    .map_err(|_| "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned())?;
-                chain.push(row).map_err(record_chain_reason)
-            },
-        )?;
-        output
-            .flush()
-            .map_err(|_| "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned())?;
-        counts
-    };
-    staging
-        .file_mut()?
-        .sync_all()
-        .map_err(|_| "DIRECT_MIGRATION_CONTENT_SYNC_FAILED".to_owned())?;
-    drop(staging.file.take());
-    let digest = chain.finish();
+    let temporary_name = temporary_staging_name()?;
+    let mut artifact = SourceImportRecordArtifact::create(
+        directory,
+        &temporary_name,
+        super::redb_import::DaemonImportOutputPlatform,
+        deadline,
+    )
+    .map_err(content_artifact_reason)?;
+    let counts = compile(
+        source,
+        root,
+        target,
+        source_plan,
+        deadline,
+        |row| {
+            artifact
+                .push(row, deadline)
+                .map_err(content_artifact_reason)
+        },
+    )?;
+    let frozen = artifact
+        .freeze(deadline)
+        .map_err(content_artifact_reason)?;
+    let digest = *frozen.chain();
+    let length = frozen.encoded_bytes();
 
-    // Compare newly computed BLAKE3 and legacy bindings, not merely a fingerprint
-    // copied from the provisional artifact. No source/credential write is allowed.
-    let mut input = BufReader::new(open_plan(&staging.path, length)?);
-    let mut compared = 0;
-    let mut buffer = [0_u8; MAX_ROW_BYTES];
+    // Recompute every digest and compare the exact generated rows with the
+    // package-owned temporary artifact before publishing it.
+    let mut readback = frozen
+        .begin_readback(deadline)
+        .map_err(content_artifact_reason)?;
     let observed = compile(
         source,
         root,
@@ -94,51 +87,27 @@ pub(super) fn stage(
         source_plan,
         deadline,
         |row| {
-            compared = reserve(compared, row.len())?;
-            input
-                .read_exact(&mut buffer[..row.len()])
-                .map_err(|_| "DIRECT_MIGRATION_CONTENT_READBACK_FAILED".to_owned())?;
-            if buffer[..row.len()] != *row {
-                return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
-            }
-            Ok(())
+            readback
+                .compare(row, deadline)
+                .map_err(content_artifact_reason)
         },
     )?;
-    let mut extra = [0_u8; 1];
-    if observed != counts
-        || compared != length
-        || input
-            .read(&mut extra)
-            .map_err(|_| "DIRECT_MIGRATION_CONTENT_READBACK_FAILED".to_owned())?
-            != 0
+    if observed != counts {
+        return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
+    }
+    let verified = readback
+        .finish(deadline)
+        .map_err(content_artifact_reason)?;
+    let name = format!("{}.source-content.v1", sha256::hex(&digest));
+    let published = verified
+        .publish(&name, deadline)
+        .map_err(content_artifact_reason)?;
+    if published.chain() != &digest
+        || published.encoded_bytes() != length
+        || published.name() != name.as_str()
     {
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
-    drop(input);
-    check_deadline(Some(deadline))?;
-    let name = format!("{}.source-content.v1", sha256::hex(&digest));
-    let destination = directory.join(&name);
-    match std::fs::hard_link(&staging.path, &destination) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(_) => {
-            return Err(
-                "DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN".to_owned(),
-            );
-        }
-    }
-    #[cfg(unix)]
-    sync_directory(directory)?;
-    #[cfg(not(unix))]
-    sync_directory(directory);
-    if fingerprint(&destination, length, deadline)? != digest {
-        return Err("DIRECT_MIGRATION_CONTENT_IMMUTABLE_CONFLICT".to_owned());
-    }
-    staging.remove()?;
-    #[cfg(unix)]
-    sync_directory(directory)?;
-    #[cfg(not(unix))]
-    sync_directory(directory);
     check_deadline(Some(deadline))?;
     Ok(ContentArtifact {
         name,
@@ -166,8 +135,6 @@ fn compile(
         return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
     }
 
-    // Offline planning can consume a legacy plaintext object without creating a
-    // key. A protected object always requires the original available credential.
     #[cfg(windows)]
     let protector = RevisionProtector::open_existing(source_header.legacy_namespace)?;
     #[cfg(not(windows))]
@@ -196,8 +163,6 @@ fn compile(
 
     for metadata in source.retained_revisions() {
         check_deadline(Some(deadline))?;
-        // Shared with ordinary DIRECT reads: both encodings, when present, must
-        // agree. A damaged protected object never falls back to plaintext.
         let bytes =
             read_import_revision(root, protector.as_ref(), &metadata, deadline)?;
         let mut hasher = Zeroizing::new(blake3::Hasher::new());
@@ -239,6 +204,54 @@ fn encoding_reason(error: SourceContentManifestEncodingError) -> String {
     error.code().to_owned()
 }
 
-fn record_chain_reason(error: SourceImportRecordChainError) -> String {
-    error.code().to_owned()
+fn content_artifact_reason(
+    error: SourceImportRecordArtifactError<String>,
+) -> String {
+    match error {
+        SourceImportRecordArtifactError::Platform(reason) => reason,
+        SourceImportRecordArtifactError::DeadlineExceeded => {
+            "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned()
+        }
+        SourceImportRecordArtifactError::TemporaryNameInvalid
+        | SourceImportRecordArtifactError::CreateFailed => {
+            "DIRECT_MIGRATION_PLAN_CREATE_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::FinalNameInvalid
+        | SourceImportRecordArtifactError::ObjectInvalid => {
+            "DIRECT_MIGRATION_PLAN_OBJECT_INVALID".to_owned()
+        }
+        SourceImportRecordArtifactError::Closed => {
+            "DIRECT_MIGRATION_PLAN_CLOSED".to_owned()
+        }
+        SourceImportRecordArtifactError::WriteFailed => {
+            "DIRECT_MIGRATION_CONTENT_WRITE_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::SyncFailed => {
+            "DIRECT_MIGRATION_CONTENT_SYNC_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::ReadFailed => {
+            "DIRECT_MIGRATION_PLAN_READ_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::ComparisonReadFailed => {
+            "DIRECT_MIGRATION_CONTENT_READBACK_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::ReadbackMismatch => {
+            "DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()
+        }
+        SourceImportRecordArtifactError::PublishOutcomeUnknown => {
+            "DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN".to_owned()
+        }
+        SourceImportRecordArtifactError::ImmutableConflict => {
+            "DIRECT_MIGRATION_CONTENT_IMMUTABLE_CONFLICT".to_owned()
+        }
+        SourceImportRecordArtifactError::IdentityChanged => {
+            "DIRECT_MIGRATION_PLAN_CLEANUP_IDENTITY_CHANGED".to_owned()
+        }
+        SourceImportRecordArtifactError::CleanupFailed => {
+            "DIRECT_MIGRATION_PLAN_CLEANUP_FAILED".to_owned()
+        }
+        SourceImportRecordArtifactError::RecordChain(error) => {
+            error.code().to_owned()
+        }
+    }
 }
