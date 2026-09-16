@@ -42,5 +42,5 @@ use kernel::{
 };
 use storage_io::{
     legacy_path, protected_path, read_plaintext_path, read_regular_file,
-    remove_plaintext_after_readback,
+    read_revision_object, remove_plaintext_after_readback,
 };
