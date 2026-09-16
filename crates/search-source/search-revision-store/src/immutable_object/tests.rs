@@ -1,7 +1,7 @@
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::*;
@@ -163,6 +163,57 @@ fn empty_revision_is_valid_and_conflicting_final_is_never_overwritten() {
         fs::read(shard.join("conflict.object")).expect("read conflict"),
         b"existing"
     );
+    assert!(!shard.join(".conflict.1.tmp").exists());
+}
+
+#[test]
+fn racing_publications_never_clobber_the_winner_or_leave_temporary_files() {
+    let fixture = Fixture::new();
+    let shard = fixture.0.join("cc");
+    fs::create_dir(&shard).expect("create shared shard");
+    let platform = TestPlatform::stable();
+    let barrier = Arc::new(Barrier::new(2));
+    let mut jobs = Vec::new();
+    for (temporary, bytes) in [
+        (".race.1.tmp", b"candidate-a".as_slice()),
+        (".race.2.tmp", b"candidate-b".as_slice()),
+    ] {
+        let start = Arc::clone(&barrier);
+        let platform = platform.clone();
+        let shard = shard.clone();
+        jobs.push(std::thread::spawn(move || {
+            start.wait();
+            (
+                bytes,
+                publish_legacy_revision_object(
+                    &platform,
+                    &shard,
+                    "race.object",
+                    temporary,
+                    bytes,
+                    64,
+                ),
+            )
+        }));
+    }
+    let outcomes = jobs
+        .into_iter()
+        .map(|job| job.join().expect("join publication"))
+        .collect::<Vec<_>>();
+    let winners = outcomes
+        .iter()
+        .filter(|(_, outcome)| outcome.is_ok())
+        .collect::<Vec<_>>();
+    assert_eq!(winners.len(), 1, "{outcomes:?}");
+    assert_eq!(
+        fs::read(shard.join("race.object")).expect("read winner"),
+        winners[0].0,
+    );
+    assert_eq!(
+        fs::read_dir(&shard).expect("list shard").count(),
+        1,
+        "only the final object may remain"
+    );
 }
 
 #[test]
@@ -183,7 +234,7 @@ fn invalid_names_and_size_are_rejected_before_mutation() {
     assert!(matches!(
         publish_legacy_revision_object(
             &platform,
-            &fixture.0.join("cc"),
+            &fixture.0.join("dd"),
             "../escape",
             ".escape.tmp",
             b"x",
@@ -194,7 +245,7 @@ fn invalid_names_and_size_are_rejected_before_mutation() {
     assert!(matches!(
         publish_legacy_revision_object(
             &platform,
-            &fixture.0.join("cc"),
+            &fixture.0.join("dd"),
             "object",
             ".object.tmp",
             b"too large",
@@ -202,7 +253,7 @@ fn invalid_names_and_size_are_rejected_before_mutation() {
         ),
         Err(LegacyRevisionObjectError::SizeInvalid)
     ));
-    assert!(!fixture.0.join("cc").exists());
+    assert!(!fixture.0.join("dd").exists());
 }
 
 #[test]
