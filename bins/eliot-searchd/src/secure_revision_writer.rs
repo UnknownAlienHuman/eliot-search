@@ -5,7 +5,10 @@ use std::io;
 use std::path::Path;
 use zeroize::Zeroizing;
 
-use super::storage_io::{legacy_path, persist_immutable_object, protected_path, read_regular_file};
+use super::storage_io::{
+    legacy_path, persist_immutable_object, protected_path,
+    read_revision_object,
+};
 use super::{
     IndexedSource, MAX_REVISION_OBJECT_BYTES, RevisionMetadata, RevisionProtector,
     verify_plaintext,
@@ -29,8 +32,10 @@ pub(super) fn persist_before_publication(
         verify_plaintext(&metadata, plaintext)?;
         let path = legacy_path(root, &metadata.revision_id)?;
         persist_immutable_object(&path, plaintext)?;
-        let observed = Zeroizing::new(read_regular_file(
-            &path, MAX_REVISION_OBJECT_BYTES, "DIRECT_REVISION_READ_ERROR",
+        let observed = Zeroizing::new(read_revision_object(
+            &path,
+            MAX_REVISION_OBJECT_BYTES,
+            "DIRECT_REVISION_READ_ERROR",
         )?);
         return verify_plaintext(&metadata, &observed);
     }
@@ -70,7 +75,7 @@ pub(super) fn persist_verified(
         }
         Err(_) => return Err("DIRECT_REVISION_PROTECTED_METADATA_ERROR".to_owned()),
     }
-    let object = read_regular_file(
+    let object = read_revision_object(
         &path,
         MAX_REVISION_OBJECT_BYTES,
         "DIRECT_REVISION_PROTECTED_READ_ERROR",
