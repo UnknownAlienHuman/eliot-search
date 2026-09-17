@@ -1,9 +1,9 @@
 //! Pure layout and physical-inventory grammar for legacy DIRECT revisions.
 //!
-//! Filesystem traversal, metadata observation, source-catalog membership and
-//! content hashing remain daemon composition. This owner closes the legacy
-//! revision root, object-size ceiling, final/temporary basename grammar,
-//! classification tags and canonical relative locators used during migration.
+//! Filesystem traversal, metadata acquisition and object-content hashing remain
+//! daemon composition. This owner closes the legacy revision root, object-size
+//! ceiling, final/temporary basename grammar, normalized inventory model,
+//! digest/cursor/page rules and canonical report projection used during migration.
 
 #![allow(
     clippy::missing_const_for_fn,
@@ -241,5 +241,31 @@ fn decimal(value: &str) -> bool {
     !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
 }
 
+mod model;
+mod page;
+mod report;
+mod wire;
+
+pub use model::{
+    LEGACY_REVISION_MAX_INVENTORY_OBJECTS,
+    LEGACY_REVISION_MAX_INVENTORY_SHARDS,
+    LegacyRevisionInventory, LegacyRevisionInventoryDigest,
+    LegacyRevisionInventoryEntry, LegacyRevisionInventoryError,
+    build_legacy_revision_inventory,
+};
+pub use page::{
+    LEGACY_REVISION_MAX_PAGE_OBJECTS,
+    LEGACY_REVISION_MAX_PAGE_STORED_BYTES,
+    LEGACY_REVISION_MAX_REPORT_BYTES, LegacyRevisionInventoryCursor,
+    LegacyRevisionInventoryPage, legacy_revision_inventory_checkpoint,
+    plan_legacy_revision_inventory_page,
+};
+pub use report::{
+    LegacyRevisionObjectEvidence,
+    render_legacy_revision_inventory_report,
+};
+
+#[cfg(test)]
+mod model_tests;
 #[cfg(test)]
 mod tests;

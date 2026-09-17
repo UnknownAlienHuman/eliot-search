@@ -22,6 +22,8 @@ Admit, retain and reopen immutable source revisions under complete residency ide
 - bounded legacy DIRECT `.bin` / `.dpapi` object I/O during T02 migration
 - closed legacy revision root/shard/final/temporary filename grammar
 - stable physical inventory classification tags and canonical relative locators
+- deterministic legacy inventory ordering, counts and names/sizes/mtimes digest
+- legacy orphan checkpoint, canonical cursor, bounded page and exact JSON projection
 
 ## Forbidden ownership
 
@@ -31,6 +33,7 @@ Admit, retain and reopen immutable source revisions under complete residency ide
 - source identity or access authorization
 - secret acquisition, DPAPI/keyring operations or plaintext verification policy
 - preparation/materialization artifacts owned by `search-materializer`
+- data-root traversal, metadata acquisition or object-content hashing
 
 ## Allowed dependencies
 
@@ -52,19 +55,29 @@ is improved:
 - `publish_legacy_revision_object(platform, directory, final_name, temporary_name, bytes, maximum_bytes)`
 - `classify_legacy_revision_inventory_name(name)`
 - `legacy_revision_inventory_relative_locator(shard, name)`
+- `build_legacy_revision_inventory(shards, observations)`
+- `legacy_revision_inventory_checkpoint(catalog, backend, inventory)`
+- `plan_legacy_revision_inventory_page(inventory, checkpoint, cursor)`
+- `render_legacy_revision_inventory_report(namespace, catalog, inventory, page, evidence)`
 
 The legacy adapter treats bytes as opaque and accepts qualified native identity,
 locator and directory-durability observations through an injected platform. It
 must never infer source identity, decrypt/protect bytes, authorize a revision or
-write a preparation artifact. The pure inventory grammar owns only admitted
-legacy names, protection suffixes, classification tags and relative locators;
-filesystem traversal and catalog overlay remain injected. A racing final object
-is reused only after exact readback; a conflicting object is never replaced.
+write a preparation artifact. The pure inventory owner accepts only normalized
+qualified observations plus catalog-overlay classifications. Concrete SHA-256,
+filesystem traversal, metadata and content fingerprints remain injected by daemon
+composition. A racing final object is reused only after exact readback; a
+conflicting object is never replaced.
 
 ## Failure surface
 
 Use typed errors/reason codes. Relevant public reasons: `SOURCE_REVISION_UNAVAILABLE`, `RESIDENCY_DOMAIN_MISMATCH`, `CAS_INTEGRITY_MISMATCH`. Never turn a degraded or partial
 state into an apparent success. Possible publication followed by failed durability is outcome-unknown, not an ordinary retryable miss.
+
+Legacy inventory construction and paging preserve the existing bounded
+`DIRECT_MIGRATION_*` reason namespace. Malformed cursors are rejected before
+catalog or filesystem access. A stale checkpoint, zero-progress page, aggregate
+byte overflow or overlarge report fails closed and never authorizes deletion.
 
 ## Test seams and exit evidence
 
@@ -78,7 +91,8 @@ state into an apparent success. Possible publication followed by failed durabili
 - `legacy read rejects changed native identity and oversize before allocation`
 - `DIRECT revision paths compose this package while preparation artifacts do not`
 - `legacy revision final/temporary names and shard grammar fail closed`
-- `daemon contains no duplicate revision filename parser or classification tags`
+- `inventory order/digest/cursor/page/report bytes remain frozen`
+- `daemon contains no duplicate revision filename parser, inventory model, digest domains or report schema`
 
 Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
 but the writer does not edit another package opportunistically.
