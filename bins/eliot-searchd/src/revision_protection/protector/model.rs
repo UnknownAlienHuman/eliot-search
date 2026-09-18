@@ -8,8 +8,15 @@ use search_os_secrets::{
     legacy_revision_is_protected_object,
 };
 #[cfg(windows)]
+use search_os_secrets::{
+    derive_legacy_revision_dpapi_entropy,
+    derive_legacy_revision_key_binding,
+};
+#[cfg(windows)]
 use zeroize::{Zeroize, Zeroizing};
 
+#[cfg(windows)]
+use super::super::envelope::DirectRevisionDigest;
 #[cfg(windows)]
 use super::super::windows;
 use crate::sha256;
@@ -63,14 +70,16 @@ impl RevisionProtector {
             let root_secret = Zeroizing::new(
                 windows::load_or_create_root_secret(namespace_id, revision_root)?,
             );
-            let key_binding_digest = sha256::digest_parts(
-                b"eliot-search/revision-key-binding/v1",
-                &[&namespace_id, &root_secret[..]],
-            );
-            let entropy = sha256::digest_parts(
-                b"eliot-search/revision-dpapi-entropy/v1",
-                &[&namespace_id, &root_secret[..]],
-            );
+            let key_binding_digest =
+                derive_legacy_revision_key_binding::<DirectRevisionDigest>(
+                    &namespace_id,
+                    &root_secret,
+                );
+            let entropy =
+                derive_legacy_revision_dpapi_entropy::<DirectRevisionDigest>(
+                    &namespace_id,
+                    &root_secret,
+                );
             Ok(Self {
                 namespace_id,
                 key_binding_digest,

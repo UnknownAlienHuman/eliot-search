@@ -18,11 +18,54 @@ pub const LEGACY_REVISION_OUTER_HEADER_BYTES: usize =
 /// Exact authenticated inner header size before plaintext bytes.
 pub const LEGACY_REVISION_INNER_HEADER_BYTES: usize =
     8 + 4 + 32 + 32 + 32 + 32 + 8;
+/// Exact legacy platform root-secret byte length.
+pub const LEGACY_REVISION_ROOT_SECRET_BYTES: usize = 32;
+/// Frozen domain for binding a legacy envelope to one platform root secret.
+pub const LEGACY_REVISION_KEY_BINDING_DOMAIN: &[u8] =
+    b"eliot-search/revision-key-binding/v1";
+/// Frozen domain for deriving DPAPI optional entropy from the same root secret.
+pub const LEGACY_REVISION_DPAPI_ENTROPY_DOMAIN: &[u8] =
+    b"eliot-search/revision-dpapi-entropy/v1";
 
 /// Injected digest owner for validating exact plaintext bytes.
 pub trait LegacyRevisionContentDigest {
     /// Returns the exact 32-byte digest of `bytes`.
     fn digest(bytes: &[u8]) -> [u8; 32];
+}
+
+/// Injected multipart digest owner for legacy platform-key derivation.
+///
+/// The pure package owns domain separation and part ordering. The daemon keeps
+/// the concrete SHA-256 implementation and platform root-secret lifecycle.
+pub trait LegacyRevisionKeyDigest {
+    /// Digests one exact domain plus ordered byte-string parts.
+    fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32];
+}
+
+/// Derives the persisted-envelope key-binding identity for one namespace and
+/// exact platform root secret.
+#[must_use]
+pub fn derive_legacy_revision_key_binding<D: LegacyRevisionKeyDigest>(
+    namespace_id: &[u8; 32],
+    root_secret: &[u8; LEGACY_REVISION_ROOT_SECRET_BYTES],
+) -> [u8; 32] {
+    D::digest_parts(
+        LEGACY_REVISION_KEY_BINDING_DOMAIN,
+        &[namespace_id, root_secret],
+    )
+}
+
+/// Derives the DPAPI optional entropy for one namespace and exact platform root
+/// secret.
+#[must_use]
+pub fn derive_legacy_revision_dpapi_entropy<D: LegacyRevisionKeyDigest>(
+    namespace_id: &[u8; 32],
+    root_secret: &[u8; LEGACY_REVISION_ROOT_SECRET_BYTES],
+) -> [u8; 32] {
+    D::digest_parts(
+        LEGACY_REVISION_DPAPI_ENTROPY_DOMAIN,
+        &[namespace_id, root_secret],
+    )
 }
 
 /// Exact source-revision identity authenticated by both envelope layers.

@@ -1,8 +1,10 @@
-//! DIRECT compatibility translation around the package-owned envelope codec.
+//! DIRECT compatibility translation around package-owned legacy secret contracts.
 
 use search_os_secrets::LegacyRevisionEnvelopeError;
 #[cfg(windows)]
-use search_os_secrets::LegacyRevisionContentDigest;
+use search_os_secrets::{
+    LegacyRevisionContentDigest, LegacyRevisionKeyDigest,
+};
 
 use crate::sha256;
 
@@ -13,6 +15,13 @@ pub(super) struct DirectRevisionDigest;
 impl LegacyRevisionContentDigest for DirectRevisionDigest {
     fn digest(bytes: &[u8]) -> [u8; 32] {
         sha256::digest(bytes)
+    }
+}
+
+#[cfg(windows)]
+impl LegacyRevisionKeyDigest for DirectRevisionDigest {
+    fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+        sha256::digest_parts(domain, parts)
     }
 }
 

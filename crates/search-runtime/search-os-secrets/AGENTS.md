@@ -12,12 +12,13 @@ The bounded implementation packet is `swarm/assignments/search-os-secrets.md`.
 - guarded short-lived plaintext access inside the adapter boundary
 - creation, rotation and deletion receipts without secret material
 - pure finite byte-layout and binding validation for the legacy protected-revision compatibility envelope
+- pure domain separation and ordered transcript for legacy platform-key/DPAPI-entropy derivation
 
 ## Forbidden ownership
 
 - Qdrant/provider process supervision
 - source grants, sessions or policy decisions
-- filesystem, Credential Manager, DPAPI, RNG or other platform I/O
+- filesystem, Credential Manager, DPAPI, RNG, concrete hash implementation or other platform I/O
 - source identity, catalog currentness or plaintext-admission authority
 - plaintext through public serialization, Debug, logs, argv, config or telemetry
 - cross-user or cross-incarnation reuse

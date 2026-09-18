@@ -7,6 +7,8 @@ use search_os_secrets::{
     decode_legacy_revision_inner,
     encode_legacy_revision_inner, encode_legacy_revision_outer,
 };
+#[cfg(windows)]
+use zeroize::Zeroizing;
 
 use super::*;
 
@@ -127,7 +129,12 @@ fn real_dpapi_round_trip_preserves_empty_unicode_and_binary_bytes() {
         assert!(RevisionProtector::is_protected_object(&object));
         assert_eq!(
             protector
-                .unprotect(&object, &"33".repeat(32), &digest, u64::try_from(bytes.len()).expect("test length"))
+                .unprotect(
+                    &object,
+                    &"33".repeat(32),
+                    &digest,
+                    u64::try_from(bytes.len()).expect("test length"),
+                )
                 .expect("unprotect"),
             bytes
         );
