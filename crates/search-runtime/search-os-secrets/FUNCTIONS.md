@@ -1,10 +1,11 @@
 # Function contract — `search-os-secrets`
 
-**Status:** W1/P01 logical contract; no Windows secret backend or side-channel evidence exists.
+**Status:** finite secret lifecycle and pure legacy revision-envelope compatibility contract are
+implemented; qualified Windows effect composition and side-channel evidence remain separate work.
 
 This package owns opaque OS-user/installation/incarnation/purpose-bound local secret lifecycle. Public
-APIs never return plaintext secret bytes. Process launch, provider pairing, transport sessions and source
-access remain outside this package.
+APIs never serialize plaintext secret bytes. Process launch, provider pairing, transport sessions,
+platform I/O and source access remain outside this package.
 
 ## Global rules
 
@@ -13,7 +14,8 @@ access remain outside this package.
 - one reference binds OS user, installation, incarnation, purpose and authoritative generation;
 - Debug, Display, serde, errors, receipts, logs, metrics and panic text expose no secret material;
 - no secret enters command line, repository file, ordinary environment snapshot or crash metadata;
-- deletion claims logical unavailability from this store, not physical secure erasure.
+- deletion claims logical unavailability from this store, not physical secure erasure;
+- pure compatibility codecs perform no filesystem, credential, DPAPI, RNG, source-catalog or policy I/O.
 
 ## Configuration operations
 
@@ -51,7 +53,9 @@ Returns backend class, purpose, generation, binding digest and lifecycle state o
 
 ## Secret lifecycle
 
-### `create(binding, purpose, entropy_port, store_port, operation, deadline, cancel) -> Result<SecretCreateReceipt, SecretError>`
+### `create(binding, purpose, entropy_port, store_port, operation, deadline, cancel)`
+
+Returns `Result<SecretCreateReceipt, SecretError>`.
 
 Generates accepted-strength random material through an injected OS/CSPRNG port and durably stores it under
 the validated binding. Success returns a new opaque reference plus content-free receipt.
@@ -60,7 +64,9 @@ Cancellation before store mutation is clean. Timeout/cancellation after possible
 `SECRET_CREATE_OUTCOME_UNKNOWN`; recovery queries exact operation/binding/purpose identity and never
 creates an untracked second secret.
 
-### `with_secret(reference, expected_binding, purpose, consumer, deadline, cancel) -> Result<SecretUseReceipt, SecretError>`
+### `with_secret(reference, expected_binding, purpose, consumer, deadline, cancel)`
+
+Returns `Result<SecretUseReceipt, SecretError>`.
 
 Opens plaintext only inside a non-serializable guarded consumer invocation. The consumer receives a
 borrowed bounded secret view whose type cannot be returned, cloned into a public record or formatted.
@@ -104,6 +110,39 @@ removal or platform forensic erasure.
 Resolves unknown create/rotate/delete outcomes by exact backend operation metadata and generation state.
 Ambiguous or corrupt state locks/quarantines the reference rather than exposing/choosing material.
 
+## Legacy revision compatibility envelope
+
+These functions preserve the frozen DIRECT protected-object format while platform effects remain in
+qualified adapters. They create no source authority and do not decide whether plaintext may be admitted.
+
+### `encode_legacy_revision_inner(binding, plaintext) -> Result<Vec<u8>, LegacyRevisionEnvelopeError>`
+
+Emits the exact `ELSIN2\0\0` version-1 authenticated inner layout. Plaintext length must equal the
+immutable binding and remain at or below 64 MiB. The caller must validate the content digest before
+platform encryption.
+
+### `decode_legacy_revision_inner<D>(inner, binding) -> Result<&[u8], LegacyRevisionEnvelopeError>`
+
+Requires exact inner magic, version, namespace, key binding, revision identity, content digest and length.
+`D` is the injected concrete digest owner; the package does not choose or relabel a hash implementation.
+
+### `encode_legacy_revision_outer(binding, protected) -> Result<Vec<u8>, LegacyRevisionEnvelopeError>`
+
+Emits the exact `ELSRV2\0\0` version-1 outer layout around non-empty protected bytes, with the complete
+object bounded at 65 MiB.
+
+### `decode_legacy_revision_outer(object, expected, expected_key)`
+
+Returns `Result<(LegacyRevisionBinding, &[u8]), LegacyRevisionEnvelopeError>`.
+
+Checks exact framing, payload length, namespace, revision identity, content binding and optional qualified
+platform-key binding. Returning borrowed protected bytes is not decryption evidence.
+
+### `legacy_revision_is_protected_object(bytes) -> bool`
+
+Checks the outer format marker only. Marker presence never proves authentication, current policy,
+decryption or plaintext admission.
+
 ## Health and audit
 
 ### `health(reference_or_backend, expected_binding) -> SecretStoreHealth`
@@ -120,7 +159,8 @@ surfaces for canary bytes. It is evidence support, not a production secret scann
 
 All store operations use finite deadlines and stable mutation identities. A timeout after possible write
 is unknown until exact recovery. Crashes never permit fallback to another user/incarnation/purpose or
-return secret material in recovery diagnostics.
+return secret material in recovery diagnostics. Pure envelope operations have no external mutation and
+are deterministic over finite inputs.
 
 ## Typed failures
 
@@ -140,6 +180,17 @@ return secret material in recovery diagnostics.
 - `SECRET_OPERATION_CONFLICT`
 - `SECRET_USE_CANCELLED`
 - `SECRET_PLAINTEXT_FORBIDDEN`
+- `SECRET_LEGACY_REVISION_PROTECTED_PAYLOAD_INVALID`
+- `SECRET_LEGACY_REVISION_PLAINTEXT_TOO_LARGE`
+- `SECRET_LEGACY_REVISION_PROTECTED_FORMAT_REQUIRED`
+- `SECRET_LEGACY_REVISION_ENVELOPE_INVALID`
+- `SECRET_LEGACY_REVISION_NAMESPACE_MISMATCH`
+- `SECRET_LEGACY_REVISION_KEY_BINDING_MISMATCH`
+- `SECRET_LEGACY_REVISION_BINDING_MISMATCH`
+- `SECRET_LEGACY_REVISION_INNER_ENVELOPE_INVALID`
+- `SECRET_LEGACY_REVISION_INNER_BINDING_MISMATCH`
+- `SECRET_LEGACY_REVISION_LENGTH_MISMATCH`
+- `SECRET_LEGACY_REVISION_CONTENT_MISMATCH`
 
 ## Required tests / qualification evidence
 
@@ -153,5 +204,7 @@ return secret material in recovery diagnostics.
 - lease TTL/purpose/consumer and non-serialization bounds;
 - deletion idempotency and explicit secure-erasure nonclaim;
 - backend lock/corruption produces locked/quarantined state without existence leakage;
+- legacy envelope frozen bytes, truncation, field mutation, wrong namespace/key/revision/content/length and
+  oversize/empty protected payload fail closed;
 - `secrets` configuration plaintext/ref/change-policy fixtures;
 - fake entropy/store/clock/consumer ports prove no process/session ownership.
