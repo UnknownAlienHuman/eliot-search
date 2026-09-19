@@ -1,86 +1,72 @@
-//! DPAPI protect/unprotect translation with zeroized native outputs.
+//! DIRECT compatibility translation around the platform DPAPI owner.
 
-use core::ptr::{null, null_mut};
-
-use super::ffi::{
-    CRYPTPROTECT_UI_FORBIDDEN, DataBlob, LocalAllocation,
-    crypt_protect_data, crypt_unprotect_data, get_last_error,
+use search_os_secrets_windows::{
+    LegacyRevisionDpapiError, protect_legacy_revision_current_user,
+    unprotect_legacy_revision_current_user,
 };
 
 pub(super) fn protect_data(
     input: &mut [u8],
     entropy: &[u8; 32],
 ) -> Result<Vec<u8>, String> {
-    let input_len = u32::try_from(input.len())
-        .map_err(|_| "DIRECT_DPAPI_INPUT_TOO_LARGE".to_owned())?;
-    let mut entropy_copy = *entropy;
-    let input_blob = DataBlob {
-        byte_length: input_len,
-        bytes: input.as_mut_ptr(),
-    };
-    let entropy_blob = DataBlob {
-        byte_length: u32::try_from(entropy_copy.len())
-            .map_err(|_| "DIRECT_DPAPI_INPUT_TOO_LARGE".to_owned())?,
-        bytes: entropy_copy.as_mut_ptr(),
-    };
-    let mut output = DataBlob {
-        byte_length: 0,
-        bytes: null_mut(),
-    };
-    let success = unsafe {
-        crypt_protect_data(
-            &raw const input_blob,
-            null(),
-            &raw const entropy_blob,
-            null_mut(),
-            null_mut(),
-            CRYPTPROTECT_UI_FORBIDDEN,
-            &raw mut output,
-        )
-    };
-    super::super::zeroize(&mut entropy_copy);
-    if success == 0 {
-        let error = unsafe { get_last_error() };
-        return Err(format!("DIRECT_DPAPI_PROTECT_FAILED:{error}"));
-    }
-    LocalAllocation(output).into_vec(super::super::MAX_PROTECTED_OBJECT_BYTES)
+    protect_legacy_revision_current_user(input, entropy).map_err(direct_reason)
 }
 
 pub(super) fn unprotect_data(
     input: &mut [u8],
     entropy: &[u8; 32],
 ) -> Result<Vec<u8>, String> {
-    let input_len = u32::try_from(input.len())
-        .map_err(|_| "DIRECT_DPAPI_INPUT_TOO_LARGE".to_owned())?;
-    let mut entropy_copy = *entropy;
-    let input_blob = DataBlob {
-        byte_length: input_len,
-        bytes: input.as_mut_ptr(),
-    };
-    let entropy_blob = DataBlob {
-        byte_length: u32::try_from(entropy_copy.len())
-            .map_err(|_| "DIRECT_DPAPI_INPUT_TOO_LARGE".to_owned())?,
-        bytes: entropy_copy.as_mut_ptr(),
-    };
-    let mut output = DataBlob {
-        byte_length: 0,
-        bytes: null_mut(),
-    };
-    let success = unsafe {
-        crypt_unprotect_data(
-            &raw const input_blob,
-            null_mut(),
-            &raw const entropy_blob,
-            null_mut(),
-            null_mut(),
-            CRYPTPROTECT_UI_FORBIDDEN,
-            &raw mut output,
-        )
-    };
-    super::super::zeroize(&mut entropy_copy);
-    if success == 0 {
-        let error = unsafe { get_last_error() };
-        return Err(format!("DIRECT_DPAPI_UNPROTECT_FAILED:{error}"));
+    unprotect_legacy_revision_current_user(input, entropy).map_err(direct_reason)
+}
+
+fn direct_reason(error: LegacyRevisionDpapiError) -> String {
+    match error {
+        LegacyRevisionDpapiError::UnsupportedPlatform => {
+            "DIRECT_REVISION_ENCRYPTION_UNAVAILABLE".to_owned()
+        }
+        LegacyRevisionDpapiError::InputTooLarge => {
+            "DIRECT_DPAPI_INPUT_TOO_LARGE".to_owned()
+        }
+        LegacyRevisionDpapiError::OutputTooLarge => {
+            "DIRECT_DPAPI_OUTPUT_TOO_LARGE".to_owned()
+        }
+        LegacyRevisionDpapiError::InvalidPlatformOutput => {
+            "DIRECT_DPAPI_OUTPUT_INVALID".to_owned()
+        }
+        LegacyRevisionDpapiError::ProtectFailed(code) => {
+            format!("DIRECT_DPAPI_PROTECT_FAILED:{code}")
+        }
+        LegacyRevisionDpapiError::UnprotectFailed(code) => {
+            format!("DIRECT_DPAPI_UNPROTECT_FAILED:{code}")
+        }
     }
-    LocalAllocation(output).into_vec(super::super::MAX_PROTECTED_OBJECT_BYTES)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn package_failures_preserve_direct_compatibility_reasons() {
+        assert_eq!(
+            direct_reason(LegacyRevisionDpapiError::InputTooLarge),
+            "DIRECT_DPAPI_INPUT_TOO_LARGE"
+        );
+        assert_eq!(
+            direct_reason(LegacyRevisionDpapiError::OutputTooLarge),
+            "DIRECT_DPAPI_OUTPUT_TOO_LARGE"
+        );
+        assert_eq!(
+            direct_reason(LegacyRevisionDpapiError::InvalidPlatformOutput),
+            "DIRECT_DPAPI_OUTPUT_INVALID"
+        );
+        assert_eq!(
+            direct_reason(LegacyRevisionDpapiError::ProtectFailed(5)),
+            "DIRECT_DPAPI_PROTECT_FAILED:5"
+        );
+        assert_eq!(
+            direct_reason(LegacyRevisionDpapiError::UnprotectFailed(13)),
+            "DIRECT_DPAPI_UNPROTECT_FAILED:13"
+        );
+    }
 }

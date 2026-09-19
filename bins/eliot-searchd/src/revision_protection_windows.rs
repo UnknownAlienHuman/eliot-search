@@ -1,9 +1,12 @@
 #![allow(unsafe_code)]
 
-//! Windows-native revision protection adapter.
+//! Windows-native revision credential and inventory composition.
 //!
-//! Raw FFI ownership, credential lifecycle, DPAPI translation, protected
-//! object inventory and test-only cleanup remain private and separately bounded.
+//! Credential Manager, CSPRNG, cross-process vault locking, protected-object
+//! inventory and test-only cleanup remain private here. Native DPAPI execution
+//! and every DPAPI-owned `LocalAlloc` buffer belong to
+//! `search-os-secrets-windows`; this module retains only DIRECT reason
+//! translation and higher-level daemon composition.
 
 mod credential;
 mod dpapi;

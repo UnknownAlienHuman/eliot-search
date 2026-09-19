@@ -159,6 +159,11 @@ search-continuation = { workspace = true, optional = true }
 search-retention = { workspace = true, optional = true }
 search-eval = { workspace = true, optional = true }
 
+[target.'cfg(windows)'.dependencies]
+# Concrete current-user DPAPI effect owner. The daemon retains only credential,
+# inventory and DIRECT compatibility composition around this platform adapter.
+search-os-secrets-windows = { path = "../../crates/search-runtime/search-os-secrets-windows" }
+
 [dev-dependencies]
 # Windows/all-features daemon parity lane over the exact already-locked
 # qdrant-client transport. This adds no production runtime or new package.

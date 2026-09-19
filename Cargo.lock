@@ -386,6 +386,7 @@ dependencies = [
  "search-lexical",
  "search-materializer",
  "search-os-secrets",
+ "search-os-secrets-windows",
  "search-overlay",
  "search-point-identity",
  "search-ports",

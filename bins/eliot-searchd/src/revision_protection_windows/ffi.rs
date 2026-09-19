@@ -1,13 +1,11 @@
-//! Raw Windows APIs and zeroizing native allocation owners.
+//! Raw Windows credential, RNG and cross-process vault APIs.
 
 use core::ffi::c_void;
 use core::ptr::{self, null_mut};
-use std::slice;
 
 pub(super) const CRED_TYPE_GENERIC: u32 = 1;
 pub(super) const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
 pub(super) const ERROR_NOT_FOUND: u32 = 1_168;
-pub(super) const CRYPTPROTECT_UI_FORBIDDEN: u32 = 0x0000_0001;
 pub(super) const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
 pub(super) const ROOT_SECRET_BYTES: usize = 32;
 pub(super) const MAX_CREDENTIAL_BLOB_BYTES: usize = 5 * 512;
@@ -41,12 +39,6 @@ pub(super) struct CredentialW {
     pub(super) user_name: *mut u16,
 }
 
-#[repr(C)]
-pub(super) struct DataBlob {
-    pub(super) byte_length: u32,
-    pub(super) bytes: *mut u8,
-}
-
 #[link(name = "Advapi32")]
 unsafe extern "system" {
     #[link_name = "CredReadW"]
@@ -72,36 +64,10 @@ unsafe extern "system" {
     fn cred_free(buffer: *mut c_void);
 }
 
-#[link(name = "Crypt32")]
-unsafe extern "system" {
-    #[link_name = "CryptProtectData"]
-    pub(super) fn crypt_protect_data(
-        data_in: *const DataBlob,
-        description: *const u16,
-        optional_entropy: *const DataBlob,
-        reserved: *mut c_void,
-        prompt: *mut c_void,
-        flags: u32,
-        data_out: *mut DataBlob,
-    ) -> i32;
-    #[link_name = "CryptUnprotectData"]
-    pub(super) fn crypt_unprotect_data(
-        data_in: *const DataBlob,
-        description: *mut *mut u16,
-        optional_entropy: *const DataBlob,
-        reserved: *mut c_void,
-        prompt: *mut c_void,
-        flags: u32,
-        data_out: *mut DataBlob,
-    ) -> i32;
-}
-
 #[link(name = "Kernel32")]
 unsafe extern "system" {
     #[link_name = "GetLastError"]
     pub(super) fn get_last_error() -> u32;
-    #[link_name = "LocalFree"]
-    fn local_free(memory: *mut c_void) -> *mut c_void;
     #[link_name = "CreateMutexW"]
     fn create_mutex_w(
         security_attributes: *mut c_void,
@@ -134,6 +100,7 @@ impl Drop for CredentialAllocation {
         if self.0.is_null() {
             return;
         }
+        // SAFETY: `self.0` is returned by CredReadW and owned exactly once.
         unsafe {
             let credential = &mut *self.0;
             let size = usize::try_from(credential.credential_blob_size)
@@ -147,44 +114,6 @@ impl Drop for CredentialAllocation {
     }
 }
 
-pub(super) struct LocalAllocation(pub(super) DataBlob);
-
-impl LocalAllocation {
-    pub(super) fn into_vec(
-        mut self,
-        max_bytes: usize,
-    ) -> Result<Vec<u8>, String> {
-        let length = usize::try_from(self.0.byte_length)
-            .map_err(|_| "DIRECT_DPAPI_OUTPUT_TOO_LARGE".to_owned())?;
-        if self.0.bytes.is_null() || length == 0 || length > max_bytes {
-            return Err("DIRECT_DPAPI_OUTPUT_INVALID".to_owned());
-        }
-        let output = unsafe { slice::from_raw_parts(self.0.bytes, length) }.to_vec();
-        unsafe {
-            ptr::write_bytes(self.0.bytes, 0, length);
-            let _ = local_free(self.0.bytes.cast());
-        }
-        self.0.bytes = null_mut();
-        self.0.byte_length = 0;
-        Ok(output)
-    }
-}
-
-impl Drop for LocalAllocation {
-    fn drop(&mut self) {
-        if self.0.bytes.is_null() {
-            return;
-        }
-        let length = usize::try_from(self.0.byte_length).unwrap_or(0);
-        unsafe {
-            if length > 0 {
-                ptr::write_bytes(self.0.bytes, 0, length);
-            }
-            let _ = local_free(self.0.bytes.cast());
-        }
-    }
-}
-
 /// Held cross-process vault mutex. Released and closed on drop.
 pub(super) struct VaultLock(*mut c_void);
 
@@ -193,6 +122,7 @@ impl Drop for VaultLock {
         if self.0.is_null() {
             return;
         }
+        // SAFETY: the handle is a live mutex handle owned by this guard.
         unsafe {
             release_mutex(self.0);
             close_handle(self.0);
@@ -202,15 +132,19 @@ impl Drop for VaultLock {
 
 pub(super) fn acquire_vault_lock() -> Result<VaultLock, String> {
     let name = wide(VAULT_MUTEX_NAME);
+    // SAFETY: null security attributes and a terminated name are valid inputs.
     let handle = unsafe { create_mutex_w(null_mut(), 0, name.as_ptr()) };
     if handle.is_null() {
+        // SAFETY: GetLastError has no preconditions.
         let error = unsafe { get_last_error() };
         return Err(format!("DIRECT_REVISION_VAULT_LOCK_FAILED:{error}"));
     }
+    // SAFETY: `handle` is a live mutex handle.
     let status = unsafe { wait_for_single_object(handle, VAULT_LOCK_WAIT_MILLIS) };
     if status == WAIT_OBJECT_0 || status == WAIT_ABANDONED {
         return Ok(VaultLock(handle));
     }
+    // SAFETY: unsuccessful acquisition leaves one owned live handle to close.
     unsafe {
         close_handle(handle);
     }

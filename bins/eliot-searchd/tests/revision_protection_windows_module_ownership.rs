@@ -4,6 +4,14 @@ fn crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+fn workspace_root() -> PathBuf {
+    crate_root()
+        .parent()
+        .and_then(Path::parent)
+        .expect("daemon is a workspace member")
+        .to_owned()
+}
+
 fn read(root: &Path, relative: &str) -> String {
     std::fs::read_to_string(root.join(relative))
         .unwrap_or_else(|error| panic!("cannot read {relative}: {error}"))
@@ -21,11 +29,14 @@ fn revision_protection_windows_entry_is_thin() {
     assert!(entry.contains("mod test_cleanup;"));
     assert!(entry.contains("pub(super) use credential::load_or_create_root_secret;"));
     assert!(entry.contains("pub(super) use dpapi::{protect_data, unprotect_data};"));
-    assert!(entry.len() < 2_500, "entry grew to {} bytes", entry.len());
+    assert!(entry.len() < 3_000, "entry grew to {} bytes", entry.len());
     for forbidden in [
         "unsafe extern",
         "CredentialW",
-        "crypt_protect_data",
+        "CryptProtectData",
+        "CryptUnprotectData",
+        "LocalFree",
+        "DataBlob",
         "pub(super) fn read_credential",
         "contains_protected_objects",
         "impl super::RevisionProtector",
@@ -38,7 +49,70 @@ fn revision_protection_windows_entry_is_thin() {
 }
 
 #[test]
-fn windows_revision_protection_responsibilities_are_bounded() {
+fn native_dpapi_and_local_alloc_have_one_platform_package_owner() {
+    let workspace = workspace_root();
+    let package = [
+        read(
+            &workspace,
+            "crates/search-runtime/search-os-secrets-windows/src/lib.rs",
+        ),
+        read(
+            &workspace,
+            "crates/search-runtime/search-os-secrets-windows/src/model.rs",
+        ),
+        read(
+            &workspace,
+            "crates/search-runtime/search-os-secrets-windows/src/dpapi.rs",
+        ),
+    ]
+    .join("\n");
+    let daemon_dpapi = read(
+        &workspace,
+        "bins/eliot-searchd/src/revision_protection_windows/dpapi.rs",
+    );
+    let daemon_ffi = read(
+        &workspace,
+        "bins/eliot-searchd/src/revision_protection_windows/ffi.rs",
+    );
+    let manifest = read(&workspace, "bins/eliot-searchd/Cargo.toml");
+
+    for marker in [
+        "CryptProtectData",
+        "CryptUnprotectData",
+        "LocalFree",
+        "struct DataBlob",
+        "struct NativeOutput",
+        "pub fn protect_legacy_revision_current_user(",
+        "pub fn unprotect_legacy_revision_current_user(",
+        "CRYPTPROTECT_UI_FORBIDDEN",
+    ] {
+        assert!(package.contains(marker), "platform package lost owner {marker}");
+    }
+    assert!(package.contains("impl Drop for NativeOutput"));
+    assert!(package.contains("clear_and_free"));
+
+    for forbidden in [
+        "CryptProtectData",
+        "CryptUnprotectData",
+        "LocalFree",
+        "DataBlob",
+        "NativeOutput",
+        "unsafe extern",
+    ] {
+        assert!(
+            !daemon_dpapi.contains(forbidden) && !daemon_ffi.contains(forbidden),
+            "daemon restored DPAPI owner {forbidden}"
+        );
+    }
+    assert!(daemon_dpapi.contains("protect_legacy_revision_current_user"));
+    assert!(daemon_dpapi.contains("unprotect_legacy_revision_current_user"));
+    assert!(daemon_dpapi.contains("DIRECT_DPAPI_PROTECT_FAILED"));
+    assert!(daemon_dpapi.contains("DIRECT_DPAPI_UNPROTECT_FAILED"));
+    assert!(manifest.contains("search-os-secrets-windows = { path ="));
+}
+
+#[test]
+fn remaining_windows_revision_responsibilities_are_bounded() {
     let root = crate_root();
     let owners = [
         (
@@ -48,10 +122,6 @@ fn windows_revision_protection_responsibilities_are_bounded() {
         (
             "src/revision_protection_windows/credential.rs",
             "pub(super) fn load_or_create_root_secret(",
-        ),
-        (
-            "src/revision_protection_windows/dpapi.rs",
-            "pub(super) fn protect_data(",
         ),
         (
             "src/revision_protection_windows/inventory.rs",
@@ -92,18 +162,23 @@ fn windows_revision_protection_responsibilities_are_bounded() {
     for api in [
         "CredReadW",
         "CredWriteW",
-        "CryptProtectData",
-        "CryptUnprotectData",
         "BCryptGenRandom",
         "CreateMutexW",
         "WaitForSingleObject",
-        "LocalFree",
     ] {
-        assert!(ffi.contains(api), "lost native API {api}");
+        assert!(ffi.contains(api), "lost remaining native API {api}");
     }
     assert!(ffi.contains("impl Drop for CredentialAllocation"));
-    assert!(ffi.contains("impl Drop for LocalAllocation"));
     assert!(ffi.contains("impl Drop for VaultLock"));
+    for moved in [
+        "CryptProtectData",
+        "CryptUnprotectData",
+        "LocalFree",
+        "LocalAllocation",
+        "DataBlob",
+    ] {
+        assert!(!ffi.contains(moved), "daemon FFI retained moved owner {moved}");
+    }
 
     let credential = read(&root, "src/revision_protection_windows/credential.rs");
     assert!(credential.contains("contains_protected_objects(revision_root)?"));
@@ -112,12 +187,6 @@ fn windows_revision_protection_responsibilities_are_bounded() {
     assert!(credential.contains("DIRECT_REVISION_KEY_WRITE_OUTCOME_UNKNOWN"));
     assert!(credential.contains("constant_time_equal"));
     assert!(!credential.contains("CryptProtectData"));
-
-    let dpapi = read(&root, "src/revision_protection_windows/dpapi.rs");
-    assert!(dpapi.contains("CRYPTPROTECT_UI_FORBIDDEN"));
-    assert!(dpapi.contains("LocalAllocation(output).into_vec"));
-    assert!(dpapi.contains("super::super::zeroize(&mut entropy_copy)"));
-    assert!(!dpapi.contains("CredReadW"));
 
     let inventory = read(&root, "src/revision_protection_windows/inventory.rs");
     assert!(inventory.contains("MAX_OBJECT_SCAN: usize = 2_000_000"));
@@ -158,6 +227,8 @@ fn windows_revision_protection_contracts_stay_closed() {
     let dpapi = read(&root, "src/revision_protection_windows/dpapi.rs");
     for reason in [
         "DIRECT_DPAPI_INPUT_TOO_LARGE",
+        "DIRECT_DPAPI_OUTPUT_TOO_LARGE",
+        "DIRECT_DPAPI_OUTPUT_INVALID",
         "DIRECT_DPAPI_PROTECT_FAILED",
         "DIRECT_DPAPI_UNPROTECT_FAILED",
     ] {
@@ -165,8 +236,8 @@ fn windows_revision_protection_contracts_stay_closed() {
     }
 
     let existing = read(&root, "src/revision_protection_windows/existing.rs");
-    assert!(existing.contains("eliot-search/revision-key-binding/v1"));
-    assert!(existing.contains("eliot-search/revision-dpapi-entropy/v1"));
+    assert!(existing.contains("derive_legacy_revision_key_binding"));
+    assert!(existing.contains("derive_legacy_revision_dpapi_entropy"));
     assert!(!existing.contains("write_credential"));
     assert!(!existing.contains("contains_protected_objects"));
 }
