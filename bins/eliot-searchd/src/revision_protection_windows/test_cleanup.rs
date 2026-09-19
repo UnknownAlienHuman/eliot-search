@@ -1,58 +1,21 @@
-//! Test-only Credential Manager cleanup with bounded verified deletion.
+//! Test-only namespace parsing and package-owned Credential Manager cleanup.
 
 use std::fs;
 use std::path::Path;
 
-use search_os_secrets_windows::load_existing_legacy_revision_root_secret;
-
-use super::ffi::{
-    CRED_TYPE_GENERIC, acquire_vault_lock, cred_delete_w, wide,
-};
+use search_os_secrets_windows::delete_legacy_revision_root_secret_for_test;
 
 pub(super) fn delete_test_credential_for_data_root(data_root: &Path) {
     let Some((namespace_id, namespace_hex)) = read_test_namespace(data_root) else {
         return;
     };
-    if !delete_test_credential_verified(&namespace_id, &namespace_hex) {
+    if let Err(error) = delete_legacy_revision_root_secret_for_test(&namespace_id) {
         eprintln!(
-            "ELIOT_TEST_CLEANUP: revision-key credential still present after bounded retries: root={} namespace={namespace_hex}",
+            "ELIOT_TEST_CLEANUP: revision-key credential cleanup unresolved: root={} namespace={namespace_hex} reason={}",
             data_root.display(),
+            error.code(),
         );
     }
-}
-
-fn delete_test_credential_verified(
-    namespace_id: &[u8; 32],
-    namespace_hex: &str,
-) -> bool {
-    let target = wide(&format!("ELIOT Search/revision-key/{namespace_hex}"));
-    for attempt in 0..16_u32 {
-        let Ok(_lock) = acquire_vault_lock() else {
-            std::thread::sleep(core::time::Duration::from_millis(
-                10_u64 << attempt.min(7),
-            ));
-            continue;
-        };
-        // SAFETY: target is NUL-terminated and cleanup is limited to an exact
-        // test-derived namespace credential.
-        unsafe {
-            let _ = cred_delete_w(target.as_ptr(), CRED_TYPE_GENERIC, 0);
-        }
-        if credential_absent(namespace_id) {
-            return true;
-        }
-        std::thread::sleep(core::time::Duration::from_millis(
-            10_u64 << attempt.min(7),
-        ));
-    }
-    false
-}
-
-fn credential_absent(namespace_id: &[u8; 32]) -> bool {
-    matches!(
-        load_existing_legacy_revision_root_secret(namespace_id),
-        Ok(None)
-    )
 }
 
 /// Reads this data root's namespace hex without creating anything.

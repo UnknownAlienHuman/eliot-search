@@ -1,17 +1,14 @@
-#![allow(unsafe_code)]
-
 //! Windows revision-protection composition.
 //!
-//! Credential Manager, CSPRNG, vault locking, DPAPI execution, and their native
-//! allocations belong to `search-os-secrets-windows`. This module retains only
-//! protected-object inventory, frozen envelope/digest composition, historical
-//! `DIRECT_*` reason translation, and test-only credential cleanup.
+//! Credential Manager, CSPRNG, vault locking, DPAPI execution, native
+//! allocations, and bounded test credential deletion belong to
+//! `search-os-secrets-windows`. This module retains protected-object inventory,
+//! frozen envelope/digest composition, historical `DIRECT_*` reason translation,
+//! namespace-file parsing, and test cleanup orchestration.
 
 mod credential;
 mod dpapi;
 mod existing;
-#[cfg(test)]
-mod ffi;
 mod inventory;
 #[cfg(test)]
 mod test_cleanup;

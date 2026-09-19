@@ -164,6 +164,10 @@ search-eval = { workspace = true, optional = true }
 # inventory and DIRECT compatibility composition around this platform adapter.
 search-os-secrets-windows = { path = "../../crates/search-runtime/search-os-secrets-windows" }
 
+[target.'cfg(windows)'.dev-dependencies]
+# Native test cleanup is feature-gated and absent from production daemon builds.
+search-os-secrets-windows = { path = "../../crates/search-runtime/search-os-secrets-windows", features = ["test-credential-cleanup"] }
+
 [dev-dependencies]
 # Windows/all-features daemon parity lane over the exact already-locked
 # qdrant-client transport. This adds no production runtime or new package.

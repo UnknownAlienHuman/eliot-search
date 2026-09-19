@@ -22,7 +22,7 @@ concurrent process that published a key after the initial read therefore wins;
 a stale generated candidate never overwrites that key. Every successful write
 must read back the exact same 32 bytes before the secret is returned.
 
-Three bounded public surfaces are available:
+Three production surfaces are available:
 
 - legacy revision root-secret operations use `LegacyRevisionRootSecret`,
   `LegacyRevisionRootSecretRequirement`, and the two load functions;
@@ -31,6 +31,12 @@ Three bounded public surfaces are available:
 - legacy DIRECT revision compatibility uses exact inner-envelope bytes and an
   already-derived 32-byte optional-entropy value.
 
+The optional `test-credential-cleanup` feature adds one exact-namespace cleanup
+operation for native test harnesses. It serializes with production key creation,
+uses the same package-owned target grammar and vault mutex, and returns success
+only after Credential Manager readback proves absence. Production daemon builds
+do not enable this feature.
+
 Secret owners are non-clone, redact `Debug`, and overwrite their Rust buffers on
 drop. Native Credential Manager and decrypted DPAPI allocations are cleared
 before release when their reported length is within the admitted bound.
@@ -38,5 +44,5 @@ Oversized invalid native output is released without an unbounded memory clear.
 
 The pure envelope, root-secret shape, and key-derivation contracts remain in
 `search-os-secrets`. The daemon retains source/catalog authority, protected-object
-inventory, concrete SHA-256, persistence, and translation to historical
-`DIRECT_*` compatibility reasons.
+inventory, concrete SHA-256, persistence, namespace-file parsing, and translation
+to historical `DIRECT_*` compatibility reasons.
