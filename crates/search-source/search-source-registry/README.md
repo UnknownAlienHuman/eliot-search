@@ -14,11 +14,17 @@ and namespace ownership. Admission rules are evaluated by
 - source-owner/cutover state
 - deterministic schema, replay validation and append planning for the legacy
   DIRECT source-event journal while migration remains incomplete
+- exact pure schema and codec for the legacy `control/source-roots.v1`
+  registration catalog
 
-The legacy journal compatibility model is pure and filesystem-free.
-`eliot-searchd` supplies the qualified digest primitive and owns data-root
-locking, safe reads, durable append, exact readback and quarantine. This keeps
-daemon composition from becoming a second source-registry implementation.
+The legacy compatibility models are pure and filesystem-free.
+`eliot-searchd` supplies qualified digest primitives and owns data-root locking,
+platform path validation, safe reads, durable publication, exact readback and
+crash recovery. For `source-roots.v1`, this crate owns only the frozen header,
+line framing, duplicate detection, and finite file/root bounds; locator contents
+remain opaque until daemon path qualification. This keeps daemon composition
+from becoming a second source-registry schema owner without giving the registry
+filesystem authority.
 
 ## Must not own
 
@@ -26,7 +32,8 @@ daemon composition from becoming a second source-registry implementation.
 - admission-rule implementation
 - access authority, ranking or Qdrant transport
 - concrete redb access
-- data-root filesystem mutation or journal file publication
+- data-root filesystem traversal or mutation
+- platform path canonicalization, overlap checks or journal/catalog publication
 
 - **Delivery wave:** W2 / P03
 - **Soft source-line target:** 6,500

@@ -4,6 +4,14 @@ fn crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+fn workspace_root() -> PathBuf {
+    crate_root()
+        .parent()
+        .and_then(Path::parent)
+        .expect("daemon is a workspace member")
+        .to_owned()
+}
+
 fn read(root: &Path, relative: &str) -> String {
     std::fs::read_to_string(root.join(relative))
         .unwrap_or_else(|error| panic!("cannot read {relative}: {error}"))
@@ -44,6 +52,59 @@ fn source_roots_entry_and_kernel_are_thin() {
 }
 
 #[test]
+fn legacy_source_root_catalog_schema_has_one_registry_owner() {
+    let workspace = workspace_root();
+    let package = read(
+        &workspace,
+        "crates/search-source/search-source-registry/src/legacy_root_catalog.rs",
+    );
+    let daemon_spec = read(
+        &workspace,
+        "bins/eliot-searchd/src/source_roots/kernel/spec.rs",
+    );
+    let daemon_registry = read(
+        &workspace,
+        "bins/eliot-searchd/src/source_roots/kernel/registry.rs",
+    );
+
+    for marker in [
+        "# ELIOT Search source roots v1",
+        "pub const LEGACY_SOURCE_ROOT_CATALOG_MAX_ROOTS: usize = 32",
+        "pub const LEGACY_SOURCE_ROOT_CATALOG_MAX_BYTES: usize = 64 * 1024",
+        "pub fn decode_legacy_source_root_catalog(",
+        "pub fn encode_legacy_source_root_catalog<I, S>(",
+        "LegacySourceRootCatalogError::DuplicateRoot",
+    ] {
+        assert!(package.contains(marker), "registry package lost owner {marker}");
+    }
+    for forbidden in [
+        "std::fs",
+        "std::path",
+        "OpenOptions",
+        "canonicalize",
+        "symlink_metadata",
+        "source bytes",
+        "qdrant_client",
+    ] {
+        assert!(
+            !package.contains(forbidden),
+            "pure legacy root codec acquired forbidden token {forbidden}"
+        );
+    }
+
+    assert!(daemon_spec.contains(
+        "LEGACY_SOURCE_ROOT_CATALOG_MAX_ROOTS as MAX_SOURCE_ROOTS"
+    ));
+    assert!(daemon_spec.contains(
+        "LEGACY_SOURCE_ROOT_CATALOG_MAX_BYTES as MAX_SOURCE_ROOT_FILE_BYTES"
+    ));
+    assert!(!daemon_spec.contains("# ELIOT Search source roots v1"));
+    assert!(daemon_registry.contains("decode_legacy_source_root_catalog"));
+    assert!(daemon_registry.contains("encode_legacy_source_root_catalog"));
+    assert!(!daemon_registry.contains("# ELIOT Search source roots v1"));
+}
+
+#[test]
 fn source_root_responsibilities_stay_separated() {
     let root = crate_root();
     let owners = [
@@ -79,7 +140,7 @@ fn source_root_responsibilities_stay_separated() {
     let spec = read(&root, "src/source_roots/kernel/spec.rs");
     assert!(spec.contains("MAX_SOURCE_ROOTS"));
     assert!(spec.contains("MAX_WATCHER_HINTS"));
-    assert!(spec.contains("# ELIOT Search source roots v1"));
+    assert!(!spec.contains("# ELIOT Search source roots v1"));
     assert!(!spec.contains("std::fs"));
 
     let path = read(&root, "src/source_roots/kernel/path.rs");
@@ -94,6 +155,8 @@ fn source_root_responsibilities_stay_separated() {
     assert!(registry.contains("create_new(true)"));
     assert!(registry.contains("UpdateOutcomeUnknown"));
     assert!(registry.contains("pub fn migration_input"));
+    assert!(registry.contains("decode_legacy_source_root_catalog"));
+    assert!(registry.contains("encode_legacy_source_root_catalog"));
     assert!(!registry.contains("mark_reconciled_synced"));
 
     let catalog = read(&root, "src/source_roots/kernel/catalog.rs");

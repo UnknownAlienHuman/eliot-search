@@ -5,8 +5,9 @@
 //! transitions. It persists accepted identity/admission decisions through the
 //! vendor-neutral [`error::RegistryControlPort`] and never reimplements those
 //! semantics. Canonical product operations enter through [`api`]. The bounded
-//! legacy DIRECT journal compatibility surface is re-exported at the crate root;
-//! the daemon remains the bounded filesystem integration owner.
+//! legacy DIRECT journal and source-root catalog compatibility surfaces are
+//! re-exported at the crate root; the daemon remains the bounded filesystem
+//! integration owner.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -31,6 +32,7 @@
 pub mod api;
 pub mod cutover;
 pub mod error;
+pub mod legacy_root_catalog;
 pub mod membership;
 pub mod portfolio;
 pub mod recovery;
@@ -45,6 +47,11 @@ mod source_legacy_direct;
 pub use api::{
     DEFAULT_REGISTRY_LIMITS, InMemoryRegistryJournal, JournalEntryKind, RegistryControlPort,
     RegistryError, RegistryJournalEntry, RegistryLimits, RegistryPortError,
+};
+pub use legacy_root_catalog::{
+    LEGACY_SOURCE_ROOT_CATALOG_HEADER, LEGACY_SOURCE_ROOT_CATALOG_MAX_BYTES,
+    LEGACY_SOURCE_ROOT_CATALOG_MAX_ROOTS, LegacySourceRootCatalogError,
+    decode_legacy_source_root_catalog, encode_legacy_source_root_catalog,
 };
 pub use membership::{MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership};
 pub use portfolio::PortfolioItem;
