@@ -1,16 +1,16 @@
 #![allow(unsafe_code)]
 
-//! Windows-native revision credential and inventory composition.
+//! Windows revision-protection composition.
 //!
-//! Credential Manager, CSPRNG, cross-process vault locking, protected-object
-//! inventory and test-only cleanup remain private here. Native DPAPI execution
-//! and every DPAPI-owned `LocalAlloc` buffer belong to
-//! `search-os-secrets-windows`; this module retains only DIRECT reason
-//! translation and higher-level daemon composition.
+//! Credential Manager, CSPRNG, vault locking, DPAPI execution, and their native
+//! allocations belong to `search-os-secrets-windows`. This module retains only
+//! protected-object inventory, frozen envelope/digest composition, historical
+//! `DIRECT_*` reason translation, and test-only credential cleanup.
 
 mod credential;
 mod dpapi;
 mod existing;
+#[cfg(test)]
 mod ffi;
 mod inventory;
 #[cfg(test)]

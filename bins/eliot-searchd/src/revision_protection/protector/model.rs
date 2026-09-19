@@ -13,7 +13,7 @@ use search_os_secrets::{
     derive_legacy_revision_key_binding,
 };
 #[cfg(windows)]
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 #[cfg(windows)]
 use super::super::envelope::DirectRevisionDigest;
@@ -67,18 +67,17 @@ impl RevisionProtector {
     ) -> Result<Self, String> {
         #[cfg(windows)]
         {
-            let root_secret = Zeroizing::new(
-                windows::load_or_create_root_secret(namespace_id, revision_root)?,
-            );
+            let root_secret =
+                windows::load_or_create_root_secret(namespace_id, revision_root)?;
             let key_binding_digest =
                 derive_legacy_revision_key_binding::<DirectRevisionDigest>(
                     &namespace_id,
-                    &root_secret,
+                    root_secret.expose_secret(),
                 );
             let entropy =
                 derive_legacy_revision_dpapi_entropy::<DirectRevisionDigest>(
                     &namespace_id,
-                    &root_secret,
+                    root_secret.expose_secret(),
                 );
             Ok(Self {
                 namespace_id,

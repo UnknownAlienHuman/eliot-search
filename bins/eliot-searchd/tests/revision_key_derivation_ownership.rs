@@ -79,9 +79,20 @@ fn legacy_revision_key_derivation_has_one_pure_owner() {
 }
 
 #[test]
-fn credential_and_digest_effects_remain_outside_the_pure_contract() {
+fn credential_effects_and_digest_effects_have_distinct_owners() {
     let root = workspace_root();
-    let credential = read(
+    let credential_package = [
+        read(
+            &root,
+            "crates/search-runtime/search-os-secrets-windows/src/credential.rs",
+        ),
+        read(
+            &root,
+            "crates/search-runtime/search-os-secrets-windows/src/credential/windows.rs",
+        ),
+    ]
+    .join("\n");
+    let daemon_credential = read(
         &root,
         "bins/eliot-searchd/src/revision_protection_windows/credential.rs",
     );
@@ -90,8 +101,17 @@ fn credential_and_digest_effects_remain_outside_the_pure_contract() {
         "bins/eliot-searchd/src/revision_protection/envelope.rs",
     );
 
-    assert!(credential.contains("load_or_create_root_secret"));
-    assert!(credential.contains("bcrypt_gen_random"));
-    assert!(credential.contains("CredReadW") || credential.contains("cred_read_w"));
+    assert!(credential_package.contains("load_or_create_legacy_revision_root_secret"));
+    assert!(credential_package.contains(
+        "pub const LEGACY_REVISION_ROOT_SECRET_BYTES: usize = 32"
+    ));
+    assert!(credential_package.contains("BCryptGenRandom"));
+    assert!(credential_package.contains("CredReadW"));
+    assert!(credential_package.contains("CredWriteW"));
+    assert!(daemon_credential.contains("contains_protected_objects"));
+    assert!(daemon_credential.contains("load_or_create_legacy_revision_root_secret"));
+    assert!(!daemon_credential.contains("BCryptGenRandom"));
+    assert!(!daemon_credential.contains("CredReadW"));
+    assert!(!daemon_credential.contains("CredWriteW"));
     assert!(envelope.contains("sha256::digest_parts(domain, parts)"));
 }

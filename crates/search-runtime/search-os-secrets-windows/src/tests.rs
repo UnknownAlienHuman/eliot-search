@@ -55,6 +55,17 @@ fn non_windows_operations_fail_closed() {
         protect_legacy_revision_current_user(&mut input, &[0x44; 32]),
         Err(LegacyRevisionDpapiError::UnsupportedPlatform)
     );
+    assert!(matches!(
+        load_existing_legacy_revision_root_secret(&[0x55; 32]),
+        Err(LegacyRevisionRootSecretError::UnsupportedPlatform)
+    ));
+    assert!(matches!(
+        load_or_create_legacy_revision_root_secret(
+            &[0x55; 32],
+            LegacyRevisionRootSecretRequirement::CreateIfMissing,
+        ),
+        Err(LegacyRevisionRootSecretError::UnsupportedPlatform)
+    ));
 }
 
 #[cfg(windows)]

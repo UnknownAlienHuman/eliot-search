@@ -1,12 +1,14 @@
-//! Windows current-user DPAPI effect adapter.
+//! Windows current-user secret effect adapter.
 //!
-//! This crate owns the native `CryptProtectData` / `CryptUnprotectData`
-//! boundary and every DPAPI-owned `LocalAlloc` buffer. It performs no
-//! filesystem, Credential Manager, registry, clock, process, source-catalog or
-//! policy I/O. Callers own persistence and supply exact non-secret entropy.
+//! This crate owns the native Credential Manager, `BCryptGenRandom`, named
+//! vault mutex, `CryptProtectData` / `CryptUnprotectData`, and every native
+//! allocation returned by those APIs. It performs no filesystem, registry,
+//! clock, process, source-catalog or policy I/O.
 //!
-//! Two bounded surfaces are exposed:
+//! Three bounded surfaces are exposed:
 //!
+//! - legacy revision root-secret read/create receives one namespace identity
+//!   plus the caller's already-established missing-key requirement;
 //! - short lifecycle secrets use [`SecretBytes`], [`ProtectionScope`] and
 //!   [`ProtectedSecret`];
 //! - the frozen legacy revision compatibility path accepts exact envelope bytes
@@ -17,9 +19,11 @@
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
+mod credential;
 mod dpapi;
 mod model;
 
+pub use credential::*;
 pub use dpapi::*;
 pub use model::*;
 

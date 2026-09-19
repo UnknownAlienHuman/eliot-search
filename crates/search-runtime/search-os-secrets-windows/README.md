@@ -1,29 +1,42 @@
 # search-os-secrets-windows
 
-Concrete Windows current-user DPAPI effect adapter.
+Concrete Windows current-user secret effect adapter.
 
-The package owns the native `CryptProtectData` / `CryptUnprotectData` boundary,
-DPAPI `LocalAlloc` output lifetime, bounded copy-out, and plaintext clear-before-free.
-It performs no filesystem, Credential Manager, registry, process, clock, source-catalog,
-or policy I/O.
+The package owns the native boundaries for:
 
-Two bounded public surfaces are available:
+- Credential Manager read/create/readback of the 32-byte legacy revision root
+  secret;
+- `BCryptGenRandom` generation of a missing root secret;
+- the named cross-process revision-vault mutex;
+- `CryptProtectData` / `CryptUnprotectData`;
+- Credential Manager and DPAPI native allocation lifetimes;
+- bounded copy-out and clear-before-free.
 
+It performs no filesystem, registry, source-catalog, process, clock, or policy
+I/O. Daemon composition scans the admitted revision root and passes exactly one
+requirement: create is allowed only when no protected revision object exists;
+otherwise the original credential is mandatory.
+
+The create path rechecks Credential Manager after acquiring the named mutex. A
+concurrent process that published a key after the initial read therefore wins;
+a stale generated candidate never overwrites that key. Every successful write
+must read back the exact same 32 bytes before the secret is returned.
+
+Three bounded public surfaces are available:
+
+- legacy revision root-secret operations use `LegacyRevisionRootSecret`,
+  `LegacyRevisionRootSecretRequirement`, and the two load functions;
 - short application secrets use `SecretBytes`, `ProtectionScope`, and
   `ProtectedSecret`;
 - legacy DIRECT revision compatibility uses exact inner-envelope bytes and an
   already-derived 32-byte optional-entropy value.
 
-The legacy surface returns only DPAPI ciphertext or untrusted inner-envelope
-bytes. The caller still owns the frozen envelope codec, exact revision binding,
-plaintext digest validation, persistence, catalog currentness, and source access.
+Secret owners are non-clone, redact `Debug`, and overwrite their Rust buffers on
+drop. Native Credential Manager and decrypted DPAPI allocations are cleared
+before release when their reported length is within the admitted bound.
+Oversized invalid native output is released without an unbounded memory clear.
 
-All native output allocations are released exactly once. Decrypted native output
-is overwritten before `LocalFree`; an output larger than its admitted bound is
-released without an unbounded memory clear. Optional entropy is copied into an
-owned buffer and overwritten on drop.
-
-This package is a platform effect adapter, not a second secret lifecycle owner.
-The pure lifecycle and legacy framing/derivation contracts remain in
-`search-os-secrets`; daemon composition owns Credential Manager root-secret
-lifecycle and existing `DIRECT_*` compatibility translation.
+The pure envelope, root-secret shape, and key-derivation contracts remain in
+`search-os-secrets`. The daemon retains source/catalog authority, protected-object
+inventory, concrete SHA-256, persistence, and translation to historical
+`DIRECT_*` compatibility reasons.

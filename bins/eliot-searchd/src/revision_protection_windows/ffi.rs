@@ -1,73 +1,27 @@
-//! Raw Windows credential, RNG and cross-process vault APIs.
+//! Test-only Windows credential deletion and vault serialization.
 
 use core::ffi::c_void;
-use core::ptr::{self, null_mut};
+use core::ptr::null_mut;
 
 pub(super) const CRED_TYPE_GENERIC: u32 = 1;
-pub(super) const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
-pub(super) const ERROR_NOT_FOUND: u32 = 1_168;
-pub(super) const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
-pub(super) const ROOT_SECRET_BYTES: usize = 32;
-pub(super) const MAX_CREDENTIAL_BLOB_BYTES: usize = 5 * 512;
 
 const VAULT_MUTEX_NAME: &str = "ELIOT-Search-RevisionVault-v1";
 const VAULT_LOCK_WAIT_MILLIS: u32 = 5_000;
 const WAIT_OBJECT_0: u32 = 0;
 const WAIT_ABANDONED: u32 = 0x0000_0080;
 
-#[allow(dead_code)]
-#[repr(C)]
-pub(super) struct FileTime {
-    pub(super) low_date_time: u32,
-    pub(super) high_date_time: u32,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub(super) struct CredentialW {
-    pub(super) flags: u32,
-    pub(super) credential_type: u32,
-    pub(super) target_name: *mut u16,
-    pub(super) comment: *mut u16,
-    pub(super) last_written: FileTime,
-    pub(super) credential_blob_size: u32,
-    pub(super) credential_blob: *mut u8,
-    pub(super) persist: u32,
-    pub(super) attribute_count: u32,
-    pub(super) attributes: *mut c_void,
-    pub(super) target_alias: *mut u16,
-    pub(super) user_name: *mut u16,
-}
-
 #[link(name = "Advapi32")]
 unsafe extern "system" {
-    #[link_name = "CredReadW"]
-    pub(super) fn cred_read_w(
-        target_name: *const u16,
-        credential_type: u32,
-        flags: u32,
-        credential: *mut *mut CredentialW,
-    ) -> i32;
-    #[link_name = "CredWriteW"]
-    pub(super) fn cred_write_w(
-        credential: *const CredentialW,
-        flags: u32,
-    ) -> i32;
-    #[cfg(test)]
     #[link_name = "CredDeleteW"]
     pub(super) fn cred_delete_w(
         target_name: *const u16,
         credential_type: u32,
         flags: u32,
     ) -> i32;
-    #[link_name = "CredFree"]
-    fn cred_free(buffer: *mut c_void);
 }
 
 #[link(name = "Kernel32")]
 unsafe extern "system" {
-    #[link_name = "GetLastError"]
-    pub(super) fn get_last_error() -> u32;
     #[link_name = "CreateMutexW"]
     fn create_mutex_w(
         security_attributes: *mut c_void,
@@ -82,39 +36,6 @@ unsafe extern "system" {
     fn close_handle(handle: *mut c_void) -> i32;
 }
 
-#[link(name = "Bcrypt")]
-unsafe extern "system" {
-    #[link_name = "BCryptGenRandom"]
-    pub(super) fn bcrypt_gen_random(
-        algorithm: *mut c_void,
-        buffer: *mut u8,
-        buffer_bytes: u32,
-        flags: u32,
-    ) -> i32;
-}
-
-pub(super) struct CredentialAllocation(pub(super) *mut CredentialW);
-
-impl Drop for CredentialAllocation {
-    fn drop(&mut self) {
-        if self.0.is_null() {
-            return;
-        }
-        // SAFETY: `self.0` is returned by CredReadW and owned exactly once.
-        unsafe {
-            let credential = &mut *self.0;
-            let size = usize::try_from(credential.credential_blob_size)
-                .unwrap_or(0)
-                .min(MAX_CREDENTIAL_BLOB_BYTES);
-            if !credential.credential_blob.is_null() && size > 0 {
-                ptr::write_bytes(credential.credential_blob, 0, size);
-            }
-            cred_free(self.0.cast());
-        }
-    }
-}
-
-/// Held cross-process vault mutex. Released and closed on drop.
 pub(super) struct VaultLock(*mut c_void);
 
 impl Drop for VaultLock {
@@ -122,11 +43,12 @@ impl Drop for VaultLock {
         if self.0.is_null() {
             return;
         }
-        // SAFETY: the handle is a live mutex handle owned by this guard.
+        // SAFETY: the handle is a live mutex handle owned by this test guard.
         unsafe {
             release_mutex(self.0);
             close_handle(self.0);
         }
+        self.0 = null_mut();
     }
 }
 
@@ -135,20 +57,18 @@ pub(super) fn acquire_vault_lock() -> Result<VaultLock, String> {
     // SAFETY: null security attributes and a terminated name are valid inputs.
     let handle = unsafe { create_mutex_w(null_mut(), 0, name.as_ptr()) };
     if handle.is_null() {
-        // SAFETY: GetLastError has no preconditions.
-        let error = unsafe { get_last_error() };
-        return Err(format!("DIRECT_REVISION_VAULT_LOCK_FAILED:{error}"));
+        return Err("TEST_REVISION_VAULT_LOCK_FAILED".to_owned());
     }
     // SAFETY: `handle` is a live mutex handle.
     let status = unsafe { wait_for_single_object(handle, VAULT_LOCK_WAIT_MILLIS) };
     if status == WAIT_OBJECT_0 || status == WAIT_ABANDONED {
         return Ok(VaultLock(handle));
     }
-    // SAFETY: unsuccessful acquisition leaves one owned live handle to close.
+    // SAFETY: unsuccessful acquisition leaves one owned handle to close.
     unsafe {
         close_handle(handle);
     }
-    Err(format!("DIRECT_REVISION_VAULT_BUSY:{status}"))
+    Err(format!("TEST_REVISION_VAULT_BUSY:{status}"))
 }
 
 pub(super) fn wide(value: &str) -> Vec<u16> {
