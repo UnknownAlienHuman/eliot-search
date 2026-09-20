@@ -112,20 +112,18 @@ pub(super) fn collect_files(
         }
     };
 
-    let mut entries = match entries.collect::<Result<Vec<_>, _>>() {
-        Ok(entries) => entries,
-        Err(error) => {
-            errors.push(format!(
-                "{}: unable to enumerate directory: {error}",
-                relative_path(root, directory)
-            ));
-            return;
-        }
+    let Some(mut entries) = collect_bounded_entries(
+        entries,
+        &relative_path(root, directory),
+        budget,
+        errors,
+    ) else {
+        return;
     };
     entries.sort_by_key(std::fs::DirEntry::file_name);
 
     for entry in entries {
-        if budget.stopped || !budget.observe_entry(errors) {
+        if budget.stopped {
             return;
         }
         let name = entry.file_name();
@@ -160,6 +158,38 @@ pub(super) fn collect_files(
             ));
         }
     }
+}
+
+// Charge entries before buffering or sorting them. A limit checked only in the
+// later traversal loop does not bound the directory allocation itself. Buffered
+// parent entries and recursive child entries share this one non-refundable budget.
+fn collect_bounded_entries<T>(
+    entries: impl IntoIterator<Item = std::io::Result<T>>,
+    label: &str,
+    budget: &mut ScanBudget,
+    errors: &mut Vec<String>,
+) -> Option<Vec<T>> {
+    if budget.stopped {
+        return None;
+    }
+    let mut collected = Vec::new();
+    for entry in entries {
+        // At most one extra entry is observed to detect exhaustion; it is never
+        // retained and the iterator is not drained after the limit is reached.
+        if !budget.observe_entry(errors) {
+            return None;
+        }
+        match entry {
+            Ok(entry) => collected.push(entry),
+            Err(error) => {
+                errors.push(format!(
+                    "{label}: unable to enumerate directory: {error}"
+                ));
+                return None;
+            }
+        }
+    }
+    Some(collected)
 }
 
 fn validate_root(root: &Path, errors: &mut Vec<String>) -> bool {
@@ -267,22 +297,57 @@ pub(super) fn read_text(
         return None;
     }
 
-    let read_limit = budget.limits.file_bytes.min(remaining);
-    let mut text = String::new();
-    let mut reader = file.take(read_limit.saturating_add(1));
-    if let Err(error) = reader.read_to_string(&mut text) {
-        errors.push(format!("{label}: unable to read UTF-8 text: {error}"));
+    read_bounded_utf8(file, label, budget, errors)
+}
+
+fn read_bounded_utf8(
+    reader: impl Read,
+    label: &str,
+    budget: &mut ScanBudget,
+    errors: &mut Vec<String>,
+) -> Option<String> {
+    if budget.stopped {
         return None;
     }
-    let actual_bytes = u64::try_from(text.len()).unwrap_or(u64::MAX);
+    let read_limit = budget.limits.file_bytes.min(budget.remaining_bytes());
+    let mut bytes = Vec::new();
+    let result = reader
+        .take(read_limit.saturating_add(1))
+        .read_to_end(&mut bytes);
+
+    // Charge physical bytes before any error or decoding exit. read_to_string
+    // may discard invalid UTF-8, and read_to_end can fail after a partial read;
+    // neither case refunds the work already done. The single overflow probe
+    // byte is charged too, and aggregate exhaustion latches the entire scan.
+    let actual_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    budget.bytes_read = budget.bytes_read.saturating_add(actual_bytes);
+    if budget.bytes_read > budget.limits.total_bytes {
+        budget.stop(
+            errors,
+            format!(
+                "{label}: repository text scan exceeded the {}-byte aggregate limit",
+                budget.limits.total_bytes
+            ),
+        );
+        return None;
+    }
     if actual_bytes > read_limit {
         errors.push(format!(
             "{label}: file grew beyond the bounded read allowance"
         ));
         return None;
     }
-    budget.bytes_read = budget.bytes_read.saturating_add(actual_bytes);
-    Some(text)
+    if let Err(error) = result {
+        errors.push(format!("{label}: unable to read UTF-8 text: {error}"));
+        return None;
+    }
+    match String::from_utf8(bytes) {
+        Ok(text) => Some(text),
+        Err(error) => {
+            errors.push(format!("{label}: unable to read UTF-8 text: {error}"));
+            None
+        }
+    }
 }
 
 pub(super) fn read_toml(
@@ -302,162 +367,4 @@ pub(super) fn read_toml(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::io::ErrorKind;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    use super::*;
-
-    struct Fixture {
-        root: PathBuf,
-    }
-
-    impl Fixture {
-        fn new() -> Self {
-            static NEXT: AtomicU64 = AtomicU64::new(0);
-            for _ in 0..128 {
-                let root = std::env::temp_dir().join(format!(
-                    "eliot-qdrant-boundary-fs-{}-{}",
-                    std::process::id(),
-                    NEXT.fetch_add(1, Ordering::Relaxed),
-                ));
-                match fs::create_dir(&root) {
-                    Ok(()) => return Self { root },
-                    Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
-                    Err(error) => panic!("cannot create fixture: {error}"),
-                }
-            }
-            panic!("fixture directory collision budget exhausted");
-        }
-
-        fn write(&self, relative: &str, text: &str) -> PathBuf {
-            let path = self.root.join(relative);
-            fs::create_dir_all(path.parent().expect("fixture parent"))
-                .expect("create fixture parent");
-            fs::write(&path, text).expect("write fixture");
-            path
-        }
-    }
-
-    impl Drop for Fixture {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.root);
-        }
-    }
-
-    #[test]
-    fn entry_budget_stops_enumeration() {
-        let fixture = Fixture::new();
-        fixture.write("a.rs", "");
-        fixture.write("b.rs", "");
-        let mut budget = ScanBudget::with_limits(ScanLimits {
-            entries: 1,
-            ..ScanLimits::default()
-        });
-        let mut files = Vec::new();
-        let mut errors = Vec::new();
-        collect_files(
-            &fixture.root,
-            &fixture.root,
-            0,
-            &mut budget,
-            &mut files,
-            &mut errors,
-        );
-        assert!(errors.iter().any(|error| error.contains("entry limit")));
-    }
-
-    #[test]
-    fn depth_budget_stops_recursion() {
-        let fixture = Fixture::new();
-        fixture.write("a/b/c.rs", "");
-        let mut budget = ScanBudget::with_limits(ScanLimits {
-            depth: 1,
-            ..ScanLimits::default()
-        });
-        let mut files = Vec::new();
-        let mut errors = Vec::new();
-        collect_files(
-            &fixture.root,
-            &fixture.root,
-            0,
-            &mut budget,
-            &mut files,
-            &mut errors,
-        );
-        assert!(errors.iter().any(|error| error.contains("depth limit")));
-    }
-
-    #[test]
-    fn per_file_and_aggregate_byte_limits_fail_closed() {
-        let fixture = Fixture::new();
-        let path = fixture.write("large.rs", "1234");
-
-        let mut per_file_budget = ScanBudget::with_limits(ScanLimits {
-            file_bytes: 3,
-            ..ScanLimits::default()
-        });
-        let mut per_file_errors = Vec::new();
-        assert!(
-            read_text(
-                &path,
-                "large.rs",
-                &mut per_file_budget,
-                &mut per_file_errors,
-            )
-            .is_none()
-        );
-        assert!(
-            per_file_errors
-                .iter()
-                .any(|error| error.contains("per-file limit"))
-        );
-
-        let mut aggregate_budget = ScanBudget::with_limits(ScanLimits {
-            total_bytes: 3,
-            ..ScanLimits::default()
-        });
-        let mut aggregate_errors = Vec::new();
-        assert!(
-            read_text(
-                &path,
-                "large.rs",
-                &mut aggregate_budget,
-                &mut aggregate_errors,
-            )
-            .is_none()
-        );
-        assert!(
-            aggregate_errors
-                .iter()
-                .any(|error| error.contains("aggregate limit"))
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn symbolic_link_is_reported_instead_of_skipped() {
-        use std::os::unix::fs::symlink;
-
-        let fixture = Fixture::new();
-        let target = fixture.write("target.rs", "");
-        symlink(target, fixture.root.join("escape.rs")).expect("create symlink");
-
-        let mut budget = ScanBudget::default();
-        let mut files = Vec::new();
-        let mut errors = Vec::new();
-        collect_files(
-            &fixture.root,
-            &fixture.root,
-            0,
-            &mut budget,
-            &mut files,
-            &mut errors,
-        );
-        assert!(
-            errors
-                .iter()
-                .any(|error| error.contains("symbolic links are not allowed"))
-        );
-    }
-}
+mod tests;
