@@ -82,7 +82,6 @@ mod git_source_composition;
 mod source_composition;
 mod source_fence;
 mod source_migration_command;
-mod source_root_commands;
 mod source_roots;
 mod storage_security;
 

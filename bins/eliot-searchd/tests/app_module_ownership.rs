@@ -18,7 +18,10 @@ fn app_entry_and_kernel_are_thin_stable_facades() {
     assert!(entry.len() < 1_500, "facade grew to {} bytes", entry.len());
 
     let kernel = read(&root, "src/app/kernel.rs");
-    for module in ["commands", "dispatch", "output", "protocol", "spec", "status"] {
+    for module in [
+        "commands", "dispatch", "output", "protocol", "source_root_commands",
+        "spec", "status",
+    ] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
     assert!(kernel.contains("pub use dispatch::run_main;"));
@@ -50,6 +53,7 @@ fn app_responsibilities_stay_separated() {
         ("src/app/kernel/status.rs", "fn shell_health_effective"),
         ("src/app/kernel/output.rs", "fn emit_store_search"),
         ("src/app/kernel/commands.rs", "fn cmd_index_file"),
+        ("src/app/kernel/source_root_commands.rs", "pub fn run"),
         ("src/app/kernel/dispatch.rs", "pub fn run_main"),
     ];
     for (relative, marker) in owners {
@@ -85,11 +89,27 @@ fn app_responsibilities_stay_separated() {
     assert!(!commands.contains("MAX_COMMAND_BYTES"));
     assert!(!commands.contains("pub fn run_main"));
 
+    let source_roots = read(&root, "src/app/kernel/source_root_commands.rs");
+    assert!(source_roots.contains("DataRootGuard::acquire"));
+    assert!(source_roots.contains("SourceRootCatalog"));
+    assert!(source_roots.contains("sync_registered"));
+    assert!(source_roots.contains("escape_json"));
+    assert!(!source_roots.contains("pub fn run_main"));
+
     let dispatch = read(&root, "src/app/kernel/dispatch.rs");
     assert_eq!(dispatch.matches("pub fn run_main").count(), 1);
-    assert!(dispatch.contains("crate::source_root_commands::run"));
+    assert!(dispatch.contains("super::source_root_commands::run"));
+    assert!(dispatch.contains("super::source_root_commands::escape_json"));
+    assert!(!dispatch.contains("crate::source_root_commands"));
     assert!(!dispatch.contains("DirectStore::open"));
     assert!(!dispatch.contains("collect_orphan_revisions"));
+
+    let entry = read(&root, "src/entry.rs");
+    assert!(!entry.contains("mod source_root_commands;"));
+    assert!(
+        !root.join("src/source_root_commands.rs").exists(),
+        "obsolete daemon-root source-root command owner returned"
+    );
 
     let tests = read(&root, "src/app/kernel/tests.rs");
     assert!(tests.contains("oversized_frame_terminates_session_without_executing_suffix"));

@@ -8,6 +8,7 @@ mod commands;
 mod dispatch;
 mod output;
 mod protocol;
+mod source_root_commands;
 mod spec;
 mod status;
 

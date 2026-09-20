@@ -125,7 +125,7 @@ fn run() -> Result<(), String> {
         "--source-roots"
         | "--register-source-root"
         | "--unregister-source-root"
-        | "--sync-source-roots" => crate::source_root_commands::run(&arguments)?,
+        | "--sync-source-roots" => super::source_root_commands::run(&arguments)?,
         "--scan-stdin" | "--scan-stdin-ascii-insensitive" => {
             require_argument_count(&arguments, 2)?;
             cmd_scan_stdin(&arguments, argument)?;
@@ -182,7 +182,7 @@ pub fn run_main() -> ExitCode {
         Err(error) => {
             eprintln!(
                 "{{\"error\":\"{}\"}}",
-                crate::source_root_commands::escape_json(&error)
+                super::source_root_commands::escape_json(&error)
             );
             ExitCode::from(2)
         }
