@@ -3,6 +3,10 @@ mod imports;
 mod lexer;
 mod module_graph;
 mod surface;
+mod tokens;
+
+#[cfg(test)]
+mod surface_regressions;
 
 #[cfg(test)]
 mod tests;
@@ -15,6 +19,7 @@ use super::VENDOR_MODULE;
 use imports::vendor_identifiers;
 use lexer::code_only;
 use surface::find_public_vendor_surfaces;
+use tokens::code_tokens;
 
 pub(super) fn rust_string_constant(
     source: &str,
@@ -59,39 +64,6 @@ pub(super) fn contains_vendor_sdk_reference(source: &str) -> bool {
         previous = [previous[1], if is_vendor { VENDOR_MODULE } else { token }];
     }
     false
-}
-
-// Token boundaries, rather than textual `use ` / `crate::` prefixes, make
-// comments, whitespace and raw identifiers immaterial to a reference. This
-// streams over the masked source without constructing another token buffer.
-fn code_tokens(mut code: &str) -> impl Iterator<Item = &str> {
-    std::iter::from_fn(move || {
-        code = code.trim_start();
-        let raw_prefix = if code.strip_prefix("r#").is_some_and(|raw| {
-            raw.chars().next().is_some_and(is_identifier_character)
-        }) {
-            2
-        } else {
-            0
-        };
-        let tail = &code[raw_prefix..];
-        let first = tail.chars().next()?;
-        let end = if is_identifier_character(first) {
-            tail.find(|character| !is_identifier_character(character))
-                .unwrap_or(tail.len())
-        } else {
-            first.len_utf8()
-        };
-        let (token, rest) = code.split_at(raw_prefix + end);
-        code = rest;
-        Some(token)
-    })
-}
-
-fn is_identifier_character(character: char) -> bool {
-    character.is_ascii_alphanumeric()
-        || character == '_'
-        || (!character.is_ascii() && !character.is_whitespace())
 }
 
 pub(super) fn public_vendor_surface_lines(source: &str) -> Vec<usize> {

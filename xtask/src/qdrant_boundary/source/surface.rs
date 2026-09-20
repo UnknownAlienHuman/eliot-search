@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
+use std::iter::Peekable;
 
 use super::imports::contains_any_identifier;
+use super::tokens::{CodeToken, code_token_spans};
 
 pub(super) fn find_public_vendor_surfaces(
     code: &str,
@@ -11,95 +13,51 @@ pub(super) fn find_public_vendor_surfaces(
     })
 }
 
-/// Returns the start lines of public Rust surfaces for which `matches` is true.
+/// Inspects lexical public surfaces independently of source formatting.
 ///
-/// Signatures, trait/enum bodies and exported macro token trees are accumulated
-/// before matching so a qualified path split across lines cannot evade the
-/// lexical boundary check. Unterminated public surfaces are still inspected at
-/// EOF; compilation remains the complementary syntax authority.
+/// Borrowed slices preserve the original line/byte locations. Function bodies,
+/// constant initializers and private named fields are not public signatures.
+/// Trait/enum bodies, tuple-struct signatures and exported macros are checked
+/// as a whole. This does not expand macros or replace Rust name/type checking.
+/// Unterminated surfaces are inspected through EOF rather than silently dropped.
 pub(super) fn find_public_surfaces_matching(
     code: &str,
     mut matches: impl FnMut(&str) -> bool,
 ) -> Vec<usize> {
     let mut violations = Vec::new();
-    let mut public_signature: Option<PublicSurface> = None;
-    let mut public_block: Option<PublicSurface> = None;
-    let mut macro_export_attribute: Option<usize> = None;
-    let mut public_macro: Option<PublicSurface> = None;
+    let mut tokens = code_token_spans(code).peekable();
+    let mut macro_export_line = None;
 
-    for (index, line) in code.lines().enumerate() {
-        let line_number = index + 1;
-        let trimmed = line.trim();
-
-        if let Some(item) = macro_export_suffix(trimmed) {
-            macro_export_attribute = Some(line_number);
-            if starts_macro_rules(item) {
-                public_macro = Some(PublicSurface::new(line_number));
-                macro_export_attribute = None;
+    while let Some(token) = tokens.next() {
+        if token.text == "#" && tokens.peek().is_some_and(|next| next.text == "[") {
+            let _ = tokens.next();
+            if tokens.peek().is_some_and(|next| next.text == "macro_export") {
+                macro_export_line = Some(token.line);
             }
-        } else if let Some(attribute_line) = macro_export_attribute {
-            if starts_macro_rules(trimmed) {
-                public_macro = Some(PublicSurface::new(attribute_line));
-                macro_export_attribute = None;
-            } else if !trimmed.is_empty() && !trimmed.starts_with("#[") {
-                macro_export_attribute = None;
+            skip_group(&mut tokens, code.len());
+            continue;
+        }
+        if token.text == "macro_rules"
+            && tokens.peek().is_some_and(|next| next.text == "!")
+        {
+            let end = macro_body_end(&mut tokens, code.len());
+            if let Some(line) = macro_export_line.take()
+                && matches(&code[token.start..end])
+            {
+                violations.push(line);
             }
+            // An unexported macro definition is not an expanded public API.
+            continue;
         }
-
-        if public_macro.is_none() && starts_public_macro(trimmed) {
-            public_macro = Some(PublicSurface::new(line_number));
+        macro_export_line = None;
+        if token.text != "pub"
+            || restricted_visibility(&code[token.end..])
+        {
+            continue;
         }
-        if let Some(surface) = public_macro.as_mut() {
-            surface.push_line(trimmed);
-            surface.observe_tokens(trimmed);
-            if surface.finished() {
-                if matches(&surface.text) {
-                    violations.push(surface.start);
-                }
-                public_macro = None;
-            }
-        }
-
-        if public_block.is_none() && starts_public_block(trimmed) {
-            public_block = Some(PublicSurface::new(line_number));
-        }
-        if let Some(surface) = public_block.as_mut() {
-            surface.push_line(trimmed);
-            surface.observe_braces(trimmed);
-            if surface.finished() {
-                if matches(&surface.text) {
-                    violations.push(surface.start);
-                }
-                public_block = None;
-            }
-        }
-
-        if public_signature.is_none() && starts_public_signature(trimmed) {
-            public_signature = Some(PublicSurface::new(line_number));
-        }
-        if let Some(surface) = public_signature.as_mut() {
-            surface.push_line(trimmed);
-            if signature_ended(trimmed) {
-                if matches(&surface.text) {
-                    violations.push(surface.start);
-                }
-                public_signature = None;
-            }
-        }
-
-        // Public fields and compact declarations can sit inside a public
-        // struct body even though the struct header itself ended at `{`.
-        if trimmed.starts_with("pub ") && matches(trimmed) {
-            violations.push(line_number);
-        }
-    }
-
-    for surface in [public_signature, public_block, public_macro]
-        .into_iter()
-        .flatten()
-    {
-        if matches(&surface.text) {
-            violations.push(surface.start);
+        let end = public_surface_end(&mut tokens, code.len());
+        if matches(&code[token.start..end]) {
+            violations.push(token.line);
         }
     }
 
@@ -108,102 +66,161 @@ pub(super) fn find_public_surfaces_matching(
     violations
 }
 
-#[derive(Clone, Debug)]
-struct PublicSurface {
-    start: usize,
-    depth: isize,
-    opened: bool,
-    text: String,
-}
-
-impl PublicSurface {
-    const fn new(start: usize) -> Self {
-        Self {
-            start,
-            depth: 0,
-            opened: false,
-            text: String::new(),
-        }
-    }
-
-    fn push_line(&mut self, line: &str) {
-        self.text.push_str(line);
-        self.text.push('\n');
-    }
-
-    fn observe_braces(&mut self, line: &str) {
-        self.observe_counts(
-            line.bytes().filter(|byte| *byte == b'{').count(),
-            line.bytes().filter(|byte| *byte == b'}').count(),
-        );
-    }
-
-    fn observe_tokens(&mut self, line: &str) {
-        self.observe_counts(
-            line.bytes()
-                .filter(|byte| matches!(*byte, b'{' | b'(' | b'['))
-                .count(),
-            line.bytes()
-                .filter(|byte| matches!(*byte, b'}' | b')' | b']'))
-                .count(),
-        );
-    }
-
-    fn observe_counts(&mut self, opens: usize, closes: usize) {
-        if opens > 0 {
-            self.opened = true;
-        }
-        self.depth += isize::try_from(opens).unwrap_or(isize::MAX);
-        self.depth -= isize::try_from(closes).unwrap_or(isize::MAX);
-    }
-
-    const fn finished(&self) -> bool {
-        self.opened && self.depth <= 0
-    }
-}
-
-fn macro_export_suffix(line: &str) -> Option<&str> {
-    let rest = line.strip_prefix("#[macro_export")?;
-    if !rest.starts_with(']') && !rest.starts_with('(') {
-        return None;
-    }
-    let end = rest.find(']')?;
-    Some(rest[end + 1..].trim_start())
-}
-
-fn starts_macro_rules(line: &str) -> bool {
-    let compact = line.replace(char::is_whitespace, "");
-    compact.starts_with("macro_rules!")
-}
-
-fn starts_public_macro(line: &str) -> bool {
-    line.strip_prefix("pub ")
-        .is_some_and(|rest| rest.starts_with("macro "))
-}
-
-fn starts_public_block(line: &str) -> bool {
-    line.starts_with("pub trait ")
-        || line.starts_with("pub unsafe trait ")
-        || line.starts_with("pub auto trait ")
-        || line.starts_with("pub enum ")
-}
-
-fn starts_public_signature(line: &str) -> bool {
-    if line == "pub" {
-        return true;
-    }
-    let Some(rest) = line.strip_prefix("pub ") else {
+fn restricted_visibility(code: &str) -> bool {
+    let mut tokens = code_token_spans(code);
+    if !tokens.next().is_some_and(|token| token.text == "(") {
         return false;
-    };
-    matches!(
-        rest.split_whitespace().next(),
-        Some(
-            "fn" | "async" | "unsafe" | "const" | "extern" | "type"
-                | "static" | "struct" | "union" | "use"
-        )
-    )
+    }
+    match tokens.next().map(|token| token.text) {
+        Some("in") => true,
+        Some("crate" | "self" | "super") => {
+            tokens.next().is_some_and(|token| token.text == ")")
+        }
+        _ => false,
+    }
 }
 
-fn signature_ended(line: &str) -> bool {
-    line.contains('{') || line.ends_with(';')
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SurfaceKind {
+    Function,
+    Constant,
+    Statement,
+    Struct,
+    Module,
+    Block,
+    Field,
+}
+
+fn surface_kind<'a>(
+    tokens: &mut Peekable<impl Iterator<Item = CodeToken<'a>>>,
+) -> SurfaceKind {
+    while let Some(token) = tokens.next() {
+        match token.text {
+            "async" | "unsafe" | "extern" | "auto" | "default" | "safe" => {}
+            "const" if tokens.peek().is_some_and(|next| {
+                matches!(next.text, "fn" | "unsafe")
+            }) => {}
+            "fn" => {
+                return if tokens.peek().is_some_and(|next| next.text == "(") {
+                    SurfaceKind::Field
+                } else {
+                    SurfaceKind::Function
+                };
+            }
+            "const" | "static" => return SurfaceKind::Constant,
+            "type" | "use" => return SurfaceKind::Statement,
+            "struct" | "union" => return SurfaceKind::Struct,
+            "mod" => return SurfaceKind::Module,
+            "enum" | "trait" | "macro" => return SurfaceKind::Block,
+            _ => return SurfaceKind::Field,
+        }
+    }
+    SurfaceKind::Field
+}
+
+fn public_surface_end<'a>(
+    tokens: &mut Peekable<impl Iterator<Item = CodeToken<'a>>>,
+    eof: usize,
+) -> usize {
+    // Classify without losing the first field token: tuple fields can start
+    // with a delimiter, as in `pub (u8, Vendor)`, not only a field name.
+    let kind = if tokens.peek().is_some_and(|token| {
+        matches!(token.text, "(" | "[" | "<" | "&" | "*")
+    }) {
+        SurfaceKind::Field
+    } else {
+        surface_kind(tokens)
+    };
+    let mut depth = SurfaceDepth::default();
+    let mut previous = "";
+
+    while let Some(token) = tokens.next() {
+        if depth.at_top() {
+            match token.text {
+                ";" => return token.end,
+                "," | ")" | "}" if kind == SurfaceKind::Field => return token.start,
+                "=" if kind == SurfaceKind::Constant => return token.start,
+                "{" if kind == SurfaceKind::Block => return skip_group(tokens, eof),
+                "{" if matches!(kind, SurfaceKind::Function | SurfaceKind::Struct | SurfaceKind::Module) => {
+                    return token.start;
+                }
+                _ => {}
+            }
+        }
+        depth.observe(token.text, previous);
+        previous = token.text;
+    }
+    eof
+}
+
+// Only ordinary delimiter groups require balancing inside a generic argument.
+// A `>` in `fn() -> T` is an arrow, not the end of that generic argument. Angle
+// punctuation inside array/const expressions must not alter the outer type depth.
+#[derive(Clone, Copy, Debug, Default)]
+struct SurfaceDepth {
+    round: usize,
+    square: usize,
+    curly: usize,
+    angle: usize,
+}
+
+impl SurfaceDepth {
+    const fn groups_closed(self) -> bool {
+        self.round == 0 && self.square == 0 && self.curly == 0
+    }
+
+    const fn at_top(self) -> bool {
+        self.groups_closed() && self.angle == 0
+    }
+
+    fn observe(&mut self, token: &str, previous: &str) {
+        match token {
+            "(" => self.round = self.round.saturating_add(1),
+            ")" => self.round = self.round.saturating_sub(1),
+            "[" => self.square = self.square.saturating_add(1),
+            "]" => self.square = self.square.saturating_sub(1),
+            "{" => self.curly = self.curly.saturating_add(1),
+            "}" => self.curly = self.curly.saturating_sub(1),
+            "<" if self.groups_closed() => self.angle = self.angle.saturating_add(1),
+            ">" if self.groups_closed() && previous != "-" => {
+                self.angle = self.angle.saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn macro_body_end<'a>(
+    tokens: &mut impl Iterator<Item = CodeToken<'a>>,
+    eof: usize,
+) -> usize {
+    while let Some(token) = tokens.next() {
+        if matches!(token.text, "{" | "(" | "[") {
+            return skip_group(tokens, eof);
+        }
+    }
+    eof
+}
+
+// The opening delimiter has already been consumed. Counter-only traversal is
+// iterative and bounded by the existing file-byte budget; no recursive descent,
+// token buffer or additional source copy is created, even for deeply nested input.
+fn skip_group<'a>(
+    tokens: &mut impl Iterator<Item = CodeToken<'a>>,
+    eof: usize,
+) -> usize {
+    let mut depth = 1_usize;
+    for token in tokens {
+        match token.text {
+            "{" | "(" | "[" => depth = depth.saturating_add(1),
+            "}" | ")" | "]" => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return token.end;
+                }
+            }
+            _ => {}
+        }
+    }
+    eof
 }

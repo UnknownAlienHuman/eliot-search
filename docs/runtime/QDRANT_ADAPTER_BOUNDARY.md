@@ -33,7 +33,7 @@ Run the structural gate from the repository root:
 
 ```powershell
 cargo run --locked -p xtask -- validate qdrant-boundary --json
-cargo test --locked -p xtask --lib qdrant_boundary::source::tests
+cargo test --locked -p xtask --lib qdrant_boundary::source
 cargo test --locked -p xtask --test qdrant_boundary_regressions
 cargo test --locked -p xtask --test qdrant_cross_file_boundary
 cargo test --locked -p xtask --test qdrant_qualified_path_boundary
@@ -55,6 +55,21 @@ multiline signatures, public trait contracts, enum variants, split
 visibility/qualifier layouts and exported macro definitions. Both
 `#[macro_export] macro_rules!` and `pub macro` token trees are bounded by their
 balanced delimiters; private macros remain adapter internals.
+
+Public-surface extraction uses the same streaming tokens as direct-reference
+checking, with original byte offsets and line numbers. Tabs, comments, split
+keywords, leading attributes and multiple declarations on one line do not
+change signature or field boundaries. Grouped public imports and multiline
+named-field types are checked through their balanced delimiters; nested generic
+commas, function arrows and const-generic groups cannot prematurely end them.
+Function bodies, constant initializers and private named fields are not treated
+as public signatures merely because they share a line with `pub`. Nested
+exported macro definitions are still inspected. Trait/enum bodies and tuple-
+struct signatures (including trailing `where` clauses) remain conservatively
+checked as a whole. Traversal is iterative and borrows the masked source rather
+than collecting another token vector or copying each surface. The source-test
+command above includes the surface regression module; these lexical fixtures do
+not compile the synthetic vendor programs or qualify a live backend.
 
 A bounded module-graph pass resolves canonical `lib.rs`, `mod.rs` and nested
 `*.rs` layouts, direct literal `include!` edges and direct literal `#[path] mod`
