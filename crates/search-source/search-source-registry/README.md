@@ -16,15 +16,18 @@ and namespace ownership. Admission rules are evaluated by
   DIRECT source-event journal while migration remains incomplete
 - exact pure schema and codec for the legacy `control/source-roots.v1`
   registration catalog
+- content-free configured-root observation states, bounded watcher dirty hints,
+  explicit currentness gaps, reconciliation generations and sync-proof state
 
-The legacy compatibility models are pure and filesystem-free.
+The legacy compatibility and currentness models are pure and filesystem-free.
 `eliot-searchd` supplies qualified digest primitives and owns data-root locking,
-platform path validation, safe reads, durable publication, exact readback and
-crash recovery. For `source-roots.v1`, this crate owns only the frozen header,
-line framing, duplicate detection, and finite file/root bounds; locator contents
-remain opaque until daemon path qualification. This keeps daemon composition
-from becoming a second source-registry schema owner without giving the registry
-filesystem authority.
+platform path validation, safe reads, durable publication, exact readback,
+watcher adapters and crash recovery. For `source-roots.v1`, this crate owns only
+the frozen header, line framing, duplicate detection, finite file/root bounds,
+and the pure state machine that consumes already-qualified observations.
+Locator contents remain opaque until daemon path qualification. Watcher hints
+never prove availability; only an exact authoritative observation pass can
+advance or restore currentness.
 
 ## Must not own
 
@@ -34,6 +37,7 @@ filesystem authority.
 - concrete redb access
 - data-root filesystem traversal or mutation
 - platform path canonicalization, overlap checks or journal/catalog publication
+- watcher/process/clock ownership
 
 - **Delivery wave:** W2 / P03
 - **Soft source-line target:** 6,500

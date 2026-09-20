@@ -42,7 +42,8 @@ fn source_roots_entry_and_kernel_are_thin() {
         assert!(kernel.contains(&format!("mod {module};")));
     }
     assert!(kernel.contains("mod tests;"));
-    assert!(kernel.len() < 3_000, "kernel grew to {} bytes", kernel.len());
+    assert!(kernel.contains("pub use search_source_registry::{"));
+    assert!(kernel.len() < 3_500, "kernel grew to {} bytes", kernel.len());
     for forbidden in ["std::fs", "OpenOptions", "struct SourceRootCatalog"] {
         assert!(
             !kernel.contains(forbidden),
@@ -105,11 +106,89 @@ fn legacy_source_root_catalog_schema_has_one_registry_owner() {
 }
 
 #[test]
+fn root_currentness_state_has_one_registry_owner() {
+    let workspace = workspace_root();
+    let package = read(
+        &workspace,
+        "crates/search-source/search-source-registry/src/root_currentness.rs",
+    );
+    let daemon_catalog = read(
+        &workspace,
+        "bins/eliot-searchd/src/source_roots/kernel/catalog.rs",
+    );
+    let daemon_model = read(
+        &workspace,
+        "bins/eliot-searchd/src/source_roots/kernel/model.rs",
+    );
+    let daemon_spec = read(
+        &workspace,
+        "bins/eliot-searchd/src/source_roots/kernel/spec.rs",
+    );
+
+    for marker in [
+        "pub struct SourceRootCurrentness",
+        "pub enum SourceRootState",
+        "pub enum ObservationGapReason",
+        "pub struct ReconciliationCursor",
+        "pub struct CurrentWorkspaceTruth",
+        "pub const MAX_SOURCE_ROOT_WATCHER_HINTS: usize = 64",
+        "pub const MAX_SOURCE_ROOT_OBSERVATION_GAPS: usize = 40",
+        "pub fn reconcile(&mut self, observed: &[SourceRootState]) -> bool",
+        "pub fn note_watcher_hint(",
+        "pub fn mark_reconciled_synced(&mut self) -> bool",
+    ] {
+        assert!(package.contains(marker), "registry package lost owner {marker}");
+    }
+    for forbidden in [
+        "std::fs",
+        "std::path",
+        "PathBuf",
+        "OpenOptions",
+        "probe_root",
+        "canonicalize",
+        "qdrant_client",
+        "search_source_reconcile",
+    ] {
+        assert!(
+            !package.contains(forbidden),
+            "pure currentness owner acquired forbidden token {forbidden}"
+        );
+    }
+
+    assert!(daemon_catalog.contains("currentness: SourceRootCurrentness"));
+    assert!(daemon_catalog.contains("self.currentness.reconcile(&observed)"));
+    assert!(daemon_catalog.contains("self.currentness.mark_update_outcome_unknown()"));
+    for removed in [
+        "needs_reopen: bool",
+        "watcher_sequence: u64",
+        "pending_hints: Vec<WatcherHint>",
+        "watcher_overflowed: bool",
+        "reconciliation_generation: u64",
+        "last_synced_generation: Option<u64>",
+    ] {
+        assert!(
+            !daemon_catalog.contains(removed),
+            "daemon restored currentness owner {removed}"
+        );
+    }
+    assert!(!daemon_model.contains("pub enum SourceRootState"));
+    assert!(!daemon_model.contains("pub enum ObservationGapReason"));
+    assert!(!daemon_model.contains("pub struct ReconciliationCursor"));
+    assert!(!daemon_model.contains("pub struct CurrentWorkspaceTruth"));
+    assert!(daemon_spec.contains(
+        "MAX_SOURCE_ROOT_WATCHER_HINTS as MAX_WATCHER_HINTS"
+    ));
+    assert!(daemon_spec.contains(
+        "MAX_SOURCE_ROOT_OBSERVATION_GAPS as MAX_OBSERVATION_GAPS"
+    ));
+}
+
+#[test]
 fn source_root_responsibilities_stay_separated() {
     let root = crate_root();
     let owners = [
         ("src/source_roots/kernel/error.rs", "pub enum SourceRootError"),
-        ("src/source_roots/kernel/model.rs", "pub enum SourceRootState"),
+        ("src/source_roots/kernel/model.rs", "pub struct SourceRootView"),
         ("src/source_roots/kernel/path.rs", "fn canonicalize_new_root("),
         ("src/source_roots/kernel/registry.rs", "fn persist_entries("),
         ("src/source_roots/kernel/catalog.rs", "pub struct SourceRootCatalog"),
@@ -164,11 +243,14 @@ fn source_root_responsibilities_stay_separated() {
     assert!(catalog.contains("observation_gaps"));
     assert!(catalog.contains("current_workspace_truth"));
     assert!(catalog.contains("mark_reconciled_synced"));
+    assert!(catalog.contains("SourceRootCurrentness"));
     assert!(!catalog.contains("OpenOptions"));
 
     let model = read(&root, "src/source_roots/kernel/model.rs");
-    assert!(model.contains("ObservationGapReason"));
-    assert!(model.contains("CurrentWorkspaceTruth"));
+    assert!(model.contains("SourceRootView"));
+    assert!(model.contains("SourceRootEntry"));
+    assert!(!model.contains("ObservationGapReason"));
+    assert!(!model.contains("CurrentWorkspaceTruth"));
     assert!(!model.contains("std::fs"));
 }
 

@@ -12,6 +12,8 @@ The bounded packet is `swarm/assignments/search-source-registry.md`.
 - verified admission-receipt persistence
 - frozen pure schemas/codecs for legacy source-registry journals and root-registration catalogs while
   migration remains incomplete
+- content-free configured-root observation/currentness state, bounded watcher hints, explicit gaps and
+  reconciliation-generation/sync-proof transitions
 
 ## Forbidden ownership
 
@@ -20,6 +22,7 @@ The bounded packet is `swarm/assignments/search-source-registry.md`.
 - access/ranking/Qdrant behavior
 - concrete redb dependency
 - data-root filesystem traversal, platform path canonicalization, file publication or crash-recovery I/O
+- watcher/process/clock ownership or claims that hints establish currentness
 
 ## Dependencies
 

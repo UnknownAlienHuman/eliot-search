@@ -1,14 +1,16 @@
-//! Live observation catalog state, watcher hints and currentness proof.
+//! Live observation catalog I/O composed with package-owned currentness state.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::error::SourceRootError;
-use super::model::{
-    CurrentWorkspaceTruth, ObservationGap, ObservationGapReason,
-    ReconciliationCursor, SourceRootEntry, SourceRootState, SourceRootView,
+use search_source_registry::{
+    CurrentWorkspaceTruth, ObservationGap, ReconciliationCursor,
+    SourceRootCurrentness, SourceRootCurrentnessError, SourceRootState,
     WatcherHint, WatcherHintKind,
 };
+
+use super::error::SourceRootError;
+use super::model::{SourceRootEntry, SourceRootView};
 use super::path::{
     canonicalize_configured_set, canonicalize_new_root,
     ensure_no_overlap, ensure_outside_data_root, path_text, probe_root,
@@ -17,19 +19,25 @@ use super::path::{
 use super::registry::{
     load_configured_paths, persist_entries, recover_interrupted_update,
 };
-use super::spec::{MAX_OBSERVATION_GAPS, MAX_SOURCE_ROOTS, MAX_WATCHER_HINTS};
+use super::spec::MAX_SOURCE_ROOTS;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RegistrationMutation {
+    Insert {
+        position: usize,
+        state: SourceRootState,
+    },
+    Remove {
+        position: usize,
+    },
+}
 
 #[derive(Debug)]
 pub struct SourceRootCatalog {
     config_path: PathBuf,
     entries: Vec<SourceRootEntry>,
     excluded_data_root: Option<PathBuf>,
-    needs_reopen: bool,
-    watcher_sequence: u64,
-    pending_hints: Vec<WatcherHint>,
-    watcher_overflowed: bool,
-    reconciliation_generation: u64,
-    last_synced_generation: Option<u64>,
+    currentness: SourceRootCurrentness,
 }
 
 impl SourceRootCatalog {
@@ -83,22 +91,17 @@ impl SourceRootCatalog {
             }
         }
         canonicalize_configured_set(&mut configured)?;
+        let entries = configured
+            .into_iter()
+            .map(|configured_path| SourceRootEntry { configured_path })
+            .collect::<Vec<_>>();
+        let currentness = SourceRootCurrentness::new(entries.len())
+            .map_err(map_currentness_error)?;
         let mut catalog = Self {
             config_path,
-            entries: configured
-                .into_iter()
-                .map(|configured_path| SourceRootEntry {
-                    configured_path,
-                    state: SourceRootState::Unverifiable,
-                })
-                .collect(),
+            entries,
             excluded_data_root: None,
-            needs_reopen: false,
-            watcher_sequence: 0,
-            pending_hints: Vec::new(),
-            watcher_overflowed: false,
-            reconciliation_generation: 0,
-            last_synced_generation: None,
+            currentness,
         };
         catalog.refresh();
         if !command_roots.is_empty() {
@@ -107,55 +110,41 @@ impl SourceRootCatalog {
         Ok(catalog)
     }
 
-    pub(crate) const fn configured_count(&self) -> usize {
+    pub(crate) fn configured_count(&self) -> usize {
         self.entries.len()
     }
 
     pub(crate) fn available_count(&self) -> usize {
-        if self.needs_reopen {
-            return 0;
-        }
-        self.entries
-            .iter()
-            .filter(|entry| entry.state == SourceRootState::Available)
-            .count()
+        self.currentness.available_count()
     }
 
     pub(crate) fn unavailable_count(&self) -> usize {
-        self.configured_count().saturating_sub(self.available_count())
+        self.currentness.unavailable_count()
     }
 
     /// Reconciles watcher hints against authoritative root probes.
     pub(crate) fn refresh(&mut self) -> bool {
-        if self.needs_reopen {
+        if self.currentness.update_outcome_unknown() {
             return false;
         }
-        let had_overflow = self.watcher_overflowed;
-        let had_hints = !self.pending_hints.is_empty();
-        let mut changed = false;
-        for entry in &mut self.entries {
-            let observed = probe_root(&entry.configured_path);
-            changed |= entry.state != observed;
-            entry.state = observed;
-        }
-        self.pending_hints.clear();
-        self.watcher_overflowed = false;
-        if changed || had_overflow || had_hints {
-            self.reconciliation_generation =
-                self.reconciliation_generation.wrapping_add(1);
-            self.last_synced_generation = None;
-        }
-        changed || had_overflow || had_hints
+        let observed = self
+            .entries
+            .iter()
+            .map(|entry| probe_root(&entry.configured_path))
+            .collect::<Vec<_>>();
+        self.currentness.reconcile(&observed)
     }
 
     pub(crate) fn available_paths(&self) -> Vec<(usize, &Path)> {
-        if self.needs_reopen {
+        if self.currentness.update_outcome_unknown() {
             return Vec::new();
         }
         self.entries
             .iter()
             .enumerate()
-            .filter(|(_, entry)| entry.state == SourceRootState::Available)
+            .filter(|(index, _)| {
+                self.currentness.state(*index) == Some(SourceRootState::Available)
+            })
             .map(|(index, entry)| (index, entry.configured_path.as_path()))
             .collect()
     }
@@ -182,11 +171,9 @@ impl SourceRootCatalog {
             .position(|entry| entry.configured_path == canonical)
         {
             let observed = probe_root(&canonical);
-            if self.entries[index].state != observed {
-                self.entries[index].state = observed;
-                self.reconciliation_generation =
-                    self.reconciliation_generation.wrapping_add(1);
-                self.last_synced_generation = None;
+            if let Err(error) = self.currentness.observe(index, observed) {
+                self.currentness.mark_update_outcome_unknown();
+                return Err(map_currentness_error(error));
             }
             return self.view(index);
         }
@@ -205,10 +192,15 @@ impl SourceRootCatalog {
             index,
             SourceRootEntry {
                 configured_path: canonical,
-                state: SourceRootState::Available,
             },
         );
-        self.commit(staged)?;
+        self.commit(
+            staged,
+            RegistrationMutation::Insert {
+                position: index,
+                state: SourceRootState::Available,
+            },
+        )?;
         self.view(index)
     }
 
@@ -231,23 +223,37 @@ impl SourceRootCatalog {
         let removed = path_text(&self.entries[index].configured_path)?.to_owned();
         let mut staged = self.entries.clone();
         staged.remove(index);
-        self.commit(staged)?;
+        self.commit(staged, RegistrationMutation::Remove { position: index })?;
         Ok(removed)
     }
 
-    fn commit(&mut self, staged: Vec<SourceRootEntry>) -> Result<(), SourceRootError> {
+    fn commit(
+        &mut self,
+        staged: Vec<SourceRootEntry>,
+        mutation: RegistrationMutation,
+    ) -> Result<(), SourceRootError> {
         if let Err(error) = persist_entries(&self.config_path, &staged) {
-            self.needs_reopen = true;
+            self.currentness.mark_update_outcome_unknown();
             return Err(error);
         }
         self.entries = staged;
-        self.reconciliation_generation = self.reconciliation_generation.wrapping_add(1);
-        self.last_synced_generation = None;
+        let result = match mutation {
+            RegistrationMutation::Insert { position, state } => {
+                self.currentness.insert(position, state)
+            }
+            RegistrationMutation::Remove { position } => {
+                self.currentness.remove(position)
+            }
+        };
+        if let Err(error) = result {
+            self.currentness.mark_update_outcome_unknown();
+            return Err(map_currentness_error(error));
+        }
         Ok(())
     }
 
-    const fn ensure_usable(&self) -> Result<(), SourceRootError> {
-        if self.needs_reopen {
+    fn ensure_usable(&self) -> Result<(), SourceRootError> {
+        if self.currentness.update_outcome_unknown() {
             Err(SourceRootError::UpdateOutcomeUnknown)
         } else {
             Ok(())
@@ -260,10 +266,14 @@ impl SourceRootCatalog {
             .entries
             .get(index)
             .ok_or(SourceRootError::CatalogCorrupt)?;
+        let state = self
+            .currentness
+            .state(index)
+            .ok_or(SourceRootError::CatalogCorrupt)?;
         Ok(SourceRootView {
             index,
             path: path_text(&entry.configured_path)?.to_owned(),
-            state: entry.state,
+            state,
         })
     }
 
@@ -278,108 +288,51 @@ impl SourceRootCatalog {
         if position >= self.entries.len() {
             return Err(SourceRootError::RootNotFound);
         }
-        self.watcher_sequence = self.watcher_sequence.wrapping_add(1);
-        if self.pending_hints.len() >= MAX_WATCHER_HINTS {
-            self.watcher_overflowed = true;
-            return Ok(true);
-        }
-        self.pending_hints.push(WatcherHint {
-            position,
-            kind,
-            sequence: self.watcher_sequence,
-        });
-        Ok(self.watcher_overflowed)
+        self.currentness
+            .note_watcher_hint(position, kind)
+            .map_err(map_currentness_error)
     }
 
     #[allow(dead_code)]
     pub(crate) fn drain_watcher_hints(&mut self) -> Vec<WatcherHint> {
-        core::mem::take(&mut self.pending_hints)
+        self.currentness.drain_watcher_hints()
     }
 
     #[allow(dead_code)]
     pub(crate) const fn watcher_overflowed(&self) -> bool {
-        self.watcher_overflowed
+        self.currentness.watcher_overflowed()
     }
 
     /// Returns explicit bounded gaps blocking currentness.
     pub(crate) fn observation_gaps(&self) -> Vec<ObservationGap> {
-        let mut gaps = Vec::new();
-        if self.needs_reopen {
-            gaps.push(ObservationGap {
-                position: 0,
-                reason: ObservationGapReason::UpdateOutcomeUnknown,
-                state: SourceRootState::Unverifiable,
-            });
-            return gaps;
-        }
-        for (position, entry) in self.entries.iter().enumerate() {
-            let reason = match entry.state {
-                SourceRootState::Available => continue,
-                SourceRootState::Missing => ObservationGapReason::Missing,
-                SourceRootState::NotDirectory => ObservationGapReason::NotDirectory,
-                SourceRootState::Unsafe => ObservationGapReason::Unsafe,
-                SourceRootState::Unverifiable => ObservationGapReason::Unverifiable,
-            };
-            if gaps.len() >= MAX_OBSERVATION_GAPS {
-                break;
-            }
-            gaps.push(ObservationGap {
-                position,
-                reason,
-                state: entry.state,
-            });
-        }
-        if self.watcher_overflowed && gaps.len() < MAX_OBSERVATION_GAPS {
-            gaps.push(ObservationGap {
-                position: self.entries.len(),
-                reason: ObservationGapReason::WatcherOverflow,
-                state: SourceRootState::Unverifiable,
-            });
-        }
-        gaps
+        self.currentness.observation_gaps()
     }
 
-    pub(crate) const fn reconciliation_cursor(&self) -> ReconciliationCursor {
-        ReconciliationCursor {
-            generation: self.reconciliation_generation,
-            pending_hints: self.pending_hints.len(),
-            overflowed: self.watcher_overflowed,
-            hint_sequence: self.watcher_sequence,
-            last_synced_generation: self.last_synced_generation,
-        }
+    pub(crate) fn reconciliation_cursor(&self) -> ReconciliationCursor {
+        self.currentness.reconciliation_cursor()
     }
 
     /// Computes source/workspace truth without index truth.
     pub(crate) fn current_workspace_truth(&self) -> CurrentWorkspaceTruth {
-        let gaps = self.observation_gaps();
-        let configured = self.configured_count();
-        let available = self.available_count();
-        let unavailable = self.unavailable_count();
-        let source_current =
-            !self.needs_reopen && configured > 0 && gaps.is_empty() && available == configured;
-        let workspace_current = source_current
-            && self.last_synced_generation == Some(self.reconciliation_generation);
-        CurrentWorkspaceTruth {
-            configured,
-            available,
-            unavailable,
-            gap_count: gaps.len(),
-            reconciliation_generation: self.reconciliation_generation,
-            last_synced_generation: self.last_synced_generation,
-            source_current,
-            workspace_current,
-        }
+        self.currentness.current_workspace_truth()
     }
 
     /// Marks the current reconciliation generation as sync-proven.
     pub(crate) fn mark_reconciled_synced(&mut self) -> bool {
-        if self.needs_reopen
-            || self.entries.is_empty()
-            || !self.observation_gaps().is_empty()
-        {
-            return false;
+        self.currentness.mark_reconciled_synced()
+    }
+}
+
+fn map_currentness_error(error: SourceRootCurrentnessError) -> SourceRootError {
+    match error {
+        SourceRootCurrentnessError::RootLimitExceeded => {
+            SourceRootError::RootLimitExceeded
         }
-        self.last_synced_generation = Some(self.reconciliation_generation);
-        true
+        SourceRootCurrentnessError::PositionOutOfRange => {
+            SourceRootError::CatalogCorrupt
+        }
+        SourceRootCurrentnessError::UpdateOutcomeUnknown => {
+            SourceRootError::UpdateOutcomeUnknown
+        }
     }
 }

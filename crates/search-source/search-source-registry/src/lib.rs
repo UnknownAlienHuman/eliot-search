@@ -5,9 +5,9 @@
 //! transitions. It persists accepted identity/admission decisions through the
 //! vendor-neutral [`error::RegistryControlPort`] and never reimplements those
 //! semantics. Canonical product operations enter through [`api`]. The bounded
-//! legacy DIRECT journal and source-root catalog compatibility surfaces are
-//! re-exported at the crate root; the daemon remains the bounded filesystem
-//! integration owner.
+//! legacy DIRECT journal, source-root catalog and root-currentness compatibility
+//! surfaces are re-exported at the crate root; the daemon remains the bounded
+//! filesystem integration owner.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -37,6 +37,7 @@ pub mod membership;
 pub mod portfolio;
 pub mod recovery;
 pub mod root;
+pub mod root_currentness;
 pub mod snapshot;
 pub mod source;
 pub mod view;
@@ -58,6 +59,12 @@ pub use portfolio::PortfolioItem;
 pub use recovery::{
     NamespaceCutover, RegistryBatch, RegistryChange, RegistryOperation, RegistryReceipt,
     SourceRegistry,
+};
+pub use root_currentness::{
+    CurrentWorkspaceTruth, MAX_SOURCE_ROOT_OBSERVATION_GAPS,
+    MAX_SOURCE_ROOT_WATCHER_HINTS, ObservationGap, ObservationGapReason,
+    ReconciliationCursor, SourceRootCurrentness, SourceRootCurrentnessError,
+    SourceRootState, WatcherHint, WatcherHintKind,
 };
 pub use source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 pub use source_legacy_direct::{

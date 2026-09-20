@@ -4,8 +4,9 @@ use std::fs::{self, File, Metadata};
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
+use search_source_registry::SourceRootState;
+
 use super::error::SourceRootError;
-use super::model::SourceRootState;
 use super::spec::{MAX_SOURCE_ROOT_PATH_BYTES, MAX_SOURCE_ROOTS};
 
 pub(super) fn canonicalize_configured_set(
