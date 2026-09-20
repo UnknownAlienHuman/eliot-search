@@ -1,8 +1,5 @@
 //! Owner-fenced DIRECT runtime composition.
 
-#[path = "../service_session.rs"]
-mod session;
-
 mod codec;
 mod diagnostics;
 mod dispatch;
@@ -11,6 +8,7 @@ mod mutation;
 mod query;
 mod reporting;
 mod runtime;
+mod session;
 mod spec;
 mod state;
 

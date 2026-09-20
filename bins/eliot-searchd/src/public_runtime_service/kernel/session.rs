@@ -1,4 +1,4 @@
-//! Fail-stop session boundary for the primary DIRECT service.
+//! Fail-stop line-session boundary for the primary DIRECT runtime service.
 //!
 //! Once a mutation is dispatched, an error cannot prove it had no effects.
 //! Do not consume another command or retry output after a failed exchange.
@@ -65,7 +65,7 @@ impl<W: Write> Write for SessionOutput<'_, W> {
 }
 
 /// A successful return means EOF/shutdown after only complete exchanges.
-/// The owner must discard handles and exit on Err, not resume this reader.
+/// The owner must discard handles and exit on `Err`, not resume this reader.
 pub(super) fn serve<R: BufRead, W: Write>(
     reader: &mut R,
     writer: &mut W,
@@ -130,5 +130,4 @@ pub(super) fn serve<R: BufRead, W: Write>(
 }
 
 #[cfg(test)]
-#[path = "service_session_tests.rs"]
 mod tests;
