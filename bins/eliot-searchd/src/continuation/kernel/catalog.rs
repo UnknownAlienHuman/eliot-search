@@ -268,26 +268,36 @@ impl ContinuationCatalog {
         token: &str,
         page_size: usize,
     ) -> Result<SearchPage, ContinuationError> {
+        self.advance_window_with_clock(token, page_size, Instant::now)
+    }
+
+    // The source-fence comparison and page allocation happen after the outer
+    // expiry check. Recheck before copying and immediately before returning a
+    // page. Clock injection is private and exists only for deterministic fault
+    // tests; production uses the same monotonic Instant::now as the outer gate.
+    fn advance_window_with_clock(
+        &mut self,
+        token: &str,
+        page_size: usize,
+        mut now: impl FnMut() -> Instant,
+    ) -> Result<SearchPage, ContinuationError> {
         let record = self
             .records
             .get_mut(token)
             .ok_or(ContinuationError::NotFound)?;
+        let expires_at = record.expires_at;
+        if now() >= expires_at {
+            self.drop_window(token);
+            self.expire();
+            return Err(ContinuationError::Expired);
+        }
         let page_start = record.next_index;
         let page_end = page_start
             .saturating_add(page_size)
             .min(record.matches.len());
         let page_matches = record.matches[page_start..page_end].to_vec();
-        record.next_index = page_end;
         let exhausted = page_end == record.matches.len();
-        let expires_in_ms = if exhausted {
-            None
-        } else {
-            let remaining = record
-                .expires_at
-                .saturating_duration_since(Instant::now());
-            Some(u64::try_from(remaining.as_millis()).unwrap_or(u64::MAX))
-        };
-        let page = SearchPage {
+        let mut page = SearchPage {
             matches: page_matches,
             gaps: Vec::new(),
             coverage: record.coverage.clone(),
@@ -295,12 +305,28 @@ impl ContinuationCatalog {
             page_end,
             exhausted,
             continuation_token: (!exhausted).then(|| token.to_owned()),
-            expires_in_ms,
+            expires_in_ms: None,
         };
+        record.next_index = page_end;
         if exhausted {
             self.drop_window(token);
         }
         self.expire();
+
+        let terminal_time = now();
+        if terminal_time >= expires_at {
+            // Expiry denies the complete page, including a would-be final one.
+            // Drop the window rather than retaining an advanced, undelivered
+            // ranking. drop_window is idempotent after exhaustion or the sweep.
+            self.drop_window(token);
+            return Err(ContinuationError::Expired);
+        }
+        if !exhausted {
+            let remaining = expires_at.saturating_duration_since(terminal_time);
+            page.expires_in_ms = Some(
+                u64::try_from(remaining.as_millis()).unwrap_or(u64::MAX),
+            );
+        }
         Ok(page)
     }
 

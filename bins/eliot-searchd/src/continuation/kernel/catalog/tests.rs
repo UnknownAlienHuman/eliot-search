@@ -229,3 +229,99 @@ fn empty_final_page_cannot_retain_or_reissue_a_window() {
     assert_eq!(catalog.retained_matches, 0);
     assert!(catalog.records.is_empty());
 }
+
+#[test]
+fn expired_window_is_removed_before_page_materialization() {
+    let mut catalog = catalog(&[("window", 8, 1)]);
+    let expired_at = Instant::now();
+    catalog.records.get_mut("window").unwrap().expires_at = expired_at;
+    let mut observations = 0;
+
+    let result = catalog.advance_window_with_clock("window", 1, || {
+        observations += 1;
+        expired_at
+    });
+
+    assert_eq!(result, Err(ContinuationError::Expired));
+    assert_eq!(observations, 1);
+    assert!(catalog.records.is_empty());
+    assert_eq!(catalog.retained_matches, 0);
+}
+
+#[test]
+fn expiration_during_materialization_discards_even_the_final_page() {
+    for page_size in [1, 100] {
+        let mut catalog = catalog(&[("window", 8, 1)]);
+        let before = Instant::now();
+        let expires_at = before + CONTINUATION_TTL;
+        catalog.records.get_mut("window").unwrap().expires_at = expires_at;
+        let mut observations = 0;
+
+        let result = catalog.advance_window_with_clock("window", page_size, || {
+            observations += 1;
+            if observations == 1 { before } else { expires_at }
+        });
+
+        assert_eq!(result, Err(ContinuationError::Expired));
+        assert_eq!(observations, 2);
+        assert!(catalog.records.is_empty());
+        assert_eq!(catalog.retained_matches, 0);
+        assert_eq!(
+            catalog.advance_window("window", 1),
+            Err(ContinuationError::NotFound),
+        );
+    }
+}
+
+#[test]
+fn remaining_ttl_is_measured_at_the_final_checkpoint() {
+    let mut catalog = catalog(&[("window", 8, 1)]);
+    let before = Instant::now();
+    let expires_at = before + CONTINUATION_TTL;
+    let terminal_time = before + std::time::Duration::from_secs(5);
+    catalog.records.get_mut("window").unwrap().expires_at = expires_at;
+    let mut times = [before, terminal_time].into_iter();
+
+    let page = catalog
+        .advance_window_with_clock("window", 1, || times.next().unwrap())
+        .unwrap();
+
+    assert_eq!(
+        page.expires_in_ms,
+        Some(u64::try_from(expires_at.duration_since(terminal_time).as_millis()).unwrap()),
+    );
+    assert_eq!(catalog.records["window"].expires_at, expires_at);
+    assert_eq!(catalog.records["window"].next_index, 2);
+    assert_eq!(catalog.retained_matches, 8);
+    assert!(times.next().is_none());
+}
+
+#[test]
+fn unknown_token_is_rejected_before_observing_the_clock() {
+    let mut catalog = catalog(&[("window", 8, 1)]);
+    let result = catalog.advance_window_with_clock("unknown", 1, || {
+        panic!("an unknown window must not reach expiry observations")
+    });
+    assert_eq!(result, Err(ContinuationError::NotFound));
+    assert_eq!(catalog.records["window"].next_index, 1);
+    assert_eq!(catalog.retained_matches, 8);
+}
+
+#[test]
+fn late_expiration_and_sweep_preserve_unaffected_window_accounting() {
+    let mut catalog = catalog(&[("target", 8, 1), ("live", 5, 1), ("old", 4, 1)]);
+    let before = Instant::now();
+    let expires_at = before + CONTINUATION_TTL;
+    catalog.records.get_mut("target").unwrap().expires_at = expires_at;
+    catalog.records.get_mut("old").unwrap().expires_at = before;
+    let live_storage = catalog.records["live"].matches.as_ptr();
+    let mut times = [before, expires_at].into_iter();
+
+    let result = catalog.advance_window_with_clock("target", 1, || times.next().unwrap());
+
+    assert_eq!(result, Err(ContinuationError::Expired));
+    assert_eq!(catalog.records.len(), 1);
+    assert_eq!(catalog.records["live"].matches.as_ptr(), live_storage);
+    assert_eq!(catalog.records["live"].next_index, 1);
+    assert_eq!(catalog.retained_matches, 5);
+}
