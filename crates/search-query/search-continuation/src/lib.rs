@@ -15,6 +15,10 @@
     clippy::too_many_lines
 )]
 
+mod emission;
+
+use emission::EmissionSelection;
+
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -306,11 +310,19 @@ pub struct LiveContinuationState {
     pub continuity: ContinuityFence,
 }
 
-/// Permit binding an expansion to one exact process-local record revision.
+/// Permit binding an expansion to one exact record incarnation and selection.
+///
+/// Ephemeral permits contain only the selected fingerprints. A durable replan
+/// permit must first be bound with [`ContinuationStore::bind_durable_emission`].
+/// Neither form replaces emission-time live-authority checks.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContinuationPermit {
     continuation_id: ContinuationId,
     record_revision: u64,
+    token_digest: HandleTokenDigest,
+    created_at: UtcTimestamp,
+    expires_at: UtcTimestamp,
+    selection: EmissionSelection,
     binding_id: BindingId,
     plan_fingerprint: PlanFingerprint,
     result_fence: ResultFence,
@@ -368,7 +380,7 @@ pub enum ResumePlan {
     },
     /// Replan from durable immutable state and suppress earlier emissions.
     DurableReplan {
-        /// Permit required when emission succeeds.
+        /// Replan permit; bind verified results before committing emission.
         permit: ContinuationPermit,
         /// Durable job reference.
         durable_job_ref: OpaqueRef,
@@ -716,7 +728,9 @@ impl ContinuationStore {
     /// Revalidates and produces the next bounded expansion plan.
     ///
     /// Returned candidates are not marked issued until [`Self::commit_emission`]
-    /// is called after successful emission.
+    /// is called after successful emission. Revalidate with
+    /// [`Self::revalidate_emission`] immediately before delivery; the caller
+    /// must keep its live security/output barrier closed across that boundary.
     pub fn resume(
         &self,
         credential: &ContinuationCredential,
@@ -729,9 +743,13 @@ impl ContinuationStore {
         }
         let stored = self.authorized(credential)?;
         Self::revalidate(stored, live, now)?;
-        let permit = ContinuationPermit {
+        let mut permit = ContinuationPermit {
             continuation_id: stored.id(),
             record_revision: stored.revision,
+            token_digest: stored.token_digest(),
+            created_at: stored.created_at().clone(),
+            expires_at: stored.expires_at().clone(),
+            selection: EmissionSelection::DurableReplan { max_items },
             binding_id: stored.binding_id(),
             plan_fingerprint: stored.plan_fingerprint(),
             result_fence: stored.result_fence().clone(),
@@ -748,8 +766,12 @@ impl ContinuationStore {
                     .cloned()
                     .collect::<Vec<_>>();
                 if selected.is_empty() {
+                    permit.selection = EmissionSelection::Exhausted;
                     return Ok(ResumePlan::Exhausted { permit });
                 }
+                permit.selection = EmissionSelection::Ephemeral(
+                    selected.iter().map(|item| item.fingerprint).collect(),
+                );
                 Ok(ResumePlan::EphemeralWindow {
                     permit,
                     candidates: bounded(selected)?,
@@ -770,65 +792,6 @@ impl ContinuationStore {
             }),
             _ => Err(ContinuationError::DurabilityMismatch),
         }
-    }
-
-    /// Marks fingerprints issued only after successful client emission.
-    pub fn commit_emission(
-        &mut self,
-        permit: &ContinuationPermit,
-        emitted: &BoundedList<Blake3Digest32, MAX_LIST_ITEMS>,
-    ) -> Result<EmissionReceipt, ContinuationError> {
-        if emitted.is_empty() || emitted.len() > self.limits.max_expansion_items {
-            return Err(ContinuationError::InvalidLimits);
-        }
-        let proposed = unique_fingerprints(emitted.iter().copied())?;
-        let stored = self
-            .records
-            .get_mut(&permit.continuation_id)
-            .ok_or(ContinuationError::StalePermit)?;
-        validate_permit(stored, permit)?;
-        if proposed.iter().any(|value| stored.issued.contains(value)) {
-            return Err(ContinuationError::DuplicateCandidate);
-        }
-        if let ContinuationPayload::Ephemeral { candidates, .. } = &stored.payload {
-            let available = candidates
-                .iter()
-                .map(|item| item.fingerprint)
-                .collect::<BTreeSet<_>>();
-            if !proposed.is_subset(&available) {
-                return Err(ContinuationError::StalePermit);
-            }
-        }
-        let next_total = stored
-            .issued
-            .len()
-            .checked_add(proposed.len())
-            .ok_or(ContinuationError::ResourceExhausted)?;
-        if next_total > self.limits.max_issued_candidates {
-            return Err(ContinuationError::ResourceExhausted);
-        }
-        let next_revision = stored.next_revision()?;
-        let completed = match &stored.payload {
-            ContinuationPayload::Ephemeral { candidates, .. } => candidates.iter().all(|item| {
-                stored.issued.contains(&item.fingerprint) || proposed.contains(&item.fingerprint)
-            }),
-            ContinuationPayload::DurableReplan => false,
-        };
-        let receipt = EmissionReceipt {
-            continuation_id: stored.id(),
-            emitted_count: emitted.len(),
-            issued_total: next_total,
-            completed,
-            cleanup_effect: completed.then(|| stored.cleanup_effect()),
-        };
-        // Every recoverable rejection precedes the first state mutation.
-        stored.issued.extend(proposed);
-        stored.revision = next_revision;
-        if completed {
-            stored.set_status(LifecycleRecordStatus::Revoked);
-            stored.terminal_reason = Some(InvalidationReason::Completed);
-        }
-        Ok(receipt)
     }
 
     /// Explicitly completes a continuation and returns its cleanup effect.
@@ -1288,6 +1251,10 @@ fn validate_permit(
     permit: &ContinuationPermit,
 ) -> Result<(), ContinuationError> {
     if !value.is_active()
+        || value.id() != permit.continuation_id
+        || !constant_time_equal(&value.token_digest(), &permit.token_digest)
+        || value.created_at() != &permit.created_at
+        || value.expires_at() != &permit.expires_at
         || value.revision != permit.record_revision
         || value.binding_id() != permit.binding_id
         || value.plan_fingerprint() != permit.plan_fingerprint
@@ -1335,3 +1302,6 @@ fn constant_time_equal(left: &HandleTokenDigest, right: &HandleTokenDigest) -> b
 
 #[cfg(test)]
 mod atomicity_tests;
+
+#[cfg(test)]
+mod emission_tests;

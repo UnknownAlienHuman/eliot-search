@@ -19,7 +19,7 @@ use search_contracts::{
     ShadowFenceRevision, SourceView, WorkspaceId, WorkspaceViewRevisionId, WorkspaceViewSource,
 };
 
-fn time(minute: u8) -> UtcTimestamp {
+pub(super) fn time(minute: u8) -> UtcTimestamp {
     UtcTimestamp::parse(format!("2026-09-21T00:{minute:02}:00.000000Z")).expect("fixture time")
 }
 
@@ -69,7 +69,7 @@ fn fence() -> ResultFence {
     }
 }
 
-fn insert(
+pub(super) fn insert(
     store: &mut ContinuationStore,
     seed: u8,
     durable: bool,
@@ -140,11 +140,11 @@ fn insert(
     }
 }
 
-fn store() -> ContinuationStore {
+pub(super) fn store() -> ContinuationStore {
     ContinuationStore::new(ContinuationLimits::BASELINE).expect("fixture limits")
 }
 
-fn permit(store: &ContinuationStore, credential: &ContinuationCredential) -> ContinuationPermit {
+pub(super) fn permit(store: &ContinuationStore, credential: &ContinuationCredential) -> ContinuationPermit {
     let value = store.records.get(&credential.continuation_id).expect("fixture record");
     let live = LiveContinuationState {
         binding_id: value.binding_id(),
@@ -167,25 +167,26 @@ fn permit(store: &ContinuationStore, credential: &ContinuationCredential) -> Con
         },
     };
     match store.resume(credential, &live, &time(0), 3).expect("fixture resume") {
-        ResumePlan::EphemeralWindow { permit, .. }
-        | ResumePlan::DurableReplan { permit, .. }
-        | ResumePlan::Exhausted { permit } => permit,
+        ResumePlan::DurableReplan { permit, .. } => store
+            .bind_durable_emission(&permit, &live, &time(0), &emitted(&[1, 2, 3]))
+            .expect("fixture durable selection"),
+        ResumePlan::EphemeralWindow { permit, .. } | ResumePlan::Exhausted { permit } => permit,
     }
 }
 
-fn emitted(values: &[u8]) -> BoundedList<Blake3Digest32, MAX_LIST_ITEMS> {
+pub(super) fn emitted(values: &[u8]) -> BoundedList<Blake3Digest32, MAX_LIST_ITEMS> {
     bounded(values.iter().map(|value| Blake3Digest32::from_bytes([*value; 32])).collect())
         .expect("fixture emitted set")
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct Snapshot {
+pub(super) struct Snapshot {
     limits: ContinuationLimits,
     records: BTreeMap<ContinuationId, StoredContinuation>,
     tokens: BTreeMap<HandleTokenDigest, ContinuationId>,
 }
 
-fn snapshot(store: &ContinuationStore) -> Snapshot {
+pub(super) fn snapshot(store: &ContinuationStore) -> Snapshot {
     Snapshot {
         limits: store.limits,
         records: store.records.clone(),
