@@ -8,10 +8,9 @@ use super::surface::{
 };
 
 mod qualified_path;
-mod use_tree;
 
 use qualified_path::contains_tainted_qualified_path;
-use use_tree::{
+use super::use_tree::{
     DirectTaint, UseLeaf, collect_use_statements, direct_tainted_bindings,
     expand_local_aliases,
 };
@@ -274,7 +273,9 @@ fn collect_public_surface_findings(
             &mut visible_tainted_names,
             findings,
         );
-        expand_local_aliases(&unit.code, &mut visible_tainted_names);
+        for line in expand_local_aliases(&unit.code, &mut visible_tainted_names) {
+            findings.insert((unit.relative.to_string(), line));
+        }
         if !visible_tainted_names.is_empty() {
             for line in
                 find_public_vendor_surfaces(&unit.code, &visible_tainted_names)

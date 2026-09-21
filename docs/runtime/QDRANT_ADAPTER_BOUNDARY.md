@@ -71,6 +71,25 @@ than collecting another token vector or copying each surface. The source-test
 command above includes the surface regression module; these lexical fixtures do
 not compile the synthetic vendor programs or qualify a live backend.
 
+The local and cross-file passes share one token-delimited import/alias owner.
+`use`, `extern crate` and `type` declarations retain exact visibility and source
+lines even with tabs, comments, attributes or adjacent declarations. Grouped
+imports taint only their vendor-derived leaves; unrelated siblings and similarly
+named modules are not vendor bindings. Unicode tokens and raw keyword aliases
+are matched as identifiers, not substrings or language keywords. Generic alias
+defaults/bounds and array/const groups remain in the checked declaration.
+
+Declaration storage is capped at 65,536 borrowed slices per file. Use trees are
+limited to 64 nested groups and 256 path segments; all imports in one file share
+65,536 expanded leaves and a 16 MiB logical expansion budget covering duplicated
+strings and record storage (not allocator overhead or a measured RSS ceiling).
+Limits are charged before leaf allocation. A dependency work list propagates
+local import/type aliases without repeatedly rescanning reversed chains; its
+262,144 distinct-edge ceiling is checked before insertion. Cycles terminate
+without inventing vendor bindings. Malformed/incomplete imports and exhausted
+budgets yield source-located failures, never a successful prefix. The existing
+source-test command includes these import and resource-bound regressions.
+
 A bounded module-graph pass resolves canonical `lib.rs`, `mod.rs` and nested
 `*.rs` layouts, direct literal `include!` edges and direct literal `#[path] mod`
 overrides. Included source inherits the including module identity while keeping
@@ -115,7 +134,8 @@ This remains a lexical structural check, not complete Rust name resolution,
 Cargo compilation or live qualification. Direct computed `include!`/`#[path]`
 forms are rejected rather than interpreted. Macro-generated directives,
 `cfg_attr`-selected module paths, conditional-compilation truth, module aliases
-used as path roots and compiler-derived visibility still require complementary
+used as path roots, lexical shadowing, Unicode normalization and compiler-derived
+visibility still require complementary
 compiled checks and independent review. A structural PASS alone must not be
 represented as complete boundary or product acceptance.
 

@@ -2,8 +2,13 @@ mod cross_file;
 mod imports;
 mod lexer;
 mod module_graph;
+mod statements;
 mod surface;
 mod tokens;
+mod use_tree;
+
+#[cfg(test)]
+mod import_regressions;
 
 #[cfg(test)]
 mod surface_regressions;
