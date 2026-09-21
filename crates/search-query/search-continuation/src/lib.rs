@@ -577,6 +577,12 @@ impl StoredContinuation {
         }
     }
 
+    fn next_revision(&self) -> Result<u64, ContinuationError> {
+        self.revision
+            .checked_add(1)
+            .ok_or(ContinuationError::RevisionExhausted)
+    }
+
     fn cleanup_effect(&self) -> ContinuationEffect {
         match &self.record {
             ContinuationRecord::EphemeralWindow(record) => ContinuationEffect::ReleaseEpochPin {
@@ -592,7 +598,20 @@ impl StoredContinuation {
     }
 }
 
+// A bounded terminal transition is fully prepared before any record changes.
+// No candidate window or issued set is copied into this batch.
+struct PreparedTerminalBatch {
+    revisions: Vec<(ContinuationId, u64)>,
+    ids: BoundedList<ContinuationId, MAX_LIST_ITEMS>,
+    effects: BoundedList<ContinuationEffect, MAX_LIST_ITEMS>,
+}
+
 /// Finite server-owned continuation catalog.
+///
+/// Emission and terminal transitions validate revisions and prepare their
+/// receipts before changing state. A returned error does not apply a prefix
+/// of the requested transition or publish new limits. External cleanup remains
+/// the caller's responsibility; a failed invalidation is not a serving permit.
 #[derive(Debug)]
 pub struct ContinuationStore {
     limits: ContinuationLimits,
@@ -788,31 +807,28 @@ impl ContinuationStore {
         if next_total > self.limits.max_issued_candidates {
             return Err(ContinuationError::ResourceExhausted);
         }
-        stored.issued.extend(proposed);
-        stored.revision = stored
-            .revision
-            .checked_add(1)
-            .ok_or(ContinuationError::RevisionExhausted)?;
+        let next_revision = stored.next_revision()?;
         let completed = match &stored.payload {
-            ContinuationPayload::Ephemeral { candidates, .. } => candidates
-                .iter()
-                .all(|item| stored.issued.contains(&item.fingerprint)),
+            ContinuationPayload::Ephemeral { candidates, .. } => candidates.iter().all(|item| {
+                stored.issued.contains(&item.fingerprint) || proposed.contains(&item.fingerprint)
+            }),
             ContinuationPayload::DurableReplan => false,
         };
-        let cleanup_effect = if completed {
-            stored.set_status(LifecycleRecordStatus::Revoked);
-            stored.terminal_reason = Some(InvalidationReason::Completed);
-            Some(stored.cleanup_effect())
-        } else {
-            None
-        };
-        Ok(EmissionReceipt {
+        let receipt = EmissionReceipt {
             continuation_id: stored.id(),
             emitted_count: emitted.len(),
-            issued_total: stored.issued.len(),
+            issued_total: next_total,
             completed,
-            cleanup_effect,
-        })
+            cleanup_effect: completed.then(|| stored.cleanup_effect()),
+        };
+        // Every recoverable rejection precedes the first state mutation.
+        stored.issued.extend(proposed);
+        stored.revision = next_revision;
+        if completed {
+            stored.set_status(LifecycleRecordStatus::Revoked);
+            stored.terminal_reason = Some(InvalidationReason::Completed);
+        }
+        Ok(receipt)
     }
 
     /// Explicitly completes a continuation and returns its cleanup effect.
@@ -825,13 +841,12 @@ impl ContinuationStore {
             .get_mut(&permit.continuation_id)
             .ok_or(ContinuationError::StalePermit)?;
         validate_permit(stored, permit)?;
+        let next_revision = stored.next_revision()?;
+        let effect = stored.cleanup_effect();
         stored.set_status(LifecycleRecordStatus::Revoked);
         stored.terminal_reason = Some(InvalidationReason::Completed);
-        stored.revision = stored
-            .revision
-            .checked_add(1)
-            .ok_or(ContinuationError::RevisionExhausted)?;
-        Ok(stored.cleanup_effect())
+        stored.revision = next_revision;
+        Ok(effect)
     }
 
     /// Applies one bounded monotonic invalidation.
@@ -889,21 +904,11 @@ impl ContinuationStore {
         pending.sort();
         let more_remaining = pending.len() > self.limits.max_lifecycle_batch;
         pending.truncate(self.limits.max_lifecycle_batch);
-        let mut ids = Vec::new();
-        let mut effects = Vec::new();
-        for (_, id) in pending {
-            let value = self.records.get_mut(&id).expect("collected record");
-            value.set_status(LifecycleRecordStatus::Expired);
-            value.revision = value
-                .revision
-                .checked_add(1)
-                .ok_or(ContinuationError::RevisionExhausted)?;
-            ids.push(id);
-            effects.push(value.cleanup_effect());
-        }
+        let batch = self.prepare_terminal_batch(pending.into_iter().map(|(_, id)| id).collect())?;
+        self.apply_terminal_batch(&batch.revisions, LifecycleRecordStatus::Expired, None);
         Ok(ExpiryReceipt {
-            expired: bounded(ids)?,
-            effects: bounded(effects)?,
+            expired: batch.ids,
+            effects: batch.effects,
             more_remaining,
         })
     }
@@ -974,25 +979,12 @@ impl ContinuationStore {
                 expire_ids.extend(matching.into_iter().take(excess));
             }
         }
-        if expire_ids.len() > self.limits.max_lifecycle_batch {
-            return Err(ContinuationError::ResourceExhausted);
-        }
-        let mut ids = Vec::new();
-        let mut effects = Vec::new();
-        for id in expire_ids {
-            let value = self.records.get_mut(&id).expect("collected record");
-            value.set_status(LifecycleRecordStatus::Expired);
-            value.revision = value
-                .revision
-                .checked_add(1)
-                .ok_or(ContinuationError::RevisionExhausted)?;
-            ids.push(id);
-            effects.push(value.cleanup_effect());
-        }
+        let batch = self.prepare_terminal_batch(expire_ids.into_iter().collect())?;
+        self.apply_terminal_batch(&batch.revisions, LifecycleRecordStatus::Expired, None);
         self.limits = limits;
         Ok(ConfigApplyReceipt {
-            expired: bounded(ids)?,
-            effects: bounded(effects)?,
+            expired: batch.ids,
+            effects: batch.effects,
         })
     }
 
@@ -1011,12 +1003,13 @@ impl ContinuationStore {
             .map(|(id, _)| *id)
             .take(max_items)
             .collect::<Vec<_>>();
+        let ids = bounded(ids)?;
         for id in &ids {
             if let Some(value) = self.records.remove(id) {
                 self.token_index.remove(&value.token_digest());
             }
         }
-        bounded(ids)
+        Ok(ids)
     }
 
     fn authorized(
@@ -1167,6 +1160,48 @@ impl ContinuationStore {
         }
     }
 
+    fn prepare_terminal_batch(
+        &self,
+        ids: Vec<ContinuationId>,
+    ) -> Result<PreparedTerminalBatch, ContinuationError> {
+        if ids.len() > self.limits.max_lifecycle_batch {
+            return Err(ContinuationError::ResourceExhausted);
+        }
+        let mut revisions = Vec::with_capacity(ids.len());
+        let mut effects = Vec::with_capacity(ids.len());
+        for id in &ids {
+            let value = self.records.get(id).ok_or(ContinuationError::NotAuthorized)?;
+            revisions.push((*id, value.next_revision()?));
+            effects.push(value.cleanup_effect());
+        }
+        Ok(PreparedTerminalBatch {
+            revisions,
+            ids: bounded(ids)?,
+            effects: bounded(effects)?,
+        })
+    }
+
+    // Only a batch prepared above is applied, under the same exclusive store
+    // borrow. No record can disappear or change between validation and commit.
+    // This phase has no fallible counter/receipt construction and copies no
+    // candidate windows. Process failure or allocator panic is not rollback.
+    fn apply_terminal_batch(
+        &mut self,
+        revisions: &[(ContinuationId, u64)],
+        status: LifecycleRecordStatus,
+        invalidation: Option<(InvalidationReason, NonZeroRevision)>,
+    ) {
+        for (id, revision) in revisions {
+            let value = self.records.get_mut(id).expect("prevalidated terminal record");
+            value.set_status(status);
+            value.revision = *revision;
+            if let Some((reason, generation)) = invalidation {
+                value.terminal_reason = Some(reason);
+                value.last_invalidation_generation = Some(generation);
+            }
+        }
+    }
+
     fn invalidate_ids(
         &mut self,
         ids: Vec<ContinuationId>,
@@ -1176,10 +1211,11 @@ impl ContinuationStore {
         if ids.len() > self.limits.max_lifecycle_batch {
             return Err(ContinuationError::ResourceExhausted);
         }
-        for id in &ids {
+        let mut selected = Vec::new();
+        for id in ids {
             let value = self
                 .records
-                .get(id)
+                .get(&id)
                 .ok_or(ContinuationError::NotAuthorized)?;
             if value
                 .last_invalidation_generation
@@ -1187,31 +1223,20 @@ impl ContinuationStore {
             {
                 return Err(ContinuationError::OperationConflict);
             }
-        }
-        let mut invalidated = Vec::new();
-        let mut effects = Vec::new();
-        for id in ids {
-            let value = self
-                .records
-                .get_mut(&id)
-                .ok_or(ContinuationError::NotAuthorized)?;
-            if !value.is_active() || value.last_invalidation_generation == Some(generation) {
-                continue;
+            if value.is_active() && value.last_invalidation_generation != Some(generation) {
+                selected.push(id);
             }
-            value.set_status(LifecycleRecordStatus::Revoked);
-            value.terminal_reason = Some(reason);
-            value.last_invalidation_generation = Some(generation);
-            value.revision = value
-                .revision
-                .checked_add(1)
-                .ok_or(ContinuationError::RevisionExhausted)?;
-            invalidated.push(id);
-            effects.push(value.cleanup_effect());
         }
+        let batch = self.prepare_terminal_batch(selected)?;
+        self.apply_terminal_batch(
+            &batch.revisions,
+            LifecycleRecordStatus::Revoked,
+            Some((reason, generation)),
+        );
         Ok(InvalidationReceipt {
             generation,
-            invalidated: bounded(invalidated)?,
-            effects: bounded(effects)?,
+            invalidated: batch.ids,
+            effects: batch.effects,
         })
     }
 }
@@ -1307,3 +1332,6 @@ fn constant_time_equal(left: &HandleTokenDigest, right: &HandleTokenDigest) -> b
         })
         == 0
 }
+
+#[cfg(test)]
+mod atomicity_tests;
