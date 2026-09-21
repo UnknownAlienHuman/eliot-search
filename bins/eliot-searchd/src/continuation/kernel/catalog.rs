@@ -18,7 +18,9 @@ use super::spec::{
     MAX_RETAINED_MATCHES, validate_page_size,
 };
 
-#[derive(Clone, Debug)]
+// A retained window has one owner. Cloning a record would duplicate every
+// match (and its strings), bypassing the intended window-memory accounting.
+#[derive(Debug)]
 struct ContinuationRecord {
     namespace_id: String,
     session_tag: u64,
@@ -240,7 +242,6 @@ impl ContinuationCatalog {
         let record = self
             .records
             .get(token)
-            .cloned()
             .ok_or(ContinuationError::NotFound)?;
         if Instant::now() >= record.expires_at {
             self.drop_window(token);
@@ -255,11 +256,22 @@ impl ContinuationCatalog {
             return Err(ContinuationError::SourceFenceChanged);
         }
 
-        self.records.remove(token);
-        self.retained_matches = self
-            .retained_matches
-            .saturating_sub(record.matches.len());
-        let mut record = record;
+        self.advance_window(token, page_size)
+    }
+
+    // Called only after page-size, entropy, session, live-barrier, expiry and
+    // source-fence checks above. This private seam owns paging mechanics, not
+    // authorization. Keep the retained allocation in place; clone only the
+    // selected page and fixed-size coverage, never the whole ranked window.
+    fn advance_window(
+        &mut self,
+        token: &str,
+        page_size: usize,
+    ) -> Result<SearchPage, ContinuationError> {
+        let record = self
+            .records
+            .get_mut(token)
+            .ok_or(ContinuationError::NotFound)?;
         let page_start = record.next_index;
         let page_end = page_start
             .saturating_add(page_size)
@@ -275,23 +287,21 @@ impl ContinuationCatalog {
                 .saturating_duration_since(Instant::now());
             Some(u64::try_from(remaining.as_millis()).unwrap_or(u64::MAX))
         };
-        if !exhausted {
-            self.retained_matches = self
-                .retained_matches
-                .saturating_add(record.matches.len());
-            self.records.insert(token.to_owned(), record.clone());
-        }
-        self.expire();
-        Ok(SearchPage {
+        let page = SearchPage {
             matches: page_matches,
             gaps: Vec::new(),
-            coverage: record.coverage,
+            coverage: record.coverage.clone(),
             page_start,
             page_end,
             exhausted,
             continuation_token: (!exhausted).then(|| token.to_owned()),
             expires_in_ms,
-        })
+        };
+        if exhausted {
+            self.drop_window(token);
+        }
+        self.expire();
+        Ok(page)
     }
 
     /// Marks one window immediately expired for unit tests.
@@ -339,3 +349,6 @@ impl ContinuationCatalog {
         Err(ContinuationError::TokenExhausted)
     }
 }
+
+#[cfg(test)]
+mod tests;
