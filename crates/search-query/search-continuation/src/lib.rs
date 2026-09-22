@@ -343,6 +343,22 @@ impl ContinuationPermit {
     pub const fn record_revision(&self) -> u64 {
         self.record_revision
     }
+
+    /// Maximum fingerprints bound to this selection or pending durable replan.
+    ///
+    /// Pass this bound to the durable executor instead of assuming the original
+    /// request size still fits the issued-set quota. It does not authorize
+    /// output or replace current-limit and live-fence revalidation.
+    #[must_use]
+    pub fn max_emission_items(&self) -> usize {
+        match &self.selection {
+            EmissionSelection::Ephemeral(selected) | EmissionSelection::DurableBatch(selected) => {
+                selected.len()
+            }
+            EmissionSelection::DurableReplan { max_items } => *max_items,
+            EmissionSelection::Exhausted => 0,
+        }
+    }
 }
 
 /// External cleanup or renewal effect.
@@ -748,6 +764,9 @@ impl ContinuationStore {
     /// is called after successful emission. Revalidate with
     /// [`Self::revalidate_emission`] immediately before delivery; the caller
     /// must keep its live security/output barrier closed across that boundary.
+    /// Selection also fits the remaining issued-fingerprint quota. A full quota
+    /// returns `ResourceExhausted`, not a false exhausted result; an already
+    /// fully issued ephemeral window still returns `Exhausted` for cleanup.
     pub fn resume(
         &self,
         credential: &ContinuationCredential,
@@ -760,13 +779,21 @@ impl ContinuationStore {
         }
         let stored = self.authorized(credential)?;
         Self::revalidate(stored, live, now)?;
+        let remaining_issued = self
+            .limits
+            .max_issued_candidates
+            .checked_sub(stored.issued.len())
+            .ok_or(ContinuationError::ResourceExhausted)?;
+        let selection_limit = max_items.min(remaining_issued);
         let mut permit = ContinuationPermit {
             continuation_id: stored.id(),
             record_revision: stored.revision,
             token_digest: stored.token_digest(),
             created_at: stored.created_at().clone(),
             expires_at: stored.expires_at().clone(),
-            selection: EmissionSelection::DurableReplan { max_items },
+            selection: EmissionSelection::DurableReplan {
+                max_items: selection_limit,
+            },
             binding_id: stored.binding_id(),
             plan_fingerprint: stored.plan_fingerprint(),
             result_fence: stored.result_fence().clone(),
@@ -776,16 +803,18 @@ impl ContinuationStore {
                 ContinuationRecord::EphemeralWindow(record),
                 ContinuationPayload::Ephemeral { candidates, .. },
             ) => {
-                let selected = candidates
+                let mut unissued = candidates
                     .iter()
                     .filter(|item| !stored.issued.contains(&item.fingerprint))
-                    .take(max_items)
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if selected.is_empty() {
+                    .peekable();
+                if unissued.peek().is_none() {
                     permit.selection = EmissionSelection::Exhausted;
                     return Ok(ResumePlan::Exhausted { permit });
                 }
+                if selection_limit == 0 {
+                    return Err(ContinuationError::ResourceExhausted);
+                }
+                let selected = unissued.take(selection_limit).cloned().collect::<Vec<_>>();
                 permit.selection = EmissionSelection::Ephemeral(
                     selected.iter().map(|item| item.fingerprint).collect(),
                 );
@@ -801,12 +830,17 @@ impl ContinuationStore {
             (
                 ContinuationRecord::DurableReplanCheckpoint(record),
                 ContinuationPayload::DurableReplan,
-            ) => Ok(ResumePlan::DurableReplan {
-                permit,
-                durable_job_ref: record.durable_job_ref.clone(),
-                replan_checkpoint_ref: record.replan_checkpoint_ref.clone(),
-                issued_fingerprints: bounded(stored.issued.iter().copied().collect())?,
-            }),
+            ) => {
+                if selection_limit == 0 {
+                    return Err(ContinuationError::ResourceExhausted);
+                }
+                Ok(ResumePlan::DurableReplan {
+                    permit,
+                    durable_job_ref: record.durable_job_ref.clone(),
+                    replan_checkpoint_ref: record.replan_checkpoint_ref.clone(),
+                    issued_fingerprints: bounded(stored.issued.iter().copied().collect())?,
+                })
+            }
             _ => Err(ContinuationError::DurabilityMismatch),
         }
     }
@@ -898,6 +932,10 @@ impl ContinuationStore {
     /// A lifetime exceeding the new TTL is expired, not silently shortened or
     /// renewed. Existing handle/permit timestamps remain immutable. All selected
     /// transitions are prepared before publishing any record or limit change.
+    /// The total record cap includes terminal records awaiting cleanup. A cap
+    /// below the retained count returns `ResourceExhausted` without mutation;
+    /// execute cleanup and compact terminal records before retrying the change.
+    /// This method never deletes denial records merely to fit a smaller cap.
     ///
     /// # Panics
     ///
@@ -910,6 +948,11 @@ impl ContinuationStore {
         limits: ContinuationLimits,
     ) -> Result<ConfigApplyReceipt, ContinuationError> {
         let limits = limits.validate()?;
+        // Expiration releases working sets, not retained record slots. Deleting
+        // terminal records here would bypass the caller's cleanup obligation.
+        if self.records.len() > limits.max_records {
+            return Err(ContinuationError::ResourceExhausted);
+        }
         let mut ordered = self
             .records
             .iter()
@@ -934,14 +977,11 @@ impl ContinuationStore {
                 expire_ids.insert(*id);
             }
         }
-        let mut survivors = ordered
+        let survivors = ordered
             .iter()
             .map(|(_, id)| *id)
             .filter(|id| !expire_ids.contains(id))
             .collect::<Vec<_>>();
-        while survivors.len() > limits.max_records {
-            expire_ids.insert(survivors.remove(0));
-        }
         let bindings = survivors
             .iter()
             .filter_map(|id| self.records.get(id).map(StoredContinuation::binding_id))
@@ -1339,3 +1379,6 @@ mod lifetime_tests;
 
 #[cfg(test)]
 mod terminal_cleanup_tests;
+
+#[cfg(test)]
+mod quota_tests;
