@@ -16,8 +16,10 @@
 )]
 
 mod emission;
+mod lifetime;
 
 use emission::EmissionSelection;
+use lifetime::fits_ttl;
 
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
@@ -118,7 +120,7 @@ pub struct ContinuationLimits {
     pub max_expansion_items: usize,
     /// Maximum records changed by one lifecycle operation.
     pub max_lifecycle_batch: usize,
-    /// Maximum declared TTL in milliseconds.
+    /// Maximum actual and declared continuation lifetime in milliseconds.
     pub max_ttl_millis: u64,
 }
 
@@ -245,7 +247,8 @@ pub struct CreateContinuationRequest {
     pub payload: ContinuationPayload,
     /// Random client token and its dedicated digest.
     pub token: ContinuationTokenMaterial,
-    /// Explicit finite TTL for policy validation.
+    /// Lifetime ceiling for this creation, within the configured maximum.
+    /// The actual timestamp interval must be positive and no longer than this.
     pub ttl_millis: u64,
     /// Candidate fingerprints already emitted before durable restore/creation.
     pub issued_fingerprints: BoundedList<Blake3Digest32, MAX_LIST_ITEMS>,
@@ -878,6 +881,10 @@ impl ContinuationStore {
 
     /// Applies restrictive live limits and expires incompatible active records.
     ///
+    /// A lifetime exceeding the new TTL is expired, not silently shortened or
+    /// renewed. Existing handle/permit timestamps remain immutable. All selected
+    /// transitions are prepared before publishing any record or limit change.
+    ///
     /// # Panics
     ///
     /// Panics if a collected record ID is missing from the store. This is
@@ -904,7 +911,12 @@ impl ContinuationStore {
                 ContinuationPayload::Ephemeral { candidates, .. }
                     if candidates.len() > limits.max_candidate_window
             );
-            if oversized_window || value.issued.len() > limits.max_issued_candidates {
+            let oversized_lifetime =
+                !fits_ttl(value.created_at(), value.expires_at(), limits.max_ttl_millis);
+            if oversized_lifetime
+                || oversized_window
+                || value.issued.len() > limits.max_issued_candidates
+            {
                 expire_ids.insert(*id);
             }
         }
@@ -1010,7 +1022,7 @@ impl ContinuationStore {
             }
             LifecycleRecordStatus::Active => {}
         }
-        if now >= value.expires_at() {
+        if now < value.created_at() || now >= value.expires_at() {
             return Err(ContinuationError::SnapshotExpired);
         }
         if value.binding_id() != live.binding_id {
@@ -1048,7 +1060,9 @@ impl ContinuationStore {
         expires_at: &UtcTimestamp,
         ttl_millis: u64,
     ) -> Result<(), ContinuationError> {
-        if ttl_millis == 0 || ttl_millis > self.limits.max_ttl_millis || created_at >= expires_at {
+        if ttl_millis > self.limits.max_ttl_millis
+            || !fits_ttl(created_at, expires_at, ttl_millis)
+        {
             Err(ContinuationError::InvalidTtl)
         } else {
             Ok(())
@@ -1305,3 +1319,6 @@ mod atomicity_tests;
 
 #[cfg(test)]
 mod emission_tests;
+
+#[cfg(test)]
+mod lifetime_tests;
