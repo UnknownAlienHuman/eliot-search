@@ -33,11 +33,12 @@ impl MutationAttempt {
     }
 }
 
-/// Remembers the first output failure even if a caller catches its error.
-/// A later successful write cannot make a partial response reusable.
+/// Tracks the first I/O failure and whether response bytes were written.
+/// A logical error after partial output is fatal even without a failed write.
 pub(super) struct SessionOutput<'a, W> {
     inner: &'a mut W,
     failed: bool,
+    started: bool,
 }
 
 impl<W: Write> Write for SessionOutput<'_, W> {
@@ -46,6 +47,9 @@ impl<W: Write> Write for SessionOutput<'_, W> {
             return Err(io::Error::from(io::ErrorKind::BrokenPipe));
         }
         let result = self.inner.write(bytes);
+        if matches!(result, Ok(count) if count > 0) {
+            self.started = true;
+        }
         if result.is_err() || (matches!(result, Ok(0)) && !bytes.is_empty()) {
             self.failed = true;
         }
@@ -96,11 +100,13 @@ pub(super) fn serve<R: BufRead, W: Write>(
         let mut output = SessionOutput {
             inner: &mut *writer,
             failed: false,
+            started: false,
         };
         let result = execute(&command, &mut output, &mut attempt);
-        if output.failed {
-            // There may already be a partial JSON frame on the channel. Do
-            // not append an error frame or consume a following request.
+        if output.failed || (output.started && result.is_err()) {
+            // A logical failure after successful writes (for example the
+            // next frame exceeding its size bound) also leaves an incomplete
+            // exchange. Do not append an error frame or consume another request.
             return Err(if attempt.dispatched {
                 MUTATION_UNKNOWN
             } else {
@@ -131,3 +137,6 @@ pub(super) fn serve<R: BufRead, W: Write>(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod delivery_tests;

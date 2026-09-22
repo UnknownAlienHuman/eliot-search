@@ -1,5 +1,9 @@
 //! Finite session-local continuation catalog.
 
+mod prepared;
+
+pub(crate) use prepared::PreparedPage;
+
 use core::fmt;
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -106,14 +110,27 @@ impl ContinuationCatalog {
         invalidated
     }
 
-    /// Creates the first page and an opaque continuation when retained matches
-    /// remain. An exhausted single page inserts no record.
+    /// Compatibility seam for the existing catalog tests. Production commits
+    /// through `PreparedPage::deliver` only after a complete output exchange.
+    #[cfg(test)]
     pub(crate) fn create_page(
+        &mut self,
+        store: &DirectStore,
+        result: StoreSearchResult,
+        page_size: usize,
+    ) -> Result<SearchPage, ContinuationError> {
+        self.prepare_page(store, result, page_size)?
+            .finish_for_tests(Instant::now)
+    }
+
+    /// Stages a first page without publishing its token or charging its window.
+    /// Dropping the exclusive preparation leaves no new catalog record.
+    pub(crate) fn prepare_page(
         &mut self,
         store: &DirectStore,
         mut result: StoreSearchResult,
         page_size: usize,
-    ) -> Result<SearchPage, ContinuationError> {
+    ) -> Result<PreparedPage<'_>, ContinuationError> {
         validate_page_size(page_size)?;
         if self.entropy_poisoned {
             return Err(ContinuationError::EntropyUnavailable);
@@ -154,7 +171,7 @@ impl ContinuationCatalog {
         let page_end = retained_matches.min(page_size);
         let page_matches = result.matches[..page_end].to_vec();
         if page_end == retained_matches {
-            return Ok(SearchPage {
+            return Ok(PreparedPage::new(self, SearchPage {
                 matches: page_matches,
                 gaps: result.gaps,
                 coverage,
@@ -163,7 +180,7 @@ impl ContinuationCatalog {
                 exhausted: true,
                 continuation_token: None,
                 expires_in_ms: None,
-            });
+            }, None));
         }
         if self.records.len() >= MAX_CONTINUATIONS {
             return Err(ContinuationError::CapacityExceeded);
@@ -179,11 +196,7 @@ impl ContinuationCatalog {
             coverage: coverage.clone(),
             expires_at: Instant::now() + CONTINUATION_TTL,
         };
-        self.retained_matches = self
-            .retained_matches
-            .saturating_add(record.matches.len());
-        self.records.insert(token.clone(), record);
-        Ok(SearchPage {
+        Ok(PreparedPage::new(self, SearchPage {
             matches: page_matches,
             gaps: result.gaps,
             coverage,
@@ -195,10 +208,11 @@ impl ContinuationCatalog {
                 u64::try_from(CONTINUATION_TTL.as_millis())
                     .unwrap_or(u64::MAX),
             ),
-        })
+        }, Some(record)))
     }
 
-    /// Advances one exact window after a clean live-authority checkpoint.
+    /// Advances one exact window in the existing catalog tests.
+    #[cfg(test)]
     pub(crate) fn continue_page(
         &mut self,
         store: &DirectStore,
@@ -213,8 +227,8 @@ impl ContinuationCatalog {
         )
     }
 
-    /// Advances one window after session, live authority, TTL and exact source
-    /// fence revalidation. Any denial drops the whole retained ranking.
+    /// Existing test seam retaining live-barrier denial coverage.
+    #[cfg(test)]
     pub(crate) fn continue_page_with_live_barrier(
         &mut self,
         store: &DirectStore,
@@ -222,6 +236,19 @@ impl ContinuationCatalog {
         page_size: usize,
         barrier: LiveExpansionBarrier,
     ) -> Result<SearchPage, ContinuationError> {
+        self.prepare_continue_page(store, token, page_size, barrier)?
+            .finish_for_tests(Instant::now)
+    }
+
+    /// Stages the next page after the existing session/live/source checks.
+    /// Preparation never advances or deletes a live window, even a final one.
+    pub(crate) fn prepare_continue_page(
+        &mut self,
+        store: &DirectStore,
+        token: &str,
+        page_size: usize,
+        barrier: LiveExpansionBarrier,
+    ) -> Result<PreparedPage<'_>, ContinuationError> {
         validate_page_size(page_size)?;
         if self.entropy_poisoned {
             return Err(ContinuationError::EntropyUnavailable);
@@ -256,13 +283,14 @@ impl ContinuationCatalog {
             return Err(ContinuationError::SourceFenceChanged);
         }
 
-        self.advance_window(token, page_size)
+        self.prepare_window_with_clock(token, page_size, Instant::now)
     }
 
     // Called only after page-size, entropy, session, live-barrier, expiry and
     // source-fence checks above. This private seam owns paging mechanics, not
     // authorization. Keep the retained allocation in place; clone only the
     // selected page and fixed-size coverage, never the whole ranked window.
+    #[cfg(test)]
     fn advance_window(
         &mut self,
         token: &str,
@@ -271,19 +299,29 @@ impl ContinuationCatalog {
         self.advance_window_with_clock(token, page_size, Instant::now)
     }
 
-    // The source-fence comparison and page allocation happen after the outer
-    // expiry check. Recheck before copying and immediately before returning a
-    // page. Clock injection is private and exists only for deterministic fault
-    // tests; production uses the same monotonic Instant::now as the outer gate.
+    #[cfg(test)]
     fn advance_window_with_clock(
         &mut self,
         token: &str,
         page_size: usize,
         mut now: impl FnMut() -> Instant,
     ) -> Result<SearchPage, ContinuationError> {
+        self.prepare_window_with_clock(token, page_size, &mut now)?
+            .finish_for_tests(now)
+    }
+
+    // The selected page is copied once, while the original ranking and cursor
+    // remain in the catalog. The exclusive preparation cannot be cloned or
+    // outlive this borrow. Production callers have already checked authority.
+    fn prepare_window_with_clock(
+        &mut self,
+        token: &str,
+        page_size: usize,
+        mut now: impl FnMut() -> Instant,
+    ) -> Result<PreparedPage<'_>, ContinuationError> {
         let record = self
             .records
-            .get_mut(token)
+            .get(token)
             .ok_or(ContinuationError::NotFound)?;
         let expires_at = record.expires_at;
         if now() >= expires_at {
@@ -295,39 +333,18 @@ impl ContinuationCatalog {
         let page_end = page_start
             .saturating_add(page_size)
             .min(record.matches.len());
-        let page_matches = record.matches[page_start..page_end].to_vec();
-        let exhausted = page_end == record.matches.len();
-        let mut page = SearchPage {
-            matches: page_matches,
+        let page = SearchPage {
+            matches: record.matches[page_start..page_end].to_vec(),
             gaps: Vec::new(),
             coverage: record.coverage.clone(),
             page_start,
             page_end,
-            exhausted,
-            continuation_token: (!exhausted).then(|| token.to_owned()),
+            exhausted: page_end == record.matches.len(),
+            continuation_token: (page_end < record.matches.len())
+                .then(|| token.to_owned()),
             expires_in_ms: None,
         };
-        record.next_index = page_end;
-        if exhausted {
-            self.drop_window(token);
-        }
-        self.expire();
-
-        let terminal_time = now();
-        if terminal_time >= expires_at {
-            // Expiry denies the complete page, including a would-be final one.
-            // Drop the window rather than retaining an advanced, undelivered
-            // ranking. drop_window is idempotent after exhaustion or the sweep.
-            self.drop_window(token);
-            return Err(ContinuationError::Expired);
-        }
-        if !exhausted {
-            let remaining = expires_at.saturating_duration_since(terminal_time);
-            page.expires_in_ms = Some(
-                u64::try_from(remaining.as_millis()).unwrap_or(u64::MAX),
-            );
-        }
-        Ok(page)
+        Ok(PreparedPage::existing(self, token, page, expires_at))
     }
 
     /// Marks one window immediately expired for unit tests.
@@ -378,3 +395,6 @@ impl ContinuationCatalog {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod delivery_tests;

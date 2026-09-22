@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use crate::continuation::ContinuationError;
+use crate::continuation::{ContinuationError, LiveExpansionBarrier};
 use crate::direct_preparation::verify_spine_gate;
 use crate::result_handles::ResultHandleError;
 use crate::service_output::{
@@ -50,13 +50,20 @@ pub(super) fn cmd_search_page<W: Write>(
     let result = store.search(&query, parse_search_mode(mode)?)?;
     enforce_spine_gate(&result)?;
     let page = continuations
-        .create_page(store, result, page_size)
+        .prepare_page(store, result, page_size)
         .map_err(continuation_error)?;
-    let public = handles
-        .mint_page(store, &page.matches)
+    let mut public = handles
+        .prepare_mint_page(store, &page.page().matches)
         .map_err(handle_error)?;
     refresh_storage(storage, canonical_root)?;
-    emit_search_page(writer, &page, &public, storage)
+    page.deliver(|page| {
+        public.revalidate().map_err(handle_error)?;
+        emit_search_page(writer, page, public.matches(), storage)
+    })?;
+    // No recoverable work remains after complete output. Both catalogs were
+    // exclusively borrowed throughout preparation and emission.
+    let _ = public.commit();
+    Ok(())
 }
 
 pub(super) fn cmd_continue<W: Write>(
@@ -75,13 +82,25 @@ pub(super) fn cmd_continue<W: Write>(
     } = &mut *state;
     let page_size = parse_page_size(page_size)?;
     let page = continuations
-        .continue_page(store, token, page_size)
+        .prepare_continue_page(
+            store,
+            token,
+            page_size,
+            LiveExpansionBarrier::clean(),
+        )
         .map_err(continuation_error)?;
-    let public = handles
-        .mint_page(store, &page.matches)
+    let mut public = handles
+        .prepare_mint_page(store, &page.page().matches)
         .map_err(handle_error)?;
     refresh_storage(storage, canonical_root)?;
-    emit_search_page(writer, &page, &public, storage)
+    page.deliver(|page| {
+        public.revalidate().map_err(handle_error)?;
+        emit_search_page(writer, page, public.matches(), storage)
+    })?;
+    // No recoverable work remains after complete output. Both catalogs were
+    // exclusively borrowed throughout preparation and emission.
+    let _ = public.commit();
+    Ok(())
 }
 
 pub(super) fn cmd_expand_handle<W: Write>(

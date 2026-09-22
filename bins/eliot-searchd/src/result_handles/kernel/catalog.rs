@@ -1,7 +1,11 @@
 //! Ephemeral handle minting, finite catalog state and token lifecycle.
 
+mod prepared;
+
+pub(crate) use prepared::PreparedHandles;
+
 use core::fmt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use crate::continuation::qualified_entropy_32;
@@ -69,12 +73,25 @@ impl ResultHandleCatalog {
         invalidated
     }
 
-    /// Atomically mints one opaque handle per source-backed match.
+    /// Compatibility seam for existing catalog tests.
+    #[cfg(test)]
     pub(crate) fn mint_page(
         &mut self,
         store: &DirectStore,
         matches: &[StoredMatch],
     ) -> Result<Vec<PublicHandledMatch>, ResultHandleError> {
+        let mut prepared = self.prepare_mint_page(store, matches)?;
+        prepared.revalidate()?;
+        Ok(prepared.commit())
+    }
+
+    /// Stages handles under an exclusive borrow; none is inserted until commit.
+    /// Any preparation, diagnostics or output error may drop the whole batch.
+    pub(crate) fn prepare_mint_page(
+        &mut self,
+        store: &DirectStore,
+        matches: &[StoredMatch],
+    ) -> Result<PreparedHandles<'_>, ResultHandleError> {
         if self.entropy_poisoned {
             return Err(ResultHandleError::EntropyUnavailable);
         }
@@ -95,6 +112,7 @@ impl ResultHandleCatalog {
         let expires_in_ms =
             u64::try_from(RESULT_HANDLE_TTL.as_millis()).unwrap_or(u64::MAX);
         let mut staged = Vec::with_capacity(matches.len());
+        let mut reserved = BTreeSet::new();
 
         for item in matches {
             let source = summaries
@@ -109,7 +127,10 @@ impl ResultHandleCatalog {
             {
                 return Err(ResultHandleError::RevisionChanged);
             }
-            let token = self.allocate_token()?;
+            let token = self.allocate_token(&reserved, &mut || {
+                qualified_entropy_32().map_err(|_| ResultHandleError::EntropyUnavailable)
+            })?;
+            reserved.insert(token.clone());
             staged.push((
                 token.clone(),
                 ResultHandleRecord {
@@ -135,12 +156,7 @@ impl ResultHandleCatalog {
             ));
         }
 
-        let mut public = Vec::with_capacity(staged.len());
-        for (token, record, item) in staged {
-            self.records.insert(token, record);
-            public.push(item);
-        }
-        Ok(public)
+        Ok(PreparedHandles::new(self, staged, expires_at))
     }
 
     /// Durable handles require an external immutable-retention lease.
@@ -166,15 +182,20 @@ impl ResultHandleCatalog {
             .retain(|_, record| record.expires_at > now);
     }
 
-    fn allocate_token(&self) -> Result<String, ResultHandleError> {
+    fn allocate_token(
+        &self,
+        reserved: &BTreeSet<String>,
+        entropy: &mut impl FnMut() -> Result<[u8; 32], ResultHandleError>,
+    ) -> Result<String, ResultHandleError> {
         for _ in 0..128 {
-            let material =
-                qualified_entropy_32().map_err(|_| ResultHandleError::EntropyUnavailable)?;
-            let token = sha256::hex(&material);
-            if !self.records.contains_key(&token) {
+            let token = sha256::hex(&entropy()?);
+            if !self.records.contains_key(&token) && !reserved.contains(&token) {
                 return Ok(token);
             }
         }
         Err(ResultHandleError::TokenExhausted)
     }
 }
+
+#[cfg(test)]
+mod delivery_tests;
