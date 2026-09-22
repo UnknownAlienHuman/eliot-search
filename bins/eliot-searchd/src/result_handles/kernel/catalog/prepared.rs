@@ -30,6 +30,11 @@ impl<'a> PreparedHandles<'a> {
         &self.public
     }
 
+    /// Original batch deadline; an empty batch has no handle lifetime.
+    pub(crate) fn expires_at(&self) -> Option<Instant> {
+        (!self.public.is_empty()).then_some(self.expires_at)
+    }
+
     /// Refreshes reported remaining TTL without renewing the original deadline.
     pub(crate) fn revalidate(&mut self) -> Result<(), ResultHandleError> {
         self.revalidate_at(Instant::now())

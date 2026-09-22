@@ -5,6 +5,7 @@ mod diagnostics;
 mod dispatch;
 mod entry;
 mod mutation;
+mod output_deadline;
 mod query;
 mod reporting;
 mod runtime;

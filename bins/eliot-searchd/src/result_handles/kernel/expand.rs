@@ -12,7 +12,8 @@ use super::model::ResultHandleExpansion;
 use super::spec::MAX_HANDLE_EXPANSION_BYTES;
 
 impl ResultHandleCatalog {
-    /// Expands one exact source range after a clean live-authority checkpoint.
+    /// Immediate compatibility seam for existing source/authority fixtures.
+    #[cfg(test)]
     pub(crate) fn expand(
         &mut self,
         store: &DirectStore,
@@ -29,8 +30,7 @@ impl ResultHandleCatalog {
         )
     }
 
-    /// Expands one handle after the live-authority checkpoint and exact
-    /// namespace, fence, source, revision and readback revalidation.
+    #[cfg(test)]
     pub(crate) fn expand_with_live_barrier(
         &mut self,
         store: &DirectStore,
@@ -39,6 +39,37 @@ impl ResultHandleCatalog {
         byte_end: u64,
         barrier: LiveExpansionBarrier,
     ) -> Result<ResultHandleExpansion, ResultHandleError> {
+        self.prepare_expand_with_live_barrier(store, token, byte_start, byte_end, barrier)
+            .map(|prepared| prepared.expansion)
+    }
+
+    /// Retains the handle borrow and original deadline through response delivery.
+    pub(crate) fn prepare_expand(
+        &mut self,
+        store: &DirectStore,
+        token: &str,
+        byte_start: u64,
+        byte_end: u64,
+    ) -> Result<PreparedExpansion<'_>, ResultHandleError> {
+        self.prepare_expand_with_live_barrier(
+            store,
+            token,
+            byte_start,
+            byte_end,
+            LiveExpansionBarrier::clean(),
+        )
+    }
+
+    /// Expands one handle after the live-authority checkpoint and exact
+    /// namespace, fence, source, revision and readback revalidation.
+    fn prepare_expand_with_live_barrier(
+        &mut self,
+        store: &DirectStore,
+        token: &str,
+        byte_start: u64,
+        byte_end: u64,
+        barrier: LiveExpansionBarrier,
+    ) -> Result<PreparedExpansion<'_>, ResultHandleError> {
         if self.entropy_poisoned {
             return Err(ResultHandleError::EntropyUnavailable);
         }
@@ -120,12 +151,75 @@ impl ResultHandleCatalog {
             return Err(ResultHandleError::ReadbackMismatch);
         }
         self.expire();
-        Ok(ResultHandleExpansion {
-            source_handle: token.to_owned(),
-            byte_start,
-            byte_end,
-            source_byte_length: record.byte_length,
-            bytes,
-        })
+        // Readback and expiry housekeeping may outlast the initial TTL gate.
+        // Do not return source bytes from an expired (or swept) handle.
+        PreparedExpansion::new(
+            self,
+            ResultHandleExpansion {
+                source_handle: token.to_owned(),
+                byte_start,
+                byte_end,
+                source_byte_length: record.byte_length,
+                bytes,
+            },
+            record.expires_at,
+            Instant::now(),
+        )
     }
 }
+
+/// Verified bytes awaiting output, not a new record or a transferable authority.
+/// An exclusive catalog borrow keeps the original handle stable until drop.
+#[must_use]
+pub(crate) struct PreparedExpansion<'a> {
+    catalog: &'a mut ResultHandleCatalog,
+    expansion: ResultHandleExpansion,
+    expires_at: Instant,
+}
+
+impl<'a> PreparedExpansion<'a> {
+    fn new(
+        catalog: &'a mut ResultHandleCatalog,
+        expansion: ResultHandleExpansion,
+        expires_at: Instant,
+        now: Instant,
+    ) -> Result<Self, ResultHandleError> {
+        let mut prepared = Self { catalog, expansion, expires_at };
+        prepared.revalidate_at(now)?;
+        Ok(prepared)
+    }
+
+    fn revalidate_at(&mut self, now: Instant) -> Result<(), ResultHandleError> {
+        let token = &self.expansion.source_handle;
+        if now >= self.expires_at || !self.catalog.records.contains_key(token) {
+            self.catalog.records.remove(token);
+            self.catalog.expire();
+            return Err(ResultHandleError::Expired);
+        }
+        Ok(())
+    }
+
+    /// Checks again after caller-side diagnostics and just before output.
+    /// The callback must enforce the supplied absolute deadline on writes.
+    pub(crate) fn deliver(
+        self,
+        emit: impl FnOnce(&ResultHandleExpansion, Instant) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.deliver_at(Instant::now(), emit)
+    }
+
+    fn deliver_at(
+        mut self,
+        now: Instant,
+        emit: impl FnOnce(&ResultHandleExpansion, Instant) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.revalidate_at(now).map_err(|error| error.code().to_owned())?;
+        // No post-output check: writer success is not retroactively denied.
+        // Dropping the preparation discards its bytes, never advances a cursor
+        // or renews the handle. Session failure owns whole-session invalidation.
+        emit(&self.expansion, self.expires_at)
+    }
+}
+
+#[cfg(test)]
+mod deadline_tests;

@@ -57,6 +57,12 @@ impl<'a> PreparedPage<'a> {
         &self.page
     }
 
+    /// Original absolute deadline, including a would-be final page.
+    /// Never reconstruct this from the rounded, reported remaining TTL.
+    pub(crate) const fn expires_at(&self) -> Option<Instant> {
+        self.expires_at
+    }
+
     /// Checks the original deadline immediately before the output callback.
     /// Only callback success commits the cursor/new window; output errors must
     /// still trigger the session's fail-stop rule, never retry a partial frame.

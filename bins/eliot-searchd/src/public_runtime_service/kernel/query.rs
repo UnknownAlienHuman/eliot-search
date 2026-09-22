@@ -11,6 +11,7 @@ use crate::service_output::{
 
 use super::codec::{decode_query, parse_page_size, parse_search_mode, parse_u64};
 use super::diagnostics::refresh_storage;
+use super::output_deadline::{page_deadline, with_deadline};
 use super::state::CommandState;
 
 pub(super) fn cmd_streaming_search<W: Write>(
@@ -56,9 +57,12 @@ pub(super) fn cmd_search_page<W: Write>(
         .prepare_mint_page(store, &page.page().matches)
         .map_err(handle_error)?;
     refresh_storage(storage, canonical_root)?;
+    let deadline = page_deadline(page.expires_at(), public.expires_at());
     page.deliver(|page| {
         public.revalidate().map_err(handle_error)?;
-        emit_search_page(writer, page, public.matches(), storage)
+        with_deadline(writer, deadline, |output| {
+            emit_search_page(output, page, public.matches(), storage)
+        })
     })?;
     // No recoverable work remains after complete output. Both catalogs were
     // exclusively borrowed throughout preparation and emission.
@@ -93,9 +97,12 @@ pub(super) fn cmd_continue<W: Write>(
         .prepare_mint_page(store, &page.page().matches)
         .map_err(handle_error)?;
     refresh_storage(storage, canonical_root)?;
+    let deadline = page_deadline(page.expires_at(), public.expires_at());
     page.deliver(|page| {
         public.revalidate().map_err(handle_error)?;
-        emit_search_page(writer, page, public.matches(), storage)
+        with_deadline(writer, deadline, |output| {
+            emit_search_page(output, page, public.matches(), storage)
+        })
     })?;
     // No recoverable work remains after complete output. Both catalogs were
     // exclusively borrowed throughout preparation and emission.
@@ -120,10 +127,16 @@ pub(super) fn cmd_expand_handle<W: Write>(
     let start = parse_u64(start, "SERVICE_START_OFFSET_INVALID")?;
     let end = parse_u64(end, "SERVICE_END_OFFSET_INVALID")?;
     let expansion = handles
-        .expand(store, token, start, end)
+        .prepare_expand(store, token, start, end)
         .map_err(handle_error)?;
     refresh_storage(storage, canonical_root)?;
-    emit_handle_expansion(writer, &expansion, storage)
+    expansion.deliver(|expansion, expires_at| {
+        with_deadline(
+            writer,
+            Some((expires_at, ResultHandleError::Expired.code())),
+            |output| emit_handle_expansion(output, expansion, storage),
+        )
+    })
 }
 
 fn enforce_spine_gate(
