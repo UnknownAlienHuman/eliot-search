@@ -556,10 +556,21 @@ impl StoredContinuation {
         }
     }
 
-    const fn set_status(&mut self, status: LifecycleRecordStatus) {
+    fn set_status(&mut self, status: LifecycleRecordStatus) {
         match &mut self.record {
             ContinuationRecord::EphemeralWindow(value) => value.status = status,
             ContinuationRecord::DurableReplanCheckpoint(value) => value.status = status,
+        }
+        if status != LifecycleRecordStatus::Active {
+            // Terminal records retain identity, denial reason and cleanup refs,
+            // not query working sets. Replacing (rather than clearing) the
+            // candidate vector releases its backing allocation immediately.
+            // Every caller has already prepared revisions and cleanup receipts;
+            // no fallible work or external effects are introduced here.
+            if let ContinuationPayload::Ephemeral { candidates, .. } = &mut self.payload {
+                *candidates = BoundedList::empty();
+            }
+            self.issued = BTreeSet::new();
         }
     }
 
@@ -627,6 +638,9 @@ struct PreparedTerminalBatch {
 /// receipts before changing state. A returned error does not apply a prefix
 /// of the requested transition or publish new limits. External cleanup remains
 /// the caller's responsibility; a failed invalidation is not a serving permit.
+/// Terminal transitions release the store-owned candidate window and issued set
+/// before returning. Identity, denial state and cleanup references remain until
+/// compaction; caller-owned pages/permits and external pins have separate owners.
 #[derive(Debug)]
 pub struct ContinuationStore {
     limits: ContinuationLimits,
@@ -1322,3 +1336,6 @@ mod emission_tests;
 
 #[cfg(test)]
 mod lifetime_tests;
+
+#[cfg(test)]
+mod terminal_cleanup_tests;
