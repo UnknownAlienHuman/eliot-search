@@ -252,7 +252,8 @@ pub struct AuthorizedScope {
 /// Intersects requested IDs with an immutable authoritative snapshot.
 ///
 /// Unknown, inactive, or foreign IDs are rejected instead of silently widening
-/// or substituting an adjacent scope.
+/// or substituting an adjacent scope. Every selected key must match the
+/// embedded membership identity; inconsistent snapshots fail closed.
 pub fn intersect_scope(
     requested: &RequestedMembershipScope,
     grant_scope: &BTreeSet<SourceMembershipId>,
@@ -270,9 +271,7 @@ pub fn intersect_scope(
             .bindings
             .get(membership)
             .ok_or(AccessError::ScopeUnknown)?;
-        if !binding.active {
-            return Err(AccessError::ScopeUnauthorized);
-        }
+        validate_membership_binding(membership, binding)?;
         memberships.insert(*membership, binding.clone());
     }
     if memberships.is_empty() {
@@ -285,6 +284,22 @@ pub fn intersect_scope(
         membership_generation: authoritative.membership_generation,
         snapshot_digest: authoritative.snapshot_digest,
     })
+}
+
+// The map key is used for grant/live-fence checks while the embedded ID is
+// used to build retrieval/IDF predicates. They must name the same membership;
+// never repair a mismatched snapshot by rekeying it or rewriting its payload.
+fn validate_membership_binding(
+    membership: &SourceMembershipId,
+    binding: &MembershipAccessBinding,
+) -> Result<(), AccessError> {
+    if !binding.active {
+        return Err(AccessError::ScopeUnauthorized);
+    }
+    if *membership != binding.membership_id {
+        return Err(AccessError::SnapshotStale);
+    }
+    Ok(())
 }
 
 /// Exact indexed route and visible epoch.
@@ -368,7 +383,9 @@ pub struct SafeRetrievalLeg {
 }
 
 /// Compiles finite safe legs. Without a current overlap proof, each membership
-/// remains in its own independent scoring population.
+/// remains in its own independent scoring population. Empty scopes and
+/// inconsistent membership bindings fail before any leg is constructed,
+/// including when a caller supplies an overlap proof.
 ///
 /// # Panics
 ///
@@ -385,6 +402,14 @@ pub fn compile_safe_legs(
 ) -> Result<Vec<SafeRetrievalLeg>, AccessError> {
     if max_legs == 0 {
         return Err(AccessError::RetrievalLegBudgetExceeded);
+    }
+    // AuthorizedScope has public fields, so direct callers can bypass
+    // intersect_scope. Validate before either grouped or singleton planning.
+    if scope.memberships.is_empty() {
+        return Err(AccessError::AuthorizedScopeEmpty);
+    }
+    for (membership, binding) in &scope.memberships {
+        validate_membership_binding(membership, binding)?;
     }
     let membership_ids = scope.memberships.keys().copied().collect::<BTreeSet<_>>();
     let can_group = overlap_proof.is_some_and(|proof| {
@@ -524,14 +549,16 @@ pub enum ContaminationDecision {
 }
 
 /// Discards a whole leg when its candidates, IDF, counts, diversity, or trace
-/// may have been influenced by newly denied or purged material.
+/// may have been influenced by newly denied or purged material. Regressed or
+/// contradictory live snapshots discard all legs; a leg from a generation
+/// newer than the current snapshot cannot be certified clean either.
 #[must_use]
 pub fn classify_contaminated_legs(
     execution: &[LegSecurityPopulation],
     previous: &LiveSecurityState,
     current: &LiveSecurityState,
 ) -> ContaminationDecision {
-    if current.fail_closed {
+    if current.fail_closed || invalid_live_transition(previous, current) {
         return ContaminationDecision::DiscardLegs(
             execution.iter().map(|leg| leg.leg_id).collect(),
         );
@@ -549,8 +576,9 @@ pub fn classify_contaminated_legs(
     let contaminated = execution
         .iter()
         .filter(|leg| {
-            leg.security_generation < current.generation
-                && !leg.memberships.is_disjoint(&newly_restricted)
+            leg.security_generation > current.generation
+                || (leg.security_generation < current.generation
+                    && !leg.memberships.is_disjoint(&newly_restricted))
         })
         .map(|leg| leg.leg_id)
         .collect::<BTreeSet<_>>();
@@ -559,6 +587,15 @@ pub fn classify_contaminated_legs(
     } else {
         ContaminationDecision::DiscardLegs(contaminated)
     }
+}
+
+// A generation names one immutable live snapshot. Neither an older snapshot
+// nor two different snapshots with the same generation establish continuity.
+// A higher generation may legitimately contain permissive changes; do not
+// impose a deny-set superset requirement or treat every update as contamination.
+fn invalid_live_transition(previous: &LiveSecurityState, current: &LiveSecurityState) -> bool {
+    current.generation < previous.generation
+        || (current.generation == previous.generation && current != previous)
 }
 
 // ---------------------------------------------------------------------------
@@ -666,7 +703,8 @@ pub const fn idf_predicate_digest(plan: &BaseEligibilityPlan) -> EligibilityPlan
 ///
 /// Any plan whose membership is newly purged or denied fails the whole set
 /// instead of silently narrowing it: callers must discard and replan the
-/// contaminated leg via [`classify_contaminated_legs`].
+/// contaminated leg via [`classify_contaminated_legs`]. A live snapshot older
+/// than any supplied plan is rejected, even when its deny sets are empty.
 pub fn retain_eligible_plans<'a>(
     plans: &'a [BaseEligibilityPlan],
     live: &LiveSecurityState,
@@ -685,6 +723,12 @@ pub fn retain_eligible_plans<'a>(
         .any(|plan| live.denied_memberships.contains(&plan.membership_id))
     {
         return Err(AccessError::LiveRevocation);
+    }
+    if plans
+        .iter()
+        .any(|plan| plan.live_security_generation > live.generation)
+    {
+        return Err(AccessError::SecurityFenceStale);
     }
     Ok(plans.iter().collect())
 }
@@ -710,7 +754,8 @@ pub enum ActiveRequestDecision {
 ///
 /// Purge overlap denies; deny overlap discards and replans; a fail-closed
 /// domain cancels with an explicit gap. No decision exposes inaccessible
-/// names, counts, scores or whether a foreign token/source existed.
+/// names, counts, scores or whether a foreign token/source existed. Regressed
+/// or contradictory live snapshots cancel, including content-free completion.
 #[must_use]
 pub fn classify_active_request_contamination(
     memberships: &BTreeSet<SourceMembershipId>,
@@ -718,7 +763,7 @@ pub fn classify_active_request_contamination(
     current: &LiveSecurityState,
     content_pending: bool,
 ) -> ActiveRequestDecision {
-    if current.fail_closed {
+    if current.fail_closed || invalid_live_transition(previous, current) {
         return ActiveRequestDecision::CancelAndGap;
     }
     let newly_purged = current
