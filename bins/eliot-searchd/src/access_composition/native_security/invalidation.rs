@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use search_access::{AccessError, MAX_SECURITY_DEPENDENTS, SecurityDependentReceipt};
 use search_contracts::{BoundedList, LiveDenySnapshotRef, OpaqueId, ReceiptRef};
 use search_control_redb::security_restriction::SecurityRestrictionCommit;
+use search_continuation::{ContinuationCleanup, ContinuationStore};
 use search_handles::HandleStore;
 use search_ports::{CancellationProbe, OperationContext};
 
@@ -15,10 +16,13 @@ use super::{
 };
 
 mod handles;
+mod continuations;
 
 /// Canonical handle owner's configuration identifier. This slot cannot be
 /// registered as a generic callback or silently substituted with legacy tokens.
 pub const HANDLE_SECURITY_DEPENDENT: &str = "search-handles";
+
+const CONTINUATION_SECURITY_DEPENDENT: &str = "search-continuation";
 
 /// One additional capability owner's executed, idempotent invalidation.
 ///
@@ -41,6 +45,14 @@ pub trait SecurityDependentInvalidator<C: CancellationProbe> {
 
 enum RegisteredInvalidator<'a, C: CancellationProbe> {
     Handles(&'a mut HandleStore),
+    Continuations {
+        store: &'a mut ContinuationStore,
+        cleanup: &'a mut dyn FnMut(
+            &SecurityRestrictionCommit,
+            &ContinuationCleanup,
+            &OperationContext<C>,
+        ) -> Result<(), AccessError>,
+    },
     Owner(&'a mut dyn SecurityDependentInvalidator<C>),
 }
 
@@ -53,7 +65,8 @@ enum RegisteredInvalidator<'a, C: CancellationProbe> {
 /// closed and all owners must support replay of the same operation.
 ///
 /// Construct under the existing domain lock, register the canonical handle store
-/// with `register_handles` and every other required owner with `register_owner`,
+/// with `register_handles`, continuations with `register_continuations`, and
+/// every other required owner with `register_owner`,
 /// then supply the registry to `NativeSecurityDomain::{restore, apply, recover}`.
 /// Dropping the registry releases borrows, not security restrictions.
 pub struct SecurityInvalidationRegistry<'a, C: CancellationProbe> {
@@ -88,14 +101,39 @@ impl<'a, C: CancellationProbe> SecurityInvalidationRegistry<'a, C> {
         self.insert(owner, RegisteredInvalidator::Handles(store))
     }
 
-    /// Registers another required owner. The canonical handle slot is reserved
-    /// for the concrete implementation; arbitrary callbacks cannot replace it.
+    /// Registers canonical continuation invalidation and its real resource owner.
+    /// The configured identifier is `search-continuation`. `cleanup` must release
+    /// exactly the requested pin or delete exactly the requested job/checkpoint,
+    /// returning success only from execution or verified prior completion.
+    /// It must be idempotent for the original operation/record/target, preserve
+    /// outcome uncertainty, and respect the supplied remaining context budget.
+    /// No cleanup implementation or success fallback is supplied by the registry.
+    /// The callback must not reacquire this already-held domain lock.
+    pub fn register_continuations<F>(
+        &mut self,
+        store: &'a mut ContinuationStore,
+        cleanup: &'a mut F,
+    ) -> Result<(), AccessError>
+    where
+        F: FnMut(
+            &SecurityRestrictionCommit,
+            &ContinuationCleanup,
+            &OperationContext<C>,
+        ) -> Result<(), AccessError> + 'a,
+    {
+        let owner = OpaqueId::new(CONTINUATION_SECURITY_DEPENDENT)
+            .map_err(|_| AccessError::SecurityFailClosed)?;
+        self.insert(owner, RegisteredInvalidator::Continuations { store, cleanup })
+    }
+
+    /// Registers another required owner. Canonical handle/continuation slots
+    /// are reserved for concrete store passes; callbacks cannot replace them.
     pub fn register_owner(
         &mut self,
         owner: OpaqueId,
         invalidator: &'a mut dyn SecurityDependentInvalidator<C>,
     ) -> Result<(), AccessError> {
-        if owner.as_str() == HANDLE_SECURITY_DEPENDENT {
+        if matches!(owner.as_str(), HANDLE_SECURITY_DEPENDENT | CONTINUATION_SECURITY_DEPENDENT) {
             return Err(AccessError::SecurityOperationConflict);
         }
         self.insert(owner, RegisteredInvalidator::Owner(invalidator))
@@ -154,6 +192,9 @@ impl<C: CancellationProbe + Clone> SecurityInvalidationSink<C>
             let receipt_ref = match invalidator {
                 RegisteredInvalidator::Handles(store) => {
                     handles::invalidate(store, committed, mutation_receipt, &budget)?
+                }
+                RegisteredInvalidator::Continuations { store, cleanup } => {
+                    continuations::invalidate(store, &mut **cleanup, committed, mutation_receipt, &budget)?
                 }
                 RegisteredInvalidator::Owner(invalidator) => invalidator.invalidate(
                     committed, mutation_receipt, published,

@@ -130,6 +130,8 @@ pub(super) fn insert(
         revision,
         terminal_reason: None,
         last_invalidation_generation: None,
+        security_scope: None,
+        security_cleanup: None,
     });
     store.token_index.insert(digest, id);
     ContinuationCredential {

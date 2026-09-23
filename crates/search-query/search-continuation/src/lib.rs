@@ -17,6 +17,12 @@
 
 mod emission;
 mod lifetime;
+mod security;
+
+pub use security::{
+    ContinuationCleanup, ContinuationSecurityScope, SecurityInvalidation,
+    SecurityInvalidationProgress, SecurityInvalidationReceipt,
+};
 
 use emission::EmissionSelection;
 use lifetime::fits_ttl;
@@ -513,6 +519,8 @@ struct StoredContinuation {
     revision: u64,
     terminal_reason: Option<InvalidationReason>,
     last_invalidation_generation: Option<NonZeroRevision>,
+    security_scope: Option<ContinuationSecurityScope>,
+    security_cleanup: Option<security::PendingCleanup>,
 }
 
 impl StoredContinuation {
@@ -693,6 +701,9 @@ impl ContinuationStore {
     }
 
     /// Creates an ephemeral or durable continuation after complete validation.
+    /// Without a captured influence scope, security invalidation treats this
+    /// record conservatively. New serving callers should use
+    /// [`Self::create_with_security_scope`] with the full planned population.
     pub fn create(
         &mut self,
         request: CreateContinuationRequest,
@@ -736,6 +747,8 @@ impl ContinuationStore {
             revision: 1,
             terminal_reason: None,
             last_invalidation_generation: None,
+            security_scope: None,
+            security_cleanup: None,
         };
         self.token_index.insert(digest, id);
         self.records.insert(id, stored);
@@ -1018,6 +1031,8 @@ impl ContinuationStore {
     }
 
     /// Removes terminal records after their cleanup effects were executed.
+    /// Records with an unresolved security-cleanup obligation remain retained,
+    /// including after a security pass was interrupted or dropped.
     pub fn compact_terminal(
         &mut self,
         max_items: usize,
@@ -1028,7 +1043,7 @@ impl ContinuationStore {
         let ids = self
             .records
             .iter()
-            .filter(|(_, value)| !value.is_active())
+            .filter(|(_, value)| !value.is_active() && value.security_cleanup.is_none())
             .map(|(id, _)| *id)
             .take(max_items)
             .collect::<Vec<_>>();
