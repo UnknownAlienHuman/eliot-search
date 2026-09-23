@@ -1,5 +1,7 @@
 //! Exact continuation-to-guard bindings in the existing process-local pin owner.
 
+mod creation;
+
 use core::fmt;
 use std::collections::BTreeMap;
 
@@ -42,6 +44,7 @@ struct BoundPin {
     guard: EpochPinGuard,
     created_at_ms: u64,
     expires_at_ms: u64,
+    abandoned: bool,
 }
 
 /// Finite RAII guard bindings for canonical ephemeral continuations.
@@ -117,7 +120,7 @@ impl ContinuationPins {
         let guard = self.registry.acquire_epoch_pin(
             route, epoch, owner, EpochPinPurpose::Continuation { expires_at_ms }, now_ms,
         )?;
-        let binding = BoundPin { reference: reference.clone(), guard, created_at_ms: now_ms, expires_at_ms };
+        let binding = BoundPin { reference: reference.clone(), guard, created_at_ms: now_ms, expires_at_ms, abandoned: false };
         self.next_reference = next;
         self.records.insert(continuation_id, binding);
         Ok(reference)
@@ -137,7 +140,7 @@ impl ContinuationPins {
         now_ms: u64,
     ) -> Result<(), PinError> {
         let binding = self.binding(continuation_id, reference)?;
-        if binding.guard.released {
+        if binding.guard.released || binding.abandoned {
             return Err(PinError::PinNotFound);
         }
         if binding.guard.route != route || binding.guard.epoch != epoch {

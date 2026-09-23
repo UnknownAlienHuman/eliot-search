@@ -11,6 +11,7 @@ mod grant_authority;
 mod grant_command;
 mod system_grant;
 mod native_security;
+mod pinned_continuation;
 
 pub use gate::*;
 pub use grant::*;
