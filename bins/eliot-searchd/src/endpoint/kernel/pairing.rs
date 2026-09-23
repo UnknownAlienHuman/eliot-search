@@ -6,14 +6,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use search_provider_protocol::pairing::{
     ClientNonce, PairingChallenge, PairingLedger, PairingMachine, PairingTranscript,
-    ProofDigest, SessionId,
+    ProofDigest, SessionId, verify_proof,
 };
 
 use super::codec::{encode_challenge, hex_encode, parse_auth_line};
 use super::spec::{
-    EndpointKeySource, MAX_AUTH_LINE_BYTES, PAIRING_PROTOCOL_VERSION,
+    EndpointKeySource, MAX_AUTH_LINE_BYTES, PAIRING_PROTOCOL_VERSION, READ_TIMEOUT, WRITE_TIMEOUT,
 };
-use super::wire::{read_bounded_line, redacted_io_error, write_line};
+use super::wire::{SocketDeadline, redacted_io_error};
 
 const BINDING_DOMAIN: &[u8] = b"eliot-search/loopback-binding/v1\0";
 const BINDING_ROLE: &[u8] = b"loopback-operator";
@@ -40,7 +40,9 @@ pub fn keyed_proof(key: &[u8; 32], transcript: &PairingTranscript) -> ProofDiges
     ProofDigest::from_bytes(*blake3::keyed_hash(key, transcript.as_bytes()).as_bytes())
 }
 
-/// Runs the mutual pairing ceremony and returns the authenticated reader.
+/// Runs the mutual pairing ceremony under one non-renewable deadline.
+/// Only complete proof/readiness output returns an authenticated reader. The
+/// connection owner tears down every error/unwind without appending another frame.
 pub(super) fn authenticate_connection<S>(
     stream: &mut TcpStream,
     connection_sequence: u64,
@@ -50,6 +52,12 @@ pub(super) fn authenticate_connection<S>(
 where
     S: EndpointKeySource,
 {
+    let deadline = SocketDeadline::new(READ_TIMEOUT)
+        .map_err(|error| redacted_io_error("ENDPOINT_TIMEOUT_CONFIGURATION_ERROR", &error))?;
+    let check_deadline = || {
+        deadline.check().map_err(|_| "ENDPOINT_PAIRING_TIMEOUT".to_owned())
+    };
+    check_deadline()?;
     let prepared = source
         .with_endpoint_key(|key| {
             let binding = pairing_binding_digest(key);
@@ -65,6 +73,7 @@ where
             Ok::<_, String>((machine, binding, session, nonce, challenge, expected_client))
         })
         .map_err(|_| "ENDPOINT_KEY_UNAVAILABLE".to_owned())??;
+    check_deadline()?;
     let (mut machine, binding, session, nonce, challenge, expected_client) = prepared;
 
     ledger.consume(session, &challenge).map_err(|error| {
@@ -72,7 +81,7 @@ where
         error.to_string()
     })?;
 
-    write_line(
+    deadline.write_line(
         stream,
         &encode_challenge(binding, session, &nonce, &challenge),
     )
@@ -81,25 +90,33 @@ where
         .try_clone()
         .map_err(|error| redacted_io_error("ENDPOINT_STREAM_CLONE_ERROR", &error))?;
     let mut reader = BufReader::new(read_stream);
-    let authentication = read_bounded_line(&mut reader, MAX_AUTH_LINE_BYTES)?
+    let authentication = deadline.read_line(&mut reader, MAX_AUTH_LINE_BYTES)?
         .ok_or_else(|| "ENDPOINT_AUTHENTICATION_MISSING".to_owned())?;
     let observed = parse_auth_line(&authentication)?;
     if machine
         .verify_client_proof(&expected_client, &observed)
         .is_err()
     {
-        let _ = write_line(stream, "{\"error\":\"AUTHENTICATION_FAILED\"}");
+        let _ = deadline.write_line(stream, "{\"error\":\"AUTHENTICATION_FAILED\"}");
         return Err("ENDPOINT_AUTHENTICATION_FAILED".to_owned());
     }
 
+    check_deadline()?;
     let provider_proof = source
         .with_endpoint_key(|key| {
+            // The lease may have rotated while waiting for the client. Do not
+            // authenticate with one key and acknowledge under another. Compare
+            // the bound digest in constant work; raw key material stays leased.
+            if !verify_proof(&binding, &pairing_binding_digest(key)) {
+                return Err("ENDPOINT_KEY_CHANGED".to_owned());
+            }
             machine
                 .server_transcript()
                 .map(|transcript| keyed_proof(key, &transcript))
+                .map_err(|_| "ENDPOINT_PAIRING_TRANSCRIPT_FAILED".to_owned())
         })
-        .map_err(|_| "ENDPOINT_KEY_UNAVAILABLE".to_owned())?
-        .map_err(|_| "ENDPOINT_PAIRING_TRANSCRIPT_FAILED".to_owned())?;
+        .map_err(|_| "ENDPOINT_KEY_UNAVAILABLE".to_owned())??;
+    check_deadline()?;
     machine
         .issue_provider_proof(provider_proof)
         .map_err(|_| "ENDPOINT_PAIRING_PROVIDER_FAILED".to_owned())?;
@@ -108,7 +125,7 @@ where
         .map_err(|_| "ENDPOINT_PAIRING_PROVIDER_FAILED".to_owned())?;
     debug_assert_eq!(verified.version(), PAIRING_PROTOCOL_VERSION);
 
-    write_line(
+    deadline.write_line(
         stream,
         &format!(
             "PAIRING_VERIFIED\tproof={}",
@@ -116,7 +133,7 @@ where
         ),
     )
     .map_err(|error| redacted_io_error("ENDPOINT_READY_WRITE_ERROR", &error))?;
-    write_line(
+    deadline.write_line(
         stream,
         concat!(
             "{\"event\":\"authenticated\",\"protocol_version\":1,",
@@ -125,6 +142,15 @@ where
         ),
     )
     .map_err(|error| redacted_io_error("ENDPOINT_READY_WRITE_ERROR", &error))?;
+    // Socket options are shared with the cloned read handle. Leave ordinary
+    // command/child output with its configured bound, not the last few
+    // milliseconds of the completed handshake. Resetting options does not
+    // extend the handshake: its original deadline is checked again afterwards.
+    stream
+        .set_read_timeout(Some(READ_TIMEOUT))
+        .and_then(|()| stream.set_write_timeout(Some(WRITE_TIMEOUT)))
+        .map_err(|error| redacted_io_error("ENDPOINT_TIMEOUT_CONFIGURATION_ERROR", &error))?;
+    check_deadline()?;
     Ok(reader)
 }
 
