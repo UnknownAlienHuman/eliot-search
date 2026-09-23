@@ -216,7 +216,12 @@ impl BindingSession {
 /// in-flight ceiling → connection sequence/replay mutation. Skipping pairing
 /// is unrepresentable: `open` requires the ceremony token and every admission
 /// re-checks the paired version and nonce.
-#[derive(Clone, Debug)]
+///
+/// This mutable connection owner is deliberately non-clonable: copying replay
+/// and in-flight state would fork one authenticated session. Share read-only
+/// request cancellation probes instead. Dropping the owner signals outstanding
+/// observers even when explicit disconnect was skipped during unwinding.
+#[derive(Debug)]
 pub struct BoundSession {
     binding: BindingContext,
     pairing: VerifiedPairing,
@@ -341,6 +346,12 @@ impl BoundSession {
         let _ = self.session.begin_drain();
         let _ = self.session.close();
         receipt
+    }
+}
+
+impl Drop for BoundSession {
+    fn drop(&mut self) {
+        let _ = self.disconnect();
     }
 }
 

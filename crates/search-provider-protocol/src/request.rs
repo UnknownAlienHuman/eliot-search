@@ -28,6 +28,10 @@ use crate::pairing::{ProofDigest, ServerNonce, verify_proof};
 use crate::progress::ProgressState;
 use crate::terminal::TerminalKind;
 
+mod cancellation;
+
+pub use cancellation::RequestCancellation;
+
 /// Domain separator bound into every request envelope transcript.
 pub const ENVELOPE_REQUEST_DOMAIN: &str = "ELIOT-ENVELOPE-REQ-v1";
 /// Domain separator bound into every response envelope transcript.
@@ -795,7 +799,9 @@ impl InFlightRegistry {
 /// Guard for one admitted request: deadline, cancellation and progress.
 ///
 /// The guard carries no grant decision and no source content — only ordering,
-/// timing and lifecycle state.
+/// timing and lifecycle state. Clones share one monotonic cancellation signal;
+/// ordering, deadline and progress remain snapshots. Finishing a cloned guard
+/// only validates that snapshot, not session completion or client delivery.
 #[derive(Clone, Debug)]
 pub struct RequestGuard {
     request_id: RequestId,
@@ -803,7 +809,7 @@ pub struct RequestGuard {
     admitted_at: MonotonicMillis,
     deadline: Option<MonotonicMillis>,
     progress: Option<ProgressState>,
-    cancelled: bool,
+    cancelled: RequestCancellation,
 }
 
 impl RequestGuard {
@@ -826,7 +832,7 @@ impl RequestGuard {
             admitted_at: now,
             deadline,
             progress: None,
-            cancelled: false,
+            cancelled: RequestCancellation::new(),
         })
     }
 
@@ -861,15 +867,24 @@ impl RequestGuard {
             .is_some_and(|deadline| now.get() >= deadline.get())
     }
 
-    /// Whether cancellation was recorded for this guard.
+    /// Whether any owner recorded cancellation for this exact request.
     #[must_use]
-    pub const fn is_cancelled(&self) -> bool {
-        self.cancelled
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.is_cancelled()
     }
 
-    /// Records cancellation; terminal emission still goes through `finish`.
+    /// Read-only shared probe for port contexts and cooperative worker checks.
+    /// No request ID lookup, task registry or independent cancellation flag is
+    /// needed. Dropping an observer never cancels the connection's request.
+    #[must_use]
+    pub fn cancellation(&self) -> RequestCancellation {
+        self.cancelled.clone()
+    }
+
+    /// Signals every existing guard and port observer; the signal cannot reset.
+    /// Terminal emission and external-effect classification remain separate.
     pub fn mark_cancelled(&mut self) {
-        self.cancelled = true;
+        self.cancelled.cancel();
     }
 
     /// Advances monotone progress, fixing the denominator on first use.
@@ -879,6 +894,9 @@ impl RequestGuard {
         completed: u64,
         limits: ProtocolLimits,
     ) -> Result<(), ProtocolError> {
+        if self.is_cancelled() {
+            return Err(ProtocolError::InvalidSessionTransition);
+        }
         match &mut self.progress {
             Some(state) => {
                 if state.total() != total {
@@ -901,6 +919,12 @@ impl RequestGuard {
         terminal: TerminalKind,
         limits: ProtocolLimits,
     ) -> Result<(), ProtocolError> {
+        if self.progress.is_some_and(|state| state.terminal().is_some()) {
+            return Err(ProtocolError::DuplicateTerminal);
+        }
+        if self.is_cancelled() && terminal != TerminalKind::Cancelled {
+            return Err(ProtocolError::InvalidSessionTransition);
+        }
         match &mut self.progress {
             Some(state) => state.finish(terminal),
             empty @ None => {
