@@ -58,7 +58,7 @@ pub(super) fn do_op(
             Err(reason) => return fail_with_provider_error(stream, reason),
         };
         if write_provider_line(stream, &line).is_err() {
-            return Err("LOOPBACK_PROXY_WRITE_ERROR".to_owned());
+            return Ok(EndpointAction::Abort);
         }
         return Err(denial.reason.to_owned());
     }
@@ -68,26 +68,32 @@ pub(super) fn do_op(
             crate::provider_composition::OpArgument::None,
         ) => match child.dispatch_provider("status", Terminal::Single, stream) {
             Ok(crate::provider_composition::ChildReply::Rejected) => {
-                let line = crate::provider_composition::render_op_response(
+                let line = match crate::provider_composition::render_op_response(
                     operation,
                     crate::provider_composition::OpStatus::Failed,
                     "LOOPBACK_DIRECT_COMMAND_FAILED",
                     &[],
-                )
-                .map_err(str::to_owned)?;
-                let _ = write_provider_line(stream, &line);
+                ) {
+                    Ok(line) => line,
+                    Err(_) => return Ok(EndpointAction::Abort),
+                };
+                if write_provider_line(stream, &line).is_err() {
+                    return Ok(EndpointAction::Abort);
+                }
                 Err("LOOPBACK_DIRECT_COMMAND_FAILED".to_owned())
             }
             Ok(crate::provider_composition::ChildReply::Complete) => {
-                let line = crate::provider_composition::render_op_response(
+                let line = match crate::provider_composition::render_op_response(
                     operation,
                     crate::provider_composition::OpStatus::Ok,
                     crate::provider_composition::PROVIDER_OK,
                     &[],
-                )
-                .map_err(str::to_owned)?;
+                ) {
+                    Ok(line) => line,
+                    Err(_) => return Ok(EndpointAction::Abort),
+                };
                 if write_provider_line(stream, &line).is_err() {
-                    return Err("LOOPBACK_PROXY_WRITE_ERROR".to_owned());
+                    return Ok(EndpointAction::Abort);
                 }
                 Ok(EndpointAction::Continue)
             }
@@ -122,7 +128,7 @@ pub(super) fn do_op(
             )
             .map_err(str::to_owned)?;
             if write_provider_line(stream, &line).is_err() {
-                return Err("LOOPBACK_PROXY_WRITE_ERROR".to_owned());
+                return Ok(EndpointAction::Abort);
             }
             Ok(EndpointAction::Continue)
         }
@@ -134,7 +140,9 @@ pub(super) fn do_op(
                 &capabilities.blockers,
             )
             .map_err(str::to_owned)?;
-            let _ = write_provider_line(stream, &line);
+            if write_provider_line(stream, &line).is_err() {
+                return Ok(EndpointAction::Abort);
+            }
             Err(crate::provider_composition::PROVIDER_RECIPE_NOT_BOUND.to_owned())
         }
     }

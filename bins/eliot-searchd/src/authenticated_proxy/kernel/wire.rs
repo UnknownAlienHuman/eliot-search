@@ -21,9 +21,14 @@ pub(super) fn fail_with_provider_error(
     stream: &mut TcpStream,
     reason: &str,
 ) -> Result<EndpointAction, String> {
-    let _ = write_provider_line(
+    if write_provider_line(
         stream,
         &crate::provider_composition::render_provider_error(reason),
-    );
+    )
+    .is_err()
+    {
+        // The endpoint must not append request_complete after a partial error.
+        return Ok(EndpointAction::Abort);
+    }
     Err(reason.to_owned())
 }

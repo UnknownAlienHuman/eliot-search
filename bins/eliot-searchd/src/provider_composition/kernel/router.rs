@@ -32,6 +32,7 @@ const SESSION_ANCHOR_DOMAIN: &[u8] = b"eliot-provider-session/v1\0";
 /// idempotent and releases exactly one in-flight slot.
 pub struct ProviderRouter {
     session: SessionMachine,
+    binding: Option<BindingKey>,
     inflight: InFlightRegistry,
     guards: BTreeMap<RequestId, RequestGuard>,
     pending: VecDeque<RequestId>,
@@ -46,9 +47,9 @@ impl ProviderRouter {
     /// Opens one connection from the pairing key, negotiated version and a
     /// fresh server nonce.
     ///
-    /// The session anchor proves key possession at open; connection
-    /// authentication itself stays owned by the pairing ceremony that
-    /// supplied the key. A zero key or an out-of-range version fails closed.
+    /// The caller must complete transport pairing before opening. This stores
+    /// that exact key for the connection; construction is not a pairing proof
+    /// or a source-access grant. Zero keys and unsupported versions fail closed.
     pub fn open(
         key: &[u8; 32],
         version: ProtocolVersion,
@@ -73,6 +74,7 @@ impl ProviderRouter {
         session.activate(&anchor, &anchor)?;
         Ok(Self {
             session,
+            binding: Some(binding),
             inflight: InFlightRegistry::new(limits.max_in_flight_requests)?,
             guards: BTreeMap::new(),
             pending: VecDeque::new(),
@@ -87,7 +89,8 @@ impl ProviderRouter {
     /// Whether the connection currently admits requests.
     #[must_use]
     pub fn is_active(&self) -> bool {
-        self.session.state() == search_provider_protocol::SessionState::Active
+        self.binding.is_some()
+            && self.session.state() == search_provider_protocol::SessionState::Active
     }
 
     /// Negotiated version bound to this connection.
@@ -118,7 +121,8 @@ impl ProviderRouter {
     ///
     /// The deadline check runs before any session state mutates, so an
     /// expired deadline leaves sequence, replay and in-flight state
-    /// untouched.
+    /// untouched. The supplied key must equal the established connection key;
+    /// it cannot replace that key even with a valid proof under another key.
     pub fn admit(
         &mut self,
         envelope: &AuthenticatedEnvelope,
@@ -141,7 +145,22 @@ impl ProviderRouter {
         if envelope.server_nonce() != &self.nonce {
             return Err(ProtocolError::AuthenticationFailed);
         }
-        verify_envelope(key, envelope)?;
+        let binding = self
+            .binding
+            .as_ref()
+            .ok_or(ProtocolError::AuthenticationRequired)?;
+        binding.with_bytes(|established| {
+            // Fixed-work comparison over the entire key, before any admission
+            // state changes. Verify the envelope with the retained key itself.
+            let difference = established
+                .iter()
+                .zip(key.iter())
+                .fold(0_u8, |difference, (left, right)| difference | (*left ^ *right));
+            if difference != 0 {
+                return Err(ProtocolError::AuthenticationFailed);
+            }
+            verify_envelope(established, envelope)
+        })?;
         let guard = RequestGuard::new(
             *envelope.request_id(),
             sequence,
@@ -201,6 +220,8 @@ impl ProviderRouter {
     pub fn disconnect(&mut self) -> DisconnectReceipt {
         let receipt = disconnect_all(&mut self.inflight, &mut self.guards);
         self.pending.clear();
+        // Drop the non-clonable, zero-on-drop key with the transport authority.
+        self.binding = None;
         let _ = self.session.begin_drain();
         let _ = self.session.close();
         receipt

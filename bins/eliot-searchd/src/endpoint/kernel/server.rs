@@ -13,7 +13,48 @@ use super::spec::{
 };
 use super::wire::{read_bounded_line, redacted_io_error, sanitize_code, write_line};
 
-/// Lease-bound listener entry using mutual keyed pairing transcripts.
+/// Connection-owned application state around authenticated command dispatch.
+///
+/// The listener resets state before pairing and on every connection exit,
+/// including failed pairing, EOF, timeout and unwind. A handler must not retain
+/// authority from a previous transport. Durable service state has a separate owner.
+pub trait EndpointConnectionHandler {
+    /// Dispatches only after the current TCP connection has completed pairing.
+    fn command(
+        &mut self,
+        command: &str,
+        stream: &mut TcpStream,
+    ) -> Result<EndpointAction, String>;
+
+    /// Cancels connection-local work and clears authentication state without I/O.
+    /// This operation must be infallible, idempotent and must not panic.
+    fn disconnected(&mut self);
+}
+
+// Compatibility for command-only callers that have no connection-local state.
+struct CommandHandler<F>(F);
+
+impl<F> EndpointConnectionHandler for CommandHandler<F>
+where
+    F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+{
+    fn command(&mut self, command: &str, stream: &mut TcpStream) -> Result<EndpointAction, String> {
+        self.0(command, stream)
+    }
+
+    fn disconnected(&mut self) {}
+}
+
+struct ConnectionScope<'a, H: EndpointConnectionHandler>(&'a mut H);
+
+impl<H: EndpointConnectionHandler> Drop for ConnectionScope<'_, H> {
+    fn drop(&mut self) {
+        self.0.disconnected();
+    }
+}
+
+/// Command-only compatibility entry; stateful handlers use
+/// [`serve_loopback_with_handler`] to bind cleanup to TCP lifetime.
 pub fn serve_loopback_with_source<F, S>(
     port: u16,
     source: &mut S,
@@ -21,6 +62,19 @@ pub fn serve_loopback_with_source<F, S>(
 ) -> Result<(), String>
 where
     F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+    S: EndpointKeySource,
+{
+    serve_loopback_with_handler(port, source, CommandHandler(handler))
+}
+
+/// Lease-bound listener with explicit, unconditional connection teardown.
+pub fn serve_loopback_with_handler<H, S>(
+    port: u16,
+    source: &mut S,
+    handler: H,
+) -> Result<(), String>
+where
+    H: EndpointConnectionHandler,
     S: EndpointKeySource,
 {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
@@ -37,17 +91,31 @@ where
 
     let ledger = PairingLedger::new(MAX_PAIRING_CHALLENGES)
         .map_err(|_| "ENDPOINT_REPLAY_LEDGER_INVALID".to_owned())?;
-    serve_listener(&listener, source, ledger, handler)
+    serve_listener_with_handler(&listener, source, ledger, handler)
 }
 
+#[cfg(test)]
 pub(super) fn serve_listener<F, S>(
     listener: &TcpListener,
     source: &mut S,
-    mut ledger: PairingLedger,
-    mut handler: F,
+    ledger: PairingLedger,
+    handler: F,
 ) -> Result<(), String>
 where
     F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+    S: EndpointKeySource,
+{
+    serve_listener_with_handler(listener, source, ledger, CommandHandler(handler))
+}
+
+fn serve_listener_with_handler<H, S>(
+    listener: &TcpListener,
+    source: &mut S,
+    mut ledger: PairingLedger,
+    mut handler: H,
+) -> Result<(), String>
+where
+    H: EndpointConnectionHandler,
     S: EndpointKeySource,
 {
     let mut connection_sequence = 0_u64;
@@ -99,17 +167,21 @@ where
     Ok(())
 }
 
-fn serve_connection<F, S>(
+fn serve_connection<H, S>(
     mut stream: TcpStream,
     connection_sequence: u64,
     source: &mut S,
     ledger: &mut PairingLedger,
-    handler: &mut F,
+    handler: &mut H,
 ) -> Result<EndpointAction, String>
 where
-    F: FnMut(&str, &mut TcpStream) -> Result<EndpointAction, String>,
+    H: EndpointConnectionHandler,
     S: EndpointKeySource,
 {
+    // Reset before the key source exposes this connection's pairing material.
+    // Install teardown before the first fallible authentication or I/O operation.
+    handler.disconnected();
+    let connection = ConnectionScope(handler);
     let mut reader = authenticate_connection(&mut stream, connection_sequence, source, ledger)?;
 
     let mut request_sequence = 0_u64;
@@ -133,7 +205,7 @@ where
             &format!("{{\"event\":\"request_started\",\"sequence\":{request_sequence}}}"),
         )
         .map_err(|error| redacted_io_error("ENDPOINT_WRITE_ERROR", &error))?;
-        let outcome = handler(&command, &mut stream);
+        let outcome = connection.0.command(&command, &mut stream);
         match complete_request(&mut stream, outcome, request_sequence) {
             EndpointAction::Continue => {
                 request_sequence = request_sequence

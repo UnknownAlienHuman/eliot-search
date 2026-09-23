@@ -2,6 +2,7 @@
 
 use std::cell::Cell;
 use std::env;
+use std::net::TcpStream;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -46,21 +47,15 @@ pub(super) fn run_proxy(
         "\"runtime_owner_ready\":true,",
         "\"source_backed_search_available\":true}}"
     ));
-    let mut router: Option<crate::provider_composition::ProviderRouter> = None;
-    let mut hello_counter = 0_u64;
-    let endpoint_result = endpoint::serve_loopback_with_source(
+    let endpoint_result = endpoint::serve_loopback_with_handler(
         port,
         &mut source,
-        |command, stream| {
-            dispatch_provider_command(
-                command,
-                stream,
-                &mut child,
-                &mut router,
-                &mut hello_counter,
-                &capabilities,
-                &cache,
-            )
+        ProxyConnection {
+            child: &mut child,
+            router: None,
+            hello_counter: 0,
+            capabilities: &capabilities,
+            cache: &cache,
         },
     );
     if endpoint_result.is_err() {
@@ -69,4 +64,39 @@ pub(super) fn run_proxy(
     let child_result = child.finish();
     endpoint_result?;
     child_result
+}
+
+// The child remains the single data-root owner across connections. Only the
+// provider session and its cached pairing material are connection-local.
+struct ProxyConnection<'a> {
+    child: &'a mut DirectChild,
+    router: Option<crate::provider_composition::ProviderRouter>,
+    hello_counter: u64,
+    capabilities: &'a crate::provider_composition::ProviderCapabilities,
+    cache: &'a Rc<Cell<Option<[u8; 32]>>>,
+}
+
+impl endpoint::EndpointConnectionHandler for ProxyConnection<'_> {
+    fn command(
+        &mut self,
+        command: &str,
+        stream: &mut TcpStream,
+    ) -> Result<endpoint::EndpointAction, String> {
+        dispatch_provider_command(
+            command,
+            stream,
+            self.child,
+            &mut self.router,
+            &mut self.hello_counter,
+            self.capabilities,
+            self.cache,
+        )
+    }
+
+    fn disconnected(&mut self) {
+        if let Some(mut router) = self.router.take() {
+            let _ = router.disconnect();
+        }
+        self.cache.set(None);
+    }
 }

@@ -29,10 +29,28 @@ pub(super) fn do_hello(
             );
         }
     };
-    *hello_counter = hello_counter.wrapping_add(1);
+    // An accepted re-hello ends the prior session before any new preparation.
+    // Failure cannot leave an old router available behind a rejected hello.
+    let reconnect_cancelled = router
+        .take()
+        .map_or(0, |mut bound| bound.disconnect().cancelled_requests());
+    let Some(next_counter) = hello_counter.checked_add(1) else {
+        return fail_with_provider_error(
+            stream,
+            search_provider_protocol::ProtocolError::SequenceExhausted.code(),
+        );
+    };
+    *hello_counter = next_counter;
+    // A stable token file and a restarted counter must not repeat an envelope
+    // nonce. Every hello uses the existing OS CSPRNG owner; no clock fallback.
+    let entropy = match crate::qualified_entropy::qualified_entropy_32() {
+        Ok(entropy) => entropy,
+        Err(reason) => return fail_with_provider_error(stream, reason),
+    };
+    let nonce_key = blake3::keyed_hash(key, &entropy);
     let nonce = match crate::provider_composition::derive_server_nonce(
-        key,
-        *hello_counter,
+        nonce_key.as_bytes(),
+        next_counter,
     ) {
         Ok(nonce) => nonce,
         Err(error) => {
@@ -42,38 +60,35 @@ pub(super) fn do_hello(
             );
         }
     };
-    // Re-hello rebinds and deterministically cancels prior connection state.
-    let reconnect_cancelled = router
-        .as_mut()
-        .map_or(0, |bound| bound.disconnect().cancelled_requests());
-    match crate::provider_composition::ProviderRouter::open(
+    let bound = match crate::provider_composition::ProviderRouter::open(
         key,
         version,
         nonce,
         DEFAULT_PROTOCOL_LIMITS,
     ) {
-        Ok(bound) => *router = Some(bound),
+        Ok(bound) => bound,
         Err(error) => {
-            *router = None;
             return fail_with_provider_error(
                 stream,
                 crate::provider_composition::protocol_reason(error),
             );
         }
-    }
-    match crate::provider_composition::render_hello(
+    };
+    let line = match crate::provider_composition::render_hello(
         version,
         &nonce,
         capabilities,
         reconnect_cancelled,
     ) {
-        Ok(line) => {
-            if write_provider_line(stream, &line).is_err() {
-                *router = None;
-                return Err("LOOPBACK_PROXY_WRITE_ERROR".to_owned());
-            }
-            Ok(EndpointAction::Continue)
-        }
-        Err(reason) => fail_with_provider_error(stream, reason),
+        Ok(line) => line,
+        Err(reason) => return fail_with_provider_error(stream, reason),
+    };
+    if write_provider_line(stream, &line).is_err() {
+        // Possible partial output: do not append an error or outer completion.
+        return Ok(EndpointAction::Abort);
     }
+    // Publish the new router only after the hello was fully written/flushed.
+    // A later endpoint-completion failure triggers connection-scope teardown.
+    *router = Some(bound);
+    Ok(EndpointAction::Continue)
 }
