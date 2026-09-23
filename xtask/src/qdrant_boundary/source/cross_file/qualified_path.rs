@@ -45,7 +45,7 @@ pub(super) fn contains_tainted_qualified_path(
                 return true;
             }
             for endpoint in 2..=segments.len() {
-                let Some((module, name.as_str())) =
+                let Some((module, name)) =
                     resolve_item(current_module, &segments[..endpoint])
                 else {
                     continue;
