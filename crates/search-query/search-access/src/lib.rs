@@ -13,6 +13,13 @@
     clippy::too_many_lines
 )]
 
+mod barrier;
+
+pub use barrier::{
+    DurableSecurityRestriction, MAX_SECURITY_DEPENDENTS, SecurityDependentReceipt,
+    SecurityMutationBarrier, SecurityMutationEffects, SecurityMutationReceipt, SecurityRestriction,
+};
+
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
