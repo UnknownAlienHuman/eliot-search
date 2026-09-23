@@ -25,6 +25,11 @@ use search_ports::{CancellationProbe, OperationContext};
 mod budget;
 mod effects;
 mod mapping;
+mod invalidation;
+
+pub use invalidation::{
+    HANDLE_SECURITY_DEPENDENT, SecurityDependentInvalidator, SecurityInvalidationRegistry,
+};
 
 use budget::MutationBudget;
 use effects::{JournalEffects, publish_current};

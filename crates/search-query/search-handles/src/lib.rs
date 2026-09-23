@@ -13,6 +13,12 @@
     clippy::too_many_lines
 )]
 
+mod invalidation;
+
+pub use invalidation::{
+    HandleInvalidationProgress, HandleSecurityInvalidation, HandleSecurityInvalidationReceipt,
+};
+
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -400,39 +406,31 @@ impl HandleStore {
     }
 
     /// Monotonically invalidates a bounded exact scope.
+    ///
+    /// Terminal records do not consume the mutation budget. Every selected
+    /// revision is checked before the first record changes, so a returned error
+    /// cannot leave a partially invalidated batch. Large security populations
+    /// use `begin_security_invalidation` under the external domain barrier.
     pub fn invalidate(
         &mut self,
         scope: &HandleInvalidationScope,
         generation: u64,
     ) -> Result<InvalidationReceipt, HandleError> {
-        let matching = self
-            .records
-            .iter()
-            .filter(|(_, record)| scope.matches(record))
-            .map(|(digest, _)| *digest)
-            .take(self.policy.max_invalidate_batch.saturating_add(1))
-            .collect::<Vec<_>>();
-        if matching.len() > self.policy.max_invalidate_batch {
-            return Err(HandleError::InvalidationBudgetExceeded);
-        }
-        let mut invalidated = 0_usize;
-        for digest in matching {
-            if let Some(record) = self.records.get_mut(&digest)
-                && record.state == HandleRecordState::Active
-            {
-                record.state = HandleRecordState::Invalidated;
-                record.invalidation_generation = generation;
-                record.handle_revision = record
-                    .handle_revision
-                    .checked_next()
-                    .map_err(|_| HandleError::InvalidTransition)?;
-                invalidated = invalidated.saturating_add(1);
+        let mut prepared = Vec::new();
+        for (digest, record) in &self.records {
+            if !scope.matches(record) || record.state != HandleRecordState::Active {
+                continue;
+            }
+            if prepared.len() == self.policy.max_invalidate_batch {
+                return Err(HandleError::InvalidationBudgetExceeded);
+            }
+            if let Some(revision) = invalidation::prepare_revision(record, generation)? {
+                prepared.push((*digest, revision));
             }
         }
-        Ok(InvalidationReceipt {
-            generation,
-            invalidated,
-        })
+        let invalidated = prepared.len();
+        invalidation::apply_prepared(self, &prepared, generation);
+        Ok(InvalidationReceipt { generation, invalidated })
     }
 
     /// Expires a bounded deterministic slice at caller-supplied time.
