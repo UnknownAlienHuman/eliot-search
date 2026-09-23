@@ -61,39 +61,42 @@ pub(super) fn do_envelope(
         .map_err(|_| "LOOPBACK_DIRECT_COMMAND_INVALID".to_owned())?;
     match child.dispatch_provider(child_command, terminal, stream) {
         Ok(reply) => {
-            let (_, terminal_kind) =
-                crate::provider_composition::status_for_reply(reply);
-            if reply == crate::provider_composition::ChildReply::Fatal {
-                return complete_envelope(
-                    stream,
-                    router,
-                    key,
-                    &request_id,
-                    terminal_kind,
-                    false,
-                )
-                .and(Ok(EndpointAction::Abort))
-                .or(Ok(EndpointAction::Abort));
-            }
-            complete_envelope(
+            use crate::provider_composition::ChildReply;
+
+            // A complete fatal frame can carry one sealed outcome-unknown
+            // terminal. A failed exchange below has no trustworthy frame
+            // boundary and must never trigger another write.
+            let unexpected_shutdown = matches!(reply, ChildReply::Shutdown) && !shutdown;
+            let unconfirmed_shutdown = shutdown && matches!(reply, ChildReply::Complete);
+            let fatal = matches!(reply, ChildReply::Fatal)
+                || unexpected_shutdown
+                || unconfirmed_shutdown;
+            let terminal_kind = if fatal {
+                search_provider_protocol::TerminalKind::OutcomeUnknown
+            } else {
+                crate::provider_composition::status_for_reply(reply).1
+            };
+            let action = complete_envelope(
                 stream,
                 router,
                 key,
                 &request_id,
                 terminal_kind,
-                shutdown,
-            )
+                shutdown && matches!(reply, ChildReply::Shutdown),
+            );
+            if fatal {
+                let _ = router.disconnect();
+                return Ok(EndpointAction::Abort);
+            }
+            action
         }
-        Err(_) => complete_envelope(
-            stream,
-            router,
-            key,
-            &request_id,
-            search_provider_protocol::TerminalKind::OutcomeUnknown,
-            false,
-        )
-        .and(Ok(EndpointAction::Abort))
-        .or(Ok(EndpointAction::Abort)),
+        Err(_) => {
+            // The child owner has already fenced/aborted an uncertain exchange.
+            // It may have forwarded partial output or encountered a socket
+            // failure. Do not append a fabricated response or an error frame.
+            let _ = router.disconnect();
+            Ok(EndpointAction::Abort)
+        }
     }
 }
 
@@ -105,41 +108,36 @@ fn complete_envelope(
     terminal_kind: search_provider_protocol::TerminalKind,
     shutdown: bool,
 ) -> Result<EndpointAction, String> {
-    let (assigned_status, provider_sequence) =
-        match router.note_terminal(request_id, terminal_kind) {
-            Ok(terminal) => terminal,
-            Err(error) => {
-                return fail_with_provider_error(
-                    stream,
-                    crate::provider_composition::protocol_reason(error),
-                );
-            }
-        };
-    let response = crate::provider_composition::seal_response_with_receipt(
-        key,
-        router.version(),
-        *router.server_nonce(),
-        *request_id,
-        assigned_status,
-        provider_sequence,
-    );
-    match crate::provider_composition::encode_response_frame(&response) {
-        Ok(frame) => {
+    let version = router.version();
+    let nonce = *router.server_nonce();
+    let delivered = match router.prepare_terminal(request_id, terminal_kind) {
+        Ok(prepared) => prepared.deliver(|assigned_status, provider_sequence| {
+            let response = crate::provider_composition::seal_response_with_receipt(
+                key,
+                version,
+                nonce,
+                *request_id,
+                assigned_status,
+                provider_sequence,
+            );
+            let frame = crate::provider_composition::encode_response_frame(&response)
+                .map_err(|error| crate::provider_composition::protocol_reason(error).to_owned())?;
             let line = format!(
                 "{}{}",
                 crate::provider_composition::RESPONSE_LINE_PREFIX,
                 crate::provider_composition::hex_encode(&frame)
             );
-            if write_provider_line(stream, &line).is_err() {
-                return Ok(EndpointAction::Abort);
-            }
-        }
-        Err(error) => {
-            return fail_with_provider_error(
-                stream,
-                crate::provider_composition::protocol_reason(error),
-            );
-        }
+            write_provider_line(stream, &line)
+        }).is_ok(),
+        Err(_) => false,
+    };
+    if !delivered {
+        // Child output has already started. Neither failed preparation nor a
+        // partial terminal write can be repaired by appending an error frame.
+        // The preparation also closes on output error/unwind; disconnect here
+        // additionally covers rejection before a preparation could be created.
+        let _ = router.disconnect();
+        return Ok(EndpointAction::Abort);
     }
     Ok(if shutdown {
         EndpointAction::Shutdown

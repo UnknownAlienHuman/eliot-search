@@ -15,6 +15,10 @@ use search_provider_protocol::{
 use super::pairing::verify_envelope;
 use super::spec::PROVIDER_PROTOCOL_RANGE;
 
+mod terminal;
+
+pub use terminal::PreparedProviderTerminal;
+
 /// Domain separating the session anchor from pairing material.
 const SESSION_ANCHOR_DOMAIN: &[u8] = b"eliot-provider-session/v1\0";
 
@@ -171,49 +175,24 @@ impl ProviderRouter {
         let outcome = cancel_request(&mut self.inflight, &mut self.guards, target);
         if matches!(outcome, CancelOutcome::Cancelled { .. }) {
             self.pending.retain(|pending| pending != target);
+            // The outcome already captured terminal state; only active guards
+            // belong in this map. Replay protection remains in SessionMachine.
+            self.guards.remove(target);
         }
         outcome
     }
 
-    /// Emits the single terminal response for the oldest pending request.
+    /// Records a terminal whose delivery is managed by the caller.
     ///
-    /// Returns the response status plus the assigned provider sequence. A
-    /// repeated terminal fails with `DuplicateTerminal`; completing a
-    /// request that is pending but not oldest fails with `SequenceGap`;
-    /// completing an unknown identity fails distinctly. The in-flight slot
-    /// is released exactly once per admission.
+    /// All fallible lifecycle and sequence checks precede state changes. The
+    /// live transport uses `prepare_terminal().deliver(...)` instead, so it
+    /// cannot record completion before the response is fully written/flushed.
     pub fn note_terminal(
         &mut self,
         request_id: &RequestId,
         terminal: TerminalKind,
     ) -> Result<(RequestStatus, u64), ProtocolError> {
-        if self.completed.contains(request_id) {
-            return Err(ProtocolError::DuplicateTerminal);
-        }
-        if self.pending_len() == 0 {
-            return Err(ProtocolError::InvalidSessionTransition);
-        }
-        match self.pending.front() {
-            Some(oldest) if oldest == request_id => {}
-            Some(_) if self.pending.contains(request_id) => {
-                return Err(ProtocolError::SequenceGap);
-            }
-            _ => return Err(ProtocolError::InvalidSessionTransition),
-        }
-        let guard = self
-            .guards
-            .get_mut(request_id)
-            .ok_or(ProtocolError::InvalidSessionTransition)?;
-        guard.finish(terminal, self.limits)?;
-        self.pending.pop_front();
-        self.completed.insert(*request_id);
-        let _ = cancel_request(&mut self.inflight, &mut self.guards, request_id);
-        let sequence = self
-            .provider_sequence
-            .next_expected()
-            .ok_or(ProtocolError::SequenceExhausted)?;
-        SequenceTracker::require_accepted(self.provider_sequence.observe(sequence))?;
-        Ok((RequestStatus::from_terminal(terminal), sequence))
+        Ok(self.prepare_terminal(request_id, terminal)?.commit())
     }
 
     /// Disconnects deterministically: cancels every in-flight request,

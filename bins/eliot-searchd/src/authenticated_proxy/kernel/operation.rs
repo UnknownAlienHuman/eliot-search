@@ -30,6 +30,10 @@ pub(super) fn do_op(
         );
     };
 
+    if !router.is_active() {
+        return Ok(EndpointAction::Abort);
+    }
+
     let indexed_query = match crate::provider_composition::classify_indexed_query(
         operation,
         &argument,
@@ -74,7 +78,7 @@ pub(super) fn do_op(
                 let _ = write_provider_line(stream, &line);
                 Err("LOOPBACK_DIRECT_COMMAND_FAILED".to_owned())
             }
-            Ok(_) => {
+            Ok(crate::provider_composition::ChildReply::Complete) => {
                 let line = crate::provider_composition::render_op_response(
                     operation,
                     crate::provider_composition::OpStatus::Ok,
@@ -87,7 +91,14 @@ pub(super) fn do_op(
                 }
                 Ok(EndpointAction::Continue)
             }
-            Err(_) => Ok(EndpointAction::Abort),
+            Ok(crate::provider_composition::ChildReply::Fatal
+                | crate::provider_composition::ChildReply::Shutdown)
+            | Err(_) => {
+                // Status succeeds only after an actual complete status reply.
+                // Fatal/uncertain child output cannot be followed by PROVIDER_OK.
+                let _ = router.disconnect();
+                Ok(EndpointAction::Abort)
+            }
         },
         (
             ProviderOperation::Cancel,
