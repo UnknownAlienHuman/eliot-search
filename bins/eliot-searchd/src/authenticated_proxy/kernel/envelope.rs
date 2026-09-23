@@ -37,6 +37,20 @@ pub(super) fn do_envelope(
             crate::provider_composition::PROVIDER_HELLO_REQUIRED,
         );
     };
+    // These closed control commands have no body. Bind the digest to the
+    // actual empty body before sequence/replay admission or child dispatch;
+    // a correctly signed but different digest is not the command we execute.
+    let empty_body = search_provider_protocol::ProofDigest::from_bytes(
+        *blake3::hash(&[]).as_bytes(),
+    );
+    if !search_provider_protocol::pairing::verify_proof(&empty_body, envelope.body_digest()) {
+        return fail_with_provider_error(
+            stream,
+            crate::provider_composition::protocol_reason(
+                search_provider_protocol::ProtocolError::InvalidEnvelope,
+            ),
+        );
+    }
     let admitted = match router.admit(
         &envelope,
         key,

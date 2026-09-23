@@ -1,6 +1,7 @@
 //! Canonical provider client facade.
 //!
-//! The previously monolithic transport remains byte-for-byte in `core.rs`.
+//! The transport entrypoints in `core.rs` use bounded private exchange and
+//! control-line parsers; no second session or verification path is created.
 //! This facade adds the indexed-query request mode without duplicating the
 //! pairing, framing, proof or response-verification machinery.
 

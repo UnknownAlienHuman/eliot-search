@@ -22,20 +22,23 @@ use std::path::Path;
 use std::time::Duration;
 
 use search_contracts::{ProtocolRange, ProtocolVersion, RequestId};
-use search_provider_protocol::negotiation::negotiate_hello;
 use search_provider_protocol::pairing::{
     ClientNonce, PairingChallenge, ProofDigest, ServerNonce, SessionId, client_proof_transcript,
     server_proof_transcript, verify_proof,
 };
 use search_provider_protocol::request::{
-    AuthenticatedResponse, ControlCommand, RequestStatus, decode_response_json,
-    encode_envelope_json, envelope_transcript, response_transcript, seal_envelope,
-    verify_response_proof,
+    AuthenticatedResponse, response_transcript, verify_response_proof,
 };
+
+mod exchange;
+mod response;
+
+#[cfg(test)]
+use search_provider_protocol::request::{ControlCommand, envelope_transcript, seal_envelope};
 
 /// Exact negotiated provider version.
 pub const PROVIDER_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
-/// Transport bounds for one CLI invocation (single request per connection).
+/// Maximum post-pairing hello or request exchange duration.
 pub const IO_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_TOKEN_FILE_BYTES: usize = 4096;
 const MIN_TOKEN_BYTES: usize = 32;
@@ -323,12 +326,15 @@ pub struct ProviderSession {
     nonce: ServerNonce,
     version: ProtocolVersion,
     envelope_sequence: u64,
+    provider_sequence: u64,
+    endpoint_sequence: u64,
     request_counter: u64,
+    active: bool,
 }
 
 impl Drop for ProviderSession {
     fn drop(&mut self) {
-        self.key.fill(0);
+        self.close();
     }
 }
 
@@ -348,6 +354,9 @@ pub fn open_session(address: SocketAddr, key: [u8; 32]) -> Result<ProviderSessio
         .map_err(|error| format!("REMOTE_STREAM_CLONE_ERROR:{error}"))?;
     let mut reader = BufReader::new(read_stream);
     let challenge = read_challenge(&mut reader)?;
+    if challenge.version != PROVIDER_VERSION {
+        return Err("REMOTE_VERSION_MISMATCH".to_owned());
+    }
     if binding_digest(&key) != challenge.binding {
         return Err("REMOTE_BINDING_MISMATCH".to_owned());
     }
@@ -385,9 +394,7 @@ pub fn open_session(address: SocketAddr, key: [u8; 32]) -> Result<ProviderSessio
     }
     let ready = read_bounded_line(&mut reader, MAX_PROVIDER_LINE_BYTES)?
         .ok_or_else(|| "REMOTE_READY_MISSING".to_owned())?;
-    if !ready.contains("\"event\":\"authenticated\"") {
-        return Err("REMOTE_AUTHENTICATION_FAILED".to_owned());
-    }
+    response::authenticated(&ready)?;
     let mut session = ProviderSession {
         stream,
         reader,
@@ -395,7 +402,10 @@ pub fn open_session(address: SocketAddr, key: [u8; 32]) -> Result<ProviderSessio
         nonce: ServerNonce::from_bytes([1; 16]).map_err(|_| "REMOTE_NONCE_INVALID".to_owned())?,
         version: PROVIDER_VERSION,
         envelope_sequence: 0,
+        provider_sequence: 0,
+        endpoint_sequence: 0,
         request_counter: 0,
+        active: false,
     };
     session.hello()?;
     Ok(session)
@@ -475,205 +485,6 @@ fn parse_verified_line(line: &str) -> Result<ProofDigest, String> {
         .map_err(|_| "REMOTE_VERIFIED_INVALID".to_owned())
 }
 
-impl ProviderSession {
-    /// Runs `op\thello` with the exact CLI range and stores nonce/version.
-    fn hello(&mut self) -> Result<(), String> {
-        write_line(&mut self.stream, "op\thello\t1.0-1.0")?;
-        let started = self.recv()?;
-        if !started.contains("request_started") {
-            return Err("REMOTE_HELLO_INVALID".to_owned());
-        }
-        let hello = self.recv()?;
-        if !hello.contains("\"event\":\"provider_hello\"") {
-            return Err("REMOTE_HELLO_INVALID".to_owned());
-        }
-        let range = provider_range();
-        let version = extract_version(&hello)?;
-        negotiate_hello(
-            range,
-            ProtocolRange::new(version, version).map_err(|_| "REMOTE_HELLO_INVALID".to_owned())?,
-        )
-        .map_err(|_| "REMOTE_VERSION_MISMATCH".to_owned())?;
-        let nonce_hex = extract_field(&hello, "\"nonce\":\"")
-            .ok_or_else(|| "REMOTE_HELLO_INVALID".to_owned())?;
-        let nonce_raw = hex_decode(&nonce_hex).ok_or_else(|| "REMOTE_HELLO_INVALID".to_owned())?;
-        if nonce_raw.len() != 16 {
-            return Err("REMOTE_HELLO_INVALID".to_owned());
-        }
-        let mut nonce = [0_u8; 16];
-        nonce.copy_from_slice(&nonce_raw);
-        self.nonce =
-            ServerNonce::from_bytes(nonce).map_err(|_| "REMOTE_HELLO_INVALID".to_owned())?;
-        self.version = version;
-        let complete = self.recv()?;
-        if !complete.contains("\"ok\":true") {
-            return Err("REMOTE_HELLO_INVALID".to_owned());
-        }
-        Ok(())
-    }
-
-    fn send(&mut self, line: &str) -> Result<(), String> {
-        write_line(&mut self.stream, line)
-    }
-
-    fn recv(&mut self) -> Result<String, String> {
-        let line = read_bounded_line(&mut self.reader, MAX_PROVIDER_LINE_BYTES)?
-            .ok_or_else(|| "REMOTE_RESPONSE_TRUNCATED".to_owned())?;
-        Ok(line)
-    }
-
-    fn mint_id(&mut self) -> RequestId {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        self.request_counter = self.request_counter.wrapping_add(1);
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(1, |elapsed| elapsed.as_nanos());
-        let mut input = Vec::with_capacity(REQUEST_ID_DOMAIN.len() + 24);
-        input.extend_from_slice(REQUEST_ID_DOMAIN);
-        input.extend_from_slice(&self.request_counter.to_le_bytes());
-        input.extend_from_slice(&nanos.to_le_bytes());
-        let digest = blake3::keyed_hash(&self.key, &input);
-        let mut raw = [0_u8; 16];
-        raw.copy_from_slice(&digest.as_bytes()[..16]);
-        if raw.iter().all(|byte| *byte == 0) {
-            raw[15] = 1;
-        }
-        RequestId::from_bytes(raw)
-    }
-
-    /// Sends one validated request; prints daemon payload lines to stdout.
-    ///
-    /// Envelope responses are proof- and receipt-verified; any non-ok
-    /// terminal (including explicit unavailable with blockers) becomes a
-    /// typed `Err` for exit-code mapping. Nothing is printed on failure
-    /// besides the daemon payload already streamed.
-    pub fn invoke(&mut self, request: &UnsignedRequest) -> Result<(), String> {
-        match request {
-            UnsignedRequest::Health => self.invoke_envelope(ControlCommand::Health),
-            UnsignedRequest::Version => self.invoke_envelope(ControlCommand::Version),
-            UnsignedRequest::Shutdown => self.invoke_envelope(ControlCommand::Shutdown),
-            _ => self.invoke_op(request),
-        }
-    }
-
-    fn invoke_envelope(&mut self, command: ControlCommand) -> Result<(), String> {
-        self.envelope_sequence = self
-            .envelope_sequence
-            .checked_add(1)
-            .ok_or_else(|| "REMOTE_SEQUENCE_EXHAUSTED".to_owned())?;
-        let request_id = self.mint_id();
-        let digest = ProofDigest::from_bytes(*blake3::hash(&[]).as_bytes());
-        let stub = seal_envelope(
-            self.version,
-            self.nonce,
-            request_id,
-            command,
-            digest,
-            ProofDigest::from_bytes([0; 32]),
-        );
-        let proof = keyed(&self.key, &envelope_transcript(&stub));
-        let sealed = seal_envelope(self.version, self.nonce, request_id, command, digest, proof);
-        let frame = encode_envelope_json(&sealed);
-        let length =
-            u32::try_from(frame.len()).map_err(|_| "REMOTE_REQUEST_TOO_LARGE".to_owned())?;
-        let mut framed = length.to_le_bytes().to_vec();
-        framed.extend_from_slice(&frame);
-        self.send(&format!(
-            "envelope\t{}\t{}",
-            self.envelope_sequence,
-            hex_encode(&framed)
-        ))?;
-        let started = self.recv()?;
-        if !started.contains("request_started") {
-            return Err("REMOTE_RESPONSE_INVALID".to_owned());
-        }
-        let mut provider_sequence = 0_u64;
-        let mut terminal: Option<AuthenticatedResponse> = None;
-        for _ in 0..MAX_RESPONSE_LINES {
-            let line = self.recv()?;
-            if let Some(hex) = line.strip_prefix("response\t") {
-                let frame = hex_decode(hex).ok_or_else(|| "REMOTE_RESPONSE_INVALID".to_owned())?;
-                if frame.len() < 4 {
-                    return Err("REMOTE_RESPONSE_INVALID".to_owned());
-                }
-                let declared = u32::from_le_bytes(
-                    frame[..4]
-                        .try_into()
-                        .map_err(|_| "REMOTE_RESPONSE_INVALID".to_owned())?,
-                ) as usize;
-                if declared + 4 != frame.len() {
-                    return Err("REMOTE_RESPONSE_INVALID".to_owned());
-                }
-                let range = provider_range();
-                let decoded = decode_response_json(&frame[4..], range)
-                    .map_err(|_| "REMOTE_RESPONSE_INVALID".to_owned())?;
-                if decoded.request_id() != &request_id {
-                    return Err("REMOTE_RESPONSE_MISMATCH".to_owned());
-                }
-                provider_sequence += 1;
-                verify_sealed_response(&self.key, &decoded, &self.nonce, provider_sequence)?;
-                terminal = Some(decoded);
-                break;
-            }
-            if line.contains("\"event\":\"provider_error\"") {
-                return Err(extract_reason(&line));
-            }
-            println!("{line}");
-        }
-        let response = terminal.ok_or_else(|| "REMOTE_RESPONSE_TRUNCATED".to_owned())?;
-        let complete = self.recv()?;
-        if !complete.contains("request_complete") {
-            return Err("REMOTE_RESPONSE_TRUNCATED".to_owned());
-        }
-        if !complete.contains("\"ok\":true") {
-            return Err(extract_reason(&complete));
-        }
-        match response.status() {
-            RequestStatus::Ok => Ok(()),
-            RequestStatus::Partial => Err("REMOTE_PARTIAL_RESULT".to_owned()),
-            RequestStatus::Cancelled => Err("REMOTE_CANCELLED".to_owned()),
-            RequestStatus::Failed => Err("REMOTE_REQUEST_FAILED".to_owned()),
-            RequestStatus::OutcomeUnknown => Err("REMOTE_OUTCOME_UNKNOWN".to_owned()),
-        }
-    }
-
-    fn invoke_op(&mut self, request: &UnsignedRequest) -> Result<(), String> {
-        let line = render_op_line(request).ok_or_else(|| "REMOTE_REQUEST_INVALID".to_owned())?;
-        self.send(&line)?;
-        let started = self.recv()?;
-        if !started.contains("request_started") {
-            return Err("REMOTE_RESPONSE_INVALID".to_owned());
-        }
-        let mut outcome: Option<(String, String, String)> = None;
-        for _ in 0..MAX_RESPONSE_LINES {
-            let line = self.recv()?;
-            if line.contains("request_complete") {
-                if !line.contains("\"ok\":true") && outcome.is_none() {
-                    return Err(extract_reason(&line));
-                }
-                break;
-            }
-            if line.contains("\"event\":\"provider_op\"") {
-                let status = extract_field(&line, "\"status\":\"").unwrap_or_default();
-                let reason = extract_field(&line, "\"reason\":\"").unwrap_or_default();
-                println!("{line}");
-                outcome = Some((status, reason, line));
-            } else if line.contains("\"event\":\"provider_error\"") {
-                return Err(extract_reason(&line));
-            } else {
-                println!("{line}");
-            }
-        }
-        match outcome {
-            Some((status, _, _)) if status == "ok" => Ok(()),
-            Some((status, _, _)) if status == "cancelled" => Ok(()),
-            Some((_, reason, _)) if reason.is_empty() => Err("REMOTE_REQUEST_FAILED".to_owned()),
-            Some((_, reason, _)) => Err(reason),
-            None => Err("REMOTE_RESPONSE_TRUNCATED".to_owned()),
-        }
-    }
-}
-
 /// Verifies a sealed response proof plus its receipt binding.
 fn verify_sealed_response(
     key: &[u8; 32],
@@ -716,38 +527,6 @@ fn seal_response_placeholder(
         stub_digest,
         ProofDigest::from_bytes([0; 32]),
     )
-}
-
-fn extract_version(line: &str) -> Result<ProtocolVersion, String> {
-    let text =
-        extract_field(line, "\"version\":\"").ok_or_else(|| "REMOTE_HELLO_INVALID".to_owned())?;
-    let (major, minor) = text
-        .split_once('.')
-        .ok_or_else(|| "REMOTE_HELLO_INVALID".to_owned())?;
-    Ok(ProtocolVersion {
-        major: major
-            .parse::<u16>()
-            .map_err(|_| "REMOTE_HELLO_INVALID".to_owned())?,
-        minor: minor
-            .parse::<u16>()
-            .map_err(|_| "REMOTE_HELLO_INVALID".to_owned())?,
-    })
-}
-
-fn extract_field(line: &str, marker: &str) -> Option<String> {
-    let start = line.find(marker)? + marker.len();
-    let end = line[start..].find('"')?;
-    Some(line[start..start + end].to_owned())
-}
-
-fn extract_reason(line: &str) -> String {
-    if let Some(reason) = extract_field(line, "\"reason\":\"").filter(|reason| !reason.is_empty()) {
-        return reason;
-    }
-    if let Some(error) = extract_field(line, "\"error\":\"").filter(|error| !error.is_empty()) {
-        return error;
-    }
-    "REMOTE_REQUEST_FAILED".to_owned()
 }
 
 fn write_line(stream: &mut TcpStream, value: &str) -> Result<(), String> {
