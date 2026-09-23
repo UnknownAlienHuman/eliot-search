@@ -3,12 +3,14 @@ use std::net::{Shutdown, TcpStream};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::JoinHandle;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+use search_provider_protocol::request::RequestCancellation;
 
 use super::model::{Exchange, Outcome};
-use super::pipe::DeadlineWriter;
+use super::pipe::{DeadlineWriter, RequestWriter};
 use super::spec::ChildLimits;
-use super::time::{deadline, pause, receive, remaining};
+use super::time::{check_request, deadline, pause, receive, receive_request, remaining};
 use super::worker::spawn_worker;
 use super::{MAX_PROXY_COMMAND_BYTES, Reply, Terminal};
 
@@ -81,13 +83,40 @@ impl ChildIo {
         socket: &TcpStream,
         terminal: Terminal,
     ) -> Outcome {
+        self.exchange_controlled(command, socket, terminal, None)
+    }
+
+    /// Anchored before protocol admission, so proof verification and queueing
+    /// do not renew the child budget. Round sub-millisecond bounds down.
+    pub(in super::super) fn request_budget(&self) -> Result<(Instant, u64), String> {
+        let millis = u64::try_from(self.limits.request.as_millis())
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| "LOOPBACK_CHILD_LIMIT_INVALID".to_owned())?;
+        Ok((deadline(Duration::from_millis(millis))?, millis))
+    }
+
+    /// A control envelope must supply its admitted signal and original deadline.
+    /// None is reserved for the existing non-envelope compatibility path.
+    pub(in super::super) fn exchange_controlled(
+        &mut self,
+        command: &str,
+        socket: &TcpStream,
+        terminal: Terminal,
+        control: Option<(Instant, RequestCancellation)>,
+    ) -> Outcome {
         if self.aborted || self.status.is_some() {
             return Err("LOOPBACK_DIRECT_CHANNEL_REQUIRES_RESTART".to_owned());
         }
         if command.len() > MAX_PROXY_COMMAND_BYTES {
             return Err("LOOPBACK_DIRECT_COMMAND_INVALID".to_owned());
         }
-        let deadline = deadline(self.limits.request)?;
+        let local_deadline = deadline(self.limits.request)?;
+        let (deadline, cancellation) = match control {
+            Some((original, probe)) => (original.min(local_deadline), Some(probe)),
+            None => (local_deadline, None),
+        };
+        check_request(deadline, cancellation.as_ref())?;
         let original_timeout = socket
             .write_timeout()
             .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
@@ -99,31 +128,37 @@ impl ChildIo {
                 .map_err(|_| "LOOPBACK_STREAM_CLONE_ERROR".to_owned())?,
             terminal,
             deadline,
+            cancellation: cancellation.clone(),
             reply,
         };
+        let mut active = ActiveExchange { child: self, socket, completed: false };
         let outcome = (|| {
-            self.commands
+            check_request(deadline, cancellation.as_ref())?;
+            active.child.commands
                 .as_ref()
                 .ok_or_else(|| "LOOPBACK_DIRECT_CHANNEL_CLOSED".to_owned())?
                 .try_send(request)
                 .map_err(|_| "LOOPBACK_DIRECT_PIPE_QUEUE_UNAVAILABLE".to_owned())?;
-            let result = receive(&response, deadline)??;
+            let result = receive_request(&response, deadline, cancellation.as_ref())??;
             if result.reply == Reply::Shutdown {
                 // The same request deadline includes child exit and pipe
                 // cleanup. STOPPED without process exit is not shutdown.
-                let status = self.wait_child(deadline)?;
-                self.wait_worker(deadline)?;
+                let status = active.child.wait_child(deadline, cancellation.as_ref())?;
+                active.child.wait_worker(deadline, cancellation.as_ref())?;
                 if !status.success() {
                     return Err("LOOPBACK_DIRECT_CHILD_EXIT_FAILED".to_owned());
                 }
             }
-            remaining(deadline)?;
+            check_request(deadline, cancellation.as_ref())?;
             if !result.deferred.is_empty() {
-                let mut writer = DeadlineWriter {
-                    socket: socket
-                        .try_clone()
-                        .map_err(|_| "LOOPBACK_STREAM_CLONE_ERROR".to_owned())?,
+                let mut writer = RequestWriter {
+                    inner: DeadlineWriter {
+                        socket: socket.try_clone()
+                            .map_err(|_| "LOOPBACK_STREAM_CLONE_ERROR".to_owned())?,
+                        deadline,
+                    },
                     deadline,
+                    cancellation: cancellation.as_ref(),
                 };
                 writer
                     .write_all(&result.deferred)
@@ -135,13 +170,10 @@ impl ChildIo {
             socket
                 .set_write_timeout(original_timeout)
                 .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
+            check_request(deadline, cancellation.as_ref())?;
             Ok(result.reply)
         })();
-        if outcome.is_err() || matches!(outcome, Ok(Reply::Fatal)) {
-            // Interrupt a slow client write as well as any blocked child pipe.
-            let _ = socket.shutdown(Shutdown::Both);
-            self.abort();
-        }
+        active.completed = outcome.as_ref().is_ok_and(|reply| *reply != Reply::Fatal);
         outcome
     }
 
@@ -156,8 +188,8 @@ impl ChildIo {
             let _ = self.child.kill();
         }
         if let Ok(deadline) = deadline(self.limits.cleanup) {
-            let _ = self.wait_child(deadline);
-            let _ = self.wait_worker(deadline);
+            let _ = self.wait_child(deadline, None);
+            let _ = self.wait_worker(deadline, None);
         }
         // If the OS cannot reap the child or release inherited pipes, do not
         // fabricate clean release. The failed proxy exits with the root still
@@ -171,8 +203,8 @@ impl ChildIo {
         }
         let end = deadline(self.limits.cleanup)?;
         let result = (|| {
-            let status = self.wait_child(end)?;
-            self.wait_worker(end)?;
+            let status = self.wait_child(end, None)?;
+            self.wait_worker(end, None)?;
             if status.success() {
                 Ok(())
             } else {
@@ -185,8 +217,13 @@ impl ChildIo {
         result
     }
 
-    fn wait_child(&mut self, end: Instant) -> Result<ExitStatus, String> {
+    fn wait_child(
+        &mut self,
+        end: Instant,
+        cancellation: Option<&RequestCancellation>,
+    ) -> Result<ExitStatus, String> {
         loop {
+            check_request(end, cancellation)?;
             if let Some(status) = self.status {
                 return Ok(status);
             }
@@ -200,14 +237,20 @@ impl ChildIo {
         }
     }
 
-    fn wait_worker(&mut self, end: Instant) -> Result<(), String> {
+    fn wait_worker(
+        &mut self,
+        end: Instant,
+        cancellation: Option<&RequestCancellation>,
+    ) -> Result<(), String> {
         while self
             .worker
             .as_ref()
             .is_some_and(|worker| !worker.is_finished())
         {
+            check_request(end, cancellation)?;
             pause(end)?;
         }
+        check_request(end, cancellation)?;
         if let Some(worker) = self.worker.take() {
             worker
                 .join()
@@ -221,6 +264,24 @@ impl Drop for ChildIo {
     fn drop(&mut self) {
         if self.status.is_none() || self.worker.is_some() {
             self.abort();
+        }
+    }
+}
+
+/// Installed before queue handoff. Cancellation, a late worker return, any
+/// failure or unwind closes the client socket and runs bounded process cleanup.
+/// Dropping the reply receiver alone would leave a worker able to emit bytes.
+struct ActiveExchange<'a> {
+    child: &'a mut ChildIo,
+    socket: &'a TcpStream,
+    completed: bool,
+}
+
+impl Drop for ActiveExchange<'_> {
+    fn drop(&mut self) {
+        if !self.completed {
+            let _ = self.socket.shutdown(Shutdown::Both);
+            self.child.abort();
         }
     }
 }

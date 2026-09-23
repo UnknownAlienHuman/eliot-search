@@ -1,11 +1,15 @@
 //! Sealed provider envelope admission and terminal completion.
 
 use std::net::TcpStream;
+use std::time::Instant;
+
+use search_provider_protocol::request::RequestGuard;
 
 use crate::endpoint::EndpointAction;
 
 use super::child::DirectChild;
-use super::wire::{fail_with_provider_error, write_provider_line};
+use super::child_io::write_admitted_line;
+use super::wire::fail_with_provider_error;
 use super::Terminal;
 
 pub(super) fn do_envelope(
@@ -51,12 +55,19 @@ pub(super) fn do_envelope(
             ),
         );
     }
+    // One server-owned budget begins before admission and is shared with the
+    // queued worker and terminal writer. These bodyless wire commands do not
+    // carry a client-selected deadline; do not mint an unlimited RequestGuard.
+    let (deadline, relative_deadline_ms) = match child.request_budget() {
+        Ok(budget) => budget,
+        Err(reason) => return fail_with_provider_error(stream, &reason),
+    };
     let admitted = match router.admit(
         &envelope,
         key,
         sequence,
         crate::provider_composition::monotonic_millis(),
-        None,
+        Some(relative_deadline_ms),
     ) {
         Ok(guard) => guard,
         Err(error) => {
@@ -66,14 +77,13 @@ pub(super) fn do_envelope(
             );
         }
     };
-    let request_id = *admitted.request_id();
     let child_command =
         crate::provider_composition::child_command_for_envelope(envelope.command());
     let shutdown = envelope.command()
         == search_provider_protocol::request::ControlCommand::Shutdown;
     let terminal = Terminal::for_command(child_command)
         .map_err(|_| "LOOPBACK_DIRECT_COMMAND_INVALID".to_owned())?;
-    match child.dispatch_provider(child_command, terminal, stream) {
+    match child.dispatch_admitted(child_command, terminal, stream, &admitted, deadline) {
         Ok(reply) => {
             use crate::provider_composition::ChildReply;
 
@@ -94,7 +104,8 @@ pub(super) fn do_envelope(
                 stream,
                 router,
                 key,
-                &request_id,
+                &admitted,
+                deadline,
                 terminal_kind,
                 shutdown && matches!(reply, ChildReply::Shutdown),
             );
@@ -118,10 +129,13 @@ fn complete_envelope(
     stream: &mut TcpStream,
     router: &mut crate::provider_composition::ProviderRouter,
     key: &[u8; 32],
-    request_id: &search_contracts::RequestId,
+    request: &RequestGuard,
+    deadline: Instant,
     terminal_kind: search_provider_protocol::TerminalKind,
     shutdown: bool,
 ) -> Result<EndpointAction, String> {
+    let request_id = request.request_id();
+    let cancellation = request.cancellation();
     let version = router.version();
     let nonce = *router.server_nonce();
     let delivered = match router.prepare_terminal(request_id, terminal_kind) {
@@ -141,7 +155,7 @@ fn complete_envelope(
                 crate::provider_composition::RESPONSE_LINE_PREFIX,
                 crate::provider_composition::hex_encode(&frame)
             );
-            write_provider_line(stream, &line)
+            write_admitted_line(stream, &line, deadline, &cancellation)
         }).is_ok(),
         Err(_) => false,
     };

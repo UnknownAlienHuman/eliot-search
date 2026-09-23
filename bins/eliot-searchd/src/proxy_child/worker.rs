@@ -4,9 +4,9 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 
 use super::model::{Exchange, ExchangeOutput};
-use super::pipe::{DeadlineWriter, read_child_line};
+use super::pipe::{DeadlineWriter, RequestWriter, read_child_line};
 use super::spec::{MAX_LINE_BYTES, MAX_RESPONSE_BYTES, MAX_RESPONSE_LINES};
-use super::time::remaining;
+use super::time::check_request;
 use super::{Reply, Terminal, forward_reply};
 
 pub(super) fn spawn_worker(
@@ -33,21 +33,33 @@ pub(super) fn spawn_worker(
                     socket,
                     terminal,
                     deadline,
+                    cancellation,
                     reply,
                 } = request;
                 let result = (|| {
-                    remaining(deadline)?;
-                    input
+                    check_request(deadline, cancellation.as_ref())?;
+                    let mut command_output = RequestWriter {
+                        inner: &mut input,
+                        deadline,
+                        cancellation: cancellation.as_ref(),
+                    };
+                    command_output
                         .write_all(command.as_bytes())
-                        .and_then(|()| input.write_all(b"\n"))
-                        .and_then(|()| input.flush())
+                        .and_then(|()| command_output.write_all(b"\n"))
+                        .and_then(|()| command_output.flush())
                         .map_err(|_| "LOOPBACK_DIRECT_CHILD_WRITE_ERROR".to_owned())?;
-                    let mut writer = DeadlineWriter { socket, deadline };
+                    let mut writer = RequestWriter {
+                        inner: DeadlineWriter { socket, deadline },
+                        deadline,
+                        cancellation: cancellation.as_ref(),
+                    };
                     let mut deferred = Vec::new();
                     let shutdown = terminal == Terminal::Shutdown;
                     let mut read = || {
-                        remaining(deadline)?;
-                        read_child_line(&mut output)
+                        check_request(deadline, cancellation.as_ref())?;
+                        let line = read_child_line(&mut output)?;
+                        check_request(deadline, cancellation.as_ref())?;
+                        Ok(line)
                     };
                     // Do not send a clean-stop frame before observing actual
                     // process exit. Retain the child's exact bytes, not a
@@ -71,7 +83,7 @@ pub(super) fn spawn_worker(
                             MAX_RESPONSE_BYTES,
                         )?
                     };
-                    remaining(deadline)?;
+                    check_request(deadline, cancellation.as_ref())?;
                     Ok(ExchangeOutput { reply, deferred })
                 })();
                 let reusable = result.as_ref().is_ok_and(|output| {

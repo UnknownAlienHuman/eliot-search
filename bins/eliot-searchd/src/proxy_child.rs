@@ -14,6 +14,7 @@ mod time;
 mod worker;
 
 pub(super) use lifecycle::ChildIo;
+pub(super) use pipe::write_admitted_line;
 pub(super) use spec::ChildLimits;
 
 #[cfg(test)]
