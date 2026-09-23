@@ -1,11 +1,13 @@
 //! Loopback endpoint composition behind the stable daemon-local facade.
 
 mod codec;
+mod input;
 mod pairing;
 mod server;
 mod spec;
 mod wire;
 
+pub use input::EndpointInput;
 pub use pairing::{keyed_proof, pairing_binding_digest};
 pub use server::{
     EndpointConnectionHandler, serve_loopback_with_handler, serve_loopback_with_source,

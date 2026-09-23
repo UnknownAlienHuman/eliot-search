@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use search_provider_protocol::request::RequestCancellation;
 
-use super::spec::MAX_LINE_BYTES;
+use super::spec::{MAX_LINE_BYTES, POLL};
 use super::time::{check_request, remaining};
 
 pub(super) struct DeadlineWriter {
@@ -91,28 +91,62 @@ pub(in super::super) fn write_admitted_line(
     line: &str,
     deadline: Instant,
     cancellation: &RequestCancellation,
+    poll: &mut dyn FnMut() -> Result<(), String>,
 ) -> Result<(), String> {
-    check_request(deadline, Some(cancellation))?;
+    write_observed(socket, &[line.as_bytes(), b"\n"], deadline, Some(cancellation), poll)
+}
+
+/// Parent-thread output keeps servicing incoming cancel/EOF even when the client
+/// stops draining its receive buffer. The worker owns output until its reply is
+/// consumed; only then may the parent use this writer for deferred/terminal bytes.
+pub(super) fn write_observed(
+    socket: &TcpStream,
+    pieces: &[&[u8]],
+    deadline: Instant,
+    cancellation: Option<&RequestCancellation>,
+    poll: &mut dyn FnMut() -> Result<(), String>,
+) -> Result<(), String> {
     let original_timeout = socket.write_timeout()
         .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
-    let mut writer = RequestWriter {
-        inner: DeadlineWriter {
-            socket: socket.try_clone()
-                .map_err(|_| "LOOPBACK_STREAM_CLONE_ERROR".to_owned())?,
-            deadline,
-        },
-        deadline,
-        cancellation: Some(cancellation),
-    };
-    let result = writer.write_all(line.as_bytes())
-        .and_then(|()| writer.write_all(b"\n"))
-        .and_then(|()| writer.flush())
-        .map_err(|_| "LOOPBACK_PROXY_WRITE_ERROR".to_owned());
-    // The endpoint's outer acknowledgement has its own transport policy.
-    // Restoring a socket option must never renew this request's deadline.
+    let result = (|| {
+        let mut writer = socket;
+        for &piece in pieces {
+            let mut bytes = piece;
+            while !bytes.is_empty() {
+                check_request(deadline, cancellation)?;
+                poll()?;
+                check_request(deadline, cancellation)?;
+                socket.set_write_timeout(Some(remaining(deadline)?.min(POLL)))
+                    .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
+                match writer.write(bytes) {
+                    Ok(0) => return Err("LOOPBACK_PROXY_WRITE_ERROR".to_owned()),
+                    Ok(count) => bytes = &bytes[count..],
+                    Err(error) if matches!(error.kind(), io::ErrorKind::Interrupted
+                        | io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => continue,
+                    Err(_) => return Err("LOOPBACK_PROXY_WRITE_ERROR".to_owned()),
+                }
+                check_request(deadline, cancellation)?;
+            }
+        }
+        loop {
+            poll()?;
+            check_request(deadline, cancellation)?;
+            socket.set_write_timeout(Some(remaining(deadline)?.min(POLL)))
+                .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
+            match writer.flush() {
+                Ok(()) => break,
+                Err(error) if matches!(error.kind(), io::ErrorKind::Interrupted
+                    | io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => {}
+                Err(_) => return Err("LOOPBACK_PROXY_WRITE_ERROR".to_owned()),
+            }
+        }
+        poll()?;
+        check_request(deadline, cancellation)
+    })();
+    // Restore only the socket option, never the original deadline. Any error
+    // still requires caller fail-stop, including errors after partial delivery.
     let restored = socket.set_write_timeout(original_timeout)
         .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned());
     result?;
-    restored?;
-    check_request(deadline, Some(cancellation))
+    restored
 }

@@ -37,7 +37,7 @@ impl DirectChild {
         terminal: Terminal,
         stream: &TcpStream,
     ) -> Result<crate::provider_composition::ChildReply, String> {
-        self.dispatch(child_command, terminal, stream, None)
+        self.dispatch(child_command, terminal, stream, None, &mut || Ok(()))
     }
 
     pub(super) fn request_budget(&self) -> Result<(Instant, u64), String> {
@@ -52,8 +52,9 @@ impl DirectChild {
         stream: &TcpStream,
         request: &RequestGuard,
         deadline: Instant,
+        poll: &mut dyn FnMut() -> Result<(), String>,
     ) -> Result<crate::provider_composition::ChildReply, String> {
-        self.dispatch(child_command, terminal, stream, Some((request, deadline)))
+        self.dispatch(child_command, terminal, stream, Some((request, deadline)), poll)
     }
 
     fn dispatch(
@@ -62,6 +63,7 @@ impl DirectChild {
         terminal: Terminal,
         stream: &TcpStream,
         admitted: Option<(&RequestGuard, Instant)>,
+        poll: &mut dyn FnMut() -> Result<(), String>,
     ) -> Result<crate::provider_composition::ChildReply, String> {
         if self.fence.blocked() {
             self.abort();
@@ -76,11 +78,12 @@ impl DirectChild {
         }
         let io = &mut self.io;
         let result = self.fence.run(|| match admitted {
-            Some((request, deadline)) => io.exchange_controlled(
+            Some((request, deadline)) => io.exchange_observed(
                 child_command,
                 stream,
                 terminal,
                 Some((deadline, request.cancellation())),
+                poll,
             ),
             None => io.exchange(child_command, stream, terminal),
         });

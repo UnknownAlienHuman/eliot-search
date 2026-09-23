@@ -90,6 +90,25 @@ impl endpoint::EndpointConnectionHandler for ProxyConnection<'_> {
             &mut self.hello_counter,
             self.capabilities,
             self.cache,
+            None,
+        )
+    }
+
+    fn command_with_input(
+        &mut self,
+        command: &str,
+        stream: &mut TcpStream,
+        input: &mut endpoint::EndpointInput,
+    ) -> Result<endpoint::EndpointAction, String> {
+        dispatch_provider_command(
+            command,
+            stream,
+            self.child,
+            &mut self.router,
+            &mut self.hello_counter,
+            self.capabilities,
+            self.cache,
+            Some(input),
         )
     }
 

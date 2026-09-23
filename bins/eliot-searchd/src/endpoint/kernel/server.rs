@@ -5,13 +5,14 @@ use std::net::{Ipv4Addr, TcpListener, TcpStream};
 
 use search_provider_protocol::pairing::PairingLedger;
 
+use super::input::EndpointInput;
 use super::pairing::authenticate_connection;
 use super::spec::{
-    EndpointAction, EndpointKeySource, MAX_COMMAND_LINE_BYTES,
+    EndpointAction, EndpointKeySource,
     MAX_COMMANDS_PER_CONNECTION, MAX_PAIRING_CHALLENGES,
     PAIRING_AUTHENTICATION_ID, READ_TIMEOUT, WRITE_TIMEOUT,
 };
-use super::wire::{read_bounded_line, redacted_io_error, sanitize_code, write_line};
+use super::wire::{redacted_io_error, sanitize_code, write_line};
 
 /// Connection-owned application state around authenticated command dispatch.
 ///
@@ -25,6 +26,18 @@ pub trait EndpointConnectionHandler {
         command: &str,
         stream: &mut TcpStream,
     ) -> Result<EndpointAction, String>;
+
+    /// Gives a stateful handler the same reader used by pairing and dispatch.
+    /// Poll only for current-request controls while execution is in flight;
+    /// ordinary callers retain the command-only behavior.
+    fn command_with_input(
+        &mut self,
+        command: &str,
+        stream: &mut TcpStream,
+        _input: &mut EndpointInput,
+    ) -> Result<EndpointAction, String> {
+        self.command(command, stream)
+    }
 
     /// Cancels connection-local work and clears authentication state without I/O.
     /// This operation must be infallible, idempotent and must not panic.
@@ -182,11 +195,12 @@ where
     // Install teardown before the first fallible authentication or I/O operation.
     handler.disconnected();
     let connection = ConnectionScope(handler);
-    let mut reader = authenticate_connection(&mut stream, connection_sequence, source, ledger)?;
+    let reader = authenticate_connection(&mut stream, connection_sequence, source, ledger)?;
+    let mut input = EndpointInput::new(reader);
 
     let mut request_sequence = 0_u64;
     loop {
-        let Some(command) = read_bounded_line(&mut reader, MAX_COMMAND_LINE_BYTES)? else {
+        let Some(command) = input.read_command()? else {
             return Ok(EndpointAction::Continue);
         };
         if command.is_empty() {
@@ -205,7 +219,7 @@ where
             &format!("{{\"event\":\"request_started\",\"sequence\":{request_sequence}}}"),
         )
         .map_err(|error| redacted_io_error("ENDPOINT_WRITE_ERROR", &error))?;
-        let outcome = connection.0.command(&command, &mut stream);
+        let outcome = connection.0.command_with_input(&command, &mut stream, &mut input);
         match complete_request(&mut stream, outcome, request_sequence) {
             EndpointAction::Continue => {
                 request_sequence = request_sequence

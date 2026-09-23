@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver, SyncSender};
@@ -8,7 +7,7 @@ use std::time::{Duration, Instant};
 use search_provider_protocol::request::RequestCancellation;
 
 use super::model::{Exchange, Outcome};
-use super::pipe::{DeadlineWriter, RequestWriter};
+use super::pipe::write_observed;
 use super::spec::ChildLimits;
 use super::time::{check_request, deadline, pause, receive, receive_request, remaining};
 use super::worker::spawn_worker;
@@ -105,6 +104,19 @@ impl ChildIo {
         terminal: Terminal,
         control: Option<(Instant, RequestCancellation)>,
     ) -> Outcome {
+        self.exchange_observed(command, socket, terminal, control, &mut || Ok(()))
+    }
+
+    /// Polls the single connection reader on this owner thread while the pipe
+    /// worker runs. A polling failure takes the same fail-stop path as I/O loss.
+    pub(in super::super) fn exchange_observed(
+        &mut self,
+        command: &str,
+        socket: &TcpStream,
+        terminal: Terminal,
+        control: Option<(Instant, RequestCancellation)>,
+        poll: &mut dyn FnMut() -> Result<(), String>,
+    ) -> Outcome {
         if self.aborted || self.status.is_some() {
             return Err("LOOPBACK_DIRECT_CHANNEL_REQUIRES_RESTART".to_owned());
         }
@@ -133,43 +145,33 @@ impl ChildIo {
         };
         let mut active = ActiveExchange { child: self, socket, completed: false };
         let outcome = (|| {
+            poll()?;
             check_request(deadline, cancellation.as_ref())?;
             active.child.commands
                 .as_ref()
                 .ok_or_else(|| "LOOPBACK_DIRECT_CHANNEL_CLOSED".to_owned())?
                 .try_send(request)
                 .map_err(|_| "LOOPBACK_DIRECT_PIPE_QUEUE_UNAVAILABLE".to_owned())?;
-            let result = receive_request(&response, deadline, cancellation.as_ref())??;
+            let result = receive_request(&response, deadline, cancellation.as_ref(), poll)??;
             if result.reply == Reply::Shutdown {
                 // The same request deadline includes child exit and pipe
                 // cleanup. STOPPED without process exit is not shutdown.
-                let status = active.child.wait_child(deadline, cancellation.as_ref())?;
-                active.child.wait_worker(deadline, cancellation.as_ref())?;
+                let status = active.child.wait_child(deadline, cancellation.as_ref(), poll)?;
+                active.child.wait_worker(deadline, cancellation.as_ref(), poll)?;
                 if !status.success() {
                     return Err("LOOPBACK_DIRECT_CHILD_EXIT_FAILED".to_owned());
                 }
             }
             check_request(deadline, cancellation.as_ref())?;
             if !result.deferred.is_empty() {
-                let mut writer = RequestWriter {
-                    inner: DeadlineWriter {
-                        socket: socket.try_clone()
-                            .map_err(|_| "LOOPBACK_STREAM_CLONE_ERROR".to_owned())?,
-                        deadline,
-                    },
-                    deadline,
-                    cancellation: cancellation.as_ref(),
-                };
-                writer
-                    .write_all(&result.deferred)
-                    .and_then(|()| writer.flush())
-                    .map_err(|_| "LOOPBACK_PROXY_WRITE_ERROR".to_owned())?;
+                write_observed(socket, &[&result.deferred], deadline, cancellation.as_ref(), poll)?;
             }
             // Cloned TcpStreams share socket options. Do not leak the child
             // budget into the endpoint's next acknowledgement.
             socket
                 .set_write_timeout(original_timeout)
                 .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
+            poll()?;
             check_request(deadline, cancellation.as_ref())?;
             Ok(result.reply)
         })();
@@ -188,8 +190,8 @@ impl ChildIo {
             let _ = self.child.kill();
         }
         if let Ok(deadline) = deadline(self.limits.cleanup) {
-            let _ = self.wait_child(deadline, None);
-            let _ = self.wait_worker(deadline, None);
+            let _ = self.wait_child(deadline, None, &mut || Ok(()));
+            let _ = self.wait_worker(deadline, None, &mut || Ok(()));
         }
         // If the OS cannot reap the child or release inherited pipes, do not
         // fabricate clean release. The failed proxy exits with the root still
@@ -203,8 +205,8 @@ impl ChildIo {
         }
         let end = deadline(self.limits.cleanup)?;
         let result = (|| {
-            let status = self.wait_child(end, None)?;
-            self.wait_worker(end, None)?;
+            let status = self.wait_child(end, None, &mut || Ok(()))?;
+            self.wait_worker(end, None, &mut || Ok(()))?;
             if status.success() {
                 Ok(())
             } else {
@@ -221,8 +223,10 @@ impl ChildIo {
         &mut self,
         end: Instant,
         cancellation: Option<&RequestCancellation>,
+        poll: &mut dyn FnMut() -> Result<(), String>,
     ) -> Result<ExitStatus, String> {
         loop {
+            poll()?;
             check_request(end, cancellation)?;
             if let Some(status) = self.status {
                 return Ok(status);
@@ -241,15 +245,18 @@ impl ChildIo {
         &mut self,
         end: Instant,
         cancellation: Option<&RequestCancellation>,
+        poll: &mut dyn FnMut() -> Result<(), String>,
     ) -> Result<(), String> {
         while self
             .worker
             .as_ref()
             .is_some_and(|worker| !worker.is_finished())
         {
+            poll()?;
             check_request(end, cancellation)?;
             pause(end)?;
         }
+        poll()?;
         check_request(end, cancellation)?;
         if let Some(worker) = self.worker.take() {
             worker

@@ -59,14 +59,15 @@ pub(super) fn receive_request<T>(
     receiver: &Receiver<T>,
     end: Instant,
     cancellation: Option<&RequestCancellation>,
+    poll: &mut dyn FnMut() -> Result<(), String>,
 ) -> Result<T, String> {
-    if cancellation.is_none() {
-        return receive(receiver, end);
-    }
     loop {
+        check_request(end, cancellation)?;
+        poll()?;
         check_request(end, cancellation)?;
         match receiver.recv_timeout(remaining(end)?.min(POLL)) {
             Ok(value) => {
+                poll()?;
                 check_request(end, cancellation)?;
                 return Ok(value);
             }

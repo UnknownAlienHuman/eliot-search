@@ -18,6 +18,7 @@ pub(super) fn do_envelope(
     child: &mut DirectChild,
     router: &mut Option<crate::provider_composition::ProviderRouter>,
     key: &[u8; 32],
+    mut input: Option<&mut crate::endpoint::EndpointInput>,
 ) -> Result<EndpointAction, String> {
     let (sequence, frame) =
         match crate::provider_composition::parse_envelope_line(command) {
@@ -83,7 +84,33 @@ pub(super) fn do_envelope(
         == search_provider_protocol::request::ControlCommand::Shutdown;
     let terminal = Terminal::for_command(child_command)
         .map_err(|_| "LOOPBACK_DIRECT_COMMAND_INVALID".to_owned())?;
-    match child.dispatch_admitted(child_command, terminal, stream, &admitted, deadline) {
+    let mut observer = admitted.clone();
+    let mut poll = || {
+        let Some(input) = input.as_deref_mut() else {
+            return Ok(());
+        };
+        let observed = input.poll_control(|line| {
+            // Do not decode ordinary query bodies during each polling pass.
+            line.starts_with("op\tcancel\t") && matches!(
+                crate::provider_composition::parse_op_line(line),
+                Ok((crate::provider_composition::ProviderOperation::Cancel,
+                    crate::provider_composition::OpArgument::CancelTarget(target)))
+                    if &target == observer.request_id()
+            )
+        });
+        match observed {
+            Ok(false) => Ok(()),
+            Ok(true) => {
+                observer.mark_cancelled();
+                Err("LOOPBACK_DIRECT_REQUEST_CANCELLED".to_owned())
+            }
+            Err(error) => {
+                observer.mark_cancelled();
+                Err(error)
+            }
+        }
+    };
+    match child.dispatch_admitted(child_command, terminal, stream, &admitted, deadline, &mut poll) {
         Ok(reply) => {
             use crate::provider_composition::ChildReply;
 
@@ -108,6 +135,7 @@ pub(super) fn do_envelope(
                 deadline,
                 terminal_kind,
                 shutdown && matches!(reply, ChildReply::Shutdown),
+                &mut poll,
             );
             if fatal {
                 let _ = router.disconnect();
@@ -133,6 +161,7 @@ fn complete_envelope(
     deadline: Instant,
     terminal_kind: search_provider_protocol::TerminalKind,
     shutdown: bool,
+    poll: &mut dyn FnMut() -> Result<(), String>,
 ) -> Result<EndpointAction, String> {
     let request_id = request.request_id();
     let cancellation = request.cancellation();
@@ -155,7 +184,7 @@ fn complete_envelope(
                 crate::provider_composition::RESPONSE_LINE_PREFIX,
                 crate::provider_composition::hex_encode(&frame)
             );
-            write_admitted_line(stream, &line, deadline, &cancellation)
+            write_admitted_line(stream, &line, deadline, &cancellation, poll)
         }).is_ok(),
         Err(_) => false,
     };
