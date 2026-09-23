@@ -12,6 +12,10 @@
     clippy::too_many_lines
 )]
 
+mod continuation;
+
+pub use continuation::ContinuationPins;
+
 use core::fmt;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, Weak};

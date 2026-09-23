@@ -6,7 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use search_access::{AccessError, MAX_SECURITY_DEPENDENTS, SecurityDependentReceipt};
 use search_contracts::{BoundedList, LiveDenySnapshotRef, OpaqueId, ReceiptRef};
 use search_control_redb::security_restriction::SecurityRestrictionCommit;
-use search_continuation::{ContinuationCleanup, ContinuationStore};
+use search_continuation::{ContinuationCleanup, ContinuationEffect, ContinuationStore};
+use search_epoch_pins::ContinuationPins;
 use search_handles::HandleStore;
 use search_ports::{CancellationProbe, OperationContext};
 
@@ -52,6 +53,15 @@ enum RegisteredInvalidator<'a, C: CancellationProbe> {
             &ContinuationCleanup,
             &OperationContext<C>,
         ) -> Result<(), AccessError>,
+    },
+    ContinuationsWithPins {
+        store: &'a mut ContinuationStore,
+        pins: &'a mut ContinuationPins,
+        durable_cleanup: Option<&'a mut dyn FnMut(
+            &SecurityRestrictionCommit,
+            &ContinuationCleanup,
+            &OperationContext<C>,
+        ) -> Result<(), AccessError>>,
     },
     Owner(&'a mut dyn SecurityDependentInvalidator<C>),
 }
@@ -126,6 +136,31 @@ impl<'a, C: CancellationProbe> SecurityInvalidationRegistry<'a, C> {
         self.insert(owner, RegisteredInvalidator::Continuations { store, cleanup })
     }
 
+    /// Connects continuation cleanup to real guards in the canonical pin owner.
+    /// Pin release cannot be replaced with an acknowledging callback. Preserve
+    /// the pin owner across retries; only retire released bindings after the
+    /// continuation and all pending cleanup have been removed.
+    ///
+    /// A supplied durable callback must execute exact job/checkpoint deletion.
+    /// `None` explicitly disables that resource path: encountering a durable
+    /// cleanup returns an error and retains its obligation, never a no-op success.
+    pub fn register_continuations_with_pins(
+        &mut self,
+        store: &'a mut ContinuationStore,
+        pins: &'a mut ContinuationPins,
+        durable_cleanup: Option<&'a mut dyn FnMut(
+            &SecurityRestrictionCommit,
+            &ContinuationCleanup,
+            &OperationContext<C>,
+        ) -> Result<(), AccessError>>,
+    ) -> Result<(), AccessError> {
+        let owner = OpaqueId::new(CONTINUATION_SECURITY_DEPENDENT)
+            .map_err(|_| AccessError::SecurityFailClosed)?;
+        self.insert(owner, RegisteredInvalidator::ContinuationsWithPins {
+            store, pins, durable_cleanup,
+        })
+    }
+
     /// Registers another required owner. Canonical handle/continuation slots
     /// are reserved for concrete store passes; callbacks cannot replace them.
     pub fn register_owner(
@@ -195,6 +230,30 @@ impl<C: CancellationProbe + Clone> SecurityInvalidationSink<C>
                 }
                 RegisteredInvalidator::Continuations { store, cleanup } => {
                     continuations::invalidate(store, &mut **cleanup, committed, mutation_receipt, &budget)?
+                }
+                RegisteredInvalidator::ContinuationsWithPins { store, pins, durable_cleanup } => {
+                    let mut cleanup = |native: &SecurityRestrictionCommit,
+                                       work: &ContinuationCleanup,
+                                       context: &OperationContext<C>| {
+                        match work.effect() {
+                            ContinuationEffect::ReleaseEpochPin { epoch_pin_ref } => {
+                                pins.release(work.continuation_id(), epoch_pin_ref)
+                                    .map(|_| ())
+                                    .map_err(|_| AccessError::SecurityFailClosed)
+                            }
+                            ContinuationEffect::DeleteDurableCheckpoint { .. } => {
+                                let execute = durable_cleanup.as_deref_mut()
+                                    .ok_or(AccessError::SecurityFailClosed)?;
+                                execute(native, work, context)
+                            }
+                            ContinuationEffect::RenewEpochPin { .. } => {
+                                Err(AccessError::SecurityOperationConflict)
+                            }
+                        }
+                    };
+                    // The existing pass verifies the exact native operation and
+                    // checks cancellation/deadline before AND after each effect.
+                    continuations::invalidate(store, &mut cleanup, committed, mutation_receipt, &budget)?
                 }
                 RegisteredInvalidator::Owner(invalidator) => invalidator.invalidate(
                     committed, mutation_receipt, published,
