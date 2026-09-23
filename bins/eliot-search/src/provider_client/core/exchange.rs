@@ -4,9 +4,9 @@
 //! leave the connection reusable. Ordinary fully framed refusals are outcomes;
 //! protocol/I/O errors, unknown outcomes and unwinding poison the session.
 
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 use std::net::Shutdown;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use search_provider_protocol::negotiation::negotiate_hello;
 use search_provider_protocol::request::{
@@ -15,12 +15,12 @@ use search_provider_protocol::request::{
 };
 
 use super::{
-    IO_TIMEOUT, MAX_PROVIDER_LINE_BYTES, MAX_RESPONSE_LINES, ProofDigest, ProtocolRange,
+    MAX_RESPONSE_LINES, ProofDigest, ProtocolRange,
     ProviderSession, REQUEST_ID_DOMAIN, RequestId, UnsignedRequest, hex_decode, hex_encode,
     keyed, provider_range, render_op_line, response, verify_sealed_response,
 };
 
-const MAX_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
+use super::transport::ExchangeBudget;
 
 struct CompletedExchange {
     outcome: Result<(), String>,
@@ -43,13 +43,13 @@ impl ProviderSession {
     pub(super) fn close(&mut self) {
         self.active = false;
         let _ = self.stream.shutdown(Shutdown::Both);
-        self.key.fill(0);
+        self.key = None;
     }
 
-    /// Installs negotiated state only after the complete hello exchange.
-    pub(super) fn hello(&mut self) -> Result<(), String> {
+    /// Installs negotiated state only after the complete hello exchange, using
+    /// the original connection-opening budget rather than restarting its clock.
+    pub(super) fn hello(&mut self, budget: &mut ExchangeBudget) -> Result<(), String> {
         let mut exchange = Exchange { session: self, completed: false };
-        let mut budget = ExchangeBudget::new()?;
         let sequence = exchange.session.endpoint_sequence;
         let next = next_sequence(sequence)?;
         budget.send(&mut exchange.session.stream, "op\thello\t1.0-1.0")?;
@@ -106,7 +106,8 @@ impl ProviderSession {
         input.extend_from_slice(self.nonce.as_bytes());
         input.extend_from_slice(&self.request_counter.to_le_bytes());
         input.extend_from_slice(&nanos.to_le_bytes());
-        let digest = blake3::keyed_hash(&self.key, &input);
+        let digest = self.key.as_ref().ok_or_else(|| "REMOTE_SESSION_CLOSED".to_owned())?
+            .with_bytes(|key| blake3::keyed_hash(key, &input));
         let mut raw = [0_u8; 16];
         raw.copy_from_slice(&digest.as_bytes()[..16]);
         if raw.iter().all(|byte| *byte == 0) { return Err("REMOTE_REQUEST_ID_INVALID".to_owned()); }
@@ -125,7 +126,8 @@ impl ProviderSession {
         let stub = seal_envelope(
             self.version, self.nonce, request_id, command, digest, ProofDigest::from_bytes([0; 32]),
         );
-        let proof = keyed(&self.key, &envelope_transcript(&stub));
+        let proof = self.key.as_ref().ok_or_else(|| "REMOTE_SESSION_CLOSED".to_owned())?
+            .with_bytes(|key| keyed(key, &envelope_transcript(&stub)));
         let sealed = seal_envelope(self.version, self.nonce, request_id, command, digest, proof);
         let frame = encode_envelope_json(&sealed);
         let length = u32::try_from(frame.len()).map_err(|_| "REMOTE_REQUEST_TOO_LARGE".to_owned())?;
@@ -146,7 +148,8 @@ impl ProviderSession {
                 if decoded.request_id() != &request_id || decoded.version() != self.version {
                     return Err("REMOTE_RESPONSE_MISMATCH".to_owned());
                 }
-                verify_sealed_response(&self.key, &decoded, &self.nonce, provider_sequence)?;
+                self.key.as_ref().ok_or_else(|| "REMOTE_SESSION_CLOSED".to_owned())?
+                    .with_bytes(|key| verify_sealed_response(key, &decoded, &self.nonce, provider_sequence))?;
                 // A verified outcome-unknown terminal intentionally precedes
                 // connection abort, not a normal endpoint acknowledgement.
                 // Preserve its meaning instead of replacing it with an EOF error.
@@ -242,93 +245,4 @@ fn next_sequence(previous: u64) -> Result<u64, String> {
 
 fn print_payload(line: &str) -> Result<(), String> {
     writeln!(io::stdout().lock(), "{line}").map_err(|_| "REMOTE_OUTPUT_ERROR".to_owned())
-}
-
-/// Counts actual consumed wire bytes (including newlines), without buffering a
-/// whole result. One absolute deadline covers all post-pairing reads/writes.
-/// Socket timeouts use only its remainder; partial I/O never renews the budget.
-struct ExchangeBudget {
-    deadline: Instant,
-    bytes: usize,
-    lines: usize,
-}
-
-impl ExchangeBudget {
-    fn new() -> Result<Self, String> {
-        Ok(Self {
-            deadline: Instant::now().checked_add(IO_TIMEOUT)
-                .ok_or_else(|| "REMOTE_DEADLINE_EXPIRED".to_owned())?,
-            bytes: 0,
-            lines: 0,
-        })
-    }
-
-    fn remaining(&self) -> Result<Duration, String> {
-        self.deadline.checked_duration_since(Instant::now())
-            .filter(|remaining| !remaining.is_zero())
-            .ok_or_else(|| "REMOTE_DEADLINE_EXPIRED".to_owned())
-    }
-
-    fn check(&self) -> Result<(), String> { self.remaining().map(|_| ()) }
-
-    fn send(&self, stream: &mut std::net::TcpStream, line: &str) -> Result<(), String> {
-        if line.is_empty() || line.len() >= MAX_PROVIDER_LINE_BYTES || line.contains('\n') || line.contains('\r') {
-            return Err("REMOTE_REQUEST_TOO_LARGE".to_owned());
-        }
-        for mut bytes in [line.as_bytes(), b"\n".as_slice()] {
-            while !bytes.is_empty() {
-                stream.set_write_timeout(Some(self.remaining()?))
-                    .map_err(|_| "REMOTE_TIMEOUT_CONFIGURATION_ERROR".to_owned())?;
-                match stream.write(bytes) {
-                    Ok(0) => return Err("REMOTE_WRITE_ERROR".to_owned()),
-                    Ok(count) => bytes = &bytes[count..],
-                    Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(_) => return Err("REMOTE_WRITE_ERROR".to_owned()),
-                }
-            }
-        }
-        stream.set_write_timeout(Some(self.remaining()?))
-            .map_err(|_| "REMOTE_TIMEOUT_CONFIGURATION_ERROR".to_owned())?;
-        stream.flush().map_err(|_| "REMOTE_WRITE_ERROR".to_owned())?;
-        self.check()
-    }
-
-    fn recv(&mut self, session: &mut ProviderSession) -> Result<String, String> {
-        if self.lines >= MAX_RESPONSE_LINES { return Err("REMOTE_RESPONSE_LINE_LIMIT_EXCEEDED".to_owned()); }
-        self.lines += 1;
-        let reader = &mut session.reader;
-        let mut line = Vec::new();
-        loop {
-            self.check()?;
-            if reader.buffer().is_empty() {
-                reader.get_ref().set_read_timeout(Some(self.remaining()?))
-                    .map_err(|_| "REMOTE_TIMEOUT_CONFIGURATION_ERROR".to_owned())?;
-            }
-            let (count, ended) = {
-                let bytes = match reader.fill_buf() {
-                    Ok(bytes) => bytes,
-                    Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(_) => return Err("REMOTE_READ_ERROR".to_owned()),
-                };
-                if bytes.is_empty() { return Err("REMOTE_RESPONSE_TRUNCATED".to_owned()); }
-                let newline = bytes.iter().position(|byte| *byte == b'\n');
-                let count = newline.map_or(bytes.len(), |position| position + 1);
-                self.bytes = self.bytes.checked_add(count)
-                    .filter(|bytes| *bytes <= MAX_RESPONSE_BYTES)
-                    .ok_or_else(|| "REMOTE_RESPONSE_BYTES_EXCEEDED".to_owned())?;
-                if line.len().checked_add(count).is_none_or(|size| size > MAX_PROVIDER_LINE_BYTES) {
-                    return Err("REMOTE_FRAME_TOO_LARGE".to_owned());
-                }
-                line.extend_from_slice(&bytes[..count]);
-                (count, newline.is_some())
-            };
-            reader.consume(count);
-            self.check()?;
-            if ended {
-                line.pop();
-                if line.last() == Some(&b'\r') { line.pop(); }
-                return String::from_utf8(line).map_err(|_| "REMOTE_FRAME_INVALID_UTF8".to_owned());
-            }
-        }
-    }
 }

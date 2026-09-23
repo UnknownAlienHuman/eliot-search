@@ -16,14 +16,14 @@
 //! fails the handshake closed, never silently.
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufReader, Read};
 use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
 use std::time::Duration;
 
 use search_contracts::{ProtocolRange, ProtocolVersion, RequestId};
 use search_provider_protocol::pairing::{
-    ClientNonce, PairingChallenge, ProofDigest, ServerNonce, SessionId, client_proof_transcript,
+    BindingKey, ClientNonce, PairingChallenge, ProofDigest, ServerNonce, SessionId, client_proof_transcript,
     server_proof_transcript, verify_proof,
 };
 use search_provider_protocol::request::{
@@ -32,13 +32,14 @@ use search_provider_protocol::request::{
 
 mod exchange;
 mod response;
+mod transport;
 
 #[cfg(test)]
 use search_provider_protocol::request::{ControlCommand, envelope_transcript, seal_envelope};
 
 /// Exact negotiated provider version.
 pub const PROVIDER_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
-/// Maximum post-pairing hello or request exchange duration.
+/// Maximum complete connection setup or individual request exchange duration.
 pub const IO_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_TOKEN_FILE_BYTES: usize = 4096;
 const MIN_TOKEN_BYTES: usize = 32;
@@ -252,19 +253,24 @@ pub fn read_endpoint_descriptor(data_root: &Path) -> Result<NamespacedEndpoint, 
 /// Regular files only, bounded size, ASCII-trimmed, minimum length enforced;
 /// the raw buffer is zeroed before return.
 pub fn read_shim_key(path: &Path) -> Result<[u8; 32], String> {
-    let bytes = read_small_regular(path, (MAX_TOKEN_FILE_BYTES + 1) as u64)?;
-    if bytes.len() > MAX_TOKEN_FILE_BYTES {
-        return Err("REMOTE_TOKEN_FILE_TOO_LARGE".to_owned());
-    }
-    let start = bytes
+    let bytes = SecretBytes(read_small_regular(path, MAX_TOKEN_FILE_BYTES as u64)?);
+    let start = bytes.0
         .iter()
         .position(|byte| !byte.is_ascii_whitespace())
-        .unwrap_or(bytes.len());
-    let end = bytes
+        .unwrap_or(bytes.0.len());
+    let end = bytes.0
         .iter()
         .rposition(|byte| !byte.is_ascii_whitespace())
         .map_or(start, |index| index + 1);
-    shim_key_from_bytes(&bytes[start..end])
+    shim_key_from_bytes(&bytes.0[start..end])
+}
+
+struct SecretBytes(Vec<u8>);
+
+impl Drop for SecretBytes {
+    fn drop(&mut self) {
+        self.0.fill(0);
+    }
 }
 
 fn read_small_regular(path: &Path, maximum: u64) -> Result<Vec<u8>, String> {
@@ -277,15 +283,27 @@ fn read_small_regular(path: &Path, maximum: u64) -> Result<Vec<u8>, String> {
         return Err("REMOTE_TOKEN_FILE_TOO_LARGE".to_owned());
     }
     let mut file = File::open(path).map_err(|error| format!("REMOTE_TOKEN_OPEN_ERROR:{error}"))?;
-    let mut bytes = Vec::new();
-    Read::take(&mut file, maximum)
-        .read_to_end(&mut bytes)
-        .map_err(|error| format!("REMOTE_TOKEN_READ_ERROR:{error}"))?;
-    if bytes.len() > MAX_TOKEN_FILE_BYTES {
-        bytes.fill(0);
+    let opened = file.metadata().map_err(|error| format!("REMOTE_TOKEN_READ_ERROR:{error}"))?;
+    if !opened.is_file() {
+        return Err("REMOTE_TOKEN_FILE_INVALID".to_owned());
+    }
+    if opened.len() > maximum {
         return Err("REMOTE_TOKEN_FILE_TOO_LARGE".to_owned());
     }
-    Ok(bytes)
+    // Probe one extra byte rather than accepting a truncated prefix when the
+    // file grows. Use this caller's cap, not the unrelated token-file constant.
+    let allowance = maximum.checked_add(1)
+        .ok_or_else(|| "REMOTE_TOKEN_FILE_TOO_LARGE".to_owned())?;
+    let capacity = usize::try_from(allowance)
+        .map_err(|_| "REMOTE_TOKEN_FILE_TOO_LARGE".to_owned())?;
+    let mut bytes = SecretBytes(Vec::with_capacity(capacity));
+    Read::take(&mut file, allowance)
+        .read_to_end(&mut bytes.0)
+        .map_err(|error| format!("REMOTE_TOKEN_READ_ERROR:{error}"))?;
+    if bytes.0.len() > capacity - 1 {
+        return Err("REMOTE_TOKEN_FILE_TOO_LARGE".to_owned());
+    }
+    Ok(std::mem::take(&mut bytes.0))
 }
 
 /// Pure development-key derivation over trimmed token bytes.
@@ -322,7 +340,7 @@ fn keyed(key: &[u8; 32], bytes: &[u8]) -> ProofDigest {
 pub struct ProviderSession {
     stream: TcpStream,
     reader: BufReader<TcpStream>,
-    key: [u8; 32],
+    key: Option<BindingKey>,
     nonce: ServerNonce,
     version: ProtocolVersion,
     envelope_sequence: u64,
@@ -339,66 +357,30 @@ impl Drop for ProviderSession {
 }
 
 /// Opens a pairing-authenticated provider session and negotiates `1.0`.
+///
+/// One deadline covers connect, both pairing proofs, readiness and hello.
+/// Partial I/O never renews it. No usable session escapes before all steps
+/// succeed; failures and unwind close the socket and drop the owned key.
 pub fn open_session(address: SocketAddr, key: [u8; 32]) -> Result<ProviderSession, String> {
+    let key = BindingKey::from_bytes(key);
     if !address.ip().is_loopback() {
         return Err("REMOTE_NON_LOOPBACK_DENIED".to_owned());
     }
-    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(10))
+    let key = key.map_err(|_| "REMOTE_TOKEN_INVALID".to_owned())?;
+    let mut budget = transport::ExchangeBudget::new()?;
+    let connect_timeout = budget.remaining()?.min(Duration::from_secs(10));
+    let stream = TcpStream::connect_timeout(&address, connect_timeout)
         .map_err(|error| format!("REMOTE_CONNECT_ERROR:{error}"))?;
-    stream
-        .set_read_timeout(Some(IO_TIMEOUT))
-        .and_then(|()| stream.set_write_timeout(Some(IO_TIMEOUT)))
-        .map_err(|error| format!("REMOTE_TIMEOUT_CONFIGURATION_ERROR:{error}"))?;
+    budget.check()?;
     let read_stream = stream
         .try_clone()
         .map_err(|error| format!("REMOTE_STREAM_CLONE_ERROR:{error}"))?;
-    let mut reader = BufReader::new(read_stream);
-    let challenge = read_challenge(&mut reader)?;
-    if challenge.version != PROVIDER_VERSION {
-        return Err("REMOTE_VERSION_MISMATCH".to_owned());
-    }
-    if binding_digest(&key) != challenge.binding {
-        return Err("REMOTE_BINDING_MISMATCH".to_owned());
-    }
-    let proof = keyed(
-        &key,
-        client_proof_transcript(
-            challenge.version,
-            &challenge.binding,
-            challenge.session,
-            &challenge.nonce,
-            &challenge.challenge,
-        )
-        .as_bytes(),
-    );
-    write_line(
-        &mut stream,
-        &format!("PAIRING_AUTH\tproof={}", hex_encode(proof.as_bytes())),
-    )?;
-    let verified_line = read_bounded_line(&mut reader, MAX_CHALLENGE_LINE_BYTES)?
-        .ok_or_else(|| "REMOTE_VERIFIED_MISSING".to_owned())?;
-    let observed = parse_verified_line(&verified_line)?;
-    let expected = keyed(
-        &key,
-        server_proof_transcript(
-            challenge.version,
-            &challenge.binding,
-            challenge.session,
-            &challenge.nonce,
-            &challenge.challenge,
-        )
-        .as_bytes(),
-    );
-    if !verify_proof(&expected, &observed) {
-        return Err("REMOTE_PROVIDER_PROOF_INVALID".to_owned());
-    }
-    let ready = read_bounded_line(&mut reader, MAX_PROVIDER_LINE_BYTES)?
-        .ok_or_else(|| "REMOTE_READY_MISSING".to_owned())?;
-    response::authenticated(&ready)?;
+    // Install socket cleanup before the first pairing read. The key stays in
+    // its existing non-clonable owner until verified pairing transfers it.
     let mut session = ProviderSession {
         stream,
-        reader,
-        key,
+        reader: BufReader::new(read_stream),
+        key: None,
         nonce: ServerNonce::from_bytes([1; 16]).map_err(|_| "REMOTE_NONCE_INVALID".to_owned())?,
         version: PROVIDER_VERSION,
         envelope_sequence: 0,
@@ -407,7 +389,53 @@ pub fn open_session(address: SocketAddr, key: [u8; 32]) -> Result<ProviderSessio
         request_counter: 0,
         active: false,
     };
-    session.hello()?;
+    let challenge_line = budget.read_line(
+        &mut session.reader, MAX_CHALLENGE_LINE_BYTES, "REMOTE_CHALLENGE_MISSING",
+    )?;
+    let challenge = parse_challenge(&challenge_line)?;
+    if challenge.version != PROVIDER_VERSION {
+        return Err("REMOTE_VERSION_MISMATCH".to_owned());
+    }
+    if !verify_proof(&key.with_bytes(binding_digest), &challenge.binding) {
+        return Err("REMOTE_BINDING_MISMATCH".to_owned());
+    }
+    let proof = key.with_bytes(|bytes| keyed(
+        bytes,
+        client_proof_transcript(
+            challenge.version,
+            &challenge.binding,
+            challenge.session,
+            &challenge.nonce,
+            &challenge.challenge,
+        ).as_bytes(),
+    ));
+    budget.send(
+        &mut session.stream,
+        &format!("PAIRING_AUTH\tproof={}", hex_encode(proof.as_bytes())),
+    )?;
+    let verified_line = budget.read_line(
+        &mut session.reader, MAX_CHALLENGE_LINE_BYTES, "REMOTE_VERIFIED_MISSING",
+    )?;
+    let observed = parse_verified_line(&verified_line)?;
+    let expected = key.with_bytes(|bytes| keyed(
+        bytes,
+        server_proof_transcript(
+            challenge.version,
+            &challenge.binding,
+            challenge.session,
+            &challenge.nonce,
+            &challenge.challenge,
+        ).as_bytes(),
+    ));
+    if !verify_proof(&expected, &observed) {
+        return Err("REMOTE_PROVIDER_PROOF_INVALID".to_owned());
+    }
+    let ready = budget.read_line(
+        &mut session.reader, MAX_PROVIDER_LINE_BYTES, "REMOTE_READY_MISSING",
+    )?;
+    response::authenticated(&ready)?;
+    session.key = Some(key);
+    session.hello(&mut budget)?;
     Ok(session)
 }
 
@@ -419,9 +447,7 @@ struct ServerChallenge {
     binding: ProofDigest,
 }
 
-fn read_challenge(reader: &mut BufReader<TcpStream>) -> Result<ServerChallenge, String> {
-    let line = read_bounded_line(reader, MAX_CHALLENGE_LINE_BYTES)?
-        .ok_or_else(|| "REMOTE_CHALLENGE_MISSING".to_owned())?;
+fn parse_challenge(line: &str) -> Result<ServerChallenge, String> {
     let parts: Vec<&str> = line.split('\t').collect();
     if parts.len() != 6 || parts[0] != "PAIRING_CHALLENGE" {
         return Err("REMOTE_CHALLENGE_INVALID".to_owned());
@@ -527,39 +553,6 @@ fn seal_response_placeholder(
         stub_digest,
         ProofDigest::from_bytes([0; 32]),
     )
-}
-
-fn write_line(stream: &mut TcpStream, value: &str) -> Result<(), String> {
-    stream
-        .write_all(value.as_bytes())
-        .and_then(|()| stream.write_all(b"\n"))
-        .and_then(|()| stream.flush())
-        .map_err(|error| format!("REMOTE_WRITE_ERROR:{error}"))
-}
-
-fn read_bounded_line(
-    reader: &mut BufReader<TcpStream>,
-    maximum_bytes: usize,
-) -> Result<Option<String>, String> {
-    let mut bytes = Vec::new();
-    let mut limited =
-        reader.take(u64::try_from(maximum_bytes.saturating_add(1)).unwrap_or(u64::MAX));
-    let read = limited
-        .read_until(b'\n', &mut bytes)
-        .map_err(|error| format!("REMOTE_READ_ERROR:{error}"))?;
-    if read == 0 {
-        return Ok(None);
-    }
-    if bytes.len() > maximum_bytes || !bytes.ends_with(b"\n") {
-        return Err("REMOTE_FRAME_TOO_LARGE".to_owned());
-    }
-    bytes.pop();
-    if bytes.last() == Some(&b'\r') {
-        bytes.pop();
-    }
-    String::from_utf8(bytes)
-        .map(Some)
-        .map_err(|_| "REMOTE_FRAME_INVALID_UTF8".to_owned())
 }
 
 fn decode_16(text: &str) -> Result<[u8; 16], String> {
