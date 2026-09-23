@@ -10,12 +10,14 @@ mod grant;
 mod grant_authority;
 mod grant_command;
 mod system_grant;
+mod native_security;
 
 pub use gate::*;
 pub use grant::*;
 pub use grant_authority::*;
 pub use grant_command::*;
 pub use system_grant::*;
+pub use native_security::*;
 
 #[cfg(test)]
 mod tests;
