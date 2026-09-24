@@ -39,9 +39,92 @@ pub trait EndpointConnectionHandler {
         self.command(command, stream)
     }
 
+    /// Supplies the one completion for the current transport request.
+    /// A handler may include it in its own output transaction; otherwise the
+    /// endpoint emits the ordinary acknowledgement after the handler returns.
+    fn command_with_completion(
+        &mut self,
+        command: &str,
+        stream: &mut TcpStream,
+        input: &mut EndpointInput,
+        _completion: &mut EndpointCompletion,
+    ) -> Result<EndpointAction, String> {
+        self.command_with_input(command, stream, input)
+    }
+
     /// Cancels connection-local work and clears authentication state without I/O.
     /// This operation must be infallible, idempotent and must not panic.
     fn disconnected(&mut self);
+}
+
+/// Single-use transport acknowledgement for the current request sequence.
+///
+/// Constructed only by the endpoint loop. The provider may deliver this frame
+/// inside its terminal preparation, before recording lifecycle completion. This
+/// is local write/flush completion, not proof that the peer received the bytes.
+#[derive(Debug)]
+pub struct EndpointCompletion {
+    sequence: u64,
+    state: CompletionState,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CompletionState {
+    Pending,
+    Failed,
+    Delivered,
+}
+
+impl EndpointCompletion {
+    fn new(sequence: u64) -> Self {
+        Self {
+            sequence,
+            state: CompletionState::Pending,
+        }
+    }
+
+    /// Writes the exact acknowledgement through the handler's output boundary.
+    ///
+    /// The callback must write the supplied frame with its newline and flush,
+    /// after the response it acknowledges, under the original deadline and
+    /// cancellation checks. A failed, repeated or unwound attempt cannot be
+    /// retried by the endpoint and cannot trigger an extra completion frame.
+    /// The frame's `ok` describes transport handling; the sealed response retains
+    /// the operation's success, failure, partial or cancellation classification.
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed endpoint error for reuse, or the callback's error.
+    pub fn deliver(
+        &mut self,
+        output: impl FnOnce(&str) -> Result<(), String>,
+    ) -> Result<(), String> {
+        if self.state != CompletionState::Pending {
+            self.state = CompletionState::Failed;
+            return Err("ENDPOINT_COMPLETION_ALREADY_ATTEMPTED".to_owned());
+        }
+        // Arm before formatting/output: even a callback error before its first
+        // write is not permission to append an unbudgeted fallback response.
+        self.state = CompletionState::Failed;
+        let frame = completion_frame(self.sequence, "\"ok\":true");
+        output(&frame)?;
+        self.state = CompletionState::Delivered;
+        Ok(())
+    }
+
+    fn finish(
+        self,
+        writer: &mut impl Write,
+        outcome: Result<EndpointAction, String>,
+    ) -> EndpointAction {
+        match (self.state, outcome) {
+            (CompletionState::Pending, outcome) => {
+                complete_request(writer, outcome, self.sequence)
+            }
+            (CompletionState::Delivered, Ok(action)) => action,
+            _ => EndpointAction::Abort,
+        }
+    }
 }
 
 // Compatibility for command-only callers that have no connection-local state.
@@ -219,8 +302,14 @@ where
             &format!("{{\"event\":\"request_started\",\"sequence\":{request_sequence}}}"),
         )
         .map_err(|error| redacted_io_error("ENDPOINT_WRITE_ERROR", &error))?;
-        let outcome = connection.0.command_with_input(&command, &mut stream, &mut input);
-        match complete_request(&mut stream, outcome, request_sequence) {
+        let mut completion = EndpointCompletion::new(request_sequence);
+        let outcome = connection.0.command_with_completion(
+            &command,
+            &mut stream,
+            &mut input,
+            &mut completion,
+        );
+        match completion.finish(&mut stream, outcome) {
             EndpointAction::Continue => {
                 request_sequence = request_sequence
                     .checked_add(1)
@@ -245,10 +334,14 @@ pub(super) fn complete_request(
             format!("\"ok\":false,\"error\":\"{}\"", sanitize_code(&error)),
         ),
     };
-    let frame = format!("{{\"event\":\"request_complete\",\"sequence\":{sequence},{status}}}");
+    let frame = completion_frame(sequence, &status);
     if write_line(writer, &frame).is_err() {
         EndpointAction::Abort
     } else {
         action
     }
+}
+
+fn completion_frame(sequence: u64, status: &str) -> String {
+    format!("{{\"event\":\"request_complete\",\"sequence\":{sequence},{status}}}")
 }

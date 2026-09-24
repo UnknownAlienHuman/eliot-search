@@ -10,7 +10,8 @@ mod wire;
 pub use input::EndpointInput;
 pub use pairing::{keyed_proof, pairing_binding_digest};
 pub use server::{
-    EndpointConnectionHandler, serve_loopback_with_handler, serve_loopback_with_source,
+    EndpointCompletion, EndpointConnectionHandler, serve_loopback_with_handler,
+    serve_loopback_with_source,
 };
 pub use spec::{
     EndpointAction, EndpointKeySource, PAIRING_AUTHENTICATION_ID,

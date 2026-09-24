@@ -19,6 +19,7 @@ pub(super) fn do_envelope(
     router: &mut Option<crate::provider_composition::ProviderRouter>,
     key: &[u8; 32],
     mut input: Option<&mut crate::endpoint::EndpointInput>,
+    completion: Option<&mut crate::endpoint::EndpointCompletion>,
 ) -> Result<EndpointAction, String> {
     let (sequence, frame) =
         match crate::provider_composition::parse_envelope_line(command) {
@@ -135,6 +136,13 @@ pub(super) fn do_envelope(
                 deadline,
                 terminal_kind,
                 shutdown && matches!(reply, ChildReply::Shutdown),
+                // Fatal/unknown exchanges intentionally have no normal outer
+                // acknowledgement. The endpoint sees Abort and writes nothing.
+                if fatal {
+                    None
+                } else {
+                    completion
+                },
                 &mut poll,
             );
             if fatal {
@@ -161,6 +169,7 @@ fn complete_envelope(
     deadline: Instant,
     terminal_kind: search_provider_protocol::TerminalKind,
     shutdown: bool,
+    completion: Option<&mut crate::endpoint::EndpointCompletion>,
     poll: &mut dyn FnMut() -> Result<(), String>,
 ) -> Result<EndpointAction, String> {
     let request_id = request.request_id();
@@ -184,13 +193,32 @@ fn complete_envelope(
                 crate::provider_composition::RESPONSE_LINE_PREFIX,
                 crate::provider_composition::hex_encode(&frame)
             );
-            write_admitted_line(stream, &line, deadline, &cancellation, poll)
+            if let Some(completion) = completion {
+                // Keep the exclusive router preparation until BOTH frames are
+                // written/flushed. A failed acknowledgement must not consume
+                // the request slot or publish the next provider sequence.
+                completion.deliver(|acknowledgement| {
+                    write_admitted_line(stream, &line, deadline, &cancellation, poll)?;
+                    write_admitted_line(
+                        stream,
+                        acknowledgement,
+                        deadline,
+                        &cancellation,
+                        poll,
+                    )
+                })
+            } else {
+                // Command-only compatibility and fatal outcome-unknown output
+                // keep their existing caller-managed acknowledgement contract.
+                write_admitted_line(stream, &line, deadline, &cancellation, poll)
+            }
         }).is_ok(),
         Err(_) => false,
     };
     if !delivered {
         // Child output has already started. Neither failed preparation nor a
-        // partial terminal write can be repaired by appending an error frame.
+        // partial terminal/acknowledgement write can be repaired by appending
+        // an error frame or retrying completion with a fresh output budget.
         // The preparation also closes on output error/unwind; disconnect here
         // additionally covers rejection before a preparation could be created.
         let _ = router.disconnect();

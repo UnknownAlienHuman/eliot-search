@@ -23,6 +23,7 @@ pub(super) fn dispatch_provider_command(
     capabilities: &crate::provider_composition::ProviderCapabilities,
     cache: &Rc<Cell<Option<[u8; 32]>>>,
     input: Option<&mut crate::endpoint::EndpointInput>,
+    completion: Option<&mut crate::endpoint::EndpointCompletion>,
 ) -> Result<EndpointAction, String> {
     if command.is_empty()
         || command.len() > MAX_PROXY_COMMAND_BYTES
@@ -44,7 +45,7 @@ pub(super) fn dispatch_provider_command(
     }
     if command.starts_with(crate::provider_composition::ENVELOPE_LINE_PREFIX) {
         let key = cached_key(cache)?;
-        return do_envelope(command, stream, child, router, &key, input);
+        return do_envelope(command, stream, child, router, &key, input, completion);
     }
     if command.starts_with(crate::provider_composition::OP_LINE_PREFIX) {
         return do_op(command, stream, child, router, capabilities);
