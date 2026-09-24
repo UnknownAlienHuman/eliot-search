@@ -22,7 +22,7 @@ pub use crate::cancel::{CancelOutcome, cancel_request};
 pub use crate::cleanup::{DisconnectReceipt, disconnect_all};
 pub use crate::config::{DEFAULT_PROTOCOL_LIMITS, FRAME_PREFIX_BYTES, ProtocolLimits};
 pub use crate::error::ProtocolError;
-pub use crate::frame::{ClientEnvelopeCodec, FrameCodec, decode_frame, encode_frame};
+pub use crate::frame::{ClientEnvelopeCodec, FrameCodec, ServerEnvelopeCodec, decode_frame, encode_frame};
 pub use crate::grant::{
     AuthenticatedStandaloneGrantEnvelope, MAX_STANDALONE_GRANT_ENVELOPE_JSON_BYTES,
     MAX_STANDALONE_GRANT_REQUEST_BYTES, STANDALONE_GRANT_ENVELOPE_DOMAIN,

@@ -1,9 +1,9 @@
 //! Typed client-to-provider envelopes from the existing P00 schema.
 //!
-//! The codec covers hello, request (all eleven recipes) and cancel. Progress,
-//! result, error and cancelled are provider-to-client messages and are rejected
-//! here, not converted to an opaque payload or a shell command. Existing shell
-//! and standalone-grant envelopes keep their independent codecs/transcripts.
+//! Client and server codecs share one header and bounded schema implementation.
+//! Direction is validated before body allocation; provider messages cannot be
+//! admitted as client commands. Existing shell and standalone-grant envelopes
+//! keep their independent codecs/transcripts.
 //!
 //! Wire fields follow the P00 record order. Unions have one named key; recipe
 //! body keys are exact versioned RecipeIdV1 values. IDs are hyphenated lowercase
@@ -19,6 +19,7 @@
 mod grant;
 mod primitives;
 mod recipe;
+mod response;
 mod source;
 mod wire;
 
@@ -31,6 +32,11 @@ use crate::config::{FRAME_PREFIX_BYTES, ProtocolLimits};
 use crate::error::ProtocolError;
 use super::FrameCodec;
 use wire::{Decoder, Encoder, Result, Schema, record};
+
+pub use response::ServerEnvelopeCodec;
+
+#[derive(Clone, Copy)]
+enum Direction { Client, Server }
 
 /// Strict typed codec for P00 client-to-provider hello, request and cancel.
 ///
@@ -54,10 +60,19 @@ impl ClientEnvelopeCodec {
         limits: ProtocolLimits,
         supported: ProtocolRange,
     ) -> Result<BoundedBytes<MAX_FRAME_BYTES>> {
+        Self::encode_direction(envelope, limits, supported, Direction::Client)
+    }
+
+    fn encode_direction(
+        envelope: &ProviderEnvelope,
+        limits: ProtocolLimits,
+        supported: ProtocolRange,
+        direction: Direction,
+    ) -> Result<BoundedBytes<MAX_FRAME_BYTES>> {
         let limits = limits.validate()?;
         validate_range(supported)?;
         validate_version(envelope.protocol_version(), supported)?;
-        validate_shape(envelope)?;
+        validate_shape(envelope, direction)?;
         let maximum = limits.max_body_bytes.min(
             limits.max_frame_bytes.checked_sub(FRAME_PREFIX_BYTES)
                 .ok_or(ProtocolError::InvalidLimits)?,
@@ -99,6 +114,15 @@ impl ClientEnvelopeCodec {
         limits: ProtocolLimits,
         supported: ProtocolRange,
     ) -> Result<ProviderEnvelope> {
+        Self::decode_direction(bytes, limits, supported, Direction::Client)
+    }
+
+    fn decode_direction(
+        bytes: &[u8],
+        limits: ProtocolLimits,
+        supported: ProtocolRange,
+        direction: Direction,
+    ) -> Result<ProviderEnvelope> {
         validate_range(supported)?;
         let payload = FrameCodec::decode(bytes, limits)?;
         let mut input = Decoder::new(payload.as_slice());
@@ -118,7 +142,7 @@ impl ClientEnvelopeCodec {
         let connection_sequence = field!(connection_sequence);
         let request_id = field!(request_id);
         let message_kind = field!(message_kind);
-        validate_direction(message_kind)?;
+        validate_direction(message_kind, direction)?;
         let relative_deadline_ms = field!(relative_deadline_ms);
         input.field(&mut first, "body")?;
         let body = get_body(message_kind, &mut input)?;
@@ -128,7 +152,7 @@ impl ClientEnvelopeCodec {
             protocol_major, protocol_minor, installation_incarnation_id, binding_id,
             connection_sequence, request_id, message_kind, relative_deadline_ms, body,
         };
-        validate_shape(&envelope)?;
+        validate_shape(&envelope, direction)?;
         Ok(envelope)
     }
 }
@@ -145,17 +169,18 @@ fn validate_version(version: ProtocolVersion, supported: ProtocolRange) -> Resul
     Ok(())
 }
 
-fn validate_direction(kind: MessageKind) -> Result<()> {
-    match kind {
-        MessageKind::Hello | MessageKind::Request | MessageKind::Cancel => Ok(()),
-        MessageKind::Progress | MessageKind::Result | MessageKind::Error | MessageKind::Cancelled => {
-            Err(ProtocolError::InvalidEnvelope)
-        }
+fn validate_direction(kind: MessageKind, direction: Direction) -> Result<()> {
+    match (direction, kind) {
+        (_, MessageKind::Hello)
+        | (Direction::Client, MessageKind::Request | MessageKind::Cancel)
+        | (Direction::Server, MessageKind::Progress | MessageKind::Result
+            | MessageKind::Error | MessageKind::Cancelled) => Ok(()),
+        _ => Err(ProtocolError::InvalidEnvelope),
     }
 }
 
-fn validate_shape(envelope: &ProviderEnvelope) -> Result<()> {
-    validate_direction(envelope.message_kind)?;
+fn validate_shape(envelope: &ProviderEnvelope, direction: Direction) -> Result<()> {
+    validate_direction(envelope.message_kind, direction)?;
     envelope.validate().map_err(|_| ProtocolError::InvalidEnvelope)?;
     if let ProviderBodyV1::Request(body) = &envelope.body {
         if body.recipe_request.request_id != envelope.request_id
@@ -164,6 +189,9 @@ fn validate_shape(envelope: &ProviderEnvelope) -> Result<()> {
         {
             return Err(ProtocolError::InvalidBody);
         }
+    }
+    if let ProviderBodyV1::Result(body) = &envelope.body {
+        response::validate_result_identity(&body.result, envelope)?;
     }
     Ok(())
 }
@@ -174,7 +202,10 @@ fn put_body(body: &ProviderBodyV1, output: &mut Encoder) -> Result<()> {
         ProviderBodyV1::Hello(value) => value.put(output)?,
         ProviderBodyV1::Request(value) => value.put(output)?,
         ProviderBodyV1::Cancel(value) => value.put(output)?,
-        _ => return Err(ProtocolError::InvalidEnvelope),
+        ProviderBodyV1::Progress(value) => value.put(output)?,
+        ProviderBodyV1::Result(value) => value.put(output)?,
+        ProviderBodyV1::Error(value) => value.put(output)?,
+        ProviderBodyV1::Cancelled(value) => value.put(output)?,
     }
     output.close(b'}')
 }
@@ -187,7 +218,10 @@ fn get_body(kind: MessageKind, input: &mut Decoder<'_>) -> Result<ProviderBodyV1
         MessageKind::Hello => ProviderBodyV1::Hello(Schema::get(input)?),
         MessageKind::Request => ProviderBodyV1::Request(Schema::get(input)?),
         MessageKind::Cancel => ProviderBodyV1::Cancel(Schema::get(input)?),
-        _ => return Err(ProtocolError::InvalidEnvelope),
+        MessageKind::Progress => ProviderBodyV1::Progress(Schema::get(input)?),
+        MessageKind::Result => ProviderBodyV1::Result(Schema::get(input)?),
+        MessageKind::Error => ProviderBodyV1::Error(Schema::get(input)?),
+        MessageKind::Cancelled => ProviderBodyV1::Cancelled(Schema::get(input)?),
     };
     input.close(b'}')?;
     Ok(body)

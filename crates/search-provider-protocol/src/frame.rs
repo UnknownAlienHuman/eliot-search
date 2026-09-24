@@ -17,7 +17,7 @@ use crate::error::ProtocolError;
 mod client;
 mod json;
 
-pub use client::ClientEnvelopeCodec;
+pub use client::{ClientEnvelopeCodec, ServerEnvelopeCodec};
 
 /// Maps a canonical frame failure to the package failure registry.
 const fn map_frame_error(code: ProtocolErrorCode) -> ProtocolError {

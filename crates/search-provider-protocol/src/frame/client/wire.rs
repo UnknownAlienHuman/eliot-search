@@ -1,6 +1,6 @@
 //! Fixed-order schema I/O. General JSON syntax is checked by FrameCodec first.
 
-use search_contracts::{MAX_JSON_DEPTH, base64url_decode, base64url_encode};
+use search_contracts::MAX_JSON_DEPTH;
 
 use crate::error::ProtocolError;
 
@@ -64,7 +64,24 @@ impl Encoder {
     pub(super) fn binary(&mut self, bytes: &[u8]) -> Result<()> {
         let length = encoded_length(bytes.len())?;
         self.room(length.checked_add(2).ok_or(ProtocolError::FrameTooLarge)?)?;
-        self.text(&base64url_encode(bytes))
+        // The contracts crate's base64 helpers are private. Encode directly
+        // into this bounded wire buffer, without an expanded temporary string.
+        const ALPHABET: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        self.raw(b"\"")?;
+        for chunk in bytes.chunks(3) {
+            let first = chunk[0];
+            let second = chunk.get(1).copied().unwrap_or(0);
+            let third = chunk.get(2).copied().unwrap_or(0);
+            let encoded = [
+                ALPHABET[usize::from(first >> 2)],
+                ALPHABET[usize::from(((first & 3) << 4) | (second >> 4))],
+                ALPHABET[usize::from(((second & 15) << 2) | (third >> 6))],
+                ALPHABET[usize::from(third & 63)],
+            ];
+            self.raw(&encoded[..chunk.len() + 1])?;
+        }
+        self.raw(b"\"")
     }
 
     pub(super) fn open(&mut self, delimiter: u8) -> Result<()> {
@@ -195,10 +212,38 @@ impl<'a> Decoder<'a> {
     }
 
     pub(super) fn binary(&mut self, maximum: usize) -> Result<Vec<u8>> {
-        let encoded = self.text(encoded_length(maximum)?)?;
-        let value = base64url_decode(&encoded).map_err(|_| ProtocolError::InvalidBody)?;
-        if value.len() > maximum { return Err(ProtocolError::FrameTooLarge); }
-        if base64url_encode(&value) != encoded { return Err(ProtocolError::InvalidBody); }
+        // Raw byte fields have one unescaped ASCII spelling. Validate their
+        // encoded/decoded lengths before allocation and reject non-zero pad bits.
+        self.literal(b"\"")?;
+        let start = self.position;
+        let ceiling = encoded_length(maximum)?;
+        while self.peek() != Some(b'"') {
+            let byte = self.peek().ok_or(ProtocolError::InvalidBody)?;
+            if self.position - start >= ceiling { return Err(ProtocolError::FrameTooLarge); }
+            base64_digit(byte)?;
+            self.position += 1;
+        }
+        let encoded = &self.bytes[start..self.position];
+        self.position += 1;
+        let tail = encoded.len() % 4;
+        if tail == 1 { return Err(ProtocolError::InvalidBody); }
+        let length = encoded.len() / 4 * 3 + match tail { 2 => 1, 3 => 2, _ => 0 };
+        if length > maximum { return Err(ProtocolError::FrameTooLarge); }
+        let mut value = Vec::with_capacity(length);
+        for chunk in encoded.chunks(4) {
+            let mut digits = [0_u8; 4];
+            for (index, byte) in chunk.iter().copied().enumerate() {
+                digits[index] = base64_digit(byte)?;
+            }
+            if (chunk.len() == 2 && digits[1] & 15 != 0)
+                || (chunk.len() == 3 && digits[2] & 3 != 0)
+            {
+                return Err(ProtocolError::InvalidBody);
+            }
+            value.push((digits[0] << 2) | (digits[1] >> 4));
+            if chunk.len() > 2 { value.push((digits[1] << 4) | (digits[2] >> 2)); }
+            if chunk.len() > 3 { value.push((digits[2] << 6) | digits[3]); }
+        }
         Ok(value)
     }
 
@@ -225,6 +270,17 @@ impl<'a> Decoder<'a> {
             return Err(ProtocolError::InvalidBody);
         }
         Ok(())
+    }
+}
+
+fn base64_digit(byte: u8) -> Result<u8> {
+    match byte {
+        b'A'..=b'Z' => Ok(byte - b'A'),
+        b'a'..=b'z' => Ok(byte - b'a' + 26),
+        b'0'..=b'9' => Ok(byte - b'0' + 52),
+        b'-' => Ok(62),
+        b'_' => Ok(63),
+        _ => Err(ProtocolError::InvalidBody),
     }
 }
 
