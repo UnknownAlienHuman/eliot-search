@@ -204,6 +204,10 @@ impl SessionMachine {
     }
 
     /// Admits one exact client request after sequence and replay checks.
+    ///
+    /// Every returned error preserves both directional counters and replay
+    /// history. The next client sequence is committed only with a new replay
+    /// entry; a refused request never spends the expected sequence value.
     pub fn admit_request(
         &mut self,
         request_id: RequestId,
@@ -218,7 +222,11 @@ impl SessionMachine {
             SessionState::Closed => return Err(ProtocolError::SessionClosed),
             SessionState::Quarantined => return Err(ProtocolError::Quarantined),
         }
-        SequenceTracker::require_accepted(self.sequences.client_mut().observe(sequence))?;
+        // Preview only the small direction-local tracker. Keep sequence-error
+        // precedence, but do not advance the live counter before replay/capacity
+        // validation. No copy or eviction of the replay ledger is needed.
+        let mut client_sequence = self.sequences.client();
+        SequenceTracker::require_accepted(client_sequence.observe(sequence))?;
         if self.replay.contains(&request_id) {
             return Err(ProtocolError::ReplayDetected);
         }
@@ -226,6 +234,7 @@ impl SessionMachine {
             return Err(ProtocolError::ReplayCapacityExceeded);
         }
         self.replay.insert(request_id);
+        *self.sequences.client_mut() = client_sequence;
         Ok(())
     }
 

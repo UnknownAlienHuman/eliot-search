@@ -26,7 +26,7 @@ use crate::cleanup::{DisconnectReceipt, disconnect_all};
 use crate::config::ProtocolLimits;
 use crate::error::ProtocolError;
 use crate::negotiation::negotiate_hello;
-use crate::pairing::{ProofDigest, ServerNonce, VerifiedPairing};
+use crate::pairing::{ProofDigest, ServerNonce, VerifiedPairing, verify_proof};
 use crate::request::{
     AuthenticatedEnvelope, InFlightRegistry, MonotonicMillis, RequestGuard,
 };
@@ -59,14 +59,17 @@ impl TransportPeer {
 /// Authenticated binding context: negotiated version plus installation,
 /// incarnation and peer binding proved by a mutual pairing ceremony.
 ///
-/// Constructible only through [`authenticate_binding`], which requires the
-/// ceremony token — never from ACL or locator data alone.
+/// Constructible only through [`authenticate_binding`], which retains the
+/// exact ceremony token. Opening a session with another ceremony is rejected,
+/// even if both ceremonies negotiated the same version. The adapter still
+/// owns resolution of the peer and pairing reference against live binding state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BindingContext {
     version: ProtocolVersion,
     binding: BindingId,
     incarnation: InstallationIncarnationId,
     role: PeerRole,
+    pairing: VerifiedPairing,
 }
 
 impl BindingContext {
@@ -122,6 +125,7 @@ pub fn authenticate_binding(
         binding: peer.binding,
         incarnation: *incarnation,
         role: peer.role,
+        pairing: *pairing,
     })
 }
 
@@ -235,23 +239,33 @@ pub struct BoundSession {
 impl BoundSession {
     /// Opens one connection from a binding context and its ceremony token.
     ///
-    /// The transport session machine is bound to the exact ceremony output:
-    /// activation compares the ceremony provider proof through the standard
-    /// constant-work comparison, anchoring the session to the pairing.
+    /// The version, ceremony session, binding digest and provider proof must
+    /// match the token retained when the binding context was authenticated.
+    /// Rejection precedes construction of mutable session/replay state. This
+    /// does not replace the adapter's live binding lookup or challenge ledger.
     pub fn open(
         binding: BindingContext,
         pairing: VerifiedPairing,
         server_nonce: ServerNonce,
         limits: ProtocolLimits,
     ) -> Result<Self, ProtocolError> {
-        if binding.version() != pairing.version() {
+        // Compare proof material against the independently retained ceremony,
+        // not against itself. Both digest comparisons perform fixed work.
+        let binding_matches = verify_proof(&binding.pairing.binding(), &pairing.binding());
+        let proof_matches =
+            verify_proof(&binding.pairing.provider_proof(), &pairing.provider_proof());
+        if binding.version() != pairing.version()
+            || binding.pairing.session() != pairing.session()
+            || !binding_matches
+            || !proof_matches
+        {
             return Err(ProtocolError::AuthenticationFailed);
         }
         let limits = limits.validate()?;
         let mut session = SessionMachine::new(limits, 1, 1)?;
         session.negotiate(binding.version())?;
         let ceremony_proof = pairing.provider_proof();
-        session.activate(&ceremony_proof, &ceremony_proof)?;
+        session.activate(&binding.pairing.provider_proof(), &ceremony_proof)?;
         Ok(Self {
             binding,
             pairing,
