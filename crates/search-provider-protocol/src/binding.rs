@@ -33,6 +33,9 @@ use crate::request::{
 use crate::session::{SessionMachine, SessionState};
 
 mod lifecycle;
+mod provider;
+
+pub use provider::{AdmittedProviderRequest, ProviderDeliveryError, ProviderFrameTranscript};
 
 /// Transport peer identity supplied by the daemon adapter.
 ///

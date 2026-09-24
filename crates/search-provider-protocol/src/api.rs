@@ -15,7 +15,8 @@
 //! [`error`](crate::error).
 
 pub use crate::binding::{
-    BindingContext, BindingSession, BoundSession, NegotiatedHello, TransportPeer,
+    AdmittedProviderRequest, BindingContext, BindingSession, BoundSession, NegotiatedHello,
+    ProviderDeliveryError, ProviderFrameTranscript, TransportPeer,
     authenticate_binding, project_capability_descriptor,
 };
 pub use crate::cancel::{CancelOutcome, cancel_request};

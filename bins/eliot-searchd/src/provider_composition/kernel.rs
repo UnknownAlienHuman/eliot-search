@@ -4,6 +4,7 @@
 //! framing/rendering, connection state, child outcome mapping and workspace
 //! currentness are isolated behind the stable provider-composition facade.
 
+mod canonical;
 mod capability;
 mod child;
 mod codec;
@@ -14,6 +15,7 @@ mod render;
 mod router;
 mod spec;
 
+pub use canonical::*;
 pub use capability::*;
 pub use child::*;
 pub use codec::*;

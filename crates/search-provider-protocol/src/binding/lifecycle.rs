@@ -151,7 +151,7 @@ impl BoundSession {
         )
     }
 
-    fn validate_session_header(
+    pub(super) fn validate_session_header(
         &self,
         version: ProtocolVersion,
         nonce: &ServerNonce,
@@ -188,6 +188,18 @@ impl BoundSession {
             return Err(ProtocolError::InvalidBody);
         }
 
+        self.commit_checked_request(request_id, sequence, now, relative_deadline_ms)
+    }
+
+    // Common mutation boundary after each envelope family has authenticated
+    // its own exact bytes. Callers must not substitute a shell/grant envelope.
+    pub(super) fn commit_checked_request(
+        &mut self,
+        request_id: RequestId,
+        sequence: u64,
+        now: MonotonicMillis,
+        relative_deadline_ms: Option<u64>,
+    ) -> Result<RequestGuard, ProtocolError> {
         let guard = RequestGuard::new(
             request_id,
             sequence,
