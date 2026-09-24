@@ -1,16 +1,20 @@
 //! Canonical `u32` little-endian length plus UTF-8 JSON framing.
 //!
-//! This is a thin limit-enforcing wrapper over
+//! This is a length- and JSON-syntax-validating wrapper over
 //! `search-contracts::protocol::{encode_json_frame, decode_json_frame}`.
 //! Baseline performs no compression and no fragmented message assembly; the
 //! 8 MiB ceiling includes the 4-byte prefix. Oversize input is rejected from
 //! the declared prefix before the canonical decoder copies the body.
+//! The syntax scanner is iterative; typed envelope codecs retain ownership of
+//! canonical field order, tags, duplicate fields and semantic validation.
 
 use search_contracts::protocol::{JsonFramePayload, decode_json_frame, encode_json_frame};
 use search_contracts::{BoundedBytes, MAX_FRAME_BYTES, ProtocolErrorCode};
 
 use crate::config::{FRAME_PREFIX_BYTES, ProtocolLimits};
 use crate::error::ProtocolError;
+
+mod json;
 
 /// Maps a canonical frame failure to the package failure registry.
 const fn map_frame_error(code: ProtocolErrorCode) -> ProtocolError {
@@ -24,7 +28,7 @@ const fn map_frame_error(code: ProtocolErrorCode) -> ProtocolError {
 pub struct FrameCodec;
 
 impl FrameCodec {
-    /// Emits `u32` little-endian length plus canonical UTF-8 JSON.
+    /// Emits a length-prefixed JSON value after validating its complete syntax.
     pub fn encode(
         payload: &JsonFramePayload,
         limits: ProtocolLimits,
@@ -32,13 +36,13 @@ impl FrameCodec {
         encode_frame(payload, limits)
     }
 
-    /// Validates length before body allocation, then UTF-8/JSON shape.
+    /// Validates length and complete UTF-8 JSON syntax before copying the body.
     pub fn decode(bytes: &[u8], limits: ProtocolLimits) -> Result<JsonFramePayload, ProtocolError> {
         decode_frame(bytes, limits)
     }
 }
 
-/// Emits `u32` little-endian length plus canonical UTF-8 JSON.
+/// Emits a length-prefixed JSON value after validating its complete syntax.
 pub fn encode_frame(
     payload: &JsonFramePayload,
     limits: ProtocolLimits,
@@ -49,10 +53,11 @@ pub fn encode_frame(
     {
         return Err(ProtocolError::FrameTooLarge);
     }
+    json::validate(payload.as_slice())?;
     encode_json_frame(payload).map_err(map_frame_error)
 }
 
-/// Validates length before body allocation, then UTF-8/JSON shape.
+/// Validates length and complete UTF-8 JSON syntax before copying the body.
 ///
 /// Oversize input is rejected without unbounded buffering: the configured
 /// ceiling is enforced from the declared `u32` prefix before the canonical
@@ -75,6 +80,10 @@ pub fn decode_frame(
     {
         return Err(ProtocolError::FrameTooLarge);
     }
+    if declared != bytes.len() - FRAME_PREFIX_BYTES {
+        return Err(ProtocolError::InvalidEnvelope);
+    }
+    json::validate(&bytes[FRAME_PREFIX_BYTES..])?;
     decode_json_frame(bytes).map_err(map_frame_error)
 }
 
