@@ -86,14 +86,17 @@ impl<W: Write> Write for RequestWriter<'_, W> {
 /// Writes a sealed terminal within the original admitted execution budget.
 /// The caller must abort the exchange on any error, including a late return
 /// after bytes were sent. Successful local I/O is not remote acknowledgement.
+/// `None` is reserved for emitting a selected cancelled terminal: the request's
+/// own cancellation must not suppress that receipt. Deadline and input polling
+/// remain mandatory, and no payload is passed through this exception.
 pub(in super::super) fn write_admitted_line(
     socket: &TcpStream,
     line: &str,
     deadline: Instant,
-    cancellation: &RequestCancellation,
+    cancellation: Option<&RequestCancellation>,
     poll: &mut dyn FnMut() -> Result<(), String>,
 ) -> Result<(), String> {
-    write_observed(socket, &[line.as_bytes(), b"\n"], deadline, Some(cancellation), poll)
+    write_observed(socket, &[line.as_bytes(), b"\n"], deadline, cancellation, poll)
 }
 
 /// Parent-thread output keeps servicing incoming cancel/EOF even when the client

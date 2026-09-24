@@ -128,7 +128,7 @@ impl ChildIo {
             Some((original, probe)) => (original.min(local_deadline), Some(probe)),
             None => (local_deadline, None),
         };
-        check_request(deadline, cancellation.as_ref())?;
+        check_request(deadline, None)?;
         let original_timeout = socket
             .write_timeout()
             .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
@@ -143,28 +143,42 @@ impl ChildIo {
             cancellation: cancellation.clone(),
             reply,
         };
+        let drain_cancellation = request.drains_cancellation();
+        let abort_cancellation = if drain_cancellation {
+            None
+        } else {
+            cancellation.as_ref()
+        };
+        check_request(deadline, abort_cancellation)?;
         let mut active = ActiveExchange { child: self, socket, completed: false };
         let outcome = (|| {
             poll()?;
-            check_request(deadline, cancellation.as_ref())?;
+            check_request(deadline, abort_cancellation)?;
             active.child.commands
                 .as_ref()
                 .ok_or_else(|| "LOOPBACK_DIRECT_CHANNEL_CLOSED".to_owned())?
                 .try_send(request)
                 .map_err(|_| "LOOPBACK_DIRECT_PIPE_QUEUE_UNAVAILABLE".to_owned())?;
-            let result = receive_request(&response, deadline, cancellation.as_ref(), poll)??;
+            let result = receive_request(&response, deadline, abort_cancellation, poll)??;
             if result.reply == Reply::Shutdown {
                 // The same request deadline includes child exit and pipe
                 // cleanup. STOPPED without process exit is not shutdown.
-                let status = active.child.wait_child(deadline, cancellation.as_ref(), poll)?;
-                active.child.wait_worker(deadline, cancellation.as_ref(), poll)?;
+                let status = active.child.wait_child(deadline, abort_cancellation, poll)?;
+                active.child.wait_worker(deadline, abort_cancellation, poll)?;
                 if !status.success() {
                     return Err("LOOPBACK_DIRECT_CHILD_EXIT_FAILED".to_owned());
                 }
             }
-            check_request(deadline, cancellation.as_ref())?;
-            if !result.deferred.is_empty() {
-                write_observed(socket, &[&result.deferred], deadline, cancellation.as_ref(), poll)?;
+            poll()?;
+            check_request(deadline, abort_cancellation)?;
+            let discard_reply = drain_cancellation
+                && cancellation.as_ref().is_some_and(RequestCancellation::is_cancelled);
+            if !result.deferred.is_empty() && !discard_reply {
+                // Once a diagnostic line starts, finish its framing even if a
+                // cancel arrives midway. Only then may a cancelled terminal
+                // follow. EOF, output failure and the original deadline still
+                // abort; cancellation never renews the drain/output budget.
+                write_observed(socket, &[&result.deferred], deadline, abort_cancellation, poll)?;
             }
             // Cloned TcpStreams share socket options. Do not leak the child
             // budget into the endpoint's next acknowledgement.
@@ -172,7 +186,7 @@ impl ChildIo {
                 .set_write_timeout(original_timeout)
                 .map_err(|_| "LOOPBACK_SOCKET_CONFIGURATION_ERROR".to_owned())?;
             poll()?;
-            check_request(deadline, cancellation.as_ref())?;
+            check_request(deadline, abort_cancellation)?;
             Ok(result.reply)
         })();
         active.completed = outcome.as_ref().is_ok_and(|reply| *reply != Reply::Fatal);
@@ -275,8 +289,8 @@ impl Drop for ChildIo {
     }
 }
 
-/// Installed before queue handoff. Cancellation, a late worker return, any
-/// failure or unwind closes the client socket and runs bounded process cleanup.
+/// Installed before queue handoff. A failed drain, cancellation of non-diagnostic
+/// work, a late return or unwind closes the socket and runs bounded cleanup.
 /// Dropping the reply receiver alone would leave a worker able to emit bytes.
 struct ActiveExchange<'a> {
     child: &'a mut ChildIo,

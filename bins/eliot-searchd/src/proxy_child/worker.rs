@@ -28,6 +28,7 @@ pub(super) fn spawn_worker(
                 return;
             }
             while let Ok(request) = requests.recv() {
+                let drain_cancellation = request.drains_cancellation();
                 let Exchange {
                     command,
                     socket,
@@ -36,12 +37,19 @@ pub(super) fn spawn_worker(
                     cancellation,
                     reply,
                 } = request;
+                // Preserve the pipe boundary for diagnostic reads. Cancellation
+                // suppresses their response, not the bounded drain itself.
+                let abort_cancellation = if drain_cancellation {
+                    None
+                } else {
+                    cancellation.as_ref()
+                };
                 let result = (|| {
-                    check_request(deadline, cancellation.as_ref())?;
+                    check_request(deadline, abort_cancellation)?;
                     let mut command_output = RequestWriter {
                         inner: &mut input,
                         deadline,
-                        cancellation: cancellation.as_ref(),
+                        cancellation: abort_cancellation,
                     };
                     command_output
                         .write_all(command.as_bytes())
@@ -51,27 +59,31 @@ pub(super) fn spawn_worker(
                     let mut writer = RequestWriter {
                         inner: DeadlineWriter { socket, deadline },
                         deadline,
-                        cancellation: cancellation.as_ref(),
+                        cancellation: abort_cancellation,
                     };
                     let mut deferred = Vec::new();
                     let shutdown = terminal == Terminal::Shutdown;
                     let mut read = || {
-                        check_request(deadline, cancellation.as_ref())?;
+                        check_request(deadline, abort_cancellation)?;
                         let line = read_child_line(&mut output)?;
-                        check_request(deadline, cancellation.as_ref())?;
+                        check_request(deadline, abort_cancellation)?;
                         Ok(line)
                     };
-                    // Do not send a clean-stop frame before observing actual
-                    // process exit. Retain the child's exact bytes, not a
-                    // synthetic receipt.
-                    let reply = if shutdown {
+                    // Retain diagnostic output until the complete child reply
+                    // has been consumed. The parent discards it on cancellation.
+                    // Shutdown still defers output until actual process exit.
+                    let reply = if shutdown || drain_cancellation {
                         forward_reply(
                             &mut read,
                             &mut deferred,
                             |line| terminal.reached(line),
-                            true,
-                            MAX_RESPONSE_LINES,
-                            2 * MAX_LINE_BYTES,
+                            shutdown,
+                            if shutdown { MAX_RESPONSE_LINES } else { 1 },
+                            if shutdown {
+                                2 * MAX_LINE_BYTES
+                            } else {
+                                MAX_LINE_BYTES
+                            },
                         )?
                     } else {
                         forward_reply(
@@ -83,7 +95,7 @@ pub(super) fn spawn_worker(
                             MAX_RESPONSE_BYTES,
                         )?
                     };
-                    check_request(deadline, cancellation.as_ref())?;
+                    check_request(deadline, abort_cancellation)?;
                     Ok(ExchangeOutput { reply, deferred })
                 })();
                 let reusable = result.as_ref().is_ok_and(|output| {

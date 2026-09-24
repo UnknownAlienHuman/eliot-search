@@ -1,5 +1,6 @@
 //! Sealed provider envelope admission and terminal completion.
 
+use std::cell::Cell;
 use std::net::TcpStream;
 use std::time::Instant;
 
@@ -85,6 +86,14 @@ pub(super) fn do_envelope(
         == search_provider_protocol::request::ControlCommand::Shutdown;
     let terminal = Terminal::for_command(child_command)
         .map_err(|_| "LOOPBACK_DIRECT_COMMAND_INVALID".to_owned())?;
+    let drain_cancellation = matches!(
+        envelope.command(),
+        search_provider_protocol::request::ControlCommand::Health
+            | search_provider_protocol::request::ControlCommand::Version
+    );
+    // Terminal selection is the cutoff for this request's cancellation. Later
+    // controls stay queued; they cannot rewrite a partially emitted terminal.
+    let accepting_cancellation = Cell::new(true);
     let mut observer = admitted.clone();
     let mut poll = || {
         let Some(input) = input.as_deref_mut() else {
@@ -92,7 +101,7 @@ pub(super) fn do_envelope(
         };
         let observed = input.poll_control(|line| {
             // Do not decode ordinary query bodies during each polling pass.
-            line.starts_with("op\tcancel\t") && matches!(
+            accepting_cancellation.get() && line.starts_with("op\tcancel\t") && matches!(
                 crate::provider_composition::parse_op_line(line),
                 Ok((crate::provider_composition::ProviderOperation::Cancel,
                     crate::provider_composition::OpArgument::CancelTarget(target)))
@@ -103,7 +112,11 @@ pub(super) fn do_envelope(
             Ok(false) => Ok(()),
             Ok(true) => {
                 observer.mark_cancelled();
-                Err("LOOPBACK_DIRECT_REQUEST_CANCELLED".to_owned())
+                if drain_cancellation {
+                    Ok(())
+                } else {
+                    Err("LOOPBACK_DIRECT_REQUEST_CANCELLED".to_owned())
+                }
             }
             Err(error) => {
                 observer.mark_cancelled();
@@ -111,6 +124,28 @@ pub(super) fn do_envelope(
             }
         }
     };
+    if drain_cancellation {
+        if poll().is_err() {
+            let _ = router.disconnect();
+            return Ok(EndpointAction::Abort);
+        }
+        if admitted.is_cancelled() {
+            // No child command has been sent; cancellation needs no synthetic
+            // child success or process restart to complete this request.
+            accepting_cancellation.set(false);
+            return complete_envelope(
+                stream,
+                router,
+                key,
+                &admitted,
+                deadline,
+                search_provider_protocol::TerminalKind::Cancelled,
+                false,
+                completion,
+                &mut poll,
+            );
+        }
+    }
     match child.dispatch_admitted(child_command, terminal, stream, &admitted, deadline, &mut poll) {
         Ok(reply) => {
             use crate::provider_composition::ChildReply;
@@ -123,8 +158,13 @@ pub(super) fn do_envelope(
             let fatal = matches!(reply, ChildReply::Fatal)
                 || unexpected_shutdown
                 || unconfirmed_shutdown;
+            if drain_cancellation && !fatal {
+                accepting_cancellation.set(false);
+            }
             let terminal_kind = if fatal {
                 search_provider_protocol::TerminalKind::OutcomeUnknown
+            } else if drain_cancellation && admitted.is_cancelled() {
+                search_provider_protocol::TerminalKind::Cancelled
             } else {
                 crate::provider_composition::status_for_reply(reply).1
             };
@@ -174,6 +214,12 @@ fn complete_envelope(
 ) -> Result<EndpointAction, String> {
     let request_id = request.request_id();
     let cancellation = request.cancellation();
+    // A cancelled terminal acknowledges the signal; it must not be blocked by
+    // that signal. The caller has frozen terminal selection, while EOF and
+    // malformed input still fail the same output callback closed.
+    let emission_cancellation =
+        (terminal_kind != search_provider_protocol::TerminalKind::Cancelled)
+            .then_some(&cancellation);
     let version = router.version();
     let nonce = *router.server_nonce();
     let delivered = match router.prepare_terminal(request_id, terminal_kind) {
@@ -198,19 +244,19 @@ fn complete_envelope(
                 // written/flushed. A failed acknowledgement must not consume
                 // the request slot or publish the next provider sequence.
                 completion.deliver(|acknowledgement| {
-                    write_admitted_line(stream, &line, deadline, &cancellation, poll)?;
+                    write_admitted_line(stream, &line, deadline, emission_cancellation, poll)?;
                     write_admitted_line(
                         stream,
                         acknowledgement,
                         deadline,
-                        &cancellation,
+                        emission_cancellation,
                         poll,
                     )
                 })
             } else {
                 // Command-only compatibility and fatal outcome-unknown output
                 // keep their existing caller-managed acknowledgement contract.
-                write_admitted_line(stream, &line, deadline, &cancellation, poll)
+                write_admitted_line(stream, &line, deadline, emission_cancellation, poll)
             }
         }).is_ok(),
         Err(_) => false,

@@ -54,9 +54,10 @@ impl EndpointInput {
     /// Polls a paired connection without executing its pending requests.
     ///
     /// `matches` must identify only a control action for the current admitted
-    /// request. A match is a fail-stop signal, not an acknowledged command: the
-    /// caller must cancel that request and close the exchange without further
-    /// replies. Non-matches stay queued for normal admission and sequencing.
+    /// request. A match is a cancellation observation, not acknowledgement or
+    /// proof that work stopped. All complete commands, including matches, remain
+    /// queued in FIFO order for normal dispatch if the current exchange safely
+    /// drains. The execution owner decides whether cancellation requires abort.
     ///
     /// A short idle poll is harmless. EOF, malformed/expired framing and queue
     /// overflow fail closed. The queue holds at most 32 frames / 4 MiB under the
@@ -72,16 +73,14 @@ impl EndpointInput {
     ) -> Result<bool, String> {
         // A cancel may already have been read while an earlier request ran.
         // Reconsider it only after its exact target has actually been admitted.
-        if self.queued.iter().any(|command| matches(command)) {
-            return Ok(true);
-        }
+        let queued_match = self.queued.iter().any(|command| matches(command));
+        // Keep observing EOF/framing even after a matching cancel was queued;
+        // otherwise a queued cancel would mask disconnect until the drain times out.
         match self.step(INPUT_POLL, false)? {
-            LineRead::Pending => Ok(false),
+            LineRead::Pending => Ok(queued_match),
             LineRead::Eof => Err("ENDPOINT_CONNECTION_CLOSED".to_owned()),
             LineRead::Complete(command) => {
-                if matches(&command) {
-                    return Ok(true);
-                }
+                let matched = queued_match || matches(&command);
                 let bytes = self.queued_bytes.checked_add(command.len())
                     .filter(|bytes| *bytes <= MAX_QUEUED_BYTES)
                     .ok_or_else(|| "ENDPOINT_INPUT_QUEUE_EXHAUSTED".to_owned())?;
@@ -90,7 +89,7 @@ impl EndpointInput {
                 }
                 self.queued.push_back(command);
                 self.queued_bytes = bytes;
-                Ok(false)
+                Ok(matched)
             }
         }
     }
