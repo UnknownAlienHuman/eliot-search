@@ -22,6 +22,10 @@ use super::{
 
 use super::transport::ExchangeBudget;
 
+mod cancellation;
+
+use cancellation::DeadlineCancellation;
+
 // One diagnostic line including its normalized LF, matching the child limit.
 const MAX_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 
@@ -57,13 +61,20 @@ impl DiagnosticReply {
     }
 
     fn publish(self, status: RequestStatus) -> Result<(), String> {
+        if let Some(line) = self.into_output(status)? {
+            print_payload(&line)?;
+        }
+        Ok(())
+    }
+
+    fn into_output(self, status: RequestStatus) -> Result<Option<String>, String> {
         match (status, self.payload) {
             // Pre-dispatch cancellation has no payload; late cancellation may
             // have a fully received one. Neither is a diagnostic result to print.
             (RequestStatus::Cancelled | RequestStatus::OutcomeUnknown, _)
-            | (RequestStatus::Failed, None) => Ok(()),
+            | (RequestStatus::Failed, None) => Ok(None),
             (RequestStatus::Ok | RequestStatus::Partial, Some((false, line)))
-            | (RequestStatus::Failed, Some((true, line))) => print_payload(&line),
+            | (RequestStatus::Failed, Some((true, line))) => Ok(Some(line)),
             _ => Err("REMOTE_RESPONSE_MISMATCH".to_owned()),
         }
     }
@@ -72,6 +83,7 @@ impl DiagnosticReply {
 struct CompletedExchange {
     outcome: Result<(), String>,
     shutdown: bool,
+    cancel_acknowledged: bool,
 }
 
 struct Exchange<'a> {
@@ -125,6 +137,10 @@ impl ProviderSession {
     /// A fully framed refusal preserves the connection and its counters. Missing,
     /// duplicate, foreign or contradictory control frames, exhausted budgets,
     /// output errors and unwind close it; there is no implicit reconnect/replay.
+    /// Expired health/version reads send one same-connection cancellation and
+    /// allow five seconds only to drain/verify both exchanges. Complete cleanup
+    /// preserves the session but still returns the work deadline failure. No
+    /// diagnostic is printed after timeout; shutdown never enters this path.
     /// Diagnostics are held until outcome/acknowledgement verification. Other
     /// payload already written to stdout cannot be retracted on a later failure.
     pub fn invoke(&mut self, request: &UnsignedRequest) -> Result<(), String> {
@@ -139,7 +155,11 @@ impl ProviderSession {
             _ => exchange.session.invoke_op(request, &mut budget),
         }?;
         budget.check()?;
-        exchange.session.endpoint_sequence = next;
+        exchange.session.endpoint_sequence = if completed.cancel_acknowledged {
+            next_sequence(next)?
+        } else {
+            next
+        };
         if completed.shutdown { exchange.session.close(); }
         exchange.completed = true;
         completed.outcome
@@ -187,9 +207,12 @@ impl ProviderSession {
         let mut framed = length.to_le_bytes().to_vec();
         framed.extend_from_slice(&frame);
         budget.send(&mut self.stream, &format!("envelope\t{client_sequence}\t{}", hex_encode(&framed)))?;
-        response::started(&budget.recv(self)?, self.endpoint_sequence)?;
+        // Cancellation can be sent only after the entire original request was
+        // written. A partial request write still closes the stream without retry.
+        let mut cancellation = DeadlineCancellation::new(command, request_id);
+        response::started(&cancellation.recv(self, budget)?, self.endpoint_sequence)?;
         for _ in 0..MAX_RESPONSE_LINES {
-            let line = budget.recv(self)?;
+            let line = cancellation.recv(self, budget)?;
             if let Some(hex) = line.strip_prefix("response\t") {
                 let frame = hex_decode(hex).ok_or_else(response::invalid)?;
                 let prefix: [u8; 4] = frame.get(..4).ok_or_else(response::invalid)?
@@ -209,25 +232,37 @@ impl ProviderSession {
                 if decoded.status() == RequestStatus::OutcomeUnknown {
                     return Err("REMOTE_OUTCOME_UNKNOWN".to_owned());
                 }
-                let complete = budget.recv(self)?;
+                let complete = cancellation.recv(self, budget)?;
                 if response::complete(&complete, self.endpoint_sequence)?.is_some() {
                     return Err("REMOTE_RESPONSE_MISMATCH".to_owned());
                 }
+                // Even discarded late diagnostics must agree with the terminal;
+                // malformed output cannot buy a reusable connection via timeout.
+                let output = diagnostic.take()
+                    .map(|diagnostic| diagnostic.into_output(decoded.status()))
+                    .transpose()?
+                    .flatten();
+                let cancel_acknowledged = cancellation.finish(self, budget)?;
                 budget.check()?;
-                if let Some(diagnostic) = diagnostic.take() {
-                    diagnostic.publish(decoded.status())?;
+                if let (false, Some(line)) = (cancel_acknowledged, output) {
+                    print_payload(&line)?;
                 }
                 self.envelope_sequence = client_sequence;
                 self.provider_sequence = provider_sequence;
                 return Ok(CompletedExchange {
-                    outcome: match decoded.status() {
-                        RequestStatus::Ok => Ok(()),
-                        RequestStatus::Partial => Err("REMOTE_PARTIAL_RESULT".to_owned()),
-                        RequestStatus::Cancelled => Err("REMOTE_CANCELLED".to_owned()),
-                        RequestStatus::Failed => Err("REMOTE_REQUEST_FAILED".to_owned()),
-                        RequestStatus::OutcomeUnknown => Err("REMOTE_OUTCOME_UNKNOWN".to_owned()),
+                    outcome: if cancel_acknowledged {
+                        Err("REMOTE_DEADLINE_EXPIRED".to_owned())
+                    } else {
+                        match decoded.status() {
+                            RequestStatus::Ok => Ok(()),
+                            RequestStatus::Partial => Err("REMOTE_PARTIAL_RESULT".to_owned()),
+                            RequestStatus::Cancelled => Err("REMOTE_CANCELLED".to_owned()),
+                            RequestStatus::Failed => Err("REMOTE_REQUEST_FAILED".to_owned()),
+                            RequestStatus::OutcomeUnknown => Err("REMOTE_OUTCOME_UNKNOWN".to_owned()),
+                        }
                     },
                     shutdown: command == ControlCommand::Shutdown && decoded.status() == RequestStatus::Ok,
+                    cancel_acknowledged,
                 });
             }
             match response::event(&line)? {
@@ -293,7 +328,7 @@ impl ProviderSession {
                         })?;
                     }
                     print_payload(&line)?;
-                    return Ok(CompletedExchange { outcome, shutdown: false });
+                    return Ok(CompletedExchange { outcome, shutdown: false, cancel_acknowledged: false });
                 }
                 "provider_error" => {
                     let reason = response::provider_error(&line)?;
@@ -301,7 +336,7 @@ impl ProviderSession {
                     if response::complete(&complete, self.endpoint_sequence)? != Some(reason) {
                         return Err("REMOTE_RESPONSE_MISMATCH".to_owned());
                     }
-                    return Ok(CompletedExchange { outcome: Err(reason.to_owned()), shutdown: false });
+                    return Ok(CompletedExchange { outcome: Err(reason.to_owned()), shutdown: false, cancel_acknowledged: false });
                 }
                 name if control_event(name) => return Err(response::invalid()),
                 _ => {
