@@ -98,7 +98,9 @@ impl DirectChild {
                 Ok(crate::provider_composition::ChildReply::Shutdown)
             }
             Ok(Reply::Fatal) => {
-                self.abort();
+                // ChildIo and ExchangeFence already forbid another dispatch.
+                // Let the envelope owner send its one signed unknown outcome
+                // before bounded child cleanup consumes the remaining deadline.
                 Ok(crate::provider_composition::ChildReply::Fatal)
             }
             Err(_) => {

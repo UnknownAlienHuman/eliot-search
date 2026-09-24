@@ -189,7 +189,15 @@ impl ChildIo {
             check_request(deadline, abort_cancellation)?;
             Ok(result.reply)
         })();
-        active.completed = outcome.as_ref().is_ok_and(|reply| *reply != Reply::Fatal);
+        if matches!(&outcome, Ok(Reply::Fatal)) {
+            // A complete fatal reply is a known frame boundary, not reusable
+            // child state. Fence admission now, without closing the client or
+            // spending cleanup time before its signed outcome can be written.
+            // The worker relinquishes its output handle before sending a reply.
+            active.child.aborted = true;
+            active.child.commands.take();
+        }
+        active.completed = outcome.is_ok();
         outcome
     }
 
@@ -292,6 +300,8 @@ impl Drop for ChildIo {
 /// Installed before queue handoff. A failed drain, cancellation of non-diagnostic
 /// work, a late return or unwind closes the socket and runs bounded cleanup.
 /// Dropping the reply receiver alone would leave a worker able to emit bytes.
+/// A fully framed fatal reply transfers output to the caller but leaves child
+/// admission fenced; the caller must attempt its terminal, then abort/close.
 struct ActiveExchange<'a> {
     child: &'a mut ChildIo,
     socket: &'a TcpStream,

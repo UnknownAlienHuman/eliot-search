@@ -1,7 +1,7 @@
 //! Sealed provider envelope admission and terminal completion.
 
 use std::cell::Cell;
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::time::Instant;
 
 use search_provider_protocol::request::RequestGuard;
@@ -158,7 +158,9 @@ pub(super) fn do_envelope(
             let fatal = matches!(reply, ChildReply::Fatal)
                 || unexpected_shutdown
                 || unconfirmed_shutdown;
-            if drain_cancellation && !fatal {
+            if drain_cancellation || fatal {
+                // Once a complete fatal reply was observed, later cancellation
+                // cannot suppress or relabel its recovery-required terminal.
                 accepting_cancellation.set(false);
             }
             let terminal_kind = if fatal {
@@ -186,7 +188,12 @@ pub(super) fn do_envelope(
                 &mut poll,
             );
             if fatal {
+                // The signed terminal was attempted at the known frame boundary
+                // under the original budget. No ordinary acknowledgement or
+                // subsequent request is legal, even if terminal delivery failed.
                 let _ = router.disconnect();
+                let _ = stream.shutdown(Shutdown::Both);
+                child.abort();
                 return Ok(EndpointAction::Abort);
             }
             action
@@ -214,12 +221,15 @@ fn complete_envelope(
 ) -> Result<EndpointAction, String> {
     let request_id = request.request_id();
     let cancellation = request.cancellation();
-    // A cancelled terminal acknowledges the signal; it must not be blocked by
-    // that signal. The caller has frozen terminal selection, while EOF and
-    // malformed input still fail the same output callback closed.
-    let emission_cancellation =
-        (terminal_kind != search_provider_protocol::TerminalKind::Cancelled)
-            .then_some(&cancellation);
+    // Cancellation cannot suppress its own terminal or a recovery-required
+    // unknown outcome. Selection is frozen; EOF, invalid framing, the original
+    // deadline and output failure still abort without an additional frame.
+    let emission_cancellation = (!matches!(
+        terminal_kind,
+        search_provider_protocol::TerminalKind::Cancelled
+            | search_provider_protocol::TerminalKind::OutcomeUnknown
+    ))
+    .then_some(&cancellation);
     let version = router.version();
     let nonce = *router.server_nonce();
     let delivered = match router.prepare_terminal(request_id, terminal_kind) {

@@ -217,8 +217,9 @@ impl BoundSession {
     /// Records the single terminal result and releases the in-flight slot.
     ///
     /// The connection-owned guard remains retained until disconnect so a
-    /// repeated terminal can be rejected distinctly. A cancelled request may
-    /// complete only as [`TerminalKind::Cancelled`].
+    /// repeated terminal can be rejected distinctly. Cancellation permits only
+    /// [`TerminalKind::Cancelled`] or [`TerminalKind::OutcomeUnknown`] when
+    /// possible external effects still require authoritative readback.
     ///
     /// # Errors
     ///
@@ -243,10 +244,8 @@ impl BoundSession {
             }
             guard.is_cancelled()
         };
-        if cancelled && terminal != TerminalKind::Cancelled {
-            return Err(ProtocolError::InvalidSessionTransition);
-        }
-
+        // RequestGuard owns the cancellation/terminal policy. In particular,
+        // cancellation must not hide an unresolved external mutation outcome.
         self.guards
             .get_mut(request_id)
             .ok_or(ProtocolError::InvalidSessionTransition)?

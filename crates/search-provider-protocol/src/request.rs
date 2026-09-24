@@ -914,6 +914,10 @@ impl RequestGuard {
     }
 
     /// Emits the single terminal response for this guard.
+    ///
+    /// Cancellation cannot authorize success or prove absence of external
+    /// effects. The caller must retain `OutcomeUnknown` when exact readback is
+    /// still required; it must not downgrade that uncertainty to `Cancelled`.
     pub fn finish(
         &mut self,
         terminal: TerminalKind,
@@ -922,7 +926,9 @@ impl RequestGuard {
         if self.progress.is_some_and(|state| state.terminal().is_some()) {
             return Err(ProtocolError::DuplicateTerminal);
         }
-        if self.is_cancelled() && terminal != TerminalKind::Cancelled {
+        if self.is_cancelled()
+            && !matches!(terminal, TerminalKind::Cancelled | TerminalKind::OutcomeUnknown)
+        {
             return Err(ProtocolError::InvalidSessionTransition);
         }
         match &mut self.progress {
