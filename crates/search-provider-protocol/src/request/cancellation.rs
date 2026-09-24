@@ -33,6 +33,12 @@ impl RequestCancellation {
         self.cancelled.load(Ordering::Acquire)
     }
 
+    // Identity, not the observed boolean: equal IDs/timestamps in another
+    // connection do not make a constructed guard an admitted one.
+    pub(crate) fn same_signal(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.cancelled, &other.cancelled)
+    }
+
     pub(super) fn cancel(&self) {
         self.cancelled.store(true, Ordering::Release);
     }

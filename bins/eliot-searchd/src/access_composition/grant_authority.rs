@@ -8,6 +8,10 @@
 
 #![allow(clippy::module_name_repetitions)]
 
+mod execution;
+
+pub use execution::{GrantExecutionError, GrantRequestInterruption};
+
 use search_contracts::{OpaqueId, RequestId, SearchReadGrantClaims, protocol::PeerRole};
 use search_provider_protocol::{BindingContext, BoundSession, StandaloneGrantRequestV1};
 
