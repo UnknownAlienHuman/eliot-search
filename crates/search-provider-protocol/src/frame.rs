@@ -28,6 +28,22 @@ const fn map_frame_error(code: ProtocolErrorCode) -> ProtocolError {
 pub struct FrameCodec;
 
 impl FrameCodec {
+    /// Validates one complete JSON payload without allocating a body copy.
+    ///
+    /// Applies the configured body and would-be frame ceilings, including space
+    /// for the four-byte prefix. Line transports must also enforce their own
+    /// framing limits before collecting bytes. Success proves JSON syntax only,
+    /// not envelope fields, canonical spelling, authentication or authority.
+    pub fn validate_payload(bytes: &[u8], limits: ProtocolLimits) -> Result<(), ProtocolError> {
+        let limits = limits.validate()?;
+        if bytes.len() > limits.max_body_bytes
+            || bytes.len().saturating_add(FRAME_PREFIX_BYTES) > limits.max_frame_bytes
+        {
+            return Err(ProtocolError::FrameTooLarge);
+        }
+        json::validate(bytes)
+    }
+
     /// Emits a length-prefixed JSON value after validating its complete syntax.
     pub fn encode(
         payload: &JsonFramePayload,
@@ -47,13 +63,7 @@ pub fn encode_frame(
     payload: &JsonFramePayload,
     limits: ProtocolLimits,
 ) -> Result<BoundedBytes<MAX_FRAME_BYTES>, ProtocolError> {
-    let limits = limits.validate()?;
-    if payload.as_slice().len() > limits.max_body_bytes
-        || payload.as_slice().len().saturating_add(FRAME_PREFIX_BYTES) > limits.max_frame_bytes
-    {
-        return Err(ProtocolError::FrameTooLarge);
-    }
-    json::validate(payload.as_slice())?;
+    FrameCodec::validate_payload(payload.as_slice(), limits)?;
     encode_json_frame(payload).map_err(map_frame_error)
 }
 

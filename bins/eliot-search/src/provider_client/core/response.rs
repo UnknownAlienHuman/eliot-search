@@ -5,6 +5,8 @@
 //! New control fields or spellings require explicit protocol negotiation.
 
 use search_contracts::ProtocolVersion;
+use search_provider_protocol::config::DEFAULT_PROTOCOL_LIMITS;
+use search_provider_protocol::frame::FrameCodec;
 use search_provider_protocol::pairing::ServerNonce;
 
 pub(super) fn invalid() -> String {
@@ -22,9 +24,12 @@ pub(super) fn authenticated(line: &str) -> Result<(), String> {
     }
 }
 
-/// Classifies only the first top-level header. Payload JSON remains payload;
-/// its nested strings cannot finish a request or declare a provider outcome.
+/// Validates the complete JSON value, then classifies its first top-level
+/// header. Nested strings cannot finish a request or declare a provider outcome;
+/// a plausible event prefix never makes a malformed payload safe to print.
 pub(super) fn event(line: &str) -> Result<&str, String> {
+    FrameCodec::validate_payload(line.as_bytes(), DEFAULT_PROTOCOL_LIMITS)
+        .map_err(|_| invalid())?;
     let mut input = Cursor(line);
     input.literal("{\"event\":")?;
     let name = input.text()?;

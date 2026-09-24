@@ -2,6 +2,8 @@ use std::io::{self, BufRead, Read, Write};
 use std::net::TcpStream;
 use std::time::Instant;
 
+use search_provider_protocol::config::DEFAULT_PROTOCOL_LIMITS;
+use search_provider_protocol::frame::FrameCodec;
 use search_provider_protocol::request::RequestCancellation;
 
 use super::spec::{MAX_LINE_BYTES, POLL};
@@ -42,9 +44,14 @@ pub(super) fn read_child_line(output: &mut impl BufRead) -> Result<Option<String
     if bytes.last() == Some(&b'\r') {
         bytes.pop();
     }
-    String::from_utf8(bytes)
-        .map(Some)
-        .map_err(|_| "LOOPBACK_DIRECT_CHILD_FRAME_NOT_UTF8".to_owned())
+    let line = String::from_utf8(bytes)
+        .map_err(|_| "LOOPBACK_DIRECT_CHILD_FRAME_NOT_UTF8".to_owned())?;
+    // Validate before READY recognition, diagnostic selection or forwarding.
+    // The line ceiling above is stricter than the shared protocol frame limit;
+    // this borrows the body and does not synthesize another framed allocation.
+    FrameCodec::validate_payload(line.as_bytes(), DEFAULT_PROTOCOL_LIMITS)
+        .map_err(|error| error.code().to_owned())?;
+    Ok(Some(line))
 }
 
 /// Applies the same admitted cancellation signal before and after every actual
