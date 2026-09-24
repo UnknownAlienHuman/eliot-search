@@ -14,6 +14,10 @@ use search_provider_protocol::{
 
 use super::router::monotonic_millis;
 
+mod tcp;
+
+pub use tcp::{CanonicalTcpConnection, CanonicalTcpError};
+
 /// Owns one exact paired key and one canonical protocol session; no independent
 /// replay ledger, grant registry or output sequence is created here.
 ///
@@ -24,6 +28,7 @@ use super::router::monotonic_millis;
 pub struct CanonicalProviderConnection {
     session: BoundSession,
     key: BindingKey,
+    limits: ProtocolLimits,
 }
 
 impl CanonicalProviderConnection {
@@ -39,6 +44,7 @@ impl CanonicalProviderConnection {
         server_nonce: ServerNonce,
         limits: ProtocolLimits,
     ) -> Result<Self, ProtocolError> {
+        let limits = limits.validate()?;
         let transcript = ceremony.server_transcript()?;
         let pairing = ceremony.into_verified()?;
         let expected = key.with_bytes(|bytes| {
@@ -48,7 +54,7 @@ impl CanonicalProviderConnection {
             return Err(ProtocolError::AuthenticationFailed);
         }
         let session = BoundSession::open(binding, pairing, server_nonce, limits)?;
-        Ok(Self { session, key })
+        Ok(Self { session, key, limits })
     }
 
     /// Authenticates the exact complete request frame using the retained key.
