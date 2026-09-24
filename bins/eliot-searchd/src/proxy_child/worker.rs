@@ -3,6 +3,7 @@ use std::process::{ChildStdin, ChildStdout};
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 
+use super::super::exchange::event_name;
 use super::model::{Exchange, ExchangeOutput};
 use super::pipe::{DeadlineWriter, RequestWriter, read_child_line};
 use super::spec::{MAX_LINE_BYTES, MAX_RESPONSE_BYTES, MAX_RESPONSE_LINES};
@@ -46,6 +47,13 @@ pub(super) fn spawn_worker(
                 };
                 let result = (|| {
                     check_request(deadline, abort_cancellation)?;
+                    let diagnostic_event = terminal.diagnostic_event(&command)?;
+                    // There is only one outstanding child command. Bytes left
+                    // after READY or the previous reply are unsolicited, not
+                    // the reply to a command that has not been sent yet.
+                    if !output.buffer().is_empty() {
+                        return Err("LOOPBACK_DIRECT_CHILD_UNSOLICITED_OUTPUT".to_owned());
+                    }
                     let mut command_output = RequestWriter {
                         inner: &mut input,
                         deadline,
@@ -67,12 +75,24 @@ pub(super) fn spawn_worker(
                         check_request(deadline, abort_cancellation)?;
                         let line = read_child_line(&mut output)?;
                         check_request(deadline, abort_cancellation)?;
+                        if let (Some(expected), Some(line)) = (diagnostic_event, line.as_deref()) {
+                            // Check before forward_reply can write or classify
+                            // this line. Real error frames keep their ordinary
+                            // rejection/fatal classification in the existing owner.
+                            if !matches!(
+                                event_name(line),
+                                Some(event) if event == expected || event == "error"
+                            ) {
+                                return Err("LOOPBACK_DIRECT_CHILD_RESPONSE_MISMATCH".to_owned());
+                            }
+                        }
                         Ok(line)
                     };
-                    // Retain diagnostic output until the complete child reply
-                    // has been consumed. The parent discards it on cancellation.
-                    // Shutdown still defers output until actual process exit.
-                    let reply = if shutdown || drain_cancellation {
+                    // Every diagnostic, including bare status, is one bounded
+                    // frame. Verify it before any client output, independently
+                    // of whether the request supports cancellation. Shutdown
+                    // still defers output until actual process exit.
+                    let reply = if shutdown || diagnostic_event.is_some() {
                         forward_reply(
                             &mut read,
                             &mut deferred,
@@ -96,6 +116,12 @@ pub(super) fn spawn_worker(
                         )?
                     };
                     check_request(deadline, abort_cancellation)?;
+                    // The child cannot legitimately answer another request yet.
+                    // Reject even a partial prefetched suffix; never clear/drain
+                    // it and then reuse a stream with an uncertain boundary.
+                    if !output.buffer().is_empty() {
+                        return Err("LOOPBACK_DIRECT_CHILD_UNSOLICITED_OUTPUT".to_owned());
+                    }
                     Ok(ExchangeOutput { reply, deferred })
                 })();
                 let reusable = result.as_ref().is_ok_and(|output| {

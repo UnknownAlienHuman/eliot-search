@@ -28,6 +28,23 @@ impl Terminal {
         })
     }
 
+    /// Exact event for the live, bodyless diagnostic commands. The transport
+    /// still uses the existing Single boundary, but any event is not a valid
+    /// reply to a diagnostic. Invalid command/terminal pairs fail before stdin.
+    pub(super) fn diagnostic_event(self, command: &str) -> Result<Option<&'static str>, String> {
+        let name = command.split('\t').next().unwrap_or_default();
+        let event = match name {
+            "health" => "health",
+            "version" => "version",
+            "status" => "provider_status",
+            _ => return Ok(None),
+        };
+        if command != name || self != Self::Single {
+            return Err("LOOPBACK_DIRECT_COMMAND_INVALID".to_owned());
+        }
+        Ok(Some(event))
+    }
+
     pub(super) fn reached(self, line: &str) -> bool {
         let event = event_name(line);
         let expected = match self {

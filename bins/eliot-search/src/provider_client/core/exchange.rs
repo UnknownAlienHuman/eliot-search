@@ -22,6 +22,53 @@ use super::{
 
 use super::transport::ExchangeBudget;
 
+// One diagnostic line including its normalized LF, matching the child limit.
+const MAX_DIAGNOSTIC_BYTES: usize = 64 * 1024;
+
+/// Holds only the diagnostic payload, not a whole streaming search result.
+/// Release requires a matching outcome and complete exchange. This validates
+/// event/outcome correspondence, not a general JSON schema or a new payload MAC.
+struct DiagnosticReply {
+    expected_event: &'static str,
+    payload: Option<(bool, String)>,
+}
+
+impl DiagnosticReply {
+    fn new(expected_event: &'static str) -> Self {
+        Self {
+            expected_event,
+            payload: None,
+        }
+    }
+
+    fn retain(&mut self, line: String) -> Result<(), String> {
+        if self.payload.is_some() {
+            return Err("REMOTE_RESPONSE_MISMATCH".to_owned());
+        }
+        if line.len() >= MAX_DIAGNOSTIC_BYTES {
+            return Err("REMOTE_FRAME_TOO_LARGE".to_owned());
+        }
+        let event = response::event(&line)?;
+        if event != self.expected_event && event != "error" {
+            return Err("REMOTE_RESPONSE_MISMATCH".to_owned());
+        }
+        self.payload = Some((event == "error", line));
+        Ok(())
+    }
+
+    fn publish(self, status: RequestStatus) -> Result<(), String> {
+        match (status, self.payload) {
+            // Pre-dispatch cancellation has no payload; late cancellation may
+            // have a fully received one. Neither is a diagnostic result to print.
+            (RequestStatus::Cancelled | RequestStatus::OutcomeUnknown, _)
+            | (RequestStatus::Failed, None) => Ok(()),
+            (RequestStatus::Ok | RequestStatus::Partial, Some((false, line)))
+            | (RequestStatus::Failed, Some((true, line))) => print_payload(&line),
+            _ => Err("REMOTE_RESPONSE_MISMATCH".to_owned()),
+        }
+    }
+}
+
 struct CompletedExchange {
     outcome: Result<(), String>,
     shutdown: bool,
@@ -78,7 +125,8 @@ impl ProviderSession {
     /// A fully framed refusal preserves the connection and its counters. Missing,
     /// duplicate, foreign or contradictory control frames, exhausted budgets,
     /// output errors and unwind close it; there is no implicit reconnect/replay.
-    /// Payload already written to stdout cannot be retracted on a later failure.
+    /// Diagnostics are held until outcome/acknowledgement verification. Other
+    /// payload already written to stdout cannot be retracted on a later failure.
     pub fn invoke(&mut self, request: &UnsignedRequest) -> Result<(), String> {
         if !self.active { return Err("REMOTE_SESSION_CLOSED".to_owned()); }
         let mut exchange = Exchange { session: self, completed: false };
@@ -119,6 +167,11 @@ impl ProviderSession {
         command: ControlCommand,
         budget: &mut ExchangeBudget,
     ) -> Result<CompletedExchange, String> {
+        let mut diagnostic = match command {
+            ControlCommand::Health => Some(DiagnosticReply::new("health")),
+            ControlCommand::Version => Some(DiagnosticReply::new("version")),
+            ControlCommand::Shutdown => None,
+        };
         let client_sequence = next_sequence(self.envelope_sequence)?;
         let provider_sequence = next_sequence(self.provider_sequence)?;
         let request_id = self.mint_id()?;
@@ -160,6 +213,10 @@ impl ProviderSession {
                 if response::complete(&complete, self.endpoint_sequence)?.is_some() {
                     return Err("REMOTE_RESPONSE_MISMATCH".to_owned());
                 }
+                budget.check()?;
+                if let Some(diagnostic) = diagnostic.take() {
+                    diagnostic.publish(decoded.status())?;
+                }
                 self.envelope_sequence = client_sequence;
                 self.provider_sequence = provider_sequence;
                 return Ok(CompletedExchange {
@@ -185,7 +242,13 @@ impl ProviderSession {
                     return Err(reason.to_owned());
                 }
                 name if control_event(name) => return Err(response::invalid()),
-                _ => print_payload(&line)?,
+                _ => {
+                    if let Some(diagnostic) = diagnostic.as_mut() {
+                        diagnostic.retain(line)?;
+                    } else {
+                        print_payload(&line)?;
+                    }
+                }
             }
         }
         Err("REMOTE_RESPONSE_LINE_LIMIT_EXCEEDED".to_owned())
@@ -204,6 +267,8 @@ impl ProviderSession {
             UnsignedRequest::Expand { .. } => "expand",
             _ => return Err("REMOTE_REQUEST_INVALID".to_owned()),
         };
+        let mut diagnostic = matches!(request, UnsignedRequest::Status)
+            .then_some(DiagnosticReply::new("provider_status"));
         let line = render_op_line(request).ok_or_else(|| "REMOTE_REQUEST_INVALID".to_owned())?;
         budget.send(&mut self.stream, &line)?;
         response::started(&budget.recv(self)?, self.endpoint_sequence)?;
@@ -216,8 +281,19 @@ impl ProviderSession {
                     // may follow. Duplicate outcomes or trailing payload fail.
                     let complete = budget.recv(self)?;
                     reply.acknowledge(response::complete(&complete, self.endpoint_sequence)?)?;
+                    let outcome = reply.result();
+                    budget.check()?;
+                    if let Some(diagnostic) = diagnostic.take() {
+                        // The closed status-operation grammar permits only
+                        // success or refusal; cancellation is a separate op.
+                        diagnostic.publish(if outcome.is_ok() {
+                            RequestStatus::Ok
+                        } else {
+                            RequestStatus::Failed
+                        })?;
+                    }
                     print_payload(&line)?;
-                    return Ok(CompletedExchange { outcome: reply.result(), shutdown: false });
+                    return Ok(CompletedExchange { outcome, shutdown: false });
                 }
                 "provider_error" => {
                     let reason = response::provider_error(&line)?;
@@ -228,7 +304,13 @@ impl ProviderSession {
                     return Ok(CompletedExchange { outcome: Err(reason.to_owned()), shutdown: false });
                 }
                 name if control_event(name) => return Err(response::invalid()),
-                _ => print_payload(&line)?,
+                _ => {
+                    if let Some(diagnostic) = diagnostic.as_mut() {
+                        diagnostic.retain(line)?;
+                    } else {
+                        print_payload(&line)?;
+                    }
+                }
             }
         }
         Err("REMOTE_RESPONSE_LINE_LIMIT_EXCEEDED".to_owned())
