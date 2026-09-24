@@ -1,7 +1,7 @@
-//! Typed recipe admission and output on the existing bound-session owner.
+//! Typed request/cancellation admission and output on the bound-session owner.
 
 use search_contracts::{
-    ProtocolRange, ProviderBodyV1, ProviderEnvelope, RequestBody,
+    MessageKind, ProtocolRange, ProviderBodyV1, ProviderEnvelope, RequestBody,
 };
 
 use crate::error::ProtocolError;
@@ -12,6 +12,8 @@ use crate::session::{SequenceTracker, SessionState};
 use crate::terminal::TerminalKind;
 
 use super::BoundSession;
+
+mod cancellation;
 
 /// Borrowed proof input for a complete typed frame, distinct from shell/grant
 /// transcripts. The adapter hashes the parts in order with its pairing key.
@@ -119,7 +121,34 @@ impl BoundSession {
         clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
         prove: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<ProofDigest, ProtocolError>,
     ) -> Result<AdmittedProviderRequest, ProtocolError> {
-        self.validate_session_header(self.binding.version(), &self.server_nonce)?;
+        let (envelope, now, deadline) = self.authenticate_provider_frame(
+            frame, observed_proof, maximum_deadline_ms, MessageKind::Request, clock, prove,
+        )?;
+        let ProviderBodyV1::Request(body) = envelope.body else {
+            return Err(ProtocolError::InvalidEnvelope);
+        };
+        let guard = self.commit_checked_request(
+            envelope.request_id, envelope.connection_sequence, now,
+            Some(deadline.get() - now.get()),
+        )?;
+        Ok(AdmittedProviderRequest { body, guard, next_event: Some(1), last_clock: now })
+    }
+
+    // Both typed ingress paths authenticate the exact frame before touching
+    // target guards, replay or sequences. Only Cancel may enter during drain;
+    // the state machine checks this again when committing its control identity.
+    fn authenticate_provider_frame(
+        &self,
+        frame: &[u8],
+        observed_proof: &ProofDigest,
+        maximum_deadline_ms: u64,
+        expected_kind: MessageKind,
+        clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
+        prove: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<ProofDigest, ProtocolError>,
+    ) -> Result<(ProviderEnvelope, MonotonicMillis, MonotonicMillis), ProtocolError> {
+        if expected_kind != MessageKind::Cancel || self.session.state() != SessionState::Draining {
+            self.validate_session_header(self.binding.version(), &self.server_nonce)?;
+        }
         if maximum_deadline_ms == 0 { return Err(ProtocolError::InvalidLimits); }
         let started = clock()?;
         let versions = ProtocolRange { minimum: self.binding.version(), maximum: self.binding.version() };
@@ -129,9 +158,9 @@ impl BoundSession {
         {
             return Err(ProtocolError::AuthenticationFailed);
         }
-        let ProviderBodyV1::Request(body) = envelope.body else {
+        if envelope.message_kind != expected_kind {
             return Err(ProtocolError::InvalidEnvelope);
-        };
+        }
         let budget = envelope.relative_deadline_ms.unwrap_or(maximum_deadline_ms)
             .min(maximum_deadline_ms);
         let deadline = started.get().checked_add(budget)
@@ -141,10 +170,7 @@ impl BoundSession {
         if !verify_proof(&expected, observed_proof) { return Err(ProtocolError::AuthenticationFailed); }
         let now = clock()?;
         if now < started || now.get() >= deadline { return Err(ProtocolError::DeadlineExpired); }
-        let guard = self.commit_checked_request(
-            envelope.request_id, envelope.connection_sequence, now, Some(deadline - now.get()),
-        )?;
-        Ok(AdmittedProviderRequest { body, guard, next_event: Some(1), last_clock: now })
+        Ok((envelope, now, MonotonicMillis::new(deadline)))
     }
 
     /// Encodes and delivers one correlated typed event, then commits its cursors.

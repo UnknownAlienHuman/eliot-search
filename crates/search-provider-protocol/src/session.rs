@@ -213,8 +213,30 @@ impl SessionMachine {
         request_id: RequestId,
         sequence: u64,
     ) -> Result<(), ProtocolError> {
+        self.admit_client_message(request_id, sequence, false)
+    }
+
+    /// Records an authenticated cancellation in the same sequence/replay space.
+    /// Unlike new work, cancellation may enter during drain. It acquires no
+    /// in-flight slot; the bound-session owner applies and acknowledges it
+    /// synchronously. Call only after authenticating the complete cancel frame.
+    pub(crate) fn admit_cancellation(
+        &mut self,
+        request_id: RequestId,
+        sequence: u64,
+    ) -> Result<(), ProtocolError> {
+        self.admit_client_message(request_id, sequence, true)
+    }
+
+    fn admit_client_message(
+        &mut self,
+        request_id: RequestId,
+        sequence: u64,
+        allow_draining: bool,
+    ) -> Result<(), ProtocolError> {
         match self.state {
             SessionState::Active if self.binding_verified => {}
+            SessionState::Draining if allow_draining && self.binding_verified => {}
             SessionState::Offered | SessionState::Negotiated | SessionState::Active => {
                 return Err(ProtocolError::AuthenticationRequired);
             }

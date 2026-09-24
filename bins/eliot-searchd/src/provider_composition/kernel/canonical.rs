@@ -7,7 +7,7 @@
 use search_contracts::{ProviderBodyV1, RequestId};
 use search_provider_protocol::{
     AdmittedProviderRequest, BindingContext, BindingKey, BoundSession, CancelOutcome,
-    DisconnectReceipt, PairingMachine, ProofDigest, ProtocolError, ProtocolLimits,
+    DisconnectReceipt, MonotonicMillis, PairingMachine, ProofDigest, ProtocolError, ProtocolLimits,
     ProviderDeliveryError, ProviderFrameTranscript, RequestGuard, ServerNonce, TerminalKind,
     verify_proof,
 };
@@ -94,13 +94,45 @@ impl CanonicalProviderConnection {
         )
     }
 
+    /// Authenticates, applies and acknowledges one complete typed cancel frame.
+    ///
+    /// Uses the retained key and the recipe path's exact-frame transcript. The
+    /// command has its own replay identity but needs no free execution slot.
+    /// `output` receives a signed acknowledgement and the cancel's original
+    /// absolute deadline in the process-local monotonic clock, not a fresh timer
+    /// or the target's deadline. It must enforce that deadline at actual writes
+    /// and finish all required transport output before returning success.
+    ///
+    /// The acknowledgement does not claim that the target has stopped or rolled
+    /// back. Output failure closes the protocol session and cannot undo a signal
+    /// already set; the transport owner must then close its socket. This method
+    /// does not enable a new wire mode on the development listener.
+    pub fn cancel_frame<E>(
+        &mut self,
+        frame: &[u8],
+        observed_proof: &ProofDigest,
+        maximum_deadline_ms: u64,
+        output: impl FnOnce(&[u8], &ProofDigest, MonotonicMillis) -> Result<(), E>,
+    ) -> Result<CancelOutcome, ProviderDeliveryError<E>> {
+        let key = &self.key;
+        self.session.cancel_provider_request(
+            frame, observed_proof, maximum_deadline_ms,
+            &mut || Ok(monotonic_millis()),
+            |transcript| Ok(keyed_frame_proof(key, transcript)),
+            |transcript, deadline| {
+                let proof = keyed_frame_proof(key, transcript);
+                output(transcript.frame(), &proof, deadline)
+            },
+        )
+    }
+
     /// Read-only canonical session for grant/access composition and guard checks.
     /// Its metadata and transport liveness are not source authority.
     #[must_use]
     pub const fn session(&self) -> &BoundSession { &self.session }
 
-    /// Cancels work only after the caller has authenticated its control message.
-    /// Never pass an unverified wire target to this connection-owned operation.
+    /// Host-local cancellation for trusted composition, not wire dispatch.
+    /// Received controls must use `cancel_frame`, which authenticates their bytes.
     pub fn cancel(&mut self, target: &RequestId) -> CancelOutcome {
         self.session.cancel(target)
     }
