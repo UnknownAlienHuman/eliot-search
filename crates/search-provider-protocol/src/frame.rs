@@ -14,7 +14,10 @@ use search_contracts::{BoundedBytes, MAX_FRAME_BYTES, ProtocolErrorCode};
 use crate::config::{FRAME_PREFIX_BYTES, ProtocolLimits};
 use crate::error::ProtocolError;
 
+mod client;
 mod json;
+
+pub use client::ClientEnvelopeCodec;
 
 /// Maps a canonical frame failure to the package failure registry.
 const fn map_frame_error(code: ProtocolErrorCode) -> ProtocolError {
