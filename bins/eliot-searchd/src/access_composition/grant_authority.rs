@@ -9,8 +9,10 @@
 #![allow(clippy::module_name_repetitions)]
 
 mod execution;
+mod serving;
 mod validation;
 
+pub use serving::StandaloneGrantRecipeHost;
 pub use validation::RecipeGrantUseError;
 
 pub use execution::{GrantExecutionError, GrantRequestInterruption};

@@ -5,7 +5,7 @@ use search_contracts::{ProviderBodyV1, RecipeIdV1, RequestBody};
 use search_provider_protocol::{AdmittedProviderRequest, BindingContext, MonotonicMillis, RequestGuard, TerminalKind};
 use std::task::Poll;
 
-use crate::access_composition::NativeSecurityDomain;
+use crate::access_composition::{AuthoritativeGrantPolicy, NativeSecurityDomain};
 use super::{CanonicalServingError, CanonicalTcpConnection, monotonic_millis};
 
 /// One cooperative work slice, in the daemon's monotonic clock.
@@ -29,6 +29,10 @@ impl CanonicalWorkBudget {
 /// Borrowed live authority held by the native host for one work/output turn.
 /// None of these values may be reconstructed from client claims or capabilities.
 pub struct CanonicalServingAuthority<'a> {
+    /// Current active standalone policy borrowed from the held native lock.
+    /// The standalone adapter requires Some; other peer roles may use None.
+    /// Never supply a detached policy snapshot or reconstruct one from claims.
+    pub standalone_policy: Option<&'a AuthoritativeGrantPolicy>,
     /// Restored native domain under the actual serving/mutation lock.
     pub domain: &'a NativeSecurityDomain,
     /// Complete authoritative influence population, not only displayed hits.
@@ -60,6 +64,10 @@ pub trait CanonicalRecipeHost {
     /// authority/domain lock held across `operation`, including socket output.
     /// Supply the complete influence fence and a conservative expiry, never a
     /// cached permit. The operation performs the concrete native checkpoints.
+    /// For standalone serving, also borrow the actual active binding policy
+    /// into standalone_policy; grant checks run inside this same lock scope.
+    /// new_standalone supplies issuer verification through its adapter, without
+    /// re-entering the policy source. Other roles retain their own grant checks.
     ///
     /// The generic return and FnOnce callback cannot be replaced with a canned
     /// success. An error after invoking it still closes the serving connection.

@@ -11,6 +11,7 @@ use search_access::{AccessCheckpoint, AccessError};
 use search_contracts::{CancelledBody, ExpandHandleTarget, ProviderBodyV1, RecipeBodyV1};
 use search_provider_protocol::{AdmittedProviderRequest, MonotonicMillis, ProtocolError, TerminalKind};
 
+use crate::access_composition::GrantUseError;
 use super::{CanonicalTcpConnection, CanonicalTcpError, monotonic_millis};
 
 /// Serving failure. Backend diagnostics are static codes, never request content.
@@ -20,6 +21,12 @@ pub enum CanonicalServingError {
     Transport(CanonicalTcpError),
     /// The live grant/scope/domain check denied this turn.
     Access(AccessError),
+    /// Standalone grant refusal before the current task/output callback ran.
+    /// Earlier work slices may already have produced effects.
+    GrantRefused(GrantUseError),
+    /// Grant time/currentness failed after the current callback returned.
+    /// Already emitted bytes and possible effects cannot be retracted.
+    GrantAfterOperation(GrantUseError),
     /// Original request or cooperative work budget expired.
     DeadlineExpired,
     /// Invalid owner configuration or a connection with unowned live requests.

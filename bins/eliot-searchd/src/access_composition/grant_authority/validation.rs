@@ -4,7 +4,7 @@ use search_contracts::{
     CorpusOrPortfolioId, HandleExpansionKind, RecipeBodyV1, ReferencePortfolioScope,
     RequestBody, RequestedScope, SearchReadGrantClaims, protocol::PeerRole,
 };
-use search_provider_protocol::{AdmittedProviderRequest, BindingContext};
+use search_provider_protocol::{AdmittedProviderRequest, BindingContext, MonotonicMillis};
 
 use crate::provider_composition::monotonic_millis;
 use super::{SessionBoundGrantAuthority, StandaloneGrantPolicySource, validate_policy_binding};
@@ -60,27 +60,12 @@ where
     ) -> Result<R, RecipeGrantUseError<F>> {
         use RecipeGrantUseError::{AfterOperation, Operation, Refused};
 
-        let body = request.body();
-        if binding.role() != PeerRole::StandaloneCli
-            || body.grant.binding_id != binding.binding_id()
-            || body.grant.installation_incarnation_id != binding.incarnation()
-            || body.recipe_request.request_id != *request.guard().request_id()
-        {
-            return Err(Refused(GrantUseError::BindingMismatch));
-        }
-        check_request(request).map_err(Refused)?;
+        validate_bound_request(binding, request).map_err(Refused)?;
         let before = self.policy_source.snapshot(binding)
             .map_err(|_| Refused(GrantUseError::PolicyUnavailable))?;
-        validate_policy_binding(binding, &before)
-            .map_err(|_| Refused(GrantUseError::BindingMismatch))?;
-        let issued = self.issuer.verify_issued_claims(&request.body().grant).map_err(Refused)?;
-        validate_policy(&request.body().grant, &issued, &before).map_err(Refused)?;
-        validate_request(request.body()).map_err(Refused)?;
-        check_request(request).map_err(Refused)?;
-        if monotonic_millis() >= issued.valid_until() {
-            return Err(Refused(GrantUseError::Expired));
-        }
+        let issued = self.verify_recipe_grant(binding, request, &before).map_err(Refused)?;
 
+        let valid_until = issued.valid_until();
         let result = operation(issued, request).map_err(Operation)?;
 
         let after = self.policy_source.snapshot(binding)
@@ -88,18 +73,100 @@ where
         if before != after {
             return Err(AfterOperation(GrantUseError::PolicyChanged));
         }
-        // The second clock check uses the same issuance record and deadline;
-        // it cannot renew a lease, mint a nonce or accept modified claims.
-        let _issued = self.issuer.verify_issued_claims(&request.body().grant)
-            .map_err(AfterOperation)?;
+        self.revalidate_after_operation(request, valid_until).map_err(AfterOperation)?;
+        Ok(result)
+    }
+
+    /// Refuse invalid grants before allocating source-free task state. This
+    /// produces no permit: execution must repeat validation under the host lock.
+    pub(super) fn preflight_recipe_grant(
+        &mut self,
+        binding: &BindingContext,
+        request: &AdmittedProviderRequest,
+    ) -> Result<(), GrantUseError> {
+        validate_bound_request(binding, request)?;
+        let policy = self.policy_source.snapshot(binding)
+            .map_err(|_| GrantUseError::PolicyUnavailable)?;
+        let _issued = self.verify_recipe_grant(binding, request, &policy)?;
+        Ok(())
+    }
+
+    /// Use the current policy borrowed from the native host's held lock.
+    ///
+    /// Only the serving adapter calls this path. It does not call snapshot()
+    /// again while that lock is held: a policy source may acquire the same
+    /// non-reentrant lock. The host must borrow the actual active policy, not a
+    /// detached cached copy, and hold its mutation lock through this entire call.
+    /// The issuer's independent lifetime checks still bracket actual work/output.
+    pub(super) fn with_locked_recipe_grant<R, F>(
+        &mut self,
+        binding: &BindingContext,
+        request: &mut AdmittedProviderRequest,
+        policy: &AuthoritativeGrantPolicy,
+        operation: impl FnOnce(
+            VerifiedStandaloneGrant<'_>,
+            &mut AdmittedProviderRequest,
+        ) -> Result<R, F>,
+    ) -> Result<R, RecipeGrantUseError<F>> {
+        use RecipeGrantUseError::{AfterOperation, Operation, Refused};
+
+        let issued = self.verify_recipe_grant(binding, request, policy).map_err(Refused)?;
+        let valid_until = issued.valid_until();
+        let result = operation(issued, request).map_err(Operation)?;
+        self.revalidate_after_operation(request, valid_until).map_err(AfterOperation)?;
+        Ok(result)
+    }
+
+    // One validation owner for unlocked preflight, snapshot-based callers and
+    // locked serving. Only the original issuance record supplies grant evidence.
+    fn verify_recipe_grant<'a>(
+        &'a mut self,
+        binding: &BindingContext,
+        request: &AdmittedProviderRequest,
+        policy: &AuthoritativeGrantPolicy,
+    ) -> Result<VerifiedStandaloneGrant<'a>, GrantUseError> {
+        validate_bound_request(binding, request)?;
+        validate_policy_binding(binding, policy).map_err(|_| GrantUseError::BindingMismatch)?;
+        let issued = self.issuer.verify_issued_claims(&request.body().grant)?;
+        validate_policy(&request.body().grant, &issued, policy)?;
+        validate_request(request.body())?;
+        check_request(request)?;
+        if monotonic_millis() >= issued.valid_until() { return Err(GrantUseError::Expired); }
+        Ok(issued)
+    }
+
+    fn revalidate_after_operation(
+        &mut self,
+        request: &AdmittedProviderRequest,
+        before_expiry: MonotonicMillis,
+    ) -> Result<(), GrantUseError> {
+        // Fresh UTC may shorten this turn's deadline, never lengthen the
+        // expiry supplied before the callback, even below the original TTL.
+        let issued = self.issuer.verify_issued_claims(&request.body().grant)?;
         let now = monotonic_millis();
+        if now >= before_expiry.min(issued.valid_until()) { return Err(GrantUseError::Expired); }
         if now < request.guard().admitted_at() || request.guard().is_expired(now)
             || (request.next_event_sequence().is_some() && request.guard().is_cancelled())
         {
-            return Err(AfterOperation(GrantUseError::RequestInactive));
+            return Err(GrantUseError::RequestInactive);
         }
-        Ok(result)
+        Ok(())
     }
+}
+
+fn validate_bound_request(
+    binding: &BindingContext,
+    request: &AdmittedProviderRequest,
+) -> Result<(), GrantUseError> {
+    let body = request.body();
+    if binding.role() != PeerRole::StandaloneCli
+        || body.grant.binding_id != binding.binding_id()
+        || body.grant.installation_incarnation_id != binding.incarnation()
+        || body.recipe_request.request_id != *request.guard().request_id()
+    {
+        return Err(GrantUseError::BindingMismatch);
+    }
+    check_request(request)
 }
 
 fn check_request(request: &AdmittedProviderRequest) -> Result<(), GrantUseError> {
