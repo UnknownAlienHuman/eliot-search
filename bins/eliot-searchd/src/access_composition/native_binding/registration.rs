@@ -1,5 +1,8 @@
 //! Atomically persist one standalone binding and its matching grant policy.
 
+mod readback;
+pub use readback::StandaloneRegistrationReadback;
+
 use search_contracts::{Blake3Digest32, protocol::PeerRole};
 use search_control_redb::{
     CommitRecoveryDecision, ConditionalControlMutation, ControlCommitReceipt, ControlError,
@@ -8,8 +11,7 @@ use search_control_redb::{
 use search_ports::{CancellationProbe, OperationContext};
 
 use super::{
-    NativeBindingError, ProviderBindingMutation, ProviderBindingRecord, ProviderBindingStatus,
-    begin, check, monotonic_millis,
+    ProviderBindingMutation, ProviderBindingRecord, ProviderBindingStatus, begin, check,
 };
 use super::super::{
     NativeGrantPolicyError, StandalonePolicyMutation, StandalonePolicyRecord, StandalonePolicyState,
@@ -164,7 +166,7 @@ impl StandaloneRegistrationCommit<'_> {
     ///
     /// Hold the actual root/policy lock across publication, this check and any
     /// acknowledgement. Shared borrows exclude journal/publisher mutation during
-    /// both lookups. Their single call budget is reduced for each native read.
+    /// both lookups, which share one native transaction and one decreasing budget.
     /// This proves metadata correspondence, not barrier completion, live lifetime,
     /// credential validity or source authorization; open_published rechecks those
     /// registration inputs and the serving owners must still validate live access.
@@ -180,18 +182,18 @@ impl StandaloneRegistrationCommit<'_> {
     ) -> Result<(), NativeGrantPolicyError> {
         let (started, deadline) = begin(context)?;
         self.registration.check_identity(journal)?;
-        for write in self.registration.command.mutation().writes() {
-            check(context, started, deadline)?;
-            let remaining = deadline.get().checked_sub(monotonic_millis().get())
-                .filter(|left| *left > 0).ok_or(NativeBindingError::Interrupted)?;
-            let read_context = OperationContext::new(
-                context.request_id(), remaining, context.cancellation().clone(),
-                context.budget_ref().clone(),
-            ).map_err(|_| NativeBindingError::Interrupted)?;
-            let current = journal.read_published_record(publisher, &write.key, &read_context)?;
-            if current.as_ref() != Some(&write.value) {
-                return Err(ControlError::TransactionConflict.into());
-            }
+        let [first, second] = self.registration.command.mutation().writes() else {
+            return Err(NativeGrantPolicyError::InvalidRecord);
+        };
+        let read_context = readback::remaining_context(context, started, deadline)?;
+        let (generation, values) = journal.read_published_record_pair(
+            publisher, [&first.key, &second.key], &read_context,
+        )?;
+        if generation < self.receipt.after_generation
+            || values[0].as_ref() != Some(&first.value)
+            || values[1].as_ref() != Some(&second.value)
+        {
+            return Err(ControlError::TransactionConflict.into());
         }
         check(context, started, deadline)?;
         Ok(())

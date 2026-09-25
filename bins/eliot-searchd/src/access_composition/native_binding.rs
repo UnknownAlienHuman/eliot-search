@@ -8,7 +8,9 @@ mod registration;
 
 pub use mutation::ProviderBindingMutation;
 pub use opening::NativeBindingExpectation;
-pub use registration::{StandaloneRegistrationCommit, StandaloneRegistrationMutation};
+pub use registration::{
+    StandaloneRegistrationCommit, StandaloneRegistrationMutation, StandaloneRegistrationReadback,
+};
 
 use search_contracts::{BindingId, Blake3Digest32, BoundedSet, InstallationId,
     InstallationIncarnationId, NonZeroRevision, OpaqueRef, ProfileId, UtcTimestamp,

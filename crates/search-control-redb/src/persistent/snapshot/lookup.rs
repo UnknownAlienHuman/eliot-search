@@ -29,12 +29,53 @@ impl PersistentControlJournal {
         key: &ControlKey,
         context: &OperationContext<C>,
     ) -> Result<Option<ControlValue>, ControlCallError> {
+        let (_, [value]) = self.read_published_fixed(publisher, [key], context)?;
+        Ok(value)
+    }
+
+    /// Read two distinct technical records and their common journal generation.
+    ///
+    /// Both lookups use one verified disk header and one published snapshot;
+    /// neither row is fetched from another generation. Values retain input key
+    /// order, including explicit absence. Count, key, per-value and aggregate
+    /// byte limits apply before results escape. No table or receipt scan occurs.
+    /// The caller still holds the actual owner lock through any subsequent use.
+    /// A successful read is metadata, not publication, a lease or source authority.
+    ///
+    /// # Errors
+    /// Preserves native read errors; duplicate keys and exhausted bounds refuse
+    /// the whole read without returning either partial value or a generation.
+    pub fn read_published_record_pair<C: CancellationProbe>(
+        &self,
+        publisher: &ControlSnapshotPublisher,
+        keys: [&ControlKey; 2],
+        context: &OperationContext<C>,
+    ) -> Result<(u64, [Option<ControlValue>; 2]), ControlCallError> {
+        self.read_published_fixed(publisher, keys, context)
+    }
+
+    // Only the one- and two-record entrypoints instantiate this bounded reader.
+    fn read_published_fixed<C: CancellationProbe, const N: usize>(
+        &self,
+        publisher: &ControlSnapshotPublisher,
+        keys: [&ControlKey; N],
+        context: &OperationContext<C>,
+    ) -> Result<(u64, [Option<ControlValue>; N]), ControlCallError> {
         let budget = Budget::new(context);
         let read = || {
             budget.check(Point::Start)?;
             self.ensure_available()?;
-            if key.as_bytes().is_empty() || key.as_bytes().len() > self.limits.max_key_bytes {
-                return Err(ControlError::InvalidKey);
+            if N == 0 || N > self.limits.max_mutation_items {
+                return Err(ControlError::BudgetExceeded);
+            }
+            for (index, &key) in keys.iter().enumerate() {
+                budget.check(Point::ReadRecord)?;
+                if key.as_bytes().is_empty() || key.as_bytes().len() > self.limits.max_key_bytes {
+                    return Err(ControlError::InvalidKey);
+                }
+                if keys[..index].contains(&key) {
+                    return Err(ControlError::DuplicateMutationKey);
+                }
             }
             if publisher.diagnostic_disk_identity() != Some(self.identity) {
                 return Err(ControlError::IdentityMismatch);
@@ -49,18 +90,24 @@ impl PersistentControlJournal {
             if header.generation != snapshot.generation {
                 return Err(ControlError::SnapshotPublicationFailed);
             }
-            let value = match snapshot.records.binary_search_by(|(found, _)| found.cmp(key)) {
-                Ok(index) => {
+            let mut values: [Option<ControlValue>; N] = std::array::from_fn(|_| None);
+            let mut total_bytes = 0_usize;
+            for (slot, key) in values.iter_mut().zip(keys) {
+                budget.check(Point::ReadRecord)?;
+                if let Ok(index) = snapshot.records.binary_search_by(|(found, _)| found.cmp(key)) {
                     let value = &snapshot.records[index].1;
                     if value.is_empty() || value.len() > self.limits.max_value_bytes {
                         return Err(ControlError::StoreCorrupt);
                     }
-                    Some(value.clone())
+                    total_bytes = total_bytes.checked_add(value.len()).ok_or(ControlError::BudgetExceeded)?;
+                    if total_bytes > self.limits.max_total_value_bytes {
+                        return Err(ControlError::BudgetExceeded);
+                    }
+                    *slot = Some(value.clone());
                 }
-                Err(_) => None,
-            };
+            }
             budget.check(Point::ReadComplete)?;
-            Ok(value)
+            Ok((header.generation, values))
         };
         read().map_err(|error| budget.failure(error, None))
     }
