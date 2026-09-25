@@ -8,18 +8,69 @@ use std::task::Poll;
 use crate::access_composition::{AuthoritativeGrantPolicy, NativeSecurityDomain};
 use super::{CanonicalServingError, CanonicalTcpConnection, monotonic_millis};
 
-/// One cooperative work slice, in the daemon's monotonic clock.
-/// Blocking backends must use an already-owned bounded worker and poll its result.
+/// One owner-issued work turn with separate lifetime and scheduling bounds.
+///
+/// The hard deadline is the original request/cleanup deadline, tightened by
+/// current authority. The earlier yield point only asks the task to return
+/// Pending. Yielding does not expire a request, release resources or renew its
+/// lifetime. Blocking backends must use an already-owned bounded worker and
+/// poll its result; the cooperative quantum is not a preemption guarantee.
 #[derive(Clone, Copy, Debug)]
 pub struct CanonicalWorkBudget {
-    /// Earlier of the original request/authority deadline and this work slice.
-    pub deadline: MonotonicMillis,
+    started: MonotonicMillis,
+    deadline: MonotonicMillis,
+    yield_at: MonotonicMillis,
 }
 
 impl CanonicalWorkBudget {
-    /// Check before each backend dispatch/read and between bounded CPU batches.
+    pub(super) fn new(
+        deadline: MonotonicMillis,
+        quantum_ms: u64,
+    ) -> Result<Self, CanonicalServingError> {
+        if !(1..=25).contains(&quantum_ms) {
+            return Err(CanonicalServingError::InvalidConfiguration);
+        }
+        let started = monotonic_millis();
+        let yield_at = started.get().checked_add(quantum_ms)
+            .map(MonotonicMillis::new).unwrap_or(deadline).min(deadline);
+        let budget = Self { started, deadline, yield_at };
+        budget.check_at(started)?;
+        Ok(budget)
+    }
+
+    /// Absolute lifetime ceiling for backend operations in this turn.
+    /// This is not the scheduling quantum and cannot be extended by the task.
+    #[must_use]
+    pub const fn deadline(self) -> MonotonicMillis { self.deadline }
+
+    /// Check the hard request/authority or cleanup lifetime before each backend
+    /// operation and after returning from it. A completed work slice is not an
+    /// error; use should_yield between bounded batches to return Pending.
     pub fn check(self) -> Result<(), CanonicalServingError> {
-        if monotonic_millis() >= self.deadline {
+        self.check_at(monotonic_millis())
+    }
+
+    /// Whether the current turn should yield without starting another batch.
+    /// Hard expiry or clock regression remains an error, even at the yield point.
+    /// Pending must retain task state and all unfinished cleanup obligations.
+    pub fn should_yield(self) -> Result<bool, CanonicalServingError> {
+        let now = monotonic_millis();
+        self.check_at(now)?;
+        Ok(now >= self.yield_at)
+    }
+
+    // Tightening authority never widens either bound or changes the origin.
+    // Only the serving owner can issue the next task slice; tasks cannot renew it.
+    pub(super) fn bounded_by(self, valid_until: MonotonicMillis) -> Self {
+        Self {
+            started: self.started,
+            deadline: self.deadline.min(valid_until),
+            yield_at: self.yield_at.min(valid_until),
+        }
+    }
+
+    fn check_at(self, now: MonotonicMillis) -> Result<(), CanonicalServingError> {
+        if now < self.started || now >= self.deadline {
             return Err(CanonicalServingError::DeadlineExpired);
         }
         Ok(())
@@ -53,6 +104,8 @@ pub trait CanonicalRecipeHost {
     /// Prepare bounded local task state, without source/provider execution or
     /// publishing handles. Partial preparation must clean itself up on error.
     /// The actual source work starts only inside `with_current_authority`.
+    /// Keep preparation bounded. If it consumes the scheduling quantum, the
+    /// owner retains the returned task and schedules its first poll next turn.
     fn prepare(
         &mut self,
         binding: &BindingContext,
@@ -92,6 +145,9 @@ pub trait CanonicalRecipeTask {
     /// no output or one progress event. Use `output.emit` inside existing
     /// prepared-handle/continuation delivery callbacks so their rollback and
     /// commit lifetimes span the actual write. Never dispatch detached work.
+    /// Check budget.should_yield() between batches and return Pending when it
+    /// requests a yield. Do not translate that yield into DeadlineExpired.
+    /// budget.check() enforces the separate hard request/authority lifetime.
     fn poll(
         &mut self,
         output: &mut CanonicalWorkOutput<'_, '_>,
@@ -103,6 +159,8 @@ pub trait CanonicalRecipeTask {
     /// completed; it is not a claim that external mutations rolled back.
     /// Failure/Pending must preserve ownership and retryable cleanup obligations.
     /// Repeated polls after completed cleanup must remain safe and idempotent.
+    /// Use should_yield for cooperative Pending and check for hard expiry; a
+    /// slice boundary alone must not lose or fail unfinished cleanup.
     fn poll_cancel(&mut self, budget: CanonicalWorkBudget) -> Result<Poll<()>, CanonicalServingError>;
 
     /// Idempotent, infallible, non-panicking, nonblocking emergency signal. Do not discard
@@ -139,6 +197,9 @@ impl CanonicalWorkOutput<'_, '_> {
     /// The native checkpoint and the host's lock span the complete frame/MAC
     /// write. Each write uses min(request deadline, current authority expiry).
     /// A swallowed error or second emission still poisons the owner turn.
+    /// Once entered, output is governed by the hard lifetime, not the yield
+    /// point. Do not roll back a prepared delivery merely because its work
+    /// quantum elapsed; actual output failure still closes the connection.
     pub fn emit(
         &mut self,
         body: ProviderBodyV1,

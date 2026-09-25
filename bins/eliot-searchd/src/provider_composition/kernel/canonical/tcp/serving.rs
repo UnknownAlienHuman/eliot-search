@@ -27,7 +27,7 @@ pub enum CanonicalServingError {
     /// Grant time/currentness failed after the current callback returned.
     /// Already emitted bytes and possible effects cannot be retracted.
     GrantAfterOperation(GrantUseError),
-    /// Original request or cooperative work budget expired.
+    /// Original request/authority lifetime expired or its clock regressed.
     DeadlineExpired,
     /// Invalid owner configuration or a connection with unowned live requests.
     InvalidConfiguration,
@@ -107,6 +107,7 @@ impl<H: CanonicalRecipeHost> CanonicalServingOwner<H> {
     /// Input Pending does not prevent execution of already accepted work.
     /// Quantum bounds input waiting and cooperative work, not blocking output;
     /// actual frame writes keep their original request/authority deadlines.
+    /// Reaching a work yield point retains and rotates the task, not the session.
     pub fn tick(&mut self) -> Result<(), CanonicalServingError> {
         let mut turn = Turn { owner: self, complete: false };
         let result = turn.owner.tick_inner();
@@ -150,7 +151,8 @@ impl<H: CanonicalRecipeHost> CanonicalServingOwner<H> {
     fn service_active(&mut self) -> Result<bool, CanonicalServingError> {
         let slot = self.active.as_mut().ok_or(CanonicalServingError::InvalidCompletion)?;
         let deadline = request_deadline(&slot.request)?;
-        let budget = work_budget(deadline, self.limits.quantum_ms)?;
+        let quantum_ms = self.limits.quantum_ms;
+        let budget = work_budget(deadline, quantum_ms)?;
         if slot.request.guard().is_cancelled() {
             let cleaned = match slot.task.as_mut() {
                 Some(task) => {
@@ -175,10 +177,13 @@ impl<H: CanonicalRecipeHost> CanonicalServingOwner<H> {
             slot.task = Some(self.host.prepare(&binding, &slot.request, budget)?);
             budget.check()?;
         }
+        // Preparation may spend this turn's quantum. Retain the task before
+        // yielding; do not give its first source work a fresh quantum here.
+        if budget.should_yield()? { return Ok(false); }
         let task = slot.task.as_mut().ok_or(CanonicalServingError::InvalidCompletion)?;
         let transport = &mut self.transport;
         self.host.with_current_authority(&binding, &mut slot.request, task, |authority, request, task| {
-            let budget = CanonicalWorkBudget { deadline: budget.deadline.min(authority.valid_until) };
+            let budget = budget.bounded_by(authority.valid_until);
             budget.check()?;
             let domain = authority.domain;
             let fence = authority.fence;
@@ -190,6 +195,10 @@ impl<H: CanonicalRecipeHost> CanonicalServingOwner<H> {
                 _ => AccessCheckpoint::BeforeLegDispatch,
             };
             domain.with_live_checkpoint(fence, checkpoint, |_| {
+                // Start the one executor slice after required authorization.
+                // Its overhead still consumes the unchanged hard lifetime, but
+                // cannot repeatedly spend every quantum before the task runs.
+                let budget = work_budget(budget.deadline(), quantum_ms)?;
                 let mut output = CanonicalWorkOutput { transport, request, authority, budget,
                     emitted_terminal: None, failed: false };
                 let result = task.poll(&mut output, budget)?;
@@ -198,7 +207,9 @@ impl<H: CanonicalRecipeHost> CanonicalServingOwner<H> {
                 if output.request.guard().is_expired(after) || after >= output.authority.valid_until {
                     return Err(CanonicalServingError::DeadlineExpired);
                 }
-                if output.emitted_terminal.is_none() { budget.check()?; }
+                // Pending at the soft yield point is normal. Only the hard
+                // request/authority lifetime can fail this completed turn.
+                budget.check()?;
                 match (result, output.emitted_terminal) {
                     (Poll::Ready(()), Some(true)) => Ok(true),
                     (Poll::Pending, None | Some(false)) => Ok(false),
@@ -244,12 +255,17 @@ impl<H: CanonicalRecipeHost> CanonicalServingOwner<H> {
         let Some(slot) = self.active.as_mut() else { return Ok(Poll::Ready(())); };
         let deadline = self.cleanup_deadline.filter(|end| monotonic_millis() < *end)
             .ok_or(CanonicalServingError::CleanupExpired)?;
-        let budget = work_budget(deadline, self.limits.quantum_ms)?;
+        let budget = work_budget(deadline, self.limits.quantum_ms).map_err(|error| match error {
+            CanonicalServingError::DeadlineExpired => CanonicalServingError::CleanupExpired,
+            other => other,
+        })?;
         let cleaned = match slot.task.as_mut() {
             Some(task) => task.poll_cancel(budget)?,
             None => Poll::Ready(()),
         };
-        budget.check()?;
+        // A cleanup slice may yield at its quantum boundary. Its one original
+        // hard deadline, rather than that quantum, decides cleanup expiry.
+        budget.check().map_err(|_| CanonicalServingError::CleanupExpired)?;
         if let Some(slot) = self.active.take() {
             if cleaned.is_pending() { self.queue.push_back(slot); }
         }
@@ -266,10 +282,7 @@ fn request_deadline(request: &AdmittedProviderRequest) -> Result<MonotonicMillis
 }
 
 fn work_budget(deadline: MonotonicMillis, quantum: u64) -> Result<CanonicalWorkBudget, CanonicalServingError> {
-    let now = monotonic_millis();
-    if now >= deadline { return Err(CanonicalServingError::DeadlineExpired); }
-    let slice = now.get().checked_add(quantum).map(MonotonicMillis::new).unwrap_or(deadline);
-    Ok(CanonicalWorkBudget { deadline: deadline.min(slice) })
+    CanonicalWorkBudget::new(deadline, quantum)
 }
 
 impl<H: CanonicalRecipeHost> Drop for CanonicalServingOwner<H> {
