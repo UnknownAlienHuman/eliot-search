@@ -12,6 +12,7 @@ mod grant_command;
 mod system_grant;
 mod native_security;
 mod native_grant_policy;
+mod native_binding;
 mod pinned_continuation;
 
 pub use gate::*;
@@ -21,6 +22,7 @@ pub use grant_command::*;
 pub use system_grant::*;
 pub use native_security::*;
 pub use native_grant_policy::*;
+pub use native_binding::*;
 
 #[cfg(test)]
 mod tests;

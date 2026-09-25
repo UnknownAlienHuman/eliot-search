@@ -10,7 +10,7 @@ mod mutation;
 
 pub use mutation::StandalonePolicyMutation;
 
-use search_contracts::{BindingId, InstallationId, InstallationIncarnationId,
+use search_contracts::{BindingId, InstallationIncarnationId,
     OpaqueId, OpaqueRef, UtcTimestamp, protocol::PeerRole};
 use search_control_redb::{ControlCallError, ControlError, ControlKey,
     ControlSnapshotPublisher, JournalLimits, PersistentControlJournal};
@@ -18,8 +18,9 @@ use search_ports::OperationContext;
 use search_provider_protocol::{BindingContext, MonotonicMillis, RequestGuard};
 
 use crate::provider_composition::monotonic_millis;
-use super::{AuthoritativeGrantPolicy, GrantIssuerError, GrantUseError, StandaloneGrantIssuer,
-    StandaloneGrantMaterial, StandaloneGrantPolicySource, StandaloneGrantTemplate, SystemGrantClock};
+use super::{AuthoritativeGrantPolicy, GrantIssuerError, GrantUseError, NativeBindingError,
+    NativeBindingPin, StandaloneGrantIssuer, StandaloneGrantMaterial, StandaloneGrantPolicySource,
+    StandaloneGrantTemplate, SystemGrantClock};
 
 /// Closed lifecycle of this policy row, not the peer's pairing state machine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -84,6 +85,8 @@ pub enum NativeGrantPolicyError {
     Call(ControlCallError),
     /// Binding, lifecycle, clock or original-request refusal.
     Grant(GrantUseError),
+    /// Native registration changed, expired, was revoked or failed readback.
+    Binding(NativeBindingError),
 }
 
 impl std::fmt::Display for NativeGrantPolicyError {
@@ -93,6 +96,7 @@ impl std::fmt::Display for NativeGrantPolicyError {
             Self::Control(error) => std::fmt::Display::fmt(error, f),
             Self::Call(error) => std::fmt::Display::fmt(error, f),
             Self::Grant(error) => std::fmt::Display::fmt(error, f),
+            Self::Binding(error) => std::fmt::Display::fmt(error, f),
         }
     }
 }
@@ -107,6 +111,10 @@ impl From<GrantUseError> for NativeGrantPolicyError {
     fn from(error: GrantUseError) -> Self { Self::Grant(error) }
 }
 
+impl From<NativeBindingError> for NativeGrantPolicyError {
+    fn from(error: NativeBindingError) -> Self { Self::Binding(error) }
+}
+
 /// A current read observation, not a cacheable authorization permit. Retain the
 /// native owner lock and revalidate the request/domain across actual work/output.
 pub struct CurrentStandalonePolicy {
@@ -118,7 +126,7 @@ impl CurrentStandalonePolicy {
     /// Exact stored policy after identity, state and lifetime checks.
     #[must_use]
     pub const fn policy(&self) -> &AuthoritativeGrantPolicy { &self.record.policy }
-    /// Earlier of policy expiry and the original request deadline, never a lease.
+    /// Earliest binding/policy expiry and original request deadline, never a lease.
     #[must_use]
     pub const fn valid_until(&self) -> MonotonicMillis { self.valid_until }
 }
@@ -132,7 +140,7 @@ impl CurrentStandalonePolicy {
 pub struct JournalStandaloneGrantPolicySource<'a> {
     journal: &'a PersistentControlJournal,
     publisher: &'a ControlSnapshotPublisher,
-    installation_id: InstallationId,
+    binding_pin: &'a NativeBindingPin,
     boot_id: &'a OpaqueId,
     request: &'a RequestGuard,
     clock: &'a mut SystemGrantClock,
@@ -140,6 +148,7 @@ pub struct JournalStandaloneGrantPolicySource<'a> {
 
 impl<'a> JournalStandaloneGrantPolicySource<'a> {
     /// Borrow the existing owners; this performs no initialization/publication.
+    /// Supply the pin returned by open_published for this exact paired session.
     /// The caller still validates the exact guard against its BoundSession.
     ///
     /// # Errors
@@ -147,16 +156,17 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
     pub fn new(
         journal: &'a PersistentControlJournal,
         publisher: &'a ControlSnapshotPublisher,
-        installation_id: InstallationId,
+        binding_pin: &'a NativeBindingPin,
         boot_id: &'a OpaqueId,
         request: &'a RequestGuard,
         clock: &'a mut SystemGrantClock,
     ) -> Result<Self, NativeGrantPolicyError> {
         remaining(request)?;
-        Ok(Self { journal, publisher, installation_id, boot_id, request, clock })
+        Ok(Self { journal, publisher, binding_pin, boot_id, request, clock })
     }
 
-    /// Read only a native-published row matching the actual current disk head.
+    /// Read the pinned binding and native policy from the current disk-published
+    /// head. Any changed binding field requires a new authenticated connection.
     /// The unchanged request deadline includes lookup, decode and UTC checks.
     /// Inactive/expired/foreign/missing rows never produce permissive defaults.
     ///
@@ -171,6 +181,14 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
         {
             return Err(GrantUseError::BindingMismatch.into());
         }
+        let binding_context = OperationContext::new(
+            *self.request.request_id(), remaining(self.request)?, self.request.cancellation(),
+            OpaqueRef::new("standalone-binding-read-v1").map_err(|_| NativeGrantPolicyError::InvalidRecord)?,
+        ).map_err(|_| NativeGrantPolicyError::Grant(GrantUseError::RequestInactive))?;
+        let binding_expiry = self.binding_pin.revalidate(
+            binding, self.journal, self.publisher, self.clock, &binding_context,
+        )?;
+        remaining(self.request)?;
         let key = policy_key(binding.incarnation(), binding.binding_id())?;
         let context = OperationContext::new(
             *self.request.request_id(), remaining(self.request)?, self.request.cancellation(),
@@ -186,12 +204,15 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
         let policy = &record.policy;
         if policy.binding_id != binding.binding_id()
             || policy.installation_incarnation_id != binding.incarnation()
-            || policy.installation_id != self.installation_id || &policy.issued_boot_id != self.boot_id
+            || policy.installation_id != self.binding_pin.record().installation_id
+            || policy.binding_generation != self.binding_pin.record().pairing_generation.get()
+            || &policy.issued_boot_id != self.boot_id
         {
             return Err(GrantUseError::BindingMismatch.into());
         }
         let expiry = self.clock.check_policy_window(&record.issued_at, record.expires_at.as_ref())?;
         let deadline = self.request.deadline().ok_or(GrantUseError::RequestInactive)?;
+        let deadline = binding_expiry.map_or(deadline, |end| deadline.min(end));
         let valid_until = expiry.map_or(deadline, |end| deadline.min(end));
         remaining(self.request)?;
         if monotonic_millis() >= valid_until { return Err(GrantUseError::Expired.into()); }
