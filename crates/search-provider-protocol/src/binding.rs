@@ -94,6 +94,30 @@ impl BindingContext {
         self.incarnation
     }
 
+    /// Checks correspondence with the ceremony that authenticated this context.
+    ///
+    /// Shared by daemon and client transport handoffs. This verifies version,
+    /// ceremony ID, binding digest and provider proof, not key possession, live
+    /// binding validity or source authority. Both digest comparisons perform
+    /// fixed work even when another field differs.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthenticationFailed` for any mismatched ceremony field.
+    pub fn verify_pairing(&self, pairing: &VerifiedPairing) -> Result<(), ProtocolError> {
+        let binding_matches = verify_proof(&self.pairing.binding(), &pairing.binding());
+        let proof_matches =
+            verify_proof(&self.pairing.provider_proof(), &pairing.provider_proof());
+        if self.version() != pairing.version()
+            || self.pairing.session() != pairing.session()
+            || !binding_matches
+            || !proof_matches
+        {
+            return Err(ProtocolError::AuthenticationFailed);
+        }
+        Ok(())
+    }
+
     /// Verified peer role.
     #[must_use]
     pub const fn role(&self) -> PeerRole {
@@ -252,18 +276,7 @@ impl BoundSession {
         server_nonce: ServerNonce,
         limits: ProtocolLimits,
     ) -> Result<Self, ProtocolError> {
-        // Compare proof material against the independently retained ceremony,
-        // not against itself. Both digest comparisons perform fixed work.
-        let binding_matches = verify_proof(&binding.pairing.binding(), &pairing.binding());
-        let proof_matches =
-            verify_proof(&binding.pairing.provider_proof(), &pairing.provider_proof());
-        if binding.version() != pairing.version()
-            || binding.pairing.session() != pairing.session()
-            || !binding_matches
-            || !proof_matches
-        {
-            return Err(ProtocolError::AuthenticationFailed);
-        }
+        binding.verify_pairing(&pairing)?;
         let limits = limits.validate()?;
         let mut session = SessionMachine::new(limits, 1, 1)?;
         session.negotiate(binding.version())?;

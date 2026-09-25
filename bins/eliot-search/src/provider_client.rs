@@ -1,4 +1,4 @@
-//! Canonical provider client facade.
+//! Canonical provider client facade with an explicit typed transport handoff.
 //!
 //! The transport entrypoints in `core.rs` use bounded private exchange and
 //! control-line parsers; no second session or verification path is created.
@@ -6,6 +6,10 @@
 //! pairing, framing, proof or response-verification machinery.
 
 mod core;
+mod typed;
+
+// Explicit paired-socket handoff; never upgrades the development token shim.
+pub use typed::{TypedClientError, TypedProviderSession};
 
 use std::net::SocketAddr;
 use std::path::Path;
