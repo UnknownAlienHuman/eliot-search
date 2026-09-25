@@ -6,6 +6,8 @@
 
 #![allow(clippy::module_name_repetitions)]
 
+mod policy;
+
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use search_contracts::UtcTimestamp;

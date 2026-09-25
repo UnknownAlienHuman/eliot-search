@@ -1,5 +1,7 @@
 //! One-read-transaction snapshot publication with cooperative admission fencing.
 
+mod lookup;
+
 use search_ports::{CancellationProbe, OperationContext};
 
 use super::operation::{Budget, Check, Point};
