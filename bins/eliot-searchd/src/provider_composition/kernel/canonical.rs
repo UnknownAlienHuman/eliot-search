@@ -18,6 +18,13 @@ mod tcp;
 
 pub use tcp::{CanonicalTcpConnection, CanonicalTcpError};
 
+#[cfg(feature = "wave4-query")]
+pub use tcp::{
+    CanonicalRecipeHost, CanonicalRecipeTask, CanonicalServingAuthority,
+    CanonicalServingError, CanonicalServingLimits, CanonicalServingOwner,
+    CanonicalWorkBudget, CanonicalWorkOutput,
+};
+
 /// Owns one exact paired key and one canonical protocol session; no independent
 /// replay ledger, grant registry or output sequence is created here.
 ///

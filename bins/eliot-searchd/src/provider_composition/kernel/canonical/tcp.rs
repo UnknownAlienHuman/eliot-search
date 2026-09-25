@@ -1,6 +1,15 @@
 //! Concrete typed TCP I/O after authoritative pairing/bootstrap handoff.
 
 mod io;
+#[cfg(feature = "wave4-query")]
+mod serving;
+
+#[cfg(feature = "wave4-query")]
+pub use serving::{
+    CanonicalRecipeHost, CanonicalRecipeTask, CanonicalServingAuthority,
+    CanonicalServingError, CanonicalServingLimits, CanonicalServingOwner,
+    CanonicalWorkBudget, CanonicalWorkOutput,
+};
 
 use std::net::TcpStream;
 use std::task::Poll;
@@ -255,9 +264,22 @@ impl CanonicalTcpConnection {
         body: ProviderBodyV1,
         terminal: Option<TerminalKind>,
     ) -> Result<(), CanonicalTcpError> {
+        self.deliver_event_before(request, body, terminal, None)
+    }
+
+    // The serving owner may only tighten the original deadline. This same
+    // writer checks the cap before/after every frame/MAC write and flush.
+    fn deliver_event_before(
+        &mut self,
+        request: &mut AdmittedProviderRequest,
+        body: ProviderBodyV1,
+        terminal: Option<TerminalKind>,
+        authority_deadline: Option<search_provider_protocol::MonotonicMillis>,
+    ) -> Result<(), CanonicalTcpError> {
         self.with_state(|state| {
             let deadline = request.guard().deadline()
                 .ok_or(CanonicalTcpError::Protocol(ProtocolError::InvalidLimits))?;
+            let deadline = authority_deadline.map_or(deadline, |authority| authority.min(deadline));
             let cancellation = request.guard().cancellation();
             let probe = terminal.is_none().then_some(&cancellation);
             let limits = state.connection.limits;
