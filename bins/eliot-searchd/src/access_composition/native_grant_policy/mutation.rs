@@ -97,6 +97,12 @@ impl StandalonePolicyMutation {
         journal.recover_conditional_transaction(&self.command, context).map_err(Into::into)
     }
 
+    // Reuse the validated row/transition in the atomic standalone registration.
+    // This borrowed command is internal to native access composition.
+    pub(in crate::access_composition) const fn command(&self) -> &ConditionalControlMutation {
+        &self.command
+    }
+
     fn check_identity(&self, journal: &PersistentControlJournal) -> Result<(), NativeGrantPolicyError> {
         if journal.identity() != self.identity { return Err(ControlError::IdentityMismatch.into()); }
         Ok(())

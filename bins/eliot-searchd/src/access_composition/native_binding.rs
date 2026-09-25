@@ -4,9 +4,11 @@
 mod codec;
 mod mutation;
 mod opening;
+mod registration;
 
 pub use mutation::ProviderBindingMutation;
 pub use opening::NativeBindingExpectation;
+pub use registration::{StandaloneRegistrationCommit, StandaloneRegistrationMutation};
 
 use search_contracts::{BindingId, Blake3Digest32, BoundedSet, InstallationId,
     InstallationIncarnationId, NonZeroRevision, OpaqueRef, ProfileId, UtcTimestamp,
