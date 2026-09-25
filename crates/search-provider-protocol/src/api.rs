@@ -24,7 +24,7 @@ pub use crate::cleanup::{DisconnectReceipt, disconnect_all};
 pub use crate::config::{DEFAULT_PROTOCOL_LIMITS, FRAME_PREFIX_BYTES, ProtocolLimits};
 pub use crate::error::ProtocolError;
 pub use crate::frame::{
-    ClientEnvelopeCodec, FrameCodec, ServerEnvelopeCodec, TypedTransportProfileV1,
+    ClientEnvelopeCodec, FrameCodec, ServerEnvelopeCodec, TypedRecordBuffer, TypedTransportProfileV1,
     decode_frame, encode_frame,
 };
 pub use crate::grant::{

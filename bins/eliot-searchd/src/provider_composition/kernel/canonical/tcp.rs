@@ -3,6 +3,8 @@
 mod io;
 
 use std::net::TcpStream;
+use std::task::Poll;
+use std::time::Duration;
 
 use search_contracts::{MessageKind, ProtocolRange, ProtocolVersion, ProviderBodyV1};
 use search_provider_protocol::{
@@ -162,16 +164,39 @@ impl CanonicalTcpConnection {
     /// Length is rejected before body allocation. The server's finite budget
     /// starts BEFORE the first prefix read; the client's smaller relative budget
     /// is measured from that same origin, including all decoding/proof work.
-    /// Refusal, partial record or any output failure closes the entire connection.
+    /// Refusal, truncated record or any output failure closes the entire connection.
+    /// This blocking entry uses the same retained reader as poll_receive.
     pub fn receive(
         &mut self,
         maximum_deadline_ms: u64,
     ) -> Result<Option<AdmittedProviderRequest>, CanonicalTcpError> {
+        loop {
+            if let Poll::Ready(result) = self.poll_receive(maximum_deadline_ms, io::POLL)? {
+                return Ok(result);
+            }
+        }
+    }
+
+    /// Polls incoming work while allowing the owner to service existing workers.
+    ///
+    /// Pending keeps one partial record and its original pre-prefix deadline;
+    /// larger budgets on later polls cannot extend it. Between calls the owner
+    /// can emit completed worker results or close. Ready(None) means an actual
+    /// authenticated cancel acknowledgement, not an empty socket or stopped work.
+    /// Input waiting is capped at min(quantum, 25 ms) and 64 KiB per turn. Complete
+    /// decoding/authentication and cancel-ack output retain their original budgets,
+    /// not the polling quantum. Zero quantum is invalid. No async Waker is used.
+    pub fn poll_receive(
+        &mut self,
+        maximum_deadline_ms: u64,
+        quantum: Duration,
+    ) -> Result<Poll<Option<AdmittedProviderRequest>>, CanonicalTcpError> {
         self.with_state(|state| {
-            let started = monotonic_millis();
-            let deadline = io::deadline(started, maximum_deadline_ms)?;
             let limits = state.connection.limits;
-            let (frame, observed) = state.io.read_record(limits, deadline)?;
+            let Poll::Ready(io::ReceivedRecord { frame, proof: observed, started, maximum_deadline_ms }) =
+                state.io.poll_record(limits, maximum_deadline_ms, quantum)? else {
+                    return Ok(Poll::Pending);
+                };
             let (connection, io) = (&mut state.connection, &mut state.io);
             let session = &mut connection.session;
             let transcript = ProviderFrameTranscript::request(
@@ -198,7 +223,7 @@ impl CanonicalTcpConnection {
                     ).map_err(CanonicalTcpError::Protocol)?;
                     session.revalidate_request_guard(request.guard(), monotonic_millis())
                         .map_err(CanonicalTcpError::Protocol)?;
-                    Ok(Some(request))
+                    Ok(Poll::Ready(Some(request)))
                 }
                 MessageKind::Cancel => {
                     let key = &connection.key;
@@ -209,7 +234,7 @@ impl CanonicalTcpConnection {
                             io.write_record(transcript.frame(), &proof, limits, cancel_deadline, None)
                         },
                     ).map_err(CanonicalTcpError::from)?;
-                    Ok(None)
+                    Ok(Poll::Ready(None))
                 }
                 _ => Err(CanonicalTcpError::Protocol(ProtocolError::InvalidEnvelope)),
             }

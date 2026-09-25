@@ -2,21 +2,39 @@
 
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpStream};
-use std::time::Duration;
+use std::task::Poll;
+use std::time::{Duration, Instant};
 
-use search_provider_protocol::{MonotonicMillis, ProofDigest, ProtocolLimits, TypedTransportProfileV1};
+use search_provider_protocol::{MonotonicMillis, ProofDigest, ProtocolError, ProtocolLimits, TypedRecordBuffer, TypedTransportProfileV1};
 use search_provider_protocol::request::RequestCancellation;
 
 use super::{CanonicalTcpError, monotonic_millis};
 
-const POLL: Duration = Duration::from_millis(25);
+pub(super) const POLL: Duration = Duration::from_millis(25);
+const POLL_BYTES: usize = 64 * 1024;
+const READ_BYTES: usize = 16 * 1024;
+
+struct Incoming {
+    record: TypedRecordBuffer,
+    started: MonotonicMillis,
+    maximum_deadline_ms: u64,
+    deadline: MonotonicMillis,
+}
+
+pub(super) struct ReceivedRecord {
+    pub(super) frame: Vec<u8>,
+    pub(super) proof: ProofDigest,
+    pub(super) started: MonotonicMillis,
+    pub(super) maximum_deadline_ms: u64,
+}
 
 pub(super) struct SocketIo {
     stream: TcpStream,
+    incoming: Option<Incoming>,
 }
 
 impl SocketIo {
-    pub(super) const fn new(stream: TcpStream) -> Self { Self { stream } }
+    pub(super) const fn new(stream: TcpStream) -> Self { Self { stream, incoming: None } }
 
     pub(super) fn configure(&self) -> Result<(), CanonicalTcpError> {
         if !self.stream.peer_addr().map_err(CanonicalTcpError::Io)?.ip().is_loopback()
@@ -48,23 +66,59 @@ impl SocketIo {
         remaining(deadline).map(|_| ())
     }
 
-    pub(super) fn read_record(
+    pub(super) fn poll_record(
         &mut self,
         limits: ProtocolLimits,
-        deadline: MonotonicMillis,
-    ) -> Result<(Vec<u8>, ProofDigest), CanonicalTcpError> {
-        let mut prefix = [0_u8; 4];
-        self.read_exact(&mut prefix, deadline)?;
-        let size = TypedTransportProfileV1::frame_length(prefix, limits)
-            .map_err(CanonicalTcpError::Protocol)?;
-        let mut frame = Vec::new();
-        frame.try_reserve_exact(size).map_err(|_| CanonicalTcpError::Allocation)?;
-        frame.extend_from_slice(&prefix);
-        frame.resize(size, 0);
-        self.read_exact(&mut frame[4..], deadline)?;
-        let mut proof = [0_u8; TypedTransportProfileV1::PROOF_BYTES];
-        self.read_exact(&mut proof, deadline)?;
-        Ok((frame, ProofDigest::from_bytes(proof)))
+        maximum_deadline_ms: u64,
+        quantum: Duration,
+    ) -> Result<Poll<ReceivedRecord>, CanonicalTcpError> {
+        if quantum.is_zero() {
+            return Err(CanonicalTcpError::Protocol(ProtocolError::InvalidLimits));
+        }
+        let turn_end = Instant::now().checked_add(quantum.min(POLL))
+            .ok_or(CanonicalTcpError::DeadlineExpired)?;
+        if let Some(incoming) = &mut self.incoming {
+            // Polling can tighten the cap, never restart its original clock.
+            incoming.maximum_deadline_ms = incoming.maximum_deadline_ms.min(maximum_deadline_ms);
+            incoming.deadline = deadline(incoming.started, incoming.maximum_deadline_ms)?;
+        } else {
+            let started = monotonic_millis();
+            self.incoming = Some(Incoming {
+                record: TypedRecordBuffer::new(limits).map_err(CanonicalTcpError::Protocol)?,
+                started, maximum_deadline_ms, deadline: deadline(started, maximum_deadline_ms)?,
+            });
+        }
+        let mut left = POLL_BYTES;
+        loop {
+            let incoming = self.incoming.as_mut().expect("record retained for polling");
+            remaining(incoming.deadline)?;
+            if incoming.record.is_complete() {
+                let incoming = self.incoming.take().expect("complete retained record");
+                let (frame, proof) = incoming.record.finish().map_err(CanonicalTcpError::Protocol)?;
+                return Ok(Poll::Ready(ReceivedRecord {
+                    frame, proof, started: incoming.started,
+                    maximum_deadline_ms: incoming.maximum_deadline_ms,
+                }));
+            }
+            if left == 0 || Instant::now() >= turn_end { return Ok(Poll::Pending); }
+            let buffer = incoming.record.read_buffer(left.min(READ_BYTES)).map_err(|error| {
+                if error == ProtocolError::ResourceExhausted { CanonicalTcpError::Allocation }
+                else { CanonicalTcpError::Protocol(error) }
+            })?;
+            let absolute_left = remaining(incoming.deadline)?;
+            let Some(turn_left) = turn_end.checked_duration_since(Instant::now())
+                .filter(|value| !value.is_zero()) else { return Ok(Poll::Pending); };
+            self.stream.set_read_timeout(Some(absolute_left.min(turn_left))).map_err(CanonicalTcpError::Io)?;
+            match self.stream.read(buffer) {
+                Ok(0) => return Err(CanonicalTcpError::PeerClosed),
+                Ok(count) => {
+                    incoming.record.advance(count).map_err(CanonicalTcpError::Protocol)?;
+                    left -= count;
+                }
+                Err(error) if retryable(&error) => {}
+                Err(error) => return Err(CanonicalTcpError::Io(error)),
+            }
+        }
     }
 
     pub(super) fn write_record(

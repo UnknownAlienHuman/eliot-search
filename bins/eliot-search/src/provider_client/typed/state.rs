@@ -1,6 +1,7 @@
 //! Client send history and response correlation, using shared protocol owners.
 
 use std::collections::BTreeMap;
+use std::task::Poll;
 use std::time::{Duration, Instant};
 
 use search_contracts::{
@@ -13,7 +14,7 @@ use search_provider_protocol::{
     ServerEnvelopeCodec, ServerNonce, SessionMachine, VerifiedPairing, verify_proof,
 };
 
-use super::io::{SocketIo, budget, remaining};
+use super::io::{POLL_INTERVAL, SocketIo, budget, remaining};
 use super::{TypedClientError, keyed_parts};
 
 struct PendingRequest {
@@ -112,8 +113,16 @@ impl State {
     }
 
     pub(super) fn receive(&mut self) -> Result<ProviderEnvelope, TypedClientError> {
+        loop {
+            if let Poll::Ready(envelope) = self.poll_receive(POLL_INTERVAL)? { return Ok(envelope); }
+        }
+    }
+
+    pub(super) fn poll_receive(&mut self, quantum: Duration) -> Result<Poll<ProviderEnvelope>, TypedClientError> {
         let deadline = self.pending_deadline().ok_or(TypedClientError::NothingPending)?;
-        let (frame, proof) = self.socket.read_record(self.limits, deadline)?;
+        let Poll::Ready((frame, proof)) = self.socket.poll_record(self.limits, deadline, quantum)? else {
+            return Ok(Poll::Pending);
+        };
         let transcript = ProviderFrameTranscript::response(self.pairing.session(), self.nonce, &frame);
         let expected = keyed_parts(&self.key, transcript.parts());
         if !verify_proof(&expected, &proof) {
@@ -149,7 +158,7 @@ impl State {
                 }
             }
         }
-        Ok(envelope)
+        Ok(Poll::Ready(envelope))
     }
 
     fn preview_response(&self, envelope: &ProviderEnvelope) -> Result<ResponseUpdate, TypedClientError> {

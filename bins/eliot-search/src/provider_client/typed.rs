@@ -8,6 +8,7 @@ mod io;
 mod state;
 
 use std::net::TcpStream;
+use std::task::Poll;
 use std::time::Duration;
 
 use search_contracts::{ProviderEnvelope, RequestBody, RequestId};
@@ -182,6 +183,19 @@ impl TypedProviderSession {
     /// Remote errors, ambiguity and partial coverage remain intact for rendering.
     pub fn receive(&mut self) -> Result<ProviderEnvelope, TypedClientError> {
         self.with_state(State::receive)
+    }
+
+    /// Polls one response without holding the caller until a whole frame arrives.
+    ///
+    /// Pending retains all partial prefix/body/MAC bytes and the original request
+    /// deadline. The caller may send_cancel or close before polling again. Input
+    /// waiting is capped at min(quantum, 25 ms) and 64 KiB per turn; complete-frame
+    /// authentication/decoding still runs synchronously under the original deadline.
+    /// Zero quantum is invalid. This is explicit polling, not an async Waker API.
+    /// Only Ready exposes a fully verified event. Pending spends no sequence or
+    /// request state; EOF, real deadline expiry and protocol errors still close.
+    pub fn poll_receive(&mut self, quantum: Duration) -> Result<Poll<ProviderEnvelope>, TypedClientError> {
+        self.with_state(|state| state.poll_receive(quantum))
     }
 
     /// Drops key and client metadata and shuts down the socket, idempotently.
