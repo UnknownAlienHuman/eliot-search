@@ -32,7 +32,9 @@ impl StandaloneRegistrationReadback {
     /// Native administration must retain the actual root/policy owner lock.
     /// This is suitable for restoring registration metadata before pairing; it
     /// does not open/create the journal, recover publication or acknowledge a peer.
-    /// An unpublished/empty publisher is an error, never proof of absent records.
+    /// An uninitialized, suspended or stale publisher is never proof of absence.
+    /// Completed native generation-zero recovery permits absent records without
+    /// inventing a snapshot, registration or commit receipt.
     /// Terminal rows remain inspectable but cannot be reactivated by prepare_change.
     ///
     /// # Errors
@@ -69,6 +71,43 @@ impl StandaloneRegistrationReadback {
         };
         check(context, started, deadline)?;
         Ok(Self { identity, generation, binding_id, records })
+    }
+
+    /// Restore the existing journal's publication, then read this registration.
+    ///
+    /// Native bootstrap uses this before pairing, both on first registration and
+    /// restart. The journal must already be opened under its verified root owner;
+    /// this method never creates a database, guesses an identity, installs policy
+    /// or retries a mutation. In-doubt writes must first be resolved using their
+    /// original descriptors. Full native verification is a bootstrap operation,
+    /// not a per-request policy read.
+    ///
+    /// One diminishing deadline and the original cancellation cover recovery,
+    /// paired readback and decoding. A verified empty journal returns generation
+    /// zero and absence of BOTH records; prepare_change can then build the first
+    /// explicit atomic registration. Existing terminal/half-present/corrupt state
+    /// is never turned into a new registration. The caller must still restore
+    /// security barriers and validate credentials before allowing a connection.
+    ///
+    /// # Errors
+    /// Preserves native recovery/read failures and original-budget exhaustion.
+    /// A completed snapshot publication is not rolled back on a later error;
+    /// failure returns no registration or permission to serve.
+    pub fn restore_published<C: CancellationProbe + Clone>(
+        journal: &PersistentControlJournal,
+        publisher: &mut ControlSnapshotPublisher,
+        binding_id: BindingId,
+        context: &OperationContext<C>,
+    ) -> Result<Self, NativeGrantPolicyError> {
+        let (started, deadline) = begin(context)?;
+        let recovery_context = remaining_context(context, started, deadline)?;
+        let _publication = journal.recover_snapshot_publication_with_context(
+            publisher, &recovery_context,
+        )?;
+        let read_context = remaining_context(context, started, deadline)?;
+        let registration = Self::read_published(journal, publisher, binding_id, &read_context)?;
+        check(context, started, deadline)?;
+        Ok(registration)
     }
 
     /// Exact journal/root/owner identity at the read, not permission to rebind it.

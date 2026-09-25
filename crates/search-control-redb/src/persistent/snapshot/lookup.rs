@@ -5,6 +5,7 @@ use search_ports::{CancellationProbe, OperationContext};
 use crate::{ControlCallError, ControlError, ControlKey, ControlSnapshotPublisher,
     ControlValue, PersistentControlJournal};
 use super::super::operation::{Budget, Check, Point};
+use super::super::{OPERATIONS, RECORDS, ReadableTableMetadata, map_storage_error, map_table_error};
 
 impl PersistentControlJournal {
     /// Read one bounded value from a disk-published snapshot after checking the
@@ -13,8 +14,10 @@ impl PersistentControlJournal {
     /// A retained historical Arc, an unbound reference-model publisher, a pending
     /// commit or publication, and a snapshot older than an unpublished commit
     /// cannot satisfy this read. No record/receipt scan, write, publication or
-    /// recovery is performed. Absence is returned only from a verified current
-    /// snapshot; it does not initialize a row or provide default authority.
+    /// recovery is performed. Absence requires a verified current snapshot or
+    /// completed native generation-zero recovery with a still-empty disk journal.
+    /// A newly constructed or suspended publisher is never sufficient. This read
+    /// does not initialize a row, fabricate a receipt or provide default authority.
     ///
     /// The caller must hold the live root/domain owner lock. Shared borrows keep
     /// this journal and publisher unchanged during the call, not after return.
@@ -35,9 +38,10 @@ impl PersistentControlJournal {
 
     /// Read two distinct technical records and their common journal generation.
     ///
-    /// Both lookups use one verified disk header and one published snapshot;
-    /// neither row is fetched from another generation. Values retain input key
-    /// order, including explicit absence. Count, key, per-value and aggregate
+    /// Both lookups use one verified disk header and one published snapshot (or
+    /// verified empty generation zero); neither row is fetched from another
+    /// generation. Values retain input key order, including explicit absence.
+    /// Count, key, per-value and aggregate
     /// byte limits apply before results escape. No table or receipt scan occurs.
     /// The caller still holds the actual owner lock through any subsequent use.
     /// A successful read is metadata, not publication, a lease or source authority.
@@ -80,17 +84,42 @@ impl PersistentControlJournal {
             if publisher.diagnostic_disk_identity() != Some(self.identity) {
                 return Err(ControlError::IdentityMismatch);
             }
-            let snapshot = publisher.current().ok_or(ControlError::SnapshotPublicationFailed)?;
-            if snapshot.identity != self.identity {
-                return Err(ControlError::IdentityMismatch);
+            let snapshot = publisher.current();
+            if let Some(snapshot) = &snapshot {
+                if snapshot.identity != self.identity {
+                    return Err(ControlError::IdentityMismatch);
+                }
+            } else if !publisher.has_verified_empty_disk(self.identity) {
+                return Err(ControlError::SnapshotPublicationFailed);
             }
             let transaction = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
             let header = self.header_from(&transaction)?;
             budget.check(Point::ReadHeader)?;
+            let mut values: [Option<ControlValue>; N] = std::array::from_fn(|_| None);
+            let Some(snapshot) = snapshot else {
+                // A first registration has no mutation receipt or Arc snapshot.
+                // Never mistake an unpublished first commit for empty state.
+                if header.generation != 0 {
+                    return Err(ControlError::SnapshotPublicationFailed);
+                }
+                // Header decoding requires zero counts/bytes at generation zero.
+                // Verify actual table cardinalities too, in THIS read transaction,
+                // so hidden/corrupt rows cannot be reported as verified absence.
+                let records = transaction.open_table(RECORDS).map_err(map_table_error)?;
+                if records.len().map_err(|error| map_storage_error(&error))? != 0 {
+                    return Err(ControlError::StoreCorrupt);
+                }
+                budget.check(Point::ReadRecord)?;
+                let operations = transaction.open_table(OPERATIONS).map_err(map_table_error)?;
+                if operations.len().map_err(|error| map_storage_error(&error))? != 0 {
+                    return Err(ControlError::StoreCorrupt);
+                }
+                budget.check(Point::ReadComplete)?;
+                return Ok((0, values));
+            };
             if header.generation != snapshot.generation {
                 return Err(ControlError::SnapshotPublicationFailed);
             }
-            let mut values: [Option<ControlValue>; N] = std::array::from_fn(|_| None);
             let mut total_bytes = 0_usize;
             for (slot, key) in values.iter_mut().zip(keys) {
                 budget.check(Point::ReadRecord)?;

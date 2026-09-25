@@ -16,6 +16,16 @@ impl ControlSnapshotPublisher {
         self.disk.as_ref().map(|state| state.identity)
     }
 
+    // Only finish_verified_empty_disk can establish this state: no snapshot,
+    // no commit identity, and a completed native generation-zero recovery.
+    // A lookup must ALSO confirm the current disk header and empty tables;
+    // this process-local observation alone is not proof of current absence.
+    pub(crate) fn has_verified_empty_disk(&self, identity: JournalIdentity) -> bool {
+        self.disk.as_ref().is_some_and(|state| {
+            state.identity == identity && !state.suspended && state.observed_generation == 0
+        }) && self.inner.current().is_none() && self.current_operation.is_none()
+    }
+
     pub(crate) fn begin_disk_publication(&mut self, identity: JournalIdentity) -> Result<(), ControlError> {
         identity.validate()?;
         // A foreign/stale owner must not poison another publisher or clear its fence.
