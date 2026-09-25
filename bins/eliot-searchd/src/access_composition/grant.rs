@@ -10,6 +10,7 @@ mod issuer;
 
 pub use issuer::{
     BoundedStandaloneGrantIssuer, GrantEntropySource, GrantTimeSource, GrantTimeWindow,
+    GrantUseError, GrantValidationClock, VerifiedStandaloneGrant,
 };
 
 use search_contracts::{

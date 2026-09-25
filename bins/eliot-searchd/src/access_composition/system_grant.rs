@@ -9,10 +9,13 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use search_contracts::UtcTimestamp;
+use search_provider_protocol::MonotonicMillis;
+
+use crate::provider_composition::monotonic_millis;
 
 use super::grant::{
     BoundedStandaloneGrantIssuer, GrantEntropySource, GrantIssuerError,
-    GrantTimeSource, GrantTimeWindow,
+    GrantTimeSource, GrantTimeWindow, GrantUseError, GrantValidationClock,
 };
 
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -73,8 +76,78 @@ impl GrantTimeSource for SystemGrantClock {
         &mut self,
         requested_ttl_ms: u64,
     ) -> Result<GrantTimeWindow, GrantIssuerError> {
-        self.issue_window_from(SystemTime::now(), requested_ttl_ms)
+        let started = monotonic_millis();
+        self.issue_window_from(SystemTime::now(), requested_ttl_ms)?
+            .with_monotonic_origin(started)
     }
+}
+
+impl GrantValidationClock for SystemGrantClock {
+    fn check_grant_window(
+        &mut self,
+        issued_at: &UtcTimestamp,
+        expires_at: &UtcTimestamp,
+        monotonic_expiry: MonotonicMillis,
+    ) -> Result<MonotonicMillis, GrantUseError> {
+        let started = monotonic_millis();
+        if started >= monotonic_expiry { return Err(GrantUseError::Expired); }
+        let now = SystemTime::now();
+        if self.last_observed.as_ref().is_some_and(|previous| &now < previous) {
+            return Err(GrantUseError::ClockUnavailable);
+        }
+        let timestamp = timestamp_from_system_time(&now)
+            .map_err(|_| GrantUseError::ClockUnavailable)?;
+        // Retain even a refused forward observation: clock rollback must not
+        // resurrect an expired grant. Never modify its original native expiry.
+        self.last_observed = Some(now);
+        if &timestamp < issued_at || &timestamp >= expires_at {
+            return Err(GrantUseError::Expired);
+        }
+        let wall_remaining = system_time_from_timestamp(expires_at)?
+            .duration_since(now).map_err(|_| GrantUseError::Expired)?;
+        let millis = u64::try_from(wall_remaining.as_millis())
+            .map_err(|_| GrantUseError::ClockUnavailable)?;
+        let wall_deadline = started.get().checked_add(millis)
+            .map(MonotonicMillis::new).ok_or(GrantUseError::ClockUnavailable)?;
+        let valid_until = monotonic_expiry.min(wall_deadline);
+        if monotonic_millis() >= valid_until { return Err(GrantUseError::Expired); }
+        Ok(valid_until)
+    }
+}
+
+// Inverse of this module's formatter, only for an already validated canonical
+// UTC value. Do not introduce a second public timestamp parser or accept input
+// outside the shared UtcTimestamp contract. Production timestamps are post-epoch.
+fn system_time_from_timestamp(value: &UtcTimestamp) -> Result<SystemTime, GrantUseError> {
+    fn decimal(bytes: &[u8], start: usize, end: usize) -> Result<u64, GrantUseError> {
+        bytes.get(start..end).ok_or(GrantUseError::ClockUnavailable)?.iter()
+            .try_fold(0_u64, |number, byte| {
+                let digit = byte.checked_sub(b'0').filter(|digit| *digit <= 9)
+                    .ok_or(GrantUseError::ClockUnavailable)?;
+                number.checked_mul(10).and_then(|n| n.checked_add(u64::from(digit)))
+                    .ok_or(GrantUseError::ClockUnavailable)
+            })
+    }
+    let bytes = value.as_str().as_bytes();
+    let year = decimal(bytes, 0, 4)?;
+    let month = decimal(bytes, 5, 7)?;
+    let day = decimal(bytes, 8, 10)?;
+    let prior_year = year.checked_sub(1).ok_or(GrantUseError::ClockUnavailable)?;
+    const MONTH_OFFSETS: [u64; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    const UNIX_DAYS: u64 = 365 * 1969 + 1969 / 4 - 1969 / 100 + 1969 / 400;
+    let month_index = usize::try_from(month.checked_sub(1).ok_or(GrantUseError::ClockUnavailable)?)
+        .map_err(|_| GrantUseError::ClockUnavailable)?;
+    let offset = *MONTH_OFFSETS.get(month_index).ok_or(GrantUseError::ClockUnavailable)?;
+    let leap_day = u64::from(month > 2 && year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+    let days = (365 * prior_year + prior_year / 4 - prior_year / 100 + prior_year / 400
+        + offset + leap_day + day.checked_sub(1).ok_or(GrantUseError::ClockUnavailable)?)
+        .checked_sub(UNIX_DAYS).ok_or(GrantUseError::ClockUnavailable)?;
+    // The shared four-digit year bound keeps these products within u64.
+    let seconds = days * SECONDS_PER_DAY + decimal(bytes, 11, 13)? * SECONDS_PER_HOUR
+        + decimal(bytes, 14, 16)? * SECONDS_PER_MINUTE + decimal(bytes, 17, 19)?;
+    UNIX_EPOCH.checked_add(Duration::from_secs(seconds))
+        .and_then(|time| time.checked_add(Duration::from_micros(decimal(bytes, 20, 26).ok()?)))
+        .ok_or(GrantUseError::ClockUnavailable)
 }
 
 /// Concrete boot-local issuer using the daemon-qualified OS CSPRNG and clock.

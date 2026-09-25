@@ -7,6 +7,11 @@
 use std::collections::BTreeMap;
 
 use search_contracts::{GrantId, OpaqueId, UtcTimestamp};
+use search_provider_protocol::MonotonicMillis;
+
+mod validation;
+
+pub use validation::{GrantUseError, GrantValidationClock, VerifiedStandaloneGrant};
 
 use super::{
     GrantIssuerError, StandaloneGrantIssuer, StandaloneGrantMaterial, StandaloneGrantTemplate,
@@ -28,6 +33,7 @@ pub struct GrantTimeWindow {
     issued_at: UtcTimestamp,
     expires_at: UtcTimestamp,
     effective_ttl_ms: u64,
+    monotonic_expiry: Option<MonotonicMillis>,
 }
 
 impl GrantTimeWindow {
@@ -44,7 +50,29 @@ impl GrantTimeWindow {
             issued_at,
             expires_at,
             effective_ttl_ms,
+            monotonic_expiry: None,
         })
+    }
+
+    /// Binds a native clock observation made before observing the UTC window.
+    ///
+    /// The expiry is captured once at issuance, never on redemption or replay.
+    /// One millisecond is withheld for UTC/millisecond truncation; an adapter
+    /// must supply more than one usable millisecond. A wall-only window created
+    /// by `new` still supports issuance but cannot pass native grant use checks.
+    /// This is trusted clock input, never a timestamp supplied by a client.
+    pub fn with_monotonic_origin(
+        mut self,
+        started: MonotonicMillis,
+    ) -> Result<Self, GrantIssuerError> {
+        if self.monotonic_expiry.is_some() {
+            return Err(GrantIssuerError::Unavailable);
+        }
+        let budget = self.effective_ttl_ms.checked_sub(1)
+            .filter(|millis| *millis > 0).ok_or(GrantIssuerError::Unavailable)?;
+        let expiry = started.get().checked_add(budget).ok_or(GrantIssuerError::Unavailable)?;
+        self.monotonic_expiry = Some(MonotonicMillis::new(expiry));
+        Ok(self)
     }
 
     /// Canonical issue time.
@@ -85,9 +113,16 @@ pub trait GrantTimeSource {
 pub struct BoundedStandaloneGrantIssuer<E, T> {
     entropy: E,
     time: T,
-    records: BTreeMap<OpaqueId, (StandaloneGrantTemplate, StandaloneGrantMaterial)>,
+    records: BTreeMap<OpaqueId, IssuedGrantRecord>,
     max_records: usize,
     max_entropy_attempts: usize,
+}
+
+#[derive(Debug)]
+struct IssuedGrantRecord {
+    template: StandaloneGrantTemplate,
+    material: StandaloneGrantMaterial,
+    monotonic_expiry: Option<MonotonicMillis>,
 }
 
 impl<E, T> BoundedStandaloneGrantIssuer<E, T> {
@@ -126,11 +161,9 @@ where
         &mut self,
         template: &StandaloneGrantTemplate,
     ) -> Result<StandaloneGrantMaterial, GrantIssuerError> {
-        if let Some((retained_template, retained_material)) =
-            self.records.get(&template.operation_id)
-        {
-            return if retained_template == template {
-                Ok(retained_material.clone())
+        if let Some(retained) = self.records.get(&template.operation_id) {
+            return if &retained.template == template {
+                Ok(retained.material.clone())
             } else {
                 Err(GrantIssuerError::OperationConflict)
             };
@@ -158,7 +191,11 @@ where
         };
         self.records.insert(
             template.operation_id.clone(),
-            (template.clone(), material.clone()),
+            IssuedGrantRecord {
+                template: template.clone(),
+                material: material.clone(),
+                monotonic_expiry: window.monotonic_expiry,
+            },
         );
         Ok(material)
     }
@@ -183,8 +220,8 @@ where
             let grant_id = GrantId::from_bytes(grant_bytes);
             let nonce = OpaqueId::new(format!("{NONCE_PREFIX}{}", hex_lower(&nonce_bytes)))
                 .map_err(|_| GrantIssuerError::Unavailable)?;
-            let collides = self.records.values().any(|(_, retained)| {
-                retained.grant_id == grant_id || retained.nonce == nonce
+            let collides = self.records.values().any(|retained| {
+                retained.material.grant_id == grant_id || retained.material.nonce == nonce
             });
             if !collides {
                 return Ok((grant_id, nonce));
