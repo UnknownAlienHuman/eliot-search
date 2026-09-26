@@ -1,7 +1,11 @@
 //! Atomically persist one standalone binding and its matching grant policy.
 
 mod readback;
+mod provisioning;
 pub use readback::StandaloneRegistrationReadback;
+pub use provisioning::{
+    StandaloneProvisioningError, StandaloneProvisioningPhase, StandaloneRegistrationProvisioning,
+};
 
 use search_contracts::{Blake3Digest32, protocol::PeerRole};
 use search_control_redb::{

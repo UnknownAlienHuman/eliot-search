@@ -8,7 +8,7 @@ pub use credential::NativePairingCredentialError;
 use search_contracts::{Blake3Digest32, InstallationId, NonZeroRevision, OpaqueRef, ProfileId};
 use search_control_redb::{ControlSnapshotPublisher, PersistentControlJournal};
 use search_ports::{CancellationProbe, OperationContext};
-use search_provider_protocol::{BindingContext, BindingKey, PairingMachine, ProtocolLimits, ServerNonce};
+use search_provider_protocol::{BindingContext, BindingKey, PairingMachine, ProtocolLimits, ServerNonce, TransportPeer};
 
 use crate::provider_composition::{CanonicalProviderConnection, monotonic_millis};
 use super::{NativeBindingError, NativeBindingPin, ProviderBindingRecord, ProviderBindingStatus,
@@ -29,6 +29,31 @@ pub struct NativeBindingExpectation {
     pub profile_id: ProfileId,
     /// Reference independently resolved by the disclosure-policy owner.
     pub disclosure_ceiling_ref: OpaqueRef,
+}
+
+impl NativeBindingExpectation {
+    // Data/coordinate consistency only. Publication, time and keyed ceremony
+    // validation remain with the caller; a matching record is not authority.
+    pub(in crate::access_composition) fn validate_registration(
+        &self,
+        record: &ProviderBindingRecord,
+        peer: &TransportPeer,
+    ) -> Result<(), NativeBindingError> {
+        record.validate()?;
+        if record.status != ProviderBindingStatus::Active
+            || record.binding_id != peer.binding
+            || record.installation_id != self.installation_id
+            || record.installation_incarnation_id != peer.incarnation
+            || record.peer_role != peer.role
+            || record.peer_identity_digest != self.peer_identity_digest
+            || record.pairing_generation != self.pairing_generation
+            || !record.permitted_profile_ids.contains(&self.profile_id)
+            || record.disclosure_ceiling_ref != self.disclosure_ceiling_ref
+        {
+            return Err(NativeBindingError::Unavailable);
+        }
+        Ok(())
+    }
 }
 
 impl CanonicalProviderConnection {
@@ -66,17 +91,9 @@ impl CanonicalProviderConnection {
         let record = ProviderBindingRecord::read_published(
             journal, publisher, binding.binding_id(), context,
         )?.ok_or(NativeBindingError::Unavailable)?;
-        if record.status != ProviderBindingStatus::Active
-            || record.installation_id != expected.installation_id
-            || record.installation_incarnation_id != binding.incarnation()
-            || record.peer_role != binding.role()
-            || record.peer_identity_digest != expected.peer_identity_digest
-            || record.pairing_generation != expected.pairing_generation
-            || !record.permitted_profile_ids.contains(&expected.profile_id)
-            || record.disclosure_ceiling_ref != expected.disclosure_ceiling_ref
-        {
-            return Err(NativeBindingError::Unavailable);
-        }
+        expected.validate_registration(&record, &TransportPeer {
+            role: binding.role(), incarnation: binding.incarnation(), binding: binding.binding_id(),
+        })?;
         let expiry = clock.check_policy_window(&record.issued_at, record.expires_at.as_ref())?;
         check(context, started, deadline)?;
         let connection = Self::open(binding, ceremony, key, server_nonce, limits)?;

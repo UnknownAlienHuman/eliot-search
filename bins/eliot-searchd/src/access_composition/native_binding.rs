@@ -9,7 +9,8 @@ mod registration;
 pub use mutation::ProviderBindingMutation;
 pub use opening::{NativeBindingExpectation, NativePairingCredentialError, NativeTcpOpenError};
 pub use registration::{
-    StandaloneRegistrationCommit, StandaloneRegistrationMutation, StandaloneRegistrationReadback,
+    StandaloneProvisioningError, StandaloneProvisioningPhase, StandaloneRegistrationCommit,
+    StandaloneRegistrationMutation, StandaloneRegistrationProvisioning, StandaloneRegistrationReadback,
 };
 
 use search_contracts::{BindingId, Blake3Digest32, BoundedSet, InstallationId,

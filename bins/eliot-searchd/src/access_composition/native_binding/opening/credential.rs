@@ -50,18 +50,44 @@ impl NativeBindingExpectation {
         peer: &TransportPeer,
         context: &OperationContext<C>,
     ) -> Result<BindingKey, NativePairingCredentialError> {
+        self.read_pairing_key(peer, context)?
+            .ok_or(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_MISSING"))
+    }
+
+    // Readback is deliberately separate from publish: absence never causes a
+    // write, and a conflicting key is not adopted as a recovered candidate.
+    pub(in crate::access_composition) fn pairing_key_matches<C: CancellationProbe>(
+        &self,
+        peer: &TransportPeer,
+        candidate: &BindingKey,
+        context: &OperationContext<C>,
+    ) -> Result<bool, NativePairingCredentialError> {
+        let Some(observed) = self.read_pairing_key(peer, context)? else { return Ok(false); };
+        let matches = candidate.with_bytes(|expected| observed.with_bytes(|actual| {
+            expected.iter().zip(actual).fold(0_u8, |difference, (left, right)| difference | (left ^ right)) == 0
+        }));
+        if !matches { return Err(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_CONFLICT")); }
+        Ok(true)
+    }
+
+    fn read_pairing_key<C: CancellationProbe>(
+        &self,
+        peer: &TransportPeer,
+        context: &OperationContext<C>,
+    ) -> Result<Option<BindingKey>, NativePairingCredentialError> {
         let locator = self.credential_locator(peer)?;
         #[cfg(windows)]
         {
             let (started, deadline) = super::begin(context)
                 .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_INTERRUPTED"))?;
             let mut remaining = || remaining(context, started, deadline);
-            let secret = search_os_secrets_windows::load_provider_pairing_credential(&locator, &mut remaining)?
-                .ok_or(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_MISSING"))?;
-            let bytes = secret.expose_secret().try_into()
-                .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))?;
-            BindingKey::from_bytes(bytes)
-                .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))
+            let secret = search_os_secrets_windows::load_provider_pairing_credential(&locator, &mut remaining)?;
+            secret.map(|secret| {
+                let bytes = secret.expose_secret().try_into()
+                    .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))?;
+                BindingKey::from_bytes(bytes)
+                    .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))
+            }).transpose()
         }
         #[cfg(not(windows))]
         {
