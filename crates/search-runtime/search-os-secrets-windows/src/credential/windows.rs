@@ -20,6 +20,7 @@ const VAULT_MUTEX_NAME: &str = "ELIOT-Search-RevisionVault-v1";
 const VAULT_LOCK_WAIT_MILLIS: u32 = 5_000;
 const WAIT_OBJECT_0: u32 = 0;
 const WAIT_ABANDONED: u32 = 0x0000_0080;
+const WAIT_TIMEOUT: u32 = 0x0000_0102;
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -255,26 +256,36 @@ impl Drop for CredentialAllocation {
     }
 }
 
-struct WindowsVaultLock(*mut c_void);
+pub(super) struct WindowsVaultLock(*mut c_void);
 
 impl WindowsVaultLock {
     fn acquire() -> Result<Self, ()> {
-        let name = wide(VAULT_MUTEX_NAME);
+        Self::acquire_named(&wide(VAULT_MUTEX_NAME), VAULT_LOCK_WAIT_MILLIS)?.ok_or(())
+    }
+
+    // Shared native handle owner. Pairing uses its own exact global name and
+    // short caller-budgeted waits; legacy revision timing/name stay unchanged.
+    pub(super) fn acquire_named(name: &[u16], wait_ms: u32) -> Result<Option<Self>, ()> {
+        if name.is_empty() || name.len() > 260 || name.last() != Some(&0)
+            || name[..name.len() - 1].contains(&0) || wait_ms == u32::MAX
+        {
+            return Err(());
+        }
         // SAFETY: null security attributes and a terminated name are valid inputs.
         let handle = unsafe { create_mutex_w(null_mut(), 0, name.as_ptr()) };
         if handle.is_null() {
             return Err(());
         }
         // SAFETY: `handle` is a live mutex handle.
-        let status = unsafe { wait_for_single_object(handle, VAULT_LOCK_WAIT_MILLIS) };
+        let status = unsafe { wait_for_single_object(handle, wait_ms) };
         if status == WAIT_OBJECT_0 || status == WAIT_ABANDONED {
-            return Ok(Self(handle));
+            return Ok(Some(Self(handle)));
         }
         // SAFETY: unsuccessful acquisition leaves one owned live handle to close.
         unsafe {
             close_handle(handle);
         }
-        Err(())
+        if status == WAIT_TIMEOUT { Ok(None) } else { Err(()) }
     }
 }
 

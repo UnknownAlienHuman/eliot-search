@@ -1,6 +1,6 @@
-//! Windows Credential Manager ownership for the legacy revision root secret.
+//! Windows Credential Manager ownership for revision and provider-pairing keys.
 //!
-//! The caller supplies only the namespace identity and whether protected
+//! The legacy revision caller supplies the namespace identity and whether protected
 //! revision objects already exist. This module owns target construction,
 //! current-user credential read/create/readback, CSPRNG generation and the
 //! cross-process vault lock. It owns no filesystem or source/catalog policy.
@@ -15,6 +15,12 @@ pub const LEGACY_REVISION_ROOT_SECRET_BYTES: usize = 32;
 
 #[cfg(windows)]
 mod windows;
+
+mod pairing;
+pub use pairing::{
+    ProviderPairingCredentialError, load_provider_pairing_credential,
+    publish_provider_pairing_credential,
+};
 
 #[cfg(test)]
 mod tests;

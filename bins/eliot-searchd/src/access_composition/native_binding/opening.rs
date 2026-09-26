@@ -1,7 +1,9 @@
 //! Native session opening against an already installed, published registration.
 
 mod tcp;
+mod credential;
 pub use tcp::NativeTcpOpenError;
+pub use credential::NativePairingCredentialError;
 
 use search_contracts::{Blake3Digest32, InstallationId, NonZeroRevision, OpaqueRef, ProfileId};
 use search_control_redb::{ControlSnapshotPublisher, PersistentControlJournal};

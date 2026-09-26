@@ -7,7 +7,7 @@ mod opening;
 mod registration;
 
 pub use mutation::ProviderBindingMutation;
-pub use opening::{NativeBindingExpectation, NativeTcpOpenError};
+pub use opening::{NativeBindingExpectation, NativePairingCredentialError, NativeTcpOpenError};
 pub use registration::{
     StandaloneRegistrationCommit, StandaloneRegistrationMutation, StandaloneRegistrationReadback,
 };

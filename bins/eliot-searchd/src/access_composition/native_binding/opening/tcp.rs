@@ -5,17 +5,19 @@ use std::net::{Shutdown, TcpStream};
 use search_contracts::{OpaqueId, protocol::PeerRole};
 use search_control_redb::{ControlSnapshotPublisher, PersistentControlJournal};
 use search_ports::{CancellationProbe, OperationContext};
-use search_provider_protocol::{BindingContext, BindingKey, MonotonicMillis, PairingMachine, ProtocolLimits, ServerNonce};
+use search_provider_protocol::{BindingContext, MonotonicMillis, PairingMachine, ProtocolLimits, ServerNonce, TransportPeer};
 
 use crate::access_composition::{GrantUseError, NativeGrantPolicyError, StandalonePolicyState};
 use crate::provider_composition::{CanonicalProviderConnection, CanonicalTcpConnection, CanonicalTcpError, monotonic_millis};
-use super::{NativeBindingError, NativeBindingExpectation, NativeBindingPin, SystemGrantClock, begin, check};
+use super::{NativeBindingError, NativeBindingExpectation, NativeBindingPin, NativePairingCredentialError, SystemGrantClock, begin, check};
 
 /// Preserve native read/clock failures separately from actual handshake I/O.
 /// Errors may follow acknowledgement output; they never imply peer receipt or
 /// permission to reuse the socket. No record, key or peer text is rendered.
 #[derive(Debug)]
 pub enum NativeTcpOpenError {
+    /// The required current-user pairing credential could not be resolved.
+    Credential(NativePairingCredentialError),
     /// Current binding or original pairing/key did not validate.
     Binding(NativeBindingError),
     /// Coherent registration, policy state, boot or lifetime did not validate.
@@ -27,6 +29,7 @@ pub enum NativeTcpOpenError {
 impl std::fmt::Display for NativeTcpOpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Credential(error) => std::fmt::Display::fmt(error, f),
             Self::Binding(error) => std::fmt::Display::fmt(error, f),
             Self::Policy(error) => std::fmt::Display::fmt(error, f),
             Self::Transport(error) => std::fmt::Display::fmt(error, f),
@@ -34,6 +37,9 @@ impl std::fmt::Display for NativeTcpOpenError {
     }
 }
 impl std::error::Error for NativeTcpOpenError {}
+impl From<NativePairingCredentialError> for NativeTcpOpenError {
+    fn from(error: NativePairingCredentialError) -> Self { Self::Credential(error) }
+}
 impl From<NativeBindingError> for NativeTcpOpenError {
     fn from(error: NativeBindingError) -> Self { Self::Binding(error) }
 }
@@ -58,8 +64,10 @@ impl CanonicalProviderConnection {
     /// Neither an invented RequestGuard nor a new grant/issuer is required.
     ///
     /// Caller holds the real native root/binding/policy mutation lock throughout.
-    /// Credentials and expected peer/profile/disclosure inputs must already be
-    /// resolved; the ceremony must be complete on THIS socket, with no other
+    /// Expected peer/profile/disclosure inputs must already be resolved. The
+    /// exact generation key is loaded from Windows Credential Manager here, not
+    /// accepted as a caller-selected key. Missing credentials are never created.
+    /// The ceremony must be complete on THIS socket, with no other
     /// reader or unread buffered bytes. Registration and dependent publication
     /// must already have finished. This does not create a listener or authorize
     /// any recipe: serving must retain the returned pin and revalidate live access.
@@ -73,7 +81,6 @@ impl CanonicalProviderConnection {
         stream: TcpStream,
         binding: BindingContext,
         ceremony: PairingMachine,
-        key: BindingKey,
         server_nonce: ServerNonce,
         limits: ProtocolLimits,
         journal: &PersistentControlJournal,
@@ -89,6 +96,12 @@ impl CanonicalProviderConnection {
         if binding.role() != PeerRole::StandaloneCli {
             return Err(NativeBindingError::Unavailable.into());
         }
+        let credential_context = remaining_context(context, started, deadline)?;
+        let peer = TransportPeer {
+            role: binding.role(), incarnation: binding.incarnation(), binding: binding.binding_id(),
+        };
+        let key = expected.load_pairing_key(&peer, &credential_context)?;
+        check(context, started, deadline)?;
         let native_context = remaining_context(context, started, deadline)?;
         let (connection, pin) = Self::open_published(
             binding, ceremony, key, server_nonce, limits, journal, publisher,
