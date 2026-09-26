@@ -1,11 +1,11 @@
-//! Bounded security invalidation over the existing handle owner.
+//! Bounded security and binding invalidation over the existing handle owner.
 
 use core::fmt;
 use std::ops::Bound::{Excluded, Unbounded};
 
 use search_contracts::{
-    BoundedSet, HandleTokenDigest, MAX_LIST_ITEMS, MAX_SET_ITEMS, NonZeroRevision,
-    SourceMembershipId,
+    BindingId, BoundedSet, HandleTokenDigest, MAX_LIST_ITEMS, MAX_SET_ITEMS,
+    NonZeroRevision, SourceMembershipId,
 };
 
 use crate::{HandleError, HandleRecord, HandleRecordState, HandleStore};
@@ -17,11 +17,11 @@ pub struct HandleInvalidationProgress {
     pub inspected: usize,
     /// Active records invalidated in this step.
     pub invalidated: usize,
-    /// The pass is complete; an empty restriction set needs no record scan.
+    /// The pass is complete; an empty membership restriction needs no scan.
     pub complete: bool,
 }
 
-/// Completion of one actual full-store membership pass, not a durable receipt.
+/// Completion of one actual full-store pass, not a durable receipt.
 /// Only a completed scan constructs this value. The caller must keep its domain
 /// barrier closed until all other dependent owners also acknowledge the mutation.
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub struct HandleSecurityInvalidationReceipt {
 }
 
 impl HandleSecurityInvalidationReceipt {
-    /// Exact security generation applied to matching handles.
+    /// Exact security or binding generation supplied to this pass.
     #[must_use]
     pub const fn generation(&self) -> u64 {
         self.generation
@@ -51,8 +51,50 @@ impl HandleSecurityInvalidationReceipt {
     }
 }
 
+enum HandleInvalidationSelector<'a> {
+    Memberships {
+        denied: &'a BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
+        purged: &'a BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
+    },
+    Binding(BindingId),
+}
+
+impl HandleInvalidationSelector<'_> {
+    fn matches(&self, record: &HandleRecord) -> bool {
+        match self {
+            Self::Memberships { denied, purged } => {
+                let membership = record.target.source_membership_id();
+                denied.contains(&membership) || purged.contains(&membership)
+            }
+            Self::Binding(binding) => record.binding.binding_id == *binding,
+        }
+    }
+
+    fn prepare(
+        &self,
+        record: &HandleRecord,
+        generation: u64,
+    ) -> Result<Option<(NonZeroRevision, u64)>, HandleError> {
+        match self {
+            Self::Memberships { .. } => prepare_revision(record, generation)
+                .map(|prepared| prepared.map(|revision| (revision, generation))),
+            Self::Binding(_) => {
+                if record.state != HandleRecordState::Active {
+                    return Ok(None);
+                }
+                let revision = record.handle_revision.checked_next()
+                    .map_err(|_| HandleError::InvalidTransition)?;
+                // Binding-revocation and live-security generations are distinct
+                // namespaces. Never compare or overwrite the latter with a lower
+                // binding revision. The record becomes terminal either way.
+                Ok(Some((revision, record.invalidation_generation.max(generation))))
+            }
+        }
+    }
+}
+
 /// Non-clonable progress cursor borrowing the sole handle store and immutable
-/// restriction sets. No token, target or record inventory is copied.
+/// selector. No token, target or record inventory is copied.
 ///
 /// Holding this value excludes minting, expiry and other store mutations between
 /// steps. Each step bounds inspected records, not merely matching records, so a
@@ -63,8 +105,7 @@ impl HandleSecurityInvalidationReceipt {
 #[must_use]
 pub struct HandleSecurityInvalidation<'a> {
     store: &'a mut HandleStore,
-    denied: &'a BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
-    purged: &'a BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
+    selector: HandleInvalidationSelector<'a>,
     generation: u64,
     cursor: Option<HandleTokenDigest>,
     complete: bool,
@@ -98,11 +139,33 @@ impl HandleStore {
     ) -> HandleSecurityInvalidation<'a> {
         HandleSecurityInvalidation {
             store: self,
-            denied,
-            purged,
+            selector: HandleInvalidationSelector::Memberships { denied, purged },
             generation,
             cursor: None,
             complete: denied.is_empty() && purged.is_empty(),
+            inspected: 0,
+            invalidated: 0,
+        }
+    }
+
+    /// Begins a bounded full-store pass for one revoked or rotated binding.
+    ///
+    /// Binding records do not delegate authority to handle tokens. Every active
+    /// handle carrying this exact server-owned binding ID is invalidated, including
+    /// durable-source handles. The caller supplies the replacement's monotonic
+    /// revocation generation and keeps native publication/admission closed until
+    /// `finish` and every other dependent acknowledgement succeed.
+    pub fn begin_binding_invalidation(
+        &mut self,
+        binding: BindingId,
+        generation: u64,
+    ) -> HandleSecurityInvalidation<'_> {
+        HandleSecurityInvalidation {
+            store: self,
+            selector: HandleInvalidationSelector::Binding(binding),
+            generation,
+            cursor: None,
+            complete: false,
             inspected: 0,
             invalidated: 0,
         }
@@ -134,11 +197,11 @@ impl HandleSecurityInvalidation<'_> {
         for (digest, record) in records.by_ref().take(limit) {
             inspected += 1;
             last = Some(*digest);
-            let membership = record.target.source_membership_id();
-            if (self.denied.contains(&membership) || self.purged.contains(&membership))
-                && let Some(revision) = prepare_revision(record, self.generation)?
+            if self.selector.matches(record)
+                && let Some((revision, stored_generation)) =
+                    self.selector.prepare(record, self.generation)?
             {
-                prepared.push((*digest, revision));
+                prepared.push((*digest, revision, stored_generation));
             }
         }
         let complete = records.next().is_none();
@@ -147,7 +210,7 @@ impl HandleSecurityInvalidation<'_> {
             .ok_or(HandleError::InvalidationBudgetExceeded)?;
         let total_invalidated = self.invalidated.checked_add(invalidated)
             .ok_or(HandleError::InvalidationBudgetExceeded)?;
-        apply_prepared(self.store, &prepared, self.generation);
+        apply_cursor_prepared(self.store, &prepared);
         self.cursor = last;
         self.complete = complete;
         self.inspected = total_inspected;
@@ -169,9 +232,8 @@ impl HandleSecurityInvalidation<'_> {
     }
 }
 
-// Shared by exact-scope invalidation and the resumable security pass. Terminal
-// records need no new revision and do not consume a mutation slot. Do not lower
-// their recorded invalidation generation when older work is replayed.
+// Shared by exact-scope invalidation and resumable membership-security passes.
+// Terminal records need no new revision and do not consume a mutation slot.
 pub(super) fn prepare_revision(
     record: &HandleRecord,
     generation: u64,
@@ -187,8 +249,7 @@ pub(super) fn prepare_revision(
         .map_err(|_| HandleError::InvalidTransition)
 }
 
-// Exclusive ownership excludes removal between preparation and application.
-// No recoverable work remains here; allocator panic is not transactional rollback.
+// Exact-scope callers remain in the live-security generation namespace.
 pub(super) fn apply_prepared(
     store: &mut HandleStore,
     prepared: &[(HandleTokenDigest, NonZeroRevision)],
@@ -198,6 +259,19 @@ pub(super) fn apply_prepared(
         let record = store.records.get_mut(digest).expect("prepared handle record");
         record.handle_revision = *revision;
         record.invalidation_generation = generation;
+        record.state = HandleRecordState::Invalidated;
+    }
+}
+
+// Cursor preparation may retain a higher generation from another namespace.
+fn apply_cursor_prepared(
+    store: &mut HandleStore,
+    prepared: &[(HandleTokenDigest, NonZeroRevision, u64)],
+) {
+    for (digest, revision, stored_generation) in prepared {
+        let record = store.records.get_mut(digest).expect("prepared handle record");
+        record.handle_revision = *revision;
+        record.invalidation_generation = *stored_generation;
         record.state = HandleRecordState::Invalidated;
     }
 }

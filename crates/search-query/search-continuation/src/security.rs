@@ -1,11 +1,13 @@
-//! Whole-window security invalidation with recoverable external cleanup.
+//! Whole-window security and binding invalidation with recoverable cleanup.
 
 mod creation;
 
 use core::fmt;
 use std::ops::Bound::{Excluded, Unbounded};
 
-use search_contracts::{BoundedSet, MAX_SET_ITEMS, NonZeroRevision, ReceiptRef, SourceMembershipId};
+use search_contracts::{
+    BindingId, BoundedSet, MAX_SET_ITEMS, NonZeroRevision, ReceiptRef, SourceMembershipId,
+};
 
 use crate::{
     ContinuationEffect, ContinuationError, ContinuationId, ContinuationStore,
@@ -77,10 +79,10 @@ impl ContinuationCleanup {
     /// Terminal record revision; it cannot change during this pass's borrow.
     #[must_use]
     pub const fn record_revision(&self) -> u64 { self.record_revision }
-    /// Original verified security-operation reference, unchanged on retry.
+    /// Original verified operation reference, unchanged on retry.
     #[must_use]
     pub const fn operation_receipt(&self) -> &ReceiptRef { &self.pending.operation_receipt }
-    /// Original live restriction generation; zero is valid for recorded bootstrap state.
+    /// Original restriction or binding generation.
     #[must_use]
     pub const fn generation(&self) -> u64 { self.pending.generation }
     /// Exact pin release or durable-checkpoint deletion. Never a renewal.
@@ -123,7 +125,7 @@ pub struct SecurityInvalidationReceipt {
 }
 
 impl SecurityInvalidationReceipt {
-    /// Restriction generation inspected by the completed pass.
+    /// Restriction or binding generation supplied to the completed pass.
     #[must_use]
     pub const fn generation(&self) -> u64 { self.generation }
     /// Records visited during this attempt.
@@ -137,17 +139,24 @@ impl SecurityInvalidationReceipt {
     pub const fn cleanups(&self) -> usize { self.cleanups }
 }
 
+enum InvalidationSelector<'scope> {
+    Memberships {
+        denied: &'scope BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
+        purged: &'scope BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
+    },
+    Binding(BindingId),
+}
+
 /// Exclusive, non-clonable continuation invalidation cursor.
 ///
-/// The enclosing security domain must stay closed until `finish` succeeds.
-/// Dropping a pass does not undo invalidation or erase pending cleanup: the
-/// record keeps the original operation reference and cannot be compacted. Retry
-/// the same operation from the beginning; external effects must be idempotent.
-/// Different-operation retries cannot take over unresolved cleanup.
+/// The enclosing security or binding domain must stay closed until `finish`
+/// succeeds. Dropping a pass does not undo invalidation or erase pending cleanup:
+/// the record keeps the original operation reference and cannot be compacted.
+/// Retry the same operation from the beginning; external effects must be
+/// idempotent. Different-operation retries cannot take over unresolved cleanup.
 pub struct SecurityInvalidation<'store, 'scope> {
     store: &'store mut ContinuationStore,
-    denied: &'scope BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
-    purged: &'scope BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
+    selector: InvalidationSelector<'scope>,
     identity: PendingCleanup,
     after: Option<ContinuationId>,
     pending: Option<ContinuationCleanup>,
@@ -187,10 +196,40 @@ impl ContinuationStore {
         operation_receipt: &ReceiptRef,
     ) -> SecurityInvalidation<'store, 'scope> {
         SecurityInvalidation {
-            store: self, denied, purged,
+            store: self,
+            selector: InvalidationSelector::Memberships { denied, purged },
             identity: PendingCleanup { operation_receipt: operation_receipt.clone(), generation },
-            after: None, pending: None, complete: false,
-            inspected: 0, invalidated: 0, cleanups: 0,
+            after: None,
+            pending: None,
+            complete: false,
+            inspected: 0,
+            invalidated: 0,
+            cleanups: 0,
+        }
+    }
+
+    /// Begins a bounded pass over every continuation belonging to one binding.
+    ///
+    /// Binding rotation/revocation invalidates the complete continuation record,
+    /// including durable replan checkpoints and windows whose membership influence
+    /// would otherwise appear disjoint. Resource cleanup is retained under the
+    /// exact registration receipt and must finish before binding acknowledgement.
+    pub fn begin_binding_invalidation(
+        &mut self,
+        binding: BindingId,
+        generation: u64,
+        operation_receipt: &ReceiptRef,
+    ) -> SecurityInvalidation<'_, 'static> {
+        SecurityInvalidation {
+            store: self,
+            selector: InvalidationSelector::Binding(binding),
+            identity: PendingCleanup { operation_receipt: operation_receipt.clone(), generation },
+            after: None,
+            pending: None,
+            complete: false,
+            inspected: 0,
+            invalidated: 0,
+            cleanups: 0,
         }
     }
 }
@@ -214,7 +253,7 @@ impl SecurityInvalidation<'_, '_> {
         for (id, record) in self.store.records.range((start, Unbounded)).take(limit) {
             inspected += 1;
             last = Some(*id);
-            let reason = restriction_reason(record, self.denied, self.purged);
+            let reason = invalidation_reason(record, &self.selector);
             if record.security_cleanup.is_some() || reason.is_some() {
                 selected = Some((*id, reason));
                 break;
@@ -227,18 +266,26 @@ impl SecurityInvalidation<'_, '_> {
                 return Err(ContinuationError::OperationConflict);
             }
             let was_active = record.is_active();
-            if was_active && record.last_invalidation_generation.is_some_and(|previous| {
-                self.identity.generation < previous.get()
-            }) {
+            let membership_security = matches!(
+                &self.selector,
+                InvalidationSelector::Memberships { .. }
+            );
+            if was_active && membership_security
+                && record.last_invalidation_generation.is_some_and(|previous| {
+                    self.identity.generation < previous.get()
+                })
+            {
                 return Err(ContinuationError::OperationConflict);
             }
-            // Bootstrap snapshots may have generation zero; the original
-            // optional nonzero lifecycle field stays absent for that one case.
-            let generation = NonZeroRevision::new(self.identity.generation).ok();
+            let security_generation = membership_security
+                .then(|| NonZeroRevision::new(self.identity.generation).ok())
+                .flatten();
             let revision = if was_active { record.next_revision()? } else { record.revision };
             let cleanup = ContinuationCleanup {
-                continuation_id: id, record_revision: revision,
-                pending: self.identity.clone(), effect: record.cleanup_effect(),
+                continuation_id: id,
+                record_revision: revision,
+                pending: self.identity.clone(),
+                effect: record.cleanup_effect(),
             };
             let retained_pending = self.identity.clone();
             if was_active {
@@ -246,7 +293,12 @@ impl SecurityInvalidation<'_, '_> {
                 record.set_status(LifecycleRecordStatus::Revoked);
                 record.terminal_reason = Some(reason);
                 record.revision = revision;
-                record.last_invalidation_generation = generation;
+                // Binding revocation and live-security generations are distinct
+                // namespaces. Binding invalidation makes the record terminal but
+                // never compares to or overwrites the security generation.
+                if membership_security {
+                    record.last_invalidation_generation = security_generation;
+                }
             }
             // The original target and operation survive cancellation, unwinding
             // and a dropped cursor. No fallible work follows the record mutation.
@@ -276,7 +328,8 @@ impl SecurityInvalidation<'_, '_> {
         let cleanup = self.pending.as_ref().ok_or(ContinuationError::InvalidTransition)?;
         let record = self.store.records.get_mut(&cleanup.continuation_id)
             .ok_or(ContinuationError::InvalidTransition)?;
-        if record.is_active() || record.revision != cleanup.record_revision
+        if record.is_active()
+            || record.revision != cleanup.record_revision
             || record.security_cleanup.as_ref() != Some(&cleanup.pending)
             || record.cleanup_effect() != cleanup.effect
         {
@@ -297,34 +350,45 @@ impl SecurityInvalidation<'_, '_> {
             return Err(ContinuationError::InvalidTransition);
         }
         Ok(SecurityInvalidationReceipt {
-            generation: self.identity.generation, inspected: self.inspected,
-            invalidated: self.invalidated, cleanups: self.cleanups,
+            generation: self.identity.generation,
+            inspected: self.inspected,
+            invalidated: self.invalidated,
+            cleanups: self.cleanups,
         })
     }
 }
 
-fn restriction_reason(
+fn invalidation_reason(
     record: &StoredContinuation,
-    denied: &BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
-    purged: &BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
+    selector: &InvalidationSelector<'_>,
 ) -> Option<InvalidationReason> {
-    let intersects = |restricted: &BoundedSet<SourceMembershipId, MAX_SET_ITEMS>| {
-        record.security_scope.as_ref().map_or_else(
-            || !restricted.is_empty(),
-            |scope| scope.memberships.iter().any(|member| restricted.contains(member)),
-        )
-    };
-    if intersects(purged) {
-        Some(InvalidationReason::Purged)
-    } else if intersects(denied) {
-        Some(InvalidationReason::AccessRevoked)
-    } else {
-        None
+    match selector {
+        InvalidationSelector::Binding(binding) => {
+            (record.binding_id() == *binding).then_some(InvalidationReason::AccessRevoked)
+        }
+        InvalidationSelector::Memberships { denied, purged } => {
+            let intersects = |restricted: &BoundedSet<SourceMembershipId, MAX_SET_ITEMS>| {
+                record.security_scope.as_ref().map_or_else(
+                    || !restricted.is_empty(),
+                    |scope| scope.memberships.iter().any(|member| restricted.contains(member)),
+                )
+            };
+            if intersects(purged) {
+                Some(InvalidationReason::Purged)
+            } else if intersects(denied) {
+                Some(InvalidationReason::AccessRevoked)
+            } else {
+                None
+            }
+        }
     }
 }
 
 const fn progress(
-    inspected: usize, invalidated: usize, cleanup_pending: bool, complete: bool,
+    inspected: usize,
+    invalidated: usize,
+    cleanup_pending: bool,
+    complete: bool,
 ) -> SecurityInvalidationProgress {
     SecurityInvalidationProgress { inspected, invalidated, cleanup_pending, complete }
 }

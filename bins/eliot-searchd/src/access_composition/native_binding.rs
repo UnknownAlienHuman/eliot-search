@@ -13,8 +13,10 @@ pub use opening::{
     NativePairingCredentialError, NativePairingCredentialIntent, NativeTcpOpenError,
 };
 pub use registration::{
-    StandaloneProvisioningError, StandaloneProvisioningPhase, StandaloneRegistrationCommit,
-    StandaloneRegistrationMutation, StandaloneRegistrationProvisioning, StandaloneRegistrationReadback,
+    StandaloneProvisioningError, StandaloneProvisioningPhase,
+    StandalonePublicationError, StandalonePublicationReceipt, StandaloneRegistrationCommit,
+    StandaloneRegistrationMutation, StandaloneRegistrationProvisioning,
+    StandaloneRegistrationReadback, publish_committed_standalone_registration,
 };
 
 use search_contracts::{BindingId, Blake3Digest32, BoundedSet, InstallationId,

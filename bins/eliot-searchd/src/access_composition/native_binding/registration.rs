@@ -1,9 +1,14 @@
 //! Atomically persist one standalone binding and its matching grant policy.
 
+mod finalization;
 mod intent;
 mod readback;
 mod provisioning;
 
+pub use finalization::{
+    StandalonePublicationError, StandalonePublicationReceipt,
+    publish_committed_standalone_registration,
+};
 pub use intent::{StandaloneProvisioningIntent, StandaloneProvisioningIntentState};
 pub use readback::StandaloneRegistrationReadback;
 pub use provisioning::{
@@ -19,7 +24,7 @@ use search_control_redb::{
 use search_ports::{CancellationProbe, OperationContext};
 
 use super::{
-    ProviderBindingMutation, ProviderBindingRecord, ProviderBindingStatus, begin, check,
+    ProviderBindingMutation, ProviderBindingRecord, ProviderBindingStatus, begin, check, codec,
 };
 use super::opening::NativePairingCredentialIntent;
 use super::super::{
@@ -208,6 +213,25 @@ impl StandaloneRegistrationCommit<'_> {
     /// Actual journal receipt for guarded snapshot publication.
     #[must_use]
     pub const fn receipt(&self) -> &ControlCommitReceipt { &self.receipt }
+
+    /// Decode the exact replacement binding carried by this command.
+    ///
+    /// The final command contains one binding identity write, one policy state
+    /// write and, for provisioning, one operation-header write. No caller-supplied
+    /// replacement is accepted by finalization.
+    pub fn replacement_binding(&self) -> Result<ProviderBindingRecord, NativeGrantPolicyError> {
+        let mut binding = None;
+        for write in self.registration.command.mutation().writes() {
+            if write.value.class() != search_control_redb::ControlRecordClass::Identity {
+                continue;
+            }
+            let Ok(candidate) = codec::decode(&write.value) else { continue; };
+            if binding.replace(candidate).is_some() {
+                return Err(NativeGrantPolicyError::InvalidRecord);
+            }
+        }
+        binding.ok_or(NativeGrantPolicyError::InvalidRecord)
+    }
 
     /// Check every exact replacement against one current disk-published head.
     ///
