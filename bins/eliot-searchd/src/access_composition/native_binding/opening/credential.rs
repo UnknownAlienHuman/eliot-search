@@ -6,6 +6,45 @@ use search_provider_protocol::{BindingKey, TransportPeer};
 
 use super::NativeBindingExpectation;
 
+/// Non-secret identity of the exact immutable registration command that owns a key.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NativePairingCredentialIntent {
+    operation_id: [u8; 32],
+    command_digest: [u8; 32],
+    expected_generation: u64,
+}
+
+impl NativePairingCredentialIntent {
+    /// Creates one exact operation identity for native credential persistence.
+    #[must_use]
+    pub const fn new(
+        operation_id: [u8; 32],
+        command_digest: [u8; 32],
+        expected_generation: u64,
+    ) -> Self {
+        Self { operation_id, command_digest, expected_generation }
+    }
+
+    /// Exact control-journal operation identity.
+    #[must_use]
+    pub const fn operation_id(self) -> [u8; 32] { self.operation_id }
+
+    /// Digest of the exact registration command.
+    #[must_use]
+    pub const fn command_digest(self) -> [u8; 32] { self.command_digest }
+
+    /// Journal generation expected by that command.
+    #[must_use]
+    pub const fn expected_generation(self) -> u64 { self.expected_generation }
+
+    #[cfg(windows)]
+    fn platform(self) -> search_os_secrets_windows::ProviderPairingCredentialIntent {
+        search_os_secrets_windows::ProviderPairingCredentialIntent::new(
+            self.operation_id, self.command_digest, self.expected_generation,
+        )
+    }
+}
+
 /// Content-free credential refusal or uncertain publication. No secret is retained.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativePairingCredentialError {
@@ -36,57 +75,90 @@ impl From<search_os_secrets_windows::ProviderPairingCredentialError> for NativeP
     }
 }
 
+struct NativePairingCredential {
+    intent: NativePairingCredentialIntent,
+    key: BindingKey,
+}
+
 impl NativeBindingExpectation {
     /// Resolve the existing key from Windows Credential Manager before pairing.
     ///
-    /// Peer locators and this expectation must come from the native registration/
-    /// identity owner. They are not grants or a verified BindingContext. The
-    /// opener still validates current registration, profile, disclosure and proof.
-    /// Missing/invalid keys never trigger generation, token-file or memory fallback.
-    /// The returned key owns zeroization; native allocation and intermediate secret
-    /// buffers remain with the existing platform owner.
+    /// The stored command intent is validated structurally but opening relies on
+    /// the current published binding and ceremony, not on that historical command.
+    /// Missing/invalid keys never trigger generation or a fallback store.
     pub fn load_pairing_key<C: CancellationProbe>(
         &self,
         peer: &TransportPeer,
         context: &OperationContext<C>,
     ) -> Result<BindingKey, NativePairingCredentialError> {
-        self.read_pairing_key(peer, context)?
+        self.read_pairing_credential(peer, context)?
+            .map(|record| record.key)
             .ok_or(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_MISSING"))
     }
 
+    /// Restore the exact candidate only when its persisted intent matches.
+    ///
+    /// This is the restart seam for an immutable administrative command. It does
+    /// not generate a replacement, adopt a key belonging to another operation or
+    /// prove that the corresponding journal transaction committed.
+    pub(in crate::access_composition) fn restore_pairing_key<C: CancellationProbe>(
+        &self,
+        peer: &TransportPeer,
+        intent: NativePairingCredentialIntent,
+        context: &OperationContext<C>,
+    ) -> Result<Option<BindingKey>, NativePairingCredentialError> {
+        let Some(record) = self.read_pairing_credential(peer, context)? else { return Ok(None); };
+        if record.intent != intent {
+            return Err(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_CONFLICT"));
+        }
+        Ok(Some(record.key))
+    }
+
     // Readback is deliberately separate from publish: absence never causes a
-    // write, and a conflicting key is not adopted as a recovered candidate.
+    // write, and a conflicting key/intent is not adopted as recovered input.
     pub(in crate::access_composition) fn pairing_key_matches<C: CancellationProbe>(
         &self,
         peer: &TransportPeer,
         candidate: &BindingKey,
+        intent: NativePairingCredentialIntent,
         context: &OperationContext<C>,
     ) -> Result<bool, NativePairingCredentialError> {
-        let Some(observed) = self.read_pairing_key(peer, context)? else { return Ok(false); };
-        let matches = candidate.with_bytes(|expected| observed.with_bytes(|actual| {
+        let Some(observed) = self.read_pairing_credential(peer, context)? else { return Ok(false); };
+        if observed.intent != intent {
+            return Err(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_CONFLICT"));
+        }
+        let matches = candidate.with_bytes(|expected| observed.key.with_bytes(|actual| {
             expected.iter().zip(actual).fold(0_u8, |difference, (left, right)| difference | (left ^ right)) == 0
         }));
         if !matches { return Err(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_CONFLICT")); }
         Ok(true)
     }
 
-    fn read_pairing_key<C: CancellationProbe>(
+    fn read_pairing_credential<C: CancellationProbe>(
         &self,
         peer: &TransportPeer,
         context: &OperationContext<C>,
-    ) -> Result<Option<BindingKey>, NativePairingCredentialError> {
+    ) -> Result<Option<NativePairingCredential>, NativePairingCredentialError> {
         let locator = self.credential_locator(peer)?;
         #[cfg(windows)]
         {
             let (started, deadline) = super::begin(context)
                 .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_INTERRUPTED"))?;
             let mut remaining = || remaining(context, started, deadline);
-            let secret = search_os_secrets_windows::load_provider_pairing_credential(&locator, &mut remaining)?;
-            secret.map(|secret| {
+            let record = search_os_secrets_windows::load_provider_pairing_credential_record(
+                &locator, &mut remaining,
+            )?;
+            record.map(|record| {
+                let platform = record.intent();
+                let intent = NativePairingCredentialIntent::new(
+                    platform.operation_id(), platform.command_digest(), platform.expected_generation(),
+                );
+                let secret = record.into_secret();
                 let bytes = secret.expose_secret().try_into()
                     .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))?;
-                BindingKey::from_bytes(bytes)
-                    .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))
+                let key = BindingKey::from_bytes(bytes)
+                    .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))?;
+                Ok(NativePairingCredential { intent, key })
             }).transpose()
         }
         #[cfg(not(windows))]
@@ -96,19 +168,16 @@ impl NativeBindingExpectation {
         }
     }
 
-    /// Publish a retained administrative candidate for one immutable generation.
+    /// Publish a retained candidate for one immutable command and generation.
     ///
-    /// Supply a key generated ONCE by qualified OS entropy and retain it through
-    /// any uncertain write. Matching readback is idempotent; a different stored
-    /// key is never adopted or replaced. Rotation uses the successor generation.
-    /// This is not binding/policy publication or a peer acknowledgement. Native
-    /// administration retains the real root lock and coordinates the separate
-    /// registration transaction and security barriers. This method generates no
-    /// key and performs no automatic retry or credential deletion.
+    /// Intent and key are persisted/read back together. Equal records are
+    /// idempotent; any different operation, digest, generation or key conflicts.
+    /// This method performs no generation, retry, deletion or journal mutation.
     pub fn publish_pairing_key<C: CancellationProbe>(
         &self,
         peer: &TransportPeer,
         key: &BindingKey,
+        intent: NativePairingCredentialIntent,
         context: &OperationContext<C>,
     ) -> Result<(), NativePairingCredentialError> {
         let locator = self.credential_locator(peer)?;
@@ -119,12 +188,13 @@ impl NativeBindingExpectation {
             let candidate = key.with_bytes(|bytes| search_os_secrets_windows::SecretBytes::new(bytes.to_vec()))
                 .map_err(|_| NativePairingCredentialError::refused("PAIRING_CREDENTIAL_KEY_INVALID"))?;
             let mut remaining = || remaining(context, started, deadline);
-            search_os_secrets_windows::publish_provider_pairing_credential(&locator, &candidate, &mut remaining)
-                .map_err(Into::into)
+            search_os_secrets_windows::publish_provider_pairing_credential(
+                &locator, intent.platform(), &candidate, &mut remaining,
+            ).map_err(Into::into)
         }
         #[cfg(not(windows))]
         {
-            let _ = (locator, key, context);
+            let _ = (locator, key, intent, context);
             Err(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_UNSUPPORTED_PLATFORM"))
         }
     }
@@ -135,9 +205,6 @@ impl NativeBindingExpectation {
             PeerRole::ClientAdapter => 2,
             _ => return Err(NativePairingCredentialError::refused("PAIRING_CREDENTIAL_PEER_INVALID")),
         };
-        // Fixed-width fields and one closed role byte have unambiguous boundaries.
-        // Profiles/disclosure references remain separately resolved authorization,
-        // not aliases for a credential or for one another. No key enters the hash.
         let mut digest = blake3::Hasher::new();
         digest.update(b"ELIOT-NATIVE-PROVIDER-PAIRING-CREDENTIAL-v1\0");
         digest.update(self.installation_id.as_bytes());

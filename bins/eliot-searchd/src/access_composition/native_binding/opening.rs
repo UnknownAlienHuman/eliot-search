@@ -3,12 +3,14 @@
 mod tcp;
 mod credential;
 pub use tcp::NativeTcpOpenError;
-pub use credential::NativePairingCredentialError;
+pub use credential::{NativePairingCredentialError, NativePairingCredentialIntent};
 
 use search_contracts::{Blake3Digest32, InstallationId, NonZeroRevision, OpaqueRef, ProfileId};
 use search_control_redb::{ControlSnapshotPublisher, PersistentControlJournal};
 use search_ports::{CancellationProbe, OperationContext};
-use search_provider_protocol::{BindingContext, BindingKey, PairingMachine, ProtocolLimits, ServerNonce, TransportPeer};
+use search_provider_protocol::{
+    BindingContext, BindingKey, PairingMachine, ProtocolLimits, ServerNonce, TransportPeer,
+};
 
 use crate::provider_composition::{CanonicalProviderConnection, monotonic_millis};
 use super::{NativeBindingError, NativeBindingPin, ProviderBindingRecord, ProviderBindingStatus,

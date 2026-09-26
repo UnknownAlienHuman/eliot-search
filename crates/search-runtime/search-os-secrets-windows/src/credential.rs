@@ -18,8 +18,9 @@ mod windows;
 
 mod pairing;
 pub use pairing::{
-    ProviderPairingCredentialError, load_provider_pairing_credential,
-    publish_provider_pairing_credential,
+    ProviderPairingCredential, ProviderPairingCredentialError,
+    ProviderPairingCredentialIntent, load_provider_pairing_credential,
+    load_provider_pairing_credential_record, publish_provider_pairing_credential,
 };
 
 #[cfg(test)]

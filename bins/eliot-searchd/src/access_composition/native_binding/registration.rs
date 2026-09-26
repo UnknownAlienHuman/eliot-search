@@ -17,6 +17,7 @@ use search_ports::{CancellationProbe, OperationContext};
 use super::{
     ProviderBindingMutation, ProviderBindingRecord, ProviderBindingStatus, begin, check,
 };
+use super::opening::NativePairingCredentialIntent;
 use super::super::{
     NativeGrantPolicyError, StandalonePolicyMutation, StandalonePolicyRecord, StandalonePolicyState,
 };
@@ -95,6 +96,16 @@ impl StandaloneRegistrationMutation {
             identity,
             command: ConditionalControlMutation::new(mutation, conditions),
         })
+    }
+
+    /// Exact non-secret intent persisted with the provider key.
+    pub(super) fn credential_intent(&self) -> NativePairingCredentialIntent {
+        let mutation = self.command.mutation();
+        NativePairingCredentialIntent::new(
+            mutation.id().0,
+            *mutation.command_digest().as_bytes(),
+            mutation.expected_generation(),
+        )
     }
 
     /// Commit the pair once through the existing conditional transaction engine.

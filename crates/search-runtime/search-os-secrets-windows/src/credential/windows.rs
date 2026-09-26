@@ -92,6 +92,118 @@ unsafe extern "system" {
 
 pub(super) struct WindowsCredentialPlatform;
 
+/// Zeroizing private owner for one provider credential record.
+pub(super) struct ProviderCredentialBlob(Vec<u8>);
+
+impl ProviderCredentialBlob {
+    pub(super) fn new(bytes: Vec<u8>) -> Result<Self, LegacyRevisionRootSecretError> {
+        if bytes.is_empty() || bytes.len() > MAX_CREDENTIAL_BLOB_BYTES {
+            return Err(LegacyRevisionRootSecretError::CredentialTooLarge);
+        }
+        Ok(Self(bytes))
+    }
+
+    pub(super) fn as_slice(&self) -> &[u8] { &self.0 }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] { &mut self.0 }
+}
+
+impl Drop for ProviderCredentialBlob {
+    fn drop(&mut self) { clear_bytes(&mut self.0); }
+}
+
+impl WindowsCredentialPlatform {
+    /// Reads one bounded provider record without applying the legacy 32-byte shape.
+    pub(super) fn read_provider_credential(
+        &mut self,
+        target: &[u16],
+    ) -> Result<Option<ProviderCredentialBlob>, LegacyRevisionRootSecretError> {
+        let mut pointer = null_mut::<CredentialW>();
+        // SAFETY: `target` is NUL-terminated and `pointer` is initialized for
+        // one CredReadW output allocation.
+        let success = unsafe {
+            cred_read_w(target.as_ptr(), CRED_TYPE_GENERIC, 0, &raw mut pointer)
+        };
+        if success == 0 {
+            // SAFETY: captured immediately after the failed credential call.
+            let error = unsafe { get_last_error() };
+            return if error == ERROR_NOT_FOUND {
+                Ok(None)
+            } else {
+                Err(LegacyRevisionRootSecretError::CredentialReadFailed(error))
+            };
+        }
+        if pointer.is_null() {
+            return Err(LegacyRevisionRootSecretError::CredentialReadbackInvalid);
+        }
+        let allocation = CredentialAllocation(pointer);
+        // SAFETY: successful CredReadW returned one live CredentialW owned by
+        // `allocation` until this scope ends.
+        let credential = unsafe { &*allocation.0 };
+        let size = usize::try_from(credential.credential_blob_size)
+            .map_err(|_| LegacyRevisionRootSecretError::CredentialReadbackInvalid)?;
+        if credential.credential_type != CRED_TYPE_GENERIC
+            || credential.persist != CRED_PERSIST_LOCAL_MACHINE
+            || size == 0
+            || size > MAX_CREDENTIAL_BLOB_BYTES
+            || credential.credential_blob.is_null()
+        {
+            return Err(LegacyRevisionRootSecretError::CredentialReadbackInvalid);
+        }
+        let mut bytes = Vec::new();
+        bytes.try_reserve_exact(size)
+            .map_err(|_| LegacyRevisionRootSecretError::CredentialReadbackInvalid)?;
+        bytes.resize(size, 0);
+        // SAFETY: the validated credential blob is live for exactly `size` bytes.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                credential.credential_blob,
+                bytes.as_mut_ptr(),
+                size,
+            );
+        }
+        drop(allocation);
+        ProviderCredentialBlob::new(bytes).map(Some)
+    }
+
+    /// Writes one already-versioned provider record through the existing owner.
+    pub(super) fn write_provider_credential(
+        &mut self,
+        target: &[u16],
+        blob: &mut ProviderCredentialBlob,
+    ) -> Result<(), LegacyRevisionRootSecretError> {
+        let mut target = target.to_vec();
+        let mut user_name = wide("ELIOT Search Provider Pairing");
+        let size = blob.as_slice().len();
+        if size == 0 || size > MAX_CREDENTIAL_BLOB_BYTES {
+            return Err(LegacyRevisionRootSecretError::CredentialTooLarge);
+        }
+        let credential = CredentialW {
+            flags: 0,
+            credential_type: CRED_TYPE_GENERIC,
+            target_name: target.as_mut_ptr(),
+            comment: null_mut(),
+            last_written: FileTime { low_date_time: 0, high_date_time: 0 },
+            credential_blob_size: u32::try_from(size)
+                .map_err(|_| LegacyRevisionRootSecretError::CredentialTooLarge)?,
+            credential_blob: blob.as_mut_slice().as_mut_ptr(),
+            persist: CRED_PERSIST_LOCAL_MACHINE,
+            attribute_count: 0,
+            attributes: null_mut(),
+            target_alias: null_mut(),
+            user_name: user_name.as_mut_ptr(),
+        };
+        // SAFETY: every pointer in `credential` remains live for this call.
+        let success = unsafe { cred_write_w(&raw const credential, 0) };
+        if success == 0 {
+            // SAFETY: captured immediately after the failed credential call.
+            let error = unsafe { get_last_error() };
+            return Err(LegacyRevisionRootSecretError::CredentialWriteFailed(error));
+        }
+        Ok(())
+    }
+}
+
 impl RootSecretPlatform for WindowsCredentialPlatform {
     type VaultGuard = WindowsVaultLock;
 

@@ -5,7 +5,10 @@
 //! it does not manufacture rollback or a durable cross-store transaction.
 
 use search_contracts::protocol::PeerRole;
-use search_control_redb::{ControlCommitReceipt, ControlSnapshotPublisher, MutationId, PersistentControlJournal};
+use search_control_redb::{
+    ControlCommitReceipt, ControlSnapshotPublisher, JournalIdentity, MutationId,
+    PersistentControlJournal,
+};
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{BindingKey, TransportPeer};
 
@@ -25,7 +28,7 @@ pub enum StandaloneProvisioningPhase {
     Prepared,
     /// Credential publication may have run; exact readback is required first.
     CredentialUnresolved,
-    /// The candidate was observed in Credential Manager; it is rechecked before commit.
+    /// The candidate and command intent were observed in Credential Manager.
     CredentialReady,
     /// The atomic registration may have committed; recover the original command.
     RegistrationUnresolved,
@@ -48,7 +51,7 @@ pub enum StandaloneProvisioningError {
     RecoveryRequired,
     /// This owner has not obtained a native registration receipt.
     NotCommitted,
-    /// The original candidate is absent. A committed registration is never repaired here.
+    /// The exact original credential is absent and cannot be recreated as recovery.
     CredentialMissing,
     /// Native recovery contradicted a previously observed committed receipt.
     InconsistentReadback,
@@ -79,19 +82,18 @@ impl From<NativePairingCredentialError> for StandaloneProvisioningError {
     fn from(error: NativePairingCredentialError) -> Self { Self::Credential(error) }
 }
 
-/// Retains exactly one generated key, native credential coordinates and immutable
+/// Retains exactly one generated/restored key, native coordinates and immutable
 /// two-row command. No Clone, secret accessor, replacement key or rebase operation.
 ///
 /// Native administration must retain the actual root/policy lock across calls.
 /// The phase is set BEFORE each possibly mutating call, including panic unwinding.
 /// A new bounded recovery call reads state; it never renews an interrupted call's
-/// budget or repeats a write implicitly. Drop clears the candidate through BindingKey
-/// but never deletes a credential or registration, nor claims to finish recovery.
+/// budget or repeats a write implicitly. Drop clears the candidate through
+/// `BindingKey` but never deletes a credential or registration.
 ///
-/// This is an in-process recovery owner, NOT a restart manifest. A crash can leave
-/// a credential without registration. Restart must retain/recover an exact durable
-/// administrative intent before continuing; do not recreate this owner from a fresh
-/// readback or adopt a different key to recover an unresolved operation.
+/// Across process restart, reconstruct this value only through [`Self::restore_exact`]
+/// with the exact original command input. Credential Manager binds the recovered
+/// key to that operation ID, command digest and expected generation.
 #[must_use = "retain the provisioning owner until its possible effects are resolved"]
 pub struct StandaloneRegistrationProvisioning {
     registration: StandaloneRegistrationMutation,
@@ -110,8 +112,6 @@ impl StandaloneRegistrationReadback {
     ///
     /// No credential or journal write occurs here. Revocation uses the existing
     /// key-free atomic registration operation, never a newly generated key.
-    /// The caller supplies a NEW administrative operation ID; this is not recovery
-    /// of a prior operation. A later generation change conflicts instead of rebasing.
     pub fn prepare_provisioning<C: CancellationProbe>(
         &self,
         operation_id: MutationId,
@@ -122,16 +122,10 @@ impl StandaloneRegistrationReadback {
     ) -> Result<StandaloneRegistrationProvisioning, StandaloneProvisioningError> {
         let (started, deadline) = begin(context)?;
         if !cfg!(windows) { return Err(StandaloneProvisioningError::UnsupportedPlatform); }
-        if binding.peer_role != PeerRole::StandaloneCli {
-            return Err(NativeBindingError::Unavailable.into());
-        }
-        let peer = TransportPeer {
-            role: binding.peer_role,
-            incarnation: binding.installation_incarnation_id,
-            binding: binding.binding_id,
-        };
-        expected.validate_registration(binding, &peer)?;
-        let registration = self.prepare_change(operation_id, binding, policy)?;
+        let (registration, peer) = prepare_exact(
+            self.identity(), operation_id, self.generation(), self.records(),
+            binding, policy, &expected,
+        )?;
         check(context, started, deadline)?;
         let mut bytes = zeroize::Zeroizing::new([0_u8; 32]);
         crate::qualified_entropy::fill_qualified_entropy(&mut bytes[..])
@@ -143,9 +137,65 @@ impl StandaloneRegistrationReadback {
             phase: StandaloneProvisioningPhase::Prepared, receipt: None,
         })
     }
+
+    /// Restore a possibly effected provisioning operation from this exact readback.
+    ///
+    /// The same operation ID and intended replacement are required. No new entropy
+    /// is drawn. This convenience works when the readback still represents the
+    /// original pre-state; use [`StandaloneRegistrationProvisioning::restore_exact`]
+    /// with retained original inputs when journal publication has moved forward.
+    pub fn restore_provisioning<C: CancellationProbe>(
+        &self,
+        operation_id: MutationId,
+        binding: &ProviderBindingRecord,
+        policy: &StandalonePolicyRecord,
+        expected: NativeBindingExpectation,
+        context: &OperationContext<C>,
+    ) -> Result<StandaloneRegistrationProvisioning, StandaloneProvisioningError> {
+        StandaloneRegistrationProvisioning::restore_exact(
+            self.identity(), operation_id, self.generation(), self.records(),
+            binding, policy, expected, context,
+        )
+    }
 }
 
 impl StandaloneRegistrationProvisioning {
+    /// Rehydrate one exact operation after process restart without generating a key.
+    ///
+    /// The caller must resupply the immutable original journal identity, expected
+    /// generation, prior records, replacement records and operation ID. Those bytes
+    /// reconstruct the command digest stored with the credential. A missing or
+    /// differently tagged credential is not repaired or adopted. The returned
+    /// owner starts in `RegistrationUnresolved`, so journal readback precedes any
+    /// later write attempt.
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_exact<C: CancellationProbe>(
+        identity: JournalIdentity,
+        operation_id: MutationId,
+        expected_generation: u64,
+        prior: Option<(&ProviderBindingRecord, &StandalonePolicyRecord)>,
+        binding: &ProviderBindingRecord,
+        policy: &StandalonePolicyRecord,
+        expected: NativeBindingExpectation,
+        context: &OperationContext<C>,
+    ) -> Result<Self, StandaloneProvisioningError> {
+        let (started, deadline) = begin(context)?;
+        if !cfg!(windows) { return Err(StandaloneProvisioningError::UnsupportedPlatform); }
+        let (registration, peer) = prepare_exact(
+            identity, operation_id, expected_generation, prior, binding, policy, &expected,
+        )?;
+        let intent = registration.credential_intent();
+        let call = remaining_context(context, started, deadline)?;
+        let candidate = expected.restore_pairing_key(&peer, intent, &call)?
+            .ok_or(StandaloneProvisioningError::CredentialMissing)?;
+        check(context, started, deadline)?;
+        Ok(Self {
+            registration, expected, peer, candidate,
+            phase: StandaloneProvisioningPhase::RegistrationUnresolved,
+            receipt: None,
+        })
+    }
+
     /// Last observed phase; a receipt remains historical until confirm_published.
     #[must_use]
     pub const fn phase(&self) -> StandaloneProvisioningPhase { self.phase }
@@ -159,17 +209,11 @@ impl StandaloneRegistrationProvisioning {
         })
     }
 
-    /// Publish the retained candidate, verify it, then commit both metadata rows.
-    /// One diminishing call budget covers every stage. The existing credential
-    /// publisher dispatches at most one write; the journal receives one atomic command.
-    /// The candidate, coordinates, operation ID and expected generation never change.
+    /// Publish the retained candidate and intent, then commit both metadata rows.
     ///
-    /// An unresolved dispatch refuses another commit until recover returns a known
-    /// phase. A key-only success is NOT a completed registration. Cancellation after
-    /// either effect preserves the phase/receipt. No automatic retry, publication,
-    /// revocation acknowledgement or deletion of an orphan credential occurs here.
-    /// Repeated calls after a known commit return its historical receipt only after
-    /// rechecking the key; a missing committed credential is never recreated.
+    /// An unresolved dispatch refuses another commit until recovery. Cancellation
+    /// after either effect preserves phase/receipt. Repeated calls after a known
+    /// commit only recheck the exact credential; missing state is never recreated.
     pub fn commit<C: CancellationProbe + Clone>(
         &mut self,
         journal: &mut PersistentControlJournal,
@@ -183,17 +227,20 @@ impl StandaloneRegistrationProvisioning {
         {
             return Err(StandaloneProvisioningError::RecoveryRequired);
         }
+        let intent = self.registration.credential_intent();
         if self.phase == Phase::Prepared {
             let call = remaining_context(context, started, deadline)?;
             self.phase = Phase::CredentialUnresolved;
-            if let Err(error) = self.expected.publish_pairing_key(&self.peer, &self.candidate, &call) {
+            if let Err(error) = self.expected.publish_pairing_key(
+                &self.peer, &self.candidate, intent, &call,
+            ) {
                 if !error.outcome_unknown() { self.phase = Phase::Prepared; }
                 return Err(error.into());
             }
             self.phase = Phase::CredentialReady;
         }
         let call = remaining_context(context, started, deadline)?;
-        if !self.expected.pairing_key_matches(&self.peer, &self.candidate, &call)? {
+        if !self.expected.pairing_key_matches(&self.peer, &self.candidate, intent, &call)? {
             if self.receipt.is_none() { self.phase = Phase::Prepared; }
             return Err(StandaloneProvisioningError::CredentialMissing);
         }
@@ -208,15 +255,11 @@ impl StandaloneRegistrationProvisioning {
         self.committed().ok_or(StandaloneProvisioningError::NotCommitted)
     }
 
-    /// Read back an interrupted invocation without writing either store. Journal
-    /// uncertainty is resolved FIRST through the exact existing operation ledger.
-    /// Credential readback then requires the original candidate bytes, not just a
-    /// present locator. A conflicting credential is never adopted or overwritten.
+    /// Resolve an interrupted invocation without writing either store.
     ///
-    /// Verified absence before a registration commit returns Prepared, permitting
-    /// a later EXPLICIT commit with the same retained candidate/command. Absence
-    /// after a known commit is an error and preserves that receipt. A new bounded
-    /// recovery request is allowed; it does not refresh the failed request's timer.
+    /// Journal uncertainty is resolved first through the exact operation ledger.
+    /// Credential readback then requires both original candidate and stored command
+    /// intent. A conflicting record is never adopted or overwritten.
     pub fn recover<C: CancellationProbe + Clone>(
         &mut self,
         journal: &mut PersistentControlJournal,
@@ -238,8 +281,11 @@ impl StandaloneRegistrationProvisioning {
                 None => self.phase = Phase::CredentialReady,
             }
         }
+        let intent = self.registration.credential_intent();
         let call = remaining_context(context, started, deadline)?;
-        let present = self.expected.pairing_key_matches(&self.peer, &self.candidate, &call)?;
+        let present = self.expected.pairing_key_matches(
+            &self.peer, &self.candidate, intent, &call,
+        )?;
         if self.receipt.is_some() {
             if !present { return Err(StandaloneProvisioningError::CredentialMissing); }
         } else {
@@ -249,15 +295,10 @@ impl StandaloneRegistrationProvisioning {
         Ok(self.phase)
     }
 
-    /// Confirm the exact credential AND both published metadata rows under one
-    /// diminishing budget before native administration can acknowledge its work.
-    /// Credential checks bracket the existing coherent metadata confirmation.
-    /// No historical receipt alone satisfies this check; it performs no writes.
+    /// Confirm the exact credential intent/key and both published metadata rows.
     ///
-    /// The real root lock, completed live restriction/dependent barriers and
-    /// guarded snapshot publication remain mandatory. This method neither does
-    /// those effects nor makes arbitrary external Credential Manager writes atomic
-    /// with redb. Lifetime/source authorization still belongs to opening and serving.
+    /// Credential checks bracket coherent metadata confirmation. The root lock,
+    /// live barriers and guarded publication remain mandatory caller-owned work.
     pub fn confirm_published<C: CancellationProbe + Clone>(
         &self,
         journal: &PersistentControlJournal,
@@ -267,19 +308,44 @@ impl StandaloneRegistrationProvisioning {
         let (started, deadline) = begin(context)?;
         self.registration.check_identity(journal)?;
         let committed = self.committed().ok_or(StandaloneProvisioningError::NotCommitted)?;
+        let intent = self.registration.credential_intent();
         let call = remaining_context(context, started, deadline)?;
-        if !self.expected.pairing_key_matches(&self.peer, &self.candidate, &call)? {
+        if !self.expected.pairing_key_matches(&self.peer, &self.candidate, intent, &call)? {
             return Err(StandaloneProvisioningError::CredentialMissing);
         }
         let call = remaining_context(context, started, deadline)?;
         committed.confirm_published(journal, publisher, &call)?;
         let call = remaining_context(context, started, deadline)?;
-        if !self.expected.pairing_key_matches(&self.peer, &self.candidate, &call)? {
+        if !self.expected.pairing_key_matches(&self.peer, &self.candidate, intent, &call)? {
             return Err(StandaloneProvisioningError::CredentialMissing);
         }
         check(context, started, deadline)?;
         Ok(())
     }
+}
+
+fn prepare_exact(
+    identity: JournalIdentity,
+    operation_id: MutationId,
+    expected_generation: u64,
+    prior: Option<(&ProviderBindingRecord, &StandalonePolicyRecord)>,
+    binding: &ProviderBindingRecord,
+    policy: &StandalonePolicyRecord,
+    expected: &NativeBindingExpectation,
+) -> Result<(StandaloneRegistrationMutation, TransportPeer), StandaloneProvisioningError> {
+    if binding.peer_role != PeerRole::StandaloneCli {
+        return Err(NativeBindingError::Unavailable.into());
+    }
+    let peer = TransportPeer {
+        role: binding.peer_role,
+        incarnation: binding.installation_incarnation_id,
+        binding: binding.binding_id,
+    };
+    expected.validate_registration(binding, &peer)?;
+    let registration = StandaloneRegistrationMutation::new(
+        identity, operation_id, expected_generation, prior, binding, policy,
+    )?;
+    Ok((registration, peer))
 }
 
 impl std::fmt::Debug for StandaloneRegistrationProvisioning {
