@@ -157,7 +157,7 @@ impl BoundSession {
         nonce: &ServerNonce,
     ) -> Result<(), ProtocolError> {
         if !self.is_active() {
-            return Err(match self.session.state() {
+            return Err(match self.session_state() {
                 SessionState::Draining => ProtocolError::SessionDraining,
                 SessionState::Closed => ProtocolError::SessionClosed,
                 SessionState::Quarantined => ProtocolError::Quarantined,
@@ -200,13 +200,14 @@ impl BoundSession {
         now: MonotonicMillis,
         relative_deadline_ms: Option<u64>,
     ) -> Result<RequestGuard, ProtocolError> {
-        let guard = RequestGuard::new(
+        let mut guard = RequestGuard::new(
             request_id,
             sequence,
             now,
             relative_deadline_ms,
             self.limits,
         )?;
+        guard.attach_session_drain(&self.drain);
         if self.inflight.len() >= self.limits.max_in_flight_requests {
             return Err(ProtocolError::ResourceExhausted);
         }

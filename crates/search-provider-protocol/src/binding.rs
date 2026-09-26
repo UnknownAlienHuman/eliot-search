@@ -32,9 +32,12 @@ use crate::request::{
 };
 use crate::session::{SessionMachine, SessionState};
 
+mod drain;
 mod lifecycle;
 mod provider;
 
+pub use drain::SessionDrainHandle;
+pub(crate) use drain::SessionDrainState;
 pub use provider::{AdmittedProviderRequest, ProviderDeliveryError, ProviderFrameTranscript};
 
 /// Transport peer identity supplied by the daemon adapter.
@@ -250,14 +253,16 @@ impl BindingSession {
 ///
 /// This mutable connection owner is deliberately non-clonable: copying replay
 /// and in-flight state would fork one authenticated session. Share read-only
-/// request cancellation probes instead. Dropping the owner signals outstanding
-/// observers even when explicit disconnect was skipped during unwinding.
+/// request cancellation probes or [`SessionDrainHandle`] instead. Dropping the
+/// owner signals outstanding observers even when explicit disconnect was skipped
+/// during unwinding.
 #[derive(Debug)]
 pub struct BoundSession {
     binding: BindingContext,
     pairing: VerifiedPairing,
     server_nonce: ServerNonce,
     session: SessionMachine,
+    drain: SessionDrainState,
     inflight: InFlightRegistry,
     guards: BTreeMap<RequestId, RequestGuard>,
     limits: ProtocolLimits,
@@ -287,6 +292,7 @@ impl BoundSession {
             pairing,
             server_nonce,
             session,
+            drain: SessionDrainState::new(),
             inflight: InFlightRegistry::new(limits.max_in_flight_requests)?,
             guards: BTreeMap::new(),
             limits,
@@ -296,13 +302,29 @@ impl BoundSession {
     /// Whether the connection currently admits requests.
     #[must_use]
     pub fn is_active(&self) -> bool {
-        self.session.state() == SessionState::Active
+        self.session.state() == SessionState::Active && !self.drain.is_requested()
     }
 
-    /// Current session lifecycle state.
+    /// Current externally observable session lifecycle state.
+    ///
+    /// An external drain request is visible immediately, before the mutable owner
+    /// next advances its internal state machine. Closed and quarantined states are
+    /// never masked by the shared signal.
     #[must_use]
-    pub const fn session_state(&self) -> SessionState {
-        self.session.state()
+    pub fn session_state(&self) -> SessionState {
+        match self.session.state() {
+            SessionState::Active if self.drain.is_requested() => SessionState::Draining,
+            state => state,
+        }
+    }
+
+    /// External monotonic drain capability for this exact session.
+    ///
+    /// It can deny new work and cancel existing observers, but cannot authenticate
+    /// a peer, mutate replay state or claim the socket has already closed.
+    #[must_use]
+    pub fn drain_handle(&self) -> SessionDrainHandle {
+        self.drain.handle()
     }
 
     /// Binding context this connection was opened from.
@@ -368,13 +390,27 @@ impl BoundSession {
         cancel_request(&mut self.inflight, &mut self.guards, target)
     }
 
-    /// Disconnects deterministically: cancels every in-flight request,
-    /// releases every guard, closes the session and reports exact counts.
-    /// Never fails; after return the connection admits nothing.
+    /// Disconnects deterministically: requests connection drain, cancels every
+    /// in-flight request, releases every guard, closes the session and reports
+    /// exact counts. Never fails; after return the connection admits nothing and
+    /// every external drain observer reports closed.
     pub fn disconnect(&mut self) -> DisconnectReceipt {
+        self.drain.request();
         let receipt = disconnect_all(&mut self.inflight, &mut self.guards);
-        let _ = self.session.begin_drain();
-        let _ = self.session.close();
+        match self.session.state() {
+            SessionState::Active => {
+                let _ = self.session.begin_drain();
+                let _ = self.session.close();
+            }
+            SessionState::Draining => {
+                let _ = self.session.close();
+            }
+            SessionState::Offered
+            | SessionState::Negotiated
+            | SessionState::Closed
+            | SessionState::Quarantined => {}
+        }
+        self.drain.mark_closed();
         receipt
     }
 }

@@ -9,7 +9,11 @@ use search_provider_protocol::{BindingContext, MonotonicMillis, PairingMachine, 
 
 use crate::access_composition::{GrantUseError, NativeGrantPolicyError, StandalonePolicyState};
 use crate::provider_composition::{CanonicalProviderConnection, CanonicalTcpConnection, CanonicalTcpError, monotonic_millis};
-use super::{NativeBindingError, NativeBindingExpectation, NativeBindingPin, NativePairingCredentialError, SystemGrantClock, begin, check};
+use super::{
+    BindingConnectionRegistry, BindingConnectionRegistryError, NativeBindingError,
+    NativeBindingExpectation, NativeBindingPin, NativePairingCredentialError,
+    SystemGrantClock, begin, check,
+};
 
 /// Preserve native read/clock failures separately from actual handshake I/O.
 /// Errors may follow acknowledgement output; they never imply peer receipt or
@@ -24,6 +28,8 @@ pub enum NativeTcpOpenError {
     Policy(NativeGrantPolicyError),
     /// The original socket's authenticated profile exchange failed.
     Transport(CanonicalTcpError),
+    /// The verified session could not be retained by the finite binding registry.
+    Registry(BindingConnectionRegistryError),
 }
 
 impl std::fmt::Display for NativeTcpOpenError {
@@ -33,6 +39,7 @@ impl std::fmt::Display for NativeTcpOpenError {
             Self::Binding(error) => std::fmt::Display::fmt(error, f),
             Self::Policy(error) => std::fmt::Display::fmt(error, f),
             Self::Transport(error) => std::fmt::Display::fmt(error, f),
+            Self::Registry(error) => std::fmt::Display::fmt(error, f),
         }
     }
 }
@@ -48,6 +55,9 @@ impl From<NativeGrantPolicyError> for NativeTcpOpenError {
 }
 impl From<CanonicalTcpError> for NativeTcpOpenError {
     fn from(error: CanonicalTcpError) -> Self { Self::Transport(error) }
+}
+impl From<BindingConnectionRegistryError> for NativeTcpOpenError {
+    fn from(error: BindingConnectionRegistryError) -> Self { Self::Registry(error) }
 }
 
 impl CanonicalProviderConnection {
@@ -67,15 +77,18 @@ impl CanonicalProviderConnection {
     /// Expected peer/profile/disclosure inputs must already be resolved. The
     /// exact generation key is loaded from Windows Credential Manager here, not
     /// accepted as a caller-selected key. Missing credentials are never created.
-    /// The ceremony must be complete on THIS socket, with no other
-    /// reader or unread buffered bytes. Registration and dependent publication
-    /// must already have finished. This does not create a listener or authorize
-    /// any recipe: serving must retain the returned pin and revalidate live access.
+    /// The ceremony must be complete on THIS socket, with no other reader or
+    /// unread buffered bytes. Registration and dependent publication must already
+    /// have finished. The successfully negotiated transport is inserted into the
+    /// finite native binding registry before it can escape to a serving owner.
+    /// This does not authorize any recipe: serving retains the returned pin and
+    /// revalidates live access.
     ///
     /// # Errors
-    /// Any refusal, expiry, I/O failure or unwind closes the owned socket and
-    /// drops the key/session. A late failure may follow acknowledgement bytes;
-    /// no retry, rollback claim or legacy repair frame is attempted.
+    /// Any refusal, expiry, registry failure, I/O failure or unwind closes the
+    /// owned socket and drops the key/session. A late failure may follow
+    /// acknowledgement bytes; no retry, rollback claim or legacy repair frame is
+    /// attempted.
     #[allow(clippy::too_many_arguments)]
     pub fn open_standalone_tcp<C: CancellationProbe + Clone>(
         stream: TcpStream,
@@ -85,6 +98,7 @@ impl CanonicalProviderConnection {
         limits: ProtocolLimits,
         journal: &PersistentControlJournal,
         publisher: &ControlSnapshotPublisher,
+        connections: &mut BindingConnectionRegistry,
         expected: &NativeBindingExpectation,
         boot_id: &OpaqueId,
         clock: &mut SystemGrantClock,
@@ -129,6 +143,7 @@ impl CanonicalProviderConnection {
                 Ok::<_, NativeTcpOpenError>(policy_expiry.map_or(until, |end| until.min(end)))
             },
         )?;
+        connections.register(&pin, &transport)?;
         Ok((transport, pin))
     }
 }
