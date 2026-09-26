@@ -1,7 +1,10 @@
 //! Atomically persist one standalone binding and its matching grant policy.
 
+mod intent;
 mod readback;
 mod provisioning;
+
+pub use intent::{StandaloneProvisioningIntent, StandaloneProvisioningIntentState};
 pub use readback::StandaloneRegistrationReadback;
 pub use provisioning::{
     StandaloneProvisioningError, StandaloneProvisioningPhase, StandaloneRegistrationProvisioning,
@@ -10,7 +13,8 @@ pub use provisioning::{
 use search_contracts::{Blake3Digest32, protocol::PeerRole};
 use search_control_redb::{
     CommitRecoveryDecision, ConditionalControlMutation, ControlCommitReceipt, ControlError,
-    ControlMutation, ControlSnapshotPublisher, JournalIdentity, MutationId, PersistentControlJournal,
+    ControlKey, ControlMutation, ControlRecordCondition, ControlSnapshotPublisher, ControlValue,
+    ControlWrite, JournalIdentity, MutationId, PersistentControlJournal,
 };
 use search_ports::{CancellationProbe, OperationContext};
 
@@ -22,12 +26,13 @@ use super::super::{
     NativeGrantPolicyError, StandalonePolicyMutation, StandalonePolicyRecord, StandalonePolicyState,
 };
 
-/// One immutable two-row command for registration, rotation or joint revocation.
+/// One immutable binding/policy command, optionally bound to a durable intent head.
 ///
-/// A crash cannot commit only the binding or only its policy. Both exact
-/// preconditions, both replacements and one operation receipt share the existing
-/// journal transaction. This is metadata persistence, not credential provisioning,
-/// a live restriction barrier, publication or a successful pairing reply.
+/// A crash cannot commit only the binding or policy. Their exact preconditions,
+/// replacements and one operation receipt share the existing journal transaction.
+/// Provisioning additionally attaches one PREPARED→COMMITTED intent-header update
+/// to the same command; payload rows remain immutable evidence. This is metadata
+/// persistence, not credential provisioning, a live barrier or peer acknowledgement.
 #[must_use = "retain the exact registration command until its outcome is resolved"]
 pub struct StandaloneRegistrationMutation {
     identity: JournalIdentity,
@@ -39,10 +44,9 @@ impl StandaloneRegistrationMutation {
     /// repair a half-present registration by guessing its missing counterpart.
     ///
     /// Native administration supplies the records. Existing binding/policy
-    /// constructors retain ownership of schema, expiry and transition checks.
-    /// Pair consistency additionally requires standalone role, equal installation,
-    /// incarnation, binding and pairing generation, and matching lifecycle states.
-    /// Binding and grant revocation revisions remain distinct namespaces.
+    /// constructors retain schema, expiry and transition checks. Pair consistency
+    /// requires standalone role, equal installation/incarnation/binding/pairing
+    /// generation and matching lifecycle states.
     ///
     /// # Errors
     /// Rejects inconsistent pairs, invalid transitions or bounded codec failures.
@@ -71,8 +75,6 @@ impl StandaloneRegistrationMutation {
         hash.update(b"ELIOT-STANDALONE-REGISTRATION-v1\0");
         hash.update(&expected_generation.to_be_bytes());
         for part in parts {
-            // These are the two already validated single-row commands. Never
-            // call their commit methods or reuse either partial receipt.
             let [write] = part.mutation().writes() else {
                 return Err(NativeGrantPolicyError::InvalidRecord);
             };
@@ -89,8 +91,11 @@ impl StandaloneRegistrationMutation {
             return Err(ControlError::DuplicateMutationKey.into());
         }
         let mutation = ControlMutation::new(
-            operation_id, Blake3Digest32::from_bytes(*hash.finalize().as_bytes()),
-            expected_generation, writes, Vec::new(),
+            operation_id,
+            Blake3Digest32::from_bytes(*hash.finalize().as_bytes()),
+            expected_generation,
+            writes,
+            Vec::new(),
         );
         Ok(Self {
             identity,
@@ -108,16 +113,48 @@ impl StandaloneRegistrationMutation {
         )
     }
 
-    /// Commit the pair once through the existing conditional transaction engine.
-    /// The borrowed receipt cannot be attached to another registration descriptor.
-    ///
-    /// The root owner must coordinate restrictive changes and dependent cleanup
-    /// under its real mutation lock. No snapshot is published here. A successful
-    /// disk commit alone does not allow acknowledgement or source access.
-    ///
-    /// # Errors
-    /// Preserves native identity, conflict, interruption and possible-commit errors.
-    /// Keep this command unchanged for recovery; never retry its halves separately.
+    pub(super) const fn command(&self) -> &ConditionalControlMutation {
+        &self.command
+    }
+
+    /// Bind a durable PREPARED intent head to COMMITTED in the same final command.
+    pub(super) fn with_intent_header(
+        mut self,
+        key: ControlKey,
+        prepared: ControlValue,
+        committed: ControlValue,
+    ) -> Result<Self, NativeGrantPolicyError> {
+        if prepared == committed
+            || self.command.mutation().writes().iter().any(|write| write.key == key)
+            || self.command.conditions().iter().any(|condition| condition.key() == &key)
+        {
+            return Err(NativeGrantPolicyError::InvalidRecord);
+        }
+        let base = self.command.mutation();
+        let mut hash = blake3::Hasher::new();
+        hash.update(b"ELIOT-STANDALONE-REGISTRATION-WITH-INTENT-v1\0");
+        hash.update(base.command_digest().as_bytes());
+        hash_key_value(&mut hash, &key, &prepared)?;
+        hash_key_value(&mut hash, &key, &committed)?;
+
+        let mut writes = base.writes().to_vec();
+        writes.push(ControlWrite { key: key.clone(), value: committed });
+        writes.sort_unstable_by(|left, right| left.key.cmp(&right.key));
+        let mut conditions = self.command.conditions().to_vec();
+        conditions.push(ControlRecordCondition::exact(key, prepared));
+        conditions.sort_unstable_by(|left, right| left.key().cmp(right.key()));
+        let mutation = ControlMutation::new(
+            base.id(),
+            Blake3Digest32::from_bytes(*hash.finalize().as_bytes()),
+            base.expected_generation(),
+            writes,
+            Vec::new(),
+        );
+        self.command = ConditionalControlMutation::new(mutation, conditions);
+        Ok(self)
+    }
+
+    /// Commit the exact command once through the existing conditional engine.
     pub fn commit<C: CancellationProbe>(
         &self,
         journal: &mut PersistentControlJournal,
@@ -128,12 +165,7 @@ impl StandaloneRegistrationMutation {
         Ok(StandaloneRegistrationCommit { registration: self, receipt })
     }
 
-    /// Resolve this exact two-row operation without executing another write.
-    /// None means resolved absence; it is not partial success or automatic retry.
-    /// A committed result remains historical until current publication is checked.
-    ///
-    /// # Errors
-    /// Retains native recovery failures; conflict/corruption never becomes absence.
+    /// Resolve this exact command without executing another write.
     pub fn recover<C: CancellationProbe>(
         &self,
         journal: &mut PersistentControlJournal,
@@ -145,12 +177,19 @@ impl StandaloneRegistrationMutation {
                 Ok(Some(StandaloneRegistrationCommit { registration: self, receipt }))
             }
             CommitRecoveryDecision::NotCommittedRetrySameOperation => Ok(None),
-            CommitRecoveryDecision::ConflictingInput => Err(ControlError::OperationConflict.into()),
-            CommitRecoveryDecision::PartialOrCorruptQuarantine => Err(ControlError::StoreQuarantined.into()),
+            CommitRecoveryDecision::ConflictingInput => {
+                Err(ControlError::OperationConflict.into())
+            }
+            CommitRecoveryDecision::PartialOrCorruptQuarantine => {
+                Err(ControlError::StoreQuarantined.into())
+            }
         }
     }
 
-    fn check_identity(&self, journal: &PersistentControlJournal) -> Result<(), NativeGrantPolicyError> {
+    fn check_identity(
+        &self,
+        journal: &PersistentControlJournal,
+    ) -> Result<(), NativeGrantPolicyError> {
         if journal.identity() != self.identity {
             return Err(ControlError::IdentityMismatch.into());
         }
@@ -158,9 +197,7 @@ impl StandaloneRegistrationMutation {
     }
 }
 
-/// Native transaction evidence bound by borrow to its exact registration command.
-/// Only successful native commit/recovery constructs it. It grants no authority
-/// and owns no second copy of the records, journal, publisher or operation ledger.
+/// Native transaction evidence bound to its exact registration command.
 #[must_use = "a registration commit still requires barriers and current publication"]
 pub struct StandaloneRegistrationCommit<'a> {
     registration: &'a StandaloneRegistrationMutation,
@@ -168,27 +205,15 @@ pub struct StandaloneRegistrationCommit<'a> {
 }
 
 impl StandaloneRegistrationCommit<'_> {
-    /// Actual journal receipt for the existing guarded publication API.
-    /// The native owner must finish required barriers/dependents first. A later
-    /// journal commit may require publication recovery rather than this old receipt.
+    /// Actual journal receipt for guarded snapshot publication.
     #[must_use]
     pub const fn receipt(&self) -> &ControlCommitReceipt { &self.receipt }
 
-    /// Check both exact record classes/bytes against the current disk-published
-    /// head before acknowledging registration. A changed, missing or unpublished
-    /// counterpart fails; retaining a historical commit never bypasses this check.
-    /// Unrelated later commits are allowed only while both records remain exact.
+    /// Check every exact replacement against one current disk-published head.
     ///
-    /// Hold the actual root/policy lock across publication, this check and any
-    /// acknowledgement. Shared borrows exclude journal/publisher mutation during
-    /// both lookups, which share one native transaction and one decreasing budget.
-    /// This proves metadata correspondence, not barrier completion, live lifetime,
-    /// credential validity or source authorization; open_published rechecks those
-    /// registration inputs and the serving owners must still validate live access.
-    ///
-    /// # Errors
-    /// Preserves read failures and rejects stale publication, record mismatch,
-    /// cancellation, clock regression and exhaustion of the original call budget.
+    /// Ordinary registration has two writes. Provisioning has a third committed
+    /// intent-header write. No historical receipt, partial subset or later missing
+    /// evidence satisfies this check.
     pub fn confirm_published<C: CancellationProbe + Clone>(
         &self,
         journal: &PersistentControlJournal,
@@ -197,17 +222,35 @@ impl StandaloneRegistrationCommit<'_> {
     ) -> Result<(), NativeGrantPolicyError> {
         let (started, deadline) = begin(context)?;
         self.registration.check_identity(journal)?;
-        let [first, second] = self.registration.command.mutation().writes() else {
-            return Err(NativeGrantPolicyError::InvalidRecord);
-        };
         let read_context = readback::remaining_context(context, started, deadline)?;
-        let (generation, values) = journal.read_published_record_pair(
-            publisher, [&first.key, &second.key], &read_context,
-        )?;
-        if generation < self.receipt.after_generation
-            || values[0].as_ref() != Some(&first.value)
-            || values[1].as_ref() != Some(&second.value)
-        {
+        let writes = self.registration.command.mutation().writes();
+        let generation = match writes {
+            [first, second] => {
+                let (generation, values) = journal.read_published_records(
+                    publisher, [&first.key, &second.key], &read_context,
+                )?;
+                if values[0].as_ref() != Some(&first.value)
+                    || values[1].as_ref() != Some(&second.value)
+                {
+                    return Err(ControlError::TransactionConflict.into());
+                }
+                generation
+            }
+            [first, second, third] => {
+                let (generation, values) = journal.read_published_records(
+                    publisher, [&first.key, &second.key, &third.key], &read_context,
+                )?;
+                if values[0].as_ref() != Some(&first.value)
+                    || values[1].as_ref() != Some(&second.value)
+                    || values[2].as_ref() != Some(&third.value)
+                {
+                    return Err(ControlError::TransactionConflict.into());
+                }
+                generation
+            }
+            _ => return Err(NativeGrantPolicyError::InvalidRecord),
+        };
+        if generation < self.receipt.after_generation {
             return Err(ControlError::TransactionConflict.into());
         }
         check(context, started, deadline)?;
@@ -215,7 +258,7 @@ impl StandaloneRegistrationCommit<'_> {
     }
 }
 
-fn validate_pair(
+pub(super) fn validate_pair(
     binding: &ProviderBindingRecord,
     record: &StandalonePolicyRecord,
 ) -> Result<(), NativeGrantPolicyError> {
@@ -236,4 +279,37 @@ fn validate_pair(
         return Err(NativeGrantPolicyError::InvalidRecord);
     }
     Ok(())
+}
+
+fn hash_key_value(
+    hash: &mut blake3::Hasher,
+    key: &ControlKey,
+    value: &ControlValue,
+) -> Result<(), NativeGrantPolicyError> {
+    hash.update(
+        &u64::try_from(key.as_bytes().len())
+            .map_err(|_| NativeGrantPolicyError::InvalidRecord)?
+            .to_be_bytes(),
+    );
+    hash.update(key.as_bytes());
+    hash.update(&[record_class_tag(value.class())]);
+    hash.update(
+        &u64::try_from(value.len())
+            .map_err(|_| NativeGrantPolicyError::InvalidRecord)?
+            .to_be_bytes(),
+    );
+    hash.update(value.as_bytes());
+    Ok(())
+}
+
+const fn record_class_tag(class: search_control_redb::ControlRecordClass) -> u8 {
+    match class {
+        search_control_redb::ControlRecordClass::Identity => 1,
+        search_control_redb::ControlRecordClass::Revision => 2,
+        search_control_redb::ControlRecordClass::State => 3,
+        search_control_redb::ControlRecordClass::Receipt => 4,
+        search_control_redb::ControlRecordClass::Operation => 5,
+        search_control_redb::ControlRecordClass::Snapshot => 6,
+        search_control_redb::ControlRecordClass::Migration => 7,
+    }
 }
