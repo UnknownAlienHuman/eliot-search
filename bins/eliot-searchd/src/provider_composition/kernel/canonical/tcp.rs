@@ -1,6 +1,7 @@
 //! Concrete typed TCP I/O after authoritative pairing/bootstrap handoff.
 
 mod io;
+mod handshake;
 #[cfg(feature = "wave4-query")]
 mod serving;
 
@@ -11,15 +12,14 @@ pub use serving::{
     CanonicalWorkBudget, CanonicalWorkOutput,
 };
 
-use std::net::TcpStream;
 use std::task::Poll;
 use std::time::Duration;
 
-use search_contracts::{MessageKind, ProtocolRange, ProtocolVersion, ProviderBodyV1};
+use search_contracts::{MessageKind, ProtocolRange, ProviderBodyV1};
 use search_provider_protocol::{
-    AdmittedProviderRequest, BoundSession, ClientEnvelopeCodec, ProofDigest,
+    AdmittedProviderRequest, BoundSession, ClientEnvelopeCodec,
     ProtocolError, ProviderDeliveryError, ProviderFrameTranscript, TerminalKind,
-    TypedTransportProfileV1, verify_proof,
+    verify_proof,
 };
 
 use super::{CanonicalProviderConnection, keyed_frame_proof, monotonic_millis};
@@ -106,60 +106,6 @@ impl Drop for TcpState {
 /// Source/grant/disclosure authorization stays with the serving composition.
 pub struct CanonicalTcpConnection {
     state: Option<TcpState>,
-}
-
-impl CanonicalProviderConnection {
-    /// Takes the ORIGINAL paired, unbuffered loopback socket into typed mode.
-    ///
-    /// Bootstrap must have resolved the live binding and conveyed this exact
-    /// session/nonce to the client through the authenticated ceremony. No other
-    /// socket clone/reader or unread bytes in an older BufReader may remain.
-    /// This method does not manufacture that bootstrap from a token file.
-    ///
-    /// Requires the client's exact profile offer and keyed proof before sending
-    /// the server's separately domain-bound acknowledgement. One finite budget
-    /// covers both directions. Mismatch, EOF, late I/O or unwind closes both
-    /// socket and session. The old listener/CLI are not silently switched.
-    pub fn into_tcp(
-        self,
-        stream: TcpStream,
-        setup_deadline_ms: u64,
-    ) -> Result<CanonicalTcpConnection, CanonicalTcpError> {
-        let mut transport = CanonicalTcpConnection {
-            state: Some(TcpState { connection: self, io: SocketIo::new(stream) }),
-        };
-        transport.with_state(|state| {
-            let deadline = io::deadline(monotonic_millis(), setup_deadline_ms)?;
-            if !state.connection.session.is_active() {
-                return Err(CanonicalTcpError::Closed);
-            }
-            if state.connection.session.binding_context().version() != (ProtocolVersion { major: 1, minor: 0 }) {
-                return Err(CanonicalTcpError::Protocol(ProtocolError::NoCompatibleVersion));
-            }
-            state.io.configure()?;
-            let mut preface = [0_u8; TypedTransportProfileV1::PREFACE.len()];
-            state.io.read_exact(&mut preface, deadline)?;
-            if preface.as_slice() != TypedTransportProfileV1::PREFACE {
-                return Err(CanonicalTcpError::ProfileMismatch);
-            }
-            let mut proof = [0_u8; TypedTransportProfileV1::PROOF_BYTES];
-            state.io.read_exact(&mut proof, deadline)?;
-            let ceremony = state.connection.session.pairing().session();
-            let nonce = *state.connection.session.server_nonce();
-            let hash = |parts: [&[u8]; 4]| state.connection.key.with_bytes(|key| {
-                let mut hasher = blake3::Hasher::new_keyed(key);
-                for part in parts { hasher.update(part); }
-                ProofDigest::from_bytes(*hasher.finalize().as_bytes())
-            });
-            let expected = hash(TypedTransportProfileV1::offer_transcript(&ceremony, &nonce));
-            if !verify_proof(&expected, &ProofDigest::from_bytes(proof)) {
-                return Err(CanonicalTcpError::Protocol(ProtocolError::AuthenticationFailed));
-            }
-            let accepted = hash(TypedTransportProfileV1::accept_transcript(&ceremony, &nonce));
-            state.io.write_parts(&[TypedTransportProfileV1::PREFACE, accepted.as_bytes()], deadline, None)
-        })?;
-        Ok(transport)
-    }
 }
 
 impl CanonicalTcpConnection {

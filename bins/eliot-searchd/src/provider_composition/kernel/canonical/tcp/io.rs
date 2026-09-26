@@ -5,6 +5,8 @@ use std::net::{Shutdown, TcpStream};
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
+use search_ports::CancellationProbe;
+
 use search_provider_protocol::{MonotonicMillis, ProofDigest, ProtocolError, ProtocolLimits, TypedRecordBuffer, TypedTransportProfileV1};
 use search_provider_protocol::request::RequestCancellation;
 
@@ -49,9 +51,12 @@ impl SocketIo {
         &mut self,
         mut bytes: &mut [u8],
         deadline: MonotonicMillis,
+        cancellation: Option<&dyn CancellationProbe>,
     ) -> Result<(), CanonicalTcpError> {
         while !bytes.is_empty() {
-            self.stream.set_read_timeout(Some(remaining(deadline)?)).map_err(CanonicalTcpError::Io)?;
+            check_cancel(cancellation)?;
+            self.stream.set_read_timeout(Some(remaining(deadline)?.min(POLL)))
+                .map_err(CanonicalTcpError::Io)?;
             match self.stream.read(bytes) {
                 Ok(0) => return Err(CanonicalTcpError::PeerClosed),
                 Ok(count) => {
@@ -61,8 +66,10 @@ impl SocketIo {
                 Err(error) if retryable(&error) => continue,
                 Err(error) => return Err(CanonicalTcpError::Io(error)),
             }
+            check_cancel(cancellation)?;
             remaining(deadline)?;
         }
+        check_cancel(cancellation)?;
         remaining(deadline).map(|_| ())
     }
 
@@ -130,14 +137,17 @@ impl SocketIo {
         cancellation: Option<&RequestCancellation>,
     ) -> Result<(), CanonicalTcpError> {
         TypedTransportProfileV1::validate_frame(frame, limits).map_err(CanonicalTcpError::Protocol)?;
-        self.write_parts(&[frame, proof.as_bytes()], deadline, cancellation)
+        self.write_parts(
+            &[frame, proof.as_bytes()], deadline,
+            cancellation.map(|probe| probe as &dyn CancellationProbe),
+        )
     }
 
     pub(super) fn write_parts(
         &mut self,
         parts: &[&[u8]],
         deadline: MonotonicMillis,
-        cancellation: Option<&RequestCancellation>,
+        cancellation: Option<&dyn CancellationProbe>,
     ) -> Result<(), CanonicalTcpError> {
         for &part in parts {
             let mut bytes = part;
@@ -184,8 +194,8 @@ fn remaining(deadline: MonotonicMillis) -> Result<Duration, CanonicalTcpError> {
         .map(Duration::from_millis).ok_or(CanonicalTcpError::DeadlineExpired)
 }
 
-fn check_cancel(cancellation: Option<&RequestCancellation>) -> Result<(), CanonicalTcpError> {
-    if cancellation.is_some_and(RequestCancellation::is_cancelled) {
+fn check_cancel(cancellation: Option<&dyn CancellationProbe>) -> Result<(), CanonicalTcpError> {
+    if cancellation.is_some_and(CancellationProbe::is_cancelled) {
         return Err(CanonicalTcpError::Cancelled);
     }
     Ok(())
