@@ -4,6 +4,7 @@
 mod codec;
 mod mutation;
 mod opening;
+mod process;
 mod registration;
 mod startup;
 
@@ -13,6 +14,7 @@ pub use opening::{
     MAX_REGISTERED_BINDING_CONNECTIONS, NativeBindingExpectation,
     NativePairingCredentialError, NativePairingCredentialIntent, NativeTcpOpenError,
 };
+pub use process::{StandaloneProcessError, StandaloneProcessOwner};
 pub use registration::{
     StandaloneProvisioningError, StandaloneProvisioningPhase,
     StandalonePublicationError, StandalonePublicationReceipt, StandaloneRegistrationCommit,
