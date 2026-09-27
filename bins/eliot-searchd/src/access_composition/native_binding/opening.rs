@@ -26,6 +26,7 @@ use super::{NativeBindingError, NativeBindingPin, ProviderBindingRecord, Provide
 /// This is data, not an authenticated capability. In particular, the actual
 /// pairing key must have been resolved for THIS peer and generation under the
 /// same native lock; client assertions or a bare token file cannot supply them.
+#[derive(Clone)]
 pub struct NativeBindingExpectation {
     /// Exact native installation identity.
     pub installation_id: InstallationId,

@@ -5,6 +5,7 @@ mod codec;
 mod mutation;
 mod opening;
 mod registration;
+mod startup;
 
 pub use mutation::ProviderBindingMutation;
 pub use opening::{
@@ -17,6 +18,10 @@ pub use registration::{
     StandalonePublicationError, StandalonePublicationReceipt, StandaloneRegistrationCommit,
     StandaloneRegistrationMutation, StandaloneRegistrationProvisioning,
     StandaloneRegistrationReadback, publish_committed_standalone_registration,
+};
+pub use startup::{
+    StandaloneBootstrapError, StandaloneBootstrapReady,
+    restore_and_publish_standalone_registration,
 };
 
 use search_contracts::{BindingId, Blake3Digest32, BoundedSet, InstallationId,

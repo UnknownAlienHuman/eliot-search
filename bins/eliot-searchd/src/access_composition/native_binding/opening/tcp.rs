@@ -5,14 +5,19 @@ use std::net::{Shutdown, TcpStream};
 use search_contracts::{OpaqueId, protocol::PeerRole};
 use search_control_redb::{ControlSnapshotPublisher, PersistentControlJournal};
 use search_ports::{CancellationProbe, OperationContext};
-use search_provider_protocol::{BindingContext, MonotonicMillis, PairingMachine, ProtocolLimits, ServerNonce, TransportPeer};
+use search_provider_protocol::{
+    BindingContext, MonotonicMillis, PairingMachine, ProtocolLimits, ServerNonce, TransportPeer,
+};
 
-use crate::access_composition::{GrantUseError, NativeGrantPolicyError, StandalonePolicyState};
-use crate::provider_composition::{CanonicalProviderConnection, CanonicalTcpConnection, CanonicalTcpError, monotonic_millis};
+use crate::access_composition::{
+    GrantUseError, NativeGrantPolicyError, StandaloneBootstrapReady, StandalonePolicyState,
+};
+use crate::provider_composition::{
+    CanonicalProviderConnection, CanonicalTcpConnection, CanonicalTcpError, monotonic_millis,
+};
 use super::{
     BindingConnectionRegistry, BindingConnectionRegistryError, NativeBindingError,
-    NativeBindingExpectation, NativeBindingPin, NativePairingCredentialError,
-    SystemGrantClock, begin, check,
+    NativeBindingPin, NativePairingCredentialError, SystemGrantClock, begin, check,
 };
 
 /// Preserve native read/clock failures separately from actual handshake I/O.
@@ -61,12 +66,18 @@ impl From<BindingConnectionRegistryError> for NativeTcpOpenError {
 }
 
 impl CanonicalProviderConnection {
-    /// Open a published standalone binding and negotiate its original TCP socket.
+    /// Open a finalized standalone binding and negotiate its original TCP socket.
     ///
     /// One finite handoff deadline starts before native opening. Binding/policy
     /// lifetimes may shorten it; lookup, key verification, partial offer reads,
     /// acknowledgement writes and final validation never get another budget.
     /// The native cancellation capability is observed around actual setup I/O.
+    ///
+    /// `ready` is produced only by restart recovery plus guarded COMMITTED
+    /// publication, prior-session fencing and binding-wide dependent cleanup.
+    /// Its exact journal, record and independently resolved expectation must match
+    /// the current session. A published row or credential alone cannot bypass that
+    /// startup barrier.
     ///
     /// The exact pin and coherent policy pair are revalidated before waiting,
     /// immediately before acknowledgement, and after output. An old boot, absent
@@ -74,21 +85,19 @@ impl CanonicalProviderConnection {
     /// Neither an invented RequestGuard nor a new grant/issuer is required.
     ///
     /// Caller holds the real native root/binding/policy mutation lock throughout.
-    /// Expected peer/profile/disclosure inputs must already be resolved. The
-    /// exact generation key is loaded from Windows Credential Manager here, not
-    /// accepted as a caller-selected key. Missing credentials are never created.
-    /// The ceremony must be complete on THIS socket, with no other reader or
-    /// unread buffered bytes. Registration and dependent publication must already
-    /// have finished. The successfully negotiated transport is inserted into the
-    /// finite native binding registry before it can escape to a serving owner.
-    /// This does not authorize any recipe: serving retains the returned pin and
-    /// revalidates live access.
+    /// The exact generation key is loaded from Windows Credential Manager here,
+    /// not accepted as a caller-selected key. Missing credentials are never
+    /// created. The ceremony must be complete on THIS socket, with no other reader
+    /// or unread buffered bytes. The successfully negotiated transport is inserted
+    /// into the finite native binding registry before it can escape to a serving
+    /// owner. This does not authorize any recipe: serving retains the returned pin
+    /// and revalidates live access.
     ///
     /// # Errors
-    /// Any refusal, expiry, registry failure, I/O failure or unwind closes the
-    /// owned socket and drops the key/session. A late failure may follow
-    /// acknowledgement bytes; no retry, rollback claim or legacy repair frame is
-    /// attempted.
+    /// Any refusal, expiry, startup-evidence mismatch, registry failure, I/O
+    /// failure or unwind closes the owned socket and drops the key/session. A late
+    /// failure may follow acknowledgement bytes; no retry, rollback claim or legacy
+    /// repair frame is attempted.
     #[allow(clippy::too_many_arguments)]
     pub fn open_standalone_tcp<C: CancellationProbe + Clone>(
         stream: TcpStream,
@@ -99,7 +108,7 @@ impl CanonicalProviderConnection {
         journal: &PersistentControlJournal,
         publisher: &ControlSnapshotPublisher,
         connections: &mut BindingConnectionRegistry,
-        expected: &NativeBindingExpectation,
+        ready: &StandaloneBootstrapReady,
         boot_id: &OpaqueId,
         clock: &mut SystemGrantClock,
         context: &OperationContext<C>,
@@ -110,37 +119,63 @@ impl CanonicalProviderConnection {
         if binding.role() != PeerRole::StandaloneCli {
             return Err(NativeBindingError::Unavailable.into());
         }
+        ready.validate_context(journal, &binding)?;
+        let expected = ready.expectation();
         let credential_context = remaining_context(context, started, deadline)?;
         let peer = TransportPeer {
-            role: binding.role(), incarnation: binding.incarnation(), binding: binding.binding_id(),
+            role: binding.role(),
+            incarnation: binding.incarnation(),
+            binding: binding.binding_id(),
         };
         let key = expected.load_pairing_key(&peer, &credential_context)?;
         check(context, started, deadline)?;
         let native_context = remaining_context(context, started, deadline)?;
         let (connection, pin) = Self::open_published(
-            binding, ceremony, key, server_nonce, limits, journal, publisher,
-            expected, clock, &native_context,
+            binding,
+            ceremony,
+            key,
+            server_nonce,
+            limits,
+            journal,
+            publisher,
+            expected,
+            clock,
+            &native_context,
         )?;
+        ready.validate_opened_record(journal, pin.record())?;
         check(context, started, deadline)?;
         let stream = socket.0.take().ok_or(CanonicalTcpError::Closed)?;
         let transport = connection.into_tcp_authorized(
-            stream, started, deadline, Some(context.cancellation()), |session| {
+            stream,
+            started,
+            deadline,
+            Some(context.cancellation()),
+            |session| {
                 let binding = session.binding_context();
                 let read_context = remaining_context(context, started, deadline)?;
                 let (registration, binding_expiry) = pin.read_standalone_registration(
-                    &binding, journal, publisher, clock, &read_context,
+                    &binding,
+                    journal,
+                    publisher,
+                    clock,
+                    &read_context,
                 )?;
                 let (_, policy) = registration.records().ok_or(NativeBindingError::Unavailable)?;
                 if policy.state != StandalonePolicyState::Active
                     || &policy.policy.issued_boot_id != boot_id
                 {
-                    return Err(NativeGrantPolicyError::Grant(GrantUseError::PolicyUnavailable).into());
+                    return Err(
+                        NativeGrantPolicyError::Grant(GrantUseError::PolicyUnavailable).into(),
+                    );
                 }
-                let policy_expiry = clock.check_policy_window(&policy.issued_at, policy.expires_at.as_ref())
+                let policy_expiry = clock
+                    .check_policy_window(&policy.issued_at, policy.expires_at.as_ref())
                     .map_err(NativeBindingError::from)?;
                 check(context, started, deadline)?;
                 let until = binding_expiry.map_or(deadline, |end| deadline.min(end));
-                Ok::<_, NativeTcpOpenError>(policy_expiry.map_or(until, |end| until.min(end)))
+                Ok::<_, NativeTcpOpenError>(
+                    policy_expiry.map_or(until, |end| until.min(end)),
+                )
             },
         )?;
         connections.register(&pin, &transport)?;
@@ -154,11 +189,18 @@ fn remaining_context<C: CancellationProbe + Clone>(
     deadline: MonotonicMillis,
 ) -> Result<OperationContext<C>, NativeBindingError> {
     check(context, started, deadline)?;
-    let remaining = deadline.get().checked_sub(monotonic_millis().get())
-        .filter(|left| *left > 0).ok_or(NativeBindingError::Interrupted)?;
+    let remaining = deadline
+        .get()
+        .checked_sub(monotonic_millis().get())
+        .filter(|left| *left > 0)
+        .ok_or(NativeBindingError::Interrupted)?;
     OperationContext::new(
-        context.request_id(), remaining, context.cancellation().clone(), context.budget_ref().clone(),
-    ).map_err(|_| NativeBindingError::Interrupted)
+        context.request_id(),
+        remaining,
+        context.cancellation().clone(),
+        context.budget_ref().clone(),
+    )
+    .map_err(|_| NativeBindingError::Interrupted)
 }
 
 // The original descriptor is transferred once, not cloned. Once taken, the TCP
@@ -166,6 +208,8 @@ fn remaining_context<C: CancellationProbe + Clone>(
 struct SocketHandoff(Option<TcpStream>);
 impl Drop for SocketHandoff {
     fn drop(&mut self) {
-        if let Some(stream) = &self.0 { let _ = stream.shutdown(Shutdown::Both); }
+        if let Some(stream) = &self.0 {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
     }
 }
