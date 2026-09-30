@@ -5,6 +5,7 @@
 //! to top: [`frame`](crate::frame) (canonical `u32`-LE/JSON),
 //! [`negotiation`](crate::negotiation) (exact major/minor),
 //! [`pairing`](crate::pairing) (mutual-authentication ceremony),
+//! [`pairing_wire`](crate::pairing_wire) (bounded pre-session proof records),
 //! [`request`](crate::request) (authenticated shell envelopes),
 //! [`grant`](crate::grant) (bounded standalone-grant body and dedicated
 //! authenticated envelope), [`binding`](crate::binding) (session composition
@@ -46,6 +47,12 @@ pub use crate::pairing::{
     BindingKey, ClientNonce, PAIRING_CLIENT_DOMAIN, PAIRING_SERVER_DOMAIN, PairingChallenge,
     PairingLedger, PairingMachine, PairingState, PairingTranscript, ProofDigest, ServerNonce,
     SessionId, VerifiedPairing, client_proof_transcript, server_proof_transcript, verify_proof,
+};
+pub use crate::pairing_wire::{
+    PAIRING_CHALLENGE_BYTES, PAIRING_PROOF_BYTES, PAIRING_VERIFIED_BYTES,
+    PairingChallengeFrame, PairingProofFrame, PairingVerifiedFrame,
+    decode_pairing_challenge, decode_pairing_proof, decode_pairing_verified,
+    encode_pairing_challenge, encode_pairing_proof, encode_pairing_verified,
 };
 pub use crate::progress::{ProgressState, emit_progress};
 pub use crate::request::{

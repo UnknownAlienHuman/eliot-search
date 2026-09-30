@@ -1,27 +1,29 @@
 //! Loopback accept lifetime tied to the bootstrapped standalone process owner.
 //!
 //! This module binds only after durable bootstrap has produced
-//! [`StandaloneBootstrapReady`]. Pairing code receives a restricted exact-I/O
-//! view of the original socket: it cannot clone, buffer ahead or detach the
-//! descriptor through this API. An opened or serving connection borrows the
+//! [`StandaloneBootstrapReady`]. Pairing uses the canonical bounded prelude over
+//! a restricted exact-I/O view of the original socket: it cannot clone, buffer
+//! ahead or detach the descriptor. An opened or serving connection borrows the
 //! process owner, so its transport, tasks and terminal cleanup cannot outlive the
 //! control journal, admission snapshot or data-root lock.
 
 mod connection;
 mod io;
+mod pairing;
 
 pub use connection::{StandaloneOpenedConnection, StandaloneServingConnection};
 pub use io::{StandalonePairingIo, StandalonePairingIoError};
+pub use pairing::StandaloneNativePairingError;
 
 use core::fmt;
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
-use search_contracts::{OpaqueId, protocol::PeerRole};
+use search_contracts::{OpaqueId, ProtocolRange, protocol::PeerRole};
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
-    BindingContext, PairingMachine, ProtocolError, ProtocolLimits, ServerNonce,
+    BindingContext, BindingSession, PairingMachine, ProtocolError, ProtocolLimits, ServerNonce,
 };
 
 use super::{NativeTcpOpenError, StandaloneBootstrapReady, StandaloneProcessOwner};
@@ -29,18 +31,18 @@ use super::{NativeTcpOpenError, StandaloneBootstrapReady, StandaloneProcessOwner
 const ACCEPT_SLEEP: Duration = Duration::from_millis(2);
 const MAX_ACCEPT_QUANTUM: Duration = Duration::from_millis(250);
 
-/// Pairing callback or native-open failure for one accepted socket.
+/// Pairing or native-open failure for one accepted socket.
 #[derive(Debug)]
-pub enum StandaloneAcceptError<E> {
+pub enum StandaloneAcceptError {
     /// Listener or restricted pairing I/O failed.
     Io(StandalonePairingIoError),
-    /// Caller-owned canonical pairing exchange refused the peer.
-    Pairing(E),
+    /// Canonical native mutual pairing refused the peer.
+    Pairing(StandaloneNativePairingError),
     /// Published binding, credential, policy or typed profile opening failed.
     Open(NativeTcpOpenError),
 }
 
-impl<E: fmt::Display> fmt::Display for StandaloneAcceptError<E> {
+impl fmt::Display for StandaloneAcceptError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => fmt::Display::fmt(error, formatter),
@@ -50,13 +52,17 @@ impl<E: fmt::Display> fmt::Display for StandaloneAcceptError<E> {
     }
 }
 
-impl<E: fmt::Debug + fmt::Display> std::error::Error for StandaloneAcceptError<E> {}
+impl std::error::Error for StandaloneAcceptError {}
 
-impl<E> From<StandalonePairingIoError> for StandaloneAcceptError<E> {
+impl From<StandalonePairingIoError> for StandaloneAcceptError {
     fn from(error: StandalonePairingIoError) -> Self { Self::Io(error) }
 }
 
-impl<E> From<NativeTcpOpenError> for StandaloneAcceptError<E> {
+impl From<StandaloneNativePairingError> for StandaloneAcceptError {
+    fn from(error: StandaloneNativePairingError) -> Self { Self::Pairing(error) }
+}
+
+impl From<NativeTcpOpenError> for StandaloneAcceptError {
     fn from(error: NativeTcpOpenError) -> Self { Self::Open(error) }
 }
 
@@ -65,7 +71,7 @@ impl<E> From<NativeTcpOpenError> for StandaloneAcceptError<E> {
 /// Construction verifies that the binding and completed ceremony correspond.
 /// It does not validate current durable registration, credential presence,
 /// policy, source scope or recipe authority; `StandaloneProcessOwner` does that
-/// while opening the typed transport.
+/// again while opening the typed transport.
 pub struct CompletedStandalonePairing {
     binding: BindingContext,
     ceremony: PairingMachine,
@@ -103,9 +109,12 @@ impl fmt::Debug for CompletedStandalonePairing {
 /// before dropping the process owner and its root lock.
 pub struct StandaloneLoopbackOwner {
     listener: TcpListener,
+    pairing: BindingSession,
     process: StandaloneProcessOwner,
     next_connection_sequence: u64,
     accept_quantum: Duration,
+    local_protocols: ProtocolRange,
+    limits: ProtocolLimits,
 }
 
 impl StandaloneLoopbackOwner {
@@ -114,14 +123,27 @@ impl StandaloneLoopbackOwner {
     /// Port zero is permitted for an explicitly supervised ephemeral endpoint.
     /// The finite poll quantum is not a request deadline; each accepted socket
     /// receives its own caller-supplied `OperationContext` before pairing begins.
+    /// The protocol range and limits are fixed for this listener lifetime.
     pub fn bind(
         process: StandaloneProcessOwner,
         port: u16,
         accept_quantum: Duration,
+        local_protocols: ProtocolRange,
+        limits: ProtocolLimits,
     ) -> Result<Self, StandalonePairingIoError> {
         if accept_quantum.is_zero() || accept_quantum > MAX_ACCEPT_QUANTUM {
             return Err(StandalonePairingIoError::InvalidConfiguration);
         }
+        let local_protocols = ProtocolRange::new(
+            local_protocols.minimum,
+            local_protocols.maximum,
+        )
+        .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
+        let limits = limits
+            .validate()
+            .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
+        let pairing = BindingSession::new(local_protocols, limits)
+            .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
             .map_err(StandalonePairingIoError::Io)?;
         if !listener
@@ -137,9 +159,12 @@ impl StandaloneLoopbackOwner {
             .map_err(StandalonePairingIoError::Io)?;
         Ok(Self {
             listener,
+            pairing,
             process,
             next_connection_sequence: 0,
             accept_quantum,
+            local_protocols,
+            limits,
         })
     }
 
@@ -154,28 +179,19 @@ impl StandaloneLoopbackOwner {
         self.process.readiness()
     }
 
-    /// Poll one accepted socket, run caller-owned canonical mutual pairing over
-    /// its restricted original descriptor, then perform native typed opening.
+    /// Poll one accepted socket, complete canonical native mutual pairing on the
+    /// original descriptor, then perform native registration/policy checks and
+    /// typed transport negotiation.
     ///
-    /// `pair` must consume only the exact bytes it defines and return a completed
-    /// ceremony for this socket. It cannot access or detach the `TcpStream` through
-    /// this API. `Poll::Pending` means no connection arrived during the configured
-    /// accept quantum; no setup deadline or sequence was consumed.
-    #[allow(clippy::too_many_arguments)]
-    pub fn poll_open<C, E, F>(
+    /// `Poll::Pending` means no connection arrived during the configured accept
+    /// quantum; no setup deadline or connection sequence was consumed. A failed
+    /// accepted connection is closed and never retried or routed to a legacy
+    /// protocol.
+    pub fn poll_open<C: CancellationProbe + Clone>(
         &mut self,
-        limits: ProtocolLimits,
         boot_id: &OpaqueId,
         context: &OperationContext<C>,
-        pair: F,
-    ) -> Result<Poll<StandaloneOpenedConnection<'_>>, StandaloneAcceptError<E>>
-    where
-        C: CancellationProbe + Clone,
-        F: FnOnce(
-            &mut StandalonePairingIo<'_, C>,
-            u64,
-        ) -> Result<CompletedStandalonePairing, E>,
-    {
+    ) -> Result<Poll<StandaloneOpenedConnection<'_>>, StandaloneAcceptError> {
         let Some(mut stream) = self.poll_accept()? else {
             return Ok(Poll::Pending);
         };
@@ -185,8 +201,18 @@ impl StandaloneLoopbackOwner {
             .ok_or(StandalonePairingIoError::ConnectionSequenceExhausted)?;
         self.next_connection_sequence = sequence;
 
+        let record = self.process.readiness().record().clone();
+        let expected = self.process.readiness().expectation().clone();
         let mut io = StandalonePairingIo::new(&mut stream, context)?;
-        let paired = pair(&mut io, sequence).map_err(StandaloneAcceptError::Pairing)?;
+        let paired = pairing::perform_native_pairing(
+            &mut io,
+            sequence,
+            &mut self.pairing,
+            self.local_protocols,
+            self.limits,
+            &record,
+            &expected,
+        )?;
         let remaining = io.remaining_context()?;
         drop(io);
 
@@ -195,7 +221,7 @@ impl StandaloneLoopbackOwner {
             paired.binding,
             paired.ceremony,
             paired.server_nonce,
-            limits,
+            self.limits,
             boot_id,
             &remaining,
         )?;

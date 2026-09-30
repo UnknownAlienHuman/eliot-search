@@ -16,12 +16,14 @@
 //!    domain-separated proof transcripts, closed ceremony state machine,
 //!    single-use challenge ledger. Keyed digests are computed by the
 //!    secret-owning daemon adapter over the exact transcripts built here.
-//! 4. [`request`] — authenticated envelopes (#89): per-request proof bound
+//! 4. [`pairing_wire`] — canonical bounded challenge/proof records used after
+//!    the ordinary typed hello and before the authenticated transport profile.
+//! 5. [`request`] — authenticated envelopes (#89): per-request proof bound
 //!    to version, server nonce, request ID, closed command and body digest,
 //!    strict fixed-size decoding, 32-in-flight registry, explicit deadlines.
-//! 5. [`grant`] — canonical bounded standalone-grant request body containing
+//! 6. [`grant`] — canonical bounded standalone-grant request body containing
 //!    requested ceilings only; binding and operation identity remain server-side.
-//! 6. [`binding`] — session composition: pairing-first sequencing enforced
+//! 7. [`binding`] — session composition: pairing-first sequencing enforced
 //!    in code; envelope admission requires the ceremony token.
 //!
 //! The public entry module is [`api`]; the crate root re-exports the same
@@ -58,6 +60,7 @@ pub mod grant;
 mod indexed;
 pub mod negotiation;
 pub mod pairing;
+pub mod pairing_wire;
 pub mod progress;
 pub mod request;
 pub mod session;
