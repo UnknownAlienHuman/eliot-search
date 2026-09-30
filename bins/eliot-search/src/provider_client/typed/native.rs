@@ -1,9 +1,11 @@
-//! Canonical native hello and mutual-pairing client over one original socket.
+//! Canonical native hello and mutual-pairing client over one original stream.
 //!
 //! The caller supplies a pairing key already resolved by the native credential
-//! owner for this exact binding generation. This module never opens a token file,
-//! derives a development key, scans endpoints, retries pairing or falls back to
-//! the legacy line protocol.
+//! owner for this exact binding generation. Pairing operates through the private
+//! transport-neutral [`ProviderIo`] seam. The current `SocketAddr` connector is a
+//! transitional loopback adapter and must not become final product composition.
+//! This module never opens a token file, derives a development key, scans
+//! endpoints, retries pairing or falls back to the legacy line protocol.
 
 use core::fmt;
 use std::net::{SocketAddr, TcpStream};
@@ -16,14 +18,14 @@ use search_contracts::{
 };
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
-    BindingContext, BindingKey, ClientEnvelopeCodec, PairingChallengeFrame,
-    PairingMachine, PairingProofFrame, ProofDigest, ServerNonce,
-    ProtocolError, ProtocolLimits, TransportPeer, authenticate_binding,
-    decode_pairing_challenge, decode_pairing_verified, encode_pairing_proof,
-    verify_proof, PAIRING_CHALLENGE_BYTES, PAIRING_VERIFIED_BYTES,
+    BindingContext, BindingKey, ClientEnvelopeCodec, PAIRING_CHALLENGE_BYTES,
+    PAIRING_VERIFIED_BYTES, PairingChallengeFrame, PairingMachine, PairingProofFrame,
+    ProofDigest, ProtocolError, ProtocolLimits, ServerNonce, TransportPeer,
+    authenticate_binding, decode_pairing_challenge, decode_pairing_verified,
+    encode_pairing_proof, verify_proof,
 };
 
-use super::io::{SetupBudget, SocketIo};
+use super::io::{ProviderIo, SetupBudget};
 use super::{TypedClientError, TypedProviderSession};
 
 const NATIVE_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
@@ -32,6 +34,8 @@ const CONNECT_QUANTUM: Duration = Duration::from_millis(250);
 // Must remain byte-equal to the daemon secret-composition binding derivation.
 // This is adapter cryptography over a protocol-owned opaque BindingKey; the
 // protocol crate still owns no hashing dependency or secret-store effect.
+// The loopback-specific domain is retained only for compatibility until both
+// client and daemon migrate atomically to the accepted named-pipe profile.
 const BINDING_DOMAIN: &[u8] = b"eliot-search/loopback-binding/v1\0";
 const BINDING_ROLE: &[u8] = b"loopback-operator";
 
@@ -54,7 +58,8 @@ impl NativeClientBinding {
     /// Construct one standalone-client binding offer.
     ///
     /// The current typed codec implements protocol 1.0 exactly; any wider,
-    /// narrower or different range is rejected before socket or credential use.
+    /// narrower or different range is rejected before transport or credential
+    /// use.
     pub fn new(
         installation_incarnation_id: InstallationIncarnationId,
         binding_id: BindingId,
@@ -89,7 +94,9 @@ impl NativeClientBinding {
 
     /// Durable provider binding expected by this client.
     #[must_use]
-    pub const fn binding_id(&self) -> BindingId { self.binding_id }
+    pub const fn binding_id(&self) -> BindingId {
+        self.binding_id
+    }
 
     /// Exact protocol range offered by this client.
     #[must_use]
@@ -117,13 +124,18 @@ impl fmt::Debug for NativeClientBinding {
 }
 
 impl TypedProviderSession {
-    /// Connect, perform canonical native mutual pairing and negotiate the typed
-    /// transport profile under one deadline and cancellation capability.
+    /// Connect through the transitional loopback adapter, perform canonical
+    /// native mutual pairing and negotiate the typed transport profile under
+    /// one deadline and cancellation capability.
     ///
     /// `key` must come from the native credential owner for `binding`; this API
     /// performs no token-file read, key derivation, key generation or fallback.
-    /// A failure or unwind closes the sole socket and zeroizes the owned key.
+    /// A failure or unwind closes the sole stream and zeroizes the owned key.
     /// The connection is attempted once and is limited to loopback.
+    ///
+    /// Final product startup must replace this connector with the accepted
+    /// installation-scoped named-pipe adapter; it must not retry or fall back to
+    /// TCP.
     pub fn connect_native<C: CancellationProbe>(
         address: SocketAddr,
         binding: &NativeClientBinding,
@@ -141,20 +153,20 @@ impl TypedProviderSession {
         )?;
         let connect_timeout = budget.remaining()?.min(CONNECT_QUANTUM);
         let stream = TcpStream::connect_timeout(&address, connect_timeout)?;
-        let mut socket = SocketIo::new(stream);
-        socket.configure()?;
+        let mut transport = ProviderIo::new(stream);
+        transport.configure()?;
         budget.remaining()?;
 
         let (binding_context, ceremony, server_nonce) = perform_pairing(
-            &mut socket,
+            &mut transport,
             binding,
             &key,
             limits,
             context,
             &budget,
         )?;
-        Self::from_paired_socket(
-            socket,
+        Self::from_paired_transport(
+            transport,
             binding_context,
             ceremony,
             key,
@@ -166,7 +178,7 @@ impl TypedProviderSession {
 }
 
 fn perform_pairing<C: CancellationProbe>(
-    socket: &mut SocketIo,
+    transport: &mut ProviderIo,
     offered: &NativeClientBinding,
     key: &BindingKey,
     limits: ProtocolLimits,
@@ -192,15 +204,12 @@ fn perform_pairing<C: CancellationProbe>(
         relative_deadline_ms: None,
         body: ProviderBodyV1::Hello(hello.clone()),
     };
-    let frame = ClientEnvelopeCodec::encode(
-        &envelope,
-        limits,
-        offered.supported_protocol_range,
-    )?;
-    socket.write_parts_setup(&[frame.as_slice()], budget)?;
+    let frame =
+        ClientEnvelopeCodec::encode(&envelope, limits, offered.supported_protocol_range)?;
+    transport.write_parts_setup(&[frame.as_slice()], budget)?;
 
     let mut challenge_bytes = [0_u8; PAIRING_CHALLENGE_BYTES];
-    socket.read_exact_setup(&mut challenge_bytes, budget)?;
+    transport.read_exact_setup(&mut challenge_bytes, budget)?;
     let challenge = decode_pairing_challenge(&challenge_bytes)?;
     validate_challenge(challenge, offered, key)?;
 
@@ -220,10 +229,10 @@ fn perform_pairing<C: CancellationProbe>(
         client_proof,
     )?;
     let proof_bytes = encode_pairing_proof(proof);
-    socket.write_parts_setup(&[&proof_bytes], budget)?;
+    transport.write_parts_setup(&[&proof_bytes], budget)?;
 
     let mut verified_bytes = [0_u8; PAIRING_VERIFIED_BYTES];
-    socket.read_exact_setup(&mut verified_bytes, budget)?;
+    transport.read_exact_setup(&mut verified_bytes, budget)?;
     let verified = decode_pairing_verified(&verified_bytes)?;
     if verified.connection_sequence() != challenge.connection_sequence() {
         ceremony.fail();
@@ -249,7 +258,11 @@ fn perform_pairing<C: CancellationProbe>(
         &peer,
     )?;
     budget.remaining()?;
-    Ok((binding_context, ceremony, challenge.server_nonce()))
+    Ok((
+        binding_context,
+        ceremony,
+        challenge.server_nonce(),
+    ))
 }
 
 fn validate_challenge(
