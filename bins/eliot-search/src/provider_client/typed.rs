@@ -1,11 +1,15 @@
-//! Typed TCP client for an explicitly handed-off, authenticated P00 connection.
+//! Typed TCP client for canonical authenticated P00 connections.
 //!
-//! This is not an upgrade of the development token-file session. Bootstrap must
-//! supply the original socket, live binding context, completed ceremony, key and
-//! server nonce. No grants are minted and no store or secret file is opened here.
+//! The explicit handoff accepts an already-paired original socket. The native
+//! opener performs canonical hello and mutual pairing from caller-supplied
+//! registered coordinates and key material. Neither path upgrades the development
+//! token-file session, mints grants or opens source/search stores.
 
 mod io;
+mod native;
 mod state;
+
+pub use native::NativeClientBinding;
 
 use std::net::TcpStream;
 use std::task::Poll;
@@ -17,7 +21,7 @@ use search_provider_protocol::{
     ProtocolLimits, SessionMachine, TypedTransportProfileV1, verify_proof,
 };
 
-use io::{SocketIo, budget};
+use io::{SetupBudget, SocketIo};
 use state::State;
 
 /// Local transport or protocol failure; authenticated remote error bodies remain
@@ -30,6 +34,8 @@ pub enum TypedClientError {
     Io(std::io::Error),
     /// The original setup or pending request budget expired.
     DeadlineExpired,
+    /// The process-local cancellation capability interrupted setup.
+    Cancelled,
     /// The peer closed before a complete record arrived.
     PeerClosed,
     /// A non-empty socket write made no progress.
@@ -58,6 +64,7 @@ impl TypedClientError {
             Self::Protocol(error) => error.code(),
             Self::Io(_) => "REMOTE_TYPED_IO_ERROR",
             Self::DeadlineExpired => "REMOTE_DEADLINE_EXPIRED",
+            Self::Cancelled => "REMOTE_TYPED_CANCELLED",
             Self::PeerClosed => "REMOTE_TYPED_FRAME_TRUNCATED",
             Self::WriteZero => "REMOTE_TYPED_WRITE_ZERO",
             Self::ProfileMismatch => "REMOTE_TYPED_PROFILE_MISMATCH",
@@ -80,7 +87,9 @@ impl From<std::io::Error> for TypedClientError {
 }
 
 impl std::fmt::Display for TypedClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(self.code()) }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
 }
 
 impl std::error::Error for TypedClientError {}
@@ -116,8 +125,22 @@ impl TypedProviderSession {
         setup_timeout: Duration,
     ) -> Result<Self, TypedClientError> {
         // Own teardown before the first fallible validation or socket option.
-        let mut socket = SocketIo::new(stream);
-        let (deadline, _) = budget(setup_timeout)?;
+        let socket = SocketIo::new(stream);
+        let never_cancelled = || false;
+        let budget = SetupBudget::new(setup_timeout, &never_cancelled)?;
+        Self::from_paired_socket(socket, binding, ceremony, key, nonce, limits, &budget)
+    }
+
+    pub(super) fn from_paired_socket(
+        mut socket: SocketIo,
+        binding: BindingContext,
+        ceremony: PairingMachine,
+        key: BindingKey,
+        nonce: search_provider_protocol::ServerNonce,
+        limits: ProtocolLimits,
+        budget: &SetupBudget<'_>,
+    ) -> Result<Self, TypedClientError> {
+        budget.remaining()?;
         let limits = limits.validate()?;
         let transcript = ceremony.server_transcript()?;
         let pairing = ceremony.into_verified()?;
@@ -132,17 +155,27 @@ impl TypedProviderSession {
             return Err(ProtocolError::NoCompatibleVersion.into());
         }
         socket.configure()?;
+        budget.remaining()?;
         let ceremony_id = pairing.session();
-        let offer = keyed_parts(&key, TypedTransportProfileV1::offer_transcript(&ceremony_id, &nonce));
-        socket.write_parts(&[TypedTransportProfileV1::PREFACE, offer.as_bytes()], deadline)?;
+        let offer = keyed_parts(
+            &key,
+            TypedTransportProfileV1::offer_transcript(&ceremony_id, &nonce),
+        );
+        socket.write_parts_setup(
+            &[TypedTransportProfileV1::PREFACE, offer.as_bytes()],
+            budget,
+        )?;
         let mut preface = [0_u8; TypedTransportProfileV1::PREFACE.len()];
-        socket.read_exact(&mut preface, deadline)?;
+        socket.read_exact_setup(&mut preface, budget)?;
         if preface.as_slice() != TypedTransportProfileV1::PREFACE {
             return Err(TypedClientError::ProfileMismatch);
         }
         let mut observed = [0_u8; TypedTransportProfileV1::PROOF_BYTES];
-        socket.read_exact(&mut observed, deadline)?;
-        let accepted = keyed_parts(&key, TypedTransportProfileV1::accept_transcript(&ceremony_id, &nonce));
+        socket.read_exact_setup(&mut observed, budget)?;
+        let accepted = keyed_parts(
+            &key,
+            TypedTransportProfileV1::accept_transcript(&ceremony_id, &nonce),
+        );
         if !verify_proof(&accepted, &ProofDigest::from_bytes(observed)) {
             return Err(ProtocolError::AuthenticationFailed.into());
         }
@@ -150,7 +183,7 @@ impl TypedProviderSession {
         session.negotiate(binding.version())?;
         session.activate(&accepted, &ProofDigest::from_bytes(observed))?;
         let state = State::new(socket, binding, pairing, key, nonce, limits, session);
-        io::remaining(deadline)?;
+        budget.remaining()?;
         Ok(Self { state: Some(state) })
     }
 
@@ -158,7 +191,11 @@ impl TypedProviderSession {
     /// either. The request ID comes from the recipe and cannot be reused on this
     /// connection. Success means local send completion, not server admission,
     /// authorization or recipe success. Encoding/proof/write share one budget.
-    pub fn send_request(&mut self, body: RequestBody, timeout: Duration) -> Result<RequestId, TypedClientError> {
+    pub fn send_request(
+        &mut self,
+        body: RequestBody,
+        timeout: Duration,
+    ) -> Result<RequestId, TypedClientError> {
         self.with_state(|state| state.send_request(body, timeout))
     }
 
@@ -194,7 +231,10 @@ impl TypedProviderSession {
     /// Zero quantum is invalid. This is explicit polling, not an async Waker API.
     /// Only Ready exposes a fully verified event. Pending spends no sequence or
     /// request state; EOF, real deadline expiry and protocol errors still close.
-    pub fn poll_receive(&mut self, quantum: Duration) -> Result<Poll<ProviderEnvelope>, TypedClientError> {
+    pub fn poll_receive(
+        &mut self,
+        quantum: Duration,
+    ) -> Result<Poll<ProviderEnvelope>, TypedClientError> {
         self.with_state(|state| state.poll_receive(quantum))
     }
 

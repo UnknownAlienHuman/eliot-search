@@ -9,7 +9,7 @@ mod core;
 mod typed;
 
 // Explicit paired-socket handoff; never upgrades the development token shim.
-pub use typed::{TypedClientError, TypedProviderSession};
+pub use typed::{NativeClientBinding, TypedClientError, TypedProviderSession};
 
 use std::net::SocketAddr;
 use std::path::Path;
