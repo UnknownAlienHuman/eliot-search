@@ -207,14 +207,15 @@ impl StandaloneProcessOwner {
         })
     }
 
-    /// Open one authenticated socket only through the completed process bootstrap.
+    /// Open one authenticated socket only for the lifetime-bound listener path.
     ///
     /// The retained root guard and exact journal/publisher remain alive across the
     /// credential read, binding/policy checks and profile handshake. The shared
-    /// rollback-fenced clock is not reset per connection. The returned transport
-    /// must be dropped before this process owner.
+    /// rollback-fenced clock is not reset per connection. This restricted method
+    /// is consumed only by `StandaloneLoopbackOwner`, which wraps its return value
+    /// in a guard borrowing this process owner.
     #[allow(clippy::too_many_arguments)]
-    pub fn open_tcp<C: CancellationProbe + Clone>(
+    pub(in crate::access_composition) fn open_tcp<C: CancellationProbe + Clone>(
         &mut self,
         stream: TcpStream,
         binding: BindingContext,
