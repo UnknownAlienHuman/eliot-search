@@ -8,10 +8,12 @@
 //! control journal, admission snapshot or data-root lock.
 
 mod connection;
+mod endpoint;
 mod io;
 mod pairing;
 
 pub use connection::{StandaloneOpenedConnection, StandaloneServingConnection};
+pub use endpoint::StandaloneEndpointPublicationError;
 pub use io::{StandalonePairingIo, StandalonePairingIoError};
 pub use pairing::StandaloneNativePairingError;
 
@@ -20,16 +22,53 @@ use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
-use search_contracts::{OpaqueId, ProtocolRange, protocol::PeerRole};
+use search_contracts::{
+    Blake3Digest32, OpaqueId, OpaqueRef, ProtocolRange, protocol::PeerRole,
+};
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
     BindingContext, BindingSession, PairingMachine, ProtocolError, ProtocolLimits, ServerNonce,
 };
 
+use endpoint::{
+    NativeEndpointPublicationBudget, PublishedNativeEndpoint, publish_native_endpoint,
+};
 use super::{NativeTcpOpenError, StandaloneBootstrapReady, StandaloneProcessOwner};
 
 const ACCEPT_SLEEP: Duration = Duration::from_millis(2);
 const MAX_ACCEPT_QUANTUM: Duration = Duration::from_millis(250);
+
+/// Listener bind or authenticated descriptor-publication failure.
+#[derive(Debug)]
+pub enum StandaloneLoopbackBindError {
+    /// Loopback listener creation or configuration failed.
+    Listener(StandalonePairingIoError),
+    /// Signed native endpoint publication did not complete.
+    Endpoint(StandaloneEndpointPublicationError),
+}
+
+impl fmt::Display for StandaloneLoopbackBindError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Listener(error) => fmt::Display::fmt(error, formatter),
+            Self::Endpoint(error) => fmt::Display::fmt(error, formatter),
+        }
+    }
+}
+
+impl std::error::Error for StandaloneLoopbackBindError {}
+
+impl From<StandalonePairingIoError> for StandaloneLoopbackBindError {
+    fn from(error: StandalonePairingIoError) -> Self {
+        Self::Listener(error)
+    }
+}
+
+impl From<StandaloneEndpointPublicationError> for StandaloneLoopbackBindError {
+    fn from(error: StandaloneEndpointPublicationError) -> Self {
+        Self::Endpoint(error)
+    }
+}
 
 /// Pairing or native-open failure for one accepted socket.
 #[derive(Debug)]
@@ -104,11 +143,15 @@ impl fmt::Debug for CompletedStandalonePairing {
     }
 }
 
-/// Listener plus root-owned process state. The listener is created only after
-/// registration bootstrap/finalization succeeded. Field order closes admission
-/// before dropping the process owner and its root lock.
+/// Listener, authenticated descriptor and root-owned process state.
+///
+/// Construction publishes the signed descriptor only after loopback bind and
+/// before returning this admission capability. Field order closes listener
+/// admission, removes the exact descriptor and only then drops the process owner
+/// and its root lock.
 pub struct StandaloneLoopbackOwner {
     listener: TcpListener,
+    endpoint: PublishedNativeEndpoint,
     pairing: BindingSession,
     process: StandaloneProcessOwner,
     next_connection_sequence: u64,
@@ -118,21 +161,26 @@ pub struct StandaloneLoopbackOwner {
 }
 
 impl StandaloneLoopbackOwner {
-    /// Bind an IPv4 loopback listener after process bootstrap.
+    /// Bind IPv4 loopback and publish its exact authenticated endpoint descriptor.
     ///
-    /// Port zero is permitted for an explicitly supervised ephemeral endpoint.
-    /// The finite poll quantum is not a request deadline; each accepted socket
-    /// receives its own caller-supplied `OperationContext` before pairing begins.
-    /// The protocol range and limits are fixed for this listener lifetime.
-    pub fn bind(
+    /// Port zero is permitted only as input; the descriptor always carries the
+    /// actual nonzero bound port. One diminishing caller budget covers listener
+    /// bind completion, exact-generation credential read, descriptor signing,
+    /// atomic replacement, durability checkpoint and exact readback. No owner is
+    /// returned while the descriptor is absent, stale or unverified.
+    #[allow(clippy::too_many_arguments)]
+    pub fn bind<C: CancellationProbe + Clone>(
         process: StandaloneProcessOwner,
         port: u16,
         accept_quantum: Duration,
         local_protocols: ProtocolRange,
         limits: ProtocolLimits,
-    ) -> Result<Self, StandalonePairingIoError> {
+        pairing_proof_ref: OpaqueRef,
+        requested_capability_digest: Option<Blake3Digest32>,
+        context: &OperationContext<C>,
+    ) -> Result<Self, StandaloneLoopbackBindError> {
         if accept_quantum.is_zero() || accept_quantum > MAX_ACCEPT_QUANTUM {
-            return Err(StandalonePairingIoError::InvalidConfiguration);
+            return Err(StandalonePairingIoError::InvalidConfiguration.into());
         }
         let local_protocols = ProtocolRange::new(
             local_protocols.minimum,
@@ -144,21 +192,34 @@ impl StandaloneLoopbackOwner {
             .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
         let pairing = BindingSession::new(local_protocols, limits)
             .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
+        let budget = NativeEndpointPublicationBudget::new(context)?;
+
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
             .map_err(StandalonePairingIoError::Io)?;
-        if !listener
+        budget.check(context)?;
+        let local_addr = listener
             .local_addr()
-            .map_err(StandalonePairingIoError::Io)?
-            .ip()
-            .is_loopback()
-        {
-            return Err(StandalonePairingIoError::NonLoopback);
+            .map_err(StandalonePairingIoError::Io)?;
+        if !local_addr.ip().is_loopback() || local_addr.port() == 0 {
+            return Err(StandalonePairingIoError::NonLoopback.into());
         }
         listener
             .set_nonblocking(true)
             .map_err(StandalonePairingIoError::Io)?;
+
+        let endpoint = publish_native_endpoint(
+            &process,
+            local_addr,
+            local_protocols,
+            pairing_proof_ref,
+            requested_capability_digest,
+            &budget,
+            context,
+        )?;
+
         Ok(Self {
             listener,
+            endpoint,
             pairing,
             process,
             next_connection_sequence: 0,
@@ -212,6 +273,8 @@ impl StandaloneLoopbackOwner {
             self.limits,
             &record,
             &expected,
+            self.endpoint.pairing_proof_ref(),
+            self.endpoint.requested_capability_digest(),
         )?;
         let remaining = io.remaining_context()?;
         drop(io);
@@ -232,14 +295,29 @@ impl StandaloneLoopbackOwner {
         }))
     }
 
-    /// Close listener admission and return the still-root-owning process state.
+    /// Close listener admission, remove the exact signed descriptor and return
+    /// the still-root-owning process state.
+    ///
     /// Any opened/serving connection borrows this owner and therefore must have
-    /// been closed and dropped before this method can be called.
-    #[must_use]
-    pub fn close_listener(self) -> StandaloneProcessOwner {
-        let Self { listener, process, .. } = self;
+    /// been closed and dropped first. A changed descriptor is never deleted as
+    /// cleanup; the method fails closed and the process owner is dropped.
+    pub fn close_listener(
+        self,
+    ) -> Result<StandaloneProcessOwner, StandaloneEndpointPublicationError> {
+        let Self {
+            listener,
+            endpoint,
+            pairing,
+            process,
+            next_connection_sequence: _,
+            accept_quantum: _,
+            local_protocols: _,
+            limits: _,
+        } = self;
         drop(listener);
-        process
+        endpoint.remove()?;
+        drop(pairing);
+        Ok(process)
     }
 
     fn poll_accept(&self) -> Result<Option<TcpStream>, StandalonePairingIoError> {
@@ -273,6 +351,7 @@ impl fmt::Debug for StandaloneLoopbackOwner {
             .debug_struct("StandaloneLoopbackOwner")
             .field("local_addr", &self.listener.local_addr().ok())
             .field("next_connection_sequence", &self.next_connection_sequence)
+            .field("endpoint", &self.endpoint)
             .field("ready", &self.process.readiness())
             .finish_non_exhaustive()
     }

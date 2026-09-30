@@ -3,7 +3,8 @@
 use core::fmt;
 
 use search_contracts::{
-    HelloBody, MessageKind, ProtocolRange, ProtocolVersion, ProviderBodyV1,
+    Blake3Digest32, HelloBody, MessageKind, OpaqueRef, ProtocolRange, ProtocolVersion,
+    ProviderBodyV1,
 };
 use search_ports::CancellationProbe;
 use search_provider_protocol::{
@@ -82,7 +83,10 @@ impl From<NativePairingCredentialError> for StandaloneNativePairingError {
 /// fresh CSPRNG draw supplies the session, nonces and challenge. The challenge is
 /// consumed in the process ledger before output, so disconnect or invalid proof
 /// abandons it rather than permitting reuse. All I/O and credential reads use the
-/// original absolute setup deadline through [`StandalonePairingIo`].
+/// original absolute setup deadline through [`StandalonePairingIo`]. The hello's
+/// pairing and capability coordinates must also match the descriptor retained by
+/// the listener owner.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn perform_native_pairing<C: CancellationProbe + Clone>(
     io: &mut StandalonePairingIo<'_, C>,
     connection_sequence: u64,
@@ -91,8 +95,17 @@ pub(super) fn perform_native_pairing<C: CancellationProbe + Clone>(
     limits: ProtocolLimits,
     record: &ProviderBindingRecord,
     expected: &NativeBindingExpectation,
+    pairing_proof_ref: &OpaqueRef,
+    requested_capability_digest: Option<Blake3Digest32>,
 ) -> Result<CompletedStandalonePairing, StandaloneNativePairingError> {
-    let received = read_hello(io, local_protocols, limits, record)?;
+    let received = read_hello(
+        io,
+        local_protocols,
+        limits,
+        record,
+        pairing_proof_ref,
+        requested_capability_digest,
+    )?;
     expected.validate_registration(record, &received.peer)?;
     let negotiated = binding_session.accept_hello(&received.hello, &received.peer)?;
     if negotiated.version() != received.version {
@@ -162,11 +175,14 @@ struct ReceivedHello {
     peer: TransportPeer,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn read_hello<C: CancellationProbe>(
     io: &mut StandalonePairingIo<'_, C>,
     local_protocols: ProtocolRange,
     limits: ProtocolLimits,
     record: &ProviderBindingRecord,
+    pairing_proof_ref: &OpaqueRef,
+    requested_capability_digest: Option<Blake3Digest32>,
 ) -> Result<ReceivedHello, StandaloneNativePairingError> {
     let limits = limits.validate()?;
     let mut prefix = [0_u8; FRAME_PREFIX_BYTES];
@@ -203,6 +219,11 @@ fn read_hello<C: CancellationProbe>(
     let ProviderBodyV1::Hello(hello) = envelope.body else {
         return Err(search_provider_protocol::ProtocolError::InvalidEnvelope.into());
     };
+    if &hello.pairing_proof_ref != pairing_proof_ref
+        || hello.requested_capability_digest != requested_capability_digest
+    {
+        return Err(search_provider_protocol::ProtocolError::AuthenticationFailed.into());
+    }
     let peer = TransportPeer {
         role: hello.peer_role,
         incarnation: envelope.installation_incarnation_id,
