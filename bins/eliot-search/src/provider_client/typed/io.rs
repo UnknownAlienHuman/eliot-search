@@ -1,4 +1,7 @@
-//! Single-owner typed record I/O. Each operation keeps its original deadline.
+//! Single-owner typed record I/O over one local byte stream.
+//!
+//! Protocol/session code depends only on this private bounded stream seam.
+//! Concrete TCP and future named-pipe adapters own transport-specific setup.
 
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpStream};
@@ -15,6 +18,47 @@ pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(25);
 const POLL_BYTES: usize = 64 * 1024;
 const READ_BYTES: usize = 16 * 1024;
 
+/// Private byte-stream capability required by the typed client engine.
+///
+/// Implementations own transport-specific validation, timeout mapping and
+/// shutdown. They must represent one original local connection; cloning,
+/// reconnecting, buffering ahead and hidden fallback are forbidden.
+pub(super) trait ProviderByteStream: Read + Write + Send + Sync + 'static {
+    /// Validate and configure the concrete stream before protocol I/O.
+    fn configure(&self) -> Result<(), TypedClientError>;
+
+    /// Bound the next receive operation.
+    fn set_receive_timeout(&self, timeout: Option<Duration>) -> io::Result<()>;
+
+    /// Bound the next send operation.
+    fn set_send_timeout(&self, timeout: Option<Duration>) -> io::Result<()>;
+
+    /// Close both directions without implying rollback or remote receipt.
+    fn close(&self) -> io::Result<()>;
+}
+
+impl ProviderByteStream for TcpStream {
+    fn configure(&self) -> Result<(), TypedClientError> {
+        if !self.peer_addr()?.ip().is_loopback() || !self.local_addr()?.ip().is_loopback() {
+            return Err(TypedClientError::NonLoopback);
+        }
+        self.set_nonblocking(false)?;
+        Ok(())
+    }
+
+    fn set_receive_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        self.set_read_timeout(timeout)
+    }
+
+    fn set_send_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        self.set_write_timeout(timeout)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.shutdown(Shutdown::Both)
+    }
+}
+
 struct Incoming {
     record: TypedRecordBuffer,
     deadline: Instant,
@@ -22,7 +66,7 @@ struct Incoming {
 
 /// One absolute setup deadline plus an injected cancellation observation.
 ///
-/// The cancellation callback owns no socket or request state. Every partial
+/// The cancellation callback owns no transport or request state. Every partial
 /// setup read/write consults it between bounded 25 ms waits; it cannot renew the
 /// deadline or turn a possible peer-visible write into rollback.
 pub(super) struct SetupBudget<'a> {
@@ -36,7 +80,10 @@ impl<'a> SetupBudget<'a> {
         cancelled: &'a dyn Fn() -> bool,
     ) -> Result<Self, TypedClientError> {
         let (deadline, _) = budget(duration)?;
-        let value = Self { deadline, cancelled };
+        let value = Self {
+            deadline,
+            cancelled,
+        };
         value.remaining()?;
         Ok(value)
     }
@@ -49,24 +96,28 @@ impl<'a> SetupBudget<'a> {
     }
 }
 
-pub(super) struct SocketIo {
-    stream: TcpStream,
+/// Sole bounded I/O owner used by pairing and typed-session state.
+///
+/// The concrete stream remains private behind [`ProviderByteStream`]. No caller
+/// can downcast it, clone it or change transport behavior after handoff.
+pub(super) struct ProviderIo {
+    stream: Box<dyn ProviderByteStream>,
     incoming: Option<Incoming>,
 }
 
-impl SocketIo {
-    pub(super) const fn new(stream: TcpStream) -> Self {
-        Self { stream, incoming: None }
+impl ProviderIo {
+    pub(super) fn new<S>(stream: S) -> Self
+    where
+        S: ProviderByteStream,
+    {
+        Self {
+            stream: Box::new(stream),
+            incoming: None,
+        }
     }
 
     pub(super) fn configure(&self) -> Result<(), TypedClientError> {
-        if !self.stream.peer_addr()?.ip().is_loopback()
-            || !self.stream.local_addr()?.ip().is_loopback()
-        {
-            return Err(TypedClientError::NonLoopback);
-        }
-        self.stream.set_nonblocking(false)?;
-        Ok(())
+        self.stream.configure()
     }
 
     pub(super) fn read_exact_setup(
@@ -76,7 +127,7 @@ impl SocketIo {
     ) -> Result<(), TypedClientError> {
         while !bytes.is_empty() {
             self.stream
-                .set_read_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
+                .set_receive_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
             match self.stream.read(bytes) {
                 Ok(0) => return Err(TypedClientError::PeerClosed),
                 Ok(count) => {
@@ -153,7 +204,7 @@ impl SocketIo {
                 return Ok(Poll::Pending);
             };
             self.stream
-                .set_read_timeout(Some(absolute_left.min(turn_left)))?;
+                .set_receive_timeout(Some(absolute_left.min(turn_left)))?;
             match self.stream.read(buffer) {
                 Ok(0) => return Err(TypedClientError::PeerClosed),
                 Ok(count) => {
@@ -185,7 +236,8 @@ impl SocketIo {
         for &part in parts {
             let mut bytes = part;
             while !bytes.is_empty() {
-                self.stream.set_write_timeout(Some(remaining(deadline)?))?;
+                self.stream
+                    .set_send_timeout(Some(remaining(deadline)?))?;
                 match self.stream.write(bytes) {
                     Ok(0) => return Err(TypedClientError::WriteZero),
                     Ok(count) => bytes = &bytes[count..],
@@ -196,7 +248,8 @@ impl SocketIo {
             }
         }
         loop {
-            self.stream.set_write_timeout(Some(remaining(deadline)?))?;
+            self.stream
+                .set_send_timeout(Some(remaining(deadline)?))?;
             match self.stream.flush() {
                 Ok(()) => break,
                 Err(error) if retryable(&error) => continue,
@@ -215,7 +268,7 @@ impl SocketIo {
             let mut bytes = part;
             while !bytes.is_empty() {
                 self.stream
-                    .set_write_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
+                    .set_send_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
                 match self.stream.write(bytes) {
                     Ok(0) => return Err(TypedClientError::WriteZero),
                     Ok(count) => bytes = &bytes[count..],
@@ -227,7 +280,7 @@ impl SocketIo {
         }
         loop {
             self.stream
-                .set_write_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
+                .set_send_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
             match self.stream.flush() {
                 Ok(()) => break,
                 Err(error) if retryable(&error) => continue,
@@ -238,13 +291,13 @@ impl SocketIo {
     }
 }
 
-impl Drop for SocketIo {
-    fn drop(&mut self) { let _ = self.stream.shutdown(Shutdown::Both); }
+impl Drop for ProviderIo {
+    fn drop(&mut self) {
+        let _ = self.stream.close();
+    }
 }
 
-pub(super) fn budget(
-    duration: Duration,
-) -> Result<(Instant, u64), TypedClientError> {
+pub(super) fn budget(duration: Duration) -> Result<(Instant, u64), TypedClientError> {
     let started = Instant::now();
     let millis = u64::try_from(duration.as_millis())
         .ok()

@@ -1,9 +1,11 @@
-//! Typed TCP client for canonical authenticated P00 connections.
+//! Typed local-provider client for canonical authenticated P00 connections.
 //!
-//! The explicit handoff accepts an already-paired original socket. The native
-//! opener performs canonical hello and mutual pairing from caller-supplied
-//! registered coordinates and key material. Neither path upgrades the development
-//! token-file session, mints grants or opens source/search stores.
+//! Pairing, profile negotiation and request/session state operate over one
+//! private local byte-stream seam. The explicit `TcpStream` entrypoint and
+//! loopback connector are transitional adapters retained only for compatibility;
+//! the final Windows product transport is a per-installation named pipe.
+//! Neither path upgrades the development token-file session, mints grants or
+//! opens source/search stores.
 
 mod io;
 mod native;
@@ -21,16 +23,16 @@ use search_provider_protocol::{
     ProtocolLimits, SessionMachine, TypedTransportProfileV1, verify_proof,
 };
 
-use io::{SetupBudget, SocketIo};
+use io::{ProviderIo, SetupBudget};
 use state::State;
 
 /// Local transport or protocol failure; authenticated remote error bodies remain
-/// typed ProviderEnvelope values, not a successful command or a fabricated code.
+/// typed `ProviderEnvelope` values, not a successful command or fabricated code.
 #[derive(Debug)]
 pub enum TypedClientError {
     /// Shared protocol validation failed.
     Protocol(ProtocolError),
-    /// A socket operation failed.
+    /// A local transport operation failed.
     Io(std::io::Error),
     /// The original setup or pending request budget expired.
     DeadlineExpired,
@@ -38,11 +40,11 @@ pub enum TypedClientError {
     Cancelled,
     /// The peer closed before a complete record arrived.
     PeerClosed,
-    /// A non-empty socket write made no progress.
+    /// A non-empty transport write made no progress.
     WriteZero,
     /// The server did not acknowledge the exact typed/MAC profile.
     ProfileMismatch,
-    /// Both socket endpoints must be local loopback addresses.
+    /// A transitional TCP adapter observed a non-loopback endpoint.
     NonLoopback,
     /// A bounded allocation could not be reserved.
     Allocation,
@@ -79,36 +81,47 @@ impl TypedClientError {
 }
 
 impl From<ProtocolError> for TypedClientError {
-    fn from(error: ProtocolError) -> Self { Self::Protocol(error) }
+    fn from(error: ProtocolError) -> Self {
+        Self::Protocol(error)
+    }
 }
 
 impl From<std::io::Error> for TypedClientError {
-    fn from(error: std::io::Error) -> Self { Self::Io(error) }
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
 }
 
 impl std::fmt::Display for TypedClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.code())
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.code())
     }
 }
 
 impl std::error::Error for TypedClientError {}
 
-/// Sole owner of one typed socket/key and its bounded client lifecycle.
+/// Sole owner of one typed local stream/key and its bounded client lifecycle.
 ///
 /// Sending and receiving are separate, so a caller can send a cancel while a
 /// recipe is outstanding. Up to the negotiated work limit and one additional
 /// cancel may await replies. The cancel reserves no work slot. Reads are
-/// synchronous, not background tasks; no reader threads or socket clones exist.
-/// Failure/unwind closes the socket and drops all state. There is no reconnect,
-/// operation replay, deadline renewal, legacy fallback or implicit daemon shutdown.
-/// Received values are authenticated protocol data, not current access permits.
+/// synchronous, not background tasks; no reader threads or stream clones exist.
+/// Failure/unwind closes the stream and drops all state. There is no reconnect,
+/// operation replay, deadline renewal, legacy fallback or implicit daemon
+/// shutdown. Received values are authenticated protocol data, not current access
+/// permits.
 pub struct TypedProviderSession {
     state: Option<State>,
 }
 
 impl TypedProviderSession {
-    /// Negotiates the typed profile on the original, already-paired socket.
+    /// Negotiates the typed profile on an original already-paired loopback TCP
+    /// stream.
+    ///
+    /// This entrypoint is a transitional adapter for existing callers. The
+    /// protocol/session engine itself no longer depends on `TcpStream`; final
+    /// product composition must use the named-pipe adapter required by the
+    /// architecture and must not fall back to this entrypoint.
     ///
     /// The handoff must leave no other reader or prefetched bytes behind. The
     /// binding must match the completed ceremony and the key must reproduce its
@@ -124,15 +137,23 @@ impl TypedProviderSession {
         limits: ProtocolLimits,
         setup_timeout: Duration,
     ) -> Result<Self, TypedClientError> {
-        // Own teardown before the first fallible validation or socket option.
-        let socket = SocketIo::new(stream);
+        // Own teardown before the first fallible validation or transport option.
+        let transport = ProviderIo::new(stream);
         let never_cancelled = || false;
         let budget = SetupBudget::new(setup_timeout, &never_cancelled)?;
-        Self::from_paired_socket(socket, binding, ceremony, key, nonce, limits, &budget)
+        Self::from_paired_transport(
+            transport,
+            binding,
+            ceremony,
+            key,
+            nonce,
+            limits,
+            &budget,
+        )
     }
 
-    pub(super) fn from_paired_socket(
-        mut socket: SocketIo,
+    pub(super) fn from_paired_transport(
+        mut transport: ProviderIo,
         binding: BindingContext,
         ceremony: PairingMachine,
         key: BindingKey,
@@ -151,27 +172,32 @@ impl TypedProviderSession {
         if !verify_proof(&expected, &pairing.provider_proof()) {
             return Err(ProtocolError::AuthenticationFailed.into());
         }
-        if binding.version() != (search_contracts::ProtocolVersion { major: 1, minor: 0 }) {
+        if binding.version()
+            != (search_contracts::ProtocolVersion {
+                major: 1,
+                minor: 0,
+            })
+        {
             return Err(ProtocolError::NoCompatibleVersion.into());
         }
-        socket.configure()?;
+        transport.configure()?;
         budget.remaining()?;
         let ceremony_id = pairing.session();
         let offer = keyed_parts(
             &key,
             TypedTransportProfileV1::offer_transcript(&ceremony_id, &nonce),
         );
-        socket.write_parts_setup(
+        transport.write_parts_setup(
             &[TypedTransportProfileV1::PREFACE, offer.as_bytes()],
             budget,
         )?;
         let mut preface = [0_u8; TypedTransportProfileV1::PREFACE.len()];
-        socket.read_exact_setup(&mut preface, budget)?;
+        transport.read_exact_setup(&mut preface, budget)?;
         if preface.as_slice() != TypedTransportProfileV1::PREFACE {
             return Err(TypedClientError::ProfileMismatch);
         }
         let mut observed = [0_u8; TypedTransportProfileV1::PROOF_BYTES];
-        socket.read_exact_setup(&mut observed, budget)?;
+        transport.read_exact_setup(&mut observed, budget)?;
         let accepted = keyed_parts(
             &key,
             TypedTransportProfileV1::accept_transcript(&ceremony_id, &nonce),
@@ -182,7 +208,15 @@ impl TypedProviderSession {
         let mut session = SessionMachine::new(limits, 1, 1)?;
         session.negotiate(binding.version())?;
         session.activate(&accepted, &ProofDigest::from_bytes(observed))?;
-        let state = State::new(socket, binding, pairing, key, nonce, limits, session);
+        let state = State::new(
+            transport,
+            binding,
+            pairing,
+            key,
+            nonce,
+            limits,
+            session,
+        );
         budget.remaining()?;
         Ok(Self { state: Some(state) })
     }
@@ -227,10 +261,11 @@ impl TypedProviderSession {
     /// Pending retains all partial prefix/body/MAC bytes and the original request
     /// deadline. The caller may send_cancel or close before polling again. Input
     /// waiting is capped at min(quantum, 25 ms) and 64 KiB per turn; complete-frame
-    /// authentication/decoding still runs synchronously under the original deadline.
-    /// Zero quantum is invalid. This is explicit polling, not an async Waker API.
-    /// Only Ready exposes a fully verified event. Pending spends no sequence or
-    /// request state; EOF, real deadline expiry and protocol errors still close.
+    /// authentication/decoding still runs synchronously under the original
+    /// deadline. Zero quantum is invalid. This is explicit polling, not an async
+    /// Waker API. Only Ready exposes a fully verified event. Pending spends no
+    /// sequence or request state; EOF, real deadline expiry and protocol errors
+    /// still close.
     pub fn poll_receive(
         &mut self,
         quantum: Duration,
@@ -238,16 +273,25 @@ impl TypedProviderSession {
         self.with_state(|state| state.poll_receive(quantum))
     }
 
-    /// Drops key and client metadata and shuts down the socket, idempotently.
-    /// Does not send shutdown or claim to undo server effects.
-    pub fn close(&mut self) { drop(self.state.take()); }
+    /// Drops key and client metadata and closes the local transport idempotently.
+    ///
+    /// This sends no shutdown request and does not claim to undo server effects.
+    pub fn close(&mut self) {
+        drop(self.state.take());
+    }
 
     fn with_state<R>(
         &mut self,
         action: impl FnOnce(&mut State) -> Result<R, TypedClientError>,
     ) -> Result<R, TypedClientError> {
-        let mut operation = Operation { state: &mut self.state, completed: false };
-        let state = operation.state.as_mut().ok_or(TypedClientError::Closed)?;
+        let mut operation = Operation {
+            state: &mut self.state,
+            completed: false,
+        };
+        let state = operation
+            .state
+            .as_mut()
+            .ok_or(TypedClientError::Closed)?;
         let result = action(state);
         operation.completed = result.is_ok();
         result
@@ -255,7 +299,9 @@ impl TypedProviderSession {
 }
 
 impl Drop for TypedProviderSession {
-    fn drop(&mut self) { self.close(); }
+    fn drop(&mut self) {
+        self.close();
+    }
 }
 
 struct Operation<'a> {
@@ -265,14 +311,18 @@ struct Operation<'a> {
 
 impl Drop for Operation<'_> {
     fn drop(&mut self) {
-        if !self.completed { drop(self.state.take()); }
+        if !self.completed {
+            drop(self.state.take());
+        }
     }
 }
 
 fn keyed_parts(key: &BindingKey, parts: [&[u8]; 4]) -> ProofDigest {
     key.with_bytes(|bytes| {
         let mut hasher = blake3::Hasher::new_keyed(bytes);
-        for part in parts { hasher.update(part); }
+        for part in parts {
+            hasher.update(part);
+        }
         ProofDigest::from_bytes(*hasher.finalize().as_bytes())
     })
 }
