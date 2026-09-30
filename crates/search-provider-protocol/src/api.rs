@@ -6,6 +6,7 @@
 //! [`negotiation`](crate::negotiation) (exact major/minor),
 //! [`pairing`](crate::pairing) (mutual-authentication ceremony),
 //! [`pairing_wire`](crate::pairing_wire) (bounded pre-session proof records),
+//! [`native_endpoint`](crate::native_endpoint) (authenticated local endpoint records),
 //! [`request`](crate::request) (authenticated shell envelopes),
 //! [`grant`](crate::grant) (bounded standalone-grant body and dedicated
 //! authenticated envelope), [`binding`](crate::binding) (session composition
@@ -43,6 +44,11 @@ pub use crate::indexed::{
     decode_indexed_query, encode_indexed_query,
 };
 pub use crate::negotiation::{negotiate_hello, negotiate_version, validate_envelope_version};
+pub use crate::native_endpoint::{
+    MAX_NATIVE_ENDPOINT_DESCRIPTOR_BYTES, NativeEndpointDescriptorV1,
+    decode_native_endpoint_descriptor, encode_native_endpoint_descriptor,
+    native_endpoint_descriptor_transcript, provider_pairing_credential_locator_material,
+};
 pub use crate::pairing::{
     BindingKey, ClientNonce, PAIRING_CLIENT_DOMAIN, PAIRING_SERVER_DOMAIN, PairingChallenge,
     PairingLedger, PairingMachine, PairingState, PairingTranscript, ProofDigest, ServerNonce,
