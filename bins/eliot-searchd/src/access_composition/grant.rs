@@ -234,7 +234,15 @@ fn validate_request(
     if policy.maximum_ttl_ms == 0
         || policy.binding_generation == 0
         || policy.policy_generation == 0
+        || policy.revocation_generation == 0
+        || policy.allowed_membership_ids.is_empty()
+        || policy.allowed_access_partitions.is_empty()
+        || policy.allowed_modalities.is_empty()
+        || policy.permitted_recipe_families.is_empty()
+        || policy.allowed_budget_classes.is_empty()
         || (policy.exact_scan_permission && !policy.source_read_permission)
+        || (has_portfolio(&policy.allowed_corpus_or_portfolio_ids)
+            && policy.reference_portfolio_revision.is_none())
         || (has_portfolio(&request.requested_corpus_or_portfolio_ids)
             && policy.reference_portfolio_revision.is_none())
     {
