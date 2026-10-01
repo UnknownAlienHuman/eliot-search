@@ -39,6 +39,7 @@ macro_rules! impl_wire_enum {
 
 pub(crate) use impl_wire_enum;
 
+pub mod authority;
 pub mod bounds;
 pub mod canonical;
 pub mod error;
@@ -52,6 +53,7 @@ pub mod results;
 pub mod schema;
 pub mod source;
 
+pub use authority::*;
 pub use bounds::*;
 pub use canonical::*;
 pub use error::*;
