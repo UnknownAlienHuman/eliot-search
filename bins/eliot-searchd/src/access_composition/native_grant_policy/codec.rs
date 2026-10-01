@@ -9,7 +9,10 @@ use search_contracts::{
 };
 use search_control_redb::{ControlRecordClass, ControlValue, JournalLimits};
 
-use super::{AuthoritativeGrantPolicy, NativeGrantPolicyError, StandalonePolicyRecord, StandalonePolicyState};
+use super::{
+    AuthoritativeGrantPolicy, NativeGrantPolicyError, StandalonePolicyRecord,
+    StandalonePolicyState, validate_policy_record,
+};
 
 type Result<T> = std::result::Result<T, NativeGrantPolicyError>;
 const MAGIC: &[u8; 8] = b"ELGRPOL1";
@@ -17,7 +20,7 @@ const LIMIT: usize = JournalLimits::BASELINE.max_value_bytes;
 const INVALID: NativeGrantPolicyError = NativeGrantPolicyError::InvalidRecord;
 
 pub(super) fn encode(record: &StandalonePolicyRecord) -> Result<ControlValue> {
-    record.validate()?;
+    validate_policy_record(record)?;
     let mut out = Writer(Vec::new());
     out.raw(MAGIC)?;
     out.byte(match record.state {
@@ -106,7 +109,7 @@ pub(super) fn decode(value: &ControlValue) -> Result<StandalonePolicyRecord> {
     };
     if input.position != input.bytes.len() { return Err(INVALID); }
     let record = StandalonePolicyRecord { policy, state, issued_at, expires_at };
-    record.validate()?;
+    validate_policy_record(&record)?;
     Ok(record)
 }
 
