@@ -16,7 +16,10 @@ use search_access::{
     IndexedRouteFence, LiveSecurityState, NamespacePolicyFence, OverlapFreeRouteProof,
     RequestSecurityFence, check_policy_fence,
 };
-use search_contracts::{Blake3Digest32, ProviderBodyV1, RequestBody};
+use search_contracts::{
+    Blake3Digest32, CollectionRouteRevision, ProviderBodyV1, PublicationGuards, RequestBody,
+};
+use search_control_redb::PublicationVisibilityState;
 use search_provider_protocol::{AdmittedProviderRequest, BindingContext};
 
 use crate::access_composition::{
@@ -31,8 +34,9 @@ use crate::query_serving_composition::{
 /// One complete current authority image accepted by the native query host.
 ///
 /// The value owns the actual security domain together with every snapshot and
-/// policy coordinate needed to prove that domain current. Construction validates
-/// the whole bundle before it can enter the serving owner.
+/// policy coordinate needed to prove that domain current. Route identity and
+/// projection profile come from one committed durable visibility observation;
+/// only the separately owned route revision remains an explicit input.
 pub(crate) struct LiveNativeQuerySnapshot {
     policy: AuthoritativeGrantPolicy,
     domain: NativeSecurityDomain,
@@ -41,7 +45,7 @@ pub(crate) struct LiveNativeQuerySnapshot {
     planned_policy: NamespacePolicyFence,
     authoritative_policy: AuthoritativePolicyState,
     route: IndexedRouteFence,
-    profile_digest: Blake3Digest32,
+    publication_guards: PublicationGuards,
     live: LiveSecurityState,
     overlap_proof: Option<OverlapFreeRouteProof>,
     max_legs: usize,
@@ -49,6 +53,12 @@ pub(crate) struct LiveNativeQuerySnapshot {
 
 impl LiveNativeQuerySnapshot {
     /// Validate and retain one coherent native query-authority image.
+    ///
+    /// Collection generation, visible epoch, runtime owner epoch and projection
+    /// profile are derived from `visibility`; callers cannot mix those fields
+    /// from independent snapshots. `route_revision` remains explicit because the
+    /// current visibility schema does not persist that contract coordinate and it
+    /// must never be fabricated from epoch or control generation.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         policy: AuthoritativeGrantPolicy,
@@ -57,12 +67,19 @@ impl LiveNativeQuerySnapshot {
         membership_security: StandaloneMembershipSecuritySnapshot,
         planned_policy: NamespacePolicyFence,
         authoritative_policy: AuthoritativePolicyState,
-        route: IndexedRouteFence,
-        profile_digest: Blake3Digest32,
+        visibility: PublicationVisibilityState,
+        route_revision: CollectionRouteRevision,
         live: LiveSecurityState,
         overlap_proof: Option<OverlapFreeRouteProof>,
         max_legs: usize,
     ) -> Result<Self, AccessError> {
+        let publication_guards = visibility.guards;
+        let route = IndexedRouteFence {
+            collection_generation_id: visibility.collection_generation_id,
+            visible_epoch: visibility.visible_epoch,
+            route_generation: route_revision.get(),
+            owner_epoch: publication_guards.owner_epoch,
+        };
         let snapshot = Self {
             policy,
             domain,
@@ -71,7 +88,7 @@ impl LiveNativeQuerySnapshot {
             planned_policy,
             authoritative_policy,
             route,
-            profile_digest,
+            publication_guards,
             live,
             overlap_proof,
             max_legs,
@@ -95,6 +112,24 @@ impl LiveNativeQuerySnapshot {
             || (self.policy.exact_scan_permission && !self.policy.source_read_permission)
         {
             return Err(AccessError::ScopeUnauthorized);
+        }
+        if self.route.owner_epoch != self.publication_guards.owner_epoch {
+            return Err(AccessError::RouteMismatch);
+        }
+        if self.publication_guards.source_catalog_generation
+            != self.access.source_catalog_generation
+            || self.publication_guards.membership_generation
+                != self.access.membership_generation
+            || self.publication_guards.access_generation != self.access.generation
+        {
+            return Err(AccessError::SnapshotStale);
+        }
+        if self.publication_guards.shadow_generation
+            != self.authoritative_policy.shadow_revision.get()
+            || self.publication_guards.purge_generation
+                != self.authoritative_policy.purge_revision.get()
+        {
+            return Err(AccessError::PolicyRevisionStale);
         }
         check_policy_fence(&self.planned_policy, &self.authoritative_policy)?;
         if self.membership_security.access_snapshot_digest != self.access.snapshot_digest
@@ -150,7 +185,7 @@ impl LiveNativeQuerySnapshot {
         if let Some(proof) = &self.overlap_proof {
             if proof.route != self.route
                 || proof.access_snapshot_generation != self.access.generation
-                || proof.profile_digest != self.profile_digest
+                || proof.profile_digest != self.publication_guards.profile_digest
                 || proof.memberships.is_empty()
                 || !proof
                     .memberships
@@ -165,7 +200,9 @@ impl LiveNativeQuerySnapshot {
 
     fn validate_successor(&self, next: &Self) -> Result<(), AccessError> {
         next.validate_bundle()?;
-        if next.profile_digest != self.profile_digest {
+        if next.publication_guards.profile_digest
+            != self.publication_guards.profile_digest
+        {
             return Err(AccessError::RouteMismatch);
         }
         if next.policy.installation_id != self.policy.installation_id
@@ -304,7 +341,7 @@ where
         resolver: R,
         validate_output: V,
     ) -> (Self, LiveNativeQueryAuthorityUpdater<R, V>) {
-        let profile_digest = snapshot.profile_digest;
+        let profile_digest = snapshot.publication_guards.profile_digest;
         let state = Arc::new(Mutex::new(LiveNativeQueryState {
             snapshot,
             resolver,
@@ -339,7 +376,7 @@ where
         resolver: R,
         validate_output: V,
     ) -> Result<(), AccessError> {
-        if snapshot.profile_digest != self.profile_digest {
+        if snapshot.publication_guards.profile_digest != self.profile_digest {
             return Err(AccessError::RouteMismatch);
         }
         let mut current = try_lock(&self.state)?;
@@ -376,7 +413,7 @@ where
             .snapshot
             .validate_bundle()
             .map_err(CanonicalServingError::Access)?;
-        if state.snapshot.profile_digest != self.profile_digest {
+        if state.snapshot.publication_guards.profile_digest != self.profile_digest {
             return Err(CanonicalServingError::Access(AccessError::RouteMismatch));
         }
         if state.snapshot.policy.binding_id != binding.binding_id()
@@ -407,7 +444,7 @@ where
             planned_policy,
             authoritative_policy,
             route,
-            profile_digest: _,
+            publication_guards: _,
             live,
             overlap_proof,
             max_legs,
