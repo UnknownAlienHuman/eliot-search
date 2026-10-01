@@ -17,6 +17,7 @@ pub use admission::{
     StandaloneAdmissionRequest, StandaloneMembershipSecurity,
     StandaloneMembershipSecuritySnapshot, StandalonePreRetrievalAdmission,
     StandaloneScopeResolver, compile_standalone_pre_retrieval,
+    compile_standalone_pre_retrieval_for_profile,
 };
 pub use serving::StandaloneGrantRecipeHost;
 pub use validation::RecipeGrantUseError;
