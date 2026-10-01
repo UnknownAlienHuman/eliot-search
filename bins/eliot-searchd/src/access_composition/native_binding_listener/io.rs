@@ -1,13 +1,12 @@
 //! Restricted unbuffered I/O for native pairing on one accepted local stream.
 
 use std::io::{self, Read, Write};
-use std::net::TcpStream;
 use std::time::Duration;
 
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::MonotonicMillis;
 
-use crate::provider_composition::monotonic_millis;
+use crate::provider_composition::{LocalByteStream, monotonic_millis};
 
 const STREAM_POLL: Duration = Duration::from_millis(25);
 
@@ -59,43 +58,13 @@ impl std::fmt::Display for StandalonePairingIoError {
 
 impl std::error::Error for StandalonePairingIoError {}
 
-/// One already-accepted local byte stream used by the pairing driver.
-///
-/// Platform listeners own endpoint creation and admission. This boundary only
-/// configures finite nonblocking `Read`/`Write` behavior; successful local
-/// connection establishment is never a substitute for the mutual pairing proof.
-pub(super) trait LocalPairingStream: Read + Write {
-    /// Validate/configure the accepted stream for bounded local polling.
-    fn configure_pairing(&self) -> Result<(), StandalonePairingIoError>;
-}
-
-impl LocalPairingStream for TcpStream {
-    fn configure_pairing(&self) -> Result<(), StandalonePairingIoError> {
-        if !self
-            .peer_addr()
-            .map_err(StandalonePairingIoError::Io)?
-            .ip()
-            .is_loopback()
-            || !self
-                .local_addr()
-                .map_err(StandalonePairingIoError::Io)?
-                .ip()
-                .is_loopback()
-        {
-            return Err(StandalonePairingIoError::NonLoopback);
-        }
-        self.set_nonblocking(true)
-            .map_err(StandalonePairingIoError::Io)
-    }
-}
-
 /// Restricted unbuffered pairing I/O over the original accepted stream.
 ///
 /// Reads consume exactly the requested bytes. The wrapper exposes no stream
 /// clone, raw descriptor or inner-stream accessor. Every partial read/write and
 /// flush observes one absolute deadline and the original cancellation probe.
 pub struct StandalonePairingIo<'a, C: CancellationProbe> {
-    stream: &'a mut dyn LocalPairingStream,
+    stream: &'a mut dyn LocalByteStream,
     context: &'a OperationContext<C>,
     started: MonotonicMillis,
     deadline: MonotonicMillis,
@@ -107,9 +76,11 @@ impl<'a, C: CancellationProbe> StandalonePairingIo<'a, C> {
         context: &'a OperationContext<C>,
     ) -> Result<Self, StandalonePairingIoError>
     where
-        S: LocalPairingStream + 'a,
+        S: LocalByteStream + 'a,
     {
-        stream.configure_pairing()?;
+        stream
+            .configure_nonblocking()
+            .map_err(StandalonePairingIoError::Io)?;
         let started = monotonic_millis();
         let deadline = started
             .get()

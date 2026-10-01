@@ -1,7 +1,6 @@
 //! One unbuffered local-stream owner; partial reads never borrow the next record.
 
 use std::io::{self, Read, Write};
-use std::net::{Shutdown, TcpStream};
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
@@ -13,47 +12,13 @@ use search_provider_protocol::{
 };
 use search_provider_protocol::request::RequestCancellation;
 
+use crate::provider_composition::LocalByteStream;
+
 use super::{CanonicalTcpError, monotonic_millis};
 
 pub(super) const POLL: Duration = Duration::from_millis(25);
 const POLL_BYTES: usize = 64 * 1024;
 const READ_BYTES: usize = 16 * 1024;
-
-/// One already-connected local byte stream owned by the canonical provider.
-///
-/// Platform adapters own endpoint creation and admission. This boundary keeps
-/// the authenticated framing/session engine independent from the transport while
-/// preserving one reader, one writer and one teardown owner.
-pub(super) trait LocalByteStream: Read + Write {
-    /// Validate/configure this stream for bounded nonblocking local polling.
-    fn configure_local(&self) -> Result<(), CanonicalTcpError>;
-
-    /// Close both directions without claiming peer acknowledgement.
-    fn close(&self);
-}
-
-impl LocalByteStream for TcpStream {
-    fn configure_local(&self) -> Result<(), CanonicalTcpError> {
-        if !self
-            .peer_addr()
-            .map_err(CanonicalTcpError::Io)?
-            .ip()
-            .is_loopback()
-            || !self
-                .local_addr()
-                .map_err(CanonicalTcpError::Io)?
-                .ip()
-                .is_loopback()
-        {
-            return Err(CanonicalTcpError::NonLoopback);
-        }
-        self.set_nonblocking(true).map_err(CanonicalTcpError::Io)
-    }
-
-    fn close(&self) {
-        let _ = self.shutdown(Shutdown::Both);
-    }
-}
 
 struct Incoming {
     record: TypedRecordBuffer,
@@ -75,12 +40,8 @@ pub(super) struct SocketIo {
 }
 
 impl SocketIo {
-    pub(super) fn new(stream: TcpStream) -> Self {
-        Self::from_local_stream(stream)
-    }
-
     /// Own an already-connected platform stream without changing framing.
-    pub(super) fn from_local_stream<S>(stream: S) -> Self
+    pub(super) fn new<S>(stream: S) -> Self
     where
         S: LocalByteStream + 'static,
     {
@@ -91,7 +52,9 @@ impl SocketIo {
     }
 
     pub(super) fn configure(&self) -> Result<(), CanonicalTcpError> {
-        self.stream.configure_local()
+        self.stream
+            .configure_nonblocking()
+            .map_err(CanonicalTcpError::Io)
     }
 
     pub(super) fn read_exact(
