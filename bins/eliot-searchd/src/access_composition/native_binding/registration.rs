@@ -18,19 +18,16 @@ pub use provisioning::{
 use search_contracts::{Blake3Digest32, protocol::PeerRole};
 use search_control_redb::{
     ConditionalControlMutation, ControlCommitReceipt, ControlError, ControlKey,
-    ControlSnapshotPublisher, ControlValue, JournalIdentity, MutationId,
-    PersistentControlJournal,
+    ControlRecordCondition, ControlSnapshotPublisher, ControlValue, JournalIdentity,
+    MutationId, PersistentControlJournal,
     provider_authority::{ProviderAuthorityMutation, ProviderAuthorityRecord},
 };
 use search_ports::{CancellationProbe, OperationContext};
 
-use super::{
-    ProviderBindingMutation, ProviderBindingRecord, ProviderBindingStatus, begin, check,
-};
+use super::{ProviderBindingRecord, ProviderBindingStatus, begin, check};
 use super::opening::NativePairingCredentialIntent;
 use super::super::{
-    NativeGrantPolicyError, StandalonePolicyMutation, StandalonePolicyRecord,
-    StandalonePolicyState,
+    NativeGrantPolicyError, StandalonePolicyRecord, StandalonePolicyState,
 };
 
 /// One immutable binding/policy command, optionally bound to a durable intent head.
@@ -51,9 +48,10 @@ impl StandaloneRegistrationMutation {
     ///
     /// Native administration supplies the records. Pair shape, transitions,
     /// durable keys, codecs and conditional writes are owned by
-    /// `search-control-redb::ProviderAuthorityMutation`. The two legacy leaf
-    /// mutation descriptors are retained only to preserve the existing
-    /// deterministic standalone command digest during this migration.
+    /// `search-control-redb::ProviderAuthorityMutation`. The final digest is
+    /// derived from that exact typed command using the previous domain separation,
+    /// preserving existing provisioning intent/recovery identities without
+    /// retaining a second binding/policy mutation implementation.
     ///
     /// # Errors
     /// Rejects inconsistent pairs, invalid transitions or bounded codec failures.
@@ -70,34 +68,6 @@ impl StandaloneRegistrationMutation {
             validate_pair(binding, policy)?;
         }
 
-        let binding_mutation = ProviderBindingMutation::new(
-            identity,
-            operation_id,
-            expected_generation,
-            expected.map(|pair| pair.0),
-            binding,
-        )?;
-        let policy_mutation = StandalonePolicyMutation::new(
-            identity,
-            operation_id,
-            expected_generation,
-            expected.map(|pair| pair.1),
-            policy,
-        )?;
-        let mut hash = blake3::Hasher::new();
-        hash.update(b"ELIOT-STANDALONE-REGISTRATION-v1\0");
-        hash.update(&expected_generation.to_be_bytes());
-        for part in [binding_mutation.command(), policy_mutation.command()] {
-            let [_write] = part.mutation().writes() else {
-                return Err(NativeGrantPolicyError::InvalidRecord);
-            };
-            let [_condition] = part.conditions() else {
-                return Err(NativeGrantPolicyError::InvalidRecord);
-            };
-            hash.update(part.mutation().command_digest().as_bytes());
-        }
-        let command_digest = Blake3Digest32::from_bytes(*hash.finalize().as_bytes());
-
         let expected_record = expected
             .map(|(binding, policy)| {
                 ProviderAuthorityRecord::new(binding.clone(), policy.clone())
@@ -106,6 +76,15 @@ impl StandaloneRegistrationMutation {
             .map_err(|_| NativeGrantPolicyError::InvalidRecord)?;
         let replacement = ProviderAuthorityRecord::new(binding.clone(), policy.clone())
             .map_err(|_| NativeGrantPolicyError::InvalidRecord)?;
+        let provisional = ProviderAuthorityMutation::new(
+            identity,
+            operation_id,
+            Blake3Digest32::from_bytes([0_u8; 32]),
+            expected_generation,
+            expected_record.as_ref(),
+            replacement.clone(),
+        )?;
+        let command_digest = standalone_command_digest(provisional.command())?;
         let authority = ProviderAuthorityMutation::new(
             identity,
             operation_id,
@@ -288,6 +267,80 @@ pub(super) fn validate_pair(
         return Err(NativeGrantPolicyError::InvalidRecord);
     }
     Ok(())
+}
+
+fn standalone_command_digest(
+    command: &ConditionalControlMutation,
+) -> Result<Blake3Digest32, NativeGrantPolicyError> {
+    let mutation = command.mutation();
+    if mutation.writes().len() != 2 || command.conditions().len() != 2 {
+        return Err(NativeGrantPolicyError::InvalidRecord);
+    }
+    let mut binding_digest = None;
+    let mut policy_digest = None;
+    for write in mutation.writes() {
+        let condition = command
+            .conditions()
+            .iter()
+            .find(|condition| condition.key() == &write.key)
+            .ok_or(NativeGrantPolicyError::InvalidRecord)?;
+        let (domain, slot) = match write.value.class() {
+            search_control_redb::ControlRecordClass::Identity => (
+                b"ELIOT-PROVIDER-BINDING-MUTATION-v1\0".as_slice(),
+                &mut binding_digest,
+            ),
+            search_control_redb::ControlRecordClass::State => (
+                b"ELIOT-STANDALONE-POLICY-MUTATION-v1\0".as_slice(),
+                &mut policy_digest,
+            ),
+            _ => return Err(NativeGrantPolicyError::InvalidRecord),
+        };
+        if slot.is_some() {
+            return Err(NativeGrantPolicyError::InvalidRecord);
+        }
+        *slot = Some(leaf_command_digest(
+            domain,
+            mutation.expected_generation(),
+            &write.key,
+            condition,
+            &write.value,
+        )?);
+    }
+    let binding_digest = binding_digest.ok_or(NativeGrantPolicyError::InvalidRecord)?;
+    let policy_digest = policy_digest.ok_or(NativeGrantPolicyError::InvalidRecord)?;
+    let mut hash = blake3::Hasher::new();
+    hash.update(b"ELIOT-STANDALONE-REGISTRATION-v1\0");
+    hash.update(&mutation.expected_generation().to_be_bytes());
+    hash.update(binding_digest.as_bytes());
+    hash.update(policy_digest.as_bytes());
+    Ok(Blake3Digest32::from_bytes(*hash.finalize().as_bytes()))
+}
+
+fn leaf_command_digest(
+    domain: &[u8],
+    expected_generation: u64,
+    key: &ControlKey,
+    condition: &ControlRecordCondition,
+    replacement: &ControlValue,
+) -> Result<Blake3Digest32, NativeGrantPolicyError> {
+    let mut hash = blake3::Hasher::new();
+    hash.update(domain);
+    hash.update(&expected_generation.to_be_bytes());
+    hash.update(key.as_bytes());
+    match condition.expected() {
+        Some(prior) => {
+            hash.update(&[1]);
+            hash.update(
+                &u64::try_from(prior.len())
+                    .map_err(|_| NativeGrantPolicyError::InvalidRecord)?
+                    .to_be_bytes(),
+            );
+            hash.update(prior.as_bytes());
+        }
+        None => hash.update(&[0]),
+    }
+    hash.update(replacement.as_bytes());
+    Ok(Blake3Digest32::from_bytes(*hash.finalize().as_bytes()))
 }
 
 fn hash_key_value(
