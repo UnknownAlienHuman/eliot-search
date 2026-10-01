@@ -6,6 +6,7 @@
 //! [`negotiation`](crate::negotiation) (exact major/minor),
 //! [`pairing`](crate::pairing) (mutual-authentication ceremony),
 //! [`pairing_wire`](crate::pairing_wire) (bounded pre-session proof records),
+//! [`endpoint_name`](crate::endpoint_name) (bounded installation-scoped IPC name),
 //! [`native_endpoint`](crate::native_endpoint) (authenticated local endpoint records),
 //! [`request`](crate::request) (authenticated shell envelopes),
 //! [`grant`](crate::grant) (bounded standalone-grant body and dedicated
@@ -24,9 +25,11 @@ pub use crate::binding::{
 pub use crate::cancel::{CancelOutcome, cancel_request};
 pub use crate::cleanup::{DisconnectReceipt, disconnect_all};
 pub use crate::config::{DEFAULT_PROTOCOL_LIMITS, FRAME_PREFIX_BYTES, ProtocolLimits};
+pub use crate::endpoint_name::{NATIVE_ENDPOINT_NAME_BYTES, NativeEndpointNameV1};
 pub use crate::error::ProtocolError;
 pub use crate::frame::{
-    ClientEnvelopeCodec, FrameCodec, ServerEnvelopeCodec, TypedRecordBuffer, TypedTransportProfileV1,
+    ClientEnvelopeCodec, FrameCodec, ServerEnvelopeCodec, TypedRecordBuffer,
+    TypedTransportProfileV1,
     decode_frame, encode_frame,
 };
 pub use crate::grant::{

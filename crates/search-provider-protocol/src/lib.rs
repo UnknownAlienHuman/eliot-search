@@ -18,14 +18,16 @@
 //!    secret-owning daemon adapter over the exact transcripts built here.
 //! 4. [`pairing_wire`] — canonical bounded challenge/proof records used after
 //!    the ordinary typed hello and before the authenticated transport profile.
-//! 5. [`native_endpoint`] — bounded authenticated local endpoint descriptors
+//! 5. [`endpoint_name`] — canonical bounded per-installation IPC name; platform
+//!    adapters map it into a local namespace without adding authority.
+//! 6. [`native_endpoint`] — bounded authenticated local endpoint descriptors
 //!    and exact provider-credential locator material.
-//! 6. [`request`] — authenticated envelopes (#89): per-request proof bound
+//! 7. [`request`] — authenticated envelopes (#89): per-request proof bound
 //!    to version, server nonce, request ID, closed command and body digest,
 //!    strict fixed-size decoding, 32-in-flight registry, explicit deadlines.
-//! 7. [`grant`] — canonical bounded standalone-grant request body containing
+//! 8. [`grant`] — canonical bounded standalone-grant request body containing
 //!    requested ceilings only; binding and operation identity remain server-side.
-//! 8. [`binding`] — session composition: pairing-first sequencing enforced
+//! 9. [`binding`] — session composition: pairing-first sequencing enforced
 //!    in code; envelope admission requires the ceremony token.
 //!
 //! The public entry module is [`api`]; the crate root re-exports the same
@@ -56,6 +58,7 @@ pub mod binding;
 pub mod cancel;
 pub mod cleanup;
 pub mod config;
+pub mod endpoint_name;
 pub mod error;
 pub mod frame;
 pub mod grant;
