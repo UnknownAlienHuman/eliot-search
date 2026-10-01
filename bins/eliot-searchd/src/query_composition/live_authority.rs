@@ -16,7 +16,7 @@ use search_access::{
     IndexedRouteFence, LiveSecurityState, NamespacePolicyFence, OverlapFreeRouteProof,
     RequestSecurityFence, check_policy_fence,
 };
-use search_contracts::{ProviderBodyV1, RequestBody};
+use search_contracts::{Blake3Digest32, ProviderBodyV1, RequestBody};
 use search_provider_protocol::{AdmittedProviderRequest, BindingContext};
 
 use crate::access_composition::{
@@ -41,6 +41,7 @@ pub(crate) struct LiveNativeQuerySnapshot {
     planned_policy: NamespacePolicyFence,
     authoritative_policy: AuthoritativePolicyState,
     route: IndexedRouteFence,
+    profile_digest: Blake3Digest32,
     live: LiveSecurityState,
     overlap_proof: Option<OverlapFreeRouteProof>,
     max_legs: usize,
@@ -57,6 +58,7 @@ impl LiveNativeQuerySnapshot {
         planned_policy: NamespacePolicyFence,
         authoritative_policy: AuthoritativePolicyState,
         route: IndexedRouteFence,
+        profile_digest: Blake3Digest32,
         live: LiveSecurityState,
         overlap_proof: Option<OverlapFreeRouteProof>,
         max_legs: usize,
@@ -69,6 +71,7 @@ impl LiveNativeQuerySnapshot {
             planned_policy,
             authoritative_policy,
             route,
+            profile_digest,
             live,
             overlap_proof,
             max_legs,
@@ -147,6 +150,7 @@ impl LiveNativeQuerySnapshot {
         if let Some(proof) = &self.overlap_proof {
             if proof.route != self.route
                 || proof.access_snapshot_generation != self.access.generation
+                || proof.profile_digest != self.profile_digest
                 || proof.memberships.is_empty()
                 || !proof
                     .memberships
@@ -161,6 +165,9 @@ impl LiveNativeQuerySnapshot {
 
     fn validate_successor(&self, next: &Self) -> Result<(), AccessError> {
         next.validate_bundle()?;
+        if next.profile_digest != self.profile_digest {
+            return Err(AccessError::RouteMismatch);
+        }
         if next.policy.installation_id != self.policy.installation_id
             || next.policy.installation_incarnation_id
                 != self.policy.installation_incarnation_id
@@ -267,9 +274,12 @@ struct LiveNativeQueryState<R, V> {
 /// Serving-side owner of one live native query authority bundle.
 ///
 /// This type is intentionally non-clonable. Its companion updater is the sole
-/// mutation capability; both share only the private mutex-protected state.
+/// mutation capability; both share only the private mutex-protected state. The
+/// accepted projection profile is immutable for this owner incarnation so a
+/// route/profile cutover cannot race a serving turn.
 pub(crate) struct LiveNativeQueryAuthorityOwner<R, V> {
     state: Arc<Mutex<LiveNativeQueryState<R, V>>>,
+    profile_digest: Blake3Digest32,
 }
 
 /// Sole bounded update capability for [`LiveNativeQueryAuthorityOwner`].
@@ -277,9 +287,10 @@ pub(crate) struct LiveNativeQueryAuthorityOwner<R, V> {
 /// Updates use `try_lock`: they never wait behind source work or output. A busy
 /// turn is an explicit retryable conflict for the caller, while poisoning fails
 /// closed. Replacement is all-or-nothing after full bundle and monotonicity
-/// validation.
+/// validation. A profile cutover reconstructs the owner instead of mutating it.
 pub(crate) struct LiveNativeQueryAuthorityUpdater<R, V> {
     state: Arc<Mutex<LiveNativeQueryState<R, V>>>,
+    profile_digest: Blake3Digest32,
 }
 
 impl<R, V> LiveNativeQueryAuthorityOwner<R, V>
@@ -293,6 +304,7 @@ where
         resolver: R,
         validate_output: V,
     ) -> (Self, LiveNativeQueryAuthorityUpdater<R, V>) {
+        let profile_digest = snapshot.profile_digest;
         let state = Arc::new(Mutex::new(LiveNativeQueryState {
             snapshot,
             resolver,
@@ -301,8 +313,12 @@ where
         (
             Self {
                 state: Arc::clone(&state),
+                profile_digest,
             },
-            LiveNativeQueryAuthorityUpdater { state },
+            LiveNativeQueryAuthorityUpdater {
+                state,
+                profile_digest,
+            },
         )
     }
 }
@@ -323,6 +339,9 @@ where
         resolver: R,
         validate_output: V,
     ) -> Result<(), AccessError> {
+        if snapshot.profile_digest != self.profile_digest {
+            return Err(AccessError::RouteMismatch);
+        }
         let mut current = try_lock(&self.state)?;
         current.snapshot.validate_successor(&snapshot)?;
         *current = LiveNativeQueryState {
@@ -339,6 +358,10 @@ where
     R: StandaloneScopeResolver,
     V: FnMut(&RequestBody, &ProviderBodyV1) -> Result<(), AccessError>,
 {
+    fn profile_digest(&self) -> Blake3Digest32 {
+        self.profile_digest
+    }
+
     fn with_current<T>(
         &mut self,
         binding: &BindingContext,
@@ -353,6 +376,9 @@ where
             .snapshot
             .validate_bundle()
             .map_err(CanonicalServingError::Access)?;
+        if state.snapshot.profile_digest != self.profile_digest {
+            return Err(CanonicalServingError::Access(AccessError::RouteMismatch));
+        }
         if state.snapshot.policy.binding_id != binding.binding_id()
             || state.snapshot.policy.installation_incarnation_id != binding.incarnation()
         {
@@ -381,6 +407,7 @@ where
             planned_policy,
             authoritative_policy,
             route,
+            profile_digest: _,
             live,
             overlap_proof,
             max_legs,
