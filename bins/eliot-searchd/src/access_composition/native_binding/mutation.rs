@@ -1,12 +1,17 @@
 //! Conditional binding registration, replacement and exact recovery.
 
 use search_contracts::Blake3Digest32;
-use search_control_redb::{CommitRecoveryDecision, ConditionalControlMutation, ControlCommitReceipt,
-    ControlError, ControlMutation, ControlRecordCondition, ControlWrite, JournalIdentity,
-    MutationId, PersistentControlJournal};
+use search_control_redb::{
+    CommitRecoveryDecision, ConditionalControlMutation, ControlCommitReceipt, ControlError,
+    ControlMutation, ControlRecordCondition, ControlWrite, JournalIdentity, MutationId,
+    PersistentControlJournal,
+};
 use search_ports::{CancellationProbe, OperationContext};
 
-use super::{NativeBindingError, ProviderBindingRecord, ProviderBindingStatus, binding_key, codec};
+use super::{
+    NativeBindingError, ProviderBindingRecord, ProviderBindingStatus, binding_key, codec,
+    validate_binding_record,
+};
 
 /// One immutable native administrative command, retained for possible-write recovery.
 /// This descriptor never publishes a binding or issues a successful pairing reply.
@@ -34,34 +39,50 @@ impl ProviderBindingMutation {
         replacement: &ProviderBindingRecord,
     ) -> Result<Self, NativeBindingError> {
         identity.validate()?;
-        replacement.validate()?;
+        validate_binding_record(replacement)?;
         if identity.installation_incarnation_id != replacement.installation_incarnation_id {
             return Err(ControlError::IdentityMismatch.into());
         }
-        let key = binding_key(replacement.installation_incarnation_id, replacement.binding_id)?;
+        let key = binding_key(
+            replacement.installation_incarnation_id,
+            replacement.binding_id,
+        )?;
         let value = codec::encode(replacement)?;
         let mut digest = blake3::Hasher::new();
         digest.update(b"ELIOT-PROVIDER-BINDING-MUTATION-v1\0");
         digest.update(&expected_generation.to_be_bytes());
         digest.update(key.as_bytes());
         let condition = if let Some(before) = expected {
-            before.validate()?;
+            validate_binding_record(before)?;
             validate_transition(before, replacement)?;
             let prior = codec::encode(before)?;
             digest.update(&[1]);
-            digest.update(&u64::try_from(prior.len()).map_err(|_| NativeBindingError::InvalidRecord)?.to_be_bytes());
+            digest.update(
+                &u64::try_from(prior.len())
+                    .map_err(|_| NativeBindingError::InvalidRecord)?
+                    .to_be_bytes(),
+            );
             digest.update(prior.as_bytes());
             ControlRecordCondition::exact(key.clone(), prior)
         } else {
-            if replacement.status != ProviderBindingStatus::Active { return Err(NativeBindingError::InvalidRecord); }
+            if replacement.status != ProviderBindingStatus::Active {
+                return Err(NativeBindingError::InvalidRecord);
+            }
             digest.update(&[0]);
             ControlRecordCondition::absent(key.clone())
         };
         digest.update(value.as_bytes());
-        let command = ControlMutation::new(operation_id,
-            Blake3Digest32::from_bytes(*digest.finalize().as_bytes()), expected_generation,
-            vec![ControlWrite { key, value }], Vec::new());
-        Ok(Self { identity, command: ConditionalControlMutation::new(command, vec![condition]) })
+        let command = ControlMutation::new(
+            operation_id,
+            Blake3Digest32::from_bytes(*digest.finalize().as_bytes()),
+            expected_generation,
+            vec![ControlWrite { key, value }],
+            Vec::new(),
+        );
+        Ok(Self {
+            identity,
+            command: ConditionalControlMutation::new(command, vec![condition]),
+        })
     }
 
     /// Commit the exact conditional command. A receipt is historical evidence,
@@ -73,7 +94,9 @@ impl ProviderBindingMutation {
         context: &OperationContext<C>,
     ) -> Result<ControlCommitReceipt, NativeBindingError> {
         self.check_identity(journal)?;
-        journal.transact_conditionally(self.command.clone(), context).map_err(Into::into)
+        journal
+            .transact_conditionally(self.command.clone(), context)
+            .map_err(Into::into)
     }
 
     /// Resolve the same immutable command without retrying a write or changing
@@ -85,7 +108,9 @@ impl ProviderBindingMutation {
         context: &OperationContext<C>,
     ) -> Result<CommitRecoveryDecision, NativeBindingError> {
         self.check_identity(journal)?;
-        journal.recover_conditional_transaction(&self.command, context).map_err(Into::into)
+        journal
+            .recover_conditional_transaction(&self.command, context)
+            .map_err(Into::into)
     }
 
     // Reuse the validated row/transition in the atomic standalone registration.
@@ -94,21 +119,34 @@ impl ProviderBindingMutation {
         &self.command
     }
 
-    fn check_identity(&self, journal: &PersistentControlJournal) -> Result<(), NativeBindingError> {
-        if self.identity != journal.identity() { return Err(ControlError::IdentityMismatch.into()); }
+    fn check_identity(
+        &self,
+        journal: &PersistentControlJournal,
+    ) -> Result<(), NativeBindingError> {
+        if self.identity != journal.identity() {
+            return Err(ControlError::IdentityMismatch.into());
+        }
         Ok(())
     }
 }
 
-fn validate_transition(before: &ProviderBindingRecord, after: &ProviderBindingRecord) -> Result<(), NativeBindingError> {
+fn validate_transition(
+    before: &ProviderBindingRecord,
+    after: &ProviderBindingRecord,
+) -> Result<(), NativeBindingError> {
     if before.status != ProviderBindingStatus::Active
-        || before.binding_id != after.binding_id || before.installation_id != after.installation_id
+        || before.binding_id != after.binding_id
+        || before.installation_id != after.installation_id
         || before.installation_incarnation_id != after.installation_incarnation_id
-        || before.peer_role != after.peer_role || before.peer_identity_digest != after.peer_identity_digest
+        || before.peer_role != after.peer_role
+        || before.peer_identity_digest != after.peer_identity_digest
         || before.issued_at != after.issued_at
         || before.pairing_generation.checked_next().ok() != Some(after.pairing_generation)
-        || before.revocation_generation.checked_next().ok() != Some(after.revocation_generation)
-        || before.expires_at.as_ref().is_some_and(|old| after.expires_at.as_ref().is_none_or(|new| new > old))
+        || before.revocation_generation.checked_next().ok()
+            != Some(after.revocation_generation)
+        || before.expires_at.as_ref().is_some_and(|old| {
+            after.expires_at.as_ref().is_none_or(|new| new > old)
+        })
     {
         return Err(NativeBindingError::InvalidRecord);
     }
