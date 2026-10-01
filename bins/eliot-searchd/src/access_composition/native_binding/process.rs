@@ -26,7 +26,7 @@ use search_provider_protocol::{
 
 use crate::development::DataRootGuard;
 use crate::provider_composition::{
-    CanonicalProviderConnection, CanonicalTcpConnection, monotonic_millis,
+    CanonicalProviderConnection, CanonicalTcpConnection, LocalByteStream, monotonic_millis,
 };
 
 use super::{
@@ -100,8 +100,8 @@ impl<E> From<ContinuationError> for StandaloneProcessError<E> {
 /// Field order is intentional: connection/query state and the redb handle drop
 /// before the non-clonable data-root guard releases OS exclusion. Dropping without
 /// explicit clean shutdown is fail-stop owner recovery on the next process, not a
-/// fabricated RELEASED receipt. A future listener owner must itself drop every
-/// accepted transport before this object.
+/// fabricated RELEASED receipt. A listener owner must itself drop every accepted
+/// transport before this object.
 pub struct StandaloneProcessOwner {
     ready: StandaloneBootstrapReady,
     clock: SystemGrantClock,
@@ -116,7 +116,7 @@ pub struct StandaloneProcessOwner {
 impl StandaloneProcessOwner {
     /// Open one existing exact journal under the already-acquired root guard,
     /// perform an immediate owner-epoch handoff when required, and finish the
-    /// retained standalone registration before any socket can be admitted.
+    /// retained standalone registration before any local endpoint can be admitted.
     ///
     /// `file` must be the verified final regular-file handle opened under `root`.
     /// `stored_identity` is independently trusted metadata for that exact handle,
@@ -207,13 +207,11 @@ impl StandaloneProcessOwner {
         })
     }
 
-    /// Open one authenticated socket only for the lifetime-bound listener path.
+    /// Open one authenticated compatibility TCP stream under this process owner.
     ///
-    /// The retained root guard and exact journal/publisher remain alive across the
-    /// credential read, binding/policy checks and profile handshake. The shared
-    /// rollback-fenced clock is not reset per connection. This restricted method
-    /// is consumed only by `StandaloneLoopbackOwner`, which wraps its return value
-    /// in a guard borrowing this process owner.
+    /// This remains available only for the existing loopback adapter. Final
+    /// product composition must use [`Self::open_local`] and the canonical
+    /// per-installation local endpoint without TCP fallback.
     #[allow(clippy::too_many_arguments)]
     pub(in crate::access_composition) fn open_tcp<C: CancellationProbe + Clone>(
         &mut self,
@@ -226,6 +224,43 @@ impl StandaloneProcessOwner {
         context: &OperationContext<C>,
     ) -> Result<(CanonicalTcpConnection, NativeBindingPin), NativeTcpOpenError> {
         CanonicalProviderConnection::open_standalone_tcp(
+            stream,
+            binding,
+            ceremony,
+            server_nonce,
+            limits,
+            &self.journal,
+            &self.publisher,
+            &mut self.connections,
+            &self.ready,
+            boot_id,
+            &mut self.clock,
+            context,
+        )
+    }
+
+    /// Open one authenticated already-accepted local stream under this process owner.
+    ///
+    /// The stream, current journal/publisher, bootstrap evidence, shared clock and
+    /// finite connection registry remain tied to this root lock. This method owns
+    /// no endpoint name or listener effect and cannot scan, reconnect or choose a
+    /// fallback transport. Failure drops the sole accepted stream.
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::access_composition) fn open_local<C, S>(
+        &mut self,
+        stream: S,
+        binding: BindingContext,
+        ceremony: PairingMachine,
+        server_nonce: ServerNonce,
+        limits: ProtocolLimits,
+        boot_id: &OpaqueId,
+        context: &OperationContext<C>,
+    ) -> Result<(CanonicalTcpConnection, NativeBindingPin), NativeTcpOpenError>
+    where
+        C: CancellationProbe + Clone,
+        S: LocalByteStream + 'static,
+    {
+        CanonicalProviderConnection::open_standalone_local(
             stream,
             binding,
             ceremony,
