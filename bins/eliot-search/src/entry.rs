@@ -2,8 +2,8 @@
 //!
 //! The primary client exposes the persistent DIRECT command surface, the
 //! interactive paged runtime with opaque source handles, and authenticated
-//! loopback one-shot commands. The earlier immutable snapshot/BM25 client
-//! remains `eliot-search-snapshot`.
+//! local-provider commands. The earlier immutable snapshot/BM25 client remains
+//! `eliot-search-snapshot`.
 
 #![forbid(unsafe_code)]
 
@@ -11,6 +11,7 @@ mod app;
 mod endpoint_client;
 mod native_bootstrap;
 mod native_credentials;
+mod native_local_registered;
 mod native_registered;
 mod provider_client;
 mod public_client;
