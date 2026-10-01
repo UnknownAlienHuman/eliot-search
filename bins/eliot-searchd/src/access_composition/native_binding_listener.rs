@@ -1,15 +1,14 @@
-//! Loopback accept lifetime tied to the bootstrapped standalone process owner.
+//! Local-provider accept lifetime tied to the bootstrapped process owner.
 //!
-//! This module binds only after durable bootstrap has produced
-//! [`StandaloneBootstrapReady`]. Pairing uses the canonical bounded prelude over
-//! a restricted exact-I/O view of the original socket: it cannot clone, buffer
-//! ahead or detach the descriptor. An opened or serving connection borrows the
-//! process owner, so its transport, tasks and terminal cleanup cannot outlive the
-//! control journal, admission snapshot or data-root lock.
+//! The canonical path derives one installation-scoped local endpoint and keeps
+//! listener, pairing, typed transport and retained work inside the root-owned
+//! process lifetime. The legacy loopback owner remains transitional compatibility
+//! code and must not be selected by final product startup.
 
 mod connection;
 mod endpoint;
 mod io;
+mod local;
 mod pairing;
 
 pub use connection::{StandaloneOpenedConnection, StandaloneServingConnection};
@@ -61,7 +60,7 @@ impl From<StandaloneEndpointError> for StandaloneBindError {
     fn from(error: StandaloneEndpointError) -> Self { Self::Endpoint(error) }
 }
 
-/// Pairing or native-open failure for one accepted socket.
+/// Pairing or native-open failure for one accepted stream.
 #[derive(Debug)]
 pub enum StandaloneAcceptError {
     /// Listener or restricted pairing I/O failed.
@@ -96,7 +95,7 @@ impl From<NativeTcpOpenError> for StandaloneAcceptError {
     fn from(error: NativeTcpOpenError) -> Self { Self::Open(error) }
 }
 
-/// Completed mutual pairing material for the same original accepted socket.
+/// Completed mutual pairing material for the same original accepted stream.
 ///
 /// Construction verifies that the binding and completed ceremony correspond.
 /// It does not validate current durable registration, credential presence,
@@ -134,11 +133,11 @@ impl fmt::Debug for CompletedStandalonePairing {
     }
 }
 
-/// Listener, signed endpoint publication and root-owned process state.
+/// Transitional loopback listener, descriptor publication and process state.
 ///
-/// The listener is created only after registration bootstrap/finalization
-/// succeeded. Shutdown closes admission, removes the exact authenticated
-/// descriptor and only then returns or drops the process/root owner.
+/// This owner is retained only for compatibility while product startup migrates
+/// to the installation-scoped local listener in `local`. It must never be a
+/// fallback when canonical local endpoint creation or connection fails.
 pub struct StandaloneLoopbackOwner {
     listener: Option<TcpListener>,
     endpoint: Option<endpoint::PublishedNativeEndpoint>,
@@ -151,14 +150,10 @@ pub struct StandaloneLoopbackOwner {
 }
 
 impl StandaloneLoopbackOwner {
-    /// Bind an IPv4 loopback listener and publish its authenticated descriptor.
+    /// Bind a transitional IPv4 loopback listener and publish its descriptor.
     ///
-    /// Port zero is permitted for an explicitly supervised ephemeral endpoint;
-    /// the actual selected port is signed into `runtime/native-endpoint.v1`.
-    /// The finite poll quantum is not a request deadline. One caller-supplied
-    /// setup context covers exact credential resolution, descriptor publication
-    /// and readback. The protocol range and limits are fixed for this listener
-    /// lifetime.
+    /// This compatibility entry is not valid final Windows product composition.
+    /// Failure never falls through to another endpoint or protocol.
     pub fn bind<C>(
         process: StandaloneProcessOwner,
         port: u16,
@@ -222,7 +217,7 @@ impl StandaloneLoopbackOwner {
         })
     }
 
-    /// Actual bound address; contains no credential or source metadata.
+    /// Actual bound compatibility address; contains no credential or authority.
     pub fn local_addr(&self) -> Result<SocketAddr, StandalonePairingIoError> {
         self.listener
             .as_ref()
@@ -240,14 +235,7 @@ impl StandaloneLoopbackOwner {
             .readiness()
     }
 
-    /// Poll one accepted socket, complete canonical native mutual pairing on the
-    /// original descriptor, then perform native registration/policy checks and
-    /// typed transport negotiation.
-    ///
-    /// `Poll::Pending` means no connection arrived during the configured accept
-    /// quantum; no setup deadline or connection sequence was consumed. A failed
-    /// accepted connection is closed and never retried or routed to a legacy
-    /// protocol.
+    /// Poll one transitional TCP socket through canonical pairing and validation.
     pub fn poll_open<C: CancellationProbe + Clone>(
         &mut self,
         boot_id: &OpaqueId,
@@ -301,13 +289,7 @@ impl StandaloneLoopbackOwner {
         }))
     }
 
-    /// Close listener admission, remove the exact descriptor and return the
-    /// still-root-owning process state.
-    ///
-    /// Any opened/serving connection borrows this owner and therefore must have
-    /// been closed and dropped before this method can be called. If descriptor
-    /// removal fails, drop retries it and retains the process/root lock in a
-    /// fail-stop leak rather than releasing ownership behind a stale endpoint.
+    /// Close compatibility admission, remove its descriptor and return the process.
     pub fn close_listener(
         mut self,
     ) -> Result<StandaloneProcessOwner, StandaloneEndpointError> {
@@ -359,10 +341,6 @@ impl Drop for StandaloneLoopbackOwner {
             .as_mut()
             .is_some_and(|endpoint| endpoint.remove().is_err());
         if cleanup_failed {
-            // Releasing the root while this exact descriptor may remain would
-            // let a successor race stale discovery. Preserve fail-stop ownership
-            // for the rest of this process instead; normal shutdown returns an
-            // explicit error and the OS releases exclusion when the process exits.
             if let Some(process) = self.process.take() {
                 std::mem::forget(process);
             }
