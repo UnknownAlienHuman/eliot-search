@@ -19,8 +19,10 @@ use search_provider_protocol::{
 };
 
 use crate::provider_composition::{CanonicalProviderConnection, monotonic_millis};
-use super::{NativeBindingError, NativeBindingPin, ProviderBindingRecord, ProviderBindingStatus,
-    SystemGrantClock, begin, check};
+use super::{
+    NativeBindingError, NativeBindingPin, ProviderBindingRecord, ProviderBindingStatus,
+    SystemGrantClock, begin, check, read_published_binding, validate_binding_record,
+};
 
 /// Trusted lookup inputs from the installation, credential and profile owners.
 /// This is data, not an authenticated capability. In particular, the actual
@@ -48,7 +50,7 @@ impl NativeBindingExpectation {
         record: &ProviderBindingRecord,
         peer: &TransportPeer,
     ) -> Result<(), NativeBindingError> {
-        record.validate()?;
+        validate_binding_record(record)?;
         if record.status != ProviderBindingStatus::Active
             || record.binding_id != peer.binding
             || record.installation_id != self.installation_id
@@ -97,23 +99,42 @@ impl CanonicalProviderConnection {
         context: &OperationContext<C>,
     ) -> Result<(Self, NativeBindingPin), NativeBindingError> {
         let (started, deadline) = begin(context)?;
-        let record = ProviderBindingRecord::read_published(
-            journal, publisher, binding.binding_id(), context,
-        )?.ok_or(NativeBindingError::Unavailable)?;
-        expected.validate_registration(&record, &TransportPeer {
-            role: binding.role(), incarnation: binding.incarnation(), binding: binding.binding_id(),
-        })?;
+        let record = read_published_binding(
+            journal,
+            publisher,
+            binding.binding_id(),
+            context,
+        )?
+        .ok_or(NativeBindingError::Unavailable)?;
+        expected.validate_registration(
+            &record,
+            &TransportPeer {
+                role: binding.role(),
+                incarnation: binding.incarnation(),
+                binding: binding.binding_id(),
+            },
+        )?;
         let expiry = clock.check_policy_window(&record.issued_at, record.expires_at.as_ref())?;
         check(context, started, deadline)?;
         let connection = Self::open(binding, ceremony, key, server_nonce, limits)?;
         // The original native borrows exclude journal/publisher mutation here.
         // A historical receipt is never substituted for the published row.
-        let current_expiry = clock.check_policy_window(&record.issued_at, record.expires_at.as_ref())?;
+        let current_expiry =
+            clock.check_policy_window(&record.issued_at, record.expires_at.as_ref())?;
         check(context, started, deadline)?;
         let now = monotonic_millis();
-        if expiry.is_some_and(|end| now >= end) || current_expiry.is_some_and(|end| now >= end) {
+        if expiry.is_some_and(|end| now >= end)
+            || current_expiry.is_some_and(|end| now >= end)
+        {
             return Err(NativeBindingError::Unavailable);
         }
-        Ok((connection, NativeBindingPin { journal_identity: journal.identity(), context: binding, record }))
+        Ok((
+            connection,
+            NativeBindingPin {
+                journal_identity: journal.identity(),
+                context: binding,
+                record,
+            },
+        ))
     }
 }
