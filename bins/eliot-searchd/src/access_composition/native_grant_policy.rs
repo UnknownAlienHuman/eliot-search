@@ -123,6 +123,7 @@ pub struct JournalStandaloneGrantPolicySource<'a> {
     boot_id: &'a OpaqueId,
     request: &'a RequestGuard,
     clock: &'a mut SystemGrantClock,
+    observed_generation: Option<u64>,
 }
 
 impl<'a> JournalStandaloneGrantPolicySource<'a> {
@@ -148,6 +149,7 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
             boot_id,
             request,
             clock,
+            observed_generation: None,
         })
     }
 
@@ -157,8 +159,14 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
     /// The unchanged request deadline includes lookup, decode and UTC checks.
     /// Inactive/expired/foreign/missing rows never produce permissive defaults.
     ///
+    /// The first read captures the exact published control generation. Every
+    /// subsequent read by this operation must observe the same generation, not
+    /// merely equal policy bytes. Thus an intervening unrelated control commit is
+    /// visible to the grant authority's existing double-read and discards claims.
+    ///
     /// # Errors
-    /// Returns current-head, record, binding, lifetime or interruption failure.
+    /// Returns current-head, record, binding, lifetime, generation-drift or
+    /// interruption failure.
     pub fn current(
         &mut self,
         binding: &BindingContext,
@@ -183,6 +191,12 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
             self.clock,
             &context,
         )?;
+        let generation = registration.generation();
+        match self.observed_generation {
+            None => self.observed_generation = Some(generation),
+            Some(observed) if observed == generation => {}
+            Some(_) => return Err(ControlError::TransactionConflict.into()),
+        }
         remaining(self.request)?;
         let record = registration
             .into_policy()
