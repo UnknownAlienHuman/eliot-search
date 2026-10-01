@@ -30,11 +30,11 @@ use super::{TypedClientError, TypedProviderSession};
 const NATIVE_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
 const CONNECT_QUANTUM: Duration = Duration::from_millis(250);
 
-// Must remain byte-equal to the daemon secret-composition binding derivation.
-// This is adapter cryptography over a protocol-owned opaque BindingKey; the
-// protocol crate still owns no hashing dependency or secret-store effect.
-const BINDING_DOMAIN: &[u8] = b"eliot-search/loopback-binding/v1\0";
-const BINDING_ROLE: &[u8] = b"loopback-operator";
+// Must remain byte-equal to the daemon canonical local binding derivation.
+// Legacy loopback compatibility deliberately retains its previous digest and
+// cannot silently authenticate this local-provider path.
+const BINDING_DOMAIN: &[u8] = b"eliot-search/local-provider-binding/v1\0";
+const BINDING_ROLE: &[u8] = b"standalone-local-client";
 
 /// Exact public registration coordinates used to construct the native hello.
 ///

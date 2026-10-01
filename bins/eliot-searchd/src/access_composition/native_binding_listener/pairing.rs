@@ -1,4 +1,4 @@
-//! Concrete native mutual pairing over the restricted accepted-socket view.
+//! Concrete native mutual pairing over one restricted accepted local stream.
 
 use core::fmt;
 
@@ -28,7 +28,7 @@ const CEREMONY_ENTROPY_BYTES: usize = 80;
 /// identity bytes.
 #[derive(Debug)]
 pub enum StandaloneNativePairingError {
-    /// Restricted socket I/O or original setup budget failed.
+    /// Restricted stream I/O or original setup budget failed.
     Io(StandalonePairingIoError),
     /// Canonical pairing/binding protocol validation failed.
     Protocol(search_provider_protocol::ProtocolError),
@@ -76,7 +76,7 @@ impl From<NativePairingCredentialError> for StandaloneNativePairingError {
     }
 }
 
-/// Run canonical hello/challenge/mutual-proof pairing on one exact socket.
+/// Run canonical hello/challenge/mutual-proof pairing on one exact local stream.
 ///
 /// The current published registration is checked before credential access. One
 /// fresh CSPRNG draw supplies the session, nonces and challenge. The challenge is
@@ -101,7 +101,7 @@ pub(super) fn perform_native_pairing<C: CancellationProbe + Clone>(
 
     let credential_context = io.remaining_context()?;
     let key = expected.load_pairing_key(&received.peer, &credential_context)?;
-    let binding_digest = key.with_bytes(crate::secret_composition::derive_binding_digest);
+    let binding_digest = key.with_bytes(crate::secret_composition::derive_local_binding_digest);
 
     let material = ceremony_material()?;
     let mut machine = negotiated.begin_pairing(binding_digest);

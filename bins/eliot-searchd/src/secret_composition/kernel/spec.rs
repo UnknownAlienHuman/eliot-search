@@ -3,14 +3,16 @@
 use search_contracts::ProtocolVersion;
 use search_os_secrets::{DEFAULT_SECRET_LIMITS, SecretError, SecretLimits};
 
-/// Closed purpose bound into every loopback-pairing reference.
+/// Closed purpose bound into every legacy loopback-pairing reference.
 pub const PAIRING_SECRET_PURPOSE: &str = "secret-purpose:loopback-pairing";
 /// Exact pairing-key size in bytes; anything else fails closed.
 pub const PAIRING_KEY_BYTES: usize = 32;
-/// Negotiated loopback-pairing protocol version bound into every transcript.
+/// Negotiated pairing protocol version bound into every transcript.
 pub const PAIRING_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
-/// Fixed role bound into the binding digest; substitution changes the digest.
+/// Legacy loopback role retained only for the compatibility transport.
 pub const PAIRING_ROLE: &str = "loopback-operator";
+/// Canonical local-provider role bound into native local transport pairing.
+pub const LOCAL_PAIRING_ROLE: &str = "standalone-local-client";
 /// Default finite lease lifetime in monotonic ticks (5 minutes at 1 tick/ms).
 pub const DEFAULT_PAIRING_LEASE_TTL_TICKS: u64 = 300_000;
 /// Maximum vault-blob bytes accepted into the catalog.
@@ -19,6 +21,8 @@ pub const MAX_VAULT_BLOB_BYTES: usize = 256;
 pub const MAX_RECOVERY_ATTEMPTS: u8 = 3;
 
 pub(super) const BINDING_DOMAIN: &[u8] = b"eliot-search/loopback-binding/v1\0";
+pub(super) const LOCAL_BINDING_DOMAIN: &[u8] =
+    b"eliot-search/local-provider-binding/v1\0";
 pub(super) const OPERATION_DIGEST_DOMAIN: &[u8] = b"eliot-search/loopback-operation/v1\0";
 pub(super) const TEST_RNG_DOMAIN: &[u8] = b"eliot-search/loopback-test-rng/v1\0";
 

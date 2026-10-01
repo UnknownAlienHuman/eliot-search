@@ -8,13 +8,13 @@ use search_ports::{IdempotencyClass, MonotonicInstant, MutationIdentity};
 use search_provider_protocol::pairing::{PairingTranscript, ProofDigest, verify_proof};
 
 use super::spec::{
-    BINDING_DOMAIN, MAX_VAULT_BLOB_BYTES, OPERATION_DIGEST_DOMAIN,
-    PAIRING_KEY_BYTES, PAIRING_ROLE, PAIRING_SECRET_PURPOSE,
+    BINDING_DOMAIN, LOCAL_BINDING_DOMAIN, LOCAL_PAIRING_ROLE, MAX_VAULT_BLOB_BYTES,
+    OPERATION_DIGEST_DOMAIN, PAIRING_KEY_BYTES, PAIRING_ROLE, PAIRING_SECRET_PURPOSE,
     SecretCompositionError,
 };
 use super::vault::VaultWriteEvidence;
 
-/// Builds the exact purpose-bound authority tuple for loopback pairing.
+/// Builds the exact purpose-bound authority tuple for legacy pairing storage.
 pub fn pairing_binding(
     installation_id: InstallationId,
     installation_incarnation_id: InstallationIncarnationId,
@@ -90,12 +90,34 @@ pub fn lease_window(
     Ok((now, MonotonicInstant::from_ticks(expires)))
 }
 
-/// Derives the role-bound binding digest for one pairing key.
+/// Derives the legacy loopback role-bound digest for one pairing key.
 #[must_use]
 pub fn derive_binding_digest(key: &[u8; 32]) -> ProofDigest {
+    derive_role_binding_digest(BINDING_DOMAIN, PAIRING_ROLE.as_bytes(), key)
+}
+
+/// Derives the canonical local-provider role-bound digest for one pairing key.
+///
+/// This domain is transport-neutral and is used only by the finalized native
+/// local listener/client path. Legacy loopback compatibility retains its former
+/// digest so it cannot silently interoperate with the canonical endpoint.
+#[must_use]
+pub fn derive_local_binding_digest(key: &[u8; 32]) -> ProofDigest {
+    derive_role_binding_digest(
+        LOCAL_BINDING_DOMAIN,
+        LOCAL_PAIRING_ROLE.as_bytes(),
+        key,
+    )
+}
+
+fn derive_role_binding_digest(
+    domain: &[u8],
+    role: &[u8],
+    key: &[u8; 32],
+) -> ProofDigest {
     let mut hasher = blake3::Hasher::new();
-    hasher.update(BINDING_DOMAIN);
-    hasher.update(PAIRING_ROLE.as_bytes());
+    hasher.update(domain);
+    hasher.update(role);
     hasher.update(&[0]);
     hasher.update(key);
     ProofDigest::from_bytes(*hasher.finalize().as_bytes())
