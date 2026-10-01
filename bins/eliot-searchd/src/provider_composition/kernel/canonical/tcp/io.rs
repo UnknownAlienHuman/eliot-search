@@ -1,4 +1,4 @@
-//! One unbuffered socket owner; partial reads never borrow the next record.
+//! One unbuffered local-stream owner; partial reads never borrow the next record.
 
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpStream};
@@ -7,7 +7,10 @@ use std::time::{Duration, Instant};
 
 use search_ports::CancellationProbe;
 
-use search_provider_protocol::{MonotonicMillis, ProofDigest, ProtocolError, ProtocolLimits, TypedRecordBuffer, TypedTransportProfileV1};
+use search_provider_protocol::{
+    MonotonicMillis, ProofDigest, ProtocolError, ProtocolLimits, TypedRecordBuffer,
+    TypedTransportProfileV1,
+};
 use search_provider_protocol::request::RequestCancellation;
 
 use super::{CanonicalTcpError, monotonic_millis};
@@ -15,6 +18,42 @@ use super::{CanonicalTcpError, monotonic_millis};
 pub(super) const POLL: Duration = Duration::from_millis(25);
 const POLL_BYTES: usize = 64 * 1024;
 const READ_BYTES: usize = 16 * 1024;
+
+/// One already-connected local byte stream owned by the canonical provider.
+///
+/// Platform adapters own endpoint creation and admission. This boundary keeps
+/// the authenticated framing/session engine independent from the transport while
+/// preserving one reader, one writer and one teardown owner.
+pub(super) trait LocalByteStream: Read + Write {
+    /// Validate/configure this stream for bounded nonblocking local polling.
+    fn configure_local(&self) -> Result<(), CanonicalTcpError>;
+
+    /// Close both directions without claiming peer acknowledgement.
+    fn close(&self);
+}
+
+impl LocalByteStream for TcpStream {
+    fn configure_local(&self) -> Result<(), CanonicalTcpError> {
+        if !self
+            .peer_addr()
+            .map_err(CanonicalTcpError::Io)?
+            .ip()
+            .is_loopback()
+            || !self
+                .local_addr()
+                .map_err(CanonicalTcpError::Io)?
+                .ip()
+                .is_loopback()
+        {
+            return Err(CanonicalTcpError::NonLoopback);
+        }
+        self.set_nonblocking(true).map_err(CanonicalTcpError::Io)
+    }
+
+    fn close(&self) {
+        let _ = self.shutdown(Shutdown::Both);
+    }
+}
 
 struct Incoming {
     record: TypedRecordBuffer,
@@ -31,20 +70,28 @@ pub(super) struct ReceivedRecord {
 }
 
 pub(super) struct SocketIo {
-    stream: TcpStream,
+    stream: Box<dyn LocalByteStream>,
     incoming: Option<Incoming>,
 }
 
 impl SocketIo {
-    pub(super) const fn new(stream: TcpStream) -> Self { Self { stream, incoming: None } }
+    pub(super) fn new(stream: TcpStream) -> Self {
+        Self::from_local_stream(stream)
+    }
+
+    /// Own an already-connected platform stream without changing framing.
+    pub(super) fn from_local_stream<S>(stream: S) -> Self
+    where
+        S: LocalByteStream + 'static,
+    {
+        Self {
+            stream: Box::new(stream),
+            incoming: None,
+        }
+    }
 
     pub(super) fn configure(&self) -> Result<(), CanonicalTcpError> {
-        if !self.stream.peer_addr().map_err(CanonicalTcpError::Io)?.ip().is_loopback()
-            || !self.stream.local_addr().map_err(CanonicalTcpError::Io)?.ip().is_loopback()
-        {
-            return Err(CanonicalTcpError::NonLoopback);
-        }
-        self.stream.set_nonblocking(false).map_err(CanonicalTcpError::Io)
+        self.stream.configure_local()
     }
 
     pub(super) fn read_exact(
@@ -55,15 +102,17 @@ impl SocketIo {
     ) -> Result<(), CanonicalTcpError> {
         while !bytes.is_empty() {
             check_cancel(cancellation)?;
-            self.stream.set_read_timeout(Some(remaining(deadline)?.min(POLL)))
-                .map_err(CanonicalTcpError::Io)?;
+            let left = remaining(deadline)?;
             match self.stream.read(bytes) {
                 Ok(0) => return Err(CanonicalTcpError::PeerClosed),
                 Ok(count) => {
                     let buffer = bytes;
                     bytes = &mut buffer[count..];
                 }
-                Err(error) if retryable(&error) => continue,
+                Err(error) if retryable(&error) => {
+                    pause_retry(&error, left);
+                    continue;
+                }
                 Err(error) => return Err(CanonicalTcpError::Io(error)),
             }
             check_cancel(cancellation)?;
@@ -82,7 +131,8 @@ impl SocketIo {
         if quantum.is_zero() {
             return Err(CanonicalTcpError::Protocol(ProtocolError::InvalidLimits));
         }
-        let turn_end = Instant::now().checked_add(quantum.min(POLL))
+        let turn_end = Instant::now()
+            .checked_add(quantum.min(POLL))
             .ok_or(CanonicalTcpError::DeadlineExpired)?;
         if let Some(incoming) = &mut self.incoming {
             // Polling can tighten the cap, never restart its original clock.
@@ -92,37 +142,66 @@ impl SocketIo {
             let started = monotonic_millis();
             self.incoming = Some(Incoming {
                 record: TypedRecordBuffer::new(limits).map_err(CanonicalTcpError::Protocol)?,
-                started, maximum_deadline_ms, deadline: deadline(started, maximum_deadline_ms)?,
+                started,
+                maximum_deadline_ms,
+                deadline: deadline(started, maximum_deadline_ms)?,
             });
         }
         let mut left = POLL_BYTES;
         loop {
-            let incoming = self.incoming.as_mut().expect("record retained for polling");
+            let incoming = self
+                .incoming
+                .as_mut()
+                .expect("record retained for polling");
             remaining(incoming.deadline)?;
             if incoming.record.is_complete() {
-                let incoming = self.incoming.take().expect("complete retained record");
-                let (frame, proof) = incoming.record.finish().map_err(CanonicalTcpError::Protocol)?;
+                let incoming = self
+                    .incoming
+                    .take()
+                    .expect("complete retained record");
+                let (frame, proof) = incoming
+                    .record
+                    .finish()
+                    .map_err(CanonicalTcpError::Protocol)?;
                 return Ok(Poll::Ready(ReceivedRecord {
-                    frame, proof, started: incoming.started,
+                    frame,
+                    proof,
+                    started: incoming.started,
                     maximum_deadline_ms: incoming.maximum_deadline_ms,
                 }));
             }
-            if left == 0 || Instant::now() >= turn_end { return Ok(Poll::Pending); }
-            let buffer = incoming.record.read_buffer(left.min(READ_BYTES)).map_err(|error| {
-                if error == ProtocolError::ResourceExhausted { CanonicalTcpError::Allocation }
-                else { CanonicalTcpError::Protocol(error) }
-            })?;
+            if left == 0 || Instant::now() >= turn_end {
+                return Ok(Poll::Pending);
+            }
+            let buffer = incoming
+                .record
+                .read_buffer(left.min(READ_BYTES))
+                .map_err(|error| {
+                    if error == ProtocolError::ResourceExhausted {
+                        CanonicalTcpError::Allocation
+                    } else {
+                        CanonicalTcpError::Protocol(error)
+                    }
+                })?;
             let absolute_left = remaining(incoming.deadline)?;
-            let Some(turn_left) = turn_end.checked_duration_since(Instant::now())
-                .filter(|value| !value.is_zero()) else { return Ok(Poll::Pending); };
-            self.stream.set_read_timeout(Some(absolute_left.min(turn_left))).map_err(CanonicalTcpError::Io)?;
+            let Some(turn_left) = turn_end
+                .checked_duration_since(Instant::now())
+                .filter(|value| !value.is_zero())
+            else {
+                return Ok(Poll::Pending);
+            };
             match self.stream.read(buffer) {
                 Ok(0) => return Err(CanonicalTcpError::PeerClosed),
                 Ok(count) => {
-                    incoming.record.advance(count).map_err(CanonicalTcpError::Protocol)?;
+                    incoming
+                        .record
+                        .advance(count)
+                        .map_err(CanonicalTcpError::Protocol)?;
                     left -= count;
                 }
-                Err(error) if retryable(&error) => {}
+                Err(error) if retryable(&error) => {
+                    pause_retry(&error, absolute_left.min(turn_left));
+                }
                 Err(error) => return Err(CanonicalTcpError::Io(error)),
             }
         }
@@ -136,9 +215,11 @@ impl SocketIo {
         deadline: MonotonicMillis,
         cancellation: Option<&RequestCancellation>,
     ) -> Result<(), CanonicalTcpError> {
-        TypedTransportProfileV1::validate_frame(frame, limits).map_err(CanonicalTcpError::Protocol)?;
+        TypedTransportProfileV1::validate_frame(frame, limits)
+            .map_err(CanonicalTcpError::Protocol)?;
         self.write_parts(
-            &[frame, proof.as_bytes()], deadline,
+            &[frame, proof.as_bytes()],
+            deadline,
             cancellation.map(|probe| probe as &dyn CancellationProbe),
         )
     }
@@ -153,12 +234,14 @@ impl SocketIo {
             let mut bytes = part;
             while !bytes.is_empty() {
                 check_cancel(cancellation)?;
-                self.stream.set_write_timeout(Some(remaining(deadline)?.min(POLL)))
-                    .map_err(CanonicalTcpError::Io)?;
+                let left = remaining(deadline)?;
                 match self.stream.write(bytes) {
                     Ok(0) => return Err(CanonicalTcpError::WriteZero),
                     Ok(count) => bytes = &bytes[count..],
-                    Err(error) if retryable(&error) => continue,
+                    Err(error) if retryable(&error) => {
+                        pause_retry(&error, left);
+                        continue;
+                    }
                     Err(error) => return Err(CanonicalTcpError::Io(error)),
                 }
                 check_cancel(cancellation)?;
@@ -167,11 +250,13 @@ impl SocketIo {
         }
         loop {
             check_cancel(cancellation)?;
-            self.stream.set_write_timeout(Some(remaining(deadline)?.min(POLL)))
-                .map_err(CanonicalTcpError::Io)?;
+            let left = remaining(deadline)?;
             match self.stream.flush() {
                 Ok(()) => break,
-                Err(error) if retryable(&error) => continue,
+                Err(error) if retryable(&error) => {
+                    pause_retry(&error, left);
+                    continue;
+                }
                 Err(error) => return Err(CanonicalTcpError::Io(error)),
             }
         }
@@ -181,17 +266,30 @@ impl SocketIo {
 }
 
 impl Drop for SocketIo {
-    fn drop(&mut self) { let _ = self.stream.shutdown(Shutdown::Both); }
+    fn drop(&mut self) {
+        self.stream.close();
+    }
 }
 
-pub(super) fn deadline(started: MonotonicMillis, millis: u64) -> Result<MonotonicMillis, CanonicalTcpError> {
-    started.get().checked_add(millis).filter(|end| *end > started.get())
-        .map(MonotonicMillis::new).ok_or(CanonicalTcpError::DeadlineExpired)
+pub(super) fn deadline(
+    started: MonotonicMillis,
+    millis: u64,
+) -> Result<MonotonicMillis, CanonicalTcpError> {
+    started
+        .get()
+        .checked_add(millis)
+        .filter(|end| *end > started.get())
+        .map(MonotonicMillis::new)
+        .ok_or(CanonicalTcpError::DeadlineExpired)
 }
 
 fn remaining(deadline: MonotonicMillis) -> Result<Duration, CanonicalTcpError> {
-    deadline.get().checked_sub(monotonic_millis().get()).filter(|left| *left > 0)
-        .map(Duration::from_millis).ok_or(CanonicalTcpError::DeadlineExpired)
+    deadline
+        .get()
+        .checked_sub(monotonic_millis().get())
+        .filter(|left| *left > 0)
+        .map(Duration::from_millis)
+        .ok_or(CanonicalTcpError::DeadlineExpired)
 }
 
 fn check_cancel(cancellation: Option<&dyn CancellationProbe>) -> Result<(), CanonicalTcpError> {
@@ -201,6 +299,15 @@ fn check_cancel(cancellation: Option<&dyn CancellationProbe>) -> Result<(), Cano
     Ok(())
 }
 
+fn pause_retry(error: &io::Error, remaining: Duration) {
+    if error.kind() != io::ErrorKind::Interrupted {
+        std::thread::sleep(remaining.min(POLL));
+    }
+}
+
 fn retryable(error: &io::Error) -> bool {
-    matches!(error.kind(), io::ErrorKind::Interrupted | io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)
+    matches!(
+        error.kind(),
+        io::ErrorKind::Interrupted | io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+    )
 }
