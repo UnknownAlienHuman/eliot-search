@@ -12,6 +12,7 @@ pub use issuer::{
     BoundedStandaloneGrantIssuer, GrantEntropySource, GrantTimeSource, GrantTimeWindow,
     GrantUseError, GrantValidationClock, VerifiedStandaloneGrant,
 };
+pub use search_contracts::AuthoritativeGrantPolicy;
 
 use search_contracts::{
     AccessPartitionId, BindingId, BoundedSet, CorpusOrPortfolioId, DisclosureCeiling, GrantId,
@@ -38,36 +39,6 @@ pub struct StandaloneGrantRequest {
     pub requested_source_read_permission: bool,
     pub requested_exact_scan_permission: bool,
     pub requested_ttl_ms: u64,
-}
-
-/// One immutable authoritative binding/policy capture.
-///
-/// The fixed principal/scope/domain fields are supplied by the authenticated
-/// binding owner. The request cannot replace them.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AuthoritativeGrantPolicy {
-    pub binding_id: BindingId,
-    pub binding_generation: u64,
-    pub policy_generation: u64,
-    pub installation_id: InstallationId,
-    pub installation_incarnation_id: InstallationIncarnationId,
-    pub principal_opaque_id: OpaqueId,
-    pub client_scope_ref: OpaqueRef,
-    pub scope_domain_id: ScopeDomainId,
-    pub allowed_membership_ids: BoundedSet<SourceMembershipId, MAX_SET_ITEMS>,
-    pub allowed_corpus_or_portfolio_ids: BoundedSet<CorpusOrPortfolioId, MAX_SET_ITEMS>,
-    pub reference_portfolio_revision: Option<PortfolioRevision>,
-    pub allowed_access_partitions: BoundedSet<AccessPartitionId, MAX_SET_ITEMS>,
-    pub allowed_modalities: BoundedSet<Modality, MAX_SET_ITEMS>,
-    pub permitted_recipe_families: BoundedSet<RecipeIdV1, MAX_SET_ITEMS>,
-    pub allowed_budget_classes: BoundedSet<ProfileId, MAX_SET_ITEMS>,
-    pub sensitivity_ceiling: SensitivityClass,
-    pub disclosure_ceiling: DisclosureCeiling,
-    pub source_read_permission: bool,
-    pub exact_scan_permission: bool,
-    pub issued_boot_id: OpaqueId,
-    pub revocation_generation: u64,
-    pub maximum_ttl_ms: u64,
 }
 
 /// Exact non-widened template handed to the issuer.
