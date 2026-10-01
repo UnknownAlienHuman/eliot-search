@@ -6,6 +6,7 @@
 
 // Keep reference transitions available as the model, not as a disk fallback.
 mod reference;
+mod identity;
 mod persistent;
 mod snapshot_guard;
 mod conditions;
@@ -16,6 +17,7 @@ pub mod publication_codec;
 pub mod migration;
 
 pub use reference::*;
+pub use identity::*;
 pub use persistent::PublicationSuccessor;
 pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use conditions::{ConditionalControlMutation, ControlRecordCondition};
