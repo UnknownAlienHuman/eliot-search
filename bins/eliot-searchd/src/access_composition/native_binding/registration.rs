@@ -20,9 +20,7 @@ use search_control_redb::{
     ConditionalControlMutation, ControlCommitReceipt, ControlError, ControlKey,
     ControlSnapshotPublisher, ControlValue, JournalIdentity, MutationId,
     PersistentControlJournal,
-    provider_authority::{
-        ProviderAuthorityCommit, ProviderAuthorityMutation, ProviderAuthorityRecord,
-    },
+    provider_authority::{ProviderAuthorityMutation, ProviderAuthorityRecord},
 };
 use search_ports::{CancellationProbe, OperationContext};
 
@@ -54,7 +52,7 @@ impl StandaloneRegistrationMutation {
     /// Native administration supplies the records. Pair shape, transitions,
     /// durable keys, codecs and conditional writes are owned by
     /// `search-control-redb::ProviderAuthorityMutation`. The two legacy leaf
-    /// mutation descriptors are retained only to preserve the already-deployed
+    /// mutation descriptors are retained only to preserve the existing
     /// deterministic standalone command digest during this migration.
     ///
     /// # Errors
@@ -165,7 +163,7 @@ impl StandaloneRegistrationMutation {
         let committed = journal.commit_provider_authority(&self.authority, context)?;
         Ok(StandaloneRegistrationCommit {
             registration: self,
-            committed,
+            receipt: committed.receipt().clone(),
         })
     }
 
@@ -178,7 +176,7 @@ impl StandaloneRegistrationMutation {
         let committed = journal.recover_provider_authority(&self.authority, context)?;
         Ok(committed.map(|committed| StandaloneRegistrationCommit {
             registration: self,
-            committed,
+            receipt: committed.receipt().clone(),
         }))
     }
 
@@ -197,17 +195,17 @@ impl StandaloneRegistrationMutation {
 #[must_use = "a registration commit still requires barriers and current publication"]
 pub struct StandaloneRegistrationCommit<'a> {
     registration: &'a StandaloneRegistrationMutation,
-    committed: ProviderAuthorityCommit,
+    receipt: ControlCommitReceipt,
 }
 
 impl StandaloneRegistrationCommit<'_> {
     /// Actual journal receipt for guarded snapshot publication.
     #[must_use]
-    pub const fn receipt(&self) -> &ControlCommitReceipt { self.committed.receipt() }
+    pub const fn receipt(&self) -> &ControlCommitReceipt { &self.receipt }
 
     /// Exact replacement binding carried by the typed authority command.
     pub fn replacement_binding(&self) -> Result<ProviderBindingRecord, NativeGrantPolicyError> {
-        Ok(self.committed.replacement().binding().clone())
+        Ok(self.registration.authority.replacement().binding().clone())
     }
 
     /// Check every exact replacement against one current disk-published head.
@@ -255,7 +253,7 @@ impl StandaloneRegistrationCommit<'_> {
             }
             _ => return Err(NativeGrantPolicyError::InvalidRecord),
         };
-        if generation < self.committed.receipt().after_generation {
+        if generation < self.receipt.after_generation {
             return Err(ControlError::TransactionConflict.into());
         }
         check(context, started, deadline)?;
