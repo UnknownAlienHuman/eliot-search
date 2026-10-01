@@ -18,7 +18,7 @@ use search_ports::{CancellationProbe, OperationContext};
 use crate::access_composition::{
     NativeGrantPolicyError, StandalonePolicyRecord,
 };
-use crate::access_composition::native_grant_policy::policy_key;
+use crate::access_composition::native_grant_policy::{decode_policy_record, policy_key};
 use super::{
     StandaloneRegistrationMutation, ProviderBindingRecord, validate_pair,
 };
@@ -282,7 +282,7 @@ impl StandaloneProvisioningIntent {
         let prior = match (prior_binding_raw.as_ref(), prior_policy_raw.as_ref()) {
             (Some(binding), Some(policy)) => {
                 let binding = codec::decode(binding)?;
-                let policy = StandalonePolicyRecord::decode_native(policy)?;
+                let policy = decode_policy_record(policy)?;
                 validate_pair(&binding, &policy)?;
                 Some((binding, policy))
             }
@@ -290,7 +290,7 @@ impl StandaloneProvisioningIntent {
             _ => return Err(NativeGrantPolicyError::InvalidRecord),
         };
         let next_binding_record = codec::decode(&next_binding_value)?;
-        let next_policy_record = StandalonePolicyRecord::decode_native(&next_policy_value)?;
+        let next_policy_record = decode_policy_record(&next_policy_value)?;
         validate_pair(&next_binding_record, &next_policy_record)?;
         if next_binding_record.binding_id != binding_id
             || next_binding_record.installation_incarnation_id
