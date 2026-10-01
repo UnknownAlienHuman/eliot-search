@@ -56,6 +56,14 @@ impl NativeBindingPin {
     #[must_use]
     pub const fn record(&self) -> &ProviderBindingRecord { &self.record }
 
+    /// Authenticated binding context retained when this exact session opened.
+    ///
+    /// This read-only value identifies the paired protocol session for daemon
+    /// composition. It is not a grant, access permit or replacement for
+    /// [`NativeBindingPin::revalidate`].
+    #[must_use]
+    pub const fn binding_context(&self) -> BindingContext { self.context }
+
     /// Revalidate the exact record and originating pairing against current disk
     /// publication, then check UTC using the retained rollback-fenced clock.
     /// The optional deadline is binding expiry only; callers must intersect it
