@@ -3,7 +3,6 @@
 
 mod codec;
 mod journal_open;
-mod mutation;
 mod opening;
 mod process;
 mod registration;
@@ -12,7 +11,6 @@ mod startup;
 pub use journal_open::{
     StandaloneProcessOpenError, restore_existing_standalone_process,
 };
-pub use mutation::ProviderBindingMutation;
 pub use opening::{
     BindingConnectionRegistry, BindingConnectionRegistryError, BindingDrainReceipt,
     MAX_REGISTERED_BINDING_CONNECTIONS, NativeBindingExpectation,
