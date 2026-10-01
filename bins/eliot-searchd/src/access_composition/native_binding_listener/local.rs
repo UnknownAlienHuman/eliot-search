@@ -7,6 +7,8 @@
 //! every stream still completes canonical mutual pairing and current native
 //! registration/policy validation before it can serve work.
 
+#![allow(dead_code)]
+
 use core::fmt;
 use std::io;
 use std::task::Poll;
@@ -22,8 +24,8 @@ use crate::provider_composition::LocalByteStream;
 
 use super::{
     ACCEPT_SLEEP, MAX_ACCEPT_QUANTUM, StandaloneAcceptError,
-    StandaloneNativePairingError, StandaloneOpenedConnection, StandalonePairingIo,
-    StandalonePairingIoError, pairing,
+    StandaloneOpenedConnection, StandalonePairingIo, StandalonePairingIoError,
+    pairing,
 };
 use super::super::{
     NativeBindingError, StandaloneBootstrapReady, StandaloneProcessOwner,
@@ -253,10 +255,4 @@ fn trusted_endpoint_name(
     Ok(NativeEndpointNameV1::from_installation(
         expected.installation_id,
     ))
-}
-
-impl From<StandaloneNativePairingError> for StandaloneLocalBindError {
-    fn from(error: StandaloneNativePairingError) -> Self {
-        Self::Listener(StandalonePairingIoError::Io(io::Error::other(error)))
-    }
 }
