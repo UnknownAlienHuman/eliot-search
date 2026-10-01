@@ -16,14 +16,16 @@ use search_access::{
     IndexedRouteFence, LiveSecurityState, NamespacePolicyFence, OverlapFreeRouteProof,
     RequestSecurityFence, RequestedMembershipScope, check_policy_fence,
 };
-use search_contracts::{ProviderBodyV1, RequestBody, RequestedScope, SourceMembershipId};
+use search_contracts::{
+    Blake3Digest32, ProviderBodyV1, RequestBody, RequestedScope, SourceMembershipId,
+};
 use search_provider_protocol::{AdmittedProviderRequest, BindingContext, MonotonicMillis};
 
 use crate::access_composition::{
     AuthoritativeGrantPolicy, GrantUseError, NativeSecurityDomain, StandaloneAdmissionRequest,
     StandaloneGrantTemplate, StandaloneMembershipSecuritySnapshot,
     StandalonePreRetrievalAdmission, StandaloneScopeResolver,
-    compile_standalone_pre_retrieval,
+    compile_standalone_pre_retrieval_for_profile,
 };
 use crate::provider_composition::{
     CanonicalRecipeHost, CanonicalRecipeTask, CanonicalServingAuthority,
@@ -58,6 +60,14 @@ pub(crate) struct CanonicalQueryAuthority<'a> {
 /// `operation`. They must not construct this value from request claims, endpoint
 /// existence, a cached access permit or handle possession.
 pub(crate) trait CanonicalQueryAuthorityOwner {
+    /// Current independently published projection/scoring profile.
+    ///
+    /// The zero digest is compatibility-only for owners not yet migrated to a
+    /// publication guard. Product composition must override this method.
+    fn profile_digest(&self) -> Blake3Digest32 {
+        Blake3Digest32::from_bytes([0_u8; 32])
+    }
+
     fn with_current<R>(
         &mut self,
         binding: &BindingContext,
@@ -159,6 +169,7 @@ where
             &mut Self::Task,
         ) -> Result<R, CanonicalServingError>,
     ) -> Result<R, CanonicalServingError> {
+        let profile_digest = self.authority.profile_digest();
         self.authority
             .with_current(binding, request, |current, request| {
                 let CanonicalQueryAuthority {
@@ -192,6 +203,7 @@ where
                     access,
                     authoritative_policy,
                     route,
+                    profile_digest,
                     overlap_proof,
                     live.generation,
                 )?;
@@ -224,7 +236,7 @@ where
                 };
                 let mut compile_admission =
                     |body: &RequestBody, template: &StandaloneGrantTemplate| {
-                        compile_standalone_pre_retrieval(
+                        compile_standalone_pre_retrieval_for_profile(
                             &mut fixed_scope,
                             StandaloneAdmissionRequest {
                                 body,
@@ -238,6 +250,7 @@ where
                                 overlap_proof,
                                 max_legs,
                             },
+                            profile_digest,
                         )
                     };
                 let authority = CanonicalServingAuthority {
@@ -296,6 +309,7 @@ pub(crate) struct NativeQueryAuthorityOwner<R, V> {
     planned_policy: NamespacePolicyFence,
     authoritative_policy: AuthoritativePolicyState,
     route: IndexedRouteFence,
+    profile_digest: Blake3Digest32,
     live: LiveSecurityState,
     overlap_proof: Option<OverlapFreeRouteProof>,
     max_legs: usize,
@@ -317,6 +331,7 @@ where
         planned_policy: NamespacePolicyFence,
         authoritative_policy: AuthoritativePolicyState,
         route: IndexedRouteFence,
+        profile_digest: Blake3Digest32,
         live: LiveSecurityState,
         overlap_proof: Option<OverlapFreeRouteProof>,
         max_legs: usize,
@@ -331,6 +346,7 @@ where
             planned_policy,
             authoritative_policy,
             route,
+            profile_digest,
             live,
             overlap_proof,
             max_legs,
@@ -411,6 +427,7 @@ where
         if let Some(proof) = &self.overlap_proof {
             if proof.route != self.route
                 || proof.access_snapshot_generation != self.access.generation
+                || proof.profile_digest != self.profile_digest
                 || proof.memberships.is_empty()
                 || !proof
                     .memberships
@@ -429,6 +446,10 @@ where
     R: StandaloneScopeResolver,
     V: FnMut(&RequestBody, &ProviderBodyV1) -> Result<(), AccessError>,
 {
+    fn profile_digest(&self) -> Blake3Digest32 {
+        self.profile_digest
+    }
+
     fn with_current<T>(
         &mut self,
         binding: &BindingContext,
@@ -498,6 +519,7 @@ fn validate_retained_admission(
     access: &AuthoritativeAccessSnapshot,
     policy: AuthoritativePolicyState,
     route: IndexedRouteFence,
+    profile_digest: Blake3Digest32,
     overlap_proof: Option<&OverlapFreeRouteProof>,
     live_generation: u64,
 ) -> Result<(), CanonicalServingError> {
@@ -506,7 +528,8 @@ fn validate_retained_admission(
     };
     let resolved_memberships: BTreeSet<SourceMembershipId> =
         resolved.memberships.iter().copied().collect();
-    if admission.request_fence.memberships != resolved_memberships
+    if admission.profile_digest != profile_digest
+        || admission.request_fence.memberships != resolved_memberships
         || admission.request_fence.planned_generation != access.generation
         || admission.scope.access_snapshot_generation != access.generation
         || admission.scope.source_catalog_generation != access.source_catalog_generation
@@ -530,6 +553,7 @@ fn validate_retained_admission(
                     || &proof.proof_digest != digest
                     || proof.memberships != leg.memberships
                     || proof.access_snapshot_generation != access.generation
+                    || proof.profile_digest != profile_digest
                 {
                     return Err(CanonicalServingError::Access(
                         AccessError::OverlapProofMissing,
