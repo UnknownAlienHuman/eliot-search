@@ -1,28 +1,30 @@
-//! Native registration validation spans the original socket's profile handshake.
+//! Native registration validation spans the original local stream's profile handshake.
 
-use std::net::{Shutdown, TcpStream};
+use std::net::TcpStream;
 
 use search_contracts::{OpaqueId, protocol::PeerRole};
 use search_control_redb::{ControlSnapshotPublisher, PersistentControlJournal};
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
-    BindingContext, MonotonicMillis, PairingMachine, ProtocolLimits, ServerNonce, TransportPeer,
+    BindingContext, BoundSession, MonotonicMillis, PairingMachine, ProtocolLimits,
+    ServerNonce, TransportPeer,
 };
 
 use crate::access_composition::{
     GrantUseError, NativeGrantPolicyError, StandaloneBootstrapReady, StandalonePolicyState,
 };
 use crate::provider_composition::{
-    CanonicalProviderConnection, CanonicalTcpConnection, CanonicalTcpError, monotonic_millis,
+    CanonicalProviderConnection, CanonicalTcpConnection, CanonicalTcpError, LocalByteStream,
+    monotonic_millis,
 };
 use super::{
     BindingConnectionRegistry, BindingConnectionRegistryError, NativeBindingError,
     NativeBindingPin, NativePairingCredentialError, SystemGrantClock, begin, check,
 };
 
-/// Preserve native read/clock failures separately from actual handshake I/O.
+/// Preserve native read/clock failures separately from actual local-stream I/O.
 /// Errors may follow acknowledgement output; they never imply peer receipt or
-/// permission to reuse the socket. No record, key or peer text is rendered.
+/// permission to reuse the stream. No record, key or peer text is rendered.
 #[derive(Debug)]
 pub enum NativeTcpOpenError {
     /// The required current-user pairing credential could not be resolved.
@@ -31,20 +33,20 @@ pub enum NativeTcpOpenError {
     Binding(NativeBindingError),
     /// Coherent registration, policy state, boot or lifetime did not validate.
     Policy(NativeGrantPolicyError),
-    /// The original socket's authenticated profile exchange failed.
+    /// The authenticated local transport profile exchange failed.
     Transport(CanonicalTcpError),
     /// The verified session could not be retained by the finite binding registry.
     Registry(BindingConnectionRegistryError),
 }
 
 impl std::fmt::Display for NativeTcpOpenError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Credential(error) => std::fmt::Display::fmt(error, f),
-            Self::Binding(error) => std::fmt::Display::fmt(error, f),
-            Self::Policy(error) => std::fmt::Display::fmt(error, f),
-            Self::Transport(error) => std::fmt::Display::fmt(error, f),
-            Self::Registry(error) => std::fmt::Display::fmt(error, f),
+            Self::Credential(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Binding(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Policy(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Transport(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Registry(error) => std::fmt::Display::fmt(error, formatter),
         }
     }
 }
@@ -66,38 +68,11 @@ impl From<BindingConnectionRegistryError> for NativeTcpOpenError {
 }
 
 impl CanonicalProviderConnection {
-    /// Open a finalized standalone binding and negotiate its original TCP socket.
+    /// Open a finalized standalone binding over the compatibility TCP stream.
     ///
-    /// One finite handoff deadline starts before native opening. Binding/policy
-    /// lifetimes may shorten it; lookup, key verification, partial offer reads,
-    /// acknowledgement writes and final validation never get another budget.
-    /// The native cancellation capability is observed around actual setup I/O.
-    ///
-    /// `ready` is produced only by restart recovery plus guarded COMMITTED
-    /// publication, prior-session fencing and binding-wide dependent cleanup.
-    /// Its exact journal, record and independently resolved expectation must match
-    /// the current session. A published row or credential alone cannot bypass that
-    /// startup barrier.
-    ///
-    /// The exact pin and coherent policy pair are revalidated before waiting,
-    /// immediately before acknowledgement, and after output. An old boot, absent
-    /// or terminal policy, changed binding or expired lifetime refuses handoff.
-    /// Neither an invented RequestGuard nor a new grant/issuer is required.
-    ///
-    /// Caller holds the real native root/binding/policy mutation lock throughout.
-    /// The exact generation key is loaded from Windows Credential Manager here,
-    /// not accepted as a caller-selected key. Missing credentials are never
-    /// created. The ceremony must be complete on THIS socket, with no other reader
-    /// or unread buffered bytes. The successfully negotiated transport is inserted
-    /// into the finite native binding registry before it can escape to a serving
-    /// owner. This does not authorize any recipe: serving retains the returned pin
-    /// and revalidates live access.
-    ///
-    /// # Errors
-    /// Any refusal, expiry, startup-evidence mismatch, registry failure, I/O
-    /// failure or unwind closes the owned socket and drops the key/session. A late
-    /// failure may follow acknowledgement bytes; no retry, rollback claim or legacy
-    /// repair frame is attempted.
+    /// Loopback validation remains inside `into_tcp_authorized`. Final product
+    /// startup must use [`Self::open_standalone_local`] with the canonical
+    /// installation-scoped named-pipe adapter and must not fall back here.
     #[allow(clippy::too_many_arguments)]
     pub fn open_standalone_tcp<C: CancellationProbe + Clone>(
         stream: TcpStream,
@@ -113,74 +88,201 @@ impl CanonicalProviderConnection {
         clock: &mut SystemGrantClock,
         context: &OperationContext<C>,
     ) -> Result<(CanonicalTcpConnection, NativeBindingPin), NativeTcpOpenError> {
-        // Own shutdown even if native validation fails before the TCP owner exists.
-        let mut socket = SocketHandoff(Some(stream));
-        let (started, deadline) = begin(context)?;
-        if binding.role() != PeerRole::StandaloneCli {
-            return Err(NativeBindingError::Unavailable.into());
-        }
-        ready.validate_context(journal, &binding)?;
-        let expected = ready.expectation();
-        let credential_context = remaining_context(context, started, deadline)?;
-        let peer = TransportPeer {
-            role: binding.role(),
-            incarnation: binding.incarnation(),
-            binding: binding.binding_id(),
-        };
-        let key = expected.load_pairing_key(&peer, &credential_context)?;
-        check(context, started, deadline)?;
-        let native_context = remaining_context(context, started, deadline)?;
-        let (connection, pin) = Self::open_published(
+        let PreparedNativeOpen {
+            connection,
+            pin,
+            started,
+            deadline,
+        } = prepare_native_open(
             binding,
             ceremony,
-            key,
             server_nonce,
             limits,
             journal,
             publisher,
-            expected,
+            ready,
             clock,
-            &native_context,
+            context,
         )?;
-        ready.validate_opened_record(journal, pin.record())?;
-        check(context, started, deadline)?;
-        let stream = socket.0.take().ok_or(CanonicalTcpError::Closed)?;
         let transport = connection.into_tcp_authorized(
             stream,
             started,
             deadline,
             Some(context.cancellation()),
             |session| {
-                let binding = session.binding_context();
-                let read_context = remaining_context(context, started, deadline)?;
-                let (registration, binding_expiry) = pin.read_standalone_registration(
-                    &binding,
+                authorize_profile(
+                    session,
+                    &pin,
                     journal,
                     publisher,
+                    boot_id,
                     clock,
-                    &read_context,
-                )?;
-                let (_, policy) = registration.records().ok_or(NativeBindingError::Unavailable)?;
-                if policy.state != StandalonePolicyState::Active
-                    || &policy.policy.issued_boot_id != boot_id
-                {
-                    return Err(
-                        NativeGrantPolicyError::Grant(GrantUseError::PolicyUnavailable).into(),
-                    );
-                }
-                let policy_expiry = clock
-                    .check_policy_window(&policy.issued_at, policy.expires_at.as_ref())
-                    .map_err(NativeBindingError::from)?;
-                check(context, started, deadline)?;
-                let until = binding_expiry.map_or(deadline, |end| deadline.min(end));
-                Ok::<_, NativeTcpOpenError>(
-                    policy_expiry.map_or(until, |end| until.min(end)),
+                    context,
+                    started,
+                    deadline,
                 )
             },
         )?;
         connections.register(&pin, &transport)?;
         Ok((transport, pin))
     }
+
+    /// Open a finalized standalone binding over one already-accepted local stream.
+    ///
+    /// The stream is consumed exactly once and dropped on every refusal or unwind.
+    /// Endpoint selection and acceptance happen in the platform adapter; this
+    /// method performs no name scan, reconnect, TCP fallback or authority inference.
+    /// Exact-generation Credential Manager resolution, current registration,
+    /// policy lifetime, profile proof and registry retention remain identical to
+    /// the compatibility TCP path.
+    #[allow(clippy::too_many_arguments)]
+    pub fn open_standalone_local<C, S>(
+        stream: S,
+        binding: BindingContext,
+        ceremony: PairingMachine,
+        server_nonce: ServerNonce,
+        limits: ProtocolLimits,
+        journal: &PersistentControlJournal,
+        publisher: &ControlSnapshotPublisher,
+        connections: &mut BindingConnectionRegistry,
+        ready: &StandaloneBootstrapReady,
+        boot_id: &OpaqueId,
+        clock: &mut SystemGrantClock,
+        context: &OperationContext<C>,
+    ) -> Result<(CanonicalTcpConnection, NativeBindingPin), NativeTcpOpenError>
+    where
+        C: CancellationProbe + Clone,
+        S: LocalByteStream + 'static,
+    {
+        let PreparedNativeOpen {
+            connection,
+            pin,
+            started,
+            deadline,
+        } = prepare_native_open(
+            binding,
+            ceremony,
+            server_nonce,
+            limits,
+            journal,
+            publisher,
+            ready,
+            clock,
+            context,
+        )?;
+        let transport = connection.into_local_stream_authorized(
+            stream,
+            started,
+            deadline,
+            Some(context.cancellation()),
+            |session| {
+                authorize_profile(
+                    session,
+                    &pin,
+                    journal,
+                    publisher,
+                    boot_id,
+                    clock,
+                    context,
+                    started,
+                    deadline,
+                )
+            },
+        )?;
+        connections.register(&pin, &transport)?;
+        Ok((transport, pin))
+    }
+}
+
+struct PreparedNativeOpen {
+    connection: CanonicalProviderConnection,
+    pin: NativeBindingPin,
+    started: MonotonicMillis,
+    deadline: MonotonicMillis,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_native_open<C: CancellationProbe + Clone>(
+    binding: BindingContext,
+    ceremony: PairingMachine,
+    server_nonce: ServerNonce,
+    limits: ProtocolLimits,
+    journal: &PersistentControlJournal,
+    publisher: &ControlSnapshotPublisher,
+    ready: &StandaloneBootstrapReady,
+    clock: &mut SystemGrantClock,
+    context: &OperationContext<C>,
+) -> Result<PreparedNativeOpen, NativeTcpOpenError> {
+    let (started, deadline) = begin(context)?;
+    if binding.role() != PeerRole::StandaloneCli {
+        return Err(NativeBindingError::Unavailable.into());
+    }
+    ready.validate_context(journal, &binding)?;
+    let expected = ready.expectation();
+    let credential_context = remaining_context(context, started, deadline)?;
+    let peer = TransportPeer {
+        role: binding.role(),
+        incarnation: binding.incarnation(),
+        binding: binding.binding_id(),
+    };
+    let key = expected.load_pairing_key(&peer, &credential_context)?;
+    check(context, started, deadline)?;
+    let native_context = remaining_context(context, started, deadline)?;
+    let (connection, pin) = CanonicalProviderConnection::open_published(
+        binding,
+        ceremony,
+        key,
+        server_nonce,
+        limits,
+        journal,
+        publisher,
+        expected,
+        clock,
+        &native_context,
+    )?;
+    ready.validate_opened_record(journal, pin.record())?;
+    check(context, started, deadline)?;
+    Ok(PreparedNativeOpen {
+        connection,
+        pin,
+        started,
+        deadline,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn authorize_profile<C: CancellationProbe + Clone>(
+    session: &BoundSession,
+    pin: &NativeBindingPin,
+    journal: &PersistentControlJournal,
+    publisher: &ControlSnapshotPublisher,
+    boot_id: &OpaqueId,
+    clock: &mut SystemGrantClock,
+    context: &OperationContext<C>,
+    started: MonotonicMillis,
+    deadline: MonotonicMillis,
+) -> Result<MonotonicMillis, NativeTcpOpenError> {
+    let binding = session.binding_context();
+    let read_context = remaining_context(context, started, deadline)?;
+    let (registration, binding_expiry) = pin.read_standalone_registration(
+        &binding,
+        journal,
+        publisher,
+        clock,
+        &read_context,
+    )?;
+    let (_, policy) = registration.records().ok_or(NativeBindingError::Unavailable)?;
+    if policy.state != StandalonePolicyState::Active
+        || &policy.policy.issued_boot_id != boot_id
+    {
+        return Err(NativeGrantPolicyError::Grant(GrantUseError::PolicyUnavailable).into());
+    }
+    let policy_expiry = clock
+        .check_policy_window(&policy.issued_at, policy.expires_at.as_ref())
+        .map_err(NativeBindingError::from)?;
+    check(context, started, deadline)?;
+    let until = binding_expiry.map_or(deadline, |end| deadline.min(end));
+    Ok(policy_expiry.map_or(until, |end| until.min(end)))
 }
 
 fn remaining_context<C: CancellationProbe + Clone>(
@@ -201,15 +303,4 @@ fn remaining_context<C: CancellationProbe + Clone>(
         context.budget_ref().clone(),
     )
     .map_err(|_| NativeBindingError::Interrupted)
-}
-
-// The original descriptor is transferred once, not cloned. Once taken, the TCP
-// owner is responsible for shutdown; before that, even an unwind closes here.
-struct SocketHandoff(Option<TcpStream>);
-impl Drop for SocketHandoff {
-    fn drop(&mut self) {
-        if let Some(stream) = &self.0 {
-            let _ = stream.shutdown(Shutdown::Both);
-        }
-    }
 }
