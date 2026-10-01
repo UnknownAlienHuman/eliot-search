@@ -1,11 +1,12 @@
-//! Typed TCP client for canonical authenticated P00 connections.
+//! Typed local-provider client for canonical authenticated P00 connections.
 //!
-//! The explicit handoff accepts an already-paired original socket. The native
-//! opener performs canonical hello and mutual pairing from caller-supplied
-//! registered coordinates and key material. Neither path upgrades the development
-//! token-file session, mints grants or opens source/search stores.
+//! The explicit TCP handoff is transitional compatibility code. Native pairing,
+//! typed-profile negotiation and request/session I/O share one transport-neutral
+//! stream owner so the final per-installation named-pipe adapter cannot create a
+//! second protocol stack or fallback route.
 
 mod io;
+mod local;
 mod native;
 mod state;
 
@@ -25,12 +26,12 @@ use io::{SetupBudget, SocketIo};
 use state::State;
 
 /// Local transport or protocol failure; authenticated remote error bodies remain
-/// typed ProviderEnvelope values, not a successful command or a fabricated code.
+/// typed `ProviderEnvelope` values, not a successful command or fabricated code.
 #[derive(Debug)]
 pub enum TypedClientError {
     /// Shared protocol validation failed.
     Protocol(ProtocolError),
-    /// A socket operation failed.
+    /// A local transport operation failed.
     Io(std::io::Error),
     /// The original setup or pending request budget expired.
     DeadlineExpired,
@@ -38,11 +39,11 @@ pub enum TypedClientError {
     Cancelled,
     /// The peer closed before a complete record arrived.
     PeerClosed,
-    /// A non-empty socket write made no progress.
+    /// A non-empty transport write made no progress.
     WriteZero,
     /// The server did not acknowledge the exact typed/MAC profile.
     ProfileMismatch,
-    /// Both socket endpoints must be local loopback addresses.
+    /// A transitional TCP adapter observed a non-loopback endpoint.
     NonLoopback,
     /// A bounded allocation could not be reserved.
     Allocation,
@@ -87,20 +88,20 @@ impl From<std::io::Error> for TypedClientError {
 }
 
 impl std::fmt::Display for TypedClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.code())
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.code())
     }
 }
 
 impl std::error::Error for TypedClientError {}
 
-/// Sole owner of one typed socket/key and its bounded client lifecycle.
+/// Sole owner of one typed local stream/key and its bounded client lifecycle.
 ///
 /// Sending and receiving are separate, so a caller can send a cancel while a
 /// recipe is outstanding. Up to the negotiated work limit and one additional
 /// cancel may await replies. The cancel reserves no work slot. Reads are
-/// synchronous, not background tasks; no reader threads or socket clones exist.
-/// Failure/unwind closes the socket and drops all state. There is no reconnect,
+/// synchronous, not background tasks; no reader threads or stream clones exist.
+/// Failure/unwind drops the stream and all state. There is no reconnect,
 /// operation replay, deadline renewal, legacy fallback or implicit daemon shutdown.
 /// Received values are authenticated protocol data, not current access permits.
 pub struct TypedProviderSession {
@@ -108,7 +109,7 @@ pub struct TypedProviderSession {
 }
 
 impl TypedProviderSession {
-    /// Negotiates the typed profile on the original, already-paired socket.
+    /// Negotiate the typed profile on an already-paired compatibility TCP stream.
     ///
     /// The handoff must leave no other reader or prefetched bytes behind. The
     /// binding must match the completed ceremony and the key must reproduce its
@@ -124,7 +125,6 @@ impl TypedProviderSession {
         limits: ProtocolLimits,
         setup_timeout: Duration,
     ) -> Result<Self, TypedClientError> {
-        // Own teardown before the first fallible validation or socket option.
         let socket = SocketIo::new(stream);
         let never_cancelled = || false;
         let budget = SetupBudget::new(setup_timeout, &never_cancelled)?;
@@ -187,10 +187,7 @@ impl TypedProviderSession {
         Ok(Self { state: Some(state) })
     }
 
-    /// Sends an existing typed recipe and server-issued claims without editing
-    /// either. The request ID comes from the recipe and cannot be reused on this
-    /// connection. Success means local send completion, not server admission,
-    /// authorization or recipe success. Encoding/proof/write share one budget.
+    /// Send an existing typed recipe and server-issued claims without editing either.
     pub fn send_request(
         &mut self,
         body: RequestBody,
@@ -199,10 +196,7 @@ impl TypedProviderSession {
         self.with_state(|state| state.send_request(body, timeout))
     }
 
-    /// Sends a fresh control identity for the target without completing it.
-    /// A new ID may repeat a target; a repeated control ID or self-target fails.
-    /// One cancel can await acknowledgement even when every work slot is full.
-    /// Neither sending nor receiving its acknowledgement renews target deadlines.
+    /// Send a fresh cancellation control identity for one target request.
     pub fn send_cancel(
         &mut self,
         control_id: RequestId,
@@ -212,25 +206,12 @@ impl TypedProviderSession {
         self.with_state(|state| state.send_cancel(control_id, target, timeout))
     }
 
-    /// Returns one whole authenticated, correlated typed event; prints nothing.
-    /// Checks the MAC before decoding, both directional and per-request ordering,
-    /// recipe/plan identity and the original deadlines. A cancel acknowledgement
-    /// belongs to its own control ID and does not remove the target request.
-    /// Even a target-terminal flag is not proof of rollback or a result payload.
-    /// Remote errors, ambiguity and partial coverage remain intact for rendering.
+    /// Return one whole authenticated, correlated typed event; print nothing.
     pub fn receive(&mut self) -> Result<ProviderEnvelope, TypedClientError> {
         self.with_state(State::receive)
     }
 
-    /// Polls one response without holding the caller until a whole frame arrives.
-    ///
-    /// Pending retains all partial prefix/body/MAC bytes and the original request
-    /// deadline. The caller may send_cancel or close before polling again. Input
-    /// waiting is capped at min(quantum, 25 ms) and 64 KiB per turn; complete-frame
-    /// authentication/decoding still runs synchronously under the original deadline.
-    /// Zero quantum is invalid. This is explicit polling, not an async Waker API.
-    /// Only Ready exposes a fully verified event. Pending spends no sequence or
-    /// request state; EOF, real deadline expiry and protocol errors still close.
+    /// Poll one response without holding the caller until a whole frame arrives.
     pub fn poll_receive(
         &mut self,
         quantum: Duration,
@@ -238,8 +219,9 @@ impl TypedProviderSession {
         self.with_state(|state| state.poll_receive(quantum))
     }
 
-    /// Drops key and client metadata and shuts down the socket, idempotently.
-    /// Does not send shutdown or claim to undo server effects.
+    /// Drop key, client metadata and the sole local stream, idempotently.
+    ///
+    /// This sends no shutdown request and does not claim to undo server effects.
     pub fn close(&mut self) { drop(self.state.take()); }
 
     fn with_state<R>(
