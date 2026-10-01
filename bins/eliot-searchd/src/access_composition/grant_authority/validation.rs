@@ -186,6 +186,15 @@ fn validate_policy(
 ) -> Result<(), GrantUseError> {
     let template = issued.template();
     if policy.binding_generation == 0 || policy.policy_generation == 0
+        || policy.revocation_generation == 0
+        || policy.allowed_membership_ids.is_empty()
+        || policy.allowed_access_partitions.is_empty()
+        || policy.allowed_modalities.is_empty()
+        || policy.permitted_recipe_families.is_empty()
+        || policy.allowed_budget_classes.is_empty()
+        || (policy.reference_portfolio_revision.is_none()
+            && policy.allowed_corpus_or_portfolio_ids.iter()
+                .any(|id| matches!(id, CorpusOrPortfolioId::Portfolio(_))))
         || template.binding_generation != policy.binding_generation
         || template.policy_generation != policy.policy_generation
         || claims.installation_id != policy.installation_id
@@ -196,6 +205,7 @@ fn validate_policy(
         || claims.revocation_generation != policy.revocation_generation
         || issued.effective_ttl_ms() == 0 || issued.effective_ttl_ms() > policy.maximum_ttl_ms
         || (policy.exact_scan_permission && !policy.source_read_permission)
+        || (claims.exact_scan_permission && !claims.source_read_permission)
     {
         return Err(GrantUseError::PolicyChanged);
     }
