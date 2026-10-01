@@ -64,6 +64,9 @@ test = true
 [features]
 default = ["wave1-shell"]
 wave1-shell = []
+# Retains the obsolete TCP/token-file proxy only for existing process fixtures.
+# Final product startup must never enable or fall back to this feature.
+legacy-loopback-harness = []
 # Revision-store ownership is a baseline DIRECT boundary, not optional wave
 # acceptance. The feature marker remains for graph compatibility only.
 wave2-source = []

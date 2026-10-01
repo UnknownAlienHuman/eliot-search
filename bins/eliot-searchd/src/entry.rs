@@ -2,16 +2,17 @@
 //!
 //! The primary binary composes the owner-fenced persistent DIRECT runtime,
 //! bounded continuation windows, opaque source handles, directory manifests,
-//! guarded maintenance, authenticated loopback access, and platform revision
-//! protection. The earlier immutable snapshot/BM25 daemon remains
-//! `eliot-search-snapshotd`.
+//! guarded maintenance and platform revision protection. Canonical provider IPC
+//! is installation-scoped local transport. The obsolete TCP/token-file proxy is
+//! compiled only with `legacy-loopback-harness` for process fixtures.
 
 #![deny(unsafe_code)]
 
 #[cfg(feature = "wave4-query")]
-#[allow(dead_code)] // T20: access/grant kernels are proven; provider wiring still needs authenticated policy and connection binding.
+#[allow(dead_code)]
 mod access_composition;
 mod app;
+#[cfg(feature = "legacy-loopback-harness")]
 mod authenticated_proxy;
 mod catalog_presence;
 mod catalog_quarantine;
@@ -22,6 +23,7 @@ mod direct_preparation;
 #[path = "secure_direct_store.rs"]
 mod direct_store;
 mod directory_manifest;
+#[cfg(feature = "legacy-loopback-harness")]
 mod endpoint;
 mod maintenance;
 mod maintenance_guard;
@@ -30,30 +32,26 @@ pub(crate) mod owner_composition;
 mod plaintext_direct_store;
 mod preparation_composition;
 #[cfg(feature = "wave3-index")]
-#[allow(dead_code)] // T26: CLI wiring pending; module proven by its own tests.
+#[allow(dead_code)]
 mod projection_composition;
 mod protocol_io;
 mod provider_composition;
 mod qualified_entropy;
 #[cfg(feature = "wave4-query")]
-#[allow(dead_code)] // T28: provider-query wiring pending; proven by indexed_query_process.
+#[allow(dead_code)]
 mod query_composition;
 mod public_runtime_service;
-#[allow(dead_code)] // T27: proven through publication_fault_process; daemon CLI wiring pending.
+#[allow(dead_code)]
 mod publication_composition;
 #[cfg(feature = "wave3-index")]
-#[allow(dead_code)] // T29: proven through rebuild_process; daemon CLI wiring pending.
+#[allow(dead_code)]
 mod rebuild_composition;
 #[cfg(feature = "wave7-lifecycle")]
-#[allow(dead_code)] // T39: proven through restore_process; daemon CLI wiring pending.
+#[allow(dead_code)]
 mod restore_composition;
 mod result_handles;
 mod revision_protection;
 mod safe_reader_adapter;
-// The sealed modules below are shared with the harness-only sealed binaries.
-// Only the root lock, the epoch-head observer and the root-binding check are
-// live on this path; the remaining sealed surface is harness-owned, hence
-// the scoped allowance instead of a second owner type.
 #[allow(dead_code)]
 mod sealed_digest;
 #[allow(dead_code)]
@@ -72,12 +70,9 @@ mod secret_composition;
 mod secure_commands;
 mod service_output;
 mod sha256;
-// Legacy Git compatibility helpers remain isolated until their dedicated
-// source-acquisition owner replaces them. They are not the live DIRECT path.
 #[allow(dead_code)]
 #[path = "source_composition.rs"]
 mod git_source_composition;
-// Live DIRECT ingestion enters canonical admission/identity owners here.
 #[path = "direct_store/composition.rs"]
 mod source_composition;
 mod source_fence;
@@ -90,15 +85,23 @@ mod protected_ingest_tests;
 
 use std::process::ExitCode;
 
+#[cfg(feature = "legacy-loopback-harness")]
+fn maybe_run_legacy_loopback() -> Option<ExitCode> {
+    authenticated_proxy::maybe_run()
+}
+
+#[cfg(not(feature = "legacy-loopback-harness"))]
+const fn maybe_run_legacy_loopback() -> Option<ExitCode> {
+    None
+}
+
 fn main() -> ExitCode {
     let result = source_migration_command::maybe_run()
         .or_else(preparation_composition::maybe_run)
-        .or_else(authenticated_proxy::maybe_run)
+        .or_else(maybe_run_legacy_loopback)
         .or_else(public_runtime_service::maybe_run)
         .or_else(secure_commands::maybe_run)
         .unwrap_or_else(app::run_main);
-    // The secure dispatcher owns the existing public help. Append the new
-    // composition commands there too, rather than updating only legacy help.
     if result == ExitCode::SUCCESS
         && std::env::args_os().len() == 2
         && std::env::args_os()
@@ -124,7 +127,10 @@ fn main() -> ExitCode {
                 "\nOFFLINE SOURCE-MAPPING PLAN:\n",
                 "  eliot-searchd --plan-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
                 "Requires an existing unowned root and an existing, separate output directory.\n",
-                "Preserves source state; writes a mapping draft only, without redb import or cutover.\n"
+                "Preserves source state; writes a mapping draft only, without redb import or cutover.\n",
+                "\nPROVIDER TRANSPORT:\n",
+                "  Canonical startup uses installation-scoped local IPC.\n",
+                "  TCP ports, endpoint files and token files are not accepted by the primary build.\n"
             )
         );
     }

@@ -21,6 +21,12 @@ path = "src/main.rs"
 harness = true
 test = true
 
+[features]
+default = []
+# Retains the obsolete address/token-file CLI only for existing process fixtures.
+# Final product startup must never enable or fall back to this feature.
+legacy-loopback-harness = []
+
 [dependencies]
 search-contracts.workspace = true
 search-ports.workspace = true
