@@ -248,7 +248,10 @@ impl LiveNativeQuerySnapshot {
         if next.live.generation == self.live.generation && next.live != self.live {
             return Err(AccessError::SnapshotStale);
         }
-        if next.max_legs != self.max_legs {
+        // A smaller finite leg budget is an immediate restrictive update. An
+        // increase widens available work and needs a separately versioned
+        // configuration handoff before this owner can accept it.
+        if leg_budget_update_widens(self.max_legs, next.max_legs) {
             return Err(AccessError::RetrievalLegBudgetExceeded);
         }
         Ok(())
@@ -412,6 +415,10 @@ fn overlap_proof_update_requires_revision<T: PartialEq>(
     }
 }
 
+const fn leg_budget_update_widens(current: usize, next: usize) -> bool {
+    next > current
+}
+
 fn try_lock<R, V>(
     state: &Arc<Mutex<LiveNativeQueryState<R, V>>>,
 ) -> Result<MutexGuard<'_, LiveNativeQueryState<R, V>>, AccessError> {
@@ -424,7 +431,7 @@ fn try_lock<R, V>(
 
 #[cfg(test)]
 mod tests {
-    use super::overlap_proof_update_requires_revision;
+    use super::{leg_budget_update_widens, overlap_proof_update_requires_revision};
 
     #[test]
     fn proof_removal_is_immediate_monotone_narrowing() {
@@ -448,5 +455,12 @@ mod tests {
             Some(&current),
             Some(&current),
         ));
+    }
+
+    #[test]
+    fn leg_budget_decrease_is_immediate_monotone_narrowing() {
+        assert!(!leg_budget_update_widens(8, 8));
+        assert!(!leg_budget_update_widens(8, 4));
+        assert!(leg_budget_update_widens(4, 8));
     }
 }
