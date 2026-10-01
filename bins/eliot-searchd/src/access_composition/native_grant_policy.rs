@@ -9,77 +9,25 @@ mod codec;
 mod mutation;
 
 pub use mutation::StandalonePolicyMutation;
+pub use search_contracts::{StandalonePolicyRecord, StandalonePolicyState};
 
-use search_contracts::{BindingId, InstallationIncarnationId,
-    OpaqueId, OpaqueRef, UtcTimestamp, protocol::PeerRole};
-use search_control_redb::{ControlCallError, ControlError, ControlKey,
-    ControlSnapshotPublisher, ControlValue, JournalLimits, PersistentControlJournal};
+use search_contracts::{
+    AuthoritativeGrantPolicy, BindingId, InstallationIncarnationId, OpaqueId, OpaqueRef,
+    protocol::PeerRole,
+};
+use search_control_redb::{
+    ControlCallError, ControlError, ControlKey, ControlSnapshotPublisher, JournalLimits,
+    PersistentControlJournal, provider_authority::ProviderAuthorityJournalError,
+};
 use search_ports::OperationContext;
 use search_provider_protocol::{BindingContext, MonotonicMillis, RequestGuard};
 
 use crate::provider_composition::monotonic_millis;
-use super::{AuthoritativeGrantPolicy, GrantIssuerError, GrantUseError, NativeBindingError,
-    NativeBindingPin, StandaloneGrantIssuer, StandaloneGrantMaterial, StandaloneGrantPolicySource,
-    StandaloneGrantTemplate, SystemGrantClock};
-
-/// Closed lifecycle of this policy row, not the peer's pairing state machine.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StandalonePolicyState {
-    /// Explicitly installed policy, subject to its current UTC lifetime.
-    Active,
-    /// Revoked policies remain stored and cannot be used or reactivated.
-    Revoked,
-    /// Administratively recorded expiry, also terminal for this policy identity.
-    Expired,
-}
-
-/// Content-free authored policy and lifetime. Construction is not authority:
-/// only a current disk-published row can supply the native read adapter.
-/// This does not replace the separate durable pairing/binding record.
-#[derive(Clone, Eq, PartialEq)]
-pub struct StandalonePolicyRecord {
-    /// Existing policy type; no parallel grant-claims model is introduced.
-    pub policy: AuthoritativeGrantPolicy,
-    /// Stored lifecycle, never synthesized from a missing row.
-    pub state: StandalonePolicyState,
-    /// Trusted activation time, not a client timestamp.
-    pub issued_at: UtcTimestamp,
-    /// Optional policy expiry; issued grants still have their own finite TTL.
-    pub expires_at: Option<UtcTimestamp>,
-}
-
-impl std::fmt::Debug for StandalonePolicyRecord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StandalonePolicyRecord").field("state", &self.state)
-            .field("policy_generation", &self.policy.policy_generation).finish_non_exhaustive()
-    }
-}
-
-impl StandalonePolicyRecord {
-    // Registration readback shares this codec; no sibling parser or wire API.
-    pub(super) fn decode_native(value: &ControlValue) -> Result<Self, NativeGrantPolicyError> {
-        codec::decode(value)
-    }
-
-    fn validate(&self) -> Result<(), NativeGrantPolicyError> {
-        let policy = &self.policy;
-        if policy.binding_generation == 0 || policy.policy_generation == 0
-            || policy.revocation_generation == 0
-            || policy.maximum_ttl_ms <= 1 || policy.allowed_membership_ids.is_empty()
-            || policy.allowed_access_partitions.is_empty()
-            || policy.allowed_modalities.is_empty() || policy.permitted_recipe_families.is_empty()
-            || policy.allowed_budget_classes.is_empty()
-            || (policy.exact_scan_permission && !policy.source_read_permission)
-            || self.expires_at.as_ref().is_some_and(|end| end <= &self.issued_at)
-            || (policy.reference_portfolio_revision.is_none()
-                && policy.allowed_corpus_or_portfolio_ids.iter()
-                    .any(|id| matches!(id, search_contracts::CorpusOrPortfolioId::Portfolio(_))))
-        {
-            return Err(NativeGrantPolicyError::InvalidRecord);
-        }
-        Ok(())
-    }
-}
+use super::{
+    GrantIssuerError, GrantUseError, NativeBindingError, NativeBindingPin,
+    StandaloneGrantIssuer, StandaloneGrantMaterial, StandaloneGrantPolicySource,
+    StandaloneGrantTemplate, SystemGrantClock,
+};
 
 /// Retains native read/mutation failures without printing policy contents.
 #[derive(Debug)]
@@ -97,13 +45,13 @@ pub enum NativeGrantPolicyError {
 }
 
 impl std::fmt::Display for NativeGrantPolicyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidRecord => f.write_str("DAEMON_GRANT_POLICY_RECORD_INVALID"),
-            Self::Control(error) => std::fmt::Display::fmt(error, f),
-            Self::Call(error) => std::fmt::Display::fmt(error, f),
-            Self::Grant(error) => std::fmt::Display::fmt(error, f),
-            Self::Binding(error) => std::fmt::Display::fmt(error, f),
+            Self::InvalidRecord => formatter.write_str("DAEMON_GRANT_POLICY_RECORD_INVALID"),
+            Self::Control(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Call(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Grant(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Binding(error) => std::fmt::Display::fmt(error, formatter),
         }
     }
 }
@@ -114,12 +62,27 @@ impl From<ControlError> for NativeGrantPolicyError {
 impl From<ControlCallError> for NativeGrantPolicyError {
     fn from(error: ControlCallError) -> Self { Self::Call(error) }
 }
+impl From<ProviderAuthorityJournalError> for NativeGrantPolicyError {
+    fn from(error: ProviderAuthorityJournalError) -> Self {
+        match error {
+            ProviderAuthorityJournalError::Record(error) => Self::Control(error),
+            ProviderAuthorityJournalError::Call(error) => Self::Call(error),
+        }
+    }
+}
 impl From<GrantUseError> for NativeGrantPolicyError {
     fn from(error: GrantUseError) -> Self { Self::Grant(error) }
 }
-
 impl From<NativeBindingError> for NativeGrantPolicyError {
     fn from(error: NativeBindingError) -> Self { Self::Binding(error) }
+}
+
+pub(super) fn validate_policy_record(
+    record: &StandalonePolicyRecord,
+) -> Result<(), NativeGrantPolicyError> {
+    record
+        .validate_shape()
+        .map_err(|_| NativeGrantPolicyError::InvalidRecord)
 }
 
 /// A current read observation, not a cacheable authorization permit. Retain the
@@ -133,6 +96,7 @@ impl CurrentStandalonePolicy {
     /// Exact stored policy after identity, state and lifetime checks.
     #[must_use]
     pub const fn policy(&self) -> &AuthoritativeGrantPolicy { &self.record.policy }
+
     /// Earliest binding/policy expiry and original request deadline, never a lease.
     #[must_use]
     pub const fn valid_until(&self) -> MonotonicMillis { self.valid_until }
@@ -169,7 +133,14 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
         clock: &'a mut SystemGrantClock,
     ) -> Result<Self, NativeGrantPolicyError> {
         remaining(request)?;
-        Ok(Self { journal, publisher, binding_pin, boot_id, request, clock })
+        Ok(Self {
+            journal,
+            publisher,
+            binding_pin,
+            boot_id,
+            request,
+            clock,
+        })
     }
 
     /// Read the pinned binding and native policy from the current disk-published
@@ -190,14 +161,23 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
             return Err(GrantUseError::BindingMismatch.into());
         }
         let context = OperationContext::new(
-            *self.request.request_id(), remaining(self.request)?, self.request.cancellation(),
-            OpaqueRef::new("standalone-policy-read-v1").map_err(|_| NativeGrantPolicyError::InvalidRecord)?,
-        ).map_err(|_| NativeGrantPolicyError::Grant(GrantUseError::RequestInactive))?;
+            *self.request.request_id(),
+            remaining(self.request)?,
+            self.request.cancellation(),
+            OpaqueRef::new("standalone-policy-read-v1")
+                .map_err(|_| NativeGrantPolicyError::InvalidRecord)?,
+        )
+        .map_err(|_| NativeGrantPolicyError::Grant(GrantUseError::RequestInactive))?;
         let (registration, binding_expiry) = self.binding_pin.read_standalone_registration(
-            binding, self.journal, self.publisher, self.clock, &context,
+            binding,
+            self.journal,
+            self.publisher,
+            self.clock,
+            &context,
         )?;
         remaining(self.request)?;
-        let record = registration.into_policy()
+        let record = registration
+            .into_policy()
             .ok_or(GrantUseError::PolicyUnavailable)?;
         if record.state != StandalonePolicyState::Active {
             return Err(GrantUseError::PolicyUnavailable.into());
@@ -211,12 +191,19 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
         {
             return Err(GrantUseError::BindingMismatch.into());
         }
-        let expiry = self.clock.check_policy_window(&record.issued_at, record.expires_at.as_ref())?;
-        let deadline = self.request.deadline().ok_or(GrantUseError::RequestInactive)?;
+        let expiry = self
+            .clock
+            .check_policy_window(&record.issued_at, record.expires_at.as_ref())?;
+        let deadline = self
+            .request
+            .deadline()
+            .ok_or(GrantUseError::RequestInactive)?;
         let deadline = binding_expiry.map_or(deadline, |end| deadline.min(end));
         let valid_until = expiry.map_or(deadline, |end| deadline.min(end));
         remaining(self.request)?;
-        if monotonic_millis() >= valid_until { return Err(GrantUseError::Expired.into()); }
+        if monotonic_millis() >= valid_until {
+            return Err(GrantUseError::Expired.into());
+        }
         Ok(CurrentStandalonePolicy { record, valid_until })
     }
 }
@@ -224,23 +211,35 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
 impl StandaloneGrantPolicySource for JournalStandaloneGrantPolicySource<'_> {
     type Error = NativeGrantPolicyError;
 
-    fn snapshot(&mut self, binding: &BindingContext) -> Result<AuthoritativeGrantPolicy, Self::Error> {
+    fn snapshot(
+        &mut self,
+        binding: &BindingContext,
+    ) -> Result<AuthoritativeGrantPolicy, Self::Error> {
         self.current(binding).map(|current| current.record.policy)
     }
 }
 
 fn remaining(request: &RequestGuard) -> Result<u64, GrantUseError> {
     let now = monotonic_millis();
-    if request.is_cancelled() || now < request.admitted_at()
-        || request.progress().is_some_and(|progress| progress.terminal().is_some())
+    if request.is_cancelled()
+        || now < request.admitted_at()
+        || request
+            .progress()
+            .is_some_and(|progress| progress.terminal().is_some())
     {
         return Err(GrantUseError::RequestInactive);
     }
-    request.deadline().and_then(|end| end.get().checked_sub(now.get()))
-        .filter(|left| *left > 0).ok_or(GrantUseError::RequestInactive)
+    request
+        .deadline()
+        .and_then(|end| end.get().checked_sub(now.get()))
+        .filter(|left| *left > 0)
+        .ok_or(GrantUseError::RequestInactive)
 }
 
-pub(super) fn policy_key(incarnation: InstallationIncarnationId, binding: BindingId) -> Result<ControlKey, ControlError> {
+pub(super) fn policy_key(
+    incarnation: InstallationIncarnationId,
+    binding: BindingId,
+) -> Result<ControlKey, ControlError> {
     let mut bytes = b"eliot.control.standalone-policy.v1\0".to_vec();
     bytes.extend_from_slice(incarnation.as_bytes());
     bytes.extend_from_slice(binding.as_bytes());
