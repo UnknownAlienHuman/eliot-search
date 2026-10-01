@@ -55,6 +55,7 @@
 #![forbid(unsafe_code)]
 
 pub(crate) mod registry;
+pub(crate) mod service;
 
 use std::collections::{BTreeMap, BTreeSet};
 
