@@ -101,20 +101,30 @@ where
     ) -> Result<R, CanonicalServingError> {
         self.require_binding(binding)?;
         let grants = &mut self.authority;
-        self.host.with_current_authority(binding, request, task, |mut live, request, task| {
+        self.host.with_current_authority(binding, request, task, |live, request, task| {
             let policy = live.standalone_policy
                 .ok_or(CanonicalServingError::GrantRefused(GrantUseError::PolicyUnavailable))?;
             // Borrow policy from the host's actual lock, rather than re-entering
             // its snapshot source and potentially deadlocking on the same lock.
             grants.with_locked_recipe_grant(binding, request, policy, |issued, request| {
                 validate_influence(&issued, request.body(), live.fence)?;
-                live.valid_until = live.valid_until.min(issued.valid_until());
-                if monotonic_millis() >= live.valid_until {
+                let valid_until = live.valid_until.min(issued.valid_until());
+                if monotonic_millis() >= valid_until {
                     return Err(CanonicalServingError::GrantRefused(GrantUseError::Expired));
                 }
-                // The original output validator/domain borrow is passed through
-                // intact. This expiry reaches task budgets and each TCP write.
-                operation(live, request, task)
+                // Move the non-clonable issuer-ledger proof into this one live
+                // authority turn. The task can read only its immutable template
+                // through CanonicalWorkOutput; raw request claims alone never
+                // create this evidence.
+                let authorized = CanonicalServingAuthority {
+                    standalone_policy: live.standalone_policy,
+                    standalone_grant: Some(issued),
+                    domain: live.domain,
+                    fence: live.fence,
+                    valid_until,
+                    validate_output: live.validate_output,
+                };
+                operation(authorized, request, task)
             }).map_err(map_grant_use)
         })
     }

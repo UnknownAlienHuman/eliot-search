@@ -2,10 +2,15 @@
 
 use search_access::{AccessCheckpoint, AccessError, RequestSecurityFence};
 use search_contracts::{ProviderBodyV1, RecipeIdV1, RequestBody};
-use search_provider_protocol::{AdmittedProviderRequest, BindingContext, MonotonicMillis, RequestGuard, TerminalKind};
+use search_provider_protocol::{
+    AdmittedProviderRequest, BindingContext, MonotonicMillis, RequestGuard, TerminalKind,
+};
 use std::task::Poll;
 
-use crate::access_composition::{AuthoritativeGrantPolicy, NativeSecurityDomain};
+use crate::access_composition::{
+    AuthoritativeGrantPolicy, NativeSecurityDomain, StandaloneGrantTemplate,
+    VerifiedStandaloneGrant,
+};
 use super::{CanonicalServingError, CanonicalTcpConnection, monotonic_millis};
 
 /// One owner-issued work turn with separate lifetime and scheduling bounds.
@@ -84,6 +89,12 @@ pub struct CanonicalServingAuthority<'a> {
     /// The standalone adapter requires Some; other peer roles may use None.
     /// Never supply a detached policy snapshot or reconstruct one from claims.
     pub standalone_policy: Option<&'a AuthoritativeGrantPolicy>,
+    /// Exact issuer-ledger grant verification retained for this authority turn.
+    ///
+    /// Only the standalone grant adapter supplies `Some`, after current policy,
+    /// binding, request and lifetime validation inside the same host lock. Other
+    /// roles use `None`; client claims or a transport MAC cannot construct it.
+    pub(crate) standalone_grant: Option<VerifiedStandaloneGrant<'a>>,
     /// Restored native domain under the actual serving/mutation lock.
     pub domain: &'a NativeSecurityDomain,
     /// Complete authoritative influence population, not only displayed hits.
@@ -192,6 +203,19 @@ impl CanonicalWorkOutput<'_, '_> {
     /// Sequence to put in the next progress/result event.
     #[must_use]
     pub fn next_event_sequence(&self) -> Option<u64> { self.request.next_event_sequence() }
+
+    /// Immutable issuer-ledger template validated for this standalone turn.
+    ///
+    /// `None` is valid only for non-standalone roles. Production standalone tasks
+    /// must fail closed when it is absent; request claims alone are not proof that
+    /// the original issuer record and current policy still match.
+    #[must_use]
+    pub(crate) fn standalone_grant_template(&self) -> Option<&StandaloneGrantTemplate> {
+        self.authority
+            .standalone_grant
+            .as_ref()
+            .map(VerifiedStandaloneGrant::template)
+    }
 
     /// Validate actual output and send it through the canonical transport.
     /// The native checkpoint and the host's lock span the complete frame/MAC
