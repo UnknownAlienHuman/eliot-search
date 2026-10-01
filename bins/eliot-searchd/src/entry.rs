@@ -40,6 +40,9 @@ mod qualified_entropy;
 #[cfg(feature = "wave4-query")]
 #[allow(dead_code)]
 mod query_composition;
+#[cfg(feature = "wave4-query")]
+#[path = "query_composition/serving.rs"]
+mod query_serving_composition;
 mod public_runtime_service;
 #[allow(dead_code)]
 mod publication_composition;
