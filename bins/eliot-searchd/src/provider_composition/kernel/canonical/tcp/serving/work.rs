@@ -9,7 +9,7 @@ use std::task::Poll;
 
 use crate::access_composition::{
     AuthoritativeGrantPolicy, NativeSecurityDomain, StandaloneGrantTemplate,
-    VerifiedStandaloneGrant,
+    StandalonePreRetrievalAdmission, VerifiedStandaloneGrant,
 };
 use super::{CanonicalServingError, CanonicalTcpConnection, monotonic_millis};
 
@@ -95,6 +95,18 @@ pub struct CanonicalServingAuthority<'a> {
     /// binding, request and lifetime validation inside the same host lock. Other
     /// roles use `None`; client claims or a transport MAC cannot construct it.
     pub(crate) standalone_grant: Option<VerifiedStandaloneGrant<'a>>,
+    /// Canonical pre-retrieval compiler borrowed from the same held authority
+    /// lock as the policy, access snapshot, source resolver and native domain.
+    ///
+    /// It accepts only the exact admitted request plus the non-clonable issuer
+    /// verification above. Tasks cannot obtain the template separately and must
+    /// use this callback before source reads, provider dispatch, IDF or counts.
+    pub(crate) standalone_admission: Option<
+        &'a mut dyn FnMut(
+            &RequestBody,
+            &StandaloneGrantTemplate,
+        ) -> Result<StandalonePreRetrievalAdmission, AccessError>,
+    >,
     /// Restored native domain under the actual serving/mutation lock.
     pub domain: &'a NativeSecurityDomain,
     /// Complete authoritative influence population, not only displayed hits.
@@ -128,10 +140,11 @@ pub trait CanonicalRecipeHost {
     /// authority/domain lock held across `operation`, including socket output.
     /// Supply the complete influence fence and a conservative expiry, never a
     /// cached permit. The operation performs the concrete native checkpoints.
-    /// For standalone serving, also borrow the actual active binding policy
-    /// into standalone_policy; grant checks run inside this same lock scope.
-    /// new_standalone supplies issuer verification through its adapter, without
-    /// re-entering the policy source. Other roles retain their own grant checks.
+    /// For standalone serving, also borrow the actual active binding policy and
+    /// canonical admission compiler into the same turn; grant checks run inside
+    /// this same lock scope. `new_standalone` supplies issuer verification
+    /// without re-entering the policy source. Other roles retain their own grant
+    /// and admission checks.
     ///
     /// The generic return and FnOnce callback cannot be replaced with a canned
     /// success. An error after invoking it still closes the serving connection.
@@ -153,12 +166,15 @@ pub trait CanonicalRecipeHost {
 pub trait CanonicalRecipeTask {
     /// Perform at most one bounded work slice and emit at most one event.
     /// Ready requires a successfully emitted terminal; Pending permits either
-    /// no output or one progress event. Use `output.emit` inside existing
-    /// prepared-handle/continuation delivery callbacks so their rollback and
-    /// commit lifetimes span the actual write. Never dispatch detached work.
-    /// Check budget.should_yield() between batches and return Pending when it
-    /// requests a yield. Do not translate that yield into DeadlineExpired.
-    /// budget.check() enforces the separate hard request/authority lifetime.
+    /// no output or one progress event. Standalone tasks must obtain and retain
+    /// `output.admit_standalone_query()` before their first source read, provider
+    /// dispatch, IDF, count or facet operation; the raw grant template is not
+    /// exposed. Use `output.emit` inside existing prepared-handle/continuation
+    /// delivery callbacks so their rollback and commit lifetimes span the actual
+    /// write. Never dispatch detached work. Check budget.should_yield() between
+    /// batches and return Pending when it requests a yield. Do not translate that
+    /// yield into DeadlineExpired. budget.check() enforces the separate hard
+    /// request/authority lifetime.
     fn poll(
         &mut self,
         output: &mut CanonicalWorkOutput<'_, '_>,
@@ -204,17 +220,29 @@ impl CanonicalWorkOutput<'_, '_> {
     #[must_use]
     pub fn next_event_sequence(&self) -> Option<u64> { self.request.next_event_sequence() }
 
-    /// Immutable issuer-ledger template validated for this standalone turn.
+    /// Compile the exact standalone request under this turn's current policy,
+    /// source/access snapshots and native-domain lock.
     ///
-    /// `None` is valid only for non-standalone roles. Production standalone tasks
-    /// must fail closed when it is absent; request claims alone are not proof that
-    /// the original issuer record and current policy still match.
-    #[must_use]
-    pub(crate) fn standalone_grant_template(&self) -> Option<&StandaloneGrantTemplate> {
-        self.authority
-            .standalone_grant
-            .as_ref()
-            .map(VerifiedStandaloneGrant::template)
+    /// The returned admission is not reusable authority: its request fence and
+    /// safe legs must stay with the task and every later dispatch/readback/output
+    /// boundary still requires the corresponding live checkpoint. The callback
+    /// is intentionally one turn-scoped borrow; no grant template, resolver or
+    /// authoritative snapshot escapes separately.
+    pub(crate) fn admit_standalone_query(
+        &mut self,
+    ) -> Result<StandalonePreRetrievalAdmission, CanonicalServingError> {
+        self.budget.check()?;
+        let (issued, compiler) = match (
+            self.authority.standalone_grant.as_ref(),
+            self.authority.standalone_admission.as_mut(),
+        ) {
+            (Some(issued), Some(compiler)) => (issued, compiler),
+            _ => return Err(CanonicalServingError::InvalidConfiguration),
+        };
+        let admission = compiler(self.request.body(), issued.template())
+            .map_err(CanonicalServingError::Access)?;
+        self.budget.check()?;
+        Ok(admission)
     }
 
     /// Validate actual output and send it through the canonical transport.

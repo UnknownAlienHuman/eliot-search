@@ -40,9 +40,10 @@ where
     /// Native bootstrap must transfer the issuer that actually minted the
     /// client's grant, not replace it with an empty or copied ledger. The source
     /// host must return its current policy from under the same lock as the live
-    /// domain, and must not do source/provider work outside its callback.
-    /// Existing owner limits and fresh-session checks still apply. This method
-    /// does not start a listener or manufacture missing source/executor owners.
+    /// domain, admission compiler and output validator, and must not do source or
+    /// provider work outside its callback. Existing owner limits and fresh-session
+    /// checks still apply. This method does not start a listener or manufacture
+    /// missing source/executor owners.
     ///
     /// # Errors
     ///
@@ -113,12 +114,13 @@ where
                     return Err(CanonicalServingError::GrantRefused(GrantUseError::Expired));
                 }
                 // Move the non-clonable issuer-ledger proof into this one live
-                // authority turn. The task can read only its immutable template
-                // through CanonicalWorkOutput; raw request claims alone never
-                // create this evidence.
+                // authority turn. The task receives neither claims-derived
+                // authority nor the raw template: it can only invoke the current
+                // host admission compiler while this same lock remains held.
                 let authorized = CanonicalServingAuthority {
                     standalone_policy: live.standalone_policy,
                     standalone_grant: Some(issued),
+                    standalone_admission: live.standalone_admission,
                     domain: live.domain,
                     fence: live.fence,
                     valid_until,
