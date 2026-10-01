@@ -1,4 +1,4 @@
-//! Canonical native hello and mutual-pairing client over one original socket.
+//! Canonical native hello and mutual-pairing client over one original stream.
 //!
 //! The caller supplies a pairing key already resolved by the native credential
 //! owner for this exact binding generation. This module never opens a token file,
@@ -23,7 +23,7 @@ use search_provider_protocol::{
     verify_proof, PAIRING_CHALLENGE_BYTES, PAIRING_VERIFIED_BYTES,
 };
 
-use super::io::{SetupBudget, SocketIo};
+use super::io::{LocalByteStream, SetupBudget, SocketIo};
 use super::{TypedClientError, TypedProviderSession};
 
 const NATIVE_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
@@ -54,7 +54,7 @@ impl NativeClientBinding {
     /// Construct one standalone-client binding offer.
     ///
     /// The current typed codec implements protocol 1.0 exactly; any wider,
-    /// narrower or different range is rejected before socket or credential use.
+    /// narrower or different range is rejected before transport or credential use.
     pub fn new(
         installation_incarnation_id: InstallationIncarnationId,
         binding_id: BindingId,
@@ -117,13 +117,12 @@ impl fmt::Debug for NativeClientBinding {
 }
 
 impl TypedProviderSession {
-    /// Connect, perform canonical native mutual pairing and negotiate the typed
-    /// transport profile under one deadline and cancellation capability.
+    /// Connect the compatibility TCP adapter, perform canonical mutual pairing
+    /// and negotiate the typed transport profile under one deadline.
     ///
-    /// `key` must come from the native credential owner for `binding`; this API
-    /// performs no token-file read, key derivation, key generation or fallback.
-    /// A failure or unwind closes the sole socket and zeroizes the owned key.
-    /// The connection is attempted once and is limited to loopback.
+    /// The exact I/O and session framing below accept a transport-neutral local
+    /// byte stream. This address-taking entry is retained only while the product path migrates to
+    /// the architecture-required installation-scoped named pipe.
     pub fn connect_native<C: CancellationProbe>(
         address: SocketAddr,
         binding: &NativeClientBinding,
@@ -141,7 +140,35 @@ impl TypedProviderSession {
         )?;
         let connect_timeout = budget.remaining()?.min(CONNECT_QUANTUM);
         let stream = TcpStream::connect_timeout(&address, connect_timeout)?;
-        let mut socket = SocketIo::new(stream);
+        Self::open_connected_local_stream(
+            stream,
+            binding,
+            key,
+            limits,
+            context,
+            &budget,
+        )
+    }
+
+    /// Run pairing and typed-profile negotiation over one already-connected
+    /// local stream without introducing transport-specific framing or state.
+    ///
+    /// The platform connector must spend its connect/open work from `budget`
+    /// before handing the stream here. This method never retries, reconnects,
+    /// scans another endpoint or renews the original deadline.
+    pub(super) fn open_connected_local_stream<C, S>(
+        stream: S,
+        binding: &NativeClientBinding,
+        key: BindingKey,
+        limits: ProtocolLimits,
+        context: &OperationContext<C>,
+        budget: &SetupBudget<'_>,
+    ) -> Result<Self, TypedClientError>
+    where
+        C: CancellationProbe,
+        S: LocalByteStream + 'static,
+    {
+        let mut socket = SocketIo::from_local_stream(stream);
         socket.configure()?;
         budget.remaining()?;
 
@@ -151,7 +178,7 @@ impl TypedProviderSession {
             &key,
             limits,
             context,
-            &budget,
+            budget,
         )?;
         Self::from_paired_socket(
             socket,
@@ -160,7 +187,7 @@ impl TypedProviderSession {
             key,
             server_nonce,
             limits,
-            &budget,
+            budget,
         )
     }
 }

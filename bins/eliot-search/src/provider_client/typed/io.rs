@@ -15,6 +15,35 @@ pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(25);
 const POLL_BYTES: usize = 64 * 1024;
 const READ_BYTES: usize = 16 * 1024;
 
+/// One already-connected local byte stream owned by the typed client.
+///
+/// The framing, pairing and request state machines depend only on finite
+/// `Read`/`Write` behavior. Platform adapters own endpoint creation and must
+/// configure the stream for nonblocking local-only operation here. A successful
+/// local connection is not authentication; the canonical pairing proof remains
+/// mandatory before any typed request can be sent.
+pub(super) trait LocalByteStream: Read + Write {
+    /// Verify/configure this already-connected stream for bounded local polling.
+    fn configure_local(&self) -> Result<(), TypedClientError>;
+
+    /// Close both directions without claiming peer acknowledgement.
+    fn close(&self);
+}
+
+impl LocalByteStream for TcpStream {
+    fn configure_local(&self) -> Result<(), TypedClientError> {
+        if !self.peer_addr()?.ip().is_loopback() || !self.local_addr()?.ip().is_loopback() {
+            return Err(TypedClientError::NonLoopback);
+        }
+        self.set_nonblocking(true)?;
+        Ok(())
+    }
+
+    fn close(&self) {
+        let _ = self.shutdown(Shutdown::Both);
+    }
+}
+
 struct Incoming {
     record: TypedRecordBuffer,
     deadline: Instant,
@@ -22,8 +51,8 @@ struct Incoming {
 
 /// One absolute setup deadline plus an injected cancellation observation.
 ///
-/// The cancellation callback owns no socket or request state. Every partial
-/// setup read/write consults it between bounded 25 ms waits; it cannot renew the
+/// The cancellation callback owns no stream or request state. Every partial
+/// setup read/write consults it between bounded 25 ms polls; it cannot renew the
 /// deadline or turn a possible peer-visible write into rollback.
 pub(super) struct SetupBudget<'a> {
     deadline: Instant,
@@ -50,23 +79,32 @@ impl<'a> SetupBudget<'a> {
 }
 
 pub(super) struct SocketIo {
-    stream: TcpStream,
+    stream: Box<dyn LocalByteStream>,
     incoming: Option<Incoming>,
 }
 
 impl SocketIo {
-    pub(super) const fn new(stream: TcpStream) -> Self {
-        Self { stream, incoming: None }
+    pub(super) fn new(stream: TcpStream) -> Self {
+        Self::from_local_stream(stream)
+    }
+
+    /// Own an already-connected platform stream without changing framing.
+    ///
+    /// Named-pipe/local-socket adapters use this seam after deriving the exact
+    /// installation-scoped endpoint name. No adapter may add a second parser,
+    /// reader thread, replay registry or fallback transport.
+    pub(super) fn from_local_stream<S>(stream: S) -> Self
+    where
+        S: LocalByteStream + 'static,
+    {
+        Self {
+            stream: Box::new(stream),
+            incoming: None,
+        }
     }
 
     pub(super) fn configure(&self) -> Result<(), TypedClientError> {
-        if !self.stream.peer_addr()?.ip().is_loopback()
-            || !self.stream.local_addr()?.ip().is_loopback()
-        {
-            return Err(TypedClientError::NonLoopback);
-        }
-        self.stream.set_nonblocking(false)?;
-        Ok(())
+        self.stream.configure_local()
     }
 
     pub(super) fn read_exact_setup(
@@ -75,15 +113,16 @@ impl SocketIo {
         budget: &SetupBudget<'_>,
     ) -> Result<(), TypedClientError> {
         while !bytes.is_empty() {
-            self.stream
-                .set_read_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
             match self.stream.read(bytes) {
                 Ok(0) => return Err(TypedClientError::PeerClosed),
                 Ok(count) => {
                     let buffer = bytes;
                     bytes = &mut buffer[count..];
                 }
-                Err(error) if retryable(&error) => continue,
+                Err(error) if retryable(&error) => {
+                    pause_retry(&error, budget.remaining()?);
+                    continue;
+                }
                 Err(error) => return Err(error.into()),
             }
             budget.remaining()?;
@@ -152,15 +191,15 @@ impl SocketIo {
             else {
                 return Ok(Poll::Pending);
             };
-            self.stream
-                .set_read_timeout(Some(absolute_left.min(turn_left)))?;
             match self.stream.read(buffer) {
                 Ok(0) => return Err(TypedClientError::PeerClosed),
                 Ok(count) => {
                     incoming.record.advance(count)?;
                     left -= count;
                 }
-                Err(error) if retryable(&error) => {}
+                Err(error) if retryable(&error) => {
+                    pause_retry(&error, absolute_left.min(turn_left));
+                }
                 Err(error) => return Err(error.into()),
             }
         }
@@ -185,21 +224,27 @@ impl SocketIo {
         for &part in parts {
             let mut bytes = part;
             while !bytes.is_empty() {
-                self.stream.set_write_timeout(Some(remaining(deadline)?))?;
+                let left = remaining(deadline)?;
                 match self.stream.write(bytes) {
                     Ok(0) => return Err(TypedClientError::WriteZero),
                     Ok(count) => bytes = &bytes[count..],
-                    Err(error) if retryable(&error) => continue,
+                    Err(error) if retryable(&error) => {
+                        pause_retry(&error, left);
+                        continue;
+                    }
                     Err(error) => return Err(error.into()),
                 }
                 remaining(deadline)?;
             }
         }
         loop {
-            self.stream.set_write_timeout(Some(remaining(deadline)?))?;
+            let left = remaining(deadline)?;
             match self.stream.flush() {
                 Ok(()) => break,
-                Err(error) if retryable(&error) => continue,
+                Err(error) if retryable(&error) => {
+                    pause_retry(&error, left);
+                    continue;
+                }
                 Err(error) => return Err(error.into()),
             }
         }
@@ -214,23 +259,27 @@ impl SocketIo {
         for &part in parts {
             let mut bytes = part;
             while !bytes.is_empty() {
-                self.stream
-                    .set_write_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
+                let left = budget.remaining()?;
                 match self.stream.write(bytes) {
                     Ok(0) => return Err(TypedClientError::WriteZero),
                     Ok(count) => bytes = &bytes[count..],
-                    Err(error) if retryable(&error) => continue,
+                    Err(error) if retryable(&error) => {
+                        pause_retry(&error, left);
+                        continue;
+                    }
                     Err(error) => return Err(error.into()),
                 }
                 budget.remaining()?;
             }
         }
         loop {
-            self.stream
-                .set_write_timeout(Some(budget.remaining()?.min(POLL_INTERVAL)))?;
+            let left = budget.remaining()?;
             match self.stream.flush() {
                 Ok(()) => break,
-                Err(error) if retryable(&error) => continue,
+                Err(error) if retryable(&error) => {
+                    pause_retry(&error, left);
+                    continue;
+                }
                 Err(error) => return Err(error.into()),
             }
         }
@@ -239,12 +288,12 @@ impl SocketIo {
 }
 
 impl Drop for SocketIo {
-    fn drop(&mut self) { let _ = self.stream.shutdown(Shutdown::Both); }
+    fn drop(&mut self) {
+        self.stream.close();
+    }
 }
 
-pub(super) fn budget(
-    duration: Duration,
-) -> Result<(Instant, u64), TypedClientError> {
+pub(super) fn budget(duration: Duration) -> Result<(Instant, u64), TypedClientError> {
     let started = Instant::now();
     let millis = u64::try_from(duration.as_millis())
         .ok()
@@ -261,6 +310,12 @@ pub(super) fn remaining(deadline: Instant) -> Result<Duration, TypedClientError>
         .checked_duration_since(Instant::now())
         .filter(|left| !left.is_zero())
         .ok_or(TypedClientError::DeadlineExpired)
+}
+
+fn pause_retry(error: &io::Error, remaining: Duration) {
+    if error.kind() != io::ErrorKind::Interrupted {
+        std::thread::sleep(remaining.min(POLL_INTERVAL));
+    }
 }
 
 fn retryable(error: &io::Error) -> bool {
