@@ -1,7 +1,7 @@
 //! Single-owner typed record I/O. Each operation keeps its original deadline.
 
 use std::io::{self, Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::net::TcpStream;
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
@@ -22,12 +22,13 @@ const READ_BYTES: usize = 16 * 1024;
 /// configure the stream for nonblocking local-only operation here. A successful
 /// local connection is not authentication; the canonical pairing proof remains
 /// mandatory before any typed request can be sent.
+///
+/// Closing is represented only by dropping the single owning [`SocketIo`].
+/// Local sockets and Windows named pipes do not expose one portable socket-style
+/// half/full shutdown operation, so adapters must not fabricate one.
 pub(super) trait LocalByteStream: Read + Write {
     /// Verify/configure this already-connected stream for bounded local polling.
     fn configure_local(&self) -> Result<(), TypedClientError>;
-
-    /// Close both directions without claiming peer acknowledgement.
-    fn close(&self);
 }
 
 impl LocalByteStream for TcpStream {
@@ -37,10 +38,6 @@ impl LocalByteStream for TcpStream {
         }
         self.set_nonblocking(true)?;
         Ok(())
-    }
-
-    fn close(&self) {
-        let _ = self.shutdown(Shutdown::Both);
     }
 }
 
@@ -284,12 +281,6 @@ impl SocketIo {
             }
         }
         budget.remaining().map(|_| ())
-    }
-}
-
-impl Drop for SocketIo {
-    fn drop(&mut self) {
-        self.stream.close();
     }
 }
 
