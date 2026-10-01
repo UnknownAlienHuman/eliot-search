@@ -16,8 +16,9 @@ use search_contracts::{
     protocol::PeerRole,
 };
 use search_control_redb::{
-    ControlCallError, ControlError, ControlKey, ControlSnapshotPublisher, JournalLimits,
-    PersistentControlJournal, provider_authority::ProviderAuthorityJournalError,
+    ControlCallError, ControlError, ControlKey, ControlSnapshotPublisher, ControlValue,
+    JournalLimits, PersistentControlJournal,
+    provider_authority::ProviderAuthorityJournalError,
 };
 use search_ports::OperationContext;
 use search_provider_protocol::{BindingContext, MonotonicMillis, RequestGuard};
@@ -83,6 +84,15 @@ pub(super) fn validate_policy_record(
     record
         .validate_shape()
         .map_err(|_| NativeGrantPolicyError::InvalidRecord)
+}
+
+// Provisioning intents retain exact prior/next bytes for crash recovery. Decode
+// those historical policy values through the same compatibility codec until the
+// final write path is fully moved into search-control-redb.
+pub(in crate::access_composition) fn decode_policy_record(
+    value: &ControlValue,
+) -> Result<StandalonePolicyRecord, NativeGrantPolicyError> {
+    codec::decode(value)
 }
 
 /// A current read observation, not a cacheable authorization permit. Retain the
