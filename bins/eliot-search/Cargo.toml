@@ -30,5 +30,10 @@ search-provider-protocol.workspace = true
 # matches the daemon (`bins/eliot-searchd`); keyed BLAKE3 only, no storage.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure"] }
 
+[target.'cfg(windows)'.dependencies]
+# Concrete current-user Credential Manager effect owner. The client supplies
+# only the canonical locator digest; no token file or caller-selected target.
+search-os-secrets-windows = { path = "../../crates/search-runtime/search-os-secrets-windows" }
+
 [lints]
 workspace = true

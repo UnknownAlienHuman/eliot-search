@@ -340,6 +340,7 @@ dependencies = [
  "blake3",
  "search-config",
  "search-contracts",
+ "search-os-secrets-windows",
  "search-ports",
  "search-provider-protocol",
 ]

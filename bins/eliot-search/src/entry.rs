@@ -9,6 +9,7 @@
 
 mod app;
 mod endpoint_client;
+mod native_credentials;
 mod native_registered;
 mod provider_client;
 mod public_client;
