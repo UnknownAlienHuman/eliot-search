@@ -8,10 +8,12 @@
 //! control journal, admission snapshot or data-root lock.
 
 mod connection;
+mod endpoint;
 mod io;
 mod pairing;
 
 pub use connection::{StandaloneOpenedConnection, StandaloneServingConnection};
+pub use endpoint::{StandaloneEndpointAdvertisement, StandaloneEndpointError};
 pub use io::{StandalonePairingIo, StandalonePairingIoError};
 pub use pairing::StandaloneNativePairingError;
 
@@ -30,6 +32,34 @@ use super::{NativeTcpOpenError, StandaloneBootstrapReady, StandaloneProcessOwner
 
 const ACCEPT_SLEEP: Duration = Duration::from_millis(2);
 const MAX_ACCEPT_QUANTUM: Duration = Duration::from_millis(250);
+
+/// Listener bind/configuration or authenticated endpoint-publication failure.
+#[derive(Debug)]
+pub enum StandaloneBindError {
+    /// Loopback listener, limits or polling configuration was invalid.
+    Listener(StandalonePairingIoError),
+    /// Signed descriptor publication failed; listener admission never opened.
+    Endpoint(StandaloneEndpointError),
+}
+
+impl fmt::Display for StandaloneBindError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Listener(error) => fmt::Display::fmt(error, formatter),
+            Self::Endpoint(error) => fmt::Display::fmt(error, formatter),
+        }
+    }
+}
+
+impl std::error::Error for StandaloneBindError {}
+
+impl From<StandalonePairingIoError> for StandaloneBindError {
+    fn from(error: StandalonePairingIoError) -> Self { Self::Listener(error) }
+}
+
+impl From<StandaloneEndpointError> for StandaloneBindError {
+    fn from(error: StandaloneEndpointError) -> Self { Self::Endpoint(error) }
+}
 
 /// Pairing or native-open failure for one accepted socket.
 #[derive(Debug)]
@@ -104,13 +134,16 @@ impl fmt::Debug for CompletedStandalonePairing {
     }
 }
 
-/// Listener plus root-owned process state. The listener is created only after
-/// registration bootstrap/finalization succeeded. Field order closes admission
-/// before dropping the process owner and its root lock.
+/// Listener, signed endpoint publication and root-owned process state.
+///
+/// The listener is created only after registration bootstrap/finalization
+/// succeeded. Shutdown closes admission, removes the exact authenticated
+/// descriptor and only then returns or drops the process/root owner.
 pub struct StandaloneLoopbackOwner {
-    listener: TcpListener,
+    listener: Option<TcpListener>,
+    endpoint: Option<endpoint::PublishedNativeEndpoint>,
     pairing: BindingSession,
-    process: StandaloneProcessOwner,
+    process: Option<StandaloneProcessOwner>,
     next_connection_sequence: u64,
     accept_quantum: Duration,
     local_protocols: ProtocolRange,
@@ -118,21 +151,28 @@ pub struct StandaloneLoopbackOwner {
 }
 
 impl StandaloneLoopbackOwner {
-    /// Bind an IPv4 loopback listener after process bootstrap.
+    /// Bind an IPv4 loopback listener and publish its authenticated descriptor.
     ///
-    /// Port zero is permitted for an explicitly supervised ephemeral endpoint.
-    /// The finite poll quantum is not a request deadline; each accepted socket
-    /// receives its own caller-supplied `OperationContext` before pairing begins.
-    /// The protocol range and limits are fixed for this listener lifetime.
-    pub fn bind(
+    /// Port zero is permitted for an explicitly supervised ephemeral endpoint;
+    /// the actual selected port is signed into `runtime/native-endpoint.v1`.
+    /// The finite poll quantum is not a request deadline. One caller-supplied
+    /// setup context covers exact credential resolution, descriptor publication
+    /// and readback. The protocol range and limits are fixed for this listener
+    /// lifetime.
+    pub fn bind<C>(
         process: StandaloneProcessOwner,
         port: u16,
         accept_quantum: Duration,
         local_protocols: ProtocolRange,
         limits: ProtocolLimits,
-    ) -> Result<Self, StandalonePairingIoError> {
+        advertisement: &StandaloneEndpointAdvertisement,
+        context: &OperationContext<C>,
+    ) -> Result<Self, StandaloneBindError>
+    where
+        C: CancellationProbe + Clone,
+    {
         if accept_quantum.is_zero() || accept_quantum > MAX_ACCEPT_QUANTUM {
-            return Err(StandalonePairingIoError::InvalidConfiguration);
+            return Err(StandalonePairingIoError::InvalidConfiguration.into());
         }
         let local_protocols = ProtocolRange::new(
             local_protocols.minimum,
@@ -146,21 +186,35 @@ impl StandaloneLoopbackOwner {
             .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
             .map_err(StandalonePairingIoError::Io)?;
-        if !listener
+        let address = listener
             .local_addr()
-            .map_err(StandalonePairingIoError::Io)?
-            .ip()
-            .is_loopback()
-        {
-            return Err(StandalonePairingIoError::NonLoopback);
+            .map_err(StandalonePairingIoError::Io)?;
+        if !address.ip().is_loopback() {
+            return Err(StandalonePairingIoError::NonLoopback.into());
         }
         listener
             .set_nonblocking(true)
             .map_err(StandalonePairingIoError::Io)?;
+        let endpoint = match endpoint::PublishedNativeEndpoint::publish(
+            &process,
+            address,
+            advertisement,
+            local_protocols,
+            context,
+        ) {
+            Ok(endpoint) => endpoint,
+            Err(error) => {
+                if error.requires_process_retention() {
+                    std::mem::forget(process);
+                }
+                return Err(error.into());
+            }
+        };
         Ok(Self {
-            listener,
+            listener: Some(listener),
+            endpoint: Some(endpoint),
             pairing,
-            process,
+            process: Some(process),
             next_connection_sequence: 0,
             accept_quantum,
             local_protocols,
@@ -170,13 +224,20 @@ impl StandaloneLoopbackOwner {
 
     /// Actual bound address; contains no credential or source metadata.
     pub fn local_addr(&self) -> Result<SocketAddr, StandalonePairingIoError> {
-        self.listener.local_addr().map_err(StandalonePairingIoError::Io)
+        self.listener
+            .as_ref()
+            .ok_or(StandalonePairingIoError::InvalidConfiguration)?
+            .local_addr()
+            .map_err(StandalonePairingIoError::Io)
     }
 
     /// Executed bootstrap evidence retained by the underlying process owner.
     #[must_use]
-    pub const fn readiness(&self) -> &StandaloneBootstrapReady {
-        self.process.readiness()
+    pub fn readiness(&self) -> &StandaloneBootstrapReady {
+        self.process
+            .as_ref()
+            .expect("standalone process owner is present while listener is usable")
+            .readiness()
     }
 
     /// Poll one accepted socket, complete canonical native mutual pairing on the
@@ -201,8 +262,12 @@ impl StandaloneLoopbackOwner {
             .ok_or(StandalonePairingIoError::ConnectionSequenceExhausted)?;
         self.next_connection_sequence = sequence;
 
-        let record = self.process.readiness().record().clone();
-        let expected = self.process.readiness().expectation().clone();
+        let process = self
+            .process
+            .as_ref()
+            .ok_or(StandalonePairingIoError::InvalidConfiguration)?;
+        let record = process.readiness().record().clone();
+        let expected = process.readiness().expectation().clone();
         let mut io = StandalonePairingIo::new(&mut stream, context)?;
         let paired = pairing::perform_native_pairing(
             &mut io,
@@ -216,7 +281,11 @@ impl StandaloneLoopbackOwner {
         let remaining = io.remaining_context()?;
         drop(io);
 
-        let (transport, pin) = self.process.open_tcp(
+        let process = self
+            .process
+            .as_mut()
+            .ok_or(StandalonePairingIoError::InvalidConfiguration)?;
+        let (transport, pin) = process.open_tcp(
             stream,
             paired.binding,
             paired.ceremony,
@@ -228,24 +297,39 @@ impl StandaloneLoopbackOwner {
         Ok(Poll::Ready(StandaloneOpenedConnection {
             transport: Some(transport),
             pin,
-            _process: &mut self.process,
+            _process: process,
         }))
     }
 
-    /// Close listener admission and return the still-root-owning process state.
+    /// Close listener admission, remove the exact descriptor and return the
+    /// still-root-owning process state.
+    ///
     /// Any opened/serving connection borrows this owner and therefore must have
-    /// been closed and dropped before this method can be called.
-    #[must_use]
-    pub fn close_listener(self) -> StandaloneProcessOwner {
-        let Self { listener, process, .. } = self;
-        drop(listener);
-        process
+    /// been closed and dropped before this method can be called. If descriptor
+    /// removal fails, drop retries it and retains the process/root lock in a
+    /// fail-stop leak rather than releasing ownership behind a stale endpoint.
+    pub fn close_listener(
+        mut self,
+    ) -> Result<StandaloneProcessOwner, StandaloneEndpointError> {
+        drop(self.listener.take());
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            endpoint.remove()?;
+        }
+        drop(self.endpoint.take());
+        Ok(self
+            .process
+            .take()
+            .expect("standalone process owner is present during explicit close"))
     }
 
     fn poll_accept(&self) -> Result<Option<TcpStream>, StandalonePairingIoError> {
+        let listener = self
+            .listener
+            .as_ref()
+            .ok_or(StandalonePairingIoError::InvalidConfiguration)?;
         let started = Instant::now();
         loop {
-            match self.listener.accept() {
+            match listener.accept() {
                 Ok((stream, peer)) => {
                     if !peer.ip().is_loopback() {
                         let _ = stream.shutdown(Shutdown::Both);
@@ -267,13 +351,43 @@ impl StandaloneLoopbackOwner {
     }
 }
 
+impl Drop for StandaloneLoopbackOwner {
+    fn drop(&mut self) {
+        drop(self.listener.take());
+        let cleanup_failed = self
+            .endpoint
+            .as_mut()
+            .is_some_and(|endpoint| endpoint.remove().is_err());
+        if cleanup_failed {
+            // Releasing the root while this exact descriptor may remain would
+            // let a successor race stale discovery. Preserve fail-stop ownership
+            // for the rest of this process instead; normal shutdown returns an
+            // explicit error and the OS releases exclusion when the process exits.
+            if let Some(process) = self.process.take() {
+                std::mem::forget(process);
+            }
+        } else {
+            drop(self.endpoint.take());
+        }
+    }
+}
+
 impl fmt::Debug for StandaloneLoopbackOwner {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("StandaloneLoopbackOwner")
-            .field("local_addr", &self.listener.local_addr().ok())
+            .field(
+                "local_addr",
+                &self
+                    .listener
+                    .as_ref()
+                    .and_then(|listener| listener.local_addr().ok()),
+            )
             .field("next_connection_sequence", &self.next_connection_sequence)
-            .field("ready", &self.process.readiness())
+            .field(
+                "ready",
+                &self.process.as_ref().map(StandaloneProcessOwner::readiness),
+            )
             .finish_non_exhaustive()
     }
 }
