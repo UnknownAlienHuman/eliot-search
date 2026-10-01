@@ -8,8 +8,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::task::Poll;
 
-use search_contracts::RecipeIdV1;
-use search_provider_protocol::{AdmittedProviderRequest, BindingContext};
+use search_contracts::{RecipeIdV1, SearchProviderCapabilityDescriptor};
+use search_provider_protocol::{
+    AdmittedProviderRequest, BindingContext, ProtocolError, project_capability_descriptor,
+};
 
 use crate::access_composition::StandalonePreRetrievalAdmission;
 use crate::provider_composition::{
@@ -64,10 +66,44 @@ impl std::fmt::Display for CanonicalRecipeRegistryError {
 
 impl std::error::Error for CanonicalRecipeRegistryError {}
 
+/// Binding projection or live-handler/descriptor incoherence.
+#[derive(Debug)]
+pub(crate) enum CanonicalCapabilityProjectionError {
+    /// Shared binding/version projection refused the descriptor.
+    Protocol(ProtocolError),
+    /// The descriptor advertised a recipe with no live registered handler.
+    MissingHandler(RecipeIdV1),
+}
+
+impl std::fmt::Display for CanonicalCapabilityProjectionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Protocol(error) => formatter.write_str(error.code()),
+            Self::MissingHandler(_) => {
+                formatter.write_str("DAEMON_CAPABILITY_HANDLER_INCOHERENT")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CanonicalCapabilityProjectionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Protocol(error) => Some(error),
+            Self::MissingHandler(_) => None,
+        }
+    }
+}
+
+impl From<ProtocolError> for CanonicalCapabilityProjectionError {
+    fn from(error: ProtocolError) -> Self { Self::Protocol(error) }
+}
+
 /// Deterministic one-handler-per-recipe factory used by [`CanonicalQueryHost`].
 ///
-/// The registered set is the sole source for capability publication. There is no
-/// default handler, recipe alias, natural-language fallback or first-match order.
+/// The registered set is the sole handler source for capability publication.
+/// There is no default handler, recipe alias, natural-language fallback or
+/// first-match order.
 pub(crate) struct CanonicalRecipeRegistry {
     handlers: BTreeMap<RecipeIdV1, Box<dyn RegisteredAdmittedRecipeHandler>>,
 }
@@ -93,7 +129,7 @@ impl CanonicalRecipeRegistry {
         Ok(Self { handlers: registered })
     }
 
-    /// Exact recipe set that may be advertised by the enclosing capability.
+    /// Exact recipe set backed by live constructors.
     #[must_use]
     pub(crate) fn registered_recipes(&self) -> BTreeSet<RecipeIdV1> {
         self.handlers.keys().copied().collect()
@@ -103,6 +139,42 @@ impl CanonicalRecipeRegistry {
     #[must_use]
     pub(crate) fn contains(&self, recipe_id: RecipeIdV1) -> bool {
         self.handlers.contains_key(&recipe_id)
+    }
+
+    /// Verify that every advertised recipe has one exact live handler.
+    ///
+    /// Extra registered handlers are allowed: capability prerequisites may
+    /// narrow the descriptor. A descriptor may never widen beyond the registry.
+    pub(crate) fn validate_advertised_recipes(
+        &self,
+        descriptor: &SearchProviderCapabilityDescriptor,
+    ) -> Result<(), CanonicalCapabilityProjectionError> {
+        if let Some(recipe_id) = descriptor
+            .supported_recipes
+            .iter()
+            .copied()
+            .find(|recipe_id| !self.contains(*recipe_id))
+        {
+            return Err(CanonicalCapabilityProjectionError::MissingHandler(
+                recipe_id,
+            ));
+        }
+        Ok(())
+    }
+
+    /// Apply shared binding/version projection, then enforce handler coherence.
+    ///
+    /// This does not invent recipes or silently intersect an incoherent
+    /// descriptor. A missing handler is a daemon composition failure, while
+    /// recipes excluded by authoritative readiness remain excluded.
+    pub(crate) fn project_capability(
+        &self,
+        authoritative: &SearchProviderCapabilityDescriptor,
+        binding: &BindingContext,
+    ) -> Result<SearchProviderCapabilityDescriptor, CanonicalCapabilityProjectionError> {
+        let projected = project_capability_descriptor(authoritative, binding)?;
+        self.validate_advertised_recipes(&projected)?;
+        Ok(projected)
     }
 }
 
