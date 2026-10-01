@@ -12,6 +12,7 @@ mod snapshot_guard;
 mod conditions;
 pub mod policy_codec;
 pub mod access_policy;
+pub mod provider_authority;
 pub mod security_restriction;
 pub mod publication_codec;
 pub mod migration;
