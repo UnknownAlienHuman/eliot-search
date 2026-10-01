@@ -95,19 +95,42 @@ pub struct StandalonePreRetrievalAdmission {
     pub predicates: Vec<EligibilityPredicates>,
     pub request_fence: RequestSecurityFence,
     pub admission_permit: AccessPermit,
+    /// Accepted projection/scoring profile for this exact admission.
+    pub profile_digest: Blake3Digest32,
 }
 
-/// Compile one issuer-verified standalone request to non-widening safe legs.
+/// Compatibility wrapper for callers that do not yet carry an independently
+/// published projection-profile digest.
+///
+/// Production query composition must call
+/// [`compile_standalone_pre_retrieval_for_profile`]. When a proof is present,
+/// this wrapper preserves the former behavior by treating its profile as the
+/// compatibility profile; without a proof it uses an explicitly unqualified
+/// zero digest. Neither path upgrades the proof into publication authority.
+pub fn compile_standalone_pre_retrieval<R: StandaloneScopeResolver>(
+    resolver: &mut R,
+    request: StandaloneAdmissionRequest<'_>,
+) -> Result<StandalonePreRetrievalAdmission, AccessError> {
+    let profile_digest = request.overlap_proof.map_or(
+        Blake3Digest32::from_bytes([0_u8; 32]),
+        |proof| proof.profile_digest,
+    );
+    compile_standalone_pre_retrieval_for_profile(resolver, request, profile_digest)
+}
+
+/// Compile one issuer-verified standalone request under one independently
+/// published projection/scoring profile.
 ///
 /// Fixed order: exact template/request correspondence, recipe and budget
 /// ceiling, namespace/owner/policy fence, server scope resolution, explicit
 /// scope equality, grant membership/partition/modality intersection,
-/// authoritative access intersection, safe-leg compilation and the mandatory
-/// live admission barrier. No source byte or provider call occurs before all
-/// checks succeed.
-pub fn compile_standalone_pre_retrieval<R: StandaloneScopeResolver>(
+/// authoritative access intersection, profile-bound safe-leg compilation and
+/// the mandatory live admission barrier. No source byte or provider call occurs
+/// before all checks succeed.
+pub fn compile_standalone_pre_retrieval_for_profile<R: StandaloneScopeResolver>(
     resolver: &mut R,
     request: StandaloneAdmissionRequest<'_>,
+    profile_digest: Blake3Digest32,
 ) -> Result<StandalonePreRetrievalAdmission, AccessError> {
     validate_grant_template(request.body, request.template)?;
     check_policy_fence(request.requested_policy, request.authoritative_policy)?;
@@ -132,13 +155,19 @@ pub fn compile_standalone_pre_retrieval<R: StandaloneScopeResolver>(
         &allowed_memberships,
         request.authoritative_access,
     )?;
+    // A proof from another projection/scoring profile is stale authority. It
+    // cannot group memberships; the normal finite singleton-leg path remains
+    // available when the configured leg budget permits it.
+    let overlap_proof = request
+        .overlap_proof
+        .filter(|proof| proof.profile_digest == profile_digest);
     let legs = compile_safe_legs(
         &scope,
         request.route,
         request.live.generation,
         request.authoritative_policy.shadow_revision.get(),
         request.authoritative_policy.purge_revision.get(),
-        request.overlap_proof,
+        overlap_proof,
         request.max_legs,
     )?;
     let request_fence = RequestSecurityFence {
@@ -168,6 +197,7 @@ pub fn compile_standalone_pre_retrieval<R: StandaloneScopeResolver>(
         predicates,
         request_fence,
         admission_permit,
+        profile_digest,
     })
 }
 
