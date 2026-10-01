@@ -65,6 +65,7 @@ impl StandalonePolicyRecord {
         let policy = &self.policy;
         if policy.binding_generation == 0 || policy.policy_generation == 0
             || policy.maximum_ttl_ms <= 1 || policy.allowed_membership_ids.is_empty()
+            || policy.allowed_access_partitions.is_empty()
             || policy.allowed_modalities.is_empty() || policy.permitted_recipe_families.is_empty()
             || policy.allowed_budget_classes.is_empty()
             || (policy.exact_scan_permission && !policy.source_read_permission)
