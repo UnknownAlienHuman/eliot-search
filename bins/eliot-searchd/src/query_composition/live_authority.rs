@@ -228,6 +228,20 @@ impl LiveNativeQuerySnapshot {
         {
             return Err(AccessError::RouteMismatch);
         }
+        // An overlap proof is positive authority to combine memberships in one
+        // scoring/IDF population. Adding or replacing that authority must be
+        // named by a fresh route or access generation. Removing it is monotone
+        // narrowing and can take effect immediately without waiting for another
+        // generation to be published.
+        if next.route.route_generation == self.route.route_generation
+            && next.access.generation == self.access.generation
+            && overlap_proof_update_requires_revision(
+                self.overlap_proof.as_ref(),
+                next.overlap_proof.as_ref(),
+            )
+        {
+            return Err(AccessError::OverlapProofMissing);
+        }
         if next.live.generation < self.live.generation {
             return Err(AccessError::SecurityGenerationRegression);
         }
@@ -387,6 +401,17 @@ where
     }
 }
 
+fn overlap_proof_update_requires_revision<T: PartialEq>(
+    current: Option<&T>,
+    next: Option<&T>,
+) -> bool {
+    match (current, next) {
+        (None, Some(_)) => true,
+        (Some(current), Some(next)) => current != next,
+        (None, None) | (Some(_), None) => false,
+    }
+}
+
 fn try_lock<R, V>(
     state: &Arc<Mutex<LiveNativeQueryState<R, V>>>,
 ) -> Result<MutexGuard<'_, LiveNativeQueryState<R, V>>, AccessError> {
@@ -394,5 +419,34 @@ fn try_lock<R, V>(
         Ok(guard) => Ok(guard),
         Err(TryLockError::WouldBlock) => Err(AccessError::SecurityOperationConflict),
         Err(TryLockError::Poisoned(_)) => Err(AccessError::SecurityFailClosed),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::overlap_proof_update_requires_revision;
+
+    #[test]
+    fn proof_removal_is_immediate_monotone_narrowing() {
+        let current = 1_u8;
+        assert!(!overlap_proof_update_requires_revision(
+            Some(&current),
+            None,
+        ));
+    }
+
+    #[test]
+    fn proof_addition_or_replacement_requires_a_new_generation() {
+        let current = 1_u8;
+        let replacement = 2_u8;
+        assert!(overlap_proof_update_requires_revision(None, Some(&current)));
+        assert!(overlap_proof_update_requires_revision(
+            Some(&current),
+            Some(&replacement),
+        ));
+        assert!(!overlap_proof_update_requires_revision(
+            Some(&current),
+            Some(&current),
+        ));
     }
 }
