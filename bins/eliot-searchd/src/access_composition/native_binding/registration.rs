@@ -337,7 +337,9 @@ fn leaf_command_digest(
             );
             hash.update(prior.as_bytes());
         }
-        None => hash.update(&[0]),
+        None => {
+            hash.update(&[0]);
+        }
     }
     hash.update(replacement.as_bytes());
     Ok(Blake3Digest32::from_bytes(*hash.finalize().as_bytes()))
