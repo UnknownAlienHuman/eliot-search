@@ -54,6 +54,8 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) mod registry;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_access::{BaseEligibilityPlan, EligibilityPredicates};
