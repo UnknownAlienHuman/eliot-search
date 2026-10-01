@@ -1,30 +1,33 @@
 //! Coherent native registration readback for bootstrap and live policy use.
 
 use search_contracts::BindingId;
-use search_control_redb::{ControlSnapshotPublisher, JournalIdentity, MutationId, PersistentControlJournal};
+use search_control_redb::{
+    ControlSnapshotPublisher, JournalIdentity, MutationId, PersistentControlJournal,
+    provider_authority::ProviderAuthorityReadback,
+};
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{BindingContext, MonotonicMillis};
 
-use crate::access_composition::{GrantUseError, NativeGrantPolicyError, StandalonePolicyRecord, SystemGrantClock};
-use crate::access_composition::native_grant_policy::policy_key;
-use super::{StandaloneRegistrationMutation, validate_pair};
+use crate::access_composition::{
+    GrantUseError, NativeGrantPolicyError, StandalonePolicyRecord, SystemGrantClock,
+};
+use super::StandaloneRegistrationMutation;
 use super::super::{
     NativeBindingError, NativeBindingPin, ProviderBindingRecord, ProviderBindingStatus,
-    begin, binding_key, check, codec, monotonic_millis,
+    begin, check, monotonic_millis,
 };
 
 /// Both records, or verified absence of both, at one disk-published generation.
 ///
-/// Only a native read constructs this observation. It is not a live permit or
-/// evidence that an uncertain historical command committed. Recover that command
-/// through its original operation identity; never reconstruct it from this head.
-/// No journal, snapshot pointer, issuer ledger or credential is retained here.
+/// Only the typed control owner constructs this observation. It is not a live
+/// permit or evidence that an uncertain historical command committed. Recover
+/// that command through its original operation identity; never reconstruct it
+/// from this head. No journal, snapshot pointer, issuer ledger or credential is
+/// retained here.
 #[must_use = "readback is metadata; mutation, publication and live checks remain explicit"]
 pub struct StandaloneRegistrationReadback {
-    identity: JournalIdentity,
-    generation: u64,
+    authority: ProviderAuthorityReadback,
     binding_id: BindingId,
-    records: Option<(ProviderBindingRecord, StandalonePolicyRecord)>,
 }
 
 impl StandaloneRegistrationReadback {
@@ -47,30 +50,17 @@ impl StandaloneRegistrationReadback {
         context: &OperationContext<C>,
     ) -> Result<Self, NativeGrantPolicyError> {
         let (started, deadline) = begin(context)?;
-        let identity = journal.identity();
-        let incarnation = identity.installation_incarnation_id;
-        let binding_key = binding_key(incarnation, binding_id)?;
-        let policy_key = policy_key(incarnation, binding_id)?;
         let read_context = remaining_context(context, started, deadline)?;
-        let (generation, values) = journal.read_published_record_pair(
-            publisher, [&binding_key, &policy_key], &read_context,
+        let authority = journal.read_published_provider_authority(
+            publisher,
+            binding_id,
+            &read_context,
         )?;
         check(context, started, deadline)?;
-        let records = match values {
-            [None, None] => None,
-            [Some(binding), Some(policy)] => {
-                let binding = codec::decode(&binding)?;
-                let policy = StandalonePolicyRecord::decode_native(&policy)?;
-                validate_pair(&binding, &policy)?;
-                if binding.binding_id != binding_id || binding.installation_incarnation_id != incarnation {
-                    return Err(NativeGrantPolicyError::InvalidRecord);
-                }
-                Some((binding, policy))
-            }
-            _ => return Err(NativeGrantPolicyError::InvalidRecord),
-        };
-        check(context, started, deadline)?;
-        Ok(Self { identity, generation, binding_id, records })
+        Ok(Self {
+            authority,
+            binding_id,
+        })
     }
 
     /// Restore the existing journal's publication, then read this registration.
@@ -102,26 +92,34 @@ impl StandaloneRegistrationReadback {
         let (started, deadline) = begin(context)?;
         let recovery_context = remaining_context(context, started, deadline)?;
         let _publication = journal.recover_snapshot_publication_with_context(
-            publisher, &recovery_context,
+            publisher,
+            &recovery_context,
         )?;
         let read_context = remaining_context(context, started, deadline)?;
-        let registration = Self::read_published(journal, publisher, binding_id, &read_context)?;
+        let registration = Self::read_published(
+            journal,
+            publisher,
+            binding_id,
+            &read_context,
+        )?;
         check(context, started, deadline)?;
         Ok(registration)
     }
 
     /// Exact journal/root/owner identity at the read, not permission to rebind it.
     #[must_use]
-    pub const fn identity(&self) -> JournalIdentity { self.identity }
+    pub const fn identity(&self) -> JournalIdentity { self.authority.identity() }
 
     /// Common observed journal generation; it is never advanced during preparation.
     #[must_use]
-    pub const fn generation(&self) -> u64 { self.generation }
+    pub const fn generation(&self) -> u64 { self.authority.generation() }
 
     /// Validated pair or absence of both. Neither record alone becomes authority.
     #[must_use]
     pub fn records(&self) -> Option<(&ProviderBindingRecord, &StandalonePolicyRecord)> {
-        self.records.as_ref().map(|(binding, policy)| (binding, policy))
+        self.authority
+            .record()
+            .map(|record| (record.binding(), record.policy()))
     }
 
     /// Build an atomic command using the exact observed pre-state and generation.
@@ -143,20 +141,28 @@ impl StandaloneRegistrationReadback {
             return Err(NativeGrantPolicyError::InvalidRecord);
         }
         StandaloneRegistrationMutation::new(
-            self.identity, operation_id, self.generation, self.records(), binding, policy,
+            self.identity(),
+            operation_id,
+            self.generation(),
+            self.records(),
+            binding,
+            policy,
         )
     }
 
     pub(in crate::access_composition) fn into_policy(self) -> Option<StandalonePolicyRecord> {
-        self.records.map(|(_, policy)| policy)
+        self.authority
+            .record()
+            .map(|record| record.policy().clone())
     }
 }
 
 impl core::fmt::Debug for StandaloneRegistrationReadback {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("StandaloneRegistrationReadback")
-            .field("generation", &self.generation)
-            .field("present", &self.records.is_some())
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter
+            .debug_struct("StandaloneRegistrationReadback")
+            .field("generation", &self.authority.generation())
+            .field("present", &self.authority.record().is_some())
             .finish_non_exhaustive()
     }
 }
@@ -184,13 +190,21 @@ impl NativeBindingPin {
         }
         let read_context = remaining_context(context, started, deadline)?;
         let registration = StandaloneRegistrationReadback::read_published(
-            journal, publisher, binding.binding_id(), &read_context,
+            journal,
+            publisher,
+            binding.binding_id(),
+            &read_context,
         )?;
-        let (current, _) = registration.records().ok_or(NativeBindingError::Unavailable)?;
+        let (current, _) = registration
+            .records()
+            .ok_or(NativeBindingError::Unavailable)?;
         if current != &self.record || current.status != ProviderBindingStatus::Active {
             return Err(NativeBindingError::Unavailable.into());
         }
-        let expiry = clock.check_policy_window(&current.issued_at, current.expires_at.as_ref())?;
+        let expiry = clock.check_policy_window(
+            &current.issued_at,
+            current.expires_at.as_ref(),
+        )?;
         check(context, started, deadline)?;
         if expiry.is_some_and(|end| monotonic_millis() >= end) {
             return Err(GrantUseError::Expired.into());
@@ -205,9 +219,16 @@ pub(super) fn remaining_context<C: CancellationProbe + Clone>(
     deadline: MonotonicMillis,
 ) -> Result<OperationContext<C>, NativeBindingError> {
     check(context, started, deadline)?;
-    let remaining = deadline.get().checked_sub(monotonic_millis().get())
-        .filter(|left| *left > 0).ok_or(NativeBindingError::Interrupted)?;
+    let remaining = deadline
+        .get()
+        .checked_sub(monotonic_millis().get())
+        .filter(|left| *left > 0)
+        .ok_or(NativeBindingError::Interrupted)?;
     OperationContext::new(
-        context.request_id(), remaining, context.cancellation().clone(), context.budget_ref().clone(),
-    ).map_err(|_| NativeBindingError::Interrupted)
+        context.request_id(),
+        remaining,
+        context.cancellation().clone(),
+        context.budget_ref().clone(),
+    )
+    .map_err(|_| NativeBindingError::Interrupted)
 }
