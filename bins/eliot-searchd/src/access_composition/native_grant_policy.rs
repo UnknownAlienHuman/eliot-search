@@ -6,9 +6,7 @@
 //! their owner's lock; it does not open a database or create a policy cache.
 
 mod codec;
-mod mutation;
 
-pub use mutation::StandalonePolicyMutation;
 pub use search_contracts::{StandalonePolicyRecord, StandalonePolicyState};
 
 use search_contracts::{
@@ -88,7 +86,7 @@ pub(super) fn validate_policy_record(
 
 // Provisioning intents retain exact prior/next bytes for crash recovery. Decode
 // those historical policy values through the same compatibility codec until the
-// final write path is fully moved into search-control-redb.
+// final intent codec is fully moved into search-control-redb.
 pub(in crate::access_composition) fn decode_policy_record(
     value: &ControlValue,
 ) -> Result<StandalonePolicyRecord, NativeGrantPolicyError> {
