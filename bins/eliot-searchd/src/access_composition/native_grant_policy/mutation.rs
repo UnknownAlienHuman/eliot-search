@@ -1,12 +1,17 @@
 //! Explicit conditional policy persistence on the existing operation ledger.
 
 use search_contracts::Blake3Digest32;
-use search_control_redb::{CommitRecoveryDecision, ConditionalControlMutation, ControlCommitReceipt,
-    ControlError, ControlMutation, ControlRecordCondition, ControlWrite, JournalIdentity,
-    MutationId, PersistentControlJournal};
+use search_control_redb::{
+    CommitRecoveryDecision, ConditionalControlMutation, ControlCommitReceipt, ControlError,
+    ControlMutation, ControlRecordCondition, ControlWrite, JournalIdentity, MutationId,
+    PersistentControlJournal,
+};
 use search_ports::{CancellationProbe, OperationContext};
 
-use super::{NativeGrantPolicyError, StandalonePolicyRecord, StandalonePolicyState, codec, policy_key};
+use super::{
+    NativeGrantPolicyError, StandalonePolicyRecord, StandalonePolicyState, codec, policy_key,
+    validate_policy_record,
+};
 
 /// Immutable administrative mutation retained unchanged through recovery. It
 /// contains only typed policy metadata, never secrets or a searchable corpus.
@@ -35,22 +40,31 @@ impl StandalonePolicyMutation {
         replacement: &StandalonePolicyRecord,
     ) -> Result<Self, NativeGrantPolicyError> {
         identity.validate()?;
-        replacement.validate()?;
-        if identity.installation_incarnation_id != replacement.policy.installation_incarnation_id {
+        validate_policy_record(replacement)?;
+        if identity.installation_incarnation_id
+            != replacement.policy.installation_incarnation_id
+        {
             return Err(ControlError::IdentityMismatch.into());
         }
-        let key = policy_key(replacement.policy.installation_incarnation_id, replacement.policy.binding_id)?;
+        let key = policy_key(
+            replacement.policy.installation_incarnation_id,
+            replacement.policy.binding_id,
+        )?;
         let value = codec::encode(replacement)?;
         let mut hash = blake3::Hasher::new();
         hash.update(b"ELIOT-STANDALONE-POLICY-MUTATION-v1\0");
         hash.update(&expected_generation.to_be_bytes());
         hash.update(key.as_bytes());
         let condition = if let Some(before) = expected {
-            before.validate()?;
+            validate_policy_record(before)?;
             validate_transition(before, replacement)?;
             let prior = codec::encode(before)?;
             hash.update(&[1]);
-            hash.update(&u64::try_from(prior.len()).map_err(|_| NativeGrantPolicyError::InvalidRecord)?.to_be_bytes());
+            hash.update(
+                &u64::try_from(prior.len())
+                    .map_err(|_| NativeGrantPolicyError::InvalidRecord)?
+                    .to_be_bytes(),
+            );
             hash.update(prior.as_bytes());
             ControlRecordCondition::exact(key.clone(), prior)
         } else {
@@ -62,9 +76,17 @@ impl StandalonePolicyMutation {
         };
         hash.update(value.as_bytes());
         let digest = Blake3Digest32::from_bytes(*hash.finalize().as_bytes());
-        let mutation = ControlMutation::new(operation_id, digest, expected_generation,
-            vec![ControlWrite { key, value }], Vec::new());
-        Ok(Self { identity, command: ConditionalControlMutation::new(mutation, vec![condition]) })
+        let mutation = ControlMutation::new(
+            operation_id,
+            digest,
+            expected_generation,
+            vec![ControlWrite { key, value }],
+            Vec::new(),
+        );
+        Ok(Self {
+            identity,
+            command: ConditionalControlMutation::new(mutation, vec![condition]),
+        })
     }
 
     /// Commit without publishing. The returned receipt is historical evidence,
@@ -80,7 +102,9 @@ impl StandalonePolicyMutation {
         context: &OperationContext<C>,
     ) -> Result<ControlCommitReceipt, NativeGrantPolicyError> {
         self.check_identity(journal)?;
-        journal.transact_conditionally(self.command.clone(), context).map_err(Into::into)
+        journal
+            .transact_conditionally(self.command.clone(), context)
+            .map_err(Into::into)
     }
 
     /// Recover this exact conditional transaction without dispatching another
@@ -94,7 +118,9 @@ impl StandalonePolicyMutation {
         context: &OperationContext<C>,
     ) -> Result<CommitRecoveryDecision, NativeGrantPolicyError> {
         self.check_identity(journal)?;
-        journal.recover_conditional_transaction(&self.command, context).map_err(Into::into)
+        journal
+            .recover_conditional_transaction(&self.command, context)
+            .map_err(Into::into)
     }
 
     // Reuse the validated row/transition in the atomic standalone registration.
@@ -103,25 +129,39 @@ impl StandalonePolicyMutation {
         &self.command
     }
 
-    fn check_identity(&self, journal: &PersistentControlJournal) -> Result<(), NativeGrantPolicyError> {
-        if journal.identity() != self.identity { return Err(ControlError::IdentityMismatch.into()); }
+    fn check_identity(
+        &self,
+        journal: &PersistentControlJournal,
+    ) -> Result<(), NativeGrantPolicyError> {
+        if journal.identity() != self.identity {
+            return Err(ControlError::IdentityMismatch.into());
+        }
         Ok(())
     }
 }
 
-fn validate_transition(before: &StandalonePolicyRecord, after: &StandalonePolicyRecord) -> Result<(), NativeGrantPolicyError> {
+fn validate_transition(
+    before: &StandalonePolicyRecord,
+    after: &StandalonePolicyRecord,
+) -> Result<(), NativeGrantPolicyError> {
     let old = &before.policy;
     let new = &after.policy;
     if before.state != StandalonePolicyState::Active
-        || old.binding_id != new.binding_id || old.installation_id != new.installation_id
+        || old.binding_id != new.binding_id
+        || old.installation_id != new.installation_id
         || old.installation_incarnation_id != new.installation_incarnation_id
-        || old.principal_opaque_id != new.principal_opaque_id || old.client_scope_ref != new.client_scope_ref
-        || old.scope_domain_id != new.scope_domain_id || before.issued_at != after.issued_at
+        || old.principal_opaque_id != new.principal_opaque_id
+        || old.client_scope_ref != new.client_scope_ref
+        || old.scope_domain_id != new.scope_domain_id
+        || before.issued_at != after.issued_at
         || old.policy_generation.checked_add(1) != Some(new.policy_generation)
         || new.binding_generation < old.binding_generation
         || new.revocation_generation < old.revocation_generation
-        || (after.state != StandalonePolicyState::Active && new.revocation_generation == old.revocation_generation)
-        || before.expires_at.as_ref().is_some_and(|old_end| after.expires_at.as_ref().is_none_or(|end| end > old_end))
+        || (after.state != StandalonePolicyState::Active
+            && new.revocation_generation == old.revocation_generation)
+        || before.expires_at.as_ref().is_some_and(|old_end| {
+            after.expires_at.as_ref().is_none_or(|end| end > old_end)
+        })
     {
         return Err(NativeGrantPolicyError::InvalidRecord);
     }
