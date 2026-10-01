@@ -18,8 +18,9 @@ use search_ports::{CancellationProbe, OperationContext};
 
 use crate::{
     CommitRecoveryDecision, ConditionalControlMutation, ControlCallError, ControlCommitReceipt,
-    ControlError, ControlKey, ControlMutation, ControlRecordCondition, ControlSnapshotPublisher,
-    ControlWrite, JournalIdentity, JournalLimits, MutationId, PersistentControlJournal,
+    ControlError, ControlKey, ControlMutation, ControlRecordClass, ControlRecordCondition,
+    ControlSnapshotPublisher, ControlValue, ControlWrite, JournalIdentity, JournalLimits,
+    MutationId, PersistentControlJournal,
 };
 use codec::{decode_binding, decode_policy, encode_binding, encode_policy};
 
@@ -166,6 +167,66 @@ impl ProviderAuthorityMutation {
         })
     }
 
+    /// Bind one exact operation-state transition to the same authority commit.
+    ///
+    /// This is used for crash-safe provisioning: the marker must be a distinct
+    /// non-authority `Operation` record, observed at `prepared` and replaced by
+    /// `committed`. The caller supplies a digest over the complete augmented
+    /// command; the journal still fingerprints and condition-checks every byte.
+    ///
+    /// # Errors
+    /// Rejects authority namespaces, duplicate keys, wrong record classes,
+    /// identical marker values and conflicting existing command entries.
+    pub fn with_completion_marker(
+        mut self,
+        command_digest: Blake3Digest32,
+        key: ControlKey,
+        prepared: ControlValue,
+        committed: ControlValue,
+    ) -> Result<Self, ControlError> {
+        if prepared == committed
+            || prepared.class() != ControlRecordClass::Operation
+            || committed.class() != ControlRecordClass::Operation
+            || port_reserved_key(key.as_bytes())
+            || self
+                .command
+                .mutation()
+                .writes()
+                .iter()
+                .any(|write| write.key == key)
+            || self
+                .command
+                .conditions()
+                .iter()
+                .any(|condition| condition.key() == &key)
+        {
+            return Err(ControlError::InvalidValue);
+        }
+        let base = self.command.mutation();
+        let mut writes = base.writes().to_vec();
+        writes.push(ControlWrite {
+            key: key.clone(),
+            value: committed,
+        });
+        writes.sort_unstable_by(|left, right| left.key.cmp(&right.key));
+        let mut conditions = self.command.conditions().to_vec();
+        conditions.push(ControlRecordCondition::exact(key, prepared));
+        conditions.sort_unstable_by(|left, right| left.key().cmp(right.key()));
+        let mutation = ControlMutation::new(
+            base.id(),
+            command_digest,
+            base.expected_generation(),
+            writes,
+            Vec::new(),
+        );
+        self.command = ConditionalControlMutation::new(mutation, conditions);
+        Ok(self)
+    }
+
+    /// Exact immutable conditional command for provisioning evidence/recovery.
+    #[must_use]
+    pub const fn command(&self) -> &ConditionalControlMutation { &self.command }
+
     /// Exact journal identity bound by this command.
     #[must_use]
     pub const fn identity(&self) -> JournalIdentity { self.identity }
@@ -299,8 +360,11 @@ impl ProviderAuthorityReadback {
         {
             return Err(ControlError::OperationConflict);
         }
-        let mut expected_keys = [mutation.binding_key.clone(), mutation.policy_key.clone()];
-        expected_keys.sort_unstable();
+        let expected_keys = request
+            .writes()
+            .iter()
+            .map(|write| write.key.clone())
+            .collect::<Vec<_>>();
         if receipt.changed_keys.as_slice() != expected_keys.as_slice() {
             return Err(ControlError::OperationConflict);
         }
