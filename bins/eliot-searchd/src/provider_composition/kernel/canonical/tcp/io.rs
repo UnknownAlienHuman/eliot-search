@@ -34,6 +34,10 @@ pub(super) struct ReceivedRecord {
     pub(super) maximum_deadline_ms: u64,
 }
 
+/// Sole owner of one already-connected local stream and partial input state.
+///
+/// Dropping this value is the only portable close operation. Platform adapters
+/// must not depend on a socket-specific shutdown call or retain another handle.
 pub(super) struct SocketIo {
     stream: Box<dyn LocalByteStream>,
     incoming: Option<Incoming>,
@@ -225,12 +229,6 @@ impl SocketIo {
         }
         check_cancel(cancellation)?;
         remaining(deadline).map(|_| ())
-    }
-}
-
-impl Drop for SocketIo {
-    fn drop(&mut self) {
-        self.stream.close();
     }
 }
 
