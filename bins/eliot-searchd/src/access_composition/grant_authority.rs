@@ -8,10 +8,16 @@
 
 #![allow(clippy::module_name_repetitions)]
 
+mod admission;
 mod execution;
 mod serving;
 mod validation;
 
+pub use admission::{
+    StandaloneAdmissionRequest, StandaloneMembershipSecurity,
+    StandaloneMembershipSecuritySnapshot, StandalonePreRetrievalAdmission,
+    StandaloneScopeResolver, compile_standalone_pre_retrieval,
+};
 pub use serving::StandaloneGrantRecipeHost;
 pub use validation::RecipeGrantUseError;
 
