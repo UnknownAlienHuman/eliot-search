@@ -1,4 +1,8 @@
-//! Closed bounded persistence schema, not a provider message or key transcript.
+//! Read-only compatibility decoder for persisted provider binding rows.
+//!
+//! The authoritative encoder and write path live in `search-control-redb`.
+//! This decoder remains only for non-standalone client-adapter reads and exact
+//! historical provisioning evidence; it cannot mutate or publish authority.
 
 use search_contracts::{
     BindingId, Blake3Digest32, BoundedSet, InstallationId, InstallationIncarnationId,
@@ -15,70 +19,15 @@ const BAD: NativeBindingError = NativeBindingError::InvalidRecord;
 const MAGIC: &[u8; 8] = b"ELBIND01";
 const LIMIT: usize = JournalLimits::BASELINE.max_value_bytes;
 
-pub(super) fn encode(record: &ProviderBindingRecord) -> Result<ControlValue> {
-    validate_binding_record(record)?;
-    let mut output = Vec::new();
-    append(&mut output, MAGIC)?;
-    append(&mut output, record.binding_id.as_bytes())?;
-    append(&mut output, record.installation_id.as_bytes())?;
-    append(
-        &mut output,
-        record.installation_incarnation_id.as_bytes(),
-    )?;
-    append(
-        &mut output,
-        &[match record.peer_role {
-            PeerRole::StandaloneCli => 0,
-            PeerRole::ClientAdapter => 1,
-            _ => return Err(BAD),
-        }],
-    )?;
-    append(&mut output, record.peer_identity_digest.as_bytes())?;
-    append(
-        &mut output,
-        &record.pairing_generation.get().to_be_bytes(),
-    )?;
-    append(
-        &mut output,
-        &u32::try_from(record.permitted_profile_ids.len())
-            .map_err(|_| BAD)?
-            .to_be_bytes(),
-    )?;
-    for profile in record.permitted_profile_ids.iter() {
-        text(&mut output, profile.as_str())?;
-    }
-    text(&mut output, record.disclosure_ceiling_ref.as_str())?;
-    append(&mut output, record.issued_at.as_str().as_bytes())?;
-    append(&mut output, &[u8::from(record.expires_at.is_some())])?;
-    if let Some(expires_at) = &record.expires_at {
-        append(&mut output, expires_at.as_str().as_bytes())?;
-    }
-    append(
-        &mut output,
-        &record.revocation_generation.get().to_be_bytes(),
-    )?;
-    append(
-        &mut output,
-        &[match record.status {
-            ProviderBindingStatus::Active => 0,
-            ProviderBindingStatus::Revoked => 1,
-            ProviderBindingStatus::Expired => 2,
-        }],
-    )?;
-    ControlValue::new(
-        ControlRecordClass::Identity,
-        output,
-        JournalLimits::BASELINE,
-    )
-    .map_err(Into::into)
-}
-
 pub(super) fn decode(value: &ControlValue) -> Result<ProviderBindingRecord> {
-    if value.class() != ControlRecordClass::Identity || value.len() > LIMIT {
+    if value.class() != ControlRecordClass::Identity
+        || value.is_empty()
+        || value.len() > LIMIT
+    {
         return Err(BAD);
     }
     let mut input = Input(value.as_bytes());
-    if input.take(8)? != MAGIC {
+    if input.take(MAGIC.len())? != MAGIC {
         return Err(BAD);
     }
     let binding_id = BindingId::from_bytes(input.array()?);
@@ -93,7 +42,7 @@ pub(super) fn decode(value: &ControlValue) -> Result<ProviderBindingRecord> {
     let pairing_generation = NonZeroRevision::new(input.u64()?).map_err(|_| BAD)?;
     let count = input.length(MAX_SET_ITEMS)?;
     // A nonempty profile has a four-byte length and at least one UTF-8 byte.
-    if count > input.0.len() / 5 {
+    if count > input.remaining().len() / 5 {
         return Err(BAD);
     }
     let mut profiles = Vec::new();
@@ -121,9 +70,7 @@ pub(super) fn decode(value: &ControlValue) -> Result<ProviderBindingRecord> {
         2 => ProviderBindingStatus::Expired,
         _ => return Err(BAD),
     };
-    if !input.0.is_empty() {
-        return Err(BAD);
-    }
+    input.finish()?;
     let record = ProviderBindingRecord {
         binding_id,
         installation_id,
@@ -142,32 +89,11 @@ pub(super) fn decode(value: &ControlValue) -> Result<ProviderBindingRecord> {
     Ok(record)
 }
 
-fn append(output: &mut Vec<u8>, bytes: &[u8]) -> Result<()> {
-    if output
-        .len()
-        .checked_add(bytes.len())
-        .is_none_or(|end| end > LIMIT)
-    {
-        return Err(BAD);
-    }
-    output.try_reserve(bytes.len()).map_err(|_| BAD)?;
-    output.extend_from_slice(bytes);
-    Ok(())
-}
-
-fn text(output: &mut Vec<u8>, value: &str) -> Result<()> {
-    append(
-        output,
-        &u32::try_from(value.len())
-            .map_err(|_| BAD)?
-            .to_be_bytes(),
-    )?;
-    append(output, value.as_bytes())
-}
-
 struct Input<'a>(&'a [u8]);
 
 impl<'a> Input<'a> {
+    fn remaining(&self) -> &'a [u8] { self.0 }
+
     fn take(&mut self, count: usize) -> Result<&'a [u8]> {
         let value = self.0.get(..count).ok_or(BAD)?;
         self.0 = &self.0[count..];
@@ -198,5 +124,9 @@ impl<'a> Input<'a> {
     fn timestamp(&mut self) -> Result<UtcTimestamp> {
         UtcTimestamp::parse(std::str::from_utf8(self.take(27)?).map_err(|_| BAD)?)
             .map_err(|_| BAD)
+    }
+
+    fn finish(self) -> Result<()> {
+        if self.0.is_empty() { Ok(()) } else { Err(BAD) }
     }
 }
