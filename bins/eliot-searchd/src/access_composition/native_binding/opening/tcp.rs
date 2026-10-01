@@ -71,7 +71,7 @@ impl CanonicalProviderConnection {
     /// Open a finalized standalone binding over the compatibility TCP stream.
     ///
     /// Loopback validation remains inside `into_tcp_authorized`. Final product
-    /// startup must use [`Self::open_standalone_local`] with the canonical
+    /// startup must use the crate-private local-stream path with the canonical
     /// installation-scoped named-pipe adapter and must not fall back here.
     #[allow(clippy::too_many_arguments)]
     pub fn open_standalone_tcp<C: CancellationProbe + Clone>(
@@ -136,7 +136,7 @@ impl CanonicalProviderConnection {
     /// policy lifetime, profile proof and registry retention remain identical to
     /// the compatibility TCP path.
     #[allow(clippy::too_many_arguments)]
-    pub fn open_standalone_local<C, S>(
+    pub(crate) fn open_standalone_local<C, S>(
         stream: S,
         binding: BindingContext,
         ceremony: PairingMachine,
