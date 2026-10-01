@@ -24,8 +24,9 @@ pub type ControlPortError = PortError<ControlError>;
 
 /// Closed command routing; each variant uses its existing semantic validator.
 ///
-/// Generic records cannot bypass publication's reserved keys. Initialization,
-/// schema changes and owner succession remain explicit lifecycle operations.
+/// Generic records cannot bypass publication or provider-authority reserved keys.
+/// Initialization, schema changes and owner succession remain explicit lifecycle
+/// operations.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ControlPortCommand {
     /// Technical writes with exact value/absence and generation preconditions.
@@ -293,7 +294,9 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
             || check.check(Point::PlanRecord))?;
         for key in keys {
             check.check(Point::PlanRecord)?;
-            if super::publication::port_reserved_key(key.as_bytes()) {
+            if super::publication::port_reserved_key(key.as_bytes())
+                || crate::provider_authority::port_reserved_key(key.as_bytes())
+            {
                 return Err(ControlError::InvalidKey);
             }
         }
