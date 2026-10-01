@@ -408,6 +408,18 @@ where
                 return Err(AccessError::ModalityDenied);
             }
         }
+        if let Some(proof) = &self.overlap_proof {
+            if proof.route != self.route
+                || proof.access_snapshot_generation != self.access.generation
+                || proof.memberships.is_empty()
+                || !proof
+                    .memberships
+                    .iter()
+                    .all(|membership| self.access.bindings.contains_key(membership))
+            {
+                return Err(AccessError::OverlapProofMissing);
+            }
+        }
         Ok(())
     }
 }
