@@ -16,11 +16,12 @@ use search_contracts::{
 };
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
-    BindingContext, BindingKey, ClientEnvelopeCodec, PairingChallengeFrame,
-    PairingMachine, PairingProofFrame, ProofDigest, ServerNonce,
-    ProtocolError, ProtocolLimits, TransportPeer, authenticate_binding,
-    decode_pairing_challenge, decode_pairing_verified, encode_pairing_proof,
-    verify_proof, PAIRING_CHALLENGE_BYTES, PAIRING_VERIFIED_BYTES,
+    BindingContext, BindingKey, ClientEnvelopeCodec, NativeEndpointNameV1,
+    PairingChallengeFrame, PairingMachine, PairingProofFrame, ProofDigest,
+    ProtocolError, ProtocolLimits, ServerNonce, TransportPeer,
+    authenticate_binding, decode_pairing_challenge, decode_pairing_verified,
+    encode_pairing_proof, verify_proof, PAIRING_CHALLENGE_BYTES,
+    PAIRING_VERIFIED_BYTES,
 };
 
 use super::io::{LocalByteStream, SetupBudget, SocketIo};
@@ -121,8 +122,8 @@ impl TypedProviderSession {
     /// and negotiate the typed transport profile under one deadline.
     ///
     /// The exact I/O and session framing below accept a transport-neutral local
-    /// byte stream. This address-taking entry is retained only while the product path migrates to
-    /// the architecture-required installation-scoped named pipe.
+    /// byte stream. This address-taking entry is retained only while the product
+    /// path migrates to the architecture-required installation-scoped named pipe.
     pub fn connect_native<C: CancellationProbe>(
         address: SocketAddr,
         binding: &NativeClientBinding,
@@ -140,6 +141,43 @@ impl TypedProviderSession {
         )?;
         let connect_timeout = budget.remaining()?.min(CONNECT_QUANTUM);
         let stream = TcpStream::connect_timeout(&address, connect_timeout)?;
+        Self::open_connected_local_stream(
+            stream,
+            binding,
+            key,
+            limits,
+            context,
+            &budget,
+        )
+    }
+
+    /// Connect one exact canonical local endpoint, then run the same pairing and
+    /// typed-profile engine used by the compatibility adapter.
+    ///
+    /// The platform connector receives only the protocol-owned endpoint name and
+    /// one finite connect timeout from the caller's original setup budget. It is
+    /// invoked exactly once and may not scan, rewrite the name, reconnect, choose
+    /// TCP or renew the deadline. Endpoint success remains non-authenticating.
+    pub(super) fn connect_local<C, S>(
+        endpoint_name: NativeEndpointNameV1,
+        binding: &NativeClientBinding,
+        key: BindingKey,
+        limits: ProtocolLimits,
+        context: &OperationContext<C>,
+        connect: impl FnOnce(NativeEndpointNameV1, Duration) -> std::io::Result<S>,
+    ) -> Result<Self, TypedClientError>
+    where
+        C: CancellationProbe,
+        S: LocalByteStream + 'static,
+    {
+        let cancelled = || context.cancellation().is_cancelled();
+        let budget = SetupBudget::new(
+            Duration::from_millis(context.relative_deadline_ms().get()),
+            &cancelled,
+        )?;
+        let connect_timeout = budget.remaining()?.min(CONNECT_QUANTUM);
+        let stream = connect(endpoint_name, connect_timeout)?;
+        budget.remaining()?;
         Self::open_connected_local_stream(
             stream,
             binding,
