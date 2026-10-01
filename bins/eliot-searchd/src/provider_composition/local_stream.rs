@@ -1,11 +1,13 @@
 //! Single local byte-stream boundary shared by pairing and typed provider I/O.
 //!
 //! Endpoint naming, listener/connect effects and admission belong to platform
-//! adapters. This module owns only nonblocking finite `Read`/`Write` mechanics
-//! and fail-stop close. A local stream never authenticates its peer by itself.
+//! adapters. This module owns only nonblocking finite `Read`/`Write` mechanics.
+//! A local stream never authenticates its peer by itself. Closing is represented
+//! by dropping the single stream owner; local sockets and named pipes have no
+//! portable socket-style shutdown operation.
 
 use std::io::{self, Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::net::TcpStream;
 
 /// One owned or borrowed local transport stream.
 ///
@@ -16,17 +18,10 @@ use std::net::{Shutdown, TcpStream};
 pub(crate) trait LocalByteStream: Read + Write {
     /// Configure bounded nonblocking polling on the already-connected stream.
     fn configure_nonblocking(&self) -> io::Result<()>;
-
-    /// Close both directions without claiming peer receipt or rollback.
-    fn close(&self);
 }
 
 impl LocalByteStream for TcpStream {
     fn configure_nonblocking(&self) -> io::Result<()> {
         self.set_nonblocking(true)
-    }
-
-    fn close(&self) {
-        let _ = self.shutdown(Shutdown::Both);
     }
 }
