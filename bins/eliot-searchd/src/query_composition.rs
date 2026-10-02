@@ -7,42 +7,27 @@
 //! denominator travels with the output so top-k saturation can never narrow
 //! an exact proof.
 //!
-//! Production data plane (async, qualified gate, live server) lives in
-//! `search-qdrant-bridge::real::RealDataPlane` and is intentionally not
-//! called here: it needs an async runtime plus an executed T22
-//! qualification gate that this composition does not own. The production
-//! call sequence mirrors [`ProcessTestIndexedPort`] one-to-one:
+//! The production adapter in [`live_qdrant`] binds the synchronous executor
+//! port to `search-qdrant-bridge::real::BlockingRealQueryPlane`. That bridge
+//! facade owns the pinned async vendor transport and one finite runtime; daemon
+//! composition sees only Eliot-owned route/filter/readback types. Presence of
+//! the adapter does not publish indexed capability: startup must still supply an
+//! executed `QualifiedGate`, verify the exact committed route/schema and inject
+//! the port into a live registered recipe handler.
 //!
-//! 1. `query_filtered` with one [`EligibilityFilter`] and
-//!    `IdfScope::ScopedToRetrieval` (the retrieval filter cloned as the IDF
-//!    corpus, so denied documents never move permitted denominators);
-//! 2. `readback_exact` over the nominated point IDs (payload bytes are
-//!    hints only; membership and digests are authoritative only after
-//!    readback);
+//! Fixed production operation order:
+//!
+//! 1. `query_filtered` with one [`EligibilityFilter`] and scoped IDF (the
+//!    retrieval filter is the IDF corpus, so denied documents never move
+//!    permitted denominators);
+//! 2. `readback_exact` over nominated point IDs (scored payload fields are
+//!    hints; membership and digests are accepted only after exact readback);
 //! 3. `count_exact` over the same single filter (the exact denominator).
 //!
-//! [`ProcessTestIndexedPort`] below is an explicit process-test double over
-//! the synchronous in-memory oracle. It performs the same
-//! query-then-readback-then-count steps with the same single filter value,
-//! but it never claims live-server proof: the oracle scores plain sparse
-//! dot products with no IDF weighting, so live scoring/IDF/count parity
-//! remains the T24 acceptance obligation (the same deferral as
-//! `access_composition::QDRANT_LIVE_PARITY_DEFERRED_TO`). Ranking parity
-//! with a live server is not asserted by any test in this file.
-//!
-//! Wiring (integration owner): add to `entry.rs`
-//!
-//! ```text
-//! #[cfg(feature = "wave4-query")]
-//! mod query_composition;
-//! ```
-//!
-//! and call [`execute_pinned_leg`] from the provider `query` path after the
-//! T20 pre-retrieval gate. Without `wave4-query` the module is absent and
-//! recipe queries stay explicitly unavailable through the existing
-//! `PROVIDER_*_UNAVAILABLE` capability gating. The DIRECT path is untouched:
-//! indexed-unavailable surfaces as `BackendUnavailable`, never as DIRECT
-//! success.
+//! [`ProcessTestIndexedPort`] remains an explicit process-test double over the
+//! synchronous in-memory oracle. It performs the same query/readback/count
+//! sequence but never claims live-server proof. There is no runtime fallback
+//! from [`live_qdrant::LiveQdrantIndexedPort`] to this oracle.
 //!
 //! What this module never does:
 //!
@@ -54,6 +39,7 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) mod live_qdrant;
 pub(crate) mod registry;
 pub(crate) mod service;
 
@@ -189,6 +175,42 @@ impl<'bridge> ProcessTestIndexedPort<'bridge> {
     pub const fn filter(&self) -> &EligibilityFilter {
         &self.filter
     }
+
+    fn validate_ticket(&self, ticket: &LegTicket) -> Result<(), IndexedPortError> {
+        let safe_leg = ticket
+            .leg
+            .safe_index_leg
+            .as_ref()
+            .ok_or(IndexedPortError::Failure)?;
+        let [plan] = safe_leg.eligibility_plans.as_slice() else {
+            return Err(IndexedPortError::Failure);
+        };
+        if safe_leg.route.collection_generation_id != self.route.generation
+            || safe_leg.route.visible_epoch != self.filter.visible_epoch
+            || plan.collection_generation_id != self.route.generation
+            || plan.visible_epoch != self.filter.visible_epoch
+            || plan.access_partition_digest != self.filter.access_partition_digest
+            || ticket.leg.memberships != safe_leg.memberships
+            || ticket.leg.memberships.is_empty()
+        {
+            return Err(IndexedPortError::Failure);
+        }
+        let mut expected_names = BTreeSet::new();
+        for membership in &ticket.leg.memberships {
+            let name = membership_opaque_id(*membership)
+                .map_err(|_| IndexedPortError::Failure)?;
+            if self.allowed.get(&name) != Some(membership) {
+                return Err(IndexedPortError::Failure);
+            }
+            expected_names.insert(name);
+        }
+        if expected_names != self.filter.allowed_source_memberships
+            || self.allowed.len() != expected_names.len()
+        {
+            return Err(IndexedPortError::Failure);
+        }
+        Ok(())
+    }
 }
 
 impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
@@ -201,17 +223,12 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
         limit: usize,
         idf_scoped_to_retrieval: bool,
     ) -> Result<Vec<IndexedNomination>, IndexedPortError> {
+        self.validate_ticket(ticket)?;
         if !idf_scoped_to_retrieval {
             return Err(IndexedPortError::Failure);
         }
         if limit == 0 || limit > MAX_INDEXED_LIMIT {
             return Err(IndexedPortError::Failure);
-        }
-        for membership in &ticket.leg.memberships {
-            let name = membership_opaque_id(*membership).map_err(|_| IndexedPortError::Failure)?;
-            if !self.allowed.contains_key(&name) {
-                return Err(IndexedPortError::Failure);
-            }
         }
         let scored = self
             .bridge
@@ -232,10 +249,13 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
         for point in &readback.points {
             let membership = parse_membership(&point.payload.source_membership_id)
                 .map_err(|_| IndexedPortError::Failure)?;
-            if !ticket.leg.memberships.contains(&membership) {
+            if !ticket.leg.memberships.contains(&membership)
+                || self.allowed.get(&point.payload.source_membership_id)
+                    != Some(&membership)
+                || by_id.insert(point.point_id, (point, membership)).is_some()
+            {
                 return Err(IndexedPortError::Failure);
             }
-            by_id.insert(point.point_id, (point, membership));
         }
         let mut nominations = Vec::new();
         for hit in &scored {
@@ -260,9 +280,10 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
 
     fn count_exact(
         &mut self,
-        _ticket: &LegTicket,
+        ticket: &LegTicket,
         _predicates: &EligibilityPredicates,
     ) -> Result<usize, IndexedPortError> {
+        self.validate_ticket(ticket)?;
         self.bridge
             .count_exact(&self.route, &self.filter)
             .map(|count| count.count)
@@ -270,15 +291,14 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
     }
 }
 
-/// Executes one pinned indexed leg through the process-test port.
+/// Executes one pinned indexed leg through any accepted indexed port.
 ///
-/// Thin helper used by the retrieval e2e test: it renders nothing by
-/// itself and owns no filter text. Callers supply the ticket, pins, single
-/// predicates, query vector and both live fences; the port supplies the
-/// single-contract bridge reads. Returns the executor output with its exact
-/// denominator, or the typed [`ExecuteError`].
+/// The helper owns no vendor/filter state. The supplied port may be the live
+/// qualified Qdrant adapter or the explicit process-test oracle. Both receive
+/// the same ticket, predicates, query vector and live security fences; backend
+/// unavailability remains typed and never becomes DIRECT completion.
 #[allow(clippy::too_many_arguments)]
-pub fn execute_pinned_leg(
+pub fn execute_pinned_leg<P: IndexedRetrievalPort>(
     ticket: &LegTicket,
     pins: &search_retrieval_executor::LegPinSet,
     predicates: &EligibilityPredicates,
@@ -288,7 +308,7 @@ pub fn execute_pinned_leg(
     request_security: &search_access::RequestSecurityFence,
     live_before: &search_access::LiveSecurityState,
     live_after: &search_access::LiveSecurityState,
-    port: &mut ProcessTestIndexedPort<'_>,
+    port: &mut P,
 ) -> Result<search_retrieval_executor::indexed::IndexedLegOutput, ExecuteError> {
     search_retrieval_executor::indexed::execute_indexed_leg(
         ticket,
