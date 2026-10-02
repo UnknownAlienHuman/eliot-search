@@ -3,7 +3,6 @@
 use search_contracts::{NonZeroRevision, OpaqueId, ReceiptRef};
 
 use super::error::RevisionStoreError;
-use super::limits::ENVELOPE_BINDING_VERSION;
 
 /// Exact envelope binding mirror for the authenticated-encryption profile.
 ///
@@ -17,7 +16,7 @@ use super::limits::ENVELOPE_BINDING_VERSION;
 /// envelope SHA-256 digest or vice versa.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EnvelopeBinding {
-    /// Envelope version; must equal [`ENVELOPE_BINDING_VERSION`].
+    /// Envelope version; must equal [`super::limits::ENVELOPE_BINDING_VERSION`].
     pub version: u16,
     /// Monotone data-encryption-key generation; must equal the payload
     /// encryption binding key version.
