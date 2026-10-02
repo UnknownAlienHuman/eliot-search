@@ -198,9 +198,12 @@ impl CanonicalTcpConnection {
                 }
             };
             verify_received_record(&state.connection, &envelope_record)?;
+            let version = state.connection.session.binding_context().version();
+            let versions = ProtocolRange { minimum: version, maximum: version };
             let envelope = decode_standalone_grant_envelope(
                 &envelope_record.frame,
                 limits,
+                versions,
             )
             .map_err(CanonicalTcpError::Protocol)?;
 
