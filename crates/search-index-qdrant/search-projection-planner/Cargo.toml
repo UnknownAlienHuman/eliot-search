@@ -15,6 +15,9 @@ search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
 search-point-identity.workspace = true
+# The planner owns expected payload/vector/manifest digests. Use the same exact
+# pure-Rust BLAKE3 pin as the daemon and point-identity owner.
+blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 
 [lints]
 workspace = true

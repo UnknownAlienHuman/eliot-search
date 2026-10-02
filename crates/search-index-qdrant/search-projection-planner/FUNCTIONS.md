@@ -1,51 +1,54 @@
 # Function contract — `search-projection-planner`
 
-**Status:** W3/P06 logical contract; pure planning only.
+**Status:** C13 canonical S9.5/S11.3 producer; pure implementation.
+
+## Inputs
+
+`ProjectionInput` contains already-admitted typed identities and metadata: installation and collection generation, one source/projection membership binding, immutable access/scoring partitions, source/revision/representation/unit/scoring-document IDs, profile set, point role, modality/format metadata, epoch validity, source range, residency proof and exact named vectors.
+
+The planner does not decide access, discover sources, read files or call Qdrant.
 
 ## Operations
 
-### `validate_projection_input(input, profiles) -> Result<ValidatedProjectionInput, ProjectionError>`
+### `validate_projection_input(input, profiles, budget)`
 
-Requires immutable admitted revision/representation/unit manifests, exactly one
-`ProjectionMembership -> SourceMembership`, accepted profile IDs and complete vector encodings.
+Requires one exact profile-set/vector schema, finite vectors, canonical vector digests, a valid epoch interval and bounded source range.
 
-### `build_minimal_payload(unit, membership, profile_set, epoch) -> Result<MinimalPointPayload, ProjectionError>`
+### `build_point_spec(input, identity_limits)`
 
-Emits only the opaque S9.5 fields. Corpus/repository display names, ACL subjects, membership arrays,
-source text, paths and vendor metadata are rejected.
+Builds the S11.1 canonical point key through `search-point-identity`, then emits:
 
-### `build_point_spec(input, identity_port) -> Result<PointSpec, ProjectionError>`
+- compact point UUID;
+- full BLAKE3-256 identity digest;
+- exact closed S9.5 payload;
+- exact named vector values;
+- canonical payload/vector digests retained outside Qdrant payload;
+- source-membership/range/residency context for the immutable manifest.
 
-Combines the canonical point identity, exact named-vector set, payload digest, unit/reference digests
-and expected readback shape. Point identity derivation remains owned by `search-point-identity`.
+### `plan_projection(inputs, profiles, budget, identity_limits)`
 
-### `plan_projection(input, profiles, budget) -> Result<ProjectionPlan, ProjectionError>`
+Requires one coherent projection membership/security/scoring/generation/profile scope, rejects duplicate unit roles and UUIDs, and creates a deterministic point-ID-ordered plan.
 
-Creates a deterministically ordered exact point set and rejects duplicate UUIDs, duplicate unit roles,
-missing vectors, profile mismatches and unbounded plans.
+### `plan_scoped_projection(inputs, expected_units, scope, ...)`
 
-### `canonicalize_manifest(points) -> Result<ProjectionManifest, ProjectionError>`
+Additionally proves exact admitted scope, residency and complete unit coverage.
 
-Produces immutable CAS-ready manifest bytes containing exact UUIDs, full identity digests, unit IDs,
-vector names and payload/vector digests. No broad selection predicate substitutes for the exact set.
+### `canonicalize_manifest(points, budget)`
 
-### `diff_manifests(old, new) -> Result<ManifestDiff, ProjectionError>`
+Produces immutable deterministic manifest bytes containing exact UUIDs, canonical identity keys/full digests, authoritative source-membership mapping, unit/source coordinates and expected payload/vector digests. No broad filter substitutes for the exact point set.
 
-Returns exact create, retain and retire lists. Retained IDs require full identity and expected payload/
-vector equality.
+### `diff_manifests(old, new)`
 
-### `validate_schema_requirements(manifest, collection_schema) -> Result<(), ProjectionError>`
+Returns exact create/retain/retire point entries by UUID and full entry equality.
 
-Proves every filterable payload field has the required index and every expected named vector exists
-before the plan may enter publication.
+### `expected_payload_indexes()`
 
-## Semantics
+Returns the exact 19-field S9.5 payload-index set. `validate_schema_requirements` requires equality, not a permissive superset.
 
-Planning is pure, deterministic and retry-safe. Budget/cancellation yields no usable partial manifest.
-The crate performs no Qdrant/redb/CAS I/O and makes no source/admission/access decision.
+## Prohibited payload data
 
-## Required fixtures
+Source membership, corpus/repository display names, ACL subjects, paths, source/query text, payload digests and vector digests are not representable in `MinimalPointPayload`. Source membership and expected digests remain in manifest/control data.
 
-One membership per point; minimal payload disclosure guard; deterministic manifest bytes; exact
-old/new diff; profile/generation change replaces affected points; duplicate/collision propagation;
-schema/index completeness; broad-filter closure structurally unavailable.
+## Required evidence
+
+Exact S9.5 field set; one projection membership per point; canonical full identity digest; vector/payload digest verification; deterministic manifest reconstruction; exact old/new diff; incompatible profile or collection generation replans affected points; no broad-filter closure.
