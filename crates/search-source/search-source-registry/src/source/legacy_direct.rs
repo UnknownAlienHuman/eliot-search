@@ -404,7 +404,7 @@ impl LegacyDirectRegistryState {
         if self.operations.contains_key(&record.operation_id) {
             return Err(LegacyDirectJournalError::OperationDuplicate);
         }
-        verify_revision_identity::<D>(
+        verify_legacy_direct_revision_identity::<D>(
             &record.source_id,
             &record.revision_id,
             &record.content_digest,
