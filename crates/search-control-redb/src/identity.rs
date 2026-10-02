@@ -12,17 +12,18 @@ use search_contracts::{
 
 use crate::{ControlError, JournalIdentity};
 
-/// Earliest journal schema that owns the atomic provider binding/policy pair.
+/// Earliest journal schema that owns the atomic provider binding/policy pair
+/// together with the guarded publication-visibility records used by serving.
 ///
-/// Schema-v1 journals predate these authority namespaces and must remain
-/// unavailable for grant issuance even when they happen to contain colliding
-/// generic record keys.
-pub const PROVIDER_AUTHORITY_MIN_JOURNAL_SCHEMA_VERSION: u32 = 2;
+/// Schemas 1-3 predate this unified authority/visibility contract. They remain
+/// unavailable for grant issuance until an explicit verified migration creates
+/// the complete schema-4 state; colliding generic keys are never adopted.
+pub const PROVIDER_AUTHORITY_MIN_JOURNAL_SCHEMA_VERSION: u32 = 4;
 
 /// Current concrete redb schema version owned by this package.
-pub const CURRENT_JOURNAL_SCHEMA_VERSION: u32 = 2;
+pub const CURRENT_JOURNAL_SCHEMA_VERSION: u32 = 4;
 
-const CURRENT_JOURNAL_SCHEMA_MATERIAL: &[u8] = b"ELIOT-CONTROL-REDB-SCHEMA-FAMILY-v2\0header=ELCTRL01\0receipt=ELCTOP01\0table=eliot.control.meta.v1\0table=eliot.control.records.v1\0table=eliot.control.operations.v1\0record-classes=identity,revision,state,receipt,operation,snapshot,migration\0provider-binding-key=eliot.control.provider-binding.v1\0\0provider-binding-codec=ELBIND01\0standalone-policy-key=eliot.control.standalone-policy.v1\0\0standalone-policy-codec=ELGRPOL1\0";
+const CURRENT_JOURNAL_SCHEMA_MATERIAL: &[u8] = b"ELIOT-CONTROL-REDB-SCHEMA-FAMILY-v4\0header=ELCTRL01\0receipt=ELCTOP01\0table=eliot.control.meta.v1\0table=eliot.control.records.v1\0table=eliot.control.operations.v1\0record-classes=identity,revision,state,receipt,operation,snapshot,migration\0publication-intent-key=publication_intents/current/v1\0publication-intent-codec=ELIPUB01\0publication-visibility-key=collection_route/visibility/v1\0publication-visibility-codec=ELIVIS01\0publication-receipt-prefix=publication_receipts/visible/v1/\0publication-receipt-codec=ELIVRC01\0publication-manifest-prefix=projection_memberships/manifest/v1/\0publication-manifest-codec=ELIMRF01\0publication-shadow-prefix=shadow_fences/publication/v1/\0publication-shadow-codec=ELISHW01\0publication-retired-prefix=publication_receipts/retired/v1/\0provider-binding-key=eliot.control.provider-binding.v1\0\0provider-binding-codec=ELBIND01\0standalone-policy-key=eliot.control.standalone-policy.v1\0\0standalone-policy-codec=ELGRPOL1\0";
 
 /// Exact root-owner coordinates used to bind one journal identity.
 ///
@@ -133,7 +134,7 @@ impl JournalSchemaIdentity {
         self.family_digest
     }
 
-    /// Exact schema version.
+    /// Exact schema version represented by the material.
     #[must_use]
     pub const fn version(self) -> u32 {
         self.version
