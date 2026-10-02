@@ -9,7 +9,8 @@ use super::super::{
 
 impl RealDataPlane {
     /// Deletes only explicit exact point IDs with `wait=true` and strong
-    /// ordering, then proves absence through exact readback.
+    /// ordering, then proves absence through exact readback. The route must
+    /// have passed exact live schema admission in this process.
     pub async fn delete_exact(
         &mut self,
         route: &CollectionRoute,
@@ -26,6 +27,9 @@ impl RealDataPlane {
         }
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
         let name = collection_name(route)?;
+        if !self.schemas.contains_key(&name) {
+            return Err(BridgeError::CollectionNotFound);
+        }
         context.check()?;
         let acked = tokio::time::timeout(
             context.deadline(),

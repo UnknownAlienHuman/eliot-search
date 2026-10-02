@@ -82,21 +82,29 @@ impl RealDataPlane {
             if !seen.insert(point_id) {
                 return Err(BridgeError::MalformedResponse);
             }
-            let payload_digest =
-                hex_to_32(&get_string(&scored.payload, "payload_digest")?)?;
-            let identity_digest =
-                hex_to_32(&get_string(&scored.payload, "identity_digest")?)?;
+            let payload = decode_payload(&scored.payload)?;
+            if !filter.matches(&payload) {
+                // An off-filter answer may already have displaced an eligible
+                // point from top-k. Reject the whole leg; never post-filter it
+                // into an apparently valid partial ranking.
+                return Err(BridgeError::MalformedResponse);
+            }
             nominations.push(CandidateNomination {
                 point_id,
                 score: scored.score,
-                payload_digest: search_contracts::Blake3Digest32::from_bytes(
-                    payload_digest,
-                ),
-                identity_digest: search_contracts::Blake3Digest32::from_bytes(
-                    identity_digest,
-                ),
+                payload_digest: payload.payload_digest,
+                identity_digest: payload.identity_digest,
             });
         }
+        // Qdrant returns a top-k set; daemon composition receives one stable
+        // bridge order independent of vendor tie ordering.
+        nominations.sort_by(|left, right| {
+            right
+                .score
+                .partial_cmp(&left.score)
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .then_with(|| left.point_id.cmp(&right.point_id))
+        });
         Ok(nominations)
     }
 }

@@ -45,8 +45,9 @@ impl RealDataPlane {
             return Err(BridgeError::MalformedResponse);
         }
         let mut points = Vec::with_capacity(scrolled.result.len());
+        let mut seen = BTreeSet::new();
         for retrieved in &scrolled.result {
-            points.push(decode_point(
+            let point = decode_point(
                 retrieved
                     .id
                     .as_ref()
@@ -54,7 +55,11 @@ impl RealDataPlane {
                 &retrieved.payload,
                 retrieved.vectors.as_ref(),
                 schema,
-            )?);
+            )?;
+            if !seen.insert(point.point_id) || !filter.matches(&point.payload) {
+                return Err(BridgeError::MalformedResponse);
+            }
+            points.push(point);
         }
         let next_offset = if scrolled.result.is_empty() {
             None
@@ -65,6 +70,9 @@ impl RealDataPlane {
                 .map(bridge_point_id)
                 .transpose()?
         };
+        if next_offset.is_some() && next_offset == offset {
+            return Err(BridgeError::MalformedResponse);
+        }
         Ok(ScrollPage {
             points,
             next_offset,
