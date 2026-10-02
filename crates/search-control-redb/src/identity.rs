@@ -12,10 +12,17 @@ use search_contracts::{
 
 use crate::{ControlError, JournalIdentity};
 
-/// Current concrete redb schema version owned by this package.
-pub const CURRENT_JOURNAL_SCHEMA_VERSION: u32 = 1;
+/// Earliest journal schema that owns the atomic provider binding/policy pair.
+///
+/// Schema-v1 journals predate these authority namespaces and must remain
+/// unavailable for grant issuance even when they happen to contain colliding
+/// generic record keys.
+pub const PROVIDER_AUTHORITY_MIN_JOURNAL_SCHEMA_VERSION: u32 = 2;
 
-const CURRENT_JOURNAL_SCHEMA_MATERIAL: &[u8] = b"ELIOT-CONTROL-REDB-SCHEMA-FAMILY-v1\0header=ELCTRL01\0receipt=ELCTOP01\0table=eliot.control.meta.v1\0table=eliot.control.records.v1\0table=eliot.control.operations.v1\0record-classes=identity,revision,state,receipt,operation,snapshot,migration\0";
+/// Current concrete redb schema version owned by this package.
+pub const CURRENT_JOURNAL_SCHEMA_VERSION: u32 = 2;
+
+const CURRENT_JOURNAL_SCHEMA_MATERIAL: &[u8] = b"ELIOT-CONTROL-REDB-SCHEMA-FAMILY-v2\0header=ELCTRL01\0receipt=ELCTOP01\0table=eliot.control.meta.v1\0table=eliot.control.records.v1\0table=eliot.control.operations.v1\0record-classes=identity,revision,state,receipt,operation,snapshot,migration\0provider-binding-key=eliot.control.provider-binding.v1\0\0provider-binding-codec=ELBIND01\0standalone-policy-key=eliot.control.standalone-policy.v1\0\0standalone-policy-codec=ELGRPOL1\0";
 
 /// Exact root-owner coordinates used to bind one journal identity.
 ///
