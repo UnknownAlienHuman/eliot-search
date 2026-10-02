@@ -21,15 +21,17 @@ vectors. Any missing probe rejects indexed admission.
 
 ### `create_candidate_collection(schema, context) -> Result<CollectionCreateReceipt, BridgeError>`
 
-Creates one new opaque physical generation only. It creates the exact S9.5 payload-index set and types
-before enabling strict mode, then verifies topology, vectors, every index type and strict-mode floors.
-Unknown indexes or incompatible payload/filter changes require a new collection generation.
+Creates one new opaque physical generation only. It writes the exact committed schema digest into one
+versioned collection-metadata key, creates the exact S9.5 payload-index set and types before enabling
+strict mode, then verifies metadata, topology, vectors, every index type and strict-mode floors. Unknown
+indexes, unknown collection metadata or incompatible payload/filter changes require a new collection
+generation.
 
 ### `verify_collection_schema(route, expected) -> Result<SchemaReceipt, BridgeError>`
 
-Reads back topology, named vectors, exact payload index names/types and strict settings. Version strings
-alone are insufficient, and an existing collection is never adopted without the caller-supplied exact
-schema expectation.
+Reads back the exact schema-identity metadata, topology, named vectors, payload index names/types and
+strict settings. Version strings or structural similarity alone are insufficient, and an existing
+collection is never adopted without exact equality to the caller-supplied committed expectation.
 
 ## Point and filter contracts
 
@@ -42,7 +44,8 @@ Access/scoring policy changes mint new immutable partition identifiers under S8.
 deny/shadow/purge/abandoned fences are compiled by the access owner into the allowed projection
 membership set before the bridge is called. `EligibilityFilter` renders the one S10.3 base predicate
 over installation, collection generation, allowed projection memberships, access/scoring partitions,
-profile set and visible epoch. Retrieval, `idf.corpus`, exact count and scroll use that same value.
+profile set and visible epoch. Retrieval, `idf.corpus`, exact count and scroll use that same value. The
+production query API has no global or caller-substituted IDF-population mode.
 
 Expected payload and named-vector digests remain in the immutable projection manifest. Exact bridge
 readback returns the closed typed payload and actual vector values so publication/readback owners can
@@ -101,8 +104,8 @@ floors.
 
 ## Required fixtures
 
-Exact S9.5 payload field-set/unknown-field rejection; exact 19-index schema/type equality; disposable
-full capability suite; strict unindexed retrieve/update rejection; signed-i64/missing-field filter;
-filtered-IDF noninterference; retrieval/IDF filter identity; wait/strong/readback; point collision
-non-overwrite; exact close/delete; deadline/unknown-outcome recovery; vendor-type API guard; no process
-lifecycle duplication.
+Exact S9.5 payload field-set/unknown-field rejection; exact schema-digest metadata binding; exact
+19-index schema/type equality; disposable full capability suite; strict unindexed retrieve/update
+rejection; signed-i64/missing-field filter; filtered-IDF noninterference; retrieval/IDF filter identity;
+wait/strong/readback; point collision non-overwrite; exact close/delete; deadline/unknown-outcome
+recovery; vendor-type API guard; no process lifecycle duplication.

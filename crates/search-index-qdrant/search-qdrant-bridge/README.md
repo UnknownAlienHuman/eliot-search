@@ -15,7 +15,7 @@ is never a production fallback.
 - exact S9.5 payload/index translation;
 - strict-mode index and S10.3 filter translation;
 - exact point mutation/readback/delete transport;
-- filtered query/count/scroll operations with retrieval/IDF filter identity;
+- filtered query/count/scroll operations with mandatory retrieval/IDF filter identity;
 - private vendor-type translation;
 - client/server qualification identity checks.
 
@@ -43,14 +43,17 @@ S8.2 policy/scoring changes mint new immutable `AccessPartitionId` and `ScoringP
 new projection publication. Before bridge dispatch, the access owner compiles restrictive
 shadow/deny/purge/abandoned state into the allowed projection-membership set. The bridge renders one
 S10.3 base filter over installation, collection generation, projection memberships, partitions,
-profile set and epoch, then reuses it verbatim for retrieval, `idf.corpus`, exact count and scroll.
+profile set and epoch, then reuses it verbatim for retrieval, `idf.corpus`, exact count and scroll. The
+production API cannot request global or caller-substituted IDF.
 
 ## Real data plane
 
 Connection requires an executed qualified gate and rechecks the exact server identity. Collection
-creation first creates the collection with strict admission disabled, installs all 19 mandatory S9.5
-payload indexes with exact UUID/keyword/integer types, enables strict mode, and reads the schema back.
-An existing collection is not adopted without an exact caller-supplied schema expectation.
+creation writes the committed `CollectionSchema` digest into one versioned collection-metadata key,
+creates the collection with strict admission disabled, installs all 19 mandatory S9.5 payload indexes
+with exact UUID/keyword/integer types, enables strict mode, and reads the schema back. Admission requires
+exact metadata, topology, vector, index-type and strict-setting equality; structurally compatible but
+foreign schema identity is rejected.
 
 Mutations use explicit IDs, `wait=true`, strong ordering and exact readback. Upsert performs the S11.2
 collision guard before dispatch. Close and delete use only exact IDs and generation-bound preflight;
