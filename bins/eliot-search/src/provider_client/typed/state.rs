@@ -7,9 +7,9 @@ use std::task::Poll;
 use std::time::{Duration, Instant};
 
 use search_contracts::{
-    CancelBody, ExactScanPlanRef, ProtocolRange, ProviderBodyV1, ProviderEnvelope,
-    RecipeBodyV1, RecipeIdV1, RecipeResultV1, RequestBody, RequestId,
-    SearchReadGrantClaims,
+    CancelBody, ExactScanPlanRef, InstallationId, ProtocolRange, ProviderBodyV1,
+    ProviderEnvelope, RecipeBodyV1, RecipeIdV1, RecipeResultV1, RequestBody,
+    RequestId, SearchReadGrantClaims,
 };
 use search_provider_protocol::{
     BindingContext, BindingKey, ClientEnvelopeCodec, ProgressState, ProofDigest,
@@ -44,6 +44,10 @@ pub(super) struct State {
     limits: ProtocolLimits,
     // Local sending/receive history only, not a claim of server admission.
     session: SessionMachine,
+    // Independently trusted installation identity for the canonical local path.
+    // Compatibility handoffs that cannot supply it remain None and receive no
+    // stronger installation claim from endpoint existence or peer-controlled data.
+    trusted_installation_id: Option<InstallationId>,
     // Exact authenticated claims returned by the mandatory first command.
     grant: Option<SearchReadGrantClaims>,
     requests: BTreeMap<RequestId, PendingRequest>,
@@ -68,9 +72,24 @@ impl State {
             nonce,
             limits,
             session,
+            trusted_installation_id: None,
             grant: None,
             requests: BTreeMap::new(),
             cancel: None,
+        }
+    }
+
+    pub(super) fn bind_trusted_installation_id(
+        &mut self,
+        installation_id: InstallationId,
+    ) -> Result<(), TypedClientError> {
+        match self.trusted_installation_id {
+            None => {
+                self.trusted_installation_id = Some(installation_id);
+                Ok(())
+            }
+            Some(current) if current == installation_id => Ok(()),
+            Some(_) => Err(TypedClientError::GrantMismatch),
         }
     }
 
