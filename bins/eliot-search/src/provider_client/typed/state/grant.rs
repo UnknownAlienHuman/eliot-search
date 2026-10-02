@@ -203,7 +203,10 @@ fn validate_claims(
     claims
         .validate_shape()
         .map_err(|_| TypedClientError::ResponseMismatch)?;
-    if claims.binding_id != state.binding.binding_id()
+    if state
+        .trusted_installation_id
+        .is_some_and(|trusted| claims.installation_id != trusted)
+        || claims.binding_id != state.binding.binding_id()
         || claims.installation_incarnation_id != state.binding.incarnation()
         || claims.allowed_membership_ids.is_empty()
         || claims.allowed_modalities.is_empty()
