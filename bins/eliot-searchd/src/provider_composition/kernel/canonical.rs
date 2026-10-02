@@ -4,12 +4,18 @@
 //! ceremony. The development token-file router is deliberately not upgraded by
 //! this adapter: it has no durable binding or source authority to contribute.
 
-use search_contracts::{ProviderBodyV1, RequestId};
+use search_contracts::{ProviderBodyV1, RequestId, SearchReadGrantClaims};
 use search_provider_protocol::{
-    AdmittedProviderRequest, BindingContext, BindingKey, BoundSession, CancelOutcome,
-    DisconnectReceipt, MonotonicMillis, PairingMachine, ProofDigest, ProtocolError, ProtocolLimits,
-    ProviderDeliveryError, ProviderFrameTranscript, RequestGuard, ServerNonce, TerminalKind,
-    verify_proof,
+    AdmittedProviderRequest, AuthenticatedStandaloneGrantEnvelope, BindingContext, BindingKey,
+    BoundSession, CancelOutcome, DisconnectReceipt, MonotonicMillis, PairingMachine, ProofDigest,
+    ProtocolError, ProtocolLimits, ProviderDeliveryError, ProviderFrameTranscript, RequestGuard,
+    RequestStatus, ServerNonce, TerminalKind, standalone_grant_envelope_transcript, verify_proof,
+};
+
+use crate::access_composition::{
+    GrantCommandError, GrantDeliveryFailure, SessionBoundGrantAuthority,
+    StandaloneGrantCommandInput, StandaloneGrantIssuer, StandaloneGrantPolicySource,
+    execute_standalone_grant_command_with_delivery,
 };
 
 use super::router::monotonic_millis;
@@ -79,6 +85,54 @@ impl CanonicalProviderConnection {
             frame, observed_proof, maximum_deadline_ms,
             &mut || Ok(monotonic_millis()),
             |transcript| Ok(keyed_frame_proof(key, transcript)),
+        )
+    }
+
+    /// Executes one dedicated standalone-grant command on this exact paired
+    /// session, using the connection key to reproduce the grant-envelope proof.
+    ///
+    /// The caller supplies exact canonical body bytes plus the transport-owned
+    /// connection sequence/deadline. It cannot substitute a proof computed under
+    /// another key or borrow the mutable [`BoundSession`] directly. `output` must
+    /// encode/write/flush the complete authenticated response before returning;
+    /// output failure or unwind makes the prepared terminal close the session.
+    /// This method performs no socket reads and does not invent transport routing.
+    pub fn execute_standalone_grant<P, I, E>(
+        &mut self,
+        authority: &mut SessionBoundGrantAuthority<P, I>,
+        envelope: &AuthenticatedStandaloneGrantEnvelope,
+        body_bytes: &[u8],
+        sequence: u64,
+        now: MonotonicMillis,
+        relative_deadline_ms: Option<u64>,
+        output: impl FnOnce(
+            &RequestGuard,
+            RequestStatus,
+            Result<&SearchReadGrantClaims, &GrantCommandError>,
+        ) -> Result<(), E>,
+    ) -> Result<SearchReadGrantClaims, GrantDeliveryFailure<E>>
+    where
+        P: StandaloneGrantPolicySource,
+        I: StandaloneGrantIssuer,
+    {
+        let expected_proof = self.key.with_bytes(|key| {
+            ProofDigest::from_bytes(
+                *blake3::keyed_hash(key, &standalone_grant_envelope_transcript(envelope))
+                    .as_bytes(),
+            )
+        });
+        execute_standalone_grant_command_with_delivery(
+            &mut self.session,
+            authority,
+            StandaloneGrantCommandInput {
+                envelope,
+                expected_proof: &expected_proof,
+                body_bytes,
+                sequence,
+                now,
+                relative_deadline_ms,
+            },
+            output,
         )
     }
 
