@@ -26,5 +26,28 @@ pub use native_grant_policy::*;
 pub use native_binding::*;
 pub use native_binding_listener::*;
 
+use crate::provider_composition::{CanonicalServingError, CanonicalTcpGrantError};
+
+/// Failure while performing the mandatory initial grant command and entering serving.
+#[derive(Debug)]
+pub enum StandaloneServingTransitionError {
+    /// The authenticated first-command grant exchange failed.
+    Grant(CanonicalTcpGrantError),
+    /// The successfully granted transport could not enter the serving owner.
+    Serving(CanonicalServingError),
+}
+
+impl From<CanonicalTcpGrantError> for StandaloneServingTransitionError {
+    fn from(error: CanonicalTcpGrantError) -> Self {
+        Self::Grant(error)
+    }
+}
+
+impl From<CanonicalServingError> for StandaloneServingTransitionError {
+    fn from(error: CanonicalServingError) -> Self {
+        Self::Serving(error)
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -5,12 +5,15 @@ use std::task::Poll;
 
 use crate::provider_composition::{
     CanonicalRecipeHost, CanonicalServingError, CanonicalServingLimits,
-    CanonicalServingOwner, CanonicalTcpConnection,
+    CanonicalServingOwner, CanonicalTcpConnection, CanonicalTcpGrantError,
 };
 
 use super::super::{
-    BoundedStandaloneGrantIssuer, GrantValidationClock, NativeBindingPin,
-    StandaloneGrantRecipeHost, StandaloneProcessOwner,
+    BoundedStandaloneGrantIssuer, GrantEntropySource, GrantIssuerError,
+    GrantTimeSource, GrantValidationClock, NativeBindingPin,
+    SessionBoundGrantAuthority, StandaloneGrantIssuer, StandaloneGrantMaterial,
+    StandaloneGrantPolicySource, StandaloneGrantRecipeHost, StandaloneGrantTemplate,
+    StandaloneProcessOwner, StandaloneServingTransitionError,
 };
 
 /// One opened typed transport whose lifetime is bounded by the process owner.
@@ -24,16 +27,61 @@ pub struct StandaloneOpenedConnection<'a> {
 impl<'a> StandaloneOpenedConnection<'a> {
     /// Exact current binding pin retained for live authority composition.
     #[must_use]
-    pub const fn pin(&self) -> &NativeBindingPin { &self.pin }
+    pub const fn pin(&self) -> &NativeBindingPin {
+        &self.pin
+    }
 
-    /// Transfer this connection into the canonical bounded standalone serving
-    /// owner while preserving its borrow of process/root lifetime.
+    /// Execute the mandatory first grant command, then enter canonical serving.
     ///
-    /// The query host is always wrapped by the original boot-local issuer ledger.
-    /// Durable policy reads remain operation-scoped during grant issuance and
-    /// current policy is supplied by the query host's live authority lock.
-    /// No direct ungranted serving constructor is exposed from this connection.
-    pub fn into_standalone_serving<E, T, H>(
+    /// The issuer is borrowed by the one operation-scoped grant authority, so
+    /// the exact ledger mutated by successful issuance is the ledger transferred
+    /// into the serving host. There is no public ungranted transition and no way
+    /// to replace the issuer between response delivery and recipe admission.
+    ///
+    /// Failure or unwind while reading, issuing or writing the grant response
+    /// closes the sole transport. Serving construction happens only after the
+    /// complete two-record authenticated response was written successfully.
+    #[allow(clippy::too_many_arguments)]
+    pub fn issue_grant_and_into_standalone_serving<P, E, T, H>(
+        mut self,
+        host: H,
+        policy_source: P,
+        mut issuer: BoundedStandaloneGrantIssuer<E, T>,
+        maximum_grant_deadline_ms: u64,
+        limits: CanonicalServingLimits,
+    ) -> Result<
+        StandaloneServingConnection<'a, StandaloneGrantRecipeHost<E, T, H>>,
+        StandaloneServingTransitionError,
+    >
+    where
+        P: StandaloneGrantPolicySource,
+        E: GrantEntropySource,
+        T: GrantTimeSource + GrantValidationClock,
+        H: CanonicalRecipeHost,
+    {
+        {
+            let transport = self
+                .transport
+                .as_mut()
+                .ok_or(CanonicalServingError::Closed)?;
+            let mut authority = SessionBoundGrantAuthority::new(
+                policy_source,
+                BorrowedIssuer(&mut issuer),
+            );
+            let _claims = transport.issue_initial_standalone_grant(
+                &mut authority,
+                maximum_grant_deadline_ms,
+            )?;
+        }
+        self.into_standalone_serving_after_grant(host, issuer, limits)
+            .map_err(Into::into)
+    }
+
+    /// Transfer a successfully granted connection into the bounded serving owner.
+    ///
+    /// This is private so callers cannot bypass the mandatory first command or
+    /// substitute an issuer ledger that did not mint the delivered claims.
+    fn into_standalone_serving_after_grant<E, T, H>(
         mut self,
         host: H,
         issuer: BoundedStandaloneGrantIssuer<E, T>,
@@ -78,6 +126,17 @@ impl fmt::Debug for StandaloneOpenedConnection<'_> {
     }
 }
 
+struct BorrowedIssuer<'a, I>(&'a mut I);
+
+impl<I: StandaloneGrantIssuer> StandaloneGrantIssuer for BorrowedIssuer<'_, I> {
+    fn issue(
+        &mut self,
+        template: &StandaloneGrantTemplate,
+    ) -> Result<StandaloneGrantMaterial, GrantIssuerError> {
+        self.0.issue(template)
+    }
+}
+
 /// Canonical serving owner whose transport and tasks cannot outlive the root.
 pub struct StandaloneServingConnection<'a, H: CanonicalRecipeHost> {
     serving: CanonicalServingOwner<H>,
@@ -88,10 +147,14 @@ pub struct StandaloneServingConnection<'a, H: CanonicalRecipeHost> {
 impl<H: CanonicalRecipeHost> StandaloneServingConnection<'_, H> {
     /// Exact binding pin for host-side live registration/policy checks.
     #[must_use]
-    pub const fn pin(&self) -> &NativeBindingPin { &self.pin }
+    pub const fn pin(&self) -> &NativeBindingPin {
+        &self.pin
+    }
 
     /// Service one bounded input/work turn.
-    pub fn tick(&mut self) -> Result<(), CanonicalServingError> { self.serving.tick() }
+    pub fn tick(&mut self) -> Result<(), CanonicalServingError> {
+        self.serving.tick()
+    }
 
     /// Run and normally drain until the caller's stop condition becomes true.
     /// On error the connection is closed but retained tasks remain available
@@ -104,7 +167,9 @@ impl<H: CanonicalRecipeHost> StandaloneServingConnection<'_, H> {
     }
 
     /// Stop admission/output and signal retained task resources.
-    pub fn close(&mut self) { self.serving.close(); }
+    pub fn close(&mut self) {
+        self.serving.close();
+    }
 
     /// Advance at most one retained cleanup task after closure.
     pub fn poll_cleanup(&mut self) -> Result<Poll<()>, CanonicalServingError> {
@@ -113,7 +178,9 @@ impl<H: CanonicalRecipeHost> StandaloneServingConnection<'_, H> {
 
     /// Queued/running/cleanup-pending task count.
     #[must_use]
-    pub fn retained_tasks(&self) -> usize { self.serving.retained_tasks() }
+    pub fn retained_tasks(&self) -> usize {
+        self.serving.retained_tasks()
+    }
 }
 
 impl<H: CanonicalRecipeHost> fmt::Debug for StandaloneServingConnection<'_, H> {

@@ -3,7 +3,8 @@
 //! Construction consumes the recipe registry after capability projection. The
 //! descriptor and dispatch table therefore cannot diverge through a later handler
 //! insertion/removal. Attachment consumes one opened native connection for the
-//! exact same paired binding and always installs the original issuer ledger.
+//! exact same paired binding, performs the mandatory initial grant command and
+//! installs the exact issuer ledger mutated by that command.
 
 use std::task::Poll;
 
@@ -14,8 +15,10 @@ use super::registry::{
     CanonicalCapabilityProjectionError, CanonicalRecipeRegistry,
 };
 use crate::access_composition::{
-    BoundedStandaloneGrantIssuer, GrantValidationClock, NativeBindingPin,
+    BoundedStandaloneGrantIssuer, GrantEntropySource, GrantTimeSource,
+    GrantValidationClock, NativeBindingPin, StandaloneGrantPolicySource,
     StandaloneGrantRecipeHost, StandaloneOpenedConnection, StandaloneServingConnection,
+    StandaloneServingTransitionError,
 };
 use crate::provider_composition::{CanonicalServingError, CanonicalServingLimits};
 use crate::query_serving_composition::{
@@ -56,30 +59,49 @@ where
         })
     }
 
-    /// Attach the coherent host/descriptor pair and original issuer ledger to
+    /// Issue the initial grant and attach the coherent host/descriptor pair to
     /// the exact opened session.
     ///
     /// A binding ID/incarnation match is insufficient: the complete authenticated
     /// `BindingContext`, including its verified pairing ceremony, must be equal.
-    /// Mismatch drops the opened connection and publishes nothing. Durable policy
-    /// sources remain operation-scoped and are not embedded in the serving value.
-    pub(crate) fn into_serving<'a, E, T>(
+    /// Mismatch drops the opened connection and publishes nothing. The policy
+    /// source is used only for the bracketed grant command; the exact issuer
+    /// ledger mutated by successful issuance moves into long-lived serving.
+    /// The capability becomes available only after the authenticated two-record
+    /// grant response has been written successfully.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn issue_grant_and_into_serving<'a, P, E, T>(
         self,
         opened: StandaloneOpenedConnection<'a>,
+        policy_source: P,
         issuer: BoundedStandaloneGrantIssuer<E, T>,
+        maximum_grant_deadline_ms: u64,
         limits: CanonicalServingLimits,
-    ) -> Result<CanonicalRegisteredServingConnection<'a, E, T, O>, CanonicalServingError>
+    ) -> Result<
+        CanonicalRegisteredServingConnection<'a, E, T, O>,
+        StandaloneServingTransitionError,
+    >
     where
-        T: GrantValidationClock,
+        P: StandaloneGrantPolicySource,
+        E: GrantEntropySource,
+        T: GrantTimeSource + GrantValidationClock,
     {
         let pin = opened.pin();
         if pin.binding_context() != self.binding
             || pin.record().binding_id != self.binding.binding_id()
             || pin.record().installation_incarnation_id != self.binding.incarnation()
         {
-            return Err(CanonicalServingError::InvalidConfiguration);
+            return Err(StandaloneServingTransitionError::Serving(
+                CanonicalServingError::InvalidConfiguration,
+            ));
         }
-        let connection = opened.into_standalone_serving(self.host, issuer, limits)?;
+        let connection = opened.issue_grant_and_into_standalone_serving(
+            self.host,
+            policy_source,
+            issuer,
+            maximum_grant_deadline_ms,
+            limits,
+        )?;
         Ok(CanonicalRegisteredServingConnection {
             connection,
             capability: self.capability,
