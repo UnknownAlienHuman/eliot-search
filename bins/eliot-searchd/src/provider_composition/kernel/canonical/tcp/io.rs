@@ -174,6 +174,53 @@ impl SocketIo {
         }
     }
 
+    /// Read the next complete record under an existing record's original
+    /// absolute deadline.
+    ///
+    /// This is used only for a fixed multi-record protocol operation such as the
+    /// standalone-grant envelope/body pair. It starts no new reader or timer and
+    /// refuses to coexist with a retained partial record.
+    pub(super) fn read_record_from(
+        &mut self,
+        limits: ProtocolLimits,
+        started: MonotonicMillis,
+        maximum_deadline_ms: u64,
+    ) -> Result<ReceivedRecord, CanonicalTcpError> {
+        if self.incoming.is_some() {
+            return Err(CanonicalTcpError::Protocol(
+                ProtocolError::InvalidSessionTransition,
+            ));
+        }
+        let absolute_deadline = deadline(started, maximum_deadline_ms)?;
+        let mut record = TypedRecordBuffer::new(limits).map_err(CanonicalTcpError::Protocol)?;
+        loop {
+            remaining(absolute_deadline)?;
+            if record.is_complete() {
+                let (frame, proof) = record.finish().map_err(CanonicalTcpError::Protocol)?;
+                return Ok(ReceivedRecord {
+                    frame,
+                    proof,
+                    started,
+                    maximum_deadline_ms,
+                });
+            }
+            let buffer = record.read_buffer(READ_BYTES).map_err(|error| {
+                if error == ProtocolError::ResourceExhausted {
+                    CanonicalTcpError::Allocation
+                } else {
+                    CanonicalTcpError::Protocol(error)
+                }
+            })?;
+            let left = remaining(absolute_deadline)?;
+            match self.stream.read(buffer) {
+                Ok(0) => return Err(CanonicalTcpError::PeerClosed),
+                Ok(count) => record.advance(count).map_err(CanonicalTcpError::Protocol)?,
+                Err(error) if retryable(&error) => pause_retry(&error, left),
+                Err(error) => return Err(CanonicalTcpError::Io(error)),
+            }
+        }
+    }
+
     pub(super) fn write_record(
         &mut self,
         frame: &[u8],

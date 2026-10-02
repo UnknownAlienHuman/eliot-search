@@ -25,7 +25,7 @@ use super::router::monotonic_millis;
 
 mod tcp;
 
-pub use tcp::{CanonicalTcpConnection, CanonicalTcpError};
+pub use tcp::{CanonicalTcpConnection, CanonicalTcpError, CanonicalTcpGrantError};
 
 #[cfg(feature = "wave4-query")]
 pub use tcp::{

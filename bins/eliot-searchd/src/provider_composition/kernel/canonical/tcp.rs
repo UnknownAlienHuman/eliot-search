@@ -15,15 +15,25 @@ pub use serving::{
 use std::task::Poll;
 use std::time::Duration;
 
-use search_contracts::{MessageKind, ProtocolRange, ProviderBodyV1};
+use search_contracts::{MessageKind, ProtocolRange, ProviderBodyV1, SearchReadGrantClaims};
 use search_provider_protocol::{
-    AdmittedProviderRequest, BoundSession, ClientEnvelopeCodec,
+    AdmittedProviderRequest, BoundSession, ClientEnvelopeCodec, FrameCodec,
     ProtocolError, ProviderDeliveryError, ProviderFrameTranscript, TerminalKind,
-    verify_proof,
+    decode_standalone_grant_envelope, verify_proof,
 };
 
-use super::{CanonicalProviderConnection, keyed_frame_proof, monotonic_millis};
+use crate::access_composition::{
+    GrantDeliveryFailure, SessionBoundGrantAuthority, StandaloneGrantIssuer,
+    StandaloneGrantPolicySource,
+};
+
+use super::{
+    CanonicalGrantResponseError, CanonicalProviderConnection, keyed_frame_proof,
+    monotonic_millis,
+};
 use io::SocketIo;
+
+const INITIAL_STANDALONE_GRANT_SEQUENCE: u64 = 1;
 
 /// Closed failure classes. No peer-supplied body, token or proof is rendered.
 #[derive(Debug)]
@@ -88,6 +98,50 @@ impl From<ProviderDeliveryError<CanonicalTcpError>> for CanonicalTcpError {
     }
 }
 
+/// Initial standalone-grant ingress, command or response-delivery failure.
+#[derive(Debug)]
+pub enum CanonicalTcpGrantError {
+    /// Record I/O, framing or record-level authentication failed.
+    Transport(CanonicalTcpError),
+    /// The authenticated command or its two-record response delivery failed.
+    Delivery(GrantDeliveryFailure<CanonicalGrantResponseError<CanonicalTcpError>>),
+}
+
+impl CanonicalTcpGrantError {
+    /// Stable content-free diagnostic code.
+    #[must_use]
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Transport(error) => error.code(),
+            Self::Delivery(GrantDeliveryFailure::Command(error)) => error.code(),
+            Self::Delivery(GrantDeliveryFailure::Output { error, .. }) => match error {
+                CanonicalGrantResponseError::Protocol(error) => error.code(),
+                CanonicalGrantResponseError::Output(error) => error.code(),
+            },
+        }
+    }
+}
+
+impl std::fmt::Display for CanonicalTcpGrantError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(self.code()) }
+}
+
+impl std::error::Error for CanonicalTcpGrantError {}
+
+impl From<CanonicalTcpError> for CanonicalTcpGrantError {
+    fn from(error: CanonicalTcpError) -> Self { Self::Transport(error) }
+}
+
+impl From<GrantDeliveryFailure<CanonicalGrantResponseError<CanonicalTcpError>>>
+    for CanonicalTcpGrantError
+{
+    fn from(
+        error: GrantDeliveryFailure<CanonicalGrantResponseError<CanonicalTcpError>>,
+    ) -> Self {
+        Self::Delivery(error)
+    }
+}
+
 struct TcpState {
     connection: CanonicalProviderConnection,
     io: SocketIo,
@@ -109,6 +163,108 @@ pub struct CanonicalTcpConnection {
 }
 
 impl CanonicalTcpConnection {
+    /// Read, execute and deliver the mandatory first standalone-grant command.
+    ///
+    /// The envelope and body are two ordinary typed/MAC records read by the sole
+    /// `SocketIo`. The body inherits the first prefix read's absolute deadline;
+    /// no second reader or timer is created. Both record MACs are verified before
+    /// decoding/issuance. Sequence 1 is reserved for this pre-serving phase, so
+    /// any prior application command or replay fails in `BoundSession`.
+    ///
+    /// The response is written as the authenticated envelope record followed by
+    /// its digest-bound body record under the same remaining absolute deadline.
+    /// Any refusal or output failure closes the connection. A returned claims
+    /// value came from the caller-supplied original issuer owner.
+    pub fn issue_initial_standalone_grant<P, I>(
+        &mut self,
+        authority: &mut SessionBoundGrantAuthority<P, I>,
+        maximum_deadline_ms: u64,
+    ) -> Result<SearchReadGrantClaims, CanonicalTcpGrantError>
+    where
+        P: StandaloneGrantPolicySource,
+        I: StandaloneGrantIssuer,
+    {
+        let mut operation = Operation { state: &mut self.state, completed: false };
+        let state = operation
+            .state
+            .as_mut()
+            .ok_or(CanonicalTcpGrantError::Transport(CanonicalTcpError::Closed))?;
+        let result = (|| {
+            let limits = state.connection.limits;
+            let envelope_record = loop {
+                match state.io.poll_record(limits, maximum_deadline_ms, io::POLL)? {
+                    Poll::Pending => continue,
+                    Poll::Ready(record) => break record,
+                }
+            };
+            verify_received_record(&state.connection, &envelope_record)?;
+            let envelope = decode_standalone_grant_envelope(
+                &envelope_record.frame,
+                limits,
+            )
+            .map_err(CanonicalTcpError::Protocol)?;
+
+            let body_record = state.io.read_record_from(
+                limits,
+                envelope_record.started,
+                envelope_record.maximum_deadline_ms,
+            )?;
+            verify_received_record(&state.connection, &body_record)?;
+            let body_payload = FrameCodec::decode(&body_record.frame, limits)
+                .map_err(CanonicalTcpError::Protocol)?;
+
+            let observed_at = monotonic_millis();
+            if observed_at < envelope_record.started {
+                return Err(CanonicalTcpGrantError::Transport(
+                    CanonicalTcpError::DeadlineExpired,
+                ));
+            }
+            let absolute_deadline = envelope_record
+                .started
+                .get()
+                .checked_add(envelope_record.maximum_deadline_ms)
+                .ok_or(CanonicalTcpGrantError::Transport(
+                    CanonicalTcpError::DeadlineExpired,
+                ))?;
+            let remaining_ms = absolute_deadline
+                .checked_sub(observed_at.get())
+                .filter(|remaining| *remaining > 0)
+                .ok_or(CanonicalTcpGrantError::Transport(
+                    CanonicalTcpError::DeadlineExpired,
+                ))?;
+
+            let (connection, io) = (&mut state.connection, &mut state.io);
+            connection
+                .execute_standalone_grant(
+                    authority,
+                    &envelope,
+                    body_payload.as_slice(),
+                    INITIAL_STANDALONE_GRANT_SEQUENCE,
+                    observed_at,
+                    Some(remaining_ms),
+                    |guard, envelope_frame, envelope_proof, body_frame, body_proof| {
+                        let deadline = guard.deadline().ok_or(
+                            CanonicalTcpError::Protocol(ProtocolError::InvalidLimits),
+                        )?;
+                        // Cancellation must not suppress a Cancelled or
+                        // OutcomeUnknown terminal response selected by the
+                        // command kernel, so terminal writes use no cancel probe.
+                        io.write_record(
+                            envelope_frame,
+                            envelope_proof,
+                            limits,
+                            deadline,
+                            None,
+                        )?;
+                        io.write_record(body_frame, body_proof, limits, deadline, None)
+                    },
+                )
+                .map_err(CanonicalTcpGrantError::from)
+        })();
+        operation.completed = result.is_ok();
+        result
+    }
+
     /// Reads exactly one bounded authenticated record, then dispatches it.
     ///
     /// Some is an admitted recipe, still requiring live authorization before
@@ -259,6 +415,24 @@ impl CanonicalTcpConnection {
 
 impl Drop for CanonicalTcpConnection {
     fn drop(&mut self) { self.close(); }
+}
+
+fn verify_received_record(
+    connection: &CanonicalProviderConnection,
+    record: &io::ReceivedRecord,
+) -> Result<(), CanonicalTcpError> {
+    let transcript = ProviderFrameTranscript::request(
+        connection.session.pairing().session(),
+        *connection.session.server_nonce(),
+        &record.frame,
+    );
+    let expected = keyed_frame_proof(&connection.key, &transcript);
+    if !verify_proof(&expected, &record.proof) {
+        return Err(CanonicalTcpError::Protocol(
+            ProtocolError::AuthenticationFailed,
+        ));
+    }
+    Ok(())
 }
 
 struct Operation<'a> {
