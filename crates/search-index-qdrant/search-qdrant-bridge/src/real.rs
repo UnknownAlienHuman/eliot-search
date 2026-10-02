@@ -8,7 +8,8 @@
 //! Admission: [`RealDataPlane::connect`] requires an executed
 //! [`QualifiedGate`](crate::qualified::QualifiedGate) (all T22 mandatory live
 //! probes passed) and rechecks the live server identity on connect. Collection
-//! names, filters and batches are validated before dispatch.
+//! names, generation identities, filters and batches are validated before
+//! dispatch.
 //!
 //! Single-contract retrieval + IDF (invariant 5): [`RealDataPlane::query_filtered`]
 //! takes one [`EligibilityFilter`](crate::EligibilityFilter) and renders both
@@ -54,7 +55,7 @@ use qdrant_client::qdrant::{
     WriteOrdering, WriteOrderingType, condition, point_id, points_selector,
     r#match, value, vector_output, vectors, vectors_output,
 };
-use search_contracts::{OpaqueId, ReceiptRef};
+use search_contracts::{CollectionGenerationId, OpaqueId, ReceiptRef};
 
 use crate::live::LiveEndpoint;
 use crate::mutation::{same_point_identity, validate_close_epoch};
@@ -68,9 +69,6 @@ use crate::{
     StoredVector,
 };
 
-/// gRPC canonical status numbers (`google.rpc.Code`), matched without a
-/// `tonic` dependency: only the stable numeric values travel across the
-/// crate boundary, never vendor status text.
 const CODE_INVALID_ARGUMENT: i32 = 3;
 const CODE_NOT_FOUND: i32 = 5;
 const CODE_ALREADY_EXISTS: i32 = 6;
@@ -80,12 +78,6 @@ const CODE_FAILED_PRECONDITION: i32 = 9;
 const CODE_OUT_OF_RANGE: i32 = 11;
 const CODE_UNAUTHENTICATED: i32 = 16;
 
-/// Bounded per-operation context.
-///
-/// A finite deadline plus an optional cancellation flag. Cancellation is
-/// checked before dispatch and between bounded pages/batches; expiry after a
-/// mutation dispatch reports `MutationOutcomeUnknown` because the write may
-/// have committed.
 #[derive(Clone, Debug)]
 pub struct OpContext {
     deadline: Duration,
@@ -93,7 +85,6 @@ pub struct OpContext {
 }
 
 impl OpContext {
-    /// Builds a context with a finite deadline and no cancellation flag.
     #[must_use]
     pub const fn new(deadline: Duration) -> Self {
         Self {
@@ -102,25 +93,19 @@ impl OpContext {
         }
     }
 
-    /// Builds a context with a finite deadline and a shared cancellation flag.
     #[must_use]
-    pub const fn with_cancel(
-        deadline: Duration,
-        cancelled: Arc<AtomicBool>,
-    ) -> Self {
+    pub const fn with_cancel(deadline: Duration, cancelled: Arc<AtomicBool>) -> Self {
         Self {
             deadline,
             cancelled: Some(cancelled),
         }
     }
 
-    /// Finite total operation budget.
     #[must_use]
     pub const fn deadline(&self) -> Duration {
         self.deadline
     }
 
-    /// Fails with [`BridgeError::Cancelled`] when the flag is set.
     pub fn check(&self) -> Result<(), BridgeError> {
         if self
             .cancelled
@@ -139,11 +124,6 @@ impl Default for OpContext {
     }
 }
 
-/// One absolute operation budget shared by every phase of a bridge call.
-///
-/// Constructing a fresh Tokio timeout for each network phase would multiply a
-/// caller's deadline. This owner converts the public relative budget into one
-/// monotonic start point and returns only the remaining duration.
 #[derive(Clone, Debug)]
 struct OperationBudget {
     started: Instant,
@@ -167,50 +147,58 @@ impl OperationBudget {
             .ok_or(BridgeError::DeadlineExceeded)
     }
 
-    fn remaining_after_dispatch(
-        &self,
-        context: &OpContext,
-    ) -> Result<Duration, BridgeError> {
+    fn remaining_after_dispatch(&self, context: &OpContext) -> Result<Duration, BridgeError> {
         self.remaining(context)
             .map_err(|_| BridgeError::MutationOutcomeUnknown)
     }
 }
 
-/// Proof token selecting the only admitted production IDF population.
-///
-/// Collection-wide IDF is deliberately absent from this API. The qualification
-/// harness exercises unscoped Qdrant IDF through its private probe surface.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IdfScope {
     ScopedToRetrieval,
 }
 
-/// One bounded scroll page with an opaque continuation offset.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScrollPage {
     pub points: Vec<PointRecord>,
     pub next_offset: Option<QdrantPointId>,
 }
 
-// Keep vendor translation private and physically separated by responsibility.
-// `include!` preserves the original module namespace and public paths while
-// this no-behavior-change split awaits the dedicated test pass.
 include!("real/identity.rs");
 include!("real/codec.rs");
 include!("real/filter.rs");
 include!("real/errors_schema.rs");
 
-/// Real Qdrant data plane over the pinned client transport.
-///
-/// Owns the vendor client opaquely (the type never appears in public
-/// signatures), the schemas it created, and a bounded mutation-identity
-/// ledger for exact replay. There is no fallback to the in-memory oracle.
 pub struct RealDataPlane {
     client: Qdrant,
     gate: QualifiedGate,
     limits: BridgeLimits,
     schemas: BTreeMap<String, CollectionSchema>,
+    generations: BTreeMap<String, CollectionGenerationId>,
     operations: BTreeMap<OpaqueId, MutationReceipt>,
+}
+
+impl RealDataPlane {
+    /// Resolves only the exact process-locally admitted physical route.
+    ///
+    /// A physical name is not sufficient authority: a collection generation
+    /// is part of scoring/currentness identity. Reusing the same name with a
+    /// different generation behaves as an unavailable route before any Qdrant
+    /// read or mutation.
+    fn admitted_schema(
+        &self,
+        route: &CollectionRoute,
+    ) -> Result<(String, &CollectionSchema), BridgeError> {
+        let name = collection_name(route)?;
+        if self.generations.get(&name) != Some(&route.generation) {
+            return Err(BridgeError::CollectionNotFound);
+        }
+        let schema = self
+            .schemas
+            .get(&name)
+            .ok_or(BridgeError::CollectionNotFound)?;
+        Ok((name, schema))
+    }
 }
 
 include!("real/connect_schema.rs");

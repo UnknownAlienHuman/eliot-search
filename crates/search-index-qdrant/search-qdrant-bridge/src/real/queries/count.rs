@@ -1,8 +1,8 @@
 impl RealDataPlane {
     /// Counts the exact already-authorized filter population with
     /// `exact=true`. Unindexed or strict-rejected filters fail with
-    /// [`BridgeError::UnindexedFilter`] rather than scanning. The route must
-    /// have passed exact live schema admission in this process.
+    /// [`BridgeError::UnindexedFilter`] rather than scanning. The exact route
+    /// generation must have passed live schema admission in this process.
     pub async fn count_exact(
         &self,
         route: &CollectionRoute,
@@ -11,11 +11,7 @@ impl RealDataPlane {
     ) -> Result<ExactCount, BridgeError> {
         let budget = OperationBudget::begin(context)?;
         validate_filter_for_route(filter, route)?;
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?;
+        let (name, schema) = self.admitted_schema(route)?;
         ensure_filter_indexes(schema)?;
         let vendor_filter = base_filter(filter)?;
         let counted = tokio::time::timeout(
@@ -36,8 +32,7 @@ impl RealDataPlane {
             .ok_or(BridgeError::MalformedResponse)?
             .count;
         Ok(ExactCount {
-            count: usize::try_from(count)
-                .map_err(|_| BridgeError::MalformedResponse)?,
+            count: usize::try_from(count).map_err(|_| BridgeError::MalformedResponse)?,
         })
     }
 }

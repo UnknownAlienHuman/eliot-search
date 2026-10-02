@@ -35,6 +35,10 @@ impl RealDataPlane {
             .schemas
             .get(&name)
             .is_some_and(|actual| actual != expected)
+            || self
+                .generations
+                .get(&name)
+                .is_some_and(|generation| generation != &route.generation)
         {
             return Err(BridgeError::CollectionSchemaMismatch);
         }
@@ -42,7 +46,8 @@ impl RealDataPlane {
             .map_err(|_| BridgeError::CollectionSchemaMismatch)?;
         self.verify_server_schema(&name, expected, budget.remaining(context)?)
             .await?;
-        self.schemas.insert(name, expected.clone());
+        self.schemas.insert(name.clone(), expected.clone());
+        self.generations.insert(name, route.generation);
         Ok(receipt)
     }
 }

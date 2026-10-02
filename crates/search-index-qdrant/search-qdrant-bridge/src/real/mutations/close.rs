@@ -5,9 +5,9 @@ use super::super::{PointsIdsList, PointsSelector, SetPayloadPoints, points_selec
 use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    OperationBudget, PointPayload, QdrantPointId, RealDataPlane, collection_name,
-    int_value, map_mutation_error, strong_ordering, update_completed,
-    validate_close_epoch, validate_exact_ids, vendor_point_id,
+    OperationBudget, PointPayload, QdrantPointId, RealDataPlane, int_value,
+    map_mutation_error, strong_ordering, update_completed, validate_close_epoch,
+    validate_exact_ids, vendor_point_id,
 };
 
 impl RealDataPlane {
@@ -34,12 +34,8 @@ impl RealDataPlane {
             return Err(BridgeError::MutationTooLarge);
         }
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?
-            .clone();
+        let (name, schema) = self.admitted_schema(route)?;
+        let schema = schema.clone();
         let current = self
             .fetch_points(
                 &name,

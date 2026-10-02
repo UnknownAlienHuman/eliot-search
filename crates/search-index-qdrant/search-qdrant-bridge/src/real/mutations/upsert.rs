@@ -5,9 +5,9 @@ use super::super::{PointStruct, UpsertPoints};
 use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    OperationBudget, PointRecord, QdrantPointId, RealDataPlane, collection_name,
-    encode_payload, encode_vectors, map_mutation_error, same_point_identity,
-    strong_ordering, update_completed, validate_point,
+    OperationBudget, PointRecord, QdrantPointId, RealDataPlane, encode_payload,
+    encode_vectors, map_mutation_error, same_point_identity, strong_ordering,
+    update_completed, validate_point,
 };
 
 impl RealDataPlane {
@@ -32,12 +32,8 @@ impl RealDataPlane {
         if points.is_empty() || points.len() > self.limits.max_points_per_mutation {
             return Err(BridgeError::MutationTooLarge);
         }
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?
-            .clone();
+        let (name, schema) = self.admitted_schema(route)?;
+        let schema = schema.clone();
         let mut seen = BTreeSet::new();
         for point in &points {
             if !seen.insert(point.point_id) {
@@ -57,11 +53,6 @@ impl RealDataPlane {
             });
         }
 
-        // S11.2 collision guard: before any upsert that may address an
-        // existing UUID, retrieve it and compare the full identity digest plus
-        // every canonical identity coordinate represented by this bridge.
-        // The publication owner serializes mutation dispatch; this adapter
-        // never treats a mismatched pre-existing point as overwriteable.
         let expected_by_id: BTreeMap<QdrantPointId, usize> = points
             .iter()
             .enumerate()

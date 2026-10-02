@@ -19,11 +19,7 @@ impl RealDataPlane {
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?;
+        let (name, schema) = self.admitted_schema(route)?;
         ensure_filter_indexes(schema)?;
         let vector_schema = schema
             .named_vectors
@@ -77,9 +73,6 @@ impl RealDataPlane {
             }
             let payload = decode_payload(&scored.payload)?;
             if !filter.matches(&payload) {
-                // An off-filter answer may already have displaced an eligible
-                // point from top-k. Reject the whole leg; never post-filter it
-                // into an apparently valid partial ranking.
                 return Err(BridgeError::MalformedResponse);
             }
             nominations.push(CandidateNomination {
@@ -88,8 +81,6 @@ impl RealDataPlane {
                 point_identity_digest_256: payload.point_identity_digest_256,
             });
         }
-        // Qdrant returns a top-k set; daemon composition receives one stable
-        // bridge order independent of vendor tie ordering.
         nominations.sort_by(|left, right| {
             right
                 .score

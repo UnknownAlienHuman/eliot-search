@@ -95,7 +95,7 @@ impl RealDataPlane {
             }
         }
         let name = collection_name(route)?;
-        if self.schemas.contains_key(&name) {
+        if self.schemas.contains_key(&name) || self.generations.contains_key(&name) {
             return Err(BridgeError::CollectionAlreadyExists);
         }
         let exists = tokio::time::timeout(
@@ -128,8 +128,6 @@ impl RealDataPlane {
             replication_factor: Some(1),
             write_consistency_factor: Some(1),
             sparse_vectors_config: Some(SparseVectorConfig { map: sparse }),
-            // Strict admission is deliberately disabled until every mandatory
-            // payload index has been acknowledged.
             strict_mode_config: Some(strict_mode_config(false)),
             ..Default::default()
         };
@@ -196,6 +194,7 @@ impl RealDataPlane {
         .await
         .map_err(map_post_create_error)?;
         self.schemas.insert(name.clone(), schema.clone());
+        self.generations.insert(name.clone(), route.generation);
         ReceiptRef::new(format!("qdrant:collection:{name}"))
             .map_err(|_| BridgeError::CollectionSchemaMismatch)
     }

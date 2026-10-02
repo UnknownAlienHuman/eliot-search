@@ -15,11 +15,7 @@ impl RealDataPlane {
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?;
+        let (name, schema) = self.admitted_schema(route)?;
         ensure_filter_indexes(schema)?;
         let vendor_filter = base_filter(filter)?;
         let scrolled = tokio::time::timeout(
@@ -29,8 +25,7 @@ impl RealDataPlane {
                 filter: Some(vendor_filter),
                 offset: offset.as_ref().map(vendor_point_id),
                 limit: Some(
-                    u32::try_from(limit)
-                        .map_err(|_| BridgeError::QueryBudgetExceeded)?,
+                    u32::try_from(limit).map_err(|_| BridgeError::QueryBudgetExceeded)?,
                 ),
                 with_payload: Some(true.into()),
                 with_vectors: Some(true.into()),

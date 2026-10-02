@@ -3,15 +3,14 @@ use super::super::{DeletePoints, GetPoints, PointsIdsList, PointsSelector, point
 use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    OperationBudget, QdrantPointId, RealDataPlane, collection_name,
-    map_mutation_error, strong_ordering, update_completed, validate_exact_ids,
-    vendor_point_id,
+    OperationBudget, QdrantPointId, RealDataPlane, map_mutation_error,
+    strong_ordering, update_completed, validate_exact_ids, vendor_point_id,
 };
 
 impl RealDataPlane {
     /// Deletes only explicit exact point IDs with `wait=true` and strong
-    /// ordering, then proves absence through exact readback. The route must
-    /// have passed exact live schema admission in this process.
+    /// ordering, then proves absence through exact readback. The exact route
+    /// generation must have passed live schema admission in this process.
     pub async fn delete_exact(
         &mut self,
         route: &CollectionRoute,
@@ -27,15 +26,8 @@ impl RealDataPlane {
             return Err(BridgeError::MutationTooLarge);
         }
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?
-            .clone();
-        // Missing IDs are allowed for idempotent reclaim. Any present point
-        // must still belong to the exact collection generation named by the
-        // route; otherwise deleting it would turn corruption into success.
+        let (name, schema) = self.admitted_schema(route)?;
+        let schema = schema.clone();
         self.fetch_points(
             &name,
             &ids,

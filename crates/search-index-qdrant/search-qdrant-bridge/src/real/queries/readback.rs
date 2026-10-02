@@ -5,7 +5,8 @@ impl RealDataPlane {
     /// Qdrant response order is not part of the bridge contract. Returned
     /// points and missing IDs therefore follow the sorted validated request;
     /// unexpected IDs are sorted independently. Duplicate response IDs fail
-    /// closed as a malformed response.
+    /// closed as a malformed response. The exact route generation must have
+    /// been admitted in this process before any read is dispatched.
     pub async fn readback_exact(
         &self,
         route: &CollectionRoute,
@@ -14,15 +15,11 @@ impl RealDataPlane {
     ) -> Result<BoundedPointReadback, BridgeError> {
         let budget = OperationBudget::begin(context)?;
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?;
+        let (name, schema) = self.admitted_schema(route)?;
         let readback = tokio::time::timeout(
             budget.remaining(context)?,
             self.client.get_points(GetPoints {
-                collection_name: name.clone(),
+                collection_name: name,
                 ids: ids.iter().map(vendor_point_id).collect(),
                 with_payload: Some(true.into()),
                 with_vectors: Some(true.into()),
