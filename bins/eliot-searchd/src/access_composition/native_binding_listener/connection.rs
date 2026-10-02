@@ -5,7 +5,7 @@ use std::task::Poll;
 
 use crate::provider_composition::{
     CanonicalRecipeHost, CanonicalServingError, CanonicalServingLimits,
-    CanonicalServingOwner, CanonicalTcpConnection, CanonicalTcpGrantError,
+    CanonicalServingOwner, CanonicalTcpConnection,
 };
 
 use super::super::{
