@@ -183,6 +183,9 @@ mod mutations;
 include!("real/queries.rs");
 include!("real/ledger.rs");
 
+mod blocking;
+pub use blocking::BlockingRealQueryPlane;
+
 #[cfg(test)]
 #[path = "real/tests.rs"]
 mod tests;
