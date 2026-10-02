@@ -144,10 +144,10 @@ pub struct PointIdentityKey {
 impl PointIdentityKey {
     /// Validates the frozen key schema version.
     pub const fn validate(&self) -> Result<(), PointIdentityError> {
-        if self.schema_version != POINT_IDENTITY_SCHEMA_VERSION {
-            Err(PointIdentityError::UnknownSchemaVersion)
-        } else {
+        if self.schema_version == POINT_IDENTITY_SCHEMA_VERSION {
             Ok(())
+        } else {
+            Err(PointIdentityError::UnknownSchemaVersion)
         }
     }
 }
@@ -529,11 +529,11 @@ fn append_head(
     match value {
         0..=23 => output.push(base | u8::try_from(value).map_err(|_| PointIdentityError::LengthOverflow)?),
         24..=0xff => {
-            output.push(base | 24);
+            output.push(base | 0x18);
             output.push(u8::try_from(value).map_err(|_| PointIdentityError::LengthOverflow)?);
         }
         0x100..=0xffff => {
-            output.push(base | 25);
+            output.push(base | 0x19);
             output.extend_from_slice(
                 &u16::try_from(value)
                     .map_err(|_| PointIdentityError::LengthOverflow)?
@@ -541,7 +541,7 @@ fn append_head(
             );
         }
         0x1_0000..=0xffff_ffff => {
-            output.push(base | 26);
+            output.push(base | 0x1a);
             output.extend_from_slice(
                 &u32::try_from(value)
                     .map_err(|_| PointIdentityError::LengthOverflow)?
@@ -549,7 +549,7 @@ fn append_head(
             );
         }
         _ => {
-            output.push(base | 27);
+            output.push(base | 0x1b);
             output.extend_from_slice(&value.to_be_bytes());
         }
     }

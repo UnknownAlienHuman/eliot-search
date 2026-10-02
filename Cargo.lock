@@ -409,6 +409,7 @@ dependencies = [
  "search-source-registry",
  "search-subject-resolver",
  "search-unitizer",
+ "tokio",
  "zeroize",
 ]
 
@@ -1258,6 +1259,7 @@ dependencies = [
 name = "search-point-identity"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
  "search-domain",
 ]
