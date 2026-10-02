@@ -6,24 +6,20 @@
 //! membership and digest coordinates are accepted only after exact point
 //! readback, and no Qdrant bytes become source evidence.
 
+#![allow(dead_code)]
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{OpaqueId, ReceiptRef, SourceMembershipId};
 use search_qdrant_bridge::live::LiveEndpoint;
 use search_qdrant_bridge::qualified::QualifiedGate;
-use search_qdrant_bridge::real::{
-    BlockingRealQueryPlane, IdfScope, OpContext,
-};
+use search_qdrant_bridge::real::{BlockingRealQueryPlane, IdfScope, OpContext};
 use search_qdrant_bridge::{
-    BridgeError, BridgeLimits, CollectionRoute, CollectionSchema,
-    EligibilityFilter, QdrantPointId,
+    BridgeError, BridgeLimits, CollectionRoute, CollectionSchema, EligibilityFilter, QdrantPointId,
 };
 use search_retrieval_executor::{
     LegTicket,
-    indexed::{
-        IndexedNomination, IndexedPortError, IndexedRetrievalPort,
-        MAX_INDEXED_LIMIT,
-    },
+    indexed::{IndexedNomination, IndexedPortError, IndexedRetrievalPort, MAX_INDEXED_LIMIT},
 };
 
 use super::{map_bridge_error, membership_opaque_id, parse_membership};
@@ -43,8 +39,7 @@ impl LiveQdrantQueryPlane {
         gate: QualifiedGate,
         limits: BridgeLimits,
     ) -> Result<Self, BridgeError> {
-        BlockingRealQueryPlane::connect(endpoint, gate, limits)
-            .map(|plane| Self { plane })
+        BlockingRealQueryPlane::connect(endpoint, gate, limits).map(|plane| Self { plane })
     }
 
     /// Verify and admit one exact committed physical route/schema.
@@ -154,8 +149,7 @@ impl IndexedRetrievalPort for LiveQdrantIndexedPort<'_> {
             return Ok(Vec::new());
         }
 
-        let ids: Vec<QdrantPointId> =
-            scored.iter().map(|hit| hit.point_id).collect();
+        let ids: Vec<QdrantPointId> = scored.iter().map(|hit| hit.point_id).collect();
         let readback = self
             .plane
             .readback_exact(&self.route, ids, &self.context)
@@ -169,8 +163,7 @@ impl IndexedRetrievalPort for LiveQdrantIndexedPort<'_> {
             let membership = parse_membership(&point.payload.source_membership_id)
                 .map_err(|_| IndexedPortError::Failure)?;
             if !ticket.leg.memberships.contains(&membership)
-                || self.allowed.get(&point.payload.source_membership_id)
-                    != Some(&membership)
+                || self.allowed.get(&point.payload.source_membership_id) != Some(&membership)
                 || by_id.insert(point.point_id, (point, membership)).is_some()
             {
                 return Err(IndexedPortError::Failure);
