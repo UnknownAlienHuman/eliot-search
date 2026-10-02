@@ -13,6 +13,9 @@ path = "src/lib.rs"
 [dependencies]
 search-contracts.workspace = true
 search-domain.workspace = true
+# S11.2 requires a real BLAKE3-256 digest. Reuse the repository's exact
+# pure-Rust pin; no hashing implementation or vendor transport is exposed.
+blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure"] }
 
 [lints]
 workspace = true
