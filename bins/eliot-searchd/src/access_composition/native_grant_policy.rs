@@ -209,6 +209,8 @@ impl<'a> JournalStandaloneGrantPolicySource<'a> {
             || policy.installation_incarnation_id != binding.incarnation()
             || policy.installation_id != self.binding_pin.record().installation_id
             || policy.binding_generation != self.binding_pin.record().pairing_generation.get()
+            || policy.revocation_generation
+                != self.binding_pin.record().revocation_generation.get()
             || &policy.issued_boot_id != self.boot_id
         {
             return Err(GrantUseError::BindingMismatch.into());
