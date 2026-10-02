@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use search_contracts::Epoch;
 
 use super::{
-    BridgeMutation, MutationReceipt, PointRecord, QdrantPointId,
-    same_point_identity, validate_exact_ids, validate_point,
+    BridgeMutation, MutationReceipt, PointRecord, QdrantPointId, same_point_identity,
+    validate_close_epoch, validate_exact_ids, validate_point,
 };
 use crate::{BridgeError, CollectionRoute, QdrantBridge};
 
@@ -79,11 +79,10 @@ impl QdrantBridge {
             .ok_or(BridgeError::CollectionNotFound)?;
         for id in &ids {
             let point = collection.points.get(id).ok_or(BridgeError::PointNotFound)?;
-            if point.payload.collection_generation_id != route.generation
-                || valid_until_epoch_exclusive <= point.payload.valid_from_epoch
-            {
+            if point.payload.collection_generation_id != route.generation {
                 return Err(BridgeError::ExactReadbackMismatch);
             }
+            validate_close_epoch(&point.payload, valid_until_epoch_exclusive)?;
         }
         for id in &ids {
             collection

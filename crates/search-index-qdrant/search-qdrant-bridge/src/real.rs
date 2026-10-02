@@ -13,9 +13,9 @@
 //! Single-contract retrieval + IDF (invariant 5): [`RealDataPlane::query_filtered`]
 //! takes one [`EligibilityFilter`](crate::EligibilityFilter) and renders both
 //! the retrieval `filter` and the `idf.corpus` population filter from that
-//! same value. [`IdfScope::Global`] omits the corpus (collection-wide IDF);
-//! [`IdfScope::ScopedToRetrieval`] clones the retrieval filter as the corpus.
-//! A diverged corpus is unrepresentable: there is no second filter argument.
+//! exact value. [`IdfScope::ScopedToRetrieval`] is the sole production mode;
+//! collection-wide IDF is available only to the separate qualification probe,
+//! never to an admitted query call. A diverged population is unrepresentable.
 //!
 //! Pre-dispatch versus possible-write failures: validation, cancellation and
 //! connect-time failures are definite typed errors (no commit was possible).
@@ -175,15 +175,12 @@ impl OperationBudget {
     }
 }
 
-/// Which IDF population a filtered query scores with.
+/// Proof token selecting the only admitted production IDF population.
 ///
-/// `Global` omits `idf.corpus` (collection-wide denominators).
-/// `ScopedToRetrieval` sets `idf.corpus` to the exact retrieval filter built
-/// from the same single contract, so denied documents can never move
-/// permitted denominators.
+/// Collection-wide IDF is deliberately absent from this API. The qualification
+/// harness exercises unscoped Qdrant IDF through its private probe surface.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IdfScope {
-    Global,
     ScopedToRetrieval,
 }
 

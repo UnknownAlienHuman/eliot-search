@@ -1,9 +1,9 @@
 impl RealDataPlane {
     /// Returns bounded filtered nominations for one already-authorized leg.
     /// Retrieval and `idf.corpus` are rendered from the single `filter`
-    /// contract: [`IdfScope::ScopedToRetrieval`] clones the retrieval filter
-    /// as the corpus, [`IdfScope::Global`] omits it. Scores are finite
-    /// nominations, never evidence.
+    /// contract. [`IdfScope::ScopedToRetrieval`] is a proof token for the only
+    /// admitted production mode; the exact vendor filter is cloned as the IDF
+    /// corpus. Scores are finite nominations, never evidence.
     pub async fn query_filtered(
         &self,
         route: &CollectionRoute,
@@ -11,7 +11,7 @@ impl RealDataPlane {
         vector_name: &str,
         query: &[(u32, f32)],
         limit: usize,
-        idf: IdfScope,
+        _idf: IdfScope,
         context: &OpContext,
     ) -> Result<Vec<CandidateNomination>, BridgeError> {
         let budget = OperationBudget::begin(context)?;
@@ -31,30 +31,24 @@ impl RealDataPlane {
             .ok_or(BridgeError::NamedVectorMissing)?;
         validate_query_vector(query, vector_schema.dimensions)?;
         let vendor_filter = base_filter(filter)?;
-        let corpus = match idf {
-            IdfScope::Global => None,
-            IdfScope::ScopedToRetrieval => Some(vendor_filter.clone()),
-        };
+        let corpus = vendor_filter.clone();
         let (indices, values): (Vec<u32>, Vec<f32>) = query.iter().copied().unzip();
         let answered = tokio::time::timeout(
             budget.remaining(context)?,
             self.client.query(QueryPoints {
                 collection_name: name,
-                query: Some(Query::new_nearest(VectorInput::new_sparse(
-                    indices, values,
-                ))),
+                query: Some(Query::new_nearest(VectorInput::new_sparse(indices, values))),
                 using: Some(vector_name.to_owned()),
                 filter: Some(vendor_filter),
                 params: Some(SearchParams {
                     exact: Some(true),
-                    idf: corpus.map(|population| IdfParams {
-                        corpus: Some(population),
+                    idf: Some(IdfParams {
+                        corpus: Some(corpus),
                     }),
                     ..Default::default()
                 }),
                 limit: Some(
-                    u64::try_from(limit)
-                        .map_err(|_| BridgeError::QueryBudgetExceeded)?,
+                    u64::try_from(limit).map_err(|_| BridgeError::QueryBudgetExceeded)?,
                 ),
                 with_payload: Some(true.into()),
                 ..Default::default()

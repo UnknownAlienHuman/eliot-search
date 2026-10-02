@@ -187,6 +187,26 @@ pub(crate) fn same_point_identity(existing: &PointRecord, expected: &PointRecord
             == expected.payload.projection_profile_set_id
 }
 
+/// Validates an exact close as an immutable epoch transition.
+///
+/// An open point may be closed once. Retrying the same close value is allowed
+/// so unknown-outcome recovery can converge through exact readback. Replacing
+/// an already-published upper epoch with a different value is stale authority
+/// and fails before mutation dispatch.
+pub(crate) fn validate_close_epoch(
+    payload: &PointPayload,
+    requested: Epoch,
+) -> Result<(), BridgeError> {
+    if requested <= payload.valid_from_epoch {
+        return Err(BridgeError::ExactReadbackMismatch);
+    }
+    match payload.valid_until_epoch_exclusive {
+        None => Ok(()),
+        Some(current) if current == requested => Ok(()),
+        Some(_) => Err(BridgeError::ExactReadbackMismatch),
+    }
+}
+
 /// Immutable exact mutation identity.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BridgeMutation {

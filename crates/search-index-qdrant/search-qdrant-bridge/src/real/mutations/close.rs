@@ -7,7 +7,7 @@ use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
     OperationBudget, PointPayload, QdrantPointId, RealDataPlane, collection_name,
     int_value, map_mutation_error, strong_ordering, update_completed,
-    validate_exact_ids, vendor_point_id,
+    validate_close_epoch, validate_exact_ids, vendor_point_id,
 };
 
 impl RealDataPlane {
@@ -15,7 +15,9 @@ impl RealDataPlane {
     /// payload-only update (no broad-filter closure exists). The current
     /// upper bound is read first, so a stale close fails pre-dispatch with
     /// [`BridgeError::ExactReadbackMismatch`] and a missing ID with
-    /// [`BridgeError::PointNotFound`].
+    /// [`BridgeError::PointNotFound`]. Retrying the same close value is
+    /// accepted for unknown-outcome recovery; a different existing value is
+    /// immutable and cannot be overwritten.
     pub async fn close_exact(
         &mut self,
         route: &CollectionRoute,
@@ -55,9 +57,7 @@ impl RealDataPlane {
             })?;
         for id in &ids {
             let point = current.get(id).ok_or(BridgeError::PointNotFound)?;
-            if valid_until_epoch_exclusive <= point.payload.valid_from_epoch {
-                return Err(BridgeError::ExactReadbackMismatch);
-            }
+            validate_close_epoch(&point.payload, valid_until_epoch_exclusive)?;
         }
         let mut payload = HashMap::new();
         payload.insert(
