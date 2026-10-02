@@ -78,7 +78,7 @@ impl LegacyPreparationProtection {
         }
     }
 
-    fn from_tag(tag: u8) -> Result<Self, LegacyPreparationStoreError> {
+    const fn from_tag(tag: u8) -> Result<Self, LegacyPreparationStoreError> {
         match tag {
             0 => Ok(Self::Plaintext),
             1 => Ok(Self::Protected),
