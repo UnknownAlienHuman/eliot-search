@@ -1,7 +1,7 @@
 //! Pure membership-scoped projection planning and collision verification.
 
 use search_point_identity::{
-    PointIdentityLimits, PointIdentityRegistry, ProjectionKind,
+    PointIdentityLimits, PointIdentityRegistry, PointRole,
 };
 use search_projection_planner::{
     ProjectionBudget, ProjectionError, ProjectionInput, ProjectionPlan,
@@ -9,17 +9,14 @@ use search_projection_planner::{
     verify_manifest_reconstruction,
 };
 
-use super::digest::compute_payload_digest;
 use super::error::ProjectionCompositionError;
 use super::model::CompositionRequest;
 
 /// Composes one complete membership-scoped projection plan (pure, no I/O).
 ///
-/// # Errors
-///
-/// Returns the typed [`ProjectionCompositionError`] for scope drift, missing
-/// or unexpected receipts, duplicates, collisions, invalid manifests and
-/// exhausted budgets. Performs no Qdrant, CAS or redb I/O.
+/// Scope identities are already admitted by T13/T16 owners. This function
+/// only proves exact equality, builds typed S9.5 inputs and delegates payload,
+/// identity, digest and manifest production to `search-projection-planner`.
 pub fn compose_scoped_projection(
     request: &CompositionRequest,
     profiles: &ProjectionProfiles,
@@ -32,49 +29,62 @@ pub fn compose_scoped_projection(
     point_identity_limits
         .validate()
         .map_err(ProjectionCompositionError::from)?;
-    if request.membership.source_membership_id != request.scope.source_membership_id
-        || request.membership.projection_membership_id != request.scope.projection_membership_id
+    if request.membership.source_membership_id
+        != request.scope.source_membership_id
+        || request.membership.projection_membership_id
+            != request.scope.projection_membership_id
     {
         return Err(ProjectionCompositionError::MembershipMismatch);
     }
     if request.units.is_empty() || request.units.len() > budget.max_points {
         return Err(ProjectionCompositionError::BudgetExceeded);
     }
+
     let mut inputs = Vec::with_capacity(request.units.len());
     for unit in &request.units {
-        if unit.receipt.source_byte_start >= unit.receipt.source_byte_end {
+        let receipt = &unit.receipt;
+        if receipt.source_byte_start >= receipt.source_byte_end {
             return Err(ProjectionCompositionError::from(
                 ProjectionError::InvalidUnitRange,
             ));
         }
+        if receipt.residency_digest != request.scope.residency_digest {
+            return Err(ProjectionCompositionError::ResidencyMismatch);
+        }
         inputs.push(ProjectionInput {
-            namespace_id: request.scope.namespace_id.clone(),
-            source_id: request.scope.source_id.clone(),
-            source_membership_id: request.scope.source_membership_id.clone(),
-            projection_membership_id: request.scope.projection_membership_id.clone(),
-            source_revision: request.scope.source_revision,
-            unit_ordinal: unit.receipt.unit_ordinal,
-            source_byte_start: unit.receipt.source_byte_start,
-            source_byte_end: unit.receipt.source_byte_end,
-            projection_kind: ProjectionKind::Lexical,
-            projection_fingerprint: request.scope.projection_fingerprint,
-            projection_schema_revision: request.scope.projection_schema_revision,
-            visible_epoch: request.visible_epoch,
-            access_partition_digest: unit.receipt.access_partition_digest,
-            representation_digest: unit.receipt.representation_digest,
-            scoring_partition_digest: request.scope.scoring_partition_digest,
-            collection_generation_digest: request.scope.collection_generation_digest,
-            residency_digest: unit.receipt.residency_digest,
-            unit_digest: unit.receipt.unit_digest,
-            reference_digest: unit.receipt.reference_digest,
-            payload_digest: compute_payload_digest(
-                &request.scope,
-                request.visible_epoch,
-                &unit.receipt,
-            ),
+            installation_incarnation_id:
+                request.scope.installation_incarnation_id,
+            collection_generation_id: request.scope.collection_generation_id,
+            source_membership_id: request.scope.source_membership_id,
+            projection_membership_id: request.scope.projection_membership_id,
+            access_partition_id: request.scope.access_partition_id,
+            scoring_partition_id: request.scope.scoring_partition_id,
+            source_id: request.scope.source_id,
+            source_revision_id: request.scope.source_revision_id,
+            representation_id: request.scope.representation_id,
+            unit_id: receipt.unit_id,
+            scoring_document_id: receipt.scoring_document_id,
+            projection_profile_set_id:
+                request.scope.projection_profile_set_id.clone(),
+            point_role: PointRole::Unit,
+            unit_kind: receipt.unit_kind,
+            modality: receipt.modality,
+            language_or_format: receipt.language_or_format.clone(),
+            entity_kind: receipt.entity_kind,
+            normalized_symbol_key: receipt.normalized_symbol_key.clone(),
+            repository_lineage_id: receipt.repository_lineage_id,
+            valid_from_epoch: request.visible_epoch,
+            valid_until_epoch_exclusive: None,
+            unit_ordinal: receipt.unit_ordinal,
+            source_byte_start: receipt.source_byte_start,
+            source_byte_end: receipt.source_byte_end,
+            unit_digest: receipt.unit_digest,
+            reference_digest: receipt.reference_digest,
+            residency_digest: receipt.residency_digest,
             vectors: unit.vectors.clone(),
         });
     }
+
     let plan = plan_scoped_projection(
         inputs,
         &request.expected_units,
@@ -90,9 +100,9 @@ pub fn compose_scoped_projection(
     Ok(plan)
 }
 
-/// Returns the exact filterable payload fields T24 must index.
+/// Returns the exact S9.5 payload fields T24 must index.
 #[must_use]
-pub const fn expected_payload_indexes_for_bridge() -> [&'static str; 6] {
+pub const fn expected_payload_indexes_for_bridge() -> [&'static str; 19] {
     expected_payload_indexes()
 }
 

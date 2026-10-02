@@ -1,4 +1,4 @@
-//! Membership-scoped projection composition behind the stable daemon-local facade.
+//! Membership-scoped projection composition behind the daemon-local facade.
 
 mod cas;
 mod compose;
@@ -15,7 +15,7 @@ pub use cas::{
 pub use compose::{
     compose_scoped_projection, expected_payload_indexes_for_bridge,
 };
-pub use digest::{compute_payload_digest, compute_scope_key};
+pub use digest::compute_scope_key;
 pub use error::ProjectionCompositionError;
 pub use model::{
     AdmittedUnitReceipt, ComposingUnit, CompositionRequest,

@@ -18,7 +18,8 @@ use super::spec::{MANIFEST_EXTENSION, REFERENCE_BYTES};
 /// Persists one composed manifest in the scoped CAS with a control reference.
 ///
 /// Publication is no-clobber with exact readback. Existing identical bytes
-/// replay idempotently; divergence fails closed.
+/// replay idempotently; divergence fails closed. The scope/reference path is
+/// content-free and contains no source path, display name or vendor identifier.
 pub fn store_projection_manifest(
     root: &Path,
     plan: &ProjectionPlan,
@@ -33,23 +34,40 @@ pub fn store_projection_manifest(
     if plan.manifest.canonical_bytes.len() > budget.max_manifest_bytes {
         return Err(ProjectionCompositionError::BudgetExceeded);
     }
-    let manifest_digest = *blake3::hash(&plan.manifest.canonical_bytes).as_bytes();
-    let Some(first) = plan.points.first() else {
-        return Err(ProjectionCompositionError::ManifestInvalid);
-    };
-    if first.identity.key.namespace_id != scope.namespace_id
-        || first.identity.key.source_id != scope.source_id
-        || first.identity.key.source_revision != scope.source_revision
-        || first.identity.key.source_membership_id != scope.source_membership_id
-        || first.identity.key.projection_membership_id != scope.projection_membership_id
-        || first.identity.key.projection_fingerprint != scope.projection_fingerprint
-        || first.identity.key.projection_schema_revision != scope.projection_schema_revision
-        || first.identity.key.representation_digest != scope.representation_digest
-        || first.identity.key.scoring_partition_digest != scope.scoring_partition_digest
-        || first.identity.key.collection_generation_digest != scope.collection_generation_digest
+    if plan.points.is_empty()
+        || plan.points.iter().any(|point| {
+            point.source_membership_id != scope.source_membership_id
+                || point.residency_digest != scope.residency_digest
+                || point.identity.key.installation_incarnation_id
+                    != scope.installation_incarnation_id
+                || point.identity.key.collection_generation_id
+                    != scope.collection_generation_id
+                || point.identity.key.projection_membership_id
+                    != scope.projection_membership_id
+                || point.identity.key.representation_id
+                    != scope.representation_id
+                || point.identity.key.projection_profile_set_id
+                    != scope.projection_profile_set_id
+                || point.payload.installation_incarnation_id
+                    != scope.installation_incarnation_id
+                || point.payload.collection_generation_id
+                    != scope.collection_generation_id
+                || point.payload.projection_membership_id
+                    != scope.projection_membership_id
+                || point.payload.access_partition_id != scope.access_partition_id
+                || point.payload.scoring_partition_id
+                    != scope.scoring_partition_id
+                || point.payload.source_id != scope.source_id
+                || point.payload.source_revision_id != scope.source_revision_id
+                || point.payload.representation_id != scope.representation_id
+                || point.payload.projection_profile_set_id
+                    != scope.projection_profile_set_id
+        })
     {
         return Err(ProjectionCompositionError::ScopeMismatch);
     }
+
+    let manifest_digest = *blake3::hash(&plan.manifest.canonical_bytes).as_bytes();
     let scope_key = compute_scope_key(scope);
     let (reference_path, objects_dir) = cas_directories(root, &scope_key)?;
     let object_id_hex = hex(&manifest_digest);
@@ -57,15 +75,17 @@ pub fn store_projection_manifest(
         .join(&object_id_hex[..2])
         .join(format!("{object_id_hex}.{MANIFEST_EXTENSION}"));
     if let Some(parent) = object_path.parent() {
-        fs::create_dir_all(parent).map_err(|_| ProjectionCompositionError::CasUnavailable)?;
+        fs::create_dir_all(parent)
+            .map_err(|_| ProjectionCompositionError::CasUnavailable)?;
     }
     write_new_or_replay(
         &object_path,
         &plan.manifest.canonical_bytes,
         ProjectionCompositionError::CasConflict,
     )?;
-    let point_count =
-        u64::try_from(plan.points.len()).map_err(|_| ProjectionCompositionError::BudgetExceeded)?;
+
+    let point_count = u64::try_from(plan.points.len())
+        .map_err(|_| ProjectionCompositionError::BudgetExceeded)?;
     let manifest_bytes = u64::try_from(plan.manifest.canonical_bytes.len())
         .map_err(|_| ProjectionCompositionError::BudgetExceeded)?;
     let reference = ProjectionReference {
@@ -80,6 +100,7 @@ pub fn store_projection_manifest(
         &record,
         ProjectionCompositionError::ReferenceConflict,
     )?;
+
     let reread_object = read_bounded(&object_path, budget.max_manifest_bytes)?;
     if reread_object != plan.manifest.canonical_bytes
         || blake3::hash(&reread_object).as_bytes() != &manifest_digest
@@ -113,7 +134,8 @@ pub fn load_projection_manifest_bytes(
     {
         return Err(ProjectionCompositionError::BudgetExceeded);
     }
-    let (reference_path, objects_dir) = cas_directories(root, &reference.scope_key)?;
+    let (reference_path, objects_dir) =
+        cas_directories(root, &reference.scope_key)?;
     let reread_reference = read_bounded(&reference_path, REFERENCE_BYTES)?;
     if reread_reference != reference.to_bytes() {
         return Err(ProjectionCompositionError::ReferenceConflict);
@@ -158,7 +180,8 @@ fn cas_directories(
     let refs = base.join("refs");
     let objects = base.join("objects");
     for directory in [&base, &refs, &objects] {
-        fs::create_dir_all(directory).map_err(|_| ProjectionCompositionError::CasUnavailable)?;
+        fs::create_dir_all(directory)
+            .map_err(|_| ProjectionCompositionError::CasUnavailable)?;
     }
     Ok((refs.join(format!("{}.ref", hex(scope_key))), objects))
 }
@@ -188,12 +211,20 @@ fn write_new_or_replay(
     }
 }
 
-fn read_bounded(path: &Path, max_bytes: usize) -> Result<Vec<u8>, ProjectionCompositionError> {
-    let file = fs::File::open(path).map_err(|_| ProjectionCompositionError::CasUnavailable)?;
-    let mut output = Vec::new();
-    file.take(u64::try_from(max_bytes).unwrap_or(u64::MAX).saturating_add(1))
-        .read_to_end(&mut output)
+fn read_bounded(
+    path: &Path,
+    max_bytes: usize,
+) -> Result<Vec<u8>, ProjectionCompositionError> {
+    let file = fs::File::open(path)
         .map_err(|_| ProjectionCompositionError::CasUnavailable)?;
+    let mut output = Vec::new();
+    file.take(
+        u64::try_from(max_bytes)
+            .unwrap_or(u64::MAX)
+            .saturating_add(1),
+    )
+    .read_to_end(&mut output)
+    .map_err(|_| ProjectionCompositionError::CasUnavailable)?;
     if output.len() > max_bytes {
         return Err(ProjectionCompositionError::BudgetExceeded);
     }

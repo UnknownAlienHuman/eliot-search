@@ -7,35 +7,35 @@ use search_projection_planner::ProjectionError;
 pub enum ProjectionCompositionError {
     /// A finite limit is zero or internally inconsistent.
     InvalidLimits,
-    /// Membership or immutable source identity is empty or mismatched.
+    /// Membership binding mismatches the admitted scope.
     MembershipMismatch,
-    /// More than one membership was supplied where exactly one is required.
+    /// More than one membership was supplied where one is required.
     MembershipArrayForbidden,
-    /// A raw public/vendor collection identifier reached a scope boundary.
+    /// A raw public/vendor collection identifier reached a boundary.
     RawCollectionIdForbidden,
-    /// Inputs span inequivalent scoring/security/generation domains.
+    /// Inputs span inequivalent security/scoring/generation scope.
     ScopeMismatch,
-    /// Unit residency does not match the admitted residency binding.
+    /// Unit residency does not match the admitted binding.
     ResidencyMismatch,
     /// An expected unit has no admitted receipt in the exact plan.
     MissingUnitReceipt,
     /// An input unit is outside the declared complete unit set.
     UnexpectedUnit,
-    /// Two point specs resolve to the same compact identity.
+    /// Two point specs resolve to the same compact identity or unit role.
     DuplicatePoint,
-    /// A compact point identifier maps to another complete key.
+    /// A compact point identifier maps to another complete identity.
     PointCollision,
     /// Point identity input is invalid.
     PointIdentityInvalid,
     /// A manifest does not reconstruct exactly its point specs.
     ManifestInvalid,
-    /// A plan exceeds its point, vector, or byte budget.
+    /// A plan exceeds its finite point, vector or byte budget.
     BudgetExceeded,
-    /// The scoped CAS or its references are unavailable or unreadable.
+    /// The scoped CAS or references are unavailable or unreadable.
     CasUnavailable,
     /// An immutable CAS object already exists with different bytes.
     CasConflict,
-    /// A control reference already exists with a different manifest binding.
+    /// A control reference already exists with another manifest binding.
     ReferenceConflict,
 }
 
@@ -82,31 +82,35 @@ impl From<ProjectionError> for ProjectionCompositionError {
             ProjectionError::ResidencyMismatch => Self::ResidencyMismatch,
             ProjectionError::MissingUnitReceipt => Self::MissingUnitReceipt,
             ProjectionError::UnexpectedUnit => Self::UnexpectedUnit,
-            ProjectionError::DuplicatePointId | ProjectionError::DuplicateUnitRole => {
-                Self::DuplicatePoint
-            }
+            ProjectionError::DuplicatePointId
+            | ProjectionError::DuplicateUnitRole => Self::DuplicatePoint,
             ProjectionError::PointIdentity => Self::PointIdentityInvalid,
             ProjectionError::InvalidManifest => Self::ManifestInvalid,
-            ProjectionError::BudgetExceeded | ProjectionError::ManifestTooLarge => {
-                Self::BudgetExceeded
-            }
+            ProjectionError::BudgetExceeded
+            | ProjectionError::ManifestTooLarge => Self::BudgetExceeded,
             ProjectionError::ScopeMismatch
             | ProjectionError::InvalidUnitRange
             | ProjectionError::VectorSetMismatch
             | ProjectionError::DuplicateVectorName
             | ProjectionError::VectorDimensionMismatch
             | ProjectionError::InvalidVector
+            | ProjectionError::VectorDigestMismatch
             | ProjectionError::CollectionVectorMissing
             | ProjectionError::CollectionVectorMismatch
-            | ProjectionError::PayloadIndexMissing => Self::ScopeMismatch,
+            | ProjectionError::PayloadIndexMissing
+            | ProjectionError::PayloadIndexUnexpected => Self::ScopeMismatch,
         }
     }
 }
 
-impl From<search_point_identity::PointIdentityError> for ProjectionCompositionError {
+impl From<search_point_identity::PointIdentityError>
+    for ProjectionCompositionError
+{
     fn from(error: search_point_identity::PointIdentityError) -> Self {
         match error {
-            search_point_identity::PointIdentityError::DigestCollision => Self::PointCollision,
+            search_point_identity::PointIdentityError::DigestCollision => {
+                Self::PointCollision
+            }
             search_point_identity::PointIdentityError::RegistryCapacityExceeded => {
                 Self::BudgetExceeded
             }
