@@ -25,7 +25,7 @@ mod revision_writer;
 mod preparation_store;
 #[path = "control_migration_objects.rs"]
 mod migration_objects;
-#[path = "secure_direct_store/kernel.rs"]
+#[path = "secure_direct_store/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::DirectStore;

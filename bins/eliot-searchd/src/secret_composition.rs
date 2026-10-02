@@ -4,7 +4,7 @@
 //! purpose binding, vault effects, catalog lifecycle, finite leases, keyed
 //! proofs and exact recovery after ambiguous platform mutations.
 
-#[path = "secret_composition/kernel.rs"]
+#[path = "secret_composition/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

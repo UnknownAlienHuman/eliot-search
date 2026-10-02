@@ -12,7 +12,7 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "publication_composition/kernel.rs"]
+#[path = "publication_composition/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

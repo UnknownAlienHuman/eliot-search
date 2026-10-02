@@ -8,7 +8,7 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "rebuild_composition/kernel.rs"]
+#[path = "rebuild_composition/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

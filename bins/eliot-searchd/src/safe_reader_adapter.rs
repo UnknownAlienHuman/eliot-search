@@ -4,7 +4,7 @@
 //! token/root containment, native identity, final-handle backend execution,
 //! whole-file translation and regression coverage.
 
-#[path = "safe_reader_adapter/kernel.rs"]
+#[path = "safe_reader_adapter/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

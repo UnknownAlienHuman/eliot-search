@@ -4,7 +4,7 @@
 //! admitted request models, deterministic scope/payload digests, pure plan
 //! composition, immutable scoped CAS persistence and reconstruction proofs.
 
-#[path = "projection_composition/kernel.rs"]
+#[path = "projection_composition/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

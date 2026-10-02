@@ -3,7 +3,7 @@
 //! The stable daemon-local surface delegates to bounded private owners for
 //! pairing, strict wire framing, listener lifetime and regression coverage.
 
-#[path = "endpoint/kernel.rs"]
+#[path = "endpoint/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

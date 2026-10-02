@@ -4,7 +4,7 @@
 //! finite window state, source-fence revalidation and the regression corpus
 //! remain behind one private owner pending responsibility-level extraction.
 
-#[path = "continuation/kernel.rs"]
+#[path = "continuation/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

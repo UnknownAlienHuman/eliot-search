@@ -4,7 +4,7 @@
 //! closed limits and errors, zeroizing plaintext ownership, strict envelope
 //! coding, platform dispatch and the Windows DPAPI/file boundary.
 
-#[path = "sealed_store/kernel.rs"]
+#[path = "sealed_store/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

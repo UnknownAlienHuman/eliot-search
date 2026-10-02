@@ -4,7 +4,7 @@
 //! ephemeral catalog, exact expansion verification, closed models/errors and
 //! regression coverage. Tokens remain non-self-describing session locators.
 
-#[path = "result_handles/kernel.rs"]
+#[path = "result_handles/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

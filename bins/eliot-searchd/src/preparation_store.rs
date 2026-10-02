@@ -6,7 +6,7 @@
 
 #[path = "control_migration_preparation.rs"]
 mod migration_inventory;
-#[path = "preparation_store/kernel.rs"]
+#[path = "preparation_store/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::{PreparationBatch, PreparationCursor};

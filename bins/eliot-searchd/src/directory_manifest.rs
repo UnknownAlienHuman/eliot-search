@@ -4,7 +4,7 @@
 //! manifest models, exact codec/digests, filesystem roots and discovery,
 //! immutable publication, verification/migration, and directory reconciliation.
 
-#[path = "directory_manifest/kernel.rs"]
+#[path = "directory_manifest/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

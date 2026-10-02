@@ -4,7 +4,7 @@
 //! owners. Provider envelopes, child transport and endpoint key material stay
 //! private to this composition boundary.
 
-#[path = "authenticated_proxy/kernel.rs"]
+#[path = "authenticated_proxy/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::maybe_run;

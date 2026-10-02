@@ -4,7 +4,7 @@
 //! protocol handling, DIRECT command orchestration and regression tests are
 //! isolated behind one private owner pending responsibility-level extraction.
 
-#[path = "app/kernel.rs"]
+#[path = "app/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;
