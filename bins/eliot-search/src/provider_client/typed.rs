@@ -16,10 +16,13 @@ use std::net::TcpStream;
 use std::task::Poll;
 use std::time::Duration;
 
-use search_contracts::{ProviderEnvelope, RequestBody, RequestId};
+use search_contracts::{
+    ProtocolFailureCode, ProviderEnvelope, RequestBody, RequestId,
+};
 use search_provider_protocol::{
     BindingContext, BindingKey, PairingMachine, ProofDigest, ProtocolError,
-    ProtocolLimits, SessionMachine, TypedTransportProfileV1, verify_proof,
+    ProtocolLimits, RequestStatus, SessionMachine, TypedTransportProfileV1,
+    verify_proof,
 };
 
 use io::{SetupBudget, SocketIo};
@@ -51,6 +54,19 @@ pub enum TypedClientError {
     NothingPending,
     /// This client already has one outstanding cancellation control.
     CancellationPending,
+    /// The mandatory initial standalone grant has not been issued.
+    GrantRequired,
+    /// This session already spent the one initial standalone-grant command.
+    GrantAlreadyIssued,
+    /// A recipe attempted to substitute claims other than the exact issued grant.
+    GrantMismatch,
+    /// The authenticated daemon refused the initial grant request.
+    GrantRejected {
+        /// Closed terminal status authenticated by the daemon.
+        status: RequestStatus,
+        /// Public content-free failure code authenticated in the response body.
+        failure: ProtocolFailureCode,
+    },
     /// The response does not belong to an expected request/recipe/event.
     ResponseMismatch,
     /// The connection has already closed and cannot be reused.
@@ -73,6 +89,16 @@ impl TypedClientError {
             Self::Allocation => "REMOTE_TYPED_RESOURCE_EXHAUSTED",
             Self::NothingPending => "REMOTE_TYPED_NOTHING_PENDING",
             Self::CancellationPending => "REMOTE_TYPED_CANCEL_PENDING",
+            Self::GrantRequired => "REMOTE_GRANT_REQUIRED",
+            Self::GrantAlreadyIssued => "REMOTE_GRANT_ALREADY_ISSUED",
+            Self::GrantMismatch => "REMOTE_GRANT_MISMATCH",
+            Self::GrantRejected { status, .. } => match status {
+                RequestStatus::Cancelled => "REMOTE_GRANT_CANCELLED",
+                RequestStatus::OutcomeUnknown => "REMOTE_GRANT_OUTCOME_UNKNOWN",
+                RequestStatus::Ok | RequestStatus::Partial | RequestStatus::Failed => {
+                    "REMOTE_GRANT_REJECTED"
+                }
+            },
             Self::ResponseMismatch => "REMOTE_RESPONSE_MISMATCH",
             Self::Closed => "REMOTE_SESSION_CLOSED",
         }
@@ -187,7 +213,7 @@ impl TypedProviderSession {
         Ok(Self { state: Some(state) })
     }
 
-    /// Send an existing typed recipe and server-issued claims without editing either.
+    /// Send an existing typed recipe and the exact server-issued grant unchanged.
     pub fn send_request(
         &mut self,
         body: RequestBody,
