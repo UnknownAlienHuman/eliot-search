@@ -17,9 +17,7 @@ pub(crate) use search_qdrant_bridge::live::{
     spawn_disposable_server,
 };
 pub(crate) use search_qdrant_bridge::qualified::QualifiedGate;
-pub(crate) use search_qdrant_bridge::real::{
-    IdfScope, OpContext, RealDataPlane,
-};
+pub(crate) use search_qdrant_bridge::real::{OpContext, RealDataPlane};
 pub(crate) use search_qdrant_bridge::{
     BridgeLimits, BridgeMutation, CandidateNomination, CollectionRoute,
     CollectionSchema, EligibilityFilter, PointPayload, PointRecord,

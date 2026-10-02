@@ -19,7 +19,7 @@ use crate::{
     QdrantPointId,
 };
 
-use super::{IdfScope, OpContext, RealDataPlane};
+use super::{OpContext, RealDataPlane};
 
 /// One qualified real Qdrant query plane for synchronous composition.
 ///
@@ -69,7 +69,7 @@ impl BlockingRealQueryPlane {
     }
 
     /// Execute one bounded filtered sparse query. Retrieval and IDF population
-    /// remain coupled by the bridge-owned [`IdfScope`] contract.
+    /// are rendered from the same bridge-owned eligibility filter.
     pub fn query_filtered(
         &self,
         route: &CollectionRoute,
@@ -77,7 +77,6 @@ impl BlockingRealQueryPlane {
         vector_name: &str,
         query: &[(u32, f32)],
         limit: usize,
-        idf: IdfScope,
         context: &OpContext,
     ) -> Result<Vec<CandidateNomination>, BridgeError> {
         ensure_synchronous_context()?;
@@ -87,7 +86,6 @@ impl BlockingRealQueryPlane {
             vector_name,
             query,
             limit,
-            idf,
             context,
         ))
     }

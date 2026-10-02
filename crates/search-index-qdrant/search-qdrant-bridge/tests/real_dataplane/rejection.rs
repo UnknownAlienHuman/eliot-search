@@ -49,7 +49,6 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
                     VECTOR_NAME,
                     &[(0, 1.0)],
                     0,
-                    IdfScope::ScopedToRetrieval,
                     &context,
                 )
                 .await
@@ -64,7 +63,6 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
                     VECTOR_NAME,
                     &[(0, 1.0)],
                     limits().max_query_candidates + 1,
-                    IdfScope::ScopedToRetrieval,
                     &context,
                 )
                 .await

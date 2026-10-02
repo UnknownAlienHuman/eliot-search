@@ -1,9 +1,9 @@
 impl RealDataPlane {
     /// Returns bounded filtered nominations for one already-authorized leg.
-    /// Retrieval and `idf.corpus` are rendered from the single `filter`
-    /// contract: [`IdfScope::ScopedToRetrieval`] clones the retrieval filter
-    /// as the corpus, [`IdfScope::Global`] omits it. Scores are finite
-    /// nominations, never evidence.
+    ///
+    /// Retrieval and `idf.corpus` are rendered from the same single `filter`
+    /// value. A caller cannot omit, substitute or widen the IDF population.
+    /// Scores are finite nominations, never evidence.
     pub async fn query_filtered(
         &self,
         route: &CollectionRoute,
@@ -11,7 +11,6 @@ impl RealDataPlane {
         vector_name: &str,
         query: &[(u32, f32)],
         limit: usize,
-        idf: IdfScope,
         context: &OpContext,
     ) -> Result<Vec<CandidateNomination>, BridgeError> {
         let budget = OperationBudget::begin(context)?;
@@ -31,10 +30,7 @@ impl RealDataPlane {
             .ok_or(BridgeError::NamedVectorMissing)?;
         validate_query_vector(query, vector_schema.dimensions)?;
         let vendor_filter = base_filter(filter)?;
-        let corpus = match idf {
-            IdfScope::Global => None,
-            IdfScope::ScopedToRetrieval => Some(vendor_filter.clone()),
-        };
+        let corpus = vendor_filter.clone();
         let (indices, values): (Vec<u32>, Vec<f32>) = query.iter().copied().unzip();
         let answered = tokio::time::timeout(
             budget.remaining(context)?,
@@ -47,8 +43,8 @@ impl RealDataPlane {
                 filter: Some(vendor_filter),
                 params: Some(SearchParams {
                     exact: Some(true),
-                    idf: corpus.map(|population| IdfParams {
-                        corpus: Some(population),
+                    idf: Some(IdfParams {
+                        corpus: Some(corpus),
                     }),
                     ..Default::default()
                 }),

@@ -67,7 +67,6 @@ async fn t24_real_crud_query_parity_with_oracle() {
                 VECTOR_NAME,
                 &[(0, 1.0)],
                 10,
-                IdfScope::ScopedToRetrieval,
                 &context,
             )
             .await

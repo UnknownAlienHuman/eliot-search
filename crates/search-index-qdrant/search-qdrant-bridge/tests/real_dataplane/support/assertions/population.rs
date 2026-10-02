@@ -63,7 +63,6 @@ pub(crate) async fn assert_wrong_route_rejected(
                 VECTOR_NAME,
                 &[(0, 1.0)],
                 10,
-                IdfScope::ScopedToRetrieval,
                 context,
             )
             .await
@@ -101,7 +100,6 @@ pub(crate) async fn assert_reads_cancelled(
                 VECTOR_NAME,
                 &[(0, 1.0)],
                 10,
-                IdfScope::ScopedToRetrieval,
                 cancelled,
             )
             .await

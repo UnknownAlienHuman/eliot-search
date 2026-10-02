@@ -13,9 +13,8 @@
 //! Single-contract retrieval + IDF (invariant 5): [`RealDataPlane::query_filtered`]
 //! takes one [`EligibilityFilter`](crate::EligibilityFilter) and renders both
 //! the retrieval `filter` and the `idf.corpus` population filter from that
-//! same value. [`IdfScope::Global`] omits the corpus (collection-wide IDF);
-//! [`IdfScope::ScopedToRetrieval`] clones the retrieval filter as the corpus.
-//! A diverged corpus is unrepresentable: there is no second filter argument.
+//! same value. Omitting or substituting the corpus is unrepresentable in the
+//! production bridge API.
 //!
 //! Pre-dispatch versus possible-write failures: validation, cancellation and
 //! connect-time failures are definite typed errors (no commit was possible).
@@ -55,10 +54,6 @@ use qdrant_client::qdrant::{
     r#match, value, vector_output, vectors, vectors_output,
 };
 use search_contracts::{OpaqueId, ReceiptRef};
-use crate::mutation::{same_point_identity, validate_exact_ids};
-use crate::query::{
-    ensure_filter_indexes, validate_filter_for_route, validate_query_vector,
-};
 
 use crate::live::LiveEndpoint;
 use crate::qualified::{
@@ -179,18 +174,6 @@ impl OperationBudget {
     }
 }
 
-/// Which IDF population a filtered query scores with.
-///
-/// `Global` omits `idf.corpus` (collection-wide denominators).
-/// `ScopedToRetrieval` sets `idf.corpus` to the exact retrieval filter built
-/// from the same single contract, so denied documents can never move
-/// permitted denominators.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum IdfScope {
-    Global,
-    ScopedToRetrieval,
-}
-
 /// One bounded scroll page with an opaque continuation offset.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScrollPage {
@@ -199,21 +182,12 @@ pub struct ScrollPage {
 }
 
 // Keep vendor translation private and physically separated by responsibility.
-mod identity;
-pub use identity::{collection_name, validate_collection_name};
-use identity::{bridge_point_id, hex_from_32, vendor_point_id};
-
-mod codec;
-use codec::{
-    decode_payload, decode_point, encode_payload, encode_vectors, int_value,
-    strong_ordering, update_completed,
-};
-mod filter;
-use filter::{base_filter, validate_point};
-mod errors_schema;
-use errors_schema::{
-    map_create_error, map_mutation_error, map_read_error, verify_server_schema,
-};
+// `include!` preserves the original module namespace and public paths while
+// this no-behavior-change split awaits the dedicated test pass.
+include!("real/identity.rs");
+include!("real/codec.rs");
+include!("real/filter.rs");
+include!("real/errors_schema.rs");
 
 /// Real Qdrant data plane over the pinned client transport.
 ///
@@ -228,11 +202,10 @@ pub struct RealDataPlane {
     operations: BTreeMap<OpaqueId, MutationReceipt>,
 }
 
-mod connect_schema;
-use connect_schema::{payload_index_specs, vendor_schema_type};
+include!("real/connect_schema.rs");
 mod mutations;
-mod queries;
-mod ledger;
+include!("real/queries.rs");
+include!("real/ledger.rs");
 
 mod blocking;
 pub use blocking::BlockingRealQueryPlane;
