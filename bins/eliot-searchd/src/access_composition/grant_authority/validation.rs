@@ -25,6 +25,99 @@ pub enum RecipeGrantUseError<E> {
     AfterOperation(GrantUseError),
 }
 
+impl<E, T> BoundedStandaloneGrantIssuer<E, T>
+where
+    T: GrantValidationClock,
+{
+    /// Ledger-only early refusal before bounded source-free task allocation.
+    ///
+    /// This verifies the exact issued claims, paired binding, request identity,
+    /// requested ceilings and retained lifetime. It deliberately does not claim
+    /// current durable policy authority; serving must repeat the full check with
+    /// [`Self::with_locked_recipe_grant`] under the query owner's live lock.
+    pub(super) fn preflight_issued_recipe_grant(
+        &mut self,
+        binding: &BindingContext,
+        request: &AdmittedProviderRequest,
+    ) -> Result<(), GrantUseError> {
+        let _issued = self.verify_issued_request(binding, request)?;
+        Ok(())
+    }
+
+    /// Verify the original issuer ledger against policy borrowed under the live
+    /// query-authority lock and bracket the actual work callback with lifetime
+    /// checks. No durable policy source is retained by the serving host.
+    pub(super) fn with_locked_recipe_grant<R, F>(
+        &mut self,
+        binding: &BindingContext,
+        request: &mut AdmittedProviderRequest,
+        policy: &AuthoritativeGrantPolicy,
+        operation: impl FnOnce(
+            VerifiedStandaloneGrant<'_>,
+            &mut AdmittedProviderRequest,
+        ) -> Result<R, F>,
+    ) -> Result<R, RecipeGrantUseError<F>> {
+        use RecipeGrantUseError::{AfterOperation, Operation, Refused};
+
+        let issued = self
+            .verify_recipe_grant(binding, request, policy)
+            .map_err(Refused)?;
+        let valid_until = issued.valid_until();
+        let result = operation(issued, request).map_err(Operation)?;
+        self.revalidate_after_operation(request, valid_until)
+            .map_err(AfterOperation)?;
+        Ok(result)
+    }
+
+    fn verify_recipe_grant<'a>(
+        &'a mut self,
+        binding: &BindingContext,
+        request: &AdmittedProviderRequest,
+        policy: &AuthoritativeGrantPolicy,
+    ) -> Result<VerifiedStandaloneGrant<'a>, GrantUseError> {
+        let issued = self.verify_issued_request(binding, request)?;
+        validate_policy_binding(binding, policy).map_err(|_| GrantUseError::BindingMismatch)?;
+        validate_policy(&request.body().grant, &issued, policy)?;
+        Ok(issued)
+    }
+
+    fn verify_issued_request<'a>(
+        &'a mut self,
+        binding: &BindingContext,
+        request: &AdmittedProviderRequest,
+    ) -> Result<VerifiedStandaloneGrant<'a>, GrantUseError> {
+        validate_bound_request(binding, request)?;
+        let issued = self.verify_issued_claims(&request.body().grant)?;
+        validate_request(request.body())?;
+        check_request(request)?;
+        if monotonic_millis() >= issued.valid_until() {
+            return Err(GrantUseError::Expired);
+        }
+        Ok(issued)
+    }
+
+    fn revalidate_after_operation(
+        &mut self,
+        request: &AdmittedProviderRequest,
+        before_expiry: MonotonicMillis,
+    ) -> Result<(), GrantUseError> {
+        // Fresh UTC may shorten this turn's deadline, never lengthen the
+        // expiry supplied before the callback, even below the original TTL.
+        let issued = self.verify_issued_claims(&request.body().grant)?;
+        let now = monotonic_millis();
+        if now >= before_expiry.min(issued.valid_until()) {
+            return Err(GrantUseError::Expired);
+        }
+        if now < request.guard().admitted_at()
+            || request.guard().is_expired(now)
+            || (request.next_event_sequence().is_some() && request.guard().is_cancelled())
+        {
+            return Err(GrantUseError::RequestInactive);
+        }
+        Ok(())
+    }
+}
+
 impl<P, E, T> SessionBoundGrantAuthority<P, BoundedStandaloneGrantIssuer<E, T>>
 where
     P: StandaloneGrantPolicySource,
@@ -58,22 +151,29 @@ where
             &mut AdmittedProviderRequest,
         ) -> Result<R, F>,
     ) -> Result<R, RecipeGrantUseError<F>> {
-        use RecipeGrantUseError::{AfterOperation, Operation, Refused};
+        use RecipeGrantUseError::{AfterOperation, Refused};
 
         validate_bound_request(binding, request).map_err(Refused)?;
-        let before = self.policy_source.snapshot(binding)
+        let before = self
+            .policy_source
+            .snapshot(binding)
             .map_err(|_| Refused(GrantUseError::PolicyUnavailable))?;
-        let issued = self.verify_recipe_grant(binding, request, &before).map_err(Refused)?;
+        validate_policy_binding(binding, &before)
+            .map_err(|_| Refused(GrantUseError::BindingMismatch))?;
 
-        let valid_until = issued.valid_until();
-        let result = operation(issued, request).map_err(Operation)?;
+        let result = self
+            .issuer
+            .with_locked_recipe_grant(binding, request, &before, operation)?;
 
-        let after = self.policy_source.snapshot(binding)
+        let after = self
+            .policy_source
+            .snapshot(binding)
             .map_err(|_| AfterOperation(GrantUseError::PolicyUnavailable))?;
+        validate_policy_binding(binding, &after)
+            .map_err(|_| AfterOperation(GrantUseError::PolicyChanged))?;
         if before != after {
             return Err(AfterOperation(GrantUseError::PolicyChanged));
         }
-        self.revalidate_after_operation(request, valid_until).map_err(AfterOperation)?;
         Ok(result)
     }
 
@@ -85,19 +185,18 @@ where
         request: &AdmittedProviderRequest,
     ) -> Result<(), GrantUseError> {
         validate_bound_request(binding, request)?;
-        let policy = self.policy_source.snapshot(binding)
+        let policy = self
+            .policy_source
+            .snapshot(binding)
             .map_err(|_| GrantUseError::PolicyUnavailable)?;
-        let _issued = self.verify_recipe_grant(binding, request, &policy)?;
+        let _issued = self.issuer.verify_recipe_grant(binding, request, &policy)?;
         Ok(())
     }
 
     /// Use the current policy borrowed from the native host's held lock.
     ///
-    /// Only the serving adapter calls this path. It does not call snapshot()
-    /// again while that lock is held: a policy source may acquire the same
-    /// non-reentrant lock. The host must borrow the actual active policy, not a
-    /// detached cached copy, and hold its mutation lock through this entire call.
-    /// The issuer's independent lifetime checks still bracket actual work/output.
+    /// Compatibility path for operation-scoped authorities. Long-lived serving
+    /// stores only the issuer ledger and calls the issuer-owned method directly.
     pub(super) fn with_locked_recipe_grant<R, F>(
         &mut self,
         binding: &BindingContext,
@@ -108,49 +207,8 @@ where
             &mut AdmittedProviderRequest,
         ) -> Result<R, F>,
     ) -> Result<R, RecipeGrantUseError<F>> {
-        use RecipeGrantUseError::{AfterOperation, Operation, Refused};
-
-        let issued = self.verify_recipe_grant(binding, request, policy).map_err(Refused)?;
-        let valid_until = issued.valid_until();
-        let result = operation(issued, request).map_err(Operation)?;
-        self.revalidate_after_operation(request, valid_until).map_err(AfterOperation)?;
-        Ok(result)
-    }
-
-    // One validation owner for unlocked preflight, snapshot-based callers and
-    // locked serving. Only the original issuance record supplies grant evidence.
-    fn verify_recipe_grant<'a>(
-        &'a mut self,
-        binding: &BindingContext,
-        request: &AdmittedProviderRequest,
-        policy: &AuthoritativeGrantPolicy,
-    ) -> Result<VerifiedStandaloneGrant<'a>, GrantUseError> {
-        validate_bound_request(binding, request)?;
-        validate_policy_binding(binding, policy).map_err(|_| GrantUseError::BindingMismatch)?;
-        let issued = self.issuer.verify_issued_claims(&request.body().grant)?;
-        validate_policy(&request.body().grant, &issued, policy)?;
-        validate_request(request.body())?;
-        check_request(request)?;
-        if monotonic_millis() >= issued.valid_until() { return Err(GrantUseError::Expired); }
-        Ok(issued)
-    }
-
-    fn revalidate_after_operation(
-        &mut self,
-        request: &AdmittedProviderRequest,
-        before_expiry: MonotonicMillis,
-    ) -> Result<(), GrantUseError> {
-        // Fresh UTC may shorten this turn's deadline, never lengthen the
-        // expiry supplied before the callback, even below the original TTL.
-        let issued = self.issuer.verify_issued_claims(&request.body().grant)?;
-        let now = monotonic_millis();
-        if now >= before_expiry.min(issued.valid_until()) { return Err(GrantUseError::Expired); }
-        if now < request.guard().admitted_at() || request.guard().is_expired(now)
-            || (request.next_event_sequence().is_some() && request.guard().is_cancelled())
-        {
-            return Err(GrantUseError::RequestInactive);
-        }
-        Ok(())
+        self.issuer
+            .with_locked_recipe_grant(binding, request, policy, operation)
     }
 }
 
@@ -171,8 +229,10 @@ fn validate_bound_request(
 
 fn check_request(request: &AdmittedProviderRequest) -> Result<(), GrantUseError> {
     let now = monotonic_millis();
-    if request.next_event_sequence().is_none() || request.guard().is_cancelled()
-        || now < request.guard().admitted_at() || request.guard().is_expired(now)
+    if request.next_event_sequence().is_none()
+        || request.guard().is_cancelled()
+        || now < request.guard().admitted_at()
+        || request.guard().is_expired(now)
     {
         return Err(GrantUseError::RequestInactive);
     }
@@ -185,7 +245,8 @@ fn validate_policy(
     policy: &AuthoritativeGrantPolicy,
 ) -> Result<(), GrantUseError> {
     let template = issued.template();
-    if policy.binding_generation == 0 || policy.policy_generation == 0
+    if policy.binding_generation == 0
+        || policy.policy_generation == 0
         || policy.revocation_generation == 0
         || policy.allowed_membership_ids.is_empty()
         || policy.allowed_access_partitions.is_empty()
@@ -193,7 +254,9 @@ fn validate_policy(
         || policy.permitted_recipe_families.is_empty()
         || policy.allowed_budget_classes.is_empty()
         || (policy.reference_portfolio_revision.is_none()
-            && policy.allowed_corpus_or_portfolio_ids.iter()
+            && policy
+                .allowed_corpus_or_portfolio_ids
+                .iter()
                 .any(|id| matches!(id, CorpusOrPortfolioId::Portfolio(_))))
         || template.binding_generation != policy.binding_generation
         || template.policy_generation != policy.policy_generation
@@ -203,7 +266,8 @@ fn validate_policy(
         || claims.client_scope_ref != policy.client_scope_ref
         || claims.scope_domain_id != policy.scope_domain_id
         || claims.revocation_generation != policy.revocation_generation
-        || issued.effective_ttl_ms() == 0 || issued.effective_ttl_ms() > policy.maximum_ttl_ms
+        || issued.effective_ttl_ms() == 0
+        || issued.effective_ttl_ms() > policy.maximum_ttl_ms
         || (policy.exact_scan_permission && !policy.source_read_permission)
         || (claims.exact_scan_permission && !claims.source_read_permission)
     {
@@ -214,10 +278,14 @@ fn validate_policy(
     macro_rules! subset {
         ($field:ident) => { claims.$field.iter().all(|item| policy.$field.contains(item)) };
     }
-    if !subset!(allowed_membership_ids) || !subset!(allowed_corpus_or_portfolio_ids)
-        || !subset!(allowed_access_partitions) || !subset!(allowed_modalities)
+    if !subset!(allowed_membership_ids)
+        || !subset!(allowed_corpus_or_portfolio_ids)
+        || !subset!(allowed_access_partitions)
+        || !subset!(allowed_modalities)
         || !subset!(permitted_recipe_families)
-        || !policy.allowed_budget_classes.contains(&claims.maximum_budget_class)
+        || !policy
+            .allowed_budget_classes
+            .contains(&claims.maximum_budget_class)
         || claims.sensitivity_ceiling > policy.sensitivity_ceiling
         || claims.disclosure_ceiling > policy.disclosure_ceiling
         || (claims.source_read_permission && !policy.source_read_permission)
@@ -242,13 +310,18 @@ fn validate_request(body: &RequestBody) -> Result<(), GrantUseError> {
     match &request.requested_scope {
         RequestedScope::ExplicitMemberships(memberships) => {
             if memberships.is_empty()
-                || !memberships.iter().all(|id| claims.allowed_membership_ids.contains(id))
+                || !memberships
+                    .iter()
+                    .all(|id| claims.allowed_membership_ids.contains(id))
             {
                 return Err(GrantUseError::RequestDenied);
             }
         }
         RequestedScope::Corpus(id) => {
-            if !claims.allowed_corpus_or_portfolio_ids.contains(&CorpusOrPortfolioId::Corpus(*id)) {
+            if !claims
+                .allowed_corpus_or_portfolio_ids
+                .contains(&CorpusOrPortfolioId::Corpus(*id))
+            {
                 return Err(GrantUseError::RequestDenied);
             }
         }
@@ -258,14 +331,18 @@ fn validate_request(body: &RequestBody) -> Result<(), GrantUseError> {
         RequestedScope::ActiveWorkspace(_) | RequestedScope::SourceHandle(_) => {}
     }
     match &request.body {
-        RecipeBodyV1::CompareImplementations(value) => validate_portfolio(claims, &value.references)?,
+        RecipeBodyV1::CompareImplementations(value) => {
+            validate_portfolio(claims, &value.references)?;
+        }
         RecipeBodyV1::CompileExactScan { .. } | RecipeBodyV1::ExecuteExactScan(_) => {
             if !claims.source_read_permission || !claims.exact_scan_permission {
                 return Err(GrantUseError::RequestDenied);
             }
         }
         RecipeBodyV1::ExpandHandle(value) if value.expansion == HandleExpansionKind::Excerpt => {
-            if !claims.source_read_permission { return Err(GrantUseError::RequestDenied); }
+            if !claims.source_read_permission {
+                return Err(GrantUseError::RequestDenied);
+            }
         }
         _ => {}
     }
@@ -277,7 +354,8 @@ fn validate_portfolio(
     scope: &ReferencePortfolioScope,
 ) -> Result<(), GrantUseError> {
     if claims.reference_portfolio_revision != Some(scope.portfolio_revision)
-        || !claims.allowed_corpus_or_portfolio_ids
+        || !claims
+            .allowed_corpus_or_portfolio_ids
             .contains(&CorpusOrPortfolioId::Portfolio(scope.portfolio_id))
     {
         return Err(GrantUseError::RequestDenied);

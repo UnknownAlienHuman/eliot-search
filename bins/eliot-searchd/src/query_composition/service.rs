@@ -3,7 +3,7 @@
 //! Construction consumes the recipe registry after capability projection. The
 //! descriptor and dispatch table therefore cannot diverge through a later handler
 //! insertion/removal. Attachment consumes one opened native connection for the
-//! exact same paired binding and always installs the session grant authority.
+//! exact same paired binding and always installs the original issuer ledger.
 
 use std::task::Poll;
 
@@ -15,8 +15,7 @@ use super::registry::{
 };
 use crate::access_composition::{
     BoundedStandaloneGrantIssuer, GrantValidationClock, NativeBindingPin,
-    SessionBoundGrantAuthority, StandaloneGrantPolicySource, StandaloneGrantRecipeHost,
-    StandaloneOpenedConnection, StandaloneServingConnection,
+    StandaloneGrantRecipeHost, StandaloneOpenedConnection, StandaloneServingConnection,
 };
 use crate::provider_composition::{CanonicalServingError, CanonicalServingLimits};
 use crate::query_serving_composition::{
@@ -57,21 +56,20 @@ where
         })
     }
 
-    /// Attach the coherent host/descriptor pair and the original issuer ledger
-    /// to the exact opened session.
+    /// Attach the coherent host/descriptor pair and original issuer ledger to
+    /// the exact opened session.
     ///
     /// A binding ID/incarnation match is insufficient: the complete authenticated
     /// `BindingContext`, including its verified pairing ceremony, must be equal.
-    /// Mismatch drops the opened connection and publishes nothing. The opened
-    /// connection exposes no direct ungranted serving path.
-    pub(crate) fn into_serving<'a, P, E, T>(
+    /// Mismatch drops the opened connection and publishes nothing. Durable policy
+    /// sources remain operation-scoped and are not embedded in the serving value.
+    pub(crate) fn into_serving<'a, E, T>(
         self,
         opened: StandaloneOpenedConnection<'a>,
-        authority: SessionBoundGrantAuthority<P, BoundedStandaloneGrantIssuer<E, T>>,
+        issuer: BoundedStandaloneGrantIssuer<E, T>,
         limits: CanonicalServingLimits,
-    ) -> Result<CanonicalRegisteredServingConnection<'a, P, E, T, O>, CanonicalServingError>
+    ) -> Result<CanonicalRegisteredServingConnection<'a, E, T, O>, CanonicalServingError>
     where
-        P: StandaloneGrantPolicySource,
         T: GrantValidationClock,
     {
         let pin = opened.pin();
@@ -81,7 +79,7 @@ where
         {
             return Err(CanonicalServingError::InvalidConfiguration);
         }
-        let connection = opened.into_standalone_serving(self.host, authority, limits)?;
+        let connection = opened.into_standalone_serving(self.host, issuer, limits)?;
         Ok(CanonicalRegisteredServingConnection {
             connection,
             capability: self.capability,
@@ -95,16 +93,14 @@ where
 /// original standalone issuer ledger while the connection serves. Endpoint and
 /// readiness owners may borrow it for publication, but request work and cleanup
 /// remain owned by the same connection value.
-pub(crate) struct CanonicalRegisteredServingConnection<'a, P, E, T, O>
+pub(crate) struct CanonicalRegisteredServingConnection<'a, E, T, O>
 where
-    P: StandaloneGrantPolicySource,
     T: GrantValidationClock,
     O: CanonicalQueryAuthorityOwner,
 {
     connection: StandaloneServingConnection<
         'a,
         StandaloneGrantRecipeHost<
-            P,
             E,
             T,
             CanonicalQueryHost<O, CanonicalRecipeRegistry>,
@@ -113,9 +109,8 @@ where
     capability: SearchProviderCapabilityDescriptor,
 }
 
-impl<'a, P, E, T, O> CanonicalRegisteredServingConnection<'a, P, E, T, O>
+impl<'a, E, T, O> CanonicalRegisteredServingConnection<'a, E, T, O>
 where
-    P: StandaloneGrantPolicySource,
     T: GrantValidationClock,
     O: CanonicalQueryAuthorityOwner,
 {
