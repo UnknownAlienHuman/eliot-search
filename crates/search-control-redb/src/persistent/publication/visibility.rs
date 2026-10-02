@@ -19,9 +19,10 @@ pub use succession::PublicationSuccessor;
 #[cfg(test)]
 mod tests;
 
-/// Explicit schema for durable visibility, receipt and manifest/shadow bindings.
-/// Schema 1/2 is not upgraded. Older implementations reject this version.
-pub const PUBLICATION_VISIBILITY_SCHEMA_VERSION: u32 = 3;
+/// Unified current schema for durable visibility, receipt, manifest/shadow
+/// bindings and provider authority. Schemas 1-3 require explicit verified
+/// migration and are never reinterpreted as this layout.
+pub const PUBLICATION_VISIBILITY_SCHEMA_VERSION: u32 = 4;
 const STATE: &[u8] = b"collection_route/visibility/v1";
 const RECEIPTS: &[u8] = b"publication_receipts/visible/v1/";
 const MANIFESTS: &[u8] = b"projection_memberships/manifest/v1/";
@@ -217,7 +218,7 @@ impl VisibleEpochCommit {
 
 impl PersistentControlJournal {
     /// Atomically records a new route at epoch zero with explicitly supplied guards.
-    /// This is for a newly initialized schema-3 journal, not restore or migration.
+    /// This is for a newly initialized schema-4 journal, not restore or migration.
     ///
     /// # Errors
     /// Existing state/data/intent, wrong owner or nonzero initial visibility is refused.
