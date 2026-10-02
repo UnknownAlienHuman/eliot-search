@@ -1,6 +1,6 @@
 # Function contract — `search-publication`
 
-**Status:** W3/P07 linearizable state-machine contract; no storage implementation yet.
+**Status:** W3/P07 pure linearizable state machine aligned to typed S9.5/S11 manifests; storage and daemon composition remain pending.
 
 At most one publication transaction is active globally. Prepared work may run concurrently, but a later
 epoch cannot enter staging while an earlier intent is unresolved.
@@ -9,8 +9,9 @@ epoch cannot enter staging while an earlier intent is unresolved.
 
 ### `submit(prepared, ports, context) -> Result<PublicationReceipt, PublicationError>`
 
-Validates owner/source/membership/access/shadow/purge/profile guards and the exact immutable projection
-manifest before reserving the next epoch.
+Validates the bounded frozen manifest body against every typed S11 entry, recomputes the planner-owned
+manifest digest, verifies owner/source/membership/access/shadow/purge/profile guards and only then
+reserves the next epoch. Invalid body/digest pairs consume neither the epoch nor the single-flight slot.
 
 ### `persist_intent(prepared, next_epoch, control, mutation) -> Result<PublicationIntent, PublicationError>`
 
