@@ -1,4 +1,4 @@
-//! Private vendor codec split by status, payload, vector and point ownership.
+// Private vendor codec split by status, payload, vector and point ownership.
 
 include!("codec/status.rs");
 include!("codec/payload.rs");

@@ -15,7 +15,7 @@ use super::super::super::fixtures::{
 use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
-pub(super) async fn probe_ingest_batch_a(
+pub(in crate::live) async fn probe_ingest_batch_a(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     let mut uuid_payload = HashMap::new();

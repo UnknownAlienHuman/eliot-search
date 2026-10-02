@@ -1,7 +1,7 @@
 /// Maps a vendor failure on a read path (no commit is possible) to a stable
 /// typed error. Status numbers are gRPC canonical codes; status text never
 /// crosses into errors.
-fn map_read_error(error: qdrant_client::QdrantError) -> BridgeError {
+pub(super) fn map_read_error(error: qdrant_client::QdrantError) -> BridgeError {
     match error {
         qdrant_client::QdrantError::ResponseError { status }
         | qdrant_client::QdrantError::ResourceExhaustedError { status, .. } => {
@@ -16,7 +16,7 @@ fn map_read_error(error: qdrant_client::QdrantError) -> BridgeError {
     }
 }
 
-const fn map_read_status(code: i32) -> BridgeError {
+pub(super) const fn map_read_status(code: i32) -> BridgeError {
     match code {
         CODE_NOT_FOUND => BridgeError::CollectionNotFound,
         CODE_ALREADY_EXISTS => BridgeError::CollectionAlreadyExists,

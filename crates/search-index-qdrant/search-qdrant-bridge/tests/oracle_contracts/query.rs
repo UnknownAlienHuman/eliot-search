@@ -11,8 +11,9 @@ fn public_query_matches_full_sort_with_ties_and_negative_scores() {
         .map(|point| CandidateNomination {
             point_id: point.point_id,
             score: point.vectors[VECTOR].values[0].1,
-            payload_digest: point.payload.payload_digest,
-            identity_digest: point.payload.identity_digest,
+            point_identity_digest_256: point
+                .payload
+                .point_identity_digest_256,
         })
         .collect();
     expected.sort_by(|left, right| {
@@ -50,9 +51,11 @@ fn access_and_epoch_exclusions_happen_before_scoring() {
     let (mut bridge, route) = bridge(1);
     // Every excluded point would overflow if scoring happened before filtering.
     let mut partition = point(2, f32::MAX);
-    partition.payload.access_partition_digest = digest(99);
+    partition.payload.access_partition_id =
+        AccessPartitionId::from_bytes([99; 16]);
     let mut membership = point(3, f32::MAX);
-    membership.payload.source_membership_id = opaque("denied");
+    membership.payload.projection_membership_id =
+        ProjectionMembershipId::from_bytes([99; 16]);
     let mut future = point(4, f32::MAX);
     future.payload.valid_from_epoch = epoch(43);
     let mut expired = point(5, f32::MAX);

@@ -29,12 +29,8 @@ async fn t24_live_t20_parity_denied_cannot_move_permitted() {
             .expect("permitted ingest");
 
         let permitted_filter = permitted_filter();
-        let (
-            base_count,
-            scoped_t0_before,
-            scoped_t1_before,
-            global_t0_before,
-        ) = permitted_snapshot(&plane, &route, &permitted_filter, &context).await;
+        let (base_count, scoped_t0_before, scoped_t1_before) =
+            permitted_snapshot(&plane, &route, &permitted_filter, &context).await;
         assert_eq!(base_count, 3);
         assert_eq!(scoped_t0_before.len(), 2);
         assert!(scoped_t0_before.iter().all(|hit| hit.score.is_finite()));
@@ -48,7 +44,9 @@ async fn t24_live_t20_parity_denied_cannot_move_permitted() {
         );
 
         // Six denied documents share term 0 but differ by both partition and
-        // membership. A permitted contract cannot name them.
+        // projection membership. If query_filtered ever omits or substitutes
+        // its mandatory IDF corpus, this population changes the permitted
+        // scores and the before/after equality below fails.
         let denied: Vec<PointRecord> = (10..=15).map(denied_point).collect();
         plane
             .upsert_exact(
@@ -66,12 +64,8 @@ async fn t24_live_t20_parity_denied_cannot_move_permitted() {
             .expect("denied count");
         assert_eq!(denied_count.count, 6);
 
-        let (
-            after_count,
-            scoped_t0_after,
-            scoped_t1_after,
-            global_t0_after,
-        ) = permitted_snapshot(&plane, &route, &permitted_filter, &context).await;
+        let (after_count, scoped_t0_after, scoped_t1_after) =
+            permitted_snapshot(&plane, &route, &permitted_filter, &context).await;
         assert_eq!(
             after_count, base_count,
             "denied docs cannot move permitted counts"
@@ -92,18 +86,6 @@ async fn t24_live_t20_parity_denied_cannot_move_permitted() {
                 hit.point_id
             );
         }
-
-        // Without corpus scope, denied population must move global IDF. This
-        // proves the fixture has discrimination power and scoped IDF provides
-        // the isolation.
-        assert_ne!(
-            global_t0_after, global_t0_before,
-            "global IDF must observe the denied population (test power)"
-        );
-        assert_ne!(
-            global_t0_after, scoped_t0_after,
-            "scoped corpus must differ from contaminated global IDF"
-        );
     })
     .await;
     outcome.expect("T20 parity suite finishes before the 240s budget");

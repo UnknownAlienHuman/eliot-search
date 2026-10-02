@@ -25,19 +25,59 @@ pub(crate) fn mutation(tag: &str, byte: u8) -> BridgeMutation {
     }
 }
 
+pub(crate) const fn collection_generation() -> CollectionGenerationId {
+    CollectionGenerationId::from_bytes([1; 16])
+}
+
+pub(crate) const fn access_partition() -> AccessPartitionId {
+    AccessPartitionId::from_bytes([0x41; 16])
+}
+
+pub(crate) const fn scoring_partition() -> ScoringPartitionId {
+    ScoringPartitionId::from_bytes([0x51; 16])
+}
+
+pub(crate) const fn projection_membership() -> ProjectionMembershipId {
+    ProjectionMembershipId::from_bytes([0x31; 16])
+}
+
+fn profile_set() -> ProjectionProfileSetId {
+    ProjectionProfileSetId::new("oracle-profile-set-v1")
+        .expect("projection profile set")
+}
+
 pub(crate) fn point(byte: u8, weight: f32) -> PointRecord {
     PointRecord {
         point_id: id(byte),
         payload: PointPayload {
-            source_membership_id: opaque("member"),
-            projection_membership_id: opaque("projection"),
-            access_partition_digest: digest(1),
-            source_revision: 1,
-            unit_ordinal: u64::from(byte),
+            installation_incarnation_id:
+                InstallationIncarnationId::from_bytes([0x11; 16]),
+            collection_generation_id: collection_generation(),
+            projection_membership_id: projection_membership(),
+            access_partition_id: access_partition(),
+            scoring_partition_id: scoring_partition(),
+            source_id: SourceId::from_bytes([0x61; 16]),
+            source_revision_id: SourceRevisionId::from_bytes([byte; 16]),
+            representation_id: RepresentationId::from_bytes([
+                byte.wrapping_add(1);
+                16
+            ]),
+            unit_id: UnitId::from_bytes([byte; 16]),
+            point_identity_digest_256: digest(byte),
+            scoring_document_id: ScoringDocumentId::from_bytes([
+                byte.wrapping_add(2);
+                16
+            ]),
+            projection_profile_set_id: profile_set(),
+            unit_kind: UnitKind::File,
+            modality: Modality::Code,
+            language_or_format: ProfileId::new("rust-v1")
+                .expect("language profile"),
+            entity_kind: None,
+            normalized_symbol_key: None,
+            repository_lineage_id: None,
             valid_from_epoch: epoch(10),
             valid_until_epoch_exclusive: None,
-            payload_digest: digest(byte),
-            identity_digest: digest(byte),
         },
         vectors: BTreeMap::from([(
             VECTOR.to_owned(),
@@ -45,7 +85,6 @@ pub(crate) fn point(byte: u8, weight: f32) -> PointRecord {
                 dimensions: 8,
                 sparse: true,
                 values: vec![(0, weight)],
-                digest: digest(byte),
             },
         )]),
     }
@@ -53,8 +92,15 @@ pub(crate) fn point(byte: u8, weight: f32) -> PointRecord {
 
 pub(crate) fn filter() -> EligibilityFilter {
     EligibilityFilter {
-        access_partition_digest: digest(1),
-        allowed_source_memberships: BTreeSet::from([opaque("member")]),
+        installation_incarnation_id:
+            InstallationIncarnationId::from_bytes([0x11; 16]),
+        collection_generation_id: collection_generation(),
+        allowed_projection_memberships: BTreeSet::from([
+            projection_membership(),
+        ]),
+        access_partition_id: access_partition(),
+        scoring_partition_id: scoring_partition(),
+        projection_profile_set_id: profile_set(),
         visible_epoch: epoch(42),
     }
 }

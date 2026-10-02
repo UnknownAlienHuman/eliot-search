@@ -79,7 +79,7 @@ pub fn free_loopback_ports() -> Result<(u16, u16), LiveError> {
 }
 
 /// Builds the pinned client for one already-qualified loopback endpoint.
-pub(crate) fn connect(endpoint: &LiveEndpoint) -> Result<Qdrant, LiveError> {
+pub(in crate::live) fn connect(endpoint: &LiveEndpoint) -> Result<Qdrant, LiveError> {
     // The client's own compatibility check is warn-only and tolerates ±1
     // minor, so it is skipped: the bridge enforces the exact qualified pair in
     // `probe_server_identity` and `QualifiedGate::admit` instead.

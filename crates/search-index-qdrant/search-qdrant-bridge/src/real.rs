@@ -13,9 +13,8 @@
 //! Single-contract retrieval + IDF (invariant 5): [`RealDataPlane::query_filtered`]
 //! takes one [`EligibilityFilter`](crate::EligibilityFilter) and renders both
 //! the retrieval `filter` and the `idf.corpus` population filter from that
-//! same value. [`IdfScope::Global`] omits the corpus (collection-wide IDF);
-//! [`IdfScope::ScopedToRetrieval`] clones the retrieval filter as the corpus.
-//! A diverged corpus is unrepresentable: there is no second filter argument.
+//! same value. Omitting or substituting the corpus is unrepresentable in the
+//! production bridge API.
 //!
 //! Pre-dispatch versus possible-write failures: validation, cancellation and
 //! connect-time failures are definite typed errors (no commit was possible).
@@ -40,25 +39,29 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
     CollectionInfo, Condition, CountPoints, CreateCollection,
     CreateFieldIndexCollection, DeletePoints, FieldCondition, FieldType,
-    Filter, GetPoints, IdfParams, Match, Modifier, PointId, PointStruct,
-    PointsIdsList, PointsSelector, Query, QueryPoints, Range, RepeatedStrings,
-    ScrollPoints, SearchParams, SetPayloadPoints, SparseVectorConfig,
-    SparseVectorParams, StrictModeConfig, UpdateStatus, UpsertPoints, Value,
-    Vector, VectorInput, Vectors, WriteOrdering, WriteOrderingType, condition,
-    point_id, points_selector, r#match, value, vector_output, vectors,
-    vectors_output,
+    Filter, GetPoints, IdfParams, Match, Modifier, PayloadSchemaType, PointId,
+    PointStruct, PointsIdsList, PointsSelector, Query, QueryPoints, Range,
+    RepeatedStrings, ScrollPoints, SearchParams, SetPayloadPoints,
+    SparseVectorConfig, SparseVectorParams, StrictModeConfig, UpdateCollection,
+    UpdateStatus, UpsertPoints, Value, Vector, VectorInput, Vectors,
+    WriteOrdering, WriteOrderingType, condition, point_id, points_selector,
+    r#match, value, vector_output, vectors, vectors_output,
 };
 use search_contracts::{OpaqueId, ReceiptRef};
 
 use crate::live::LiveEndpoint;
+use crate::mutation::validate_exact_ids;
 use crate::qualified::{
     QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate,
+};
+use crate::query::{
+    ensure_filter_indexes, validate_filter_for_route, validate_query_vector,
 };
 use crate::{
     BoundedPointReadback, BridgeError, BridgeLimits, BridgeMutation,
@@ -113,7 +116,7 @@ impl OpContext {
         }
     }
 
-    /// Finite per-operation deadline.
+    /// Finite total operation budget.
     #[must_use]
     pub const fn deadline(&self) -> Duration {
         self.deadline
@@ -138,16 +141,41 @@ impl Default for OpContext {
     }
 }
 
-/// Which IDF population a filtered query scores with.
+/// One absolute operation budget shared by every phase of a bridge call.
 ///
-/// `Global` omits `idf.corpus` (collection-wide denominators).
-/// `ScopedToRetrieval` sets `idf.corpus` to the exact retrieval filter built
-/// from the same single contract, so denied documents can never move
-/// permitted denominators.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum IdfScope {
-    Global,
-    ScopedToRetrieval,
+/// Constructing a fresh Tokio timeout for each network phase would multiply a
+/// caller's deadline. This owner converts the public relative budget into one
+/// monotonic start point and returns only the remaining duration.
+#[derive(Clone, Debug)]
+struct OperationBudget {
+    started: Instant,
+    total: Duration,
+}
+
+impl OperationBudget {
+    fn begin(context: &OpContext) -> Result<Self, BridgeError> {
+        context.check()?;
+        Ok(Self {
+            started: Instant::now(),
+            total: context.deadline(),
+        })
+    }
+
+    fn remaining(&self, context: &OpContext) -> Result<Duration, BridgeError> {
+        context.check()?;
+        self.total
+            .checked_sub(self.started.elapsed())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or(BridgeError::DeadlineExceeded)
+    }
+
+    fn remaining_after_dispatch(
+        &self,
+        context: &OpContext,
+    ) -> Result<Duration, BridgeError> {
+        self.remaining(context)
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)
+    }
 }
 
 /// One bounded scroll page with an opaque continuation offset.

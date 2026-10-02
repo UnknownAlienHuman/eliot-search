@@ -8,9 +8,9 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct CollectionState {
-    pub(crate) schema: CollectionSchema,
-    pub(crate) points: BTreeMap<QdrantPointId, PointRecord>,
+pub struct CollectionState {
+    pub schema: CollectionSchema,
+    pub points: BTreeMap<QdrantPointId, PointRecord>,
 }
 
 impl QdrantBridge {
