@@ -10,9 +10,9 @@ use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
 use search_contracts::{
-    BindingId, Blake3Digest32, HelloBody, InstallationIncarnationId, MessageKind,
-    OpaqueRef, ProtocolRange, ProtocolVersion, ProviderBodyV1, ProviderEnvelope,
-    protocol::PeerRole,
+    BindingId, Blake3Digest32, HelloBody, InstallationId,
+    InstallationIncarnationId, MessageKind, OpaqueRef, ProtocolRange,
+    ProtocolVersion, ProviderBodyV1, ProviderEnvelope, protocol::PeerRole,
 };
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
@@ -44,6 +44,7 @@ const BINDING_ROLE: &[u8] = b"standalone-local-client";
 /// native credential before opening the typed session.
 #[derive(Clone)]
 pub struct NativeClientBinding {
+    trusted_installation_id: Option<InstallationId>,
     installation_incarnation_id: InstallationIncarnationId,
     binding_id: BindingId,
     pairing_proof_ref: OpaqueRef,
@@ -52,11 +53,52 @@ pub struct NativeClientBinding {
 }
 
 impl NativeClientBinding {
-    /// Construct one standalone-client binding offer.
+    /// Construct one compatibility binding offer without an independently
+    /// trusted installation identity.
     ///
-    /// The current typed codec implements protocol 1.0 exactly; any wider,
-    /// narrower or different range is rejected before transport or credential use.
+    /// Canonical registration resolvers use the crate-private trusted
+    /// constructor. The current typed codec implements protocol 1.0 exactly;
+    /// any wider, narrower or different range is rejected before transport or
+    /// credential use.
     pub fn new(
+        installation_incarnation_id: InstallationIncarnationId,
+        binding_id: BindingId,
+        pairing_proof_ref: OpaqueRef,
+        supported_protocol_range: ProtocolRange,
+        requested_capability_digest: Option<Blake3Digest32>,
+    ) -> Result<Self, TypedClientError> {
+        Self::new_inner(
+            None,
+            installation_incarnation_id,
+            binding_id,
+            pairing_proof_ref,
+            supported_protocol_range,
+            requested_capability_digest,
+        )
+    }
+
+    /// Construct one binding from independently trusted installation
+    /// registration coordinates.
+    pub(crate) fn new_trusted(
+        installation_id: InstallationId,
+        installation_incarnation_id: InstallationIncarnationId,
+        binding_id: BindingId,
+        pairing_proof_ref: OpaqueRef,
+        supported_protocol_range: ProtocolRange,
+        requested_capability_digest: Option<Blake3Digest32>,
+    ) -> Result<Self, TypedClientError> {
+        Self::new_inner(
+            Some(installation_id),
+            installation_incarnation_id,
+            binding_id,
+            pairing_proof_ref,
+            supported_protocol_range,
+            requested_capability_digest,
+        )
+    }
+
+    fn new_inner(
+        trusted_installation_id: Option<InstallationId>,
         installation_incarnation_id: InstallationIncarnationId,
         binding_id: BindingId,
         pairing_proof_ref: OpaqueRef,
@@ -74,12 +116,20 @@ impl NativeClientBinding {
             return Err(ProtocolError::NoCompatibleVersion.into());
         }
         Ok(Self {
+            trusted_installation_id,
             installation_incarnation_id,
             binding_id,
             pairing_proof_ref,
             supported_protocol_range,
             requested_capability_digest,
         })
+    }
+
+    /// Independently trusted installation identity, when supplied by the
+    /// canonical registration owner rather than peer-controlled data.
+    #[must_use]
+    pub(crate) const fn trusted_installation_id(&self) -> Option<InstallationId> {
+        self.trusted_installation_id
     }
 
     /// Installation incarnation expected from the registered daemon.
@@ -103,6 +153,10 @@ impl fmt::Debug for NativeClientBinding {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("NativeClientBinding")
+            .field(
+                "trusted_installation_id",
+                &self.trusted_installation_id.is_some(),
+            )
             .field(
                 "installation_incarnation_id",
                 &self.installation_incarnation_id,
@@ -218,7 +272,7 @@ impl TypedProviderSession {
             context,
             budget,
         )?;
-        Self::from_paired_socket(
+        let mut session = Self::from_paired_socket(
             socket,
             binding_context,
             ceremony,
@@ -226,7 +280,11 @@ impl TypedProviderSession {
             server_nonce,
             limits,
             budget,
-        )
+        )?;
+        if let Some(installation_id) = binding.trusted_installation_id() {
+            session.bind_trusted_installation_id(installation_id)?;
+        }
+        Ok(session)
     }
 }
 
