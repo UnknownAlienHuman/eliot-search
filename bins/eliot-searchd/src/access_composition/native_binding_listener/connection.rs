@@ -8,7 +8,11 @@ use crate::provider_composition::{
     CanonicalServingOwner, CanonicalTcpConnection,
 };
 
-use super::super::{NativeBindingPin, StandaloneProcessOwner};
+use super::super::{
+    BoundedStandaloneGrantIssuer, GrantValidationClock, NativeBindingPin,
+    SessionBoundGrantAuthority, StandaloneGrantPolicySource, StandaloneGrantRecipeHost,
+    StandaloneProcessOwner,
+};
 
 /// One opened typed transport whose lifetime is bounded by the process owner.
 /// Fields are private: the transport cannot be detached or stored independently.
@@ -23,18 +27,34 @@ impl<'a> StandaloneOpenedConnection<'a> {
     #[must_use]
     pub const fn pin(&self) -> &NativeBindingPin { &self.pin }
 
-    /// Transfer this connection into the canonical bounded serving owner while
-    /// preserving its borrow of process/root lifetime.
-    pub fn into_serving<H: CanonicalRecipeHost>(
+    /// Transfer this connection into the canonical bounded standalone serving
+    /// owner while preserving its borrow of process/root lifetime.
+    ///
+    /// The query host is always wrapped by the original session-bound grant
+    /// authority. No direct ungranted serving constructor is exposed from this
+    /// opened native connection, so startup cannot accidentally bypass the
+    /// issuer ledger or current durable policy checks.
+    pub fn into_standalone_serving<P, E, T, H>(
         mut self,
         host: H,
+        authority: SessionBoundGrantAuthority<P, BoundedStandaloneGrantIssuer<E, T>>,
         limits: CanonicalServingLimits,
-    ) -> Result<StandaloneServingConnection<'a, H>, CanonicalServingError> {
+    ) -> Result<
+        StandaloneServingConnection<'a, StandaloneGrantRecipeHost<P, E, T, H>>,
+        CanonicalServingError,
+    >
+    where
+        P: StandaloneGrantPolicySource,
+        T: GrantValidationClock,
+        H: CanonicalRecipeHost,
+    {
         let transport = self
             .transport
             .take()
             .ok_or(CanonicalServingError::Closed)?;
-        let serving = CanonicalServingOwner::new(transport, host, limits)?;
+        let serving = CanonicalServingOwner::<
+            StandaloneGrantRecipeHost<P, E, T, H>,
+        >::new_standalone(transport, host, authority, limits)?;
         Ok(StandaloneServingConnection {
             serving,
             pin: self.pin,

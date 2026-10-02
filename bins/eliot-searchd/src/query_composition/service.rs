@@ -3,7 +3,7 @@
 //! Construction consumes the recipe registry after capability projection. The
 //! descriptor and dispatch table therefore cannot diverge through a later handler
 //! insertion/removal. Attachment consumes one opened native connection for the
-//! exact same paired binding; a service cannot be moved onto another session.
+//! exact same paired binding and always installs the session grant authority.
 
 use std::task::Poll;
 
@@ -14,7 +14,9 @@ use super::registry::{
     CanonicalCapabilityProjectionError, CanonicalRecipeRegistry,
 };
 use crate::access_composition::{
-    NativeBindingPin, StandaloneOpenedConnection, StandaloneServingConnection,
+    BoundedStandaloneGrantIssuer, GrantValidationClock, NativeBindingPin,
+    SessionBoundGrantAuthority, StandaloneGrantPolicySource, StandaloneGrantRecipeHost,
+    StandaloneOpenedConnection, StandaloneServingConnection,
 };
 use crate::provider_composition::{CanonicalServingError, CanonicalServingLimits};
 use crate::query_serving_composition::{
@@ -55,22 +57,23 @@ where
         })
     }
 
-    /// Exact descriptor that may be published for this binding.
-    #[must_use]
-    pub(crate) const fn capability(&self) -> &SearchProviderCapabilityDescriptor {
-        &self.capability
-    }
-
-    /// Attach the coherent host/descriptor pair to the exact opened session.
+    /// Attach the coherent host/descriptor pair and the original issuer ledger
+    /// to the exact opened session.
     ///
     /// A binding ID/incarnation match is insufficient: the complete authenticated
     /// `BindingContext`, including its verified pairing ceremony, must be equal.
-    /// Mismatch drops the opened connection and publishes nothing.
-    pub(crate) fn into_serving<'a>(
+    /// Mismatch drops the opened connection and publishes nothing. The opened
+    /// connection exposes no direct ungranted serving path.
+    pub(crate) fn into_serving<'a, P, E, T>(
         self,
         opened: StandaloneOpenedConnection<'a>,
+        authority: SessionBoundGrantAuthority<P, BoundedStandaloneGrantIssuer<E, T>>,
         limits: CanonicalServingLimits,
-    ) -> Result<CanonicalRegisteredServingConnection<'a, O>, CanonicalServingError> {
+    ) -> Result<CanonicalRegisteredServingConnection<'a, P, E, T, O>, CanonicalServingError>
+    where
+        P: StandaloneGrantPolicySource,
+        T: GrantValidationClock,
+    {
         let pin = opened.pin();
         if pin.binding_context() != self.binding
             || pin.record().binding_id != self.binding.binding_id()
@@ -78,7 +81,7 @@ where
         {
             return Err(CanonicalServingError::InvalidConfiguration);
         }
-        let connection = opened.into_serving(self.host, limits)?;
+        let connection = opened.into_standalone_serving(self.host, authority, limits)?;
         Ok(CanonicalRegisteredServingConnection {
             connection,
             capability: self.capability,
@@ -88,20 +91,32 @@ where
 
 /// Active native query connection retaining its exact published capability.
 ///
-/// The descriptor cannot be detached from the closed handler registry while the
-/// connection serves. Endpoint/readiness owners may borrow it for publication,
-/// but request work and cleanup remain owned by the same connection value.
-pub(crate) struct CanonicalRegisteredServingConnection<'a, O>
+/// The descriptor cannot be detached from the closed handler registry or the
+/// original standalone issuer ledger while the connection serves. Endpoint and
+/// readiness owners may borrow it for publication, but request work and cleanup
+/// remain owned by the same connection value.
+pub(crate) struct CanonicalRegisteredServingConnection<'a, P, E, T, O>
 where
+    P: StandaloneGrantPolicySource,
+    T: GrantValidationClock,
     O: CanonicalQueryAuthorityOwner,
 {
-    connection:
-        StandaloneServingConnection<'a, CanonicalQueryHost<O, CanonicalRecipeRegistry>>,
+    connection: StandaloneServingConnection<
+        'a,
+        StandaloneGrantRecipeHost<
+            P,
+            E,
+            T,
+            CanonicalQueryHost<O, CanonicalRecipeRegistry>,
+        >,
+    >,
     capability: SearchProviderCapabilityDescriptor,
 }
 
-impl<O> CanonicalRegisteredServingConnection<'_, O>
+impl<'a, P, E, T, O> CanonicalRegisteredServingConnection<'a, P, E, T, O>
 where
+    P: StandaloneGrantPolicySource,
+    T: GrantValidationClock,
     O: CanonicalQueryAuthorityOwner,
 {
     /// Exact binding-filtered descriptor backed by this connection's registry.
