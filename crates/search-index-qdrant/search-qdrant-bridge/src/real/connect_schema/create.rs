@@ -16,13 +16,13 @@ const fn map_post_create_error(error: BridgeError) -> BridgeError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PayloadIndexKind {
+pub(super) enum PayloadIndexKind {
     Uuid,
     Keyword,
     Integer,
 }
 
-const fn payload_index_specs() -> [(&'static str, PayloadIndexKind); 19] {
+pub(super) const fn payload_index_specs() -> [(&'static str, PayloadIndexKind); 19] {
     [
         (PointPayload::INSTALLATION_INCARNATION_FIELD, PayloadIndexKind::Uuid),
         (PointPayload::COLLECTION_GENERATION_FIELD, PayloadIndexKind::Uuid),
@@ -54,7 +54,7 @@ const fn vendor_field_type(kind: PayloadIndexKind) -> FieldType {
     }
 }
 
-const fn vendor_schema_type(kind: PayloadIndexKind) -> PayloadSchemaType {
+pub(super) const fn vendor_schema_type(kind: PayloadIndexKind) -> PayloadSchemaType {
     match kind {
         PayloadIndexKind::Uuid => PayloadSchemaType::Uuid,
         PayloadIndexKind::Keyword => PayloadSchemaType::Keyword,

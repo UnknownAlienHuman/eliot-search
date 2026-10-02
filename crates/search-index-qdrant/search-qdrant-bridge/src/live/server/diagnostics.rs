@@ -5,8 +5,9 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 const LOG_TAIL_BYTES: u64 = 1_024;
+const LOG_TAIL_CAPACITY: usize = 1_024;
 
-pub(super) fn read_log_tail(dir: &Path) -> String {
+pub(in crate::live) fn read_log_tail(dir: &Path) -> String {
     let mut combined = String::new();
     for name in ["qdrant-out.log", "qdrant-err.log"] {
         let path = dir.join(name);
@@ -22,7 +23,7 @@ pub(super) fn read_log_tail(dir: &Path) -> String {
         }
         let mut bytes = Vec::with_capacity(
             usize::try_from(metadata.len().saturating_sub(start))
-                .unwrap_or(LOG_TAIL_BYTES as usize),
+                .unwrap_or(LOG_TAIL_CAPACITY),
         );
         if file
             .take(LOG_TAIL_BYTES)

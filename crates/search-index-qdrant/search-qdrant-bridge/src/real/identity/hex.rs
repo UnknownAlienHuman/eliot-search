@@ -1,4 +1,4 @@
-fn hex_from_32(bytes: &[u8; 32]) -> String {
+pub(super) fn hex_from_32(bytes: &[u8; 32]) -> String {
     let mut output = String::with_capacity(64);
     for byte in bytes {
         output.push(char::from_digit(u32::from(byte >> 4), 16).unwrap_or('?'));
@@ -7,7 +7,7 @@ fn hex_from_32(bytes: &[u8; 32]) -> String {
     output
 }
 
-const fn hex_val(byte: u8) -> Option<u8> {
+pub(super) const fn hex_val(byte: u8) -> Option<u8> {
     match byte {
         b'0'..=b'9' => Some(byte - b'0'),
         b'a'..=b'f' => Some(byte - b'a' + 10),
@@ -16,7 +16,8 @@ const fn hex_val(byte: u8) -> Option<u8> {
     }
 }
 
-fn hex_to_32(text: &str) -> Result<[u8; 32], BridgeError> {
+#[cfg(test)]
+pub(super) fn hex_to_32(text: &str) -> Result<[u8; 32], BridgeError> {
     let bytes = text.as_bytes();
     if bytes.len() != 64 {
         return Err(BridgeError::MalformedResponse);

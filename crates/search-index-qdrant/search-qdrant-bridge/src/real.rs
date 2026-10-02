@@ -55,6 +55,10 @@ use qdrant_client::qdrant::{
     r#match, value, vector_output, vectors, vectors_output,
 };
 use search_contracts::{OpaqueId, ReceiptRef};
+use crate::mutation::{same_point_identity, validate_exact_ids};
+use crate::query::{
+    ensure_filter_indexes, validate_filter_for_route, validate_query_vector,
+};
 
 use crate::live::LiveEndpoint;
 use crate::qualified::{
@@ -195,12 +199,21 @@ pub struct ScrollPage {
 }
 
 // Keep vendor translation private and physically separated by responsibility.
-// `include!` preserves the original module namespace and public paths while
-// this no-behavior-change split awaits the dedicated test pass.
-include!("real/identity.rs");
-include!("real/codec.rs");
-include!("real/filter.rs");
-include!("real/errors_schema.rs");
+mod identity;
+pub use identity::{collection_name, validate_collection_name};
+use identity::{bridge_point_id, hex_from_32, vendor_point_id};
+
+mod codec;
+use codec::{
+    decode_payload, decode_point, encode_payload, encode_vectors, int_value,
+    strong_ordering, update_completed,
+};
+mod filter;
+use filter::{base_filter, validate_point};
+mod errors_schema;
+use errors_schema::{
+    map_create_error, map_mutation_error, map_read_error, verify_server_schema,
+};
 
 /// Real Qdrant data plane over the pinned client transport.
 ///
@@ -215,10 +228,11 @@ pub struct RealDataPlane {
     operations: BTreeMap<OpaqueId, MutationReceipt>,
 }
 
-include!("real/connect_schema.rs");
+mod connect_schema;
+use connect_schema::{payload_index_specs, vendor_schema_type};
 mod mutations;
-include!("real/queries.rs");
-include!("real/ledger.rs");
+mod queries;
+mod ledger;
 
 mod blocking;
 pub use blocking::BlockingRealQueryPlane;

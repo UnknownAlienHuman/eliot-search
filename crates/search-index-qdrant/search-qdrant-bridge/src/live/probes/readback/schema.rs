@@ -9,7 +9,7 @@ use super::super::super::fixtures::{
 use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
-pub(super) async fn probe_schema_digest(
+pub(in crate::live) async fn probe_schema_digest(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     let info = suite

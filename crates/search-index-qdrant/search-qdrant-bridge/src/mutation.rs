@@ -116,7 +116,7 @@ impl PointPayload {
         Self::VALID_UNTIL_FIELD,
     ];
 
-    pub(crate) fn validate(&self) -> Result<(), BridgeError> {
+    pub(super) fn validate(&self) -> Result<(), BridgeError> {
         if self
             .valid_until_epoch_exclusive
             .is_some_and(|until| until <= self.valid_from_epoch)
@@ -139,7 +139,7 @@ pub struct StoredVector {
 }
 
 impl StoredVector {
-    pub(crate) fn validate(&self, schema: VectorSchema) -> Result<(), BridgeError> {
+    pub(super) fn validate(&self, schema: VectorSchema) -> Result<(), BridgeError> {
         if self.dimensions != schema.dimensions || self.sparse != schema.sparse {
             return Err(BridgeError::VectorDimensionMismatch);
         }
@@ -171,7 +171,7 @@ pub struct PointRecord {
 /// bind every canonical key coordinate that is represented independently in
 /// S9.5. Validity and vector values are excluded because they are mutation
 /// state for that already-proven identity.
-pub(crate) fn same_point_identity(existing: &PointRecord, expected: &PointRecord) -> bool {
+pub fn same_point_identity(existing: &PointRecord, expected: &PointRecord) -> bool {
     existing.point_id == expected.point_id
         && existing.payload.point_identity_digest_256
             == expected.payload.point_identity_digest_256
@@ -204,7 +204,7 @@ pub struct MutationReceipt {
     pub replayed: bool,
 }
 
-pub(crate) fn validate_point(
+pub fn validate_point(
     point: &PointRecord,
     schema: &CollectionSchema,
     limits: BridgeLimits,
@@ -230,7 +230,7 @@ pub(crate) fn validate_point(
     Ok(())
 }
 
-pub(crate) fn validate_exact_ids(
+pub fn validate_exact_ids(
     mut ids: Vec<QdrantPointId>,
     limit: usize,
 ) -> Result<Vec<QdrantPointId>, BridgeError> {

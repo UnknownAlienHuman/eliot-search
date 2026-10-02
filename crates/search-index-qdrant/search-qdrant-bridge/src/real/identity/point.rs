@@ -1,6 +1,6 @@
 /// Provider-neutral 128-bit point ID rendered as a lowercase UUID string for
 /// the vendor transport (the full 128 bits survive the round trip).
-fn uuid_string(id: &QdrantPointId) -> String {
+pub(super) fn uuid_string(id: &QdrantPointId) -> String {
     let mut hex = String::with_capacity(32);
     for byte in id.0 {
         hex.push(char::from_digit(u32::from(byte >> 4), 16).unwrap_or('?'));
@@ -16,7 +16,7 @@ fn uuid_string(id: &QdrantPointId) -> String {
     )
 }
 
-fn parse_uuid(text: &str) -> Result<QdrantPointId, BridgeError> {
+pub(super) fn parse_uuid(text: &str) -> Result<QdrantPointId, BridgeError> {
     let bytes = text.as_bytes();
     if bytes.len() != 36 {
         return Err(BridgeError::MalformedResponse);
@@ -44,13 +44,13 @@ fn parse_uuid(text: &str) -> Result<QdrantPointId, BridgeError> {
     Ok(QdrantPointId(output))
 }
 
-fn vendor_point_id(id: &QdrantPointId) -> PointId {
+pub(super) fn vendor_point_id(id: &QdrantPointId) -> PointId {
     PointId {
         point_id_options: Some(point_id::PointIdOptions::Uuid(uuid_string(id))),
     }
 }
 
-fn bridge_point_id(id: &PointId) -> Result<QdrantPointId, BridgeError> {
+pub(super) fn bridge_point_id(id: &PointId) -> Result<QdrantPointId, BridgeError> {
     match id.point_id_options.as_ref() {
         Some(point_id::PointIdOptions::Num(number)) => {
             let mut bytes = [0_u8; 16];

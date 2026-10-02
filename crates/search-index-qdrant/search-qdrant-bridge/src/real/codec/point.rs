@@ -1,4 +1,4 @@
-fn decode_point(
+pub(super) fn decode_point(
     id: &PointId,
     payload: &HashMap<String, Value>,
     vectors: Option<&qdrant_client::qdrant::VectorsOutput>,

@@ -1,9 +1,11 @@
-use crate::mutation::validate_exact_ids;
-use crate::query::{
-    ensure_filter_indexes, validate_filter, validate_filter_for_route, validate_query_vector,
+use super::{
+    BridgeError, BridgeLimits, CollectionSchema, Condition, EligibilityFilter, FieldCondition,
+    Filter, Match, PointPayload, PointRecord, Range, RepeatedStrings, condition, encode_payload,
+    r#match,
 };
+use crate::query::validate_filter;
 
-fn keyword_condition(key: &str, text: String) -> Condition {
+pub(super) fn keyword_condition(key: &str, text: String) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
             key: key.to_owned(),
@@ -15,7 +17,7 @@ fn keyword_condition(key: &str, text: String) -> Condition {
     }
 }
 
-fn keywords_condition(key: &str, texts: Vec<String>) -> Condition {
+pub(super) fn keywords_condition(key: &str, texts: Vec<String>) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
             key: key.to_owned(),
@@ -29,7 +31,7 @@ fn keywords_condition(key: &str, texts: Vec<String>) -> Condition {
     }
 }
 
-fn range_condition(key: &str, gte: Option<f64>, lte: Option<f64>) -> Condition {
+pub(super) fn range_condition(key: &str, gte: Option<f64>, lte: Option<f64>) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
             key: key.to_owned(),
@@ -48,7 +50,7 @@ fn range_condition(key: &str, gte: Option<f64>, lte: Option<f64>) -> Condition {
 /// Qdrant `Range` bounds travel as doubles; only exactly representable
 /// integers are admitted so a large epoch can never silently truncate into a
 /// wider filter.
-const fn epoch_bound(number: i64) -> Result<f64, BridgeError> {
+pub(super) const fn epoch_bound(number: i64) -> Result<f64, BridgeError> {
     #[allow(clippy::cast_precision_loss)]
     let as_float = number as f64;
     #[allow(clippy::cast_possible_truncation)]
@@ -60,7 +62,7 @@ const fn epoch_bound(number: i64) -> Result<f64, BridgeError> {
 
 /// Canonical S10.3 base eligibility plan: the one closed filter value shared
 /// verbatim by retrieval and the IDF corpus.
-fn base_filter(filter: &EligibilityFilter) -> Result<Filter, BridgeError> {
+pub(super) fn base_filter(filter: &EligibilityFilter) -> Result<Filter, BridgeError> {
     validate_filter(filter)?;
     let projection_memberships = filter
         .allowed_projection_memberships
@@ -105,7 +107,7 @@ fn base_filter(filter: &EligibilityFilter) -> Result<Filter, BridgeError> {
     })
 }
 
-fn validate_point(
+pub(super) fn validate_point(
     point: &PointRecord,
     schema: &CollectionSchema,
     limits: BridgeLimits,

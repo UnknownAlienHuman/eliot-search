@@ -44,7 +44,7 @@ impl EligibilityFilter {
         PointPayload::VALID_UNTIL_FIELD,
     ];
 
-    pub(crate) fn matches(&self, payload: &PointPayload) -> bool {
+    pub(super) fn matches(&self, payload: &PointPayload) -> bool {
         payload.installation_incarnation_id == self.installation_incarnation_id
             && payload.collection_generation_id == self.collection_generation_id
             && self
@@ -71,14 +71,14 @@ pub struct CandidateNomination {
     pub point_identity_digest_256: Blake3Digest32,
 }
 
-pub(crate) fn validate_filter(filter: &EligibilityFilter) -> Result<(), BridgeError> {
+pub fn validate_filter(filter: &EligibilityFilter) -> Result<(), BridgeError> {
     if filter.allowed_projection_memberships.is_empty() {
         return Err(BridgeError::InvalidFilter);
     }
     Ok(())
 }
 
-pub(crate) fn validate_filter_for_route(
+pub fn validate_filter_for_route(
     filter: &EligibilityFilter,
     route: &CollectionRoute,
 ) -> Result<(), BridgeError> {
@@ -89,7 +89,7 @@ pub(crate) fn validate_filter_for_route(
     Ok(())
 }
 
-pub(crate) fn ensure_filter_indexes(schema: &CollectionSchema) -> Result<(), BridgeError> {
+pub fn ensure_filter_indexes(schema: &CollectionSchema) -> Result<(), BridgeError> {
     for field in EligibilityFilter::INDEXED_FIELDS {
         if !schema.indexed_payload_fields.contains(field) {
             return Err(BridgeError::UnindexedFilter);
@@ -98,7 +98,7 @@ pub(crate) fn ensure_filter_indexes(schema: &CollectionSchema) -> Result<(), Bri
     Ok(())
 }
 
-pub(crate) fn validate_query_vector(
+pub fn validate_query_vector(
     query: &[(u32, f32)],
     dimensions: u32,
 ) -> Result<(), BridgeError> {

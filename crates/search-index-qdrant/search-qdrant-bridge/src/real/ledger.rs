@@ -1,5 +1,9 @@
+use super::{
+    BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, QdrantPointId, RealDataPlane,
+};
+
 impl RealDataPlane {
-    fn replay(&self, mutation: &BridgeMutation) -> Result<Option<MutationReceipt>, BridgeError> {
+    pub(super) fn replay(&self, mutation: &BridgeMutation) -> Result<Option<MutationReceipt>, BridgeError> {
         let Some(existing) = self.operations.get(&mutation.operation_id) else {
             return Ok(None);
         };
@@ -11,7 +15,7 @@ impl RealDataPlane {
         Ok(Some(replay))
     }
 
-    fn record_mutation(
+    pub(super) fn record_mutation(
         &mut self,
         route: CollectionRoute,
         mutation: BridgeMutation,

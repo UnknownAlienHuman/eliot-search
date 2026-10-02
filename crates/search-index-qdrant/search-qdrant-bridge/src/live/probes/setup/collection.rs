@@ -15,7 +15,7 @@ use super::super::super::fixtures::{
 use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
-pub(super) async fn probe_create_and_topology(
+pub(in crate::live) async fn probe_create_and_topology(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     if suite
@@ -88,7 +88,7 @@ pub(super) async fn probe_create_and_topology(
     Ok(())
 }
 
-pub(super) async fn probe_payload_indexes(
+pub(in crate::live) async fn probe_payload_indexes(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     for (field, field_type) in [

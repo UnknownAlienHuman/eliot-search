@@ -5,46 +5,45 @@ use search_contracts::{
     ScoringPartitionId, SourceId, SourceRevisionId, UnitId, UnitKind,
 };
 
-fn str_value(text: &str) -> Value {
+pub(super) fn str_value(text: &str) -> Value {
     Value {
         kind: Some(value::Kind::StringValue(text.to_owned())),
     }
 }
 
-const fn int_value(number: i64) -> Value {
+pub(super) const fn int_value(number: i64) -> Value {
     Value {
         kind: Some(value::Kind::IntegerValue(number)),
     }
 }
 
-fn get_string(payload: &HashMap<String, Value>, key: &str) -> Result<String, BridgeError> {
+pub(super) fn get_string(payload: &HashMap<String, Value>, key: &str) -> Result<String, BridgeError> {
     match payload.get(key).and_then(|entry| entry.kind.as_ref()) {
         Some(value::Kind::StringValue(text)) => Ok(text.clone()),
         _ => Err(BridgeError::MalformedResponse),
     }
 }
 
-fn get_optional_string(
+pub(super) fn get_optional_string(
     payload: &HashMap<String, Value>,
     key: &str,
 ) -> Result<Option<String>, BridgeError> {
-    match payload.get(key) {
-        None => Ok(None),
-        Some(entry) => match entry.kind.as_ref() {
+    payload.get(key).map_or(Ok(None), |entry| {
+        match entry.kind.as_ref() {
             Some(value::Kind::StringValue(text)) => Ok(Some(text.clone())),
             _ => Err(BridgeError::MalformedResponse),
-        },
-    }
+        }
+    })
 }
 
-fn get_int(payload: &HashMap<String, Value>, key: &str) -> Result<i64, BridgeError> {
+pub(super) fn get_int(payload: &HashMap<String, Value>, key: &str) -> Result<i64, BridgeError> {
     match payload.get(key).and_then(|entry| entry.kind.as_ref()) {
         Some(value::Kind::IntegerValue(number)) => Ok(*number),
         _ => Err(BridgeError::MalformedResponse),
     }
 }
 
-fn ensure_closed_payload(payload: &HashMap<String, Value>) -> Result<(), BridgeError> {
+pub(super) fn ensure_closed_payload(payload: &HashMap<String, Value>) -> Result<(), BridgeError> {
     if payload
         .keys()
         .any(|key| !PointPayload::PAYLOAD_FIELDS.contains(&key.as_str()))
@@ -54,7 +53,7 @@ fn ensure_closed_payload(payload: &HashMap<String, Value>) -> Result<(), BridgeE
     Ok(())
 }
 
-fn encode_payload(point: &PointRecord) -> Result<HashMap<String, Value>, BridgeError> {
+pub(super) fn encode_payload(point: &PointRecord) -> Result<HashMap<String, Value>, BridgeError> {
     let payload = &point.payload;
     payload.validate()?;
     let mut map = HashMap::new();
@@ -149,7 +148,7 @@ fn encode_payload(point: &PointRecord) -> Result<HashMap<String, Value>, BridgeE
     Ok(map)
 }
 
-fn decode_payload(payload: &HashMap<String, Value>) -> Result<PointPayload, BridgeError> {
+pub(super) fn decode_payload(payload: &HashMap<String, Value>) -> Result<PointPayload, BridgeError> {
     ensure_closed_payload(payload)?;
     let decoded = PointPayload {
         installation_incarnation_id: InstallationIncarnationId::parse(&get_string(
@@ -223,7 +222,7 @@ fn decode_payload(payload: &HashMap<String, Value>) -> Result<PointPayload, Brid
             payload,
             PointPayload::NORMALIZED_SYMBOL_FIELD,
         )?
-        .map(|value| BoundedSymbolKey::new(value))
+        .map(BoundedSymbolKey::new)
         .transpose()
         .map_err(|_| BridgeError::MalformedResponse)?,
         repository_lineage_id: get_optional_string(

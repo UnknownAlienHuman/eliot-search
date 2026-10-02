@@ -1,4 +1,4 @@
-fn encode_vectors(point: &PointRecord) -> Vectors {
+pub(super) fn encode_vectors(point: &PointRecord) -> Vectors {
     let mut map = HashMap::new();
     for (name, stored) in &point.vectors {
         let (indices, values): (Vec<u32>, Vec<f32>) =
@@ -12,7 +12,7 @@ fn encode_vectors(point: &PointRecord) -> Vectors {
     }
 }
 
-fn decode_vectors(
+pub(super) fn decode_vectors(
     output: Option<&qdrant_client::qdrant::VectorsOutput>,
     schema: &CollectionSchema,
 ) -> Result<BTreeMap<String, StoredVector>, BridgeError> {

@@ -13,7 +13,7 @@ pub(super) struct TopCandidates {
 }
 
 impl TopCandidates {
-    pub(super) fn new(limit: usize) -> Self {
+    pub(super) const fn new(limit: usize) -> Self {
         Self {
             limit,
             heap: BinaryHeap::new(),

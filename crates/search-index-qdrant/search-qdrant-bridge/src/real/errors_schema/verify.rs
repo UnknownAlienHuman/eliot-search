@@ -1,4 +1,4 @@
-fn verify_server_schema(
+pub(super) fn verify_server_schema(
     info: &CollectionInfo,
     schema: &CollectionSchema,
 ) -> Result<(), BridgeError> {

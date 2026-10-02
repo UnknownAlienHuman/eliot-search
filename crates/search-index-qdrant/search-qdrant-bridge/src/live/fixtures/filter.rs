@@ -12,7 +12,7 @@ use super::spec::{
     VISIBLE_EPOCH, VISIBLE_EPOCH_I64,
 };
 
-pub(super) fn base_eligibility() -> BaseEligibility {
+pub(in crate::live) fn base_eligibility() -> BaseEligibility {
     BaseEligibility {
         access_partition: ACCESS_A.to_owned(),
         tenant: TENANT_A.to_owned(),
@@ -20,7 +20,7 @@ pub(super) fn base_eligibility() -> BaseEligibility {
     }
 }
 
-pub(super) const fn exact_f64(value: i64) -> Result<f64, LiveError> {
+pub(in crate::live) const fn exact_f64(value: i64) -> Result<f64, LiveError> {
     #[allow(clippy::cast_precision_loss)]
     let as_float = value as f64;
     #[allow(clippy::cast_possible_truncation)]
@@ -30,7 +30,7 @@ pub(super) const fn exact_f64(value: i64) -> Result<f64, LiveError> {
     Ok(as_float)
 }
 
-pub(super) fn keyword_condition(key: &str, value: &str) -> Condition {
+pub(in crate::live) fn keyword_condition(key: &str, value: &str) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
             key: key.to_owned(),
@@ -42,7 +42,7 @@ pub(super) fn keyword_condition(key: &str, value: &str) -> Condition {
     }
 }
 
-pub(super) fn range_condition(
+pub(in crate::live) fn range_condition(
     key: &str,
     gte: Option<f64>,
     lte: Option<f64>,
@@ -63,7 +63,7 @@ pub(super) fn range_condition(
 /// Canonical base eligibility plan, shared verbatim by retrieval and the IDF
 /// corpus: tenant A, access partition A, `valid_from <= 42`, with the
 /// open-ended upper bound expressed as `must_not(valid_until <= 42)`.
-pub(super) fn base_filter() -> Result<Filter, LiveError> {
+pub(in crate::live) fn base_filter() -> Result<Filter, LiveError> {
     Ok(Filter {
         must: vec![
             keyword_condition(FIELD_TENANT, TENANT_A),

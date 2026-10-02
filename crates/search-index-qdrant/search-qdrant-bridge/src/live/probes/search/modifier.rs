@@ -5,7 +5,7 @@ use super::super::super::fixtures::UUID_POINT;
 use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
-pub(super) async fn probe_sparse_modifier(
+pub(in crate::live) async fn probe_sparse_modifier(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     let rare = query_tenant_a(suite, 1, true).await?;

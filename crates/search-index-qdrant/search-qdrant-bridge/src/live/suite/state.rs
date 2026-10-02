@@ -11,15 +11,15 @@ use super::super::fixtures::QUALIFICATION_COLLECTION;
 use super::super::LiveError;
 use super::report::LiveSuiteReport;
 
-pub(super) struct Suite {
-    pub(super) client: Qdrant,
-    pub(super) log: Vec<String>,
+pub(in crate::live) struct Suite {
+    pub(in crate::live) client: Qdrant,
+    pub(in crate::live) log: Vec<String>,
     outcomes: Vec<LiveProbeOutcome>,
     failures: usize,
 }
 
 impl Suite {
-    pub(super) fn new(client: Qdrant, start_line: String) -> Self {
+    pub(in crate::live) fn new(client: Qdrant, start_line: String) -> Self {
         Self {
             client,
             log: vec![start_line],
@@ -28,7 +28,7 @@ impl Suite {
         }
     }
 
-    pub(super) fn record(
+    pub(in crate::live) fn record(
         &mut self,
         probe_id: &'static str,
         passed: bool,
@@ -47,7 +47,7 @@ impl Suite {
         });
     }
 
-    pub(super) fn finish(mut self) -> Result<LiveSuiteReport, LiveError> {
+    pub(in crate::live) fn finish(mut self) -> Result<LiveSuiteReport, LiveError> {
         self.log.push(format!(
             "SUITE end failures={} probes={}",
             self.failures,

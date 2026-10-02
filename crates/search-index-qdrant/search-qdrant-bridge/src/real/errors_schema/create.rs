@@ -3,7 +3,7 @@
 /// `MutationOutcomeUnknown`; callers must reconcile the exact server schema
 /// before admitting the collection. Existing collections are never silently
 /// adopted by this mapper.
-fn map_create_error(error: qdrant_client::QdrantError) -> BridgeError {
+pub(super) fn map_create_error(error: qdrant_client::QdrantError) -> BridgeError {
     match error {
         qdrant_client::QdrantError::ResponseError { status }
         | qdrant_client::QdrantError::ResourceExhaustedError { status, .. } => {
