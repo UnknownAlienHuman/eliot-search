@@ -57,6 +57,7 @@ use qdrant_client::qdrant::{
 use search_contracts::{OpaqueId, ReceiptRef};
 
 use crate::live::LiveEndpoint;
+use crate::mutation::{same_point_identity, validate_close_epoch};
 use crate::qualified::{
     QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate,
 };
