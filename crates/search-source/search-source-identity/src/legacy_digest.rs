@@ -123,7 +123,7 @@ pub fn resolve_legacy_digest_identity(
     match matches.len() {
         0 => Ok(LegacyDigestIdentityResolution::CreateNew),
         1 => Ok(LegacyDigestIdentityResolution::MatchExisting {
-            source_id: matches.into_iter().next().expect("one exact match"),
+            source_id: matches.into_iter().next().ok_or(LegacyDigestIdentityError::Conflict)?,
         }),
         _ => Err(LegacyDigestIdentityError::Collision),
     }
@@ -203,7 +203,7 @@ fn decode_digest(value: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut output = [0_u8; 32];
-    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+    for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let high = hex_nibble(pair[0])?;
         let low = hex_nibble(pair[1])?;
         output[index] = (high << 4) | low;
