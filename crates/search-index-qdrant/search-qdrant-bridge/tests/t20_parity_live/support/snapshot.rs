@@ -1,7 +1,11 @@
 use super::*;
 
-/// Permitted-contract snapshot: exact count plus one global and two scoped
-/// queries, exercising retrieval and IDF filters separately and jointly.
+/// Permitted-contract snapshot: exact count plus two scoped queries.
+///
+/// Production retrieval has no collection-wide IDF mode: both queries render
+/// the exact accepted eligibility filter into retrieval and `idf.corpus`.
+/// The separate T22 qualification probe retains the unscoped/scoped
+/// discrimination fixture needed to prove Qdrant's independent corpus support.
 pub(crate) async fn permitted_snapshot(
     plane: &RealDataPlane,
     route: &CollectionRoute,
@@ -9,7 +13,6 @@ pub(crate) async fn permitted_snapshot(
     context: &OpContext,
 ) -> (
     usize,
-    Vec<CandidateNomination>,
     Vec<CandidateNomination>,
     Vec<CandidateNomination>,
 ) {
@@ -42,17 +45,5 @@ pub(crate) async fn permitted_snapshot(
         )
         .await
         .expect("scoped t1");
-    let global_t0 = plane
-        .query_filtered(
-            route,
-            filter,
-            VECTOR_NAME,
-            &[(0, 1.0)],
-            10,
-            IdfScope::Global,
-            context,
-        )
-        .await
-        .expect("global t0");
-    (count, scoped_t0, scoped_t1, global_t0)
+    (count, scoped_t0, scoped_t1)
 }
