@@ -17,7 +17,7 @@ use std::task::Poll;
 use std::time::Duration;
 
 use search_contracts::{
-    ProtocolFailureCode, ProviderEnvelope, RequestBody, RequestId,
+    InstallationId, ProtocolFailureCode, ProviderEnvelope, RequestBody, RequestId,
 };
 use search_provider_protocol::{
     BindingContext, BindingKey, PairingMachine, ProofDigest, ProtocolError,
@@ -211,6 +211,16 @@ impl TypedProviderSession {
         let state = State::new(socket, binding, pairing, key, nonce, limits, session);
         budget.remaining()?;
         Ok(Self { state: Some(state) })
+    }
+
+    /// Bind one independently trusted installation identity before grant issuance.
+    ///
+    /// Rebinding to a different installation fails closed and drops the session.
+    pub(super) fn bind_trusted_installation_id(
+        &mut self,
+        installation_id: InstallationId,
+    ) -> Result<(), TypedClientError> {
+        self.with_state(|state| state.bind_trusted_installation_id(installation_id))
     }
 
     /// Send an existing typed recipe and the exact server-issued grant unchanged.
