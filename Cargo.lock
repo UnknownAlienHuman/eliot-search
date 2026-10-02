@@ -409,6 +409,7 @@ dependencies = [
  "search-source-registry",
  "search-subject-resolver",
  "search-unitizer",
+ "tokio",
  "zeroize",
 ]
 
@@ -1258,6 +1259,7 @@ dependencies = [
 name = "search-point-identity"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
  "search-domain",
 ]
@@ -1273,10 +1275,9 @@ dependencies = [
 name = "search-projection-planner"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
- "search-domain",
  "search-point-identity",
- "search-ports",
 ]
 
 [[package]]
@@ -1294,9 +1295,7 @@ name = "search-publication"
 version = "0.0.0"
 dependencies = [
  "search-contracts",
- "search-domain",
  "search-point-identity",
- "search-ports",
  "search-projection-planner",
 ]
 
