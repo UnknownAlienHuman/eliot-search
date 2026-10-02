@@ -12,7 +12,7 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
             .expect("create");
 
         // Wrong namespace and wrong generation never leak data.
-        let filter = permitted_filter();
+        let filter = permitted_filter(&route);
         assert_wrong_route_rejected(
             &plane,
             &make_route("t24_no_such", 0x31),
@@ -28,10 +28,10 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
         )
         .await;
 
-        // Closed filter language: an empty membership set is invalid before
-        // any network use.
-        let mut empty = permitted_filter();
-        empty.allowed_source_memberships.clear();
+        // Closed filter language: an empty projection-membership set is invalid
+        // before any network use.
+        let mut empty = filter.clone();
+        empty.allowed_projection_memberships.clear();
         assert_eq!(
             plane
                 .count_exact(&route, &empty, &context)
@@ -45,7 +45,7 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
             plane
                 .query_filtered(
                     &route,
-                    &permitted_filter(),
+                    &filter,
                     VECTOR_NAME,
                     &[(0, 1.0)],
                     0,
@@ -60,7 +60,7 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
             plane
                 .query_filtered(
                     &route,
-                    &permitted_filter(),
+                    &filter,
                     VECTOR_NAME,
                     &[(0, 1.0)],
                     limits().max_query_candidates + 1,
@@ -73,7 +73,7 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
         );
         assert_eq!(
             plane
-                .scroll_exact(&route, &permitted_filter(), None, 0, &context)
+                .scroll_exact(&route, &filter, None, 0, &context)
                 .await
                 .expect_err("zero scroll"),
             BridgeError::QueryBudgetExceeded
@@ -81,22 +81,8 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
 
         // Duplicate IDs fail whole-batch validation and commit nothing.
         let duplicate = vec![
-            point(
-                11,
-                0xA1,
-                "t24-member-a",
-                10,
-                None,
-                vec![(0, 1.0)],
-            ),
-            point(
-                11,
-                0xA1,
-                "t24-member-a",
-                10,
-                None,
-                vec![(0, 1.0)],
-            ),
+            point(&route, 11, 10, None, vec![(0, 1.0)]),
+            point(&route, 11, 10, None, vec![(0, 1.0)]),
         ];
         assert_eq!(
             plane
@@ -112,7 +98,7 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
         );
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -123,7 +109,7 @@ async fn t24_real_wrong_route_filter_and_bounds_rejected() {
             plane
                 .upsert_exact(
                     &route,
-                    oversize_batch(),
+                    oversize_batch(&route),
                     mutation("t24-reject-oversize", 0x42),
                     &context,
                 )

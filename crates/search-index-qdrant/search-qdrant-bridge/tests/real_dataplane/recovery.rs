@@ -10,6 +10,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
             .create_collection(&route, &schema(), &context)
             .await
             .expect("create");
+        let filter = permitted_filter(&route);
 
         // Pre-dispatch cancellation is definite and commits nothing.
         let flag = Arc::new(AtomicBool::new(true));
@@ -19,14 +20,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
             plane
                 .upsert_exact(
                     &route,
-                    vec![point(
-                        21,
-                        0xA1,
-                        "t24-member-a",
-                        10,
-                        None,
-                        vec![(0, 1.0)],
-                    )],
+                    vec![point(&route, 21, 10, None, vec![(0, 1.0)])],
                     mutation("t24-recovery-cancel", 0x61),
                     &cancelled,
                 )
@@ -36,7 +30,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         );
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -47,14 +41,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         // so the result is definite and no point may exist afterward.
         let squeezed = OpContext::new(Duration::ZERO);
         let mutation_id = mutation("t24-recovery-unknown", 0x62);
-        let batch = vec![point(
-            22,
-            0xA1,
-            "t24-member-a",
-            10,
-            None,
-            vec![(0, 1.0)],
-        )];
+        let batch = vec![point(&route, 22, 10, None, vec![(0, 1.0)])];
         assert_eq!(
             plane
                 .upsert_exact(
@@ -69,7 +56,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         );
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count after definite timeout")
                 .count,
@@ -84,7 +71,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         assert!(first.affected_ids.contains(&point_id(22)));
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -94,14 +81,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         let again = plane
             .upsert_exact(
                 &route,
-                vec![point(
-                    22,
-                    0xA1,
-                    "t24-member-a",
-                    10,
-                    None,
-                    vec![(0, 1.0)],
-                )],
+                vec![point(&route, 22, 10, None, vec![(0, 1.0)])],
                 mutation("t24-recovery-unknown", 0x62),
                 &context,
             )
@@ -110,7 +90,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         assert!(again.replayed);
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -122,14 +102,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
             plane
                 .upsert_exact(
                     &route,
-                    vec![point(
-                        23,
-                        0xA1,
-                        "t24-member-a",
-                        10,
-                        None,
-                        vec![(1, 1.0)],
-                    )],
+                    vec![point(&route, 23, 10, None, vec![(1, 1.0)])],
                     mutation("t24-recovery-unknown", 0x99),
                     &context,
                 )

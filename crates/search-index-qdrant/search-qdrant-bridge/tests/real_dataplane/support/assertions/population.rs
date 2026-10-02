@@ -36,12 +36,17 @@ pub(crate) async fn assert_wrong_route_rejected(
     filter: &EligibilityFilter,
     context: &OpContext,
 ) {
+    let filtered_error = if wrong.generation == filter.collection_generation_id {
+        BridgeError::CollectionNotFound
+    } else {
+        BridgeError::InvalidFilter
+    };
     assert_eq!(
         plane
             .count_exact(wrong, filter, context)
             .await
             .expect_err("wrong route count"),
-        BridgeError::CollectionNotFound
+        filtered_error
     );
     assert_eq!(
         plane
@@ -63,14 +68,14 @@ pub(crate) async fn assert_wrong_route_rejected(
             )
             .await
             .expect_err("wrong route query"),
-        BridgeError::CollectionNotFound
+        filtered_error
     );
     assert_eq!(
         plane
             .scroll_exact(wrong, filter, None, 10, context)
             .await
             .expect_err("wrong route scroll"),
-        BridgeError::CollectionNotFound
+        filtered_error
     );
 }
 
@@ -80,9 +85,10 @@ pub(crate) async fn assert_reads_cancelled(
     route: &CollectionRoute,
     cancelled: &OpContext,
 ) {
+    let filter = permitted_filter(route);
     assert_eq!(
         plane
-            .count_exact(route, &permitted_filter(), cancelled)
+            .count_exact(route, &filter, cancelled)
             .await
             .expect_err("cancelled count"),
         BridgeError::Cancelled
@@ -91,7 +97,7 @@ pub(crate) async fn assert_reads_cancelled(
         plane
             .query_filtered(
                 route,
-                &permitted_filter(),
+                &filter,
                 VECTOR_NAME,
                 &[(0, 1.0)],
                 10,
@@ -104,7 +110,7 @@ pub(crate) async fn assert_reads_cancelled(
     );
     assert_eq!(
         plane
-            .scroll_exact(route, &permitted_filter(), None, 2, cancelled)
+            .scroll_exact(route, &filter, None, 2, cancelled)
             .await
             .expect_err("cancelled scroll"),
         BridgeError::Cancelled

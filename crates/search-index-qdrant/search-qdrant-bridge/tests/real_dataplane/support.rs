@@ -10,7 +10,11 @@ pub(crate) use std::sync::{
 pub(crate) use std::time::Duration;
 
 pub(crate) use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, OwnerEpoch,
+    AccessPartitionId, Blake3Digest32, CollectionGenerationId, Epoch,
+    InstallationIncarnationId, Modality, OpaqueId, OwnerEpoch, ProfileId,
+    ProjectionMembershipId, ProjectionProfileSetId, RepresentationId,
+    ScoringDocumentId, ScoringPartitionId, SourceId, SourceRevisionId, UnitId,
+    UnitKind,
 };
 pub(crate) use search_qdrant_bridge::live::{
     NATIVE_EXE_PATH, free_loopback_ports, run_qualification_suite,

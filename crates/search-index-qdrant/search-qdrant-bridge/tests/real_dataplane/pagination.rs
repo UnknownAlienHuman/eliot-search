@@ -13,9 +13,8 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
         let mut batch = Vec::new();
         for number in 31..=35 {
             batch.push(point(
+                &route,
                 number,
-                0xA1,
-                "t24-member-a",
                 10,
                 None,
                 vec![(0, 1.0)],
@@ -31,14 +30,8 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
             .await
             .expect("upsert five");
 
-        let seen = scroll_all_ids(
-            &plane,
-            &route,
-            &permitted_filter(),
-            &context,
-            2,
-        )
-        .await;
+        let filter = permitted_filter(&route);
+        let seen = scroll_all_ids(&plane, &route, &filter, &context, 2).await;
         assert_eq!(
             seen,
             vec![
@@ -69,7 +62,7 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
             plane
                 .count_exact(
                     &make_route("t24_pages_missing", 0x71),
-                    &permitted_filter(),
+                    &filter,
                     &context,
                 )
                 .await
