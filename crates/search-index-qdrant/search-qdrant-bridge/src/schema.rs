@@ -54,6 +54,13 @@ impl CollectionSchema {
                 return Err(BridgeError::PayloadIndexMissing);
             }
         }
+        // The current bridge has an exact typed index plan for the closed
+        // eligibility language. Extra names cannot be created or type-checked
+        // safely and therefore must fail before any collection write. A wider
+        // canonical payload/filter contract requires a new schema generation.
+        if self.indexed_payload_fields.len() != EligibilityFilter::INDEXED_FIELDS.len() {
+            return Err(BridgeError::CollectionSchemaMismatch);
+        }
         Ok(())
     }
 }
