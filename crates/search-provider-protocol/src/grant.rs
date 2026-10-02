@@ -1,10 +1,12 @@
-//! Canonical standalone read-grant request protocol.
+//! Canonical standalone read-grant request and response protocol.
 //!
-//! The body carries requested ceilings only. It deliberately omits binding,
-//! installation, principal, operation and issued-grant identities: the daemon
-//! derives those from an already authenticated session and server-owned policy.
-//! The dedicated authenticated envelope binds the exact canonical body digest
-//! under a grant-specific domain without extending the W1 shell-command registry.
+//! The request body carries requested ceilings only. It deliberately omits
+//! binding, installation, principal, operation and issued-grant identities: the
+//! daemon derives those from an already authenticated session and server-owned
+//! policy. The dedicated authenticated request envelope binds the exact canonical
+//! body digest under a grant-specific domain without extending the W1 shell
+//! command registry. Responses reuse the existing authenticated response envelope
+//! and add only one strict status-consistent typed body.
 
 use search_contracts::{
     AccessPartitionId, BoundedSet, CorpusOrPortfolioId, DisclosureCeiling, Modality, ProfileId,
@@ -78,6 +80,7 @@ impl StandaloneGrantRequestV1 {
 
 mod codec;
 mod envelope;
+mod response;
 
 pub use codec::{
     decode_standalone_grant_request, encode_standalone_grant_request,
@@ -88,6 +91,11 @@ pub use envelope::{
     decode_standalone_grant_envelope_json, encode_standalone_grant_envelope,
     encode_standalone_grant_envelope_json, seal_standalone_grant_envelope,
     standalone_grant_envelope_transcript, verify_standalone_grant_envelope_proof,
+};
+pub use response::{
+    MAX_STANDALONE_GRANT_RESPONSE_BYTES, STANDALONE_GRANT_RESPONSE_VERSION,
+    StandaloneGrantResponseBodyV1, decode_standalone_grant_response_body,
+    encode_standalone_grant_response_body,
 };
 
 #[cfg(test)]

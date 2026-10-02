@@ -30,6 +30,10 @@ use search_contracts::{
 
 use crate::config::{FRAME_PREFIX_BYTES, ProtocolLimits};
 use crate::error::ProtocolError;
+use crate::grant::{
+    MAX_STANDALONE_GRANT_RESPONSE_BYTES, STANDALONE_GRANT_RESPONSE_VERSION,
+    StandaloneGrantResponseBodyV1,
+};
 use super::FrameCodec;
 use wire::{Decoder, Encoder, Result, Schema, record};
 
@@ -194,6 +198,67 @@ fn validate_shape(envelope: &ProviderEnvelope, direction: Direction) -> Result<(
         response::validate_result_identity(&body.result, envelope)?;
     }
     Ok(())
+}
+
+/// Encode the exact standalone-grant response body schema without adding a
+/// transport frame or authenticated response envelope.
+pub(crate) fn encode_grant_response_schema(
+    body: &StandaloneGrantResponseBodyV1,
+) -> Result<Vec<u8>> {
+    let mut output = Encoder::new(MAX_STANDALONE_GRANT_RESPONSE_BYTES);
+    output.open(b'{')?;
+    let mut first = true;
+    output.field(&mut first, "v")?;
+    STANDALONE_GRANT_RESPONSE_VERSION.put(&mut output)?;
+    output.field(&mut first, "outcome")?;
+    match body {
+        StandaloneGrantResponseBodyV1::Claims(claims) => {
+            output.tag("claims")?;
+            claims.put(&mut output)?;
+        }
+        StandaloneGrantResponseBodyV1::Failure(code) => {
+            output.tag("failure")?;
+            code.put(&mut output)?;
+        }
+    }
+    output.close(b'}')?;
+    output.close(b'}')?;
+    output.finish()
+}
+
+/// Decode the exact standalone-grant response body schema and reject alternate
+/// spellings by re-encoding the decoded value.
+pub(crate) fn decode_grant_response_schema(
+    bytes: &[u8],
+) -> Result<StandaloneGrantResponseBodyV1> {
+    if bytes.is_empty() || bytes.len() > MAX_STANDALONE_GRANT_RESPONSE_BYTES {
+        return Err(if bytes.len() > MAX_STANDALONE_GRANT_RESPONSE_BYTES {
+            ProtocolError::FrameTooLarge
+        } else {
+            ProtocolError::InvalidBody
+        });
+    }
+    let mut input = Decoder::new(bytes);
+    input.open(b'{')?;
+    let mut first = true;
+    input.field(&mut first, "v")?;
+    let version = u16::get(&mut input)?;
+    if version != STANDALONE_GRANT_RESPONSE_VERSION {
+        return Err(ProtocolError::NoCompatibleVersion);
+    }
+    input.field(&mut first, "outcome")?;
+    let body = match input.tag()?.as_str() {
+        "claims" => StandaloneGrantResponseBodyV1::Claims(Schema::get(&mut input)?),
+        "failure" => StandaloneGrantResponseBodyV1::Failure(Schema::get(&mut input)?),
+        _ => return Err(ProtocolError::InvalidBody),
+    };
+    input.close(b'}')?;
+    input.close(b'}')?;
+    input.finish()?;
+    if encode_grant_response_schema(&body)?.as_slice() != bytes {
+        return Err(ProtocolError::InvalidBody);
+    }
+    Ok(body)
 }
 
 fn put_body(body: &ProviderBodyV1, output: &mut Encoder) -> Result<()> {

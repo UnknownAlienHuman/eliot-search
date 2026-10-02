@@ -19,6 +19,7 @@ mod json;
 mod transport;
 
 pub use client::{ClientEnvelopeCodec, ServerEnvelopeCodec};
+pub(crate) use client::{decode_grant_response_schema, encode_grant_response_schema};
 pub use transport::{TypedRecordBuffer, TypedTransportProfileV1};
 
 /// Maps a canonical frame failure to the package failure registry.
