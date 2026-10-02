@@ -16,13 +16,13 @@ const fn map_post_create_error(error: BridgeError) -> BridgeError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum PayloadIndexKind {
+enum PayloadIndexKind {
     Uuid,
     Keyword,
     Integer,
 }
 
-pub(super) const fn payload_index_specs() -> [(&'static str, PayloadIndexKind); 19] {
+const fn payload_index_specs() -> [(&'static str, PayloadIndexKind); 19] {
     [
         (PointPayload::INSTALLATION_INCARNATION_FIELD, PayloadIndexKind::Uuid),
         (PointPayload::COLLECTION_GENERATION_FIELD, PayloadIndexKind::Uuid),
@@ -54,7 +54,7 @@ const fn vendor_field_type(kind: PayloadIndexKind) -> FieldType {
     }
 }
 
-pub(super) const fn vendor_schema_type(kind: PayloadIndexKind) -> PayloadSchemaType {
+const fn vendor_schema_type(kind: PayloadIndexKind) -> PayloadSchemaType {
     match kind {
         PayloadIndexKind::Uuid => PayloadSchemaType::Uuid,
         PayloadIndexKind::Keyword => PayloadSchemaType::Keyword,
@@ -131,6 +131,10 @@ impl RealDataPlane {
             // Strict admission is deliberately disabled until every mandatory
             // payload index has been acknowledged.
             strict_mode_config: Some(strict_mode_config(false)),
+            // The live collection must be bound to the exact committed schema
+            // identity, not merely to a caller-supplied structurally compatible
+            // descriptor.
+            metadata: schema_identity_metadata(&schema.schema_digest),
             ..Default::default()
         };
         let created = tokio::time::timeout(
