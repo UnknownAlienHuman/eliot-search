@@ -15,9 +15,7 @@ impl RealDataPlane {
         context: &OpContext,
     ) -> Result<Vec<CandidateNomination>, BridgeError> {
         let budget = OperationBudget::begin(context)?;
-        if filter.allowed_source_memberships.is_empty() {
-            return Err(BridgeError::InvalidFilter);
-        }
+        validate_filter_for_route(filter, route)?;
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
@@ -26,6 +24,7 @@ impl RealDataPlane {
             .schemas
             .get(&name)
             .ok_or(BridgeError::CollectionNotFound)?;
+        ensure_filter_indexes(schema)?;
         let vector_schema = schema
             .named_vectors
             .get(vector_name)
@@ -92,8 +91,7 @@ impl RealDataPlane {
             nominations.push(CandidateNomination {
                 point_id,
                 score: scored.score,
-                payload_digest: payload.payload_digest,
-                identity_digest: payload.identity_digest,
+                point_identity_digest_256: payload.point_identity_digest_256,
             });
         }
         // Qdrant returns a top-k set; daemon composition receives one stable

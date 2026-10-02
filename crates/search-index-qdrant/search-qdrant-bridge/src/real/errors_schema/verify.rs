@@ -42,32 +42,17 @@ fn verify_server_schema(
     {
         return Err(BridgeError::PayloadIndexMissing);
     }
-    if info.payload_schema.len() != schema.indexed_payload_fields.len() {
+    if info.payload_schema.len() != schema.indexed_payload_fields.len()
+        || schema.indexed_payload_fields.len() != PointPayload::INDEXED_FIELDS.len()
+    {
         return Err(BridgeError::CollectionSchemaMismatch);
     }
-    for (field, expected_type) in [
-        (
-            EligibilityFilter::INDEXED_FIELDS[0],
-            PayloadSchemaType::Keyword,
-        ),
-        (
-            EligibilityFilter::INDEXED_FIELDS[1],
-            PayloadSchemaType::Keyword,
-        ),
-        (
-            EligibilityFilter::INDEXED_FIELDS[2],
-            PayloadSchemaType::Integer,
-        ),
-        (
-            EligibilityFilter::INDEXED_FIELDS[3],
-            PayloadSchemaType::Integer,
-        ),
-    ] {
+    for (field, kind) in payload_index_specs() {
         let remote = info
             .payload_schema
             .get(field)
             .ok_or(BridgeError::PayloadIndexMissing)?;
-        if remote.data_type() != expected_type {
+        if remote.data_type() != vendor_schema_type(kind) {
             return Err(BridgeError::CollectionSchemaMismatch);
         }
     }

@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{Blake3Digest32, CollectionGenerationId, OpaqueId};
 
-use crate::{BridgeError, EligibilityFilter};
+use crate::{BridgeError, PointPayload};
 
 /// Named vector schema.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,16 +49,15 @@ impl CollectionSchema {
         {
             return Err(BridgeError::StrictModeRequired);
         }
-        for field in EligibilityFilter::INDEXED_FIELDS {
+        for field in PointPayload::INDEXED_FIELDS {
             if !self.indexed_payload_fields.contains(field) {
                 return Err(BridgeError::PayloadIndexMissing);
             }
         }
-        // The current bridge has an exact typed index plan for the closed
-        // eligibility language. Extra names cannot be created or type-checked
-        // safely and therefore must fail before any collection write. A wider
-        // canonical payload/filter contract requires a new schema generation.
-        if self.indexed_payload_fields.len() != EligibilityFilter::INDEXED_FIELDS.len() {
+        // S9.5 plus the qualified collection schema define one closed index
+        // plan. Unknown indexes are not silently adopted because their type or
+        // filter meaning has not been admitted for this collection generation.
+        if self.indexed_payload_fields.len() != PointPayload::INDEXED_FIELDS.len() {
             return Err(BridgeError::CollectionSchemaMismatch);
         }
         Ok(())

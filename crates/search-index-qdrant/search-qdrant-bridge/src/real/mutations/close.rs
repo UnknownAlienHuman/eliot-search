@@ -4,8 +4,8 @@ use super::super::{PointsIdsList, PointsSelector, SetPayloadPoints, points_selec
 
 use super::check_acknowledgement;
 use super::super::{
-    BridgeError, BridgeMutation, CollectionRoute, EligibilityFilter, MutationReceipt,
-    OpContext, OperationBudget, QdrantPointId, RealDataPlane, collection_name,
+    BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
+    OperationBudget, PointPayload, QdrantPointId, RealDataPlane, collection_name,
     int_value, map_mutation_error, strong_ordering, update_completed,
     validate_exact_ids, vendor_point_id,
 };
@@ -43,6 +43,7 @@ impl RealDataPlane {
                 &name,
                 &ids,
                 &schema,
+                route.generation,
                 budget.remaining(context)?,
             )
             .await
@@ -60,7 +61,7 @@ impl RealDataPlane {
         }
         let mut payload = HashMap::new();
         payload.insert(
-            EligibilityFilter::INDEXED_FIELDS[3].to_owned(),
+            PointPayload::VALID_UNTIL_FIELD.to_owned(),
             int_value(valid_until_epoch_exclusive.get()),
         );
         let acked = tokio::time::timeout(
@@ -92,6 +93,7 @@ impl RealDataPlane {
                 &name,
                 &ids,
                 &schema,
+                route.generation,
                 budget.remaining_after_dispatch(context)?,
             )
             .await

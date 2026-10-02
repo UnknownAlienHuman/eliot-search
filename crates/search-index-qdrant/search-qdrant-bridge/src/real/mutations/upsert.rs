@@ -43,6 +43,9 @@ impl RealDataPlane {
             if !seen.insert(point.point_id) {
                 return Err(BridgeError::DuplicatePointId);
             }
+            if point.payload.collection_generation_id != route.generation {
+                return Err(BridgeError::PointPayloadInvalid);
+            }
             validate_point(point, &schema, self.limits)?;
         }
         let mut vendor_points = Vec::with_capacity(points.len());
@@ -70,6 +73,7 @@ impl RealDataPlane {
                 &name,
                 &ids,
                 &schema,
+                route.generation,
                 budget.remaining(context)?,
             )
             .await?;

@@ -15,13 +15,51 @@ const fn map_post_create_error(error: BridgeError) -> BridgeError {
     }
 }
 
-const fn payload_index_specs() -> [(&'static str, FieldType); 4] {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PayloadIndexKind {
+    Uuid,
+    Keyword,
+    Integer,
+}
+
+const fn payload_index_specs() -> [(&'static str, PayloadIndexKind); 19] {
     [
-        (EligibilityFilter::INDEXED_FIELDS[0], FieldType::Keyword),
-        (EligibilityFilter::INDEXED_FIELDS[1], FieldType::Keyword),
-        (EligibilityFilter::INDEXED_FIELDS[2], FieldType::Integer),
-        (EligibilityFilter::INDEXED_FIELDS[3], FieldType::Integer),
+        (PointPayload::INSTALLATION_INCARNATION_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::COLLECTION_GENERATION_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::PROJECTION_MEMBERSHIP_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::ACCESS_PARTITION_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::SCORING_PARTITION_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::SOURCE_ID_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::SOURCE_REVISION_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::REPRESENTATION_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::UNIT_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::SCORING_DOCUMENT_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::PROJECTION_PROFILE_SET_FIELD, PayloadIndexKind::Keyword),
+        (PointPayload::UNIT_KIND_FIELD, PayloadIndexKind::Keyword),
+        (PointPayload::MODALITY_FIELD, PayloadIndexKind::Keyword),
+        (PointPayload::LANGUAGE_OR_FORMAT_FIELD, PayloadIndexKind::Keyword),
+        (PointPayload::ENTITY_KIND_FIELD, PayloadIndexKind::Keyword),
+        (PointPayload::NORMALIZED_SYMBOL_FIELD, PayloadIndexKind::Keyword),
+        (PointPayload::REPOSITORY_LINEAGE_FIELD, PayloadIndexKind::Uuid),
+        (PointPayload::VALID_FROM_FIELD, PayloadIndexKind::Integer),
+        (PointPayload::VALID_UNTIL_FIELD, PayloadIndexKind::Integer),
     ]
+}
+
+const fn vendor_field_type(kind: PayloadIndexKind) -> FieldType {
+    match kind {
+        PayloadIndexKind::Uuid => FieldType::Uuid,
+        PayloadIndexKind::Keyword => FieldType::Keyword,
+        PayloadIndexKind::Integer => FieldType::Integer,
+    }
+}
+
+const fn vendor_schema_type(kind: PayloadIndexKind) -> PayloadSchemaType {
+    match kind {
+        PayloadIndexKind::Uuid => PayloadSchemaType::Uuid,
+        PayloadIndexKind::Keyword => PayloadSchemaType::Keyword,
+        PayloadIndexKind::Integer => PayloadSchemaType::Integer,
+    }
 }
 
 fn strict_mode_config(enabled: bool) -> StrictModeConfig {
@@ -35,7 +73,7 @@ fn strict_mode_config(enabled: bool) -> StrictModeConfig {
 
 impl RealDataPlane {
     /// Creates one new opaque physical generation in the required order:
-    /// collection without strict admission, mandatory payload indexes, strict
+    /// collection without strict admission, every S9.5 payload index, strict
     /// mode enablement, then exact live schema verification.
     ///
     /// Before the collection create dispatch, cancellation or deadline expiry
@@ -113,7 +151,7 @@ impl RealDataPlane {
                 self.client.create_field_index(CreateFieldIndexCollection {
                     collection_name: name.clone(),
                     field_name: field.to_owned(),
-                    field_type: Some(field_type as i32),
+                    field_type: Some(vendor_field_type(field_type) as i32),
                     wait: Some(true),
                     ordering: Some(strong_ordering()),
                     ..Default::default()
@@ -192,15 +230,20 @@ mod create_tests {
 
     #[test]
     fn index_plan_and_strict_mode_floors_are_explicit() {
-        assert_eq!(
-            payload_index_specs(),
-            [
-                (EligibilityFilter::INDEXED_FIELDS[0], FieldType::Keyword),
-                (EligibilityFilter::INDEXED_FIELDS[1], FieldType::Keyword),
-                (EligibilityFilter::INDEXED_FIELDS[2], FieldType::Integer),
-                (EligibilityFilter::INDEXED_FIELDS[3], FieldType::Integer),
-            ]
-        );
+        let specs = payload_index_specs();
+        assert_eq!(specs.len(), PointPayload::INDEXED_FIELDS.len());
+        assert!(specs.contains(&(
+            PointPayload::INSTALLATION_INCARNATION_FIELD,
+            PayloadIndexKind::Uuid,
+        )));
+        assert!(specs.contains(&(
+            PointPayload::PROJECTION_PROFILE_SET_FIELD,
+            PayloadIndexKind::Keyword,
+        )));
+        assert!(specs.contains(&(
+            PointPayload::VALID_UNTIL_FIELD,
+            PayloadIndexKind::Integer,
+        )));
 
         let staging = strict_mode_config(false);
         assert_eq!(staging.enabled, Some(false));

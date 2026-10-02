@@ -11,9 +11,7 @@ impl RealDataPlane {
         context: &OpContext,
     ) -> Result<ScrollPage, BridgeError> {
         let budget = OperationBudget::begin(context)?;
-        if filter.allowed_source_memberships.is_empty() {
-            return Err(BridgeError::InvalidFilter);
-        }
+        validate_filter_for_route(filter, route)?;
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
@@ -22,6 +20,7 @@ impl RealDataPlane {
             .schemas
             .get(&name)
             .ok_or(BridgeError::CollectionNotFound)?;
+        ensure_filter_indexes(schema)?;
         let vendor_filter = base_filter(filter)?;
         let scrolled = tokio::time::timeout(
             budget.remaining(context)?,

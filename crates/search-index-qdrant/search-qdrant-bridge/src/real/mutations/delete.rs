@@ -28,9 +28,28 @@ impl RealDataPlane {
         }
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
         let name = collection_name(route)?;
-        if !self.schemas.contains_key(&name) {
-            return Err(BridgeError::CollectionNotFound);
-        }
+        let schema = self
+            .schemas
+            .get(&name)
+            .ok_or(BridgeError::CollectionNotFound)?
+            .clone();
+        // Missing IDs are allowed for idempotent reclaim. Any present point
+        // must still belong to the exact collection generation named by the
+        // route; otherwise deleting it would turn corruption into success.
+        self.fetch_points(
+            &name,
+            &ids,
+            &schema,
+            route.generation,
+            budget.remaining(context)?,
+        )
+        .await
+        .map_err(|error| match error {
+            BridgeError::TransportFailed
+            | BridgeError::CollectionNotFound
+            | BridgeError::DeadlineExceeded => error,
+            _ => BridgeError::ExactReadbackMismatch,
+        })?;
         let acked = tokio::time::timeout(
             budget.remaining(context)?,
             self.client.delete_points(DeletePoints {

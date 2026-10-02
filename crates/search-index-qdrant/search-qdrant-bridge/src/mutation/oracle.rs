@@ -34,6 +34,9 @@ impl QdrantBridge {
             if !seen.insert(point.point_id) {
                 return Err(BridgeError::DuplicatePointId);
             }
+            if point.payload.collection_generation_id != route.generation {
+                return Err(BridgeError::PointPayloadInvalid);
+            }
             validate_point(point, &collection.schema, self.limits)?;
             if collection
                 .points
@@ -76,7 +79,9 @@ impl QdrantBridge {
             .ok_or(BridgeError::CollectionNotFound)?;
         for id in &ids {
             let point = collection.points.get(id).ok_or(BridgeError::PointNotFound)?;
-            if valid_until_epoch_exclusive <= point.payload.valid_from_epoch {
+            if point.payload.collection_generation_id != route.generation
+                || valid_until_epoch_exclusive <= point.payload.valid_from_epoch
+            {
                 return Err(BridgeError::ExactReadbackMismatch);
             }
         }
@@ -106,6 +111,15 @@ impl QdrantBridge {
             .collections
             .get_mut(route)
             .ok_or(BridgeError::CollectionNotFound)?;
+        for id in &ids {
+            if collection
+                .points
+                .get(id)
+                .is_some_and(|point| point.payload.collection_generation_id != route.generation)
+            {
+                return Err(BridgeError::ExactReadbackMismatch);
+            }
+        }
         for id in &ids {
             collection.points.remove(id);
         }

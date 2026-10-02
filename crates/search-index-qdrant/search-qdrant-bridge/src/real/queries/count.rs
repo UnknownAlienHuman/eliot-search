@@ -10,9 +10,7 @@ impl RealDataPlane {
         context: &OpContext,
     ) -> Result<ExactCount, BridgeError> {
         let budget = OperationBudget::begin(context)?;
-        if filter.allowed_source_memberships.is_empty() {
-            return Err(BridgeError::InvalidFilter);
-        }
+        validate_filter_for_route(filter, route)?;
         let name = collection_name(route)?;
         let schema = self
             .schemas

@@ -7,6 +7,6 @@ fn decode_point(
     Ok(PointRecord {
         point_id: bridge_point_id(id)?,
         payload: decode_payload(payload)?,
-        vectors: decode_vectors(vectors, payload, schema)?,
+        vectors: decode_vectors(vectors, schema)?,
     })
 }

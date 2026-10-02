@@ -92,8 +92,7 @@ mod tests {
         CandidateNomination {
             point_id: QdrantPointId(bytes),
             score,
-            payload_digest: Blake3Digest32::from_bytes([1; 32]),
-            identity_digest: Blake3Digest32::from_bytes([2; 32]),
+            point_identity_digest_256: Blake3Digest32::from_bytes([2; 32]),
         }
     }
 

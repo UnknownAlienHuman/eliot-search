@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
+use search_contracts::CollectionGenerationId;
+
 use super::super::GetPoints;
 
 use super::super::{
@@ -59,7 +61,9 @@ impl RealDataPlane {
         }))
         .map_err(|_| BridgeError::ExactReadbackMismatch)?;
         for point in expected {
-            let found = points.get(&point.point_id).ok_or(BridgeError::ExactReadbackMismatch)?;
+            let found = points
+                .get(&point.point_id)
+                .ok_or(BridgeError::ExactReadbackMismatch)?;
             let decoded = decode_point(
                 found.id.as_ref().ok_or(BridgeError::ExactReadbackMismatch)?,
                 &found.payload,
@@ -79,6 +83,7 @@ impl RealDataPlane {
         name: &str,
         ids: &[QdrantPointId],
         schema: &CollectionSchema,
+        expected_generation: CollectionGenerationId,
         timeout: Duration,
     ) -> Result<BTreeMap<QdrantPointId, PointRecord>, BridgeError> {
         let readback = tokio::time::timeout(
@@ -104,6 +109,9 @@ impl RealDataPlane {
                 retrieved.vectors.as_ref(),
                 schema,
             )?;
+            if point.payload.collection_generation_id != expected_generation {
+                return Err(BridgeError::MalformedResponse);
+            }
             Ok((point.point_id, point))
         }))
     }
@@ -118,9 +126,16 @@ mod tests {
 
     #[test]
     fn unordered_response_is_indexed_and_missing_ids_stay_missing() {
-        let ids = [QdrantPointId([1; 16]), QdrantPointId([2; 16]), QdrantPointId([3; 16])];
+        let ids = [
+            QdrantPointId([1; 16]),
+            QdrantPointId([2; 16]),
+            QdrantPointId([3; 16]),
+        ];
         let points = index_points(&ids, [Ok(point(3)), Ok(point(1))]).expect("index");
-        assert_eq!(points.keys().copied().collect::<Vec<_>>(), vec![ids[0], ids[2]]);
+        assert_eq!(
+            points.keys().copied().collect::<Vec<_>>(),
+            vec![ids[0], ids[2]]
+        );
         assert!(!points.contains_key(&ids[1]));
     }
 

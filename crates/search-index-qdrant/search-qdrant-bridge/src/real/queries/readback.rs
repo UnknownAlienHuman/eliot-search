@@ -57,7 +57,9 @@ impl RealDataPlane {
                 retrieved.vectors.as_ref(),
                 schema,
             )?;
-            if returned.insert(id, point).is_some() {
+            if point.payload.collection_generation_id != route.generation
+                || returned.insert(id, point).is_some()
+            {
                 return Err(BridgeError::MalformedResponse);
             }
         }
