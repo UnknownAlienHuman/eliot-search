@@ -6,7 +6,7 @@
 use super::{
     BTreeMap, BTreeSet, BoundedPointReadback, BridgeError, CandidateNomination,
     CollectionRoute, CountPoints, EligibilityFilter, ExactCount, GetPoints, IdfParams,
-    IdfScope, OpContext, OperationBudget, PointRecord, QdrantPointId, Query, QueryPoints,
+    OpContext, OperationBudget, PointRecord, QdrantPointId, Query, QueryPoints,
     RealDataPlane, ScrollPage, ScrollPoints, SearchParams, VectorInput, base_filter,
     bridge_point_id, collection_name, decode_payload, decode_point, ensure_filter_indexes,
     map_read_error, validate_exact_ids, validate_filter_for_route, validate_query_vector,
