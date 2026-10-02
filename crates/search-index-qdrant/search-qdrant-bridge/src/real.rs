@@ -46,13 +46,13 @@ use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
     CollectionInfo, Condition, CountPoints, CreateCollection,
     CreateFieldIndexCollection, DeletePoints, FieldCondition, FieldType,
-    Filter, GetPoints, IdfParams, Match, Modifier, PointId, PointStruct,
-    PointsIdsList, PointsSelector, Query, QueryPoints, Range, RepeatedStrings,
-    ScrollPoints, SearchParams, SetPayloadPoints, SparseVectorConfig,
-    SparseVectorParams, StrictModeConfig, UpdateStatus, UpsertPoints, Value,
-    Vector, VectorInput, Vectors, WriteOrdering, WriteOrderingType, condition,
-    point_id, points_selector, r#match, value, vector_output, vectors,
-    vectors_output,
+    Filter, GetPoints, IdfParams, Match, Modifier, PayloadSchemaType, PointId,
+    PointStruct, PointsIdsList, PointsSelector, Query, QueryPoints, Range,
+    RepeatedStrings, ScrollPoints, SearchParams, SetPayloadPoints,
+    SparseVectorConfig, SparseVectorParams, StrictModeConfig, UpdateCollection,
+    UpdateStatus, UpsertPoints, Value, Vector, VectorInput, Vectors,
+    WriteOrdering, WriteOrderingType, condition, point_id, points_selector,
+    r#match, value, vector_output, vectors, vectors_output,
 };
 use search_contracts::{OpaqueId, ReceiptRef};
 

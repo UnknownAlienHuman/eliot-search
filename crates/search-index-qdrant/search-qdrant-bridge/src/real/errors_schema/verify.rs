@@ -7,7 +7,10 @@ fn verify_server_schema(
         .as_ref()
         .and_then(|config| config.params.as_ref())
         .ok_or(BridgeError::CollectionSchemaMismatch)?;
-    if params.shard_number != 1 {
+    if params.shard_number != 1
+        || params.replication_factor != Some(1)
+        || params.write_consistency_factor != Some(1)
+    {
         return Err(BridgeError::CollectionSchemaMismatch);
     }
     let sparse = params
@@ -31,11 +34,44 @@ fn verify_server_schema(
             return Err(BridgeError::CollectionSchemaMismatch);
         }
     }
-    for field in EligibilityFilter::INDEXED_FIELDS {
-        if !info.payload_schema.contains_key(field) {
-            return Err(BridgeError::PayloadIndexMissing);
+
+    if schema
+        .indexed_payload_fields
+        .iter()
+        .any(|field| !info.payload_schema.contains_key(field))
+    {
+        return Err(BridgeError::PayloadIndexMissing);
+    }
+    if info.payload_schema.len() != schema.indexed_payload_fields.len() {
+        return Err(BridgeError::CollectionSchemaMismatch);
+    }
+    for (field, expected_type) in [
+        (
+            EligibilityFilter::INDEXED_FIELDS[0],
+            PayloadSchemaType::Keyword,
+        ),
+        (
+            EligibilityFilter::INDEXED_FIELDS[1],
+            PayloadSchemaType::Keyword,
+        ),
+        (
+            EligibilityFilter::INDEXED_FIELDS[2],
+            PayloadSchemaType::Integer,
+        ),
+        (
+            EligibilityFilter::INDEXED_FIELDS[3],
+            PayloadSchemaType::Integer,
+        ),
+    ] {
+        let remote = info
+            .payload_schema
+            .get(field)
+            .ok_or(BridgeError::PayloadIndexMissing)?;
+        if remote.data_type() != expected_type {
+            return Err(BridgeError::CollectionSchemaMismatch);
         }
     }
+
     let strict = info
         .config
         .as_ref()

@@ -11,9 +11,28 @@ const fn map_post_create_error(error: BridgeError) -> BridgeError {
     }
 }
 
+const fn payload_index_specs() -> [(&'static str, FieldType); 4] {
+    [
+        (EligibilityFilter::INDEXED_FIELDS[0], FieldType::Keyword),
+        (EligibilityFilter::INDEXED_FIELDS[1], FieldType::Keyword),
+        (EligibilityFilter::INDEXED_FIELDS[2], FieldType::Integer),
+        (EligibilityFilter::INDEXED_FIELDS[3], FieldType::Integer),
+    ]
+}
+
+fn strict_mode_config(enabled: bool) -> StrictModeConfig {
+    StrictModeConfig {
+        enabled: Some(enabled),
+        unindexed_filtering_retrieve: Some(false),
+        unindexed_filtering_update: Some(false),
+        ..Default::default()
+    }
+}
+
 impl RealDataPlane {
-    /// Creates one new opaque physical generation with mandatory payload
-    /// indexes, strict-mode floors and post-creation schema verification.
+    /// Creates one new opaque physical generation in the required order:
+    /// collection without strict admission, mandatory payload indexes, strict
+    /// mode enablement, then exact live schema verification.
     ///
     /// Before the collection create dispatch, cancellation is definite. Once
     /// the collection may exist, cancellation, transport loss or unusable
@@ -64,12 +83,9 @@ impl RealDataPlane {
             replication_factor: Some(1),
             write_consistency_factor: Some(1),
             sparse_vectors_config: Some(SparseVectorConfig { map: sparse }),
-            strict_mode_config: Some(StrictModeConfig {
-                enabled: Some(true),
-                unindexed_filtering_retrieve: Some(false),
-                unindexed_filtering_update: Some(false),
-                ..Default::default()
-            }),
+            // Strict admission is deliberately disabled until every mandatory
+            // payload index has been acknowledged.
+            strict_mode_config: Some(strict_mode_config(false)),
             ..Default::default()
         };
         let created = tokio::time::timeout(
@@ -83,18 +99,13 @@ impl RealDataPlane {
             return Err(BridgeError::MutationOutcomeUnknown);
         }
 
-        for (field, field_type) in [
-            (EligibilityFilter::INDEXED_FIELDS[0], FieldType::Keyword),
-            (EligibilityFilter::INDEXED_FIELDS[1], FieldType::Keyword),
-            (EligibilityFilter::INDEXED_FIELDS[2], FieldType::Integer),
-            (EligibilityFilter::INDEXED_FIELDS[3], FieldType::Integer),
-        ] {
+        for (field, field_type) in payload_index_specs() {
             post_create_check(context)?;
             let indexed = tokio::time::timeout(
                 context.deadline(),
                 self.client.create_field_index(CreateFieldIndexCollection {
                     collection_name: name.clone(),
-                    field_name: (*field).to_owned(),
+                    field_name: field.to_owned(),
                     field_type: Some(field_type as i32),
                     wait: Some(true),
                     ordering: Some(strong_ordering()),
@@ -112,6 +123,23 @@ impl RealDataPlane {
             {
                 return Err(BridgeError::MutationOutcomeUnknown);
             }
+        }
+
+        post_create_check(context)?;
+        let hardened = tokio::time::timeout(
+            context.deadline(),
+            self.client.update_collection(UpdateCollection {
+                collection_name: name.clone(),
+                strict_mode_config: Some(strict_mode_config(true)),
+                ..Default::default()
+            }),
+        )
+        .await
+        .map_err(|_| BridgeError::MutationOutcomeUnknown)?
+        .map_err(map_create_error)
+        .map_err(map_post_create_error)?;
+        if !hardened.result {
+            return Err(BridgeError::MutationOutcomeUnknown);
         }
 
         post_create_check(context)?;
@@ -148,5 +176,28 @@ mod create_tests {
             map_post_create_error(BridgeError::AuthenticationInvalid),
             BridgeError::AuthenticationInvalid
         );
+    }
+
+    #[test]
+    fn index_plan_and_strict_mode_floors_are_explicit() {
+        assert_eq!(
+            payload_index_specs(),
+            [
+                (EligibilityFilter::INDEXED_FIELDS[0], FieldType::Keyword),
+                (EligibilityFilter::INDEXED_FIELDS[1], FieldType::Keyword),
+                (EligibilityFilter::INDEXED_FIELDS[2], FieldType::Integer),
+                (EligibilityFilter::INDEXED_FIELDS[3], FieldType::Integer),
+            ]
+        );
+
+        let staging = strict_mode_config(false);
+        assert_eq!(staging.enabled, Some(false));
+        assert_eq!(staging.unindexed_filtering_retrieve, Some(false));
+        assert_eq!(staging.unindexed_filtering_update, Some(false));
+
+        let admitted = strict_mode_config(true);
+        assert_eq!(admitted.enabled, Some(true));
+        assert_eq!(admitted.unindexed_filtering_retrieve, Some(false));
+        assert_eq!(admitted.unindexed_filtering_update, Some(false));
     }
 }
