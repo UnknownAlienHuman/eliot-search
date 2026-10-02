@@ -503,6 +503,7 @@ fn validate_pair(
         || binding.installation_id != policy.installation_id
         || binding.installation_incarnation_id != policy.installation_incarnation_id
         || binding.pairing_generation.get() != policy.binding_generation
+        || binding.revocation_generation.get() != policy.revocation_generation
         || !lifecycle_matches
     {
         return Err(ControlError::InvalidValue);
