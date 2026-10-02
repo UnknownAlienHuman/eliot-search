@@ -20,7 +20,7 @@ use crate::{
     CommitRecoveryDecision, ConditionalControlMutation, ControlCallError, ControlCommitReceipt,
     ControlError, ControlKey, ControlMutation, ControlRecordClass, ControlRecordCondition,
     ControlSnapshotPublisher, ControlValue, ControlWrite, JournalIdentity, JournalLimits,
-    MutationId, PersistentControlJournal,
+    MutationId, PROVIDER_AUTHORITY_MIN_JOURNAL_SCHEMA_VERSION, PersistentControlJournal,
 };
 use codec::{decode_binding, decode_policy, encode_binding, encode_policy};
 
@@ -101,6 +101,9 @@ impl ProviderAuthorityMutation {
         replacement: ProviderAuthorityRecord,
     ) -> Result<Self, ControlError> {
         identity.validate()?;
+        if identity.schema_version < PROVIDER_AUTHORITY_MIN_JOURNAL_SCHEMA_VERSION {
+            return Err(ControlError::SchemaUnsupported);
+        }
         validate_pair(replacement.binding(), replacement.policy())?;
         if identity.installation_incarnation_id
             != replacement.binding.installation_incarnation_id
@@ -445,6 +448,9 @@ impl PersistentControlJournal {
         context: &OperationContext<C>,
     ) -> Result<ProviderAuthorityReadback, ProviderAuthorityJournalError> {
         let identity = self.identity();
+        if identity.schema_version < PROVIDER_AUTHORITY_MIN_JOURNAL_SCHEMA_VERSION {
+            return Err(ControlError::SchemaUnsupported.into());
+        }
         let binding_key = binding_key(identity.installation_incarnation_id, binding_id)?;
         let policy_key = policy_key(identity.installation_incarnation_id, binding_id)?;
         let (generation, [binding, policy]) = self.read_published_record_pair(
