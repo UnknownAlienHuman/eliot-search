@@ -6,6 +6,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         let (_server, mut plane) = live_plane().await;
         let context = ctx();
         let route = make_route("t24_recovery", 0x51);
+        let filter = permitted_filter(&route);
         plane
             .create_collection(&route, &schema(), &context)
             .await
@@ -13,16 +14,16 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
 
         // Pre-dispatch cancellation is definite and commits nothing.
         let flag = Arc::new(AtomicBool::new(true));
-        let cancelled =
-            OpContext::with_cancel(Duration::from_secs(20), Arc::clone(&flag));
+        let cancelled = OpContext::with_cancel(Duration::from_secs(20), Arc::clone(&flag));
         assert_eq!(
             plane
                 .upsert_exact(
                     &route,
                     vec![point(
+                        &route,
                         21,
                         0xA1,
-                        "t24-member-a",
+                        0xB1,
                         10,
                         None,
                         vec![(0, 1.0)],
@@ -36,7 +37,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         );
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -48,9 +49,10 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         let squeezed = OpContext::new(Duration::ZERO);
         let mutation_id = mutation("t24-recovery-unknown", 0x62);
         let batch = vec![point(
+            &route,
             22,
             0xA1,
-            "t24-member-a",
+            0xB1,
             10,
             None,
             vec![(0, 1.0)],
@@ -69,7 +71,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         );
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count after definite timeout")
                 .count,
@@ -84,7 +86,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         assert!(first.affected_ids.contains(&point_id(22)));
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -95,9 +97,10 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
             .upsert_exact(
                 &route,
                 vec![point(
+                    &route,
                     22,
                     0xA1,
-                    "t24-member-a",
+                    0xB1,
                     10,
                     None,
                     vec![(0, 1.0)],
@@ -110,7 +113,7 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
         assert!(again.replayed);
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -123,9 +126,10 @@ async fn t24_real_pre_dispatch_deadline_and_replay() {
                 .upsert_exact(
                     &route,
                     vec![point(
+                        &route,
                         23,
                         0xA1,
-                        "t24-member-a",
+                        0xB1,
                         10,
                         None,
                         vec![(1, 1.0)],
