@@ -5,13 +5,14 @@ use std::collections::BTreeSet;
 use search_contracts::Epoch;
 
 use super::{
-    BridgeMutation, MutationReceipt, PointRecord, QdrantPointId, validate_exact_ids,
-    validate_point,
+    BridgeMutation, MutationReceipt, PointRecord, QdrantPointId,
+    same_point_identity, validate_exact_ids, validate_point,
 };
 use crate::{BridgeError, CollectionRoute, QdrantBridge};
 
 impl QdrantBridge {
-    /// Upserts only explicit point IDs with exact idempotency.
+    /// Upserts only explicit point IDs with exact idempotency and collision
+    /// refusal before any point is changed.
     pub fn upsert_exact(
         &mut self,
         route: &CollectionRoute,
@@ -34,6 +35,13 @@ impl QdrantBridge {
                 return Err(BridgeError::DuplicatePointId);
             }
             validate_point(point, &collection.schema, self.limits)?;
+            if collection
+                .points
+                .get(&point.point_id)
+                .is_some_and(|existing| !same_point_identity(existing, point))
+            {
+                return Err(BridgeError::PointIdCollision);
+            }
         }
         let mut affected_ids = Vec::with_capacity(points.len());
         for point in points {

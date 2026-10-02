@@ -64,6 +64,23 @@ pub struct PointRecord {
     pub vectors: BTreeMap<String, StoredVector>,
 }
 
+/// Whether an existing point names the same immutable logical identity.
+///
+/// The full 256-bit identity digest is mandatory. The bridge also compares
+/// every canonical identity coordinate represented by its current payload so
+/// a malformed digest-only alias cannot authorize overwrite. Payload validity,
+/// access-currentness, scores and vector values are deliberately excluded:
+/// they may change for the same identity during an acknowledged publication.
+pub(crate) fn same_point_identity(existing: &PointRecord, expected: &PointRecord) -> bool {
+    existing.point_id == expected.point_id
+        && existing.payload.identity_digest == expected.payload.identity_digest
+        && existing.payload.source_membership_id == expected.payload.source_membership_id
+        && existing.payload.projection_membership_id
+            == expected.payload.projection_membership_id
+        && existing.payload.source_revision == expected.payload.source_revision
+        && existing.payload.unit_ordinal == expected.payload.unit_ordinal
+}
+
 /// Immutable exact mutation identity.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BridgeMutation {

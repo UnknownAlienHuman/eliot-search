@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::super::{PointStruct, UpsertPoints};
 
@@ -6,14 +6,15 @@ use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
     PointRecord, QdrantPointId, RealDataPlane, collection_name, encode_payload,
-    encode_vectors, map_mutation_error, strong_ordering, update_completed, validate_point,
+    encode_vectors, map_mutation_error, same_point_identity, strong_ordering,
+    update_completed, validate_point,
 };
 
 impl RealDataPlane {
-    /// Upserts only explicit point IDs with `wait=true`, strong ordering and
-    /// exact readback before success. Same identity plus same canonical batch
-    /// replays without a second write; same identity plus different input is
-    /// [`BridgeError::OperationConflict`].
+    /// Upserts only explicit point IDs with collision refusal, `wait=true`,
+    /// strong ordering and exact readback before success. Same mutation identity
+    /// plus same canonical batch replays without a second write; same identity
+    /// plus different input is [`BridgeError::OperationConflict`].
     pub async fn upsert_exact(
         &mut self,
         route: &CollectionRoute,
@@ -52,7 +53,30 @@ impl RealDataPlane {
                 vectors: Some(encode_vectors(point)),
             });
         }
-        // Validation/encoding may take time; cancellation still means no write here.
+
+        // S11.2 collision guard: before any upsert that may address an
+        // existing UUID, retrieve it and compare the full identity digest plus
+        // every canonical identity coordinate represented by this bridge.
+        // The publication owner serializes mutation dispatch; this adapter
+        // never treats a mismatched pre-existing point as overwriteable.
+        let expected_by_id: BTreeMap<QdrantPointId, usize> = points
+            .iter()
+            .enumerate()
+            .map(|(index, point)| (point.point_id, index))
+            .collect();
+        let ids: Vec<QdrantPointId> = expected_by_id.keys().copied().collect();
+        let existing = self.fetch_points(&name, &ids, &schema, context).await?;
+        for (id, existing_point) in &existing {
+            let expected_index = expected_by_id
+                .get(id)
+                .ok_or(BridgeError::UnexpectedPoint)?;
+            if !same_point_identity(existing_point, &points[*expected_index]) {
+                return Err(BridgeError::PointIdCollision);
+            }
+        }
+
+        // Validation, encoding and collision preflight may take time;
+        // cancellation still means no write here.
         context.check()?;
         let acked = tokio::time::timeout(
             context.deadline(),
