@@ -1276,9 +1276,7 @@ name = "search-projection-planner"
 version = "0.0.0"
 dependencies = [
  "search-contracts",
- "search-domain",
  "search-point-identity",
- "search-ports",
 ]
 
 [[package]]

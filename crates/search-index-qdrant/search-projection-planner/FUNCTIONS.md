@@ -1,51 +1,45 @@
 # Function contract — `search-projection-planner`
 
-**Status:** W3/P06 logical contract; pure planning only.
+**Status:** canonical S9.5/S11 producer; pure planning only.
 
 ## Operations
 
-### `validate_projection_input(input, profiles) -> Result<ValidatedProjectionInput, ProjectionError>`
+### `validate_projection_input(input, profiles, budget) -> Result<ValidatedProjectionInput, ProjectionError>`
 
-Requires immutable admitted revision/representation/unit manifests, exactly one
-`ProjectionMembership -> SourceMembership`, accepted profile IDs and complete vector encodings.
+Requires one immutable `ProjectionMembership -> SourceMembership` scope, one collection generation and publication epoch, a profile-compatible representation, unique unit-role/scoring-document identities, and the exact named-vector set for every point.
 
-### `build_minimal_payload(unit, membership, profile_set, epoch) -> Result<MinimalPointPayload, ProjectionError>`
+### `build_minimal_payload(scope, unit, profiles, identity) -> Result<MinimalPointPayload, ProjectionError>`
 
-Emits only the opaque S9.5 fields. Corpus/repository display names, ACL subjects, membership arrays,
-source text, paths and vendor metadata are rejected.
+Builds the exact closed S9.5 payload. It contains typed installation, collection, projection membership, access/scoring partition, source/revision/representation/unit, full point identity, scoring document, profile set, modality/format metadata, and epoch validity fields. It cannot represent source membership, ACLs, display names, paths, source/query text, payload digests, or vector digests.
 
-### `build_point_spec(input, identity_port) -> Result<PointSpec, ProjectionError>`
+### `build_point_spec(scope, unit, profiles, budget, identity_limits, digest_port) -> Result<PointSpec, ProjectionError>`
 
-Combines the canonical point identity, exact named-vector set, payload digest, unit/reference digests
-and expected readback shape. Point identity derivation remains owned by `search-point-identity`.
+Derives the exact S11 point identity, builds the open-ended S9.5 payload, computes planner-owned canonical payload/vector digests through `ProjectionDigestPort`, and retains the exact readback expectation.
 
-### `plan_projection(input, profiles, budget) -> Result<ProjectionPlan, ProjectionError>`
+### `plan_projection(input, profiles, budget, identity_limits, digest_port) -> Result<ProjectionPlan, ProjectionError>`
 
-Creates a deterministically ordered exact point set and rejects duplicate UUIDs, duplicate unit roles,
-missing vectors, profile mismatches and unbounded plans.
+Creates a deterministically point-ID-ordered exact point set for one projection membership, blocks compact-ID collisions, rejects duplicate unit roles/scoring documents and incompatible vectors, and emits the immutable manifest.
 
-### `canonicalize_manifest(points) -> Result<ProjectionManifest, ProjectionError>`
+### `canonicalize_manifest(scope, profiles, points, budget, digest_port) -> Result<ProjectionManifest, ProjectionError>`
 
-Produces immutable CAS-ready manifest bytes containing exact UUIDs, full identity digests, unit IDs,
-vector names and payload/vector digests. No broad selection predicate substitutes for the exact set.
+Produces versioned canonical manifest bytes containing the exact membership/profile scope, point UUIDs, full identity digests, unit IDs, payload digests, and expected vector names/digests.
 
 ### `diff_manifests(old, new) -> Result<ManifestDiff, ProjectionError>`
 
-Returns exact create, retain and retire lists. Retained IDs require full identity and expected payload/
-vector equality.
+Returns exact create, retain, and retire entries. A scope/profile change replaces the complete point set. Broad source or payload-filter closure is structurally unavailable.
 
-### `validate_schema_requirements(manifest, collection_schema) -> Result<(), ProjectionError>`
+### `validate_schema_requirements(manifest, profiles, schema) -> Result<(), ProjectionError>`
 
-Proves every filterable payload field has the required index and every expected named vector exists
-before the plan may enter publication.
+Requires the exact 19-field S9.5 payload-index set with UUID/keyword/integer types and every named-vector shape required by the accepted profile set.
+
+## Digest boundary
+
+`ProjectionDigestPort::blake3_256` receives complete versioned canonical bytes. Implementations return ordinary BLAKE3-256 with no hidden prefix. The planner owns domain separation and canonical encoding; it does not accept caller-supplied payload/vector digests.
 
 ## Semantics
 
-Planning is pure, deterministic and retry-safe. Budget/cancellation yields no usable partial manifest.
-The crate performs no Qdrant/redb/CAS I/O and makes no source/admission/access decision.
+Planning is pure, deterministic, bounded, and retry-safe. Failure yields no usable partial plan or manifest. The package performs no Qdrant/redb/CAS/filesystem I/O and makes no source-admission or access decision.
 
-## Required fixtures
+## Deferred product gates
 
-One membership per point; minimal payload disclosure guard; deterministic manifest bytes; exact
-old/new diff; profile/generation change replaces affected points; duplicate/collision propagation;
-schema/index completeness; broad-filter closure structurally unavailable.
+Downstream daemon composition must translate the package-owned S9.5 payload into the bridge contract, persist the manifest in CAS, verify exact readback, and publish only through the S13 coordinator. Live Qdrant qualification and full tests are not claimed by this package revision.
