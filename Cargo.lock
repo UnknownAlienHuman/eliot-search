@@ -409,7 +409,6 @@ dependencies = [
  "search-source-registry",
  "search-subject-resolver",
  "search-unitizer",
- "tokio",
  "zeroize",
 ]
 
