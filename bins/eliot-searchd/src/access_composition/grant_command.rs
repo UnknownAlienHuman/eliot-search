@@ -8,7 +8,9 @@
 
 use std::time::Instant;
 
-use search_contracts::SearchReadGrantClaims;
+use search_contracts::{
+    ProtocolErrorCode, ProtocolFailureCode, SearchReadGrantClaims, SearchReasonCodeV1,
+};
 use search_provider_protocol::{
     AuthenticatedStandaloneGrantEnvelope, BoundSession, MonotonicMillis, ProofDigest,
     ProtocolError, RequestGuard, RequestStatus, TerminalKind, decode_standalone_grant_request,
@@ -51,7 +53,7 @@ pub enum GrantCommandError {
 }
 
 impl GrantCommandError {
-    /// Stable machine-readable reason code.
+    /// Stable daemon-internal machine-readable reason code.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
@@ -59,6 +61,23 @@ impl GrantCommandError {
             Self::Authority(error) => error.code(),
             Self::Execution(error) => error.code(),
             Self::TerminalOutcomeUnknown(_) => "DAEMON_GRANT_TERMINAL_OUTCOME_UNKNOWN",
+        }
+    }
+
+    /// Public content-free failure classification for the grant response body.
+    ///
+    /// Detailed daemon/issuer state never crosses the provider boundary. The
+    /// authenticated response status separately preserves cancelled and
+    /// outcome-unknown terminal classes.
+    #[must_use]
+    pub const fn public_failure_code(self) -> ProtocolFailureCode {
+        match self {
+            Self::Protocol(error) => public_protocol_error(error),
+            Self::Authority(error) => public_authority_error(error),
+            Self::Execution(error) => public_execution_error(error),
+            Self::TerminalOutcomeUnknown(_) => {
+                ProtocolFailureCode::Search(SearchReasonCodeV1::SecurityFailClosed)
+            }
         }
     }
 }
@@ -297,6 +316,128 @@ const fn terminal_for_authority_error(error: GrantAuthorityError) -> TerminalKin
         | GrantAuthorityError::PolicyBindingMismatch
         | GrantAuthorityError::ProtocolRequestInvalid
         | GrantAuthorityError::Mint(_) => TerminalKind::Failed,
+    }
+}
+
+const fn public_protocol_error(error: ProtocolError) -> ProtocolFailureCode {
+    match error {
+        ProtocolError::NoCompatibleVersion | ProtocolError::InvalidVersion => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::ProtocolVersionMismatch)
+        }
+        ProtocolError::FrameTooLarge => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::FrameTooLarge)
+        }
+        ProtocolError::InvalidEnvelope
+        | ProtocolError::InvalidStatus
+        | ProtocolError::InvalidBody
+        | ProtocolError::InvalidLimits => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::InvalidEnvelope)
+        }
+        ProtocolError::DuplicateSequence
+        | ProtocolError::SequenceRegression
+        | ProtocolError::SequenceGap
+        | ProtocolError::SequenceExhausted => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::SequenceGap)
+        }
+        ProtocolError::ReplayDetected => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::ReplayDetected)
+        }
+        ProtocolError::AuthenticationRequired
+        | ProtocolError::AuthenticationFailed
+        | ProtocolError::PairingFailed
+        | ProtocolError::PairingProofInvalid
+        | ProtocolError::InvalidPairingTransition
+        | ProtocolError::InvalidNonce
+        | ProtocolError::InvalidBindingKey => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::AuthFailed)
+        }
+        ProtocolError::DeadlineExpired => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::DeadlineExpired)
+        }
+        ProtocolError::UnknownCommand
+        | ProtocolError::ProgressRegression
+        | ProtocolError::ProgressExceededTotal
+        | ProtocolError::DuplicateTerminal
+        | ProtocolError::IncompleteTerminalSuccess
+        | ProtocolError::InvalidSessionTransition => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::UnsupportedMessageKind)
+        }
+        ProtocolError::ReplayCapacityExceeded | ProtocolError::ResourceExhausted => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::ResourceExhausted)
+        }
+        ProtocolError::SessionDraining
+        | ProtocolError::SessionClosed
+        | ProtocolError::Quarantined => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::SecurityFailClosed)
+        }
+    }
+}
+
+const fn public_authority_error(error: GrantAuthorityError) -> ProtocolFailureCode {
+    match error {
+        GrantAuthorityError::SessionInactive | GrantAuthorityError::PolicyUnavailable => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::SecurityFailClosed)
+        }
+        GrantAuthorityError::PeerRoleDenied => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::AuthFailed)
+        }
+        GrantAuthorityError::PolicyBindingMismatch => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::BindingMismatch)
+        }
+        GrantAuthorityError::PolicyChangedDuringIssuance => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::Stale)
+        }
+        GrantAuthorityError::ProtocolRequestInvalid => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::InvalidEnvelope)
+        }
+        GrantAuthorityError::Mint(error) => public_mint_error(error),
+    }
+}
+
+const fn public_mint_error(error: GrantMintError) -> ProtocolFailureCode {
+    match error {
+        GrantMintError::BindingMismatch => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::BindingMismatch)
+        }
+        GrantMintError::BindingGenerationStale
+        | GrantMintError::PolicyGenerationStale
+        | GrantMintError::IssuerOperationConflict => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::Stale)
+        }
+        GrantMintError::RequestedScopeEmpty
+        | GrantMintError::RequestedScopeUnauthorized
+        | GrantMintError::RequestedCeilingWidening => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::AccessRevoked)
+        }
+        GrantMintError::RequestedTtlInvalid => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::InvalidEnvelope)
+        }
+        GrantMintError::IssuerCapacityExceeded => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::ResourceExhausted)
+        }
+        GrantMintError::PolicyInvalid
+        | GrantMintError::IssuerUnavailable
+        | GrantMintError::IssuerOutcomeUnknown
+        | GrantMintError::IssuerReceiptMismatch
+        | GrantMintError::IssuerReturnedInvalidGrant => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::SecurityFailClosed)
+        }
+    }
+}
+
+const fn public_execution_error(error: GrantExecutionError) -> ProtocolFailureCode {
+    match error {
+        GrantExecutionError::Authority(error) => public_authority_error(error),
+        GrantExecutionError::Interrupted(GrantRequestInterruption::Cancelled) => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::Cancelled)
+        }
+        GrantExecutionError::Interrupted(GrantRequestInterruption::DeadlineExpired) => {
+            ProtocolFailureCode::Protocol(ProtocolErrorCode::DeadlineExpired)
+        }
+        GrantExecutionError::Interrupted(GrantRequestInterruption::NotAdmitted)
+        | GrantExecutionError::OutcomeUnknown(_) => {
+            ProtocolFailureCode::Search(SearchReasonCodeV1::SecurityFailClosed)
+        }
     }
 }
 

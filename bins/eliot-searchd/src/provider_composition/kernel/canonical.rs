@@ -7,14 +7,17 @@
 use search_contracts::{ProviderBodyV1, RequestId, SearchReadGrantClaims};
 use search_provider_protocol::{
     AdmittedProviderRequest, AuthenticatedStandaloneGrantEnvelope, BindingContext, BindingKey,
-    BoundSession, CancelOutcome, DisconnectReceipt, MonotonicMillis, PairingMachine, ProofDigest,
-    ProtocolError, ProtocolLimits, ProviderDeliveryError, ProviderFrameTranscript, RequestGuard,
-    RequestStatus, ServerNonce, TerminalKind, standalone_grant_envelope_transcript, verify_proof,
+    BoundSession, CancelOutcome, DisconnectReceipt, FrameCodec, JsonFramePayload,
+    MonotonicMillis, PairingMachine, ProofDigest, ProtocolError, ProtocolLimits,
+    ProviderDeliveryError, ProviderFrameTranscript, RequestGuard, ServerNonce,
+    StandaloneGrantResponseBodyV1, TerminalKind, encode_response,
+    encode_standalone_grant_response_body, response_transcript, seal_response,
+    standalone_grant_envelope_transcript, verify_proof,
 };
 
 use crate::access_composition::{
-    GrantCommandError, GrantDeliveryFailure, SessionBoundGrantAuthority,
-    StandaloneGrantCommandInput, StandaloneGrantIssuer, StandaloneGrantPolicySource,
+    GrantDeliveryFailure, SessionBoundGrantAuthority, StandaloneGrantCommandInput,
+    StandaloneGrantIssuer, StandaloneGrantPolicySource,
     execute_standalone_grant_command_with_delivery,
 };
 
@@ -30,6 +33,15 @@ pub use tcp::{
     CanonicalServingError, CanonicalServingLimits, CanonicalServingOwner,
     CanonicalWorkBudget, CanonicalWorkOutput,
 };
+
+/// Failure while constructing or writing the two canonical grant-response records.
+#[derive(Debug)]
+pub enum CanonicalGrantResponseError<E> {
+    /// Canonical body/envelope framing or authentication construction failed.
+    Protocol(ProtocolError),
+    /// The caller's actual transport write/flush operation failed.
+    Output(E),
+}
 
 /// Owns one exact paired key and one canonical protocol session; no independent
 /// replay ledger, grant registry or output sequence is created here.
@@ -88,15 +100,20 @@ impl CanonicalProviderConnection {
         )
     }
 
-    /// Executes one dedicated standalone-grant command on this exact paired
-    /// session, using the connection key to reproduce the grant-envelope proof.
+    /// Execute and deliver one dedicated standalone-grant command on this exact
+    /// paired session.
     ///
-    /// The caller supplies exact canonical body bytes plus the transport-owned
-    /// connection sequence/deadline. It cannot substitute a proof computed under
-    /// another key or borrow the mutable [`BoundSession`] directly. `output` must
-    /// encode/write/flush the complete authenticated response before returning;
-    /// output failure or unwind makes the prepared terminal close the session.
-    /// This method performs no socket reads and does not invent transport routing.
+    /// The caller supplies the canonical request body plus transport-owned
+    /// sequence/deadline observations. This adapter reproduces the request proof
+    /// from its non-clonable pairing key, then constructs two ordinary typed
+    /// response records in fixed order: authenticated response envelope first,
+    /// canonical status-consistent body second. Both records receive the normal
+    /// provider-frame MAC over their complete length-prefixed bytes.
+    ///
+    /// `output` must write and flush both records under the original request
+    /// guard before returning. Any encoding/output error or unwind disconnects
+    /// the session; a first-record write followed by second-record failure is not
+    /// repaired or reported as a committed terminal.
     pub fn execute_standalone_grant<P, I, E>(
         &mut self,
         authority: &mut SessionBoundGrantAuthority<P, I>,
@@ -107,17 +124,27 @@ impl CanonicalProviderConnection {
         relative_deadline_ms: Option<u64>,
         output: impl FnOnce(
             &RequestGuard,
-            RequestStatus,
-            Result<&SearchReadGrantClaims, &GrantCommandError>,
+            &[u8],
+            &ProofDigest,
+            &[u8],
+            &ProofDigest,
         ) -> Result<(), E>,
-    ) -> Result<SearchReadGrantClaims, GrantDeliveryFailure<E>>
+    ) -> Result<
+        SearchReadGrantClaims,
+        GrantDeliveryFailure<CanonicalGrantResponseError<E>>,
+    >
     where
         P: StandaloneGrantPolicySource,
         I: StandaloneGrantIssuer,
     {
-        let expected_proof = self.key.with_bytes(|key| {
+        let ceremony = self.session.pairing().session();
+        let response_nonce = *self.session.server_nonce();
+        let response_version = self.session.binding_context().version();
+        let limits = self.limits;
+        let key = &self.key;
+        let expected_proof = key.with_bytes(|bytes| {
             ProofDigest::from_bytes(
-                *blake3::keyed_hash(key, &standalone_grant_envelope_transcript(envelope))
+                *blake3::keyed_hash(bytes, &standalone_grant_envelope_transcript(envelope))
                     .as_bytes(),
             )
         });
@@ -132,7 +159,75 @@ impl CanonicalProviderConnection {
                 now,
                 relative_deadline_ms,
             },
-            output,
+            |guard, status, outcome| {
+                let response_body = match outcome {
+                    Ok(claims) => StandaloneGrantResponseBodyV1::Claims((*claims).clone()),
+                    Err(error) => StandaloneGrantResponseBodyV1::Failure(
+                        (*error).public_failure_code(),
+                    ),
+                };
+                let body_bytes = encode_standalone_grant_response_body(
+                    status,
+                    &response_body,
+                )
+                .map_err(CanonicalGrantResponseError::Protocol)?;
+                let body_payload = JsonFramePayload::new(body_bytes)
+                    .map_err(|_| CanonicalGrantResponseError::Protocol(
+                        ProtocolError::FrameTooLarge,
+                    ))?;
+                let body_digest = ProofDigest::from_bytes(
+                    *blake3::hash(body_payload.as_slice()).as_bytes(),
+                );
+                let stub = seal_response(
+                    response_version,
+                    response_nonce,
+                    *guard.request_id(),
+                    status,
+                    body_digest,
+                    ProofDigest::from_bytes([0_u8; 32]),
+                );
+                let response_proof = key.with_bytes(|bytes| {
+                    ProofDigest::from_bytes(
+                        *blake3::keyed_hash(bytes, &response_transcript(&stub)).as_bytes(),
+                    )
+                });
+                let response = seal_response(
+                    response_version,
+                    response_nonce,
+                    *guard.request_id(),
+                    status,
+                    body_digest,
+                    response_proof,
+                );
+                let envelope_frame = encode_response(&response, limits)
+                    .map_err(CanonicalGrantResponseError::Protocol)?;
+                let body_frame = FrameCodec::encode(&body_payload, limits)
+                    .map_err(CanonicalGrantResponseError::Protocol)?;
+                let envelope_record_proof = keyed_frame_proof(
+                    key,
+                    &ProviderFrameTranscript::response(
+                        ceremony,
+                        response_nonce,
+                        envelope_frame.as_slice(),
+                    ),
+                );
+                let body_record_proof = keyed_frame_proof(
+                    key,
+                    &ProviderFrameTranscript::response(
+                        ceremony,
+                        response_nonce,
+                        body_frame.as_slice(),
+                    ),
+                );
+                output(
+                    guard,
+                    envelope_frame.as_slice(),
+                    &envelope_record_proof,
+                    body_frame.as_slice(),
+                    &body_record_proof,
+                )
+                .map_err(CanonicalGrantResponseError::Output)
+            },
         )
     }
 
