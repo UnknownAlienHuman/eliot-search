@@ -1,59 +1,31 @@
-//! Deterministic provider-neutral point identities for W3 publication.
+//! Canonical collision-detectable Qdrant point identities.
 //!
-//! A point identity is derived only from immutable logical inputs: namespace,
-//! stable source identity, retained source revision, exact unit range,
-//! projection kind, projection configuration fingerprint, schema revision,
-//! exact source/projection membership pair (invariant 4: one point has exactly
-//! one `ProjectionMembership`; membership arrays are forbidden), T16
-//! representation and unit digests, the scoring-partition digest (IDF/security
-//! domain) and the opaque collection-generation digest. It does not depend on
-//! Qdrant collection names, insertion order, process identity, wall time, or
-//! current routing. The compact identifier uses a frozen two-lane digest
-//! profile and every use is guarded by the complete canonical key so a digest
-//! collision is detected rather than silently aliasing another point.
-//!
-//! Profile revision 2 binds the T26 membership/representation/scoring/
-//! generation scope. Revision-1 identities (unit range + projection config
-//! only) are rejected as stale: a profile change requires a new collection
-//! generation instead of silent reuse.
+//! The complete identity is the BLAKE3-256 digest of one versioned canonical
+//! CBOR [`ProjectionPointKey`]. The Qdrant UUID is only a namespace-separated
+//! 128-bit projection of that digest. Correctness therefore always compares the
+//! full digest and every canonical identity field before an existing UUID may
+//! be reused.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![allow(
-    clippy::doc_markdown,
-    clippy::large_enum_variant,
-    clippy::manual_let_else,
-    clippy::match_same_arms,
-    clippy::missing_const_for_fn,
     clippy::missing_errors_doc,
     clippy::module_name_repetitions,
-    clippy::must_use_candidate,
-    clippy::needless_pass_by_value,
-    clippy::option_if_let_else,
-    clippy::similar_names,
-    clippy::struct_excessive_bools,
-    clippy::too_many_arguments,
-    clippy::too_many_lines,
-    clippy::trivially_copy_pass_by_ref
+    clippy::too_many_lines
 )]
 
 use core::fmt;
 use std::collections::BTreeMap;
 
-use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId};
+use search_contracts::{
+    CollectionGenerationId, InstallationIncarnationId, ProjectionMembershipId,
+    ProjectionProfileSetId, RepresentationId, UnitId,
+};
 
-/// Frozen point-identity profile revision.
-///
-/// Revision 2 binds the T26 membership/representation/scoring/generation
-/// scope. Revision 1 (no membership binding) is stale and rejected.
-pub const POINT_IDENTITY_PROFILE_REVISION: u16 = 2;
+/// Supported canonical point-key schema version.
+pub const POINT_KEY_SCHEMA_VERSION: u16 = 1;
 
-const DOMAIN_TAG: &[u8] = b"eliot-search.point-id.v1\0";
-const FNV_OFFSET_A: u64 = 0xcbf2_9ce4_8422_2325;
-const FNV_OFFSET_B: u64 = 0x8422_2325_cbf2_9ce4;
-const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
-const MIX_A: u64 = 0x9e37_79b9_7f4a_7c15;
-const MIX_B: u64 = 0xc2b2_ae3d_27d4_eb4f;
+const UUID_PROJECTION_DOMAIN: &[u8] = b"eliot-search/qdrant-point-uuid/v1\0";
 
 /// Conservative finite point-identity limits.
 pub const DEFAULT_POINT_IDENTITY_LIMITS: PointIdentityLimits = PointIdentityLimits {
@@ -62,40 +34,41 @@ pub const DEFAULT_POINT_IDENTITY_LIMITS: PointIdentityLimits = PointIdentityLimi
     max_registered_points: 16_000_000,
 };
 
-/// Closed content-free point-identity failure.
+/// Closed point-identity failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum PointIdentityError {
     /// Limits are zero or internally inconsistent.
     InvalidLimits,
-    /// Namespace or source identifier exceeds the finite boundary.
+    /// The key schema version is not accepted.
+    UnsupportedKeyVersion,
+    /// The profile-set identifier exceeds the finite boundary.
     IdentifierTooLong,
-    /// Unit byte range is empty or inverted.
-    InvalidUnitRange,
-    /// Canonical preimage exceeds its finite byte ceiling.
+    /// Canonical encoding exceeded its finite ceiling.
     CanonicalBytesExceeded,
-    /// Canonical length or offset conversion overflowed.
+    /// Canonical encoding length conversion overflowed.
     LengthOverflow,
-    /// The same compact point identifier maps to another complete key.
+    /// One compact UUID maps to another full identity.
     DigestCollision,
-    /// The same complete key was registered with a different compact identifier.
+    /// Full digest, UUID or canonical fields differ.
     IdentityMismatch,
     /// Finite collision registry is full.
     RegistryCapacityExceeded,
-    /// Requested point is absent from the collision registry.
+    /// Requested UUID is absent from the collision registry.
     PointNotFound,
 }
 
 impl PointIdentityError {
     /// Stable machine-readable reason code.
+    #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
             Self::InvalidLimits => "POINT_ID_INVALID_LIMITS",
+            Self::UnsupportedKeyVersion => "POINT_KEY_VERSION_UNSUPPORTED",
             Self::IdentifierTooLong => "POINT_ID_IDENTIFIER_TOO_LONG",
-            Self::InvalidUnitRange => "POINT_ID_INVALID_UNIT_RANGE",
-            Self::CanonicalBytesExceeded => "POINT_ID_CANONICAL_BYTES_EXCEEDED",
-            Self::LengthOverflow => "POINT_ID_LENGTH_OVERFLOW",
-            Self::DigestCollision => "POINT_ID_DIGEST_COLLISION",
-            Self::IdentityMismatch => "POINT_ID_IDENTITY_MISMATCH",
+            Self::CanonicalBytesExceeded => "CANONICAL_ENCODING_FAILED",
+            Self::LengthOverflow => "CANONICAL_ENCODING_FAILED",
+            Self::DigestCollision => "POINT_ID_COLLISION",
+            Self::IdentityMismatch => "POINT_IDENTITY_MISMATCH",
             Self::RegistryCapacityExceeded => "POINT_ID_REGISTRY_CAPACITY_EXCEEDED",
             Self::PointNotFound => "POINT_ID_NOT_FOUND",
         }
@@ -113,11 +86,11 @@ impl std::error::Error for PointIdentityError {}
 /// Finite point-identity limits.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PointIdentityLimits {
-    /// Maximum UTF-8 bytes in one opaque identifier.
+    /// Maximum UTF-8 bytes in the profile-set identifier.
     pub max_identifier_bytes: usize,
-    /// Maximum bytes in the complete canonical identity preimage.
+    /// Maximum canonical CBOR bytes for one key.
     pub max_canonical_bytes: usize,
-    /// Maximum collision-checked identities retained by one registry instance.
+    /// Maximum collision-checked identities retained by one registry.
     pub max_registered_points: usize,
 }
 
@@ -135,157 +108,137 @@ impl PointIdentityLimits {
     }
 }
 
-/// Closed logical projection family.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum ProjectionKind {
-    /// Lexical searchable unit projection.
-    Lexical,
-    /// Exact-source metadata projection.
-    ExactMetadata,
-    /// Optional code-structure projection.
-    CodeStructure,
-    /// Optional model-produced projection.
-    ModelDerived,
+/// Logical role of one point within a projection profile set.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum PointRole {
+    /// Searchable unit point.
+    Unit,
+    /// Relation point between units/entities.
+    Relation,
+    /// Auxiliary profile-owned point.
+    Auxiliary,
 }
 
-impl ProjectionKind {
-    const fn tag(self) -> u8 {
+impl PointRole {
+    const fn cbor_value(self) -> u8 {
         match self {
-            Self::Lexical => 1,
-            Self::ExactMetadata => 2,
-            Self::CodeStructure => 3,
-            Self::ModelDerived => 4,
+            Self::Unit => 0,
+            Self::Relation => 1,
+            Self::Auxiliary => 2,
         }
     }
 }
 
-/// Complete immutable logical key for one index point.
+/// Complete immutable S11.1 logical key for one Qdrant point.
 ///
-/// The T26 scope tail (`source_membership_id` through
-/// `collection_generation_digest`) keeps one source in two authorized
-/// memberships, one unit across profile/generation changes and equivalent
-/// scoring legs in distinct, non-aliasing point sets. Raw vendor collection
-/// names, insertion order and wall time are never inputs.
+/// The key intentionally excludes source membership names, paths, policy
+/// revisions, epochs, vector values and vendor collection names. Changes to
+/// access/scoring meaning mint new immutable partition/projection identities
+/// before this key is constructed.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct PointIdentityKey {
-    /// Stable namespace identity.
-    pub namespace_id: OpaqueId,
-    /// Stable source identity within the namespace.
-    pub source_id: OpaqueId,
-    /// Retained source revision.
-    pub source_revision: NonZeroRevision,
-    /// Deterministic unit ordinal within the retained revision.
-    pub unit_ordinal: u64,
-    /// Inclusive exact source byte start.
-    pub source_byte_start: u64,
-    /// Exclusive exact source byte end.
-    pub source_byte_end: u64,
-    /// Logical projection family.
-    pub projection_kind: ProjectionKind,
-    /// Fingerprint of the complete projection/analyzer configuration.
-    pub projection_fingerprint: Blake3Digest32,
-    /// Monotone projection schema revision.
-    pub projection_schema_revision: NonZeroRevision,
-    /// Exact source membership; one point belongs to exactly one membership.
-    pub source_membership_id: OpaqueId,
-    /// Exact projection membership; membership arrays are forbidden.
-    pub projection_membership_id: OpaqueId,
-    /// T16 canonical representation digest bound to source bytes and profiles.
-    pub representation_digest: Blake3Digest32,
-    /// Exact unit bytes digest.
-    pub unit_digest: Blake3Digest32,
-    /// Scoring-partition digest (IDF/security domain; cross-domain reuse forbidden).
-    pub scoring_partition_digest: Blake3Digest32,
-    /// Opaque collection-generation digest (profile change mints a new one).
-    pub collection_generation_digest: Blake3Digest32,
+pub struct ProjectionPointKey {
+    /// Canonical key schema version; only version 1 is accepted.
+    pub schema_version: u16,
+    /// Current installation incarnation.
+    pub installation_incarnation_id: InstallationIncarnationId,
+    /// Physical collection generation identity.
+    pub collection_generation_id: CollectionGenerationId,
+    /// Exactly one projection membership.
+    pub projection_membership_id: ProjectionMembershipId,
+    /// Immutable representation identity.
+    pub representation_id: RepresentationId,
+    /// Immutable unit occurrence identity.
+    pub unit_id: UnitId,
+    /// Immutable projection-profile-set identity.
+    pub projection_profile_set_id: ProjectionProfileSetId,
+    /// Point role within that profile set.
+    pub point_role: PointRole,
 }
 
-impl PointIdentityKey {
-    /// Validates immutable key boundaries.
+impl ProjectionPointKey {
+    /// Validates the exact key version and finite profile identifier.
     pub fn validate(&self, limits: PointIdentityLimits) -> Result<(), PointIdentityError> {
         let limits = limits.validate()?;
-        if self.namespace_id.as_str().len() > limits.max_identifier_bytes
-            || self.source_id.as_str().len() > limits.max_identifier_bytes
-            || self.source_membership_id.as_str().len() > limits.max_identifier_bytes
-            || self.projection_membership_id.as_str().len() > limits.max_identifier_bytes
-        {
-            return Err(PointIdentityError::IdentifierTooLong);
+        if self.schema_version != POINT_KEY_SCHEMA_VERSION {
+            return Err(PointIdentityError::UnsupportedKeyVersion);
         }
-        if self.source_byte_start >= self.source_byte_end {
-            return Err(PointIdentityError::InvalidUnitRange);
+        if self.projection_profile_set_id.as_str().len() > limits.max_identifier_bytes {
+            return Err(PointIdentityError::IdentifierTooLong);
         }
         Ok(())
     }
+}
 
-    /// Exact source byte length represented by this point.
-    pub const fn source_byte_len(&self) -> u64 {
-        self.source_byte_end - self.source_byte_start
+/// Compatibility name for the complete canonical point key.
+pub type PointIdentityKey = ProjectionPointKey;
+
+/// Frozen canonical CBOR bytes for one [`ProjectionPointKey`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CanonicalPointKeyBytes(Vec<u8>);
+
+impl CanonicalPointKeyBytes {
+    /// Borrows the exact canonical bytes.
+    #[must_use]
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
     }
 
-    /// Encodes the complete key using the frozen length-prefixed profile.
-    pub fn canonical_bytes(
-        &self,
-        limits: PointIdentityLimits,
-    ) -> Result<Vec<u8>, PointIdentityError> {
-        self.validate(limits)?;
-        let limits = limits.validate()?;
-        let mut bytes = Vec::with_capacity(256);
-        append_bytes(&mut bytes, DOMAIN_TAG, limits)?;
-        append_u16(&mut bytes, POINT_IDENTITY_PROFILE_REVISION, limits)?;
-        append_text(&mut bytes, self.namespace_id.as_str(), limits)?;
-        append_text(&mut bytes, self.source_id.as_str(), limits)?;
-        append_u64(&mut bytes, self.source_revision.get(), limits)?;
-        append_u64(&mut bytes, self.unit_ordinal, limits)?;
-        append_u64(&mut bytes, self.source_byte_start, limits)?;
-        append_u64(&mut bytes, self.source_byte_end, limits)?;
-        append_u8(&mut bytes, self.projection_kind.tag(), limits)?;
-        append_bytes(&mut bytes, self.projection_fingerprint.as_bytes(), limits)?;
-        append_u64(&mut bytes, self.projection_schema_revision.get(), limits)?;
-        append_text(&mut bytes, self.source_membership_id.as_str(), limits)?;
-        append_text(&mut bytes, self.projection_membership_id.as_str(), limits)?;
-        append_bytes(&mut bytes, self.representation_digest.as_bytes(), limits)?;
-        append_bytes(&mut bytes, self.unit_digest.as_bytes(), limits)?;
-        append_bytes(&mut bytes, self.scoring_partition_digest.as_bytes(), limits)?;
-        append_bytes(
-            &mut bytes,
-            self.collection_generation_digest.as_bytes(),
-            limits,
-        )?;
-        Ok(bytes)
+    /// Consumes the wrapper.
+    #[must_use]
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0
     }
 }
 
-/// Compact 128-bit provider-neutral point identifier.
-///
-/// The value can be rendered as a UUID-compatible hexadecimal string, but it is
-/// intentionally not assigned UUID version semantics. Correctness relies on
-/// collision checking against [`PointIdentityKey`], not on assuming collisions
-/// are impossible.
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+/// Full BLAKE3-256 point identity digest.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PointIdentityDigest([u8; 32]);
+
+impl PointIdentityDigest {
+    /// Creates a digest from exact bytes.
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// Exact 32 digest bytes.
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+/// Compact 128-bit provider-neutral Qdrant UUID bytes.
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PointId128([u8; 16]);
 
 impl PointId128 {
     /// Creates an identifier from exact bytes.
+    #[must_use]
     pub const fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(bytes)
     }
 
     /// Exact 16 identifier bytes.
+    #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 16] {
         &self.0
     }
 
     /// Deterministic lower-case hexadecimal representation.
+    #[must_use]
     pub fn to_hex(self) -> String {
         let mut output = String::with_capacity(32);
         for byte in self.0 {
             use core::fmt::Write as _;
-            write!(&mut output, "{byte:02x}").expect("writing hexadecimal into String cannot fail");
+            write!(&mut output, "{byte:02x}")
+                .expect("writing hexadecimal into String cannot fail");
         }
         output
     }
 
-    /// UUID-compatible hyphenated representation accepted by Qdrant UUID IDs.
+    /// UUID-compatible hyphenated representation accepted by Qdrant.
+    #[must_use]
     pub fn to_hyphenated(self) -> String {
         let hex = self.to_hex();
         format!(
@@ -314,131 +267,150 @@ impl fmt::Display for PointId128 {
     }
 }
 
-/// Complete derived identity and canonical-key fingerprint.
+/// Complete derived point identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PointIdentity {
-    /// Compact provider-neutral point ID.
+    /// Compact Qdrant UUID projection.
     pub point_id: PointId128,
-    /// Complete immutable logical key.
-    pub key: PointIdentityKey,
-    /// Digest profile revision used for the compact ID.
-    pub profile_revision: u16,
+    /// Full BLAKE3-256 digest stored in payload and manifest.
+    pub full_digest: PointIdentityDigest,
+    /// Complete immutable canonical key.
+    pub key: ProjectionPointKey,
 }
 
-/// Derives a deterministic point identity from a complete immutable key.
-pub fn derive_point_identity(
-    key: PointIdentityKey,
-    limits: PointIdentityLimits,
-) -> Result<PointIdentity, PointIdentityError> {
-    let canonical = key.canonical_bytes(limits)?;
-    let point_id = PointId128::from_bytes(frozen_digest_128(&canonical));
-    Ok(PointIdentity {
-        point_id,
-        key,
-        profile_revision: POINT_IDENTITY_PROFILE_REVISION,
-    })
+/// Existing point identity read before a possible overwrite.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExistingPointIdentity {
+    /// Compact UUID occupied in Qdrant.
+    pub point_id: PointId128,
+    /// Full payload identity digest.
+    pub full_digest: PointIdentityDigest,
+    /// Canonical identity fields reconstructed from typed payload/control data.
+    pub key: ProjectionPointKey,
 }
 
-/// Complete canonical-key digest guarding one compact point identifier.
-///
-/// The 128-bit projection is an address, not the identity: correctness relies
-/// on comparing the complete [`PointIdentityKey`], never on assuming
-/// collisions are impossible.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct PointIdentityDigest([u8; 16]);
-
-impl PointIdentityDigest {
-    /// Creates a digest from exact bytes.
-    #[must_use]
-    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
-        Self(bytes)
-    }
-
-    /// Exact 16 digest bytes.
-    #[must_use]
-    pub const fn as_bytes(&self) -> &[u8; 16] {
-        &self.0
-    }
-}
-
-/// Non-destructive collision decision for one compact point identifier.
+/// Non-destructive collision decision.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum CollisionDecision {
-    /// No existing point occupies the identifier; creation is permitted.
+    /// No point occupies the UUID; creation is permitted.
     Vacant,
-    /// The existing point carries the same complete key and profile revision.
+    /// UUID, full digest and every canonical field match.
     SameFullIdentity,
-    /// The identifier maps to another complete key; never overwrite.
+    /// Any mismatch blocks the write.
     CollisionBlock,
 }
 
-/// Encodes a `ProjectionPointKey` as versioned deterministic bytes.
+/// Encodes one key as a deterministic canonical CBOR array.
 ///
-/// Ad-hoc strings, JSON serialization, map iteration order and omitted
-/// load-bearing fields are forbidden: the frozen length-prefixed profile is
-/// the only encoding.
-pub fn encode_canonical_key(
-    key: &PointIdentityKey,
-    limits: PointIdentityLimits,
-) -> Result<Vec<u8>, PointIdentityError> {
-    key.canonical_bytes(limits)
-}
-
-/// Package-local alias for the agent-contract surface name.
+/// The fixed version-1 schema is:
+/// `[version, installation, collection, membership, representation, unit,
+/// profile_set, role]`. UUIDs are 16-byte CBOR byte strings, profile set is a
+/// CBOR text string and role is an unsigned integer. Definite lengths and the
+/// shortest integer encoding make the representation canonical.
 pub fn canonical_point_key_bytes(
-    key: &PointIdentityKey,
+    key: &ProjectionPointKey,
+    limits: PointIdentityLimits,
+) -> Result<CanonicalPointKeyBytes, PointIdentityError> {
+    key.validate(limits)?;
+    let limits = limits.validate()?;
+    let mut output = Vec::with_capacity(128);
+    push_checked(&mut output, &[0x88], limits)?;
+    encode_unsigned(&mut output, u64::from(key.schema_version), limits)?;
+    encode_bytes(
+        &mut output,
+        key.installation_incarnation_id.as_bytes(),
+        limits,
+    )?;
+    encode_bytes(
+        &mut output,
+        key.collection_generation_id.as_bytes(),
+        limits,
+    )?;
+    encode_bytes(
+        &mut output,
+        key.projection_membership_id.as_bytes(),
+        limits,
+    )?;
+    encode_bytes(&mut output, key.representation_id.as_bytes(), limits)?;
+    encode_bytes(&mut output, key.unit_id.as_bytes(), limits)?;
+    encode_text(
+        &mut output,
+        key.projection_profile_set_id.as_str(),
+        limits,
+    )?;
+    encode_unsigned(
+        &mut output,
+        u64::from(key.point_role.cbor_value()),
+        limits,
+    )?;
+    Ok(CanonicalPointKeyBytes(output))
+}
+
+/// Compatibility spelling for canonical key encoding.
+pub fn encode_canonical_key(
+    key: &ProjectionPointKey,
     limits: PointIdentityLimits,
 ) -> Result<Vec<u8>, PointIdentityError> {
-    encode_canonical_key(key, limits)
+    canonical_point_key_bytes(key, limits).map(CanonicalPointKeyBytes::into_vec)
 }
 
-/// Computes the full identity digest over canonical key bytes.
-///
-/// The canonical bytes already carry the `eliot-search.point-id.v1` domain
-/// prefix and the profile revision; the digest never hashes ad-hoc strings.
-#[must_use]
-pub fn full_digest(canonical_bytes: &[u8]) -> PointIdentityDigest {
-    PointIdentityDigest(frozen_digest_128(canonical_bytes))
-}
-
-/// Package-local alias for the agent-contract surface name.
+/// Computes the full BLAKE3-256 digest of canonical key bytes.
 #[must_use]
 pub fn point_identity_digest(canonical_bytes: &[u8]) -> PointIdentityDigest {
-    full_digest(canonical_bytes)
+    PointIdentityDigest(*blake3::hash(canonical_bytes).as_bytes())
 }
 
-/// Projects a full digest into the namespace-separated UUID representation.
-///
-/// The UUID is an address, not the complete identity.
+/// Compatibility spelling for full digest derivation.
 #[must_use]
-pub const fn derive_qdrant_uuid(digest: PointIdentityDigest) -> PointId128 {
-    PointId128::from_bytes(digest.0)
+pub fn full_digest(canonical_bytes: &[u8]) -> PointIdentityDigest {
+    point_identity_digest(canonical_bytes)
 }
 
-/// Package-local alias for the agent-contract surface name.
+/// Projects a full digest into a namespace-separated 128-bit UUID.
 #[must_use]
-pub const fn project_qdrant_uuid(digest: PointIdentityDigest) -> PointId128 {
-    PointId128::from_bytes(digest.0)
+pub fn project_qdrant_uuid(digest: PointIdentityDigest) -> PointId128 {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(UUID_PROJECTION_DOMAIN);
+    hasher.update(digest.as_bytes());
+    let projected = hasher.finalize();
+    let mut bytes = [0_u8; 16];
+    bytes.copy_from_slice(&projected.as_bytes()[..16]);
+    PointId128::from_bytes(bytes)
 }
 
-/// Compares an expected identity against the observed occupant, if any.
-///
-/// `None` (vacant slot) permits creation. An occupant with the same compact
-/// ID, complete key and profile revision permits idempotent replay. Any other
-/// occupant — same UUID with a different full key, digest or revision — is
-/// [`CollisionDecision::CollisionBlock`]: the writer must never overwrite.
+/// Compatibility spelling for UUID projection.
+#[must_use]
+pub fn derive_qdrant_uuid(digest: PointIdentityDigest) -> PointId128 {
+    project_qdrant_uuid(digest)
+}
+
+/// Derives the complete point identity from one canonical key.
+pub fn derive_point_identity(
+    key: ProjectionPointKey,
+    limits: PointIdentityLimits,
+) -> Result<PointIdentity, PointIdentityError> {
+    let canonical = canonical_point_key_bytes(&key, limits)?;
+    let full_digest = point_identity_digest(canonical.as_slice());
+    let point_id = project_qdrant_uuid(full_digest);
+    Ok(PointIdentity {
+        point_id,
+        full_digest,
+        key,
+    })
+}
+
+/// Compares an expected identity with an existing occupant.
 #[must_use]
 pub fn compare_existing_identity(
     expected: &PointIdentity,
-    observed: Option<&PointIdentity>,
+    observed: Option<&ExistingPointIdentity>,
 ) -> CollisionDecision {
     let Some(observed) = observed else {
         return CollisionDecision::Vacant;
     };
     if observed.point_id == expected.point_id
+        && observed.full_digest == expected.full_digest
         && observed.key == expected.key
-        && observed.profile_revision == expected.profile_revision
-        && observed.profile_revision == POINT_IDENTITY_PROFILE_REVISION
     {
         CollisionDecision::SameFullIdentity
     } else {
@@ -446,33 +418,39 @@ pub fn compare_existing_identity(
     }
 }
 
-/// Checks the full compact digest and every load-bearing identity field.
-///
-/// Rejects unknown profile revisions (including stale revision 1), key drift
-/// and digest mismatch before publication or recovery. Idempotent replay of
-/// the exact identity validates.
+/// Verifies UUID, full digest and every canonical identity field.
+pub fn validate_identity_fields(
+    expected: &PointIdentity,
+    observed: &ExistingPointIdentity,
+) -> Result<(), PointIdentityError> {
+    if compare_existing_identity(expected, Some(observed))
+        == CollisionDecision::SameFullIdentity
+    {
+        Ok(())
+    } else {
+        Err(PointIdentityError::IdentityMismatch)
+    }
+}
+
+/// Compatibility validation for two derived identities.
 pub fn validate_identity_payload(
     expected: &PointIdentity,
     observed: &PointIdentity,
 ) -> Result<(), PointIdentityError> {
-    if expected.profile_revision != POINT_IDENTITY_PROFILE_REVISION
-        || observed.profile_revision != POINT_IDENTITY_PROFILE_REVISION
-        || observed.profile_revision != expected.profile_revision
-    {
-        return Err(PointIdentityError::IdentityMismatch);
-    }
-    if observed.key != expected.key || observed.point_id != expected.point_id {
-        return Err(PointIdentityError::IdentityMismatch);
-    }
-    Ok(())
+    let observed = ExistingPointIdentity {
+        point_id: observed.point_id,
+        full_digest: observed.full_digest,
+        key: observed.key.clone(),
+    };
+    validate_identity_fields(expected, &observed)
 }
 
-/// Finite collision registry required before publishing compact point IDs.
+/// Finite collision registry required before publishing compact UUIDs.
 #[derive(Clone, Debug)]
 pub struct PointIdentityRegistry {
     max_points: usize,
-    by_id: BTreeMap<PointId128, PointIdentityKey>,
-    by_key: BTreeMap<PointIdentityKey, PointId128>,
+    by_id: BTreeMap<PointId128, (PointIdentityDigest, ProjectionPointKey)>,
+    by_key: BTreeMap<ProjectionPointKey, PointId128>,
 }
 
 impl PointIdentityRegistry {
@@ -486,15 +464,13 @@ impl PointIdentityRegistry {
         })
     }
 
-    /// Registers or exactly replays one derived identity.
-    ///
-    /// A compact-ID collision with another complete key is a hard error.
-    pub fn register(&mut self, identity: PointIdentity) -> Result<PointId128, PointIdentityError> {
-        if identity.profile_revision != POINT_IDENTITY_PROFILE_REVISION {
-            return Err(PointIdentityError::IdentityMismatch);
-        }
-        if let Some(existing_key) = self.by_id.get(&identity.point_id) {
-            if existing_key != &identity.key {
+    /// Registers or exactly replays one identity.
+    pub fn register(
+        &mut self,
+        identity: PointIdentity,
+    ) -> Result<PointId128, PointIdentityError> {
+        if let Some((digest, key)) = self.by_id.get(&identity.point_id) {
+            if digest != &identity.full_digest || key != &identity.key {
                 return Err(PointIdentityError::DigestCollision);
             }
             return Ok(identity.point_id);
@@ -508,203 +484,261 @@ impl PointIdentityRegistry {
         if self.by_id.len() >= self.max_points {
             return Err(PointIdentityError::RegistryCapacityExceeded);
         }
-        self.by_key.insert(identity.key.clone(), identity.point_id);
-        self.by_id.insert(identity.point_id, identity.key);
+        self.by_key
+            .insert(identity.key.clone(), identity.point_id);
+        self.by_id.insert(
+            identity.point_id,
+            (identity.full_digest, identity.key),
+        );
         Ok(identity.point_id)
     }
 
-    /// Returns the complete key for one compact point ID.
-    pub fn key(&self, point_id: PointId128) -> Result<&PointIdentityKey, PointIdentityError> {
+    /// Returns the complete key for one point UUID.
+    pub fn key(
+        &self,
+        point_id: PointId128,
+    ) -> Result<&ProjectionPointKey, PointIdentityError> {
         self.by_id
             .get(&point_id)
+            .map(|(_, key)| key)
+            .ok_or(PointIdentityError::PointNotFound)
+    }
+
+    /// Returns the full digest for one point UUID.
+    pub fn digest(
+        &self,
+        point_id: PointId128,
+    ) -> Result<PointIdentityDigest, PointIdentityError> {
+        self.by_id
+            .get(&point_id)
+            .map(|(digest, _)| *digest)
             .ok_or(PointIdentityError::PointNotFound)
     }
 
     /// Number of registered identities.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.by_id.len()
     }
 
-    /// Returns whether no identities are registered.
+    /// Whether no identities are registered.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.by_id.is_empty()
     }
 }
 
-fn append_text(
-    output: &mut Vec<u8>,
-    value: &str,
-    limits: PointIdentityLimits,
-) -> Result<(), PointIdentityError> {
-    append_bytes(output, value.as_bytes(), limits)
-}
-
-fn append_bytes(
-    output: &mut Vec<u8>,
-    value: &[u8],
-    limits: PointIdentityLimits,
-) -> Result<(), PointIdentityError> {
-    let length = u32::try_from(value.len()).map_err(|_| PointIdentityError::LengthOverflow)?;
-    extend_checked(output, &length.to_be_bytes(), limits)?;
-    extend_checked(output, value, limits)
-}
-
-fn append_u8(
-    output: &mut Vec<u8>,
-    value: u8,
-    limits: PointIdentityLimits,
-) -> Result<(), PointIdentityError> {
-    extend_checked(output, &[value], limits)
-}
-
-fn append_u16(
-    output: &mut Vec<u8>,
-    value: u16,
-    limits: PointIdentityLimits,
-) -> Result<(), PointIdentityError> {
-    extend_checked(output, &value.to_be_bytes(), limits)
-}
-
-fn append_u64(
+fn encode_unsigned(
     output: &mut Vec<u8>,
     value: u64,
     limits: PointIdentityLimits,
 ) -> Result<(), PointIdentityError> {
-    extend_checked(output, &value.to_be_bytes(), limits)
+    encode_major_length(output, 0, value, limits)
 }
 
-fn extend_checked(
+fn encode_bytes(
     output: &mut Vec<u8>,
     value: &[u8],
     limits: PointIdentityLimits,
 ) -> Result<(), PointIdentityError> {
+    let length = u64::try_from(value.len()).map_err(|_| PointIdentityError::LengthOverflow)?;
+    encode_major_length(output, 2, length, limits)?;
+    push_checked(output, value, limits)
+}
+
+fn encode_text(
+    output: &mut Vec<u8>,
+    value: &str,
+    limits: PointIdentityLimits,
+) -> Result<(), PointIdentityError> {
+    let length = u64::try_from(value.len()).map_err(|_| PointIdentityError::LengthOverflow)?;
+    encode_major_length(output, 3, length, limits)?;
+    push_checked(output, value.as_bytes(), limits)
+}
+
+fn encode_major_length(
+    output: &mut Vec<u8>,
+    major: u8,
+    value: u64,
+    limits: PointIdentityLimits,
+) -> Result<(), PointIdentityError> {
+    let prefix = major << 5;
+    match value {
+        0..=23 => push_checked(output, &[prefix | u8::try_from(value).unwrap_or(0)], limits),
+        24..=0xff => push_checked(
+            output,
+            &[prefix | 24, u8::try_from(value).map_err(|_| PointIdentityError::LengthOverflow)?],
+            limits,
+        ),
+        0x100..=0xffff => {
+            push_checked(output, &[prefix | 25], limits)?;
+            push_checked(
+                output,
+                &u16::try_from(value)
+                    .map_err(|_| PointIdentityError::LengthOverflow)?
+                    .to_be_bytes(),
+                limits,
+            )
+        }
+        0x1_0000..=0xffff_ffff => {
+            push_checked(output, &[prefix | 26], limits)?;
+            push_checked(
+                output,
+                &u32::try_from(value)
+                    .map_err(|_| PointIdentityError::LengthOverflow)?
+                    .to_be_bytes(),
+                limits,
+            )
+        }
+        _ => {
+            push_checked(output, &[prefix | 27], limits)?;
+            push_checked(output, &value.to_be_bytes(), limits)
+        }
+    }
+}
+
+fn push_checked(
+    output: &mut Vec<u8>,
+    bytes: &[u8],
+    limits: PointIdentityLimits,
+) -> Result<(), PointIdentityError> {
     let new_len = output
         .len()
-        .checked_add(value.len())
+        .checked_add(bytes.len())
         .ok_or(PointIdentityError::LengthOverflow)?;
     if new_len > limits.max_canonical_bytes {
         return Err(PointIdentityError::CanonicalBytesExceeded);
     }
-    output.extend_from_slice(value);
+    output.extend_from_slice(bytes);
     Ok(())
-}
-
-fn frozen_digest_128(bytes: &[u8]) -> [u8; 16] {
-    let mut left = FNV_OFFSET_A;
-    let mut right = FNV_OFFSET_B;
-    for (index, byte) in bytes.iter().copied().enumerate() {
-        left ^= u64::from(byte);
-        left = left.wrapping_mul(FNV_PRIME);
-        left ^= left.rotate_right(29).wrapping_add(MIX_A);
-
-        right ^=
-            u64::from(byte).wrapping_add(u64::try_from(index).unwrap_or(u64::MAX).rotate_left(17));
-        right = right.wrapping_mul(FNV_PRIME ^ MIX_B);
-        right ^= right.rotate_left(31).wrapping_add(MIX_B);
-    }
-    left ^= u64::try_from(bytes.len())
-        .unwrap_or(u64::MAX)
-        .wrapping_mul(MIX_A);
-    right ^= u64::try_from(bytes.len())
-        .unwrap_or(u64::MAX)
-        .wrapping_mul(MIX_B);
-    left = avalanche(left);
-    right = avalanche(right ^ left.rotate_left(23));
-    let mut output = [0_u8; 16];
-    output[..8].copy_from_slice(&left.to_be_bytes());
-    output[8..].copy_from_slice(&right.to_be_bytes());
-    output
-}
-
-const fn avalanche(mut value: u64) -> u64 {
-    value ^= value >> 30;
-    value = value.wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    value ^= value >> 27;
-    value = value.wrapping_mul(0x94d0_49bb_1331_11eb);
-    value ^ (value >> 31)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn key(unit_ordinal: u64, start: u64, end: u64) -> PointIdentityKey {
-        PointIdentityKey {
-            namespace_id: OpaqueId::new("namespace:test").expect("namespace"),
-            source_id: OpaqueId::new("source:test").expect("source"),
-            source_revision: NonZeroRevision::new(3).expect("revision"),
-            unit_ordinal,
-            source_byte_start: start,
-            source_byte_end: end,
-            projection_kind: ProjectionKind::Lexical,
-            projection_fingerprint: Blake3Digest32::from_bytes([7; 32]),
-            projection_schema_revision: NonZeroRevision::new(2).expect("revision"),
-            source_membership_id: OpaqueId::new("membership:source:test")
-                .expect("source membership"),
-            projection_membership_id: OpaqueId::new("membership:projection:test")
-                .expect("projection membership"),
-            representation_digest: Blake3Digest32::from_bytes([11; 32]),
-            unit_digest: Blake3Digest32::from_bytes([12; 32]),
-            scoring_partition_digest: Blake3Digest32::from_bytes([13; 32]),
-            collection_generation_digest: Blake3Digest32::from_bytes([14; 32]),
+    fn key(profile: &str) -> ProjectionPointKey {
+        ProjectionPointKey {
+            schema_version: POINT_KEY_SCHEMA_VERSION,
+            installation_incarnation_id:
+                InstallationIncarnationId::from_bytes([1; 16]),
+            collection_generation_id:
+                CollectionGenerationId::from_bytes([2; 16]),
+            projection_membership_id:
+                ProjectionMembershipId::from_bytes([3; 16]),
+            representation_id: RepresentationId::from_bytes([4; 16]),
+            unit_id: UnitId::from_bytes([5; 16]),
+            projection_profile_set_id: ProjectionProfileSetId::new(profile)
+                .expect("profile"),
+            point_role: PointRole::Unit,
         }
     }
 
     #[test]
-    fn exact_same_key_produces_exact_same_point_id() {
-        let first =
-            derive_point_identity(key(0, 0, 10), DEFAULT_POINT_IDENTITY_LIMITS).expect("first");
-        let second =
-            derive_point_identity(key(0, 0, 10), DEFAULT_POINT_IDENTITY_LIMITS).expect("second");
+    fn same_key_same_identity_and_full_digest() {
+        let first = derive_point_identity(
+            key("lex-code-v1"),
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("first");
+        let second = derive_point_identity(
+            key("lex-code-v1"),
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("second");
         assert_eq!(first, second);
-        assert_eq!(first.point_id.to_hex().len(), 32);
+        assert_eq!(first.full_digest.as_bytes().len(), 32);
         assert_eq!(first.point_id.to_hyphenated().len(), 36);
     }
 
     #[test]
-    fn every_load_bearing_dimension_changes_identity() {
-        let baseline =
-            derive_point_identity(key(0, 0, 10), DEFAULT_POINT_IDENTITY_LIMITS).expect("baseline");
-        let changed_ordinal =
-            derive_point_identity(key(1, 0, 10), DEFAULT_POINT_IDENTITY_LIMITS).expect("ordinal");
-        let changed_range =
-            derive_point_identity(key(0, 1, 10), DEFAULT_POINT_IDENTITY_LIMITS).expect("range");
-        let mut changed_projection = key(0, 0, 10);
-        changed_projection.projection_fingerprint = Blake3Digest32::from_bytes([8; 32]);
-        let changed_projection =
-            derive_point_identity(changed_projection, DEFAULT_POINT_IDENTITY_LIMITS)
-                .expect("projection");
-        assert_ne!(baseline.point_id, changed_ordinal.point_id);
-        assert_ne!(baseline.point_id, changed_range.point_id);
-        assert_ne!(baseline.point_id, changed_projection.point_id);
+    fn profile_or_role_change_changes_identity() {
+        let baseline = derive_point_identity(
+            key("lex-code-v1"),
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("baseline");
+        let profile = derive_point_identity(
+            key("lex-code-v2"),
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("profile");
+        let mut relation_key = key("lex-code-v1");
+        relation_key.point_role = PointRole::Relation;
+        let relation = derive_point_identity(
+            relation_key,
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("relation");
+        assert_ne!(baseline.full_digest, profile.full_digest);
+        assert_ne!(baseline.point_id, profile.point_id);
+        assert_ne!(baseline.point_id, relation.point_id);
     }
 
     #[test]
-    fn provider_collection_or_insertion_order_is_not_an_input() {
-        let one = derive_point_identity(key(5, 100, 200), DEFAULT_POINT_IDENTITY_LIMITS)
-            .expect("identity");
-        let mut registry_a =
-            PointIdentityRegistry::new(DEFAULT_POINT_IDENTITY_LIMITS).expect("registry");
-        let mut registry_b =
-            PointIdentityRegistry::new(DEFAULT_POINT_IDENTITY_LIMITS).expect("registry");
-        registry_a.register(one.clone()).expect("register");
-        let other =
-            derive_point_identity(key(1, 0, 10), DEFAULT_POINT_IDENTITY_LIMITS).expect("other");
-        registry_b.register(other).expect("other");
-        assert_eq!(registry_b.register(one.clone()).expect("one"), one.point_id);
-        assert_eq!(registry_a.key(one.point_id).expect("key"), &one.key);
-        assert_eq!(registry_b.key(one.point_id).expect("key"), &one.key);
+    fn canonical_cbor_shape_is_frozen() {
+        let encoded = canonical_point_key_bytes(
+            &key("p"),
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("canonical");
+        assert_eq!(encoded.as_slice()[0], 0x88);
+        assert_eq!(encoded.as_slice()[1], 0x01);
+        assert_eq!(encoded.as_slice()[2], 0x50);
+        assert_eq!(encoded.as_slice().last(), Some(&0x00));
+        assert_eq!(
+            point_identity_digest(encoded.as_slice()),
+            point_identity_digest(encoded.as_slice())
+        );
     }
 
     #[test]
-    fn compact_id_collision_is_detected_against_complete_key() {
-        let first =
-            derive_point_identity(key(0, 0, 10), DEFAULT_POINT_IDENTITY_LIMITS).expect("first");
-        let mut forged =
-            derive_point_identity(key(1, 10, 20), DEFAULT_POINT_IDENTITY_LIMITS).expect("forged");
+    fn unsupported_version_and_finite_limits_fail_closed() {
+        let mut unsupported = key("p");
+        unsupported.schema_version = 2;
+        assert_eq!(
+            derive_point_identity(
+                unsupported,
+                DEFAULT_POINT_IDENTITY_LIMITS
+            ),
+            Err(PointIdentityError::UnsupportedKeyVersion)
+        );
+        let limits = PointIdentityLimits {
+            max_identifier_bytes: 1,
+            ..DEFAULT_POINT_IDENTITY_LIMITS
+        };
+        assert_eq!(
+            derive_point_identity(key("too-long"), limits),
+            Err(PointIdentityError::IdentifierTooLong)
+        );
+    }
+
+    #[test]
+    fn fake_truncated_uuid_collision_never_overwrites() {
+        let first = derive_point_identity(
+            key("lex-code-v1"),
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("first");
+        let mut forged = derive_point_identity(
+            key("lex-code-v2"),
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("forged");
         forged.point_id = first.point_id;
-        let mut registry =
-            PointIdentityRegistry::new(DEFAULT_POINT_IDENTITY_LIMITS).expect("registry");
+        let observed = ExistingPointIdentity {
+            point_id: forged.point_id,
+            full_digest: forged.full_digest,
+            key: forged.key.clone(),
+        };
+        assert_eq!(
+            compare_existing_identity(&first, Some(&observed)),
+            CollisionDecision::CollisionBlock
+        );
+        let mut registry = PointIdentityRegistry::new(
+            DEFAULT_POINT_IDENTITY_LIMITS,
+        )
+        .expect("registry");
         registry.register(first).expect("first");
         assert_eq!(
             registry.register(forged),
@@ -713,31 +747,13 @@ mod tests {
     }
 
     #[test]
-    fn invalid_or_oversize_key_fails_closed() {
-        let mut invalid = key(0, 10, 10);
-        assert_eq!(
-            derive_point_identity(invalid.clone(), DEFAULT_POINT_IDENTITY_LIMITS),
-            Err(PointIdentityError::InvalidUnitRange)
-        );
-        invalid.source_byte_end = 11;
-        let limits = PointIdentityLimits {
-            max_identifier_bytes: 4,
-            ..DEFAULT_POINT_IDENTITY_LIMITS
-        };
-        assert_eq!(
-            derive_point_identity(invalid, limits),
-            Err(PointIdentityError::IdentifierTooLong)
-        );
-    }
-
-    #[test]
-    fn registry_is_finite_and_exact_replay_is_idempotent() {
+    fn registry_exact_replay_is_idempotent_and_finite() {
         let limits = PointIdentityLimits {
             max_registered_points: 1,
             ..DEFAULT_POINT_IDENTITY_LIMITS
         };
-        let first = derive_point_identity(key(0, 0, 10), limits).expect("first");
-        let second = derive_point_identity(key(1, 10, 20), limits).expect("second");
+        let first = derive_point_identity(key("one"), limits).expect("first");
+        let second = derive_point_identity(key("two"), limits).expect("second");
         let mut registry = PointIdentityRegistry::new(limits).expect("registry");
         assert_eq!(
             registry.register(first.clone()).expect("first"),
@@ -751,161 +767,6 @@ mod tests {
             registry.register(second),
             Err(PointIdentityError::RegistryCapacityExceeded)
         );
-        assert_eq!(registry.len(), 1);
-    }
-
-    // ---- T26 membership-scoped projection: failing contract first ----
-    // These tests bind the T26 scope (membership / representation / scoring /
-    // generation) into the private point identity. They fail before the scoped
-    // key extension lands and pass after it.
-
-    fn scoped_key(membership_suffix: &str) -> PointIdentityKey {
-        PointIdentityKey {
-            namespace_id: OpaqueId::new("namespace:test").expect("namespace"),
-            source_id: OpaqueId::new("source:test").expect("source"),
-            source_revision: NonZeroRevision::new(3).expect("revision"),
-            unit_ordinal: 0,
-            source_byte_start: 0,
-            source_byte_end: 10,
-            projection_kind: ProjectionKind::Lexical,
-            projection_fingerprint: Blake3Digest32::from_bytes([7; 32]),
-            projection_schema_revision: NonZeroRevision::new(2).expect("revision"),
-            source_membership_id: OpaqueId::new(["membership:source:", membership_suffix].concat())
-                .expect("source membership"),
-            projection_membership_id: OpaqueId::new(
-                ["membership:projection:", membership_suffix].concat(),
-            )
-            .expect("projection membership"),
-            representation_digest: Blake3Digest32::from_bytes([11; 32]),
-            unit_digest: Blake3Digest32::from_bytes([12; 32]),
-            scoring_partition_digest: Blake3Digest32::from_bytes([13; 32]),
-            collection_generation_digest: Blake3Digest32::from_bytes([14; 32]),
-        }
-    }
-
-    #[test]
-    fn t26_scoped_profile_revision_is_two() {
-        assert_eq!(POINT_IDENTITY_PROFILE_REVISION, 2);
-    }
-
-    #[test]
-    fn t26_one_source_two_memberships_yield_distinct_point_ids() {
-        let first =
-            derive_point_identity(scoped_key("a"), DEFAULT_POINT_IDENTITY_LIMITS).expect("first");
-        let second =
-            derive_point_identity(scoped_key("b"), DEFAULT_POINT_IDENTITY_LIMITS).expect("second");
-        assert_ne!(first.point_id, second.point_id);
-    }
-
-    #[test]
-    fn t26_representation_unit_scoring_generation_changes_alter_identity() {
-        let baseline = derive_point_identity(scoped_key("a"), DEFAULT_POINT_IDENTITY_LIMITS)
-            .expect("baseline");
-        let mut changed = scoped_key("a");
-        changed.representation_digest = Blake3Digest32::from_bytes([21; 32]);
-        let changed = derive_point_identity(changed, DEFAULT_POINT_IDENTITY_LIMITS)
-            .expect("changed representation");
-        assert_ne!(baseline.point_id, changed.point_id);
-
-        let mut changed = scoped_key("a");
-        changed.unit_digest = Blake3Digest32::from_bytes([22; 32]);
-        let changed =
-            derive_point_identity(changed, DEFAULT_POINT_IDENTITY_LIMITS).expect("changed unit");
-        assert_ne!(baseline.point_id, changed.point_id);
-
-        let mut changed = scoped_key("a");
-        changed.scoring_partition_digest = Blake3Digest32::from_bytes([23; 32]);
-        let changed =
-            derive_point_identity(changed, DEFAULT_POINT_IDENTITY_LIMITS).expect("changed scoring");
-        assert_ne!(baseline.point_id, changed.point_id);
-
-        let mut changed = scoped_key("a");
-        changed.collection_generation_digest = Blake3Digest32::from_bytes([24; 32]);
-        let changed = derive_point_identity(changed, DEFAULT_POINT_IDENTITY_LIMITS)
-            .expect("changed generation");
-        assert_ne!(baseline.point_id, changed.point_id);
-    }
-
-    #[test]
-    fn t26_same_content_distinct_source_stays_distinct() {
-        let mut left = scoped_key("a");
-        let mut right = scoped_key("a");
-        left.source_id = OpaqueId::new("source:left").expect("left");
-        right.source_id = OpaqueId::new("source:right").expect("right");
-        let left =
-            derive_point_identity(left, DEFAULT_POINT_IDENTITY_LIMITS).expect("left identity");
-        let right =
-            derive_point_identity(right, DEFAULT_POINT_IDENTITY_LIMITS).expect("right identity");
-        assert_ne!(left.point_id, right.point_id);
-    }
-
-    #[test]
-    fn t26_canonical_encoding_is_not_json_or_ad_hoc_string() {
-        let bytes = scoped_key("a")
-            .canonical_bytes(DEFAULT_POINT_IDENTITY_LIMITS)
-            .expect("canonical bytes");
-        // Length-prefixed framing carries the domain tag; ad-hoc JSON/strings
-        // never do.
-        assert!(
-            bytes
-                .windows(b"eliot-search.point-id.v1".len())
-                .any(|window| window == b"eliot-search.point-id.v1")
-        );
-        assert!(!bytes.starts_with(b"{"));
-        assert!(!bytes.starts_with(b"\""));
-        // No JSON object framing anywhere in the preimage.
-        assert!(!bytes.contains(&b'{'));
-    }
-
-    #[test]
-    fn t26_full_digest_and_uuid_projection_agree_with_identity() {
-        let key = scoped_key("a");
-        let canonical =
-            encode_canonical_key(&key, DEFAULT_POINT_IDENTITY_LIMITS).expect("canonical key bytes");
-        let digest = full_digest(&canonical);
-        let uuid = derive_qdrant_uuid(digest);
-        let identity = derive_point_identity(key, DEFAULT_POINT_IDENTITY_LIMITS).expect("identity");
-        assert_eq!(uuid, identity.point_id);
-        assert_eq!(digest.as_bytes(), identity.point_id.as_bytes());
-    }
-
-    #[test]
-    fn t26_compare_existing_identity_never_overwrites_on_collision() {
-        let first =
-            derive_point_identity(scoped_key("a"), DEFAULT_POINT_IDENTITY_LIMITS).expect("first");
-        let mut forged =
-            derive_point_identity(scoped_key("b"), DEFAULT_POINT_IDENTITY_LIMITS).expect("forged");
-        forged.point_id = first.point_id;
-        assert_eq!(
-            compare_existing_identity(&first, None),
-            CollisionDecision::Vacant
-        );
-        assert_eq!(
-            compare_existing_identity(&first, Some(&first)),
-            CollisionDecision::SameFullIdentity
-        );
-        assert_eq!(
-            compare_existing_identity(&first, Some(&forged)),
-            CollisionDecision::CollisionBlock
-        );
-    }
-
-    #[test]
-    fn t26_identity_payload_readback_checks_full_digest_and_fields() {
-        let expected = derive_point_identity(scoped_key("a"), DEFAULT_POINT_IDENTITY_LIMITS)
-            .expect("expected");
-        validate_identity_payload(&expected, &expected).expect("exact replay validates");
-        let mut tampered = expected.clone();
-        tampered.key.unit_ordinal += 1;
-        assert_eq!(
-            validate_identity_payload(&expected, &tampered),
-            Err(PointIdentityError::IdentityMismatch)
-        );
-        let mut stale_version = expected.clone();
-        stale_version.profile_revision = 1;
-        assert_eq!(
-            validate_identity_payload(&expected, &stale_version),
-            Err(PointIdentityError::IdentityMismatch)
-        );
+        assert_eq!(registry.digest(first.point_id).expect("digest"), first.full_digest);
     }
 }

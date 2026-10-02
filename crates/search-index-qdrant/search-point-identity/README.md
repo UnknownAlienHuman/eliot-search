@@ -1,25 +1,38 @@
 # search-point-identity
 
-**C14 — Collision-safe point identity.**
+**C14 — collision-safe S11 point identity.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+This package owns the exact versioned `ProjectionPointKey`, its canonical CBOR encoding, the full BLAKE3-256 identity digest and the namespace-separated 128-bit Qdrant UUID projection.
 
-Encode canonical point keys, derive namespace-separated IDs and make collisions detectable and non-destructive.
+## Correctness boundary
+
+The UUID is an address only. Before an existing UUID can be reused, callers must compare:
+
+- the complete 32-byte identity digest;
+- installation incarnation;
+- collection generation;
+- projection membership;
+- representation and unit identities;
+- projection profile set;
+- point role.
+
+Any mismatch is `POINT_ID_COLLISION`/`COLLISION_BLOCK` and must prevent overwrite.
 
 ## Owns
 
-- versioned `ProjectionPointKey` encoding
-- canonical CBOR bytes
-- BLAKE3-256 full digest
-- 128-bit UUID projection
-- existing-point identity comparison
+- versioned fixed-shape canonical CBOR;
+- BLAKE3-256 full digest;
+- namespace-separated UUID projection;
+- deterministic identity comparison;
+- bounded process-local collision registry.
 
 ## Must not own
 
-- ad-hoc string or JSON identity derivation
-- claiming collisions impossible
-- source identity derivation
-- performing upserts
+- source identity or path semantics;
+- policy/access decisions;
+- vector or payload planning;
+- Qdrant transport or upserts;
+- claims that collisions are impossible.
 
 - **Delivery wave:** W3 / P06
 - **Soft source-line target:** 4,500

@@ -13,6 +13,9 @@ path = "src/lib.rs"
 [dependencies]
 search-contracts.workspace = true
 search-domain.workspace = true
+# Architecture S11 requires the full BLAKE3-256 identity digest. Keep the
+# repository's exact pure-Rust pin and do not enable download/assembly helpers.
+blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 
 [lints]
 workspace = true
