@@ -10,8 +10,11 @@ pub use abort::{
 pub use restore::PublicationRestoreInput;
 
 use search_contracts::{Blake3Digest32, Epoch, OpaqueId, ReceiptRef};
-use search_point_identity::PointId128;
-use search_projection_planner::{ManifestDiff, ProjectionManifest, diff_manifests};
+use search_point_identity::{DEFAULT_POINT_IDENTITY_LIMITS, PointId128};
+use search_projection_planner::{
+    ManifestDiff, ProjectionBudget, ProjectionManifest, diff_manifests,
+    manifest_digest, verify_manifest_integrity,
+};
 
 use crate::{
     AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt, ControlCommitObservation,
@@ -112,6 +115,9 @@ impl PublicationCoordinator {
         }
         if let Some(manifest) = &current_manifest {
             validate_manifest(manifest, max_points)?;
+            if current_manifest_digest != Some(manifest_digest(manifest)) {
+                return Err(PublicationError::InvalidPreparedPublication);
+            }
         }
         Ok(Self {
             visible_epoch,
@@ -155,8 +161,18 @@ impl PublicationCoordinator {
             return Err(PublicationError::PublicationBusy);
         }
         validate_manifest(&prepared.new_manifest, self.max_points)?;
-        if let Some(old) = &prepared.old_manifest {
-            validate_manifest(old, self.max_points)?;
+        if prepared.new_manifest_digest != manifest_digest(&prepared.new_manifest) {
+            return Err(PublicationError::InvalidPreparedPublication);
+        }
+        match (&prepared.old_manifest, prepared.old_manifest_digest) {
+            (Some(old), Some(digest)) => {
+                validate_manifest(old, self.max_points)?;
+                if digest != manifest_digest(old) {
+                    return Err(PublicationError::InvalidPreparedPublication);
+                }
+            }
+            (None, None) => {}
+            _ => return Err(PublicationError::InvalidPreparedPublication),
         }
         if prepared.old_manifest != self.current_manifest
             || prepared.old_manifest_digest != self.current_manifest_digest
@@ -492,7 +508,7 @@ impl PublicationCoordinator {
             .map(|entry| entry.point_id)
             .collect::<BTreeSet<_>>();
         let memberships = affected
-            .map(|entry| entry.projection_membership_id.clone())
+            .map(|entry| entry.identity_key.projection_membership_id)
             .collect::<BTreeSet<_>>();
         if fence.transaction_id != transaction.prepared.transaction_id
             || fence.target_epoch != transaction.target_epoch
@@ -548,21 +564,23 @@ impl PublicationCoordinator {
     }
 }
 
+const fn projection_budget(max_points: usize) -> ProjectionBudget {
+    ProjectionBudget {
+        max_points,
+        ..ProjectionBudget::BASELINE
+    }
+}
+
 pub fn validate_manifest(
     manifest: &ProjectionManifest,
     max_points: usize,
 ) -> Result<(), PublicationError> {
-    if manifest.canonical_bytes.is_empty() || manifest.entries.len() > max_points {
-        return Err(PublicationError::InvalidPreparedPublication);
-    }
-    if manifest
-        .entries
-        .windows(2)
-        .any(|pair| pair[0].point_id >= pair[1].point_id)
-    {
-        return Err(PublicationError::InvalidPreparedPublication);
-    }
-    Ok(())
+    verify_manifest_integrity(
+        manifest,
+        projection_budget(max_points),
+        DEFAULT_POINT_IDENTITY_LIMITS,
+    )
+    .map_err(|_| PublicationError::InvalidPreparedPublication)
 }
 
 /// Inputs must already have passed bounded, strictly sorted manifest validation.

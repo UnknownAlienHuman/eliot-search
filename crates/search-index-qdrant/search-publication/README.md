@@ -5,6 +5,19 @@ The module does not execute redb/Qdrant calls, persist epochs, verify live fence
 working daemon pipeline. Composition must supply authoritative port results. No product or gate
 acceptance is implied by these state transitions.
 
+## Typed manifest admission
+
+Before restoration or submission can consume an epoch, the coordinator invokes the planner-owned
+bounded manifest verifier. Frozen bytes must encode exactly the sorted typed entries, canonical S11
+keys, full identity digests and named-vector map with no trailing data. The supplied manifest digest is
+recomputed from those bytes. Any mismatch returns `PUBLICATION_PREPARED_INVALID` before the active slot
+or reservation floor changes. `AbandonFence` names typed `ProjectionMembershipId` values; a point-only
+fence never substitutes for membership-wide pre-retrieval/pre-IDF exclusion.
+
+The exact package tree passed Rust 1.98 `cargo check -p search-publication --lib` and strict
+`cargo clippy -p search-publication --lib -- -D warnings`. Package tests and live redb/Qdrant process
+qualification remain deferred under the current code-first project priority.
+
 ## Consumed epochs
 
 `PublicationCoordinator::new` requires both `visible_epoch` and `last_reserved_epoch`.
