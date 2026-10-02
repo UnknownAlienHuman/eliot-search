@@ -1,8 +1,3 @@
-use super::{
-    BridgeError, BridgeLimits, CollectionSchema, Condition, EligibilityFilter, FieldCondition,
-    Filter, Match, PointPayload, PointRecord, Range, RepeatedStrings, condition, encode_payload,
-    r#match,
-};
 use crate::query::validate_filter;
 
 pub(super) fn keyword_condition(key: &str, text: String) -> Condition {

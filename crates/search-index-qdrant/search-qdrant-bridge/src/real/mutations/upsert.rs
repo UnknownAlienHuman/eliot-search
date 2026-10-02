@@ -1,14 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::super::{PointStruct, UpsertPoints};
-
 use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
     OperationBudget, PointRecord, QdrantPointId, RealDataPlane, collection_name,
-    encode_payload, encode_vectors, map_mutation_error, same_point_identity,
-    strong_ordering, update_completed, validate_point,
+    encode_payload, encode_vectors, map_mutation_error, strong_ordering,
+    update_completed, validate_point,
 };
+use crate::mutation::same_point_identity;
 
 impl RealDataPlane {
     /// Upserts only explicit point IDs with collision refusal, `wait=true`,
@@ -100,10 +100,14 @@ impl RealDataPlane {
         .map_err(|_| BridgeError::MutationOutcomeUnknown)?
         .map_err(map_mutation_error)?;
         check_acknowledgement(
-            acked.result.as_ref().is_some_and(|result| update_completed(result.status)),
+            acked
+                .result
+                .as_ref()
+                .is_some_and(|result| update_completed(result.status)),
             context,
         )?;
-        let mut affected: Vec<QdrantPointId> = points.iter().map(|point| point.point_id).collect();
+        let mut affected: Vec<QdrantPointId> =
+            points.iter().map(|point| point.point_id).collect();
         affected.sort();
         self.verify_upsert_readback(
             &name,

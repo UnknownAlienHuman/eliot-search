@@ -56,8 +56,12 @@ use qdrant_client::qdrant::{
 use search_contracts::{OpaqueId, ReceiptRef};
 
 use crate::live::LiveEndpoint;
+use crate::mutation::validate_exact_ids;
 use crate::qualified::{
     QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate,
+};
+use crate::query::{
+    ensure_filter_indexes, validate_filter_for_route, validate_query_vector,
 };
 use crate::{
     BoundedPointReadback, BridgeError, BridgeLimits, BridgeMutation,
