@@ -202,7 +202,7 @@ where
         || !valid_local_name(temporary_name)
         || final_name == temporary_name
         || !temporary_name.starts_with('.')
-        || !temporary_name.ends_with(".tmp")
+        || Path::new(temporary_name).extension() != Some(std::ffi::OsStr::new("tmp"))
     {
         return Err(LegacyPreparationArtifactError::LocalNameInvalid);
     }

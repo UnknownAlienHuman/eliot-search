@@ -78,7 +78,7 @@ impl LegacyPreparationProtection {
         }
     }
 
-    fn from_tag(tag: u8) -> Result<Self, LegacyPreparationStoreError> {
+    const fn from_tag(tag: u8) -> Result<Self, LegacyPreparationStoreError> {
         match tag {
             0 => Ok(Self::Plaintext),
             1 => Ok(Self::Protected),
@@ -407,12 +407,12 @@ pub fn encode_legacy_preparation_manifest(
 ///
 /// Returns a typed failure for invalid framing, algorithm/profile drift,
 /// binding mismatch or representation mismatch.
-pub fn verify_legacy_preparation_manifest<R: LegacyDirectRepresentationDigest>(
-    manifest: &[u8],
+pub fn verify_legacy_preparation_manifest<'a, R: LegacyDirectRepresentationDigest>(
+    manifest: &'a [u8],
     expected_binding: &[u8; LEGACY_PREPARATION_BINDING_BYTES],
     expected_materializer_revision: u64,
     expected_unitizer_revision: u64,
-) -> Result<LegacyPreparationManifestView<'_>, LegacyPreparationStoreError> {
+) -> Result<LegacyPreparationManifestView<'a>, LegacyPreparationStoreError> {
     if manifest.len() < LEGACY_PREPARATION_HEADER_BYTES + 1
         || manifest.len() > LEGACY_PREPARATION_MAX_MANIFEST_BYTES
     {
