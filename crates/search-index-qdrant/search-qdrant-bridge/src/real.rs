@@ -40,7 +40,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
@@ -113,7 +113,7 @@ impl OpContext {
         }
     }
 
-    /// Finite per-operation deadline.
+    /// Finite total operation budget.
     #[must_use]
     pub const fn deadline(&self) -> Duration {
         self.deadline
@@ -135,6 +135,43 @@ impl OpContext {
 impl Default for OpContext {
     fn default() -> Self {
         Self::new(Duration::from_secs(10))
+    }
+}
+
+/// One absolute operation budget shared by every phase of a bridge call.
+///
+/// Constructing a fresh Tokio timeout for each network phase would multiply a
+/// caller's deadline. This owner converts the public relative budget into one
+/// monotonic start point and returns only the remaining duration.
+#[derive(Clone, Debug)]
+struct OperationBudget {
+    started: Instant,
+    total: Duration,
+}
+
+impl OperationBudget {
+    fn begin(context: &OpContext) -> Result<Self, BridgeError> {
+        context.check()?;
+        Ok(Self {
+            started: Instant::now(),
+            total: context.deadline(),
+        })
+    }
+
+    fn remaining(&self, context: &OpContext) -> Result<Duration, BridgeError> {
+        context.check()?;
+        self.total
+            .checked_sub(self.started.elapsed())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or(BridgeError::DeadlineExceeded)
+    }
+
+    fn remaining_after_dispatch(
+        &self,
+        context: &OpContext,
+    ) -> Result<Duration, BridgeError> {
+        self.remaining(context)
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)
     }
 }
 

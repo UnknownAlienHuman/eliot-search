@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use super::super::GetPoints;
 
 use super::super::{
-    BridgeError, CollectionSchema, OpContext, PointRecord, QdrantPointId,
-    RealDataPlane, bridge_point_id, decode_point, map_read_error, vendor_point_id,
+    BridgeError, CollectionSchema, PointRecord, QdrantPointId, RealDataPlane,
+    bridge_point_id, decode_point, map_read_error, vendor_point_id,
 };
 
 /// One bounded, unique response set. Missing points remain explicit to the
@@ -30,11 +31,11 @@ impl RealDataPlane {
         name: &str,
         expected: &[PointRecord],
         schema: &CollectionSchema,
-        context: &OpContext,
+        timeout: Duration,
     ) -> Result<(), BridgeError> {
         let ids: Vec<_> = expected.iter().map(|point| point.point_id).collect();
         let readback = tokio::time::timeout(
-            context.deadline(),
+            timeout,
             self.client.get_points(GetPoints {
                 collection_name: name.to_owned(),
                 ids: ids.iter().map(vendor_point_id).collect(),
@@ -78,10 +79,10 @@ impl RealDataPlane {
         name: &str,
         ids: &[QdrantPointId],
         schema: &CollectionSchema,
-        context: &OpContext,
+        timeout: Duration,
     ) -> Result<BTreeMap<QdrantPointId, PointRecord>, BridgeError> {
         let readback = tokio::time::timeout(
-            context.deadline(),
+            timeout,
             self.client.get_points(GetPoints {
                 collection_name: name.to_owned(),
                 ids: ids.iter().map(vendor_point_id).collect(),
@@ -91,7 +92,7 @@ impl RealDataPlane {
             }),
         )
         .await
-        .map_err(|_| BridgeError::TransportFailed)?
+        .map_err(|_| BridgeError::DeadlineExceeded)?
         .map_err(map_read_error)?;
         if readback.result.len() > ids.len() {
             return Err(BridgeError::MalformedResponse);

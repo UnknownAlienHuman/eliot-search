@@ -14,7 +14,7 @@ impl RealDataPlane {
         idf: IdfScope,
         context: &OpContext,
     ) -> Result<Vec<CandidateNomination>, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         if filter.allowed_source_memberships.is_empty() {
             return Err(BridgeError::InvalidFilter);
         }
@@ -38,7 +38,7 @@ impl RealDataPlane {
         };
         let (indices, values): (Vec<u32>, Vec<f32>) = query.iter().copied().unzip();
         let answered = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.query(QueryPoints {
                 collection_name: name,
                 query: Some(Query::new_nearest(VectorInput::new_sparse(
@@ -62,7 +62,7 @@ impl RealDataPlane {
             }),
         )
         .await
-        .map_err(|_| BridgeError::TransportFailed)?
+        .map_err(|_| BridgeError::DeadlineExceeded)?
         .map_err(map_read_error)?;
         if answered.result.len() > limit {
             return Err(BridgeError::MalformedResponse);

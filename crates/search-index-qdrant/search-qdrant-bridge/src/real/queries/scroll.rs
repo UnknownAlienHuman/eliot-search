@@ -10,7 +10,7 @@ impl RealDataPlane {
         limit: usize,
         context: &OpContext,
     ) -> Result<ScrollPage, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         if filter.allowed_source_memberships.is_empty() {
             return Err(BridgeError::InvalidFilter);
         }
@@ -24,7 +24,7 @@ impl RealDataPlane {
             .ok_or(BridgeError::CollectionNotFound)?;
         let vendor_filter = base_filter(filter)?;
         let scrolled = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.scroll(ScrollPoints {
                 collection_name: name,
                 filter: Some(vendor_filter),
@@ -39,7 +39,7 @@ impl RealDataPlane {
             }),
         )
         .await
-        .map_err(|_| BridgeError::TransportFailed)?
+        .map_err(|_| BridgeError::DeadlineExceeded)?
         .map_err(map_read_error)?;
         if scrolled.result.len() > limit {
             return Err(BridgeError::MalformedResponse);

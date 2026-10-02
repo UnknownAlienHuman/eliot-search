@@ -9,7 +9,7 @@ impl RealDataPlane {
         filter: &EligibilityFilter,
         context: &OpContext,
     ) -> Result<ExactCount, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         if filter.allowed_source_memberships.is_empty() {
             return Err(BridgeError::InvalidFilter);
         }
@@ -21,7 +21,7 @@ impl RealDataPlane {
         ensure_filter_indexes(schema)?;
         let vendor_filter = base_filter(filter)?;
         let counted = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.count(CountPoints {
                 collection_name: name,
                 filter: Some(vendor_filter),
@@ -30,7 +30,7 @@ impl RealDataPlane {
             }),
         )
         .await
-        .map_err(|_| BridgeError::TransportFailed)?
+        .map_err(|_| BridgeError::DeadlineExceeded)?
         .map_err(map_read_error)?;
         let count = counted
             .result

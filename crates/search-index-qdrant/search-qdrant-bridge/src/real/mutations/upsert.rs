@@ -5,9 +5,9 @@ use super::super::{PointStruct, UpsertPoints};
 use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    PointRecord, QdrantPointId, RealDataPlane, collection_name, encode_payload,
-    encode_vectors, map_mutation_error, same_point_identity, strong_ordering,
-    update_completed, validate_point,
+    OperationBudget, PointRecord, QdrantPointId, RealDataPlane, collection_name,
+    encode_payload, encode_vectors, map_mutation_error, same_point_identity,
+    strong_ordering, update_completed, validate_point,
 };
 
 impl RealDataPlane {
@@ -22,7 +22,7 @@ impl RealDataPlane {
         mutation: BridgeMutation,
         context: &OpContext,
     ) -> Result<MutationReceipt, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         if let Some(replay) = self.replay(&mutation)? {
             return Ok(replay);
         }
@@ -65,7 +65,14 @@ impl RealDataPlane {
             .map(|(index, point)| (point.point_id, index))
             .collect();
         let ids: Vec<QdrantPointId> = expected_by_id.keys().copied().collect();
-        let existing = self.fetch_points(&name, &ids, &schema, context).await?;
+        let existing = self
+            .fetch_points(
+                &name,
+                &ids,
+                &schema,
+                budget.remaining(context)?,
+            )
+            .await?;
         for (id, existing_point) in &existing {
             let expected_index = expected_by_id
                 .get(id)
@@ -75,11 +82,8 @@ impl RealDataPlane {
             }
         }
 
-        // Validation, encoding and collision preflight may take time;
-        // cancellation still means no write here.
-        context.check()?;
         let acked = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.upsert_points(UpsertPoints {
                 collection_name: name.clone(),
                 wait: Some(true),
@@ -97,7 +101,13 @@ impl RealDataPlane {
         )?;
         let mut affected: Vec<QdrantPointId> = points.iter().map(|point| point.point_id).collect();
         affected.sort();
-        self.verify_upsert_readback(&name, &points, &schema, context).await?;
+        self.verify_upsert_readback(
+            &name,
+            &points,
+            &schema,
+            budget.remaining_after_dispatch(context)?,
+        )
+        .await?;
         self.record_mutation(route.clone(), mutation, affected)
     }
 }

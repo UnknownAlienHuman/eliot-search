@@ -1,10 +1,14 @@
-fn post_create_check(context: &OpContext) -> Result<(), BridgeError> {
-    context.check().map_err(map_post_create_error)
+fn post_create_check(
+    context: &OpContext,
+    budget: &OperationBudget,
+) -> Result<(), BridgeError> {
+    budget.remaining_after_dispatch(context).map(|_| ())
 }
 
 const fn map_post_create_error(error: BridgeError) -> BridgeError {
     match error {
         BridgeError::Cancelled
+        | BridgeError::DeadlineExceeded
         | BridgeError::TransportFailed
         | BridgeError::MalformedResponse => BridgeError::MutationOutcomeUnknown,
         other => other,
@@ -34,17 +38,18 @@ impl RealDataPlane {
     /// collection without strict admission, mandatory payload indexes, strict
     /// mode enablement, then exact live schema verification.
     ///
-    /// Before the collection create dispatch, cancellation is definite. Once
-    /// the collection may exist, cancellation, transport loss or unusable
-    /// readback reports [`BridgeError::MutationOutcomeUnknown`] because a
-    /// partial schema may be durable and must be reconciled explicitly.
+    /// Before the collection create dispatch, cancellation or deadline expiry
+    /// is definite. Once the collection may exist, cancellation, timeout,
+    /// transport loss or unusable readback reports
+    /// [`BridgeError::MutationOutcomeUnknown`] because a partial schema may be
+    /// durable and must be reconciled explicitly.
     pub async fn create_collection(
         &mut self,
         route: &CollectionRoute,
         schema: &CollectionSchema,
         context: &OpContext,
     ) -> Result<ReceiptRef, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         schema.validate()?;
         for vector_schema in schema.named_vectors.values() {
             if !vector_schema.sparse {
@@ -55,12 +60,14 @@ impl RealDataPlane {
         if self.schemas.contains_key(&name) {
             return Err(BridgeError::CollectionAlreadyExists);
         }
-        if self
-            .client
-            .collection_exists(name.clone())
-            .await
-            .map_err(map_create_error)?
-        {
+        let exists = tokio::time::timeout(
+            budget.remaining(context)?,
+            self.client.collection_exists(name.clone()),
+        )
+        .await
+        .map_err(|_| BridgeError::DeadlineExceeded)?
+        .map_err(map_read_error)?;
+        if exists {
             return Err(BridgeError::CollectionAlreadyExists);
         }
         let mut sparse = HashMap::new();
@@ -89,7 +96,7 @@ impl RealDataPlane {
             ..Default::default()
         };
         let created = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.create_collection(create),
         )
         .await
@@ -100,9 +107,9 @@ impl RealDataPlane {
         }
 
         for (field, field_type) in payload_index_specs() {
-            post_create_check(context)?;
+            post_create_check(context, &budget)?;
             let indexed = tokio::time::timeout(
-                context.deadline(),
+                budget.remaining_after_dispatch(context)?,
                 self.client.create_field_index(CreateFieldIndexCollection {
                     collection_name: name.clone(),
                     field_name: field.to_owned(),
@@ -125,9 +132,9 @@ impl RealDataPlane {
             }
         }
 
-        post_create_check(context)?;
+        post_create_check(context, &budget)?;
         let hardened = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining_after_dispatch(context)?,
             self.client.update_collection(UpdateCollection {
                 collection_name: name.clone(),
                 strict_mode_config: Some(strict_mode_config(true)),
@@ -142,10 +149,14 @@ impl RealDataPlane {
             return Err(BridgeError::MutationOutcomeUnknown);
         }
 
-        post_create_check(context)?;
-        self.verify_server_schema(&name, schema, context)
-            .await
-            .map_err(map_post_create_error)?;
+        post_create_check(context, &budget)?;
+        self.verify_server_schema(
+            &name,
+            schema,
+            budget.remaining_after_dispatch(context)?,
+        )
+        .await
+        .map_err(map_post_create_error)?;
         self.schemas.insert(name.clone(), schema.clone());
         ReceiptRef::new(format!("qdrant:collection:{name}"))
             .map_err(|_| BridgeError::CollectionSchemaMismatch)
@@ -160,6 +171,7 @@ mod create_tests {
     fn possible_collection_effects_never_return_definite_no_write_errors() {
         for error in [
             BridgeError::Cancelled,
+            BridgeError::DeadlineExceeded,
             BridgeError::TransportFailed,
             BridgeError::MalformedResponse,
         ] {

@@ -3,8 +3,9 @@ use super::super::{DeletePoints, GetPoints, PointsIdsList, PointsSelector, point
 use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    QdrantPointId, RealDataPlane, collection_name, map_mutation_error,
-    strong_ordering, update_completed, validate_exact_ids, vendor_point_id,
+    OperationBudget, QdrantPointId, RealDataPlane, collection_name,
+    map_mutation_error, strong_ordering, update_completed, validate_exact_ids,
+    vendor_point_id,
 };
 
 impl RealDataPlane {
@@ -18,7 +19,7 @@ impl RealDataPlane {
         mutation: BridgeMutation,
         context: &OpContext,
     ) -> Result<MutationReceipt, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         if let Some(replay) = self.replay(&mutation)? {
             return Ok(replay);
         }
@@ -30,9 +31,8 @@ impl RealDataPlane {
         if !self.schemas.contains_key(&name) {
             return Err(BridgeError::CollectionNotFound);
         }
-        context.check()?;
         let acked = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.delete_points(DeletePoints {
                 collection_name: name.clone(),
                 wait: Some(true),
@@ -55,7 +55,7 @@ impl RealDataPlane {
             context,
         )?;
         let present = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining_after_dispatch(context)?,
             self.client.get_points(GetPoints {
                 collection_name: name,
                 ids: ids.iter().map(vendor_point_id).collect(),
