@@ -202,7 +202,8 @@ where
 
     let range = ProtocolRange::new(NATIVE_PROTOCOL_VERSION, NATIVE_PROTOCOL_VERSION)
         .map_err(|_| ProtocolError::InvalidVersion)?;
-    let binding = NativeClientBinding::new(
+    let binding = NativeClientBinding::new_trusted(
+        registration.installation_id,
         registration.installation_incarnation_id,
         registration.binding_id,
         registration.pairing_proof_ref.clone(),
