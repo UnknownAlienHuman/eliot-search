@@ -165,7 +165,6 @@ Only these selector forms are accepted:
 ```text
 swarm/crates.toml::package[name=<package>]
 swarm/function-packets.toml::foundation[package=<package>]
-swarm/modules/w0.toml::package[name=<package>]
 swarm/stages.toml::stage[id=W0]
 swarm/launch-state.toml::authorized_packages[<package>]
 swarm/launch-state.toml::conditional_packages[<package>]
@@ -175,14 +174,6 @@ swarm/launch-state.toml::conditional_activation.<package>
 The registry path, selected package and stage are part of the grammar. A supported selector resolving zero
 or multiple semantic records is `CONTEXT_SELECTOR_NOT_UNIQUE`; unsupported spelling or identity is
 `CONTEXT_SELECTOR_INVALID`.
-
-The W0 module selector must use the exact `swarm/modules/w0.toml` path and `package[name=<package>]`
-expression. Its package value must equal the validated caller package, and exactly one matching `package`
-row must exist in the W0 module document loaded from the same immutable Git tree.
-The module header must identify W0 with `schema_version = 1`, `project = "eliot-search"` and `earliest_wave = 0`.
-A missing module document
-or zero or multiple matching rows is `CONTEXT_SELECTOR_NOT_UNIQUE`; a wrong path, header identity, expression or
-package identity is `CONTEXT_SELECTOR_INVALID`.
 
 ## 6. Accepted handoffs
 

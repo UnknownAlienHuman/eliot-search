@@ -1,7 +1,0 @@
-{
-  "executable": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
-  "version": "7.6.6",
-  "edition": "Core",
-  "PSHOME": "C:\\Program Files\\PowerShell\\7",
-  "root_argument": "omitted; script default resolves from PSScriptRoot"
-}

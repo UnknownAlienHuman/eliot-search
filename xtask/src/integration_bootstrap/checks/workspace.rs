@@ -5,10 +5,7 @@ use toml::Value;
 
 use super::super::{Finding, load_toml};
 
-pub(in crate::integration_bootstrap) fn validate_workspace(
-    root: &Path,
-    findings: &mut Vec<Finding>,
-) {
+pub(super) fn validate_workspace(root: &Path, findings: &mut Vec<Finding>) {
     let path = root.join("Cargo.toml");
     let document = match load_toml(&path) {
         Ok(document) => document,

@@ -181,46 +181,6 @@ canonical = true
 rules = ["field_schema_must_declare_exact_allowed_or_equals_rule", "free_form_values_forbidden"]
 
 [[type]]
-name = "FixtureQualificationStatus"
-representation = "string"
-allowed = ["FAILED", "QUALIFIED", "UNAVAILABLE"]
-canonical = true
-
-[[type]]
-name = "NormalProcessExitClass"
-representation = "string"
-allowed = ["EXIT_NONZERO", "EXIT_ZERO"]
-canonical = true
-
-[[type]]
-name = "EvidenceArtifactClass"
-representation = "string"
-allowed = [
-  "PACKAGE_HANDOFF_CANDIDATE",
-  "PUBLIC_API_SCHEMA_DIGEST",
-  "QUALIFICATION_PROBE_RESULT",
-  "RESIDUAL_RISK_RECORD",
-  "TEST_RESULT",
-]
-canonical = true
-
-[[type]]
-name = "ExpectedBehaviorClass"
-representation = "string"
-allowed = ["FAILURE", "POLICY", "RECOVERY", "SUCCESS"]
-canonical = true
-
-[[type]]
-name = "QualifiedOpaqueId"
-representation = "string"
-pattern = "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
-max_bytes = 225
-namespace_max_bytes = 96
-local_max_bytes = 128
-canonical = true
-rules = ["exactly_one_ascii_forward_slash", "namespace_uses_lowercase_ascii_hyphen_segments", "local_component_uses_OpaqueId_pattern", "preserve_exact_bytes_and_case_without_normalization"]
-
-[[type]]
 name = "ClosedControlRecordKind"
 representation = "string"
 allowed = [
@@ -343,7 +303,7 @@ rules = [
   "owner_package_is_PackageName",
   "artifact_ref_is_ImmutableArtifactRef",
   "fixture_digest_is_Sha256Digest",
-  "qualification_status_is_FixtureQualificationStatus",
+  "qualification_status_is_ClosedEnum",
 ]
 
 [[type]]
@@ -355,7 +315,7 @@ rules = [
   "content_not_embedded",
   "raw_output_ref_is_ImmutableArtifactRef",
   "all_digests_are_Sha256Digest",
-  "exit_class_is_NormalProcessExitClass",
+  "exit_class_is_ClosedEnum",
 ]
 
 [[type]]
@@ -423,8 +383,8 @@ rules = [
   "command_digest_is_Sha256Digest",
   "environment_profile_is_OpaqueId",
   "timeout_seconds_is_positive_u32",
-  "expected_exit_class_is_NormalProcessExitClass",
-  "evidence_class_is_EvidenceArtifactClass",
+  "expected_exit_class_is_ClosedEnum",
+  "evidence_class_is_ClosedEnum",
   "credentials_and_raw_secrets_forbidden",
 ]
 
@@ -434,9 +394,9 @@ representation = "ordered_record"
 canonical_fields = ["requirement_id", "evidence_class", "owner_package", "acceptance_class", "artifact_required"]
 rules = [
   "requirement_id_is_OpaqueId",
-  "evidence_class_is_EvidenceArtifactClass",
+  "evidence_class_is_ClosedEnum",
   "owner_package_is_PackageName",
-  "acceptance_class_is_ExpectedBehaviorClass",
+  "acceptance_class_is_ClosedEnum",
   "artifact_required_is_bool",
 ]
 
@@ -468,10 +428,10 @@ representation = "ordered_record"
 canonical_fields = ["requirement_id", "evidence_class", "artifact_ref", "artifact_sha256", "acceptance_class"]
 rules = [
   "requirement_id_is_OpaqueId",
-  "evidence_class_is_EvidenceArtifactClass",
+  "evidence_class_is_ClosedEnum",
   "artifact_ref_is_ImmutableArtifactRef",
   "artifact_sha256_is_Sha256Digest",
-  "acceptance_class_is_ExpectedBehaviorClass",
+  "acceptance_class_is_ClosedEnum",
 ]
 
 [[type]]
@@ -512,7 +472,7 @@ representation = "ordered_record"
 canonical_fields = ["requirement_id", "evidence_class", "artifact_ref", "artifact_sha256", "raw_outcome_digest", "availability"]
 rules = [
   "requirement_id_is_OpaqueId",
-  "evidence_class_is_EvidenceArtifactClass",
+  "evidence_class_is_ClosedEnum",
   "artifact_ref_is_ImmutableArtifactRef",
   "artifact_sha256_is_Sha256Digest",
   "raw_outcome_digest_is_Sha256Digest",

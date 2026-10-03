@@ -1,66 +1,71 @@
 # ADR 0003 — Executable swarm orchestration contract
 
-- **Status:** accepted
+- **Status:** superseded by ADR 0005
 - **Date:** 2026-08-29
-- **Scope:** implementation orchestration and evidence control only
+- **Superseded:** 2026-10-03
+- **Scope:** historical repository-local development coordination only
 - **Architecture:** ELIOT Search 8.4
-- **Supersedes:** no product or capability decision
 
 ## Context
 
-The repository already has one-agent-per-package ownership, bounded assignments, dependency waves and
-an active launch gate. Those artifacts still leave several orchestration decisions implicit:
+This ADR was introduced to make a large, concurrent repository refactor reproducible. It described
+package assignments, bounded writer scopes, dependency handoffs and evidence records so multiple coding
+agents would not edit the same package from incompatible bases.
 
-- when a package is actually ready rather than merely present in Cargo;
-- which base commit, assignment revision and dependency API digests a writer received;
-- how one active writer is enforced without relying on chat history;
-- how a package handoff becomes immutable accepted input for downstream agents;
-- which raw evidence is required before a wave can advance;
-- how stale, rejected or superseded work is recorded without mutating an accepted receipt.
+The decision was never intended to define an ELIOT Search runtime capability. It explicitly excluded
+product code, vendor selection and runtime authority, and rejected creating a new orchestration service
+or database.
 
-Without a single state machine, two orchestrators could launch the same package from different bases,
-consume unreviewed dependency APIs, or treat a successful compile as a gate receipt.
+Subsequent repository instructions incorrectly promoted the development metadata into a mandatory
+ticket, lease, signature, approval-profile and control-record system. Agents then implemented generic
+swarm-controller machinery instead of completing the standalone Rust/Qdrant search product.
 
-## Decision
+## Historical decision
 
-1. `swarm/orchestration.toml` is the machine-readable assignment and handoff state-machine contract.
-2. `swarm/gates.toml` is the machine-readable gate/evidence registry. It defines evidence IDs; it does
-   not claim that any evidence has been executed.
-3. `swarm/launch-state.toml` remains the sole current launch authority and points to both registries.
-4. Every writer starts from an integration-owned assignment ticket binding:
-   - package and exact write scope;
-   - base commit;
-   - assignment path and digest;
-   - accepted dependency handoff/API digests;
-   - wave/stage and feature profile;
-   - one unique lease ID.
-5. One package has at most one active writer lease. A second writer is blocked until the first lease is
-   accepted, rejected, revoked or superseded by an integration-owner receipt.
-6. A package handoff is accepted only after review reproduces its declared tests, validates ownership
-   and dependency direction, and publishes an immutable API/schema digest.
-7. Downstream work consumes accepted handoffs by exact commit and API digest. It never consumes a
-   mutable branch head or an implementation worktree.
-8. A wave advances only through an integration-owned wave receipt containing every required package
-   handoff and every required gate-evidence reference. Missing or unavailable evidence remains explicit.
-9. Accepted receipts are append-only. A corrected API, package or wave produces a new receipt that
-   supersedes the old one; history is not rewritten.
-10. Product code, vendor selection and runtime claims remain outside this ADR.
+The original decision permitted Git-tracked, repository-local planning metadata for coordinating a
+specific development campaign. It did not require a running controller and did not grant ELIOT Search
+any authority over agents, tasks, acceptance or completion.
+
+Useful historical ideas remain valid as optional engineering practice:
+
+- one active writer per overlapping package scope;
+- exact source revision and bounded write scope;
+- explicit dependency/API handoff before downstream integration;
+- independent review and exact-head evidence;
+- append-only audit history for accepted product changes.
+
+## Supersession
+
+ADR 0005 establishes the current boundary:
+
+- ELIOT Search is a standalone search product and provider;
+- generic agent orchestration belongs to `eliot-swarm-controller` and later ELIOT Memory OS;
+- `swarm/**`, ticket drafts, launch-state files, leases, receipts and related tooling are advisory or
+  historical repository metadata only;
+- their absence or state cannot authorize, block or alter Search implementation or runtime behavior;
+- no ticket/lease/signature/approval-profile implementation is required to work on Search;
+- Search integration with ELIOT is through typed provider contracts, never through ownership of the
+  Governor, WorkScope, tasks, agent roles, review acceptance or finish authority.
+
+Any lower-precedence document that treats the old orchestration metadata as product or implementation
+authority is superseded by ADR 0005.
 
 ## Consequences
 
-- The swarm can be launched reproducibly by another orchestrator without reading prior chat history.
-- Package writers receive a bounded context with immutable dependency surfaces.
-- Concurrent duplicate ownership and stale-base merges become mechanically rejectable.
-- Gate advancement is evidence-based rather than prose-based.
-- The repository gains more control metadata, but no runtime implementation or new authority surface.
+- Existing product architecture and package ownership remain unchanged.
+- The repository may keep small optional planning aids, but must not grow another controller.
+- Generic orchestration schemas, issuers, credentials, role systems, mailboxes and schedulers are out of
+  scope for this repository.
+- Development proceeds from the architecture, accepted product contracts, the maintainer request and
+  ordinary branch/worktree ownership.
+- Historical commits remain in Git; superseded controller artifacts need not remain in the active tree.
 
 ## Rejected alternatives
 
-- **Use Cargo membership as readiness:** Cargo expresses build topology, not authorization or accepted
-  dependency state.
-- **Use GitHub issues alone:** issue state does not canonically bind API digests, gate evidence and
-  dependency receipts.
-- **Let writers update launch state:** this allows self-authorization and cross-package writes.
-- **Rewrite accepted handoffs in place:** downstream builds would become irreproducible.
-- **Create a new service/database for orchestration:** unnecessary before the repository metadata model
-  is proven; Git commits and append-only receipts are sufficient.
+- **Keep the mandatory ticket/lease system because it is already documented:** documentation cannot
+  transfer another product's responsibility into Search.
+- **Embed a reduced controller in `eliot-searchd`:** this would couple standalone search startup and
+  maintenance to unrelated agent-management state.
+- **Require ELIOT Memory OS for normal Search operation:** this violates the standalone product boundary.
+- **Delete all development coordination practices:** exact scopes, handoffs and review remain useful as
+  ordinary repository workflow without becoming a product control plane.

@@ -3,7 +3,7 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use super::spec::{DOMAIN_SEPARATOR, PLANNER_FILE_BYTE_CEILING};
+use super::spec::DOMAIN_SEPARATOR;
 
 /// SHA-256 hex of raw bytes.
 #[must_use]
@@ -102,11 +102,20 @@ pub fn plan_digest(payload_without_digest: &Value) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// Compatibility wrapper returning the signed-payload digest for a canonical
-/// signed TOML record. Uses the existing planner per-file read ceiling.
+/// SHA-256 over bytes through the single trailing newline of exactly one
+/// `\n[signature]\n` marker.
 #[must_use]
 pub fn signed_payload_digest(raw: &[u8]) -> Option<String> {
-    let max_bytes = usize::try_from(PLANNER_FILE_BYTE_CEILING).ok()?;
-    let verified = crate::control_record_bytes::verify_control_record_bytes(raw, max_bytes).ok()?;
-    Some(verified.signed_payload_sha256.to_hex())
+    const MARKER: &[u8] = b"\n[signature]\n";
+    let offset = find_subslice(raw, MARKER)?;
+    if offset == 0 || find_subslice(&raw[offset + 1..], MARKER).is_some() {
+        return None;
+    }
+    Some(exact_sha256_hex(&raw[..=offset]))
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }

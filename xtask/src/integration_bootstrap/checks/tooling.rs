@@ -4,10 +4,7 @@ use toml::Value;
 
 use super::super::{Finding, load_toml, string_array};
 
-pub(in crate::integration_bootstrap) fn validate_toolchain(
-    root: &Path,
-    findings: &mut Vec<Finding>,
-) {
+pub(super) fn validate_toolchain(root: &Path, findings: &mut Vec<Finding>) {
     let path = root.join("rust-toolchain.toml");
     let document = match load_toml(&path) {
         Ok(document) => document,
@@ -39,10 +36,7 @@ pub(in crate::integration_bootstrap) fn validate_toolchain(
     }
 }
 
-pub(in crate::integration_bootstrap) fn validate_cargo_config(
-    root: &Path,
-    findings: &mut Vec<Finding>,
-) {
+pub(super) fn validate_cargo_config(root: &Path, findings: &mut Vec<Finding>) {
     let path = root.join(".cargo/config.toml");
     let document = match load_toml(&path) {
         Ok(document) => document,
@@ -78,7 +72,7 @@ pub(in crate::integration_bootstrap) fn validate_cargo_config(
     }
 }
 
-pub(in crate::integration_bootstrap) fn validate_lock(
+pub(super) fn validate_lock(
     root: &Path,
     allow_missing: bool,
     findings: &mut Vec<Finding>,
@@ -116,10 +110,7 @@ pub(in crate::integration_bootstrap) fn validate_lock(
     }
 }
 
-pub(in crate::integration_bootstrap) fn validate_workflow(
-    root: &Path,
-    findings: &mut Vec<Finding>,
-) {
+pub(super) fn validate_workflow(root: &Path, findings: &mut Vec<Finding>) {
     let path = root.join(".github/workflows/integration-bootstrap.yml");
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
