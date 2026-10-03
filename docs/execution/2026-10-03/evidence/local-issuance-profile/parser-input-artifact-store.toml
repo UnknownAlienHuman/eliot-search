@@ -1,0 +1,123 @@
+schema_version = 1
+project = "eliot-search"
+candidate_id = "local-git-sha256-artifact-store-v1"
+profile_ref = "eliot-search/local-git-sha256-artifact-store-v1"
+profile_kind = "LOCAL_IMMUTABLE_ARTIFACT_STORE"
+profile_version = 1
+status = "PROPOSED_REVIEW_PENDING"
+claimable = false
+profile_instance = "NOT_PROVISIONED"
+qualified = false
+qualification_result = "UNAVAILABLE"
+owner = "integration-owner/native-rust-control-plane-tooling"
+target_runtime = "Windows x64"
+
+[profile_reference_contract]
+candidate_profile_ref = "eliot-search/local-git-sha256-artifact-store-v1"
+affected_profile_reference_fields = ["profile_ref", "ImmutableArtifactRef.store_profile_ref"]
+required_existing_type = "QualifiedOpaqueId via ImmutableArtifactRef.store_profile_ref"
+grammar_status = "UNRESOLVED_REQUIRED_CONTRACT_NOT_PROVISIONING_ONLY"
+reason = "the current OpaqueId grammar rejects separators and the repository does not define an accepted QualifiedOpaqueId grammar; the slash-qualified candidate string is a design label, not an accepted typed value"
+authoritative_use_blocked_until = "integration owner registers and accepts the exact QualifiedOpaqueId grammar and canonical serialization"
+
+[implementation]
+storage = "existing repository Git object database and committed trees"
+orchestration_service = "none"
+database = "none"
+runtime = "native Rust; Windows Git plumbing only for repository object/ref operations"
+git_executable_version_and_sha256 = "REQUIRED_EXTERNAL_PROFILE_INSTANCE_INPUT"
+repository_name = "REQUIRED_EXTERNAL_PROFILE_INSTANCE_INPUT"
+repository_object_format = "REQUIRED_EXTERNAL_PROFILE_INSTANCE_INPUT; exact match required"
+control_ref = "REQUIRED_EXTERNAL_PROFILE_INSTANCE_INPUT"
+
+[locator]
+artifact_id_pattern = "^sha256-[0-9a-f]{64}$"
+artifact_id_derivation = "sha256- followed by lowercase SHA-256 of exact artifact bytes"
+tree_path = "swarm/control-artifacts/v1/sha256/<first-two-hex>/<64-lowercase-hex>.bin"
+commit_resolution = "resolve path from the exact containing record/receipt commit"
+moving_ref_in_artifact_ref = false
+absolute_path_in_artifact_ref = false
+git_filter_policy = "disabled; hash and read exact bytes with no path filters or line-ending conversion"
+git_object_id_policy = "full algorithm-tagged Git blob ID, matching the bound repository object format"
+external_digest = "lowercase SHA-256 over exact artifact bytes; independent of the Git object ID"
+
+[publication]
+create_only = true
+existing_content_addressed_path = "reuse only when exact byte count and SHA-256 match; otherwise quarantine"
+existing_operation_receipt_path = "return prior receipt only when operation ID and canonical input bytes match exactly"
+record_target_already_exists = "reject; never overwrite or repair"
+commit_contents = ["canonical operation-input artifact", "all output and signature artifacts", "primary control record", "operation receipt"]
+commit_parent = "exact observed control-ref tip"
+ref_update = "single git update-ref compare-and-swap with exact expected old object ID"
+publication_point = "successful atomic ref update to the new commit"
+unreachable_prepared_objects = "not published; eligible for ordinary Git housekeeping because the accepted ref never reached them"
+remote_publication = "outside this local profile; no implicit push or remote authority claim"
+pre_publish_readback = "verify exact prospective tree bytes, Git blob IDs, SHA-256 digests, signatures and output paths"
+post_publish_readback = "read the exact new commit through the bound control ref; verify parent, receipt, inputs, outputs and artifacts before returning success"
+ref_rewind_or_divergence = "integrity failure; preserve outcome unknown and stop mutation"
+
+[retention]
+accepted_records_and_artifacts = "append-only for as long as the control ref remains authoritative"
+automatic_expiry_or_delete = false
+rewrite_or_force_update = false
+garbage_collection = "must retain every object reachable from the bound control ref"
+lost_local_repository = "integrity/availability failure; this profile supplies no independent backup or cross-clone consistency"
+purge = "separate explicitly owned process; this profile cannot erase accepted history"
+
+[currentness]
+authority_scope = "one exact local repository object database and one bound control ref"
+cross_clone_serialization = false
+stale_local_copy = "cannot claim global currentness; fail closed when a remote/shared head is an authority input and exact live readback is unavailable"
+concurrent_writers = "serialize by expected-old-object-ID ref compare-and-swap; loser performs read-only recovery"
+
+[budgets]
+max_context_sources_per_operation = 24
+max_source_bytes_per_file = 4194304
+max_total_source_bytes_per_operation = 100663296
+max_context_artifact_bytes = 104857600
+max_canonical_input_artifact_bytes = 1048576
+max_control_record_bytes = 262144
+max_operation_receipt_bytes = 65536
+max_signature_artifact_bytes = 64
+max_signature_artifacts_per_operation = 3
+max_total_signature_bytes_per_operation = 192
+max_artifact_objects_per_operation = 5
+max_total_artifact_bytes_per_operation = 105906368
+max_control_records_per_operation = 2
+max_total_control_record_bytes_per_operation = 327680
+max_tracked_blob_bytes_per_operation = 106234048
+max_working_memory_bytes_per_operation = 16777216
+max_operation_wall_clock_seconds = 120
+max_recovery_wall_clock_seconds = 30
+max_operation_receipts_per_instance = 100000
+max_artifact_objects_per_instance = 100000
+max_reachable_artifact_bytes_per_instance = 8589934592
+budget_exceeded = "typed failure before publication; never delete or truncate an accepted object"
+
+[required_external_inputs]
+items = [
+  "exact repository identity, Git object format, control-ref name and Git executable identity",
+  "accepted immutable artifact-store profile definition digest and independent qualification receipt",
+  "accepted immutable approval-profile instance, actor trust manifest and independent qualification receipt",
+  "exact trust-root public-key fingerprint verified out of band",
+  "accepted operation-receipt schema and first-four record-instance closure",
+  "for acknowledgement, an accepted typed acknowledgement payload and event schema revision",
+  "retention, local-backup and purge-owner decisions for context artifacts",
+]
+
+[qualification_plan]
+suite_id = "local_git_artifact_store_v1"
+all_results = "UNAVAILABLE"
+executed = false
+cases = [
+  "create-only content path; exact byte count, Git blob ID and SHA-256 readback",
+  "same bytes reuse the exact artifact; differing bytes at one artifact ID quarantine",
+  "path traversal, symlink, Git filter, line-ending conversion and object-format mismatch rejection",
+  "one commit publishes input, output, signature artifacts and receipt together",
+  "expected-old-ref compare-and-swap permits one concurrent publisher only",
+  "crash before ref update is SAFE_TO_RETRY only when ref, receipt and target absence are proved",
+  "lost response after ref update recovers the exact committed result without a second record",
+  "ref rewind, missing object, malformed receipt or unreadable repository preserves outcome unknown",
+  "all per-operation and lifetime byte, object-count and deadline boundaries",
+  "reachable accepted objects survive supported Git maintenance; no automatic expiry or purge",
+]

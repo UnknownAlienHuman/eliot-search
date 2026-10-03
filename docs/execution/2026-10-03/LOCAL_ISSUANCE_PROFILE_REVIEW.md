@@ -34,5 +34,13 @@ SHA-256 values; the adjacent retained stdout and stderr files are both zero byte
 and digests. Root verified copied-byte equality and the four integrated Git blobs. The original initial
 parse was reported exit 0 in the tool response, but no separate raw capture was retained; it was not rerun.
 
+A subsequent root exact-byte comparison failed: the author's parser inputs had 2, 31 and 7 CRLF
+sequences respectively, while Git stored LF bytes. The
+[provenance check](evidence/local-issuance-profile/parser-input-provenance.json) proves that removing
+only those CR bytes reproduces each committed blob; it does not relabel the original parse as a check
+of different exact bytes. Exact parser-input snapshots are retained beside the capture with `-text`
+attributes; their original mixed line endings remain intact. No syntax parser was rerun and no signed
+record or authority input was normalized.
+
 These checks establish syntax and bounded proposal provenance, not cryptographic encoding, export
 denial, mutation recovery, profile qualification, Search retrieval or package acceptance.
