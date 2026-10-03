@@ -1,0 +1,293 @@
+schema_version = 1
+project = "eliot-search"
+candidate_id = "local-profile-bootstrap-evidence-v1"
+status = "PROPOSED_REVIEW_PENDING"
+claimable = false
+instance_status = "NOT_PROVISIONED"
+qualification_result = "UNAVAILABLE"
+owner = "integration-owner"
+based_on_commit = "0f691f1b3fd10755a3c8e650ddea6f9311842978"
+scope = "local native profile trust bootstrap and its non-authoritative raw qualification evidence"
+
+[boundary]
+authority_records_created = false
+closed_control_record_kind_added = false
+issued_ticket_or_package_submission_required = false
+search_runtime_required = false
+orchestration_service = "none"
+database = "none"
+baseline_runtime = "native Rust, Git plumbing and Windows CNG only"
+hardware_or_smart_card_required = false
+different_windows_user_required = false
+same_user_boundary = "processes with the same Windows token may request every key available to that account; distinct ActorIdentity values, public keys and tasks do not prove process or human isolation"
+authority_source_boundary = "out-of-band denotes the actual externally authorized source for the root pin; a Git record, self-signed key, display name, local file, OS username or hash equality does not create that authority"
+
+[external_root_pin_acceptance]
+acceptance_point = "future native bootstrap command requires explicit --expected-root-key-id sha256-<64-lowercase-hex> and --authority-envelope <file> arguments; never discover either value from the repository, a branch, environment fallback or self-signed envelope"
+expected_root_key_id_type = "OpaqueId-shaped string sha256- plus exactly 64 lowercase hexadecimal characters; 71 ASCII bytes"
+required_public_key_blob = "exact 72-byte public BCRYPT_ECCPUBLIC_BLOB for ECDSA P-256, represented as 144 lowercase hexadecimal characters in the envelope"
+public_key_blob_validation = "decode 72 bytes; first 4 bytes are little-endian BCRYPT_ECDSA_PUBLIC_P256_MAGIC, next 4 bytes little-endian cbKey=32, followed by exactly 32-byte big-endian X and 32-byte big-endian Y coordinates; reject every other magic, width, length or point"
+fingerprint_check = "SHA-256 over the exact 72 decoded public-blob bytes, formatted sha256- plus lowercase hex, must equal the explicit expected-root-key-id argument"
+envelope_check = "envelope root_key_id must equal the explicit expected pin; verify the root signature over the exact pre-signature envelope payload with the public blob whose digest matched that pin"
+self_signed_root = "reject; an envelope cannot authorize its own root fingerprint"
+external_channel_identity = "REQUIRED_EXTERNAL_INPUT: exact authority owner/channel and authenticated delivery procedure; none is named or asserted by this proposal"
+external_currentness = "the caller must obtain the currently authorized pin/envelope through that external authority channel for each root-authorized bootstrap or activation; the tool validates the supplied bytes but cannot query or authenticate the channel itself"
+channel_reference = "record a bounded non-secret OpaqueId channel label and SHA-256 of the exact external authorization artifact for audit; these strings are trace metadata, not proof of channel authenticity"
+missing_or_unverified_pin = "UNAVAILABLE and fail closed before key mapping, qualification acceptance, trust publication or issuance"
+root_rotation = "unsupported in v1; a changed or externally revoked root invalidates the profile instance and requires a separately reviewed root-rotation contract and new external pin"
+
+[authority_envelope_v1]
+artifact_kind = "local_profile_bootstrap_authority_envelope_v1"
+transport = "out-of-band input file; its public bytes may also be copied into the first evidence commit"
+encoding = "canonical UTF-8 without BOM, LF line endings, one final LF, ordered assignments, no comments, no TOML escapes"
+max_file_bytes = 65536
+field_order_before_signature = ["schema_version", "artifact_kind", "project_namespace", "generation", "root_key_id", "root_public_key_blob_hex", "authority_channel_id", "authority_reference_sha256", "candidate_profile_refs", "actor_authorizations"]
+signature_table = "final [signature] table, fields signed_payload_sha256 then signature_bytes_hex"
+actor_authorization_field_order = ["actor_identity", "bootstrap_role", "key_id", "key_container_name", "public_key_blob_hex", "allowed_operation_domains"]
+top_level_field_types = ["schema_version=u16 exact 1", "artifact_kind=ASCII exact local_profile_bootstrap_authority_envelope_v1", "project_namespace=namespace component 1..96 ASCII bytes", "generation=u64 exact 1", "root_key_id=sha256- plus 64 lowercase hex", "root_public_key_blob_hex=144 lowercase hex characters", "authority_channel_id=OpaqueId 1..128 ASCII bytes", "authority_reference_sha256=64 lowercase hex", "candidate_profile_refs=1..8 unique QualifiedProfileRefV1 values sorted bytewise ASCII", "actor_authorizations=exactly two ordered inline tables", "signature=final table"]
+actor_authorization_field_types = ["actor_identity=syntactically valid ActorIdentity, at most 160 ASCII bytes and explicitly root-authorized; no prior control-plane registration is presumed", "bootstrap_role=one exact bootstrap_roles value", "key_id=sha256- plus 64 lowercase hex and equal to SHA-256 of the decoded public blob", "key_container_name=exact key_container_pattern, at most 120 ASCII bytes", "public_key_blob_hex=exactly 144 lowercase hex characters", "allowed_operation_domains=nonempty ordered unique ASCII values, each 1..128 bytes"]
+actors_exact_count = 2
+actor_rows_sorted_by = "bytewise ASCII ActorIdentity ascending"
+bootstrap_roles = ["bootstrap_operator", "independent_reviewer"]
+operator_identity_rule = "syntactically valid exact ActorIdentity; exact value explicitly authorized by the signed envelope; bootstrap establishes this mapping without claiming prior registration; no display-name inference"
+reviewer_identity_rule = "syntactically valid exact ActorIdentity whose class segment is reviewer; explicitly authorized by the signed envelope; no prior package-workflow registration is required"
+operator_reviewer_distinct = "ActorIdentity strings and key IDs must differ; an actual separate reviewer task is mandatory"
+allowed_domains_sorted_by = "bytewise ASCII ascending, unique, maximum 16 entries per actor, 1..128 ASCII bytes each"
+operation_domain_grammar = "^[a-z][a-z0-9_]{0,127}$; bootstrap values are the two exact strings in bootstrap_domain_binding"
+bootstrap_domain_binding = ["bootstrap_operator may use only local_profile_bootstrap_evidence_v1", "independent_reviewer may use only local_profile_bootstrap_review_v1"]
+key_container_pattern = "^EliotSearch-Approval-v1-[A-Za-z0-9._-]{1,96}$"
+key_id_derivation = "sha256- plus lowercase SHA-256 of the exact decoded public BCRYPT_ECCPUBLIC_BLOB bytes"
+root_key_disjoint_from_actor_keys = true
+signature_preimage = "ASCII ELIOT-SEARCH/LOCAL-PROFILE-ROOT-AUTHORITY/V1 || 0x00 || u16be(schema_version=1) || raw32(SHA-256(exact bytes before [signature])) || raw32(root_key_id decoded from sha256- hex)"
+signature_encoding = "exactly 64 bytes IEEE P1363 r[32]||s[32], lowercase-hex encoded in signature_bytes_hex; proposed wire encoding remains subject to independent qualification"
+signed_body_boundary = "the signed body is the exact file prefix ending at the LF immediately before the [signature] line; the [signature] line and its fields are excluded; there is exactly one blank line between the body-final LF and [signature]"
+signature_field_types = ["signed_payload_sha256=64 lowercase ASCII hex characters equal SHA-256 of the exact signed body", "signature_bytes_hex=128 lowercase ASCII hex characters decoding to exactly 64 bytes"]
+signature_api_digest = "SHA-256 of the exact domain-separated preimage bytes is the digest supplied to CNG signing or verification; no implicit rehash, truncation or alternate digest"
+canonical_text_rules = "one assignment per line in field_order_before_signature; exact key spelling and ` = ` delimiter; integers are decimal with no sign or leading zero except literal 0; strings are double-quoted ASCII with no escapes; string arrays use `[` + comma-separated double-quoted items without spaces + `]`; actor_authorizations is an ordered array of inline tables with no whitespace except one space after commas between fields, exact actor_authorization_field_order, and no whitespace around `=`; exactly one blank line precedes [signature]; signature fields use same key/delimiter rule; exactly one final LF"
+external_authority_fields_are_proof = false
+external_authority_fields_meaning = "root-signed trace metadata only; authentication comes from comparing root_key_id to the separately supplied out-of-band expected pin"
+root_private_key_custody = "external and unspecified; this proposal creates or provisions no root private key and requires no particular device or Windows account"
+root_key_algorithm = "root public key is the exact ECDSA P-256 BCRYPT_ECCPUBLIC_BLOB defined above; root signature is proposed 64-byte P1363 ECDSA over SHA-256 of signature_preimage"
+envelope_instance_created = false
+root_private_key_generated = false
+actor_keys_generated = false
+
+[cng_key_provisioning_candidate]
+provider = "Microsoft Software Key Storage Provider"
+algorithm = "ECDSA P-256 with SHA-256 prehash"
+key_scope = "persisted current-user key; do not set NCRYPT_MACHINE_KEY_FLAG"
+create_rule = "never set NCRYPT_OVERWRITE_KEY_FLAG; existing mapped container name is a hard conflict"
+silent_rule = "use NCRYPT_SILENT_FLAG for signing; UI requirement, provider absence or cancellation fails without fallback"
+export_policy = "set NCRYPT_EXPORT_POLICY_PROPERTY DWORD 0 before key finalization and read back 0; qualification must separately demonstrate the exact provider rejects private export"
+public_readback = "export exact BCRYPT_ECCPUBLIC_BLOB; recompute key_id; compare bytes and ID to root-signed authorization envelope"
+secrets = "never write private key bytes, credentials or PINs to Git, evidence artifacts, control records or logs"
+claims_not_proved = ["separate processes", "separate humans", "non-exportability without the executed provider probe", "root authority from local key possession"]
+
+[bootstrap_artifact_locations]
+raw_outcome_path = "swarm/profile-bootstrap/v1/raw/sha256/<first-two-lowercase-hex>/<64-lowercase-hex>.bin"
+authority_envelope_path = "swarm/profile-bootstrap/v1/authority/sha256/<first-two-lowercase-hex>/<64-lowercase-hex>.toml"
+evidence_path = "swarm/profile-bootstrap/v1/evidence/sha256/<first-two-lowercase-hex>/<64-lowercase-hex>.bin"
+review_binding_path = "swarm/profile-bootstrap/v1/reviews/sha256/<first-two-lowercase-hex>/<64-lowercase-hex>.bin"
+path_digest = "SHA-256 of exact file bytes; filename is full lowercase hex and parent directory is its first two hex characters"
+git_object_id = "exact full existing GitObjectId tagged sha1:<40-lowercase-hex> or sha256:<64-lowercase-hex>, matching this repository object format"
+locator_create_only = true
+existing_path_rule = "reuse only if exact bytes, byte count, Git blob ID and independent SHA-256 all match; mismatch is integrity failure"
+filter_and_path_rules = "disable Git filters and line-ending conversion; reject absolute paths, symlinks, traversal, alternate path spellings and ambient worktree resolution"
+publication = "commit the evidence manifest and all referenced same-tree raw blobs together; commit the later review binding and its same-tree outputs separately; obtain each outer immutable ref only after its containing commit ID exists"
+no_self_commit_reference = "an artifact may include same-tree blob locators without a commit; its outer immutable ref binds the exact containing commit after commit creation"
+push = "no implicit remote push"
+control_record_status = "these artifact_kind values are not ClosedControlRecordKind values, ImmutableRecordRef instances, tickets, submissions, reviews or authority receipts"
+
+[bootstrap_locator_v1]
+type_name = "BootstrapEvidenceRefV1 or BootstrapReviewBindingRefV1"
+field_order = ["repository", "commit", "path", "git_blob_id", "exact_bytes", "sha256", "artifact_kind"]
+field_types = ["RepositoryName ASCII 1..192 bytes", "GitObjectId exact tagged ASCII 45 or 71 bytes", "RepositoryRelativeSafePath ASCII 1..512 bytes", "GitObjectId exact tagged ASCII 45 or 71 bytes", "u64 unsigned big-endian", "Sha256Digest lowercase hex in TOML and raw32 in canonical binary values", "one closed BootstrapArtifactKindV1 value"]
+artifact_kinds = ["ROOT_AUTHORITY_ENVELOPE_V1", "PROFILE_EVIDENCE_V1", "INDEPENDENT_REVIEW_BINDING_V1", "RAW_OUTCOME_V1", "ACTOR_TRUST_MANIFEST_V2"]
+outer_reference_canonical_encoding = "ASCII ELIOT-SEARCH-BOOTSTRAP-LOCATOR || 0x00 || u16be(1) || u16be field_count=7 || ordinary ordered TLVs; no ClosedControlRecordKind field"
+record_kind_relation = "artifact_kind is local to this proposal and never added to ClosedControlRecordKind by implication"
+outer_locator_verification = "resolve repository identity and exact commit object; read path from that commit tree; reject symlink or non-blob; compare exact byte count, full algorithm-tagged Git blob ID, and SHA-256; require artifact_kind to match parsed bytes"
+
+[same_tree_blob_locator_v1]
+field_order = ["path", "git_blob_id", "exact_bytes", "sha256"]
+field_types = ["RepositoryRelativeSafePath ASCII 1..512 bytes", "GitObjectId exact tagged ASCII 45 or 71 bytes", "u64 unsigned big-endian", "raw32 SHA-256"]
+encoding = "u16be field_count=4 followed by ordinary ordered TLVs; resolved only against the exact containing evidence or review commit"
+canonical_encoding = "ASCII ELIOT-SEARCH-SAME-TREE-BLOB-LOCATOR || 0x00 || u16be(1) || u16be field_count=4 || ordinary ordered TLVs"
+
+[artifact_budgets]
+max_authority_envelope_bytes = 65536
+max_evidence_manifest_bytes = 262144
+max_review_binding_bytes = 65536
+max_raw_outcome_bytes_each = 1048576
+max_raw_outcomes_per_evidence = 64
+max_total_raw_outcome_bytes_per_evidence = 16777216
+max_raw_review_output_bytes = 1048576
+max_total_bootstrap_bytes_per_profile_instance = 33554432
+max_working_memory_bytes = 16777216
+max_bootstrap_operation_seconds = 120
+max_read_only_recovery_seconds = 30
+budget_failure = "typed failure before publication; no truncation, fallback, automatic deletion or PASS inference"
+
+[binary_schema_v1]
+encoding = "ASCII magic || 0x00 || u16be(1) || u16be(field_count) || ordered TLVs"
+evidence_magic = "ELIOT-SEARCH-LOCAL-PROFILE-EVIDENCE"
+review_magic = "ELIOT-SEARCH-LOCAL-PROFILE-REVIEW"
+top_level_field_count = "exactly the number of entries in each artifact's field_order; the signature trailer is excluded"
+tlv_header = "u16be ordinal || u8 wire_type || u32be exact value length || exact value bytes"
+wire_type_codes = ["0x01=ASCII", "0x02=SHA256_RAW32", "0x03=U16BE", "0x04=U32BE", "0x05=U64BE", "0x06=GIT_OBJECT_ID_TAGGED_ASCII", "0x07=NESTED_TLV", "0x08=ORDERED_ARRAY", "0x09=RAW_BYTES", "0x0A=OPTIONAL", "0x0B=U8"]
+nested_tlv = "u16be field_count followed by that many ordinary TLVs; ordinals start at 1"
+ordered_array = "u32be element_count followed by repeated u32be exact_element_length and element bytes; no sorting unless a field rule requires it"
+optional = "one byte 0x00 ABSENT or 0x01 PRESENT followed by the raw declared inner value with no extra type/length header"
+integer_encoding = "unsigned fixed-width big-endian, no sign or alternate width"
+git_object_id_encoding = "ASCII exact GitObjectId tagged form from swarm/schemas/types-v1.toml; compare tag to bound repository object format"
+ascii_wire_domain = "unless a field has a stricter declared grammar, ASCII means bytes 0x20..0x7e only; no NUL, controls, DEL, Unicode or normalization"
+unknown_or_reordered = "reject unknown, duplicate, missing, out-of-order, truncated, overlong and trailing bytes"
+top_level_max_fields = 32
+max_nested_depth = 4
+max_ascii_value_bytes = 4096
+max_probe_outcomes = 64
+max_array_element_bytes = 16384
+max_array_encoded_bytes = 1048576
+u8_encoding = "exactly one unsigned byte"
+
+[evidence_schema_v1]
+artifact_kind = "PROFILE_EVIDENCE_V1"
+field_order = ["schema_version", "artifact_kind", "run_id", "project_namespace", "candidate_profile_ref", "profile_definition_sha256", "source_base_commit", "root_key_id", "authority_envelope_same_tree_locator", "operator_actor_identity", "operator_key_id", "reviewer_actor_identity", "reviewer_key_id", "operator_task_id", "reviewer_task_id", "runtime_identity", "probe_outcomes"]
+field_types = ["U16BE exact 1", "ASCII exact PROFILE_EVIDENCE_V1", "ASCII OpaqueId", "ASCII namespace grammar", "ASCII QualifiedProfileRefV1", "raw32", "GitObjectId tagged ASCII", "raw32", "NESTED_TLV SameTreeBlobLocatorV1", "ASCII ActorIdentity", "raw32", "ASCII ActorIdentity", "raw32", "ASCII OpaqueId", "ASCII OpaqueId", "NESTED_TLV RuntimeIdentityV1", "ORDERED_ARRAY<BootstrapProbeOutcomeV1>"]
+runtime_identity_field_order = ["windows_build_identity", "rustc_version", "rustc_executable_sha256", "git_version", "git_executable_sha256", "repository_object_format", "cng_provider_name", "bootstrap_executable_sha256"]
+runtime_identity_field_types = ["ASCII 1..128 bytes", "ASCII 1..64 bytes", "raw32", "ASCII 1..64 bytes", "raw32", "ASCII exact sha1 or sha256", "ASCII exact Microsoft Software Key Storage Provider", "raw32"]
+probe_outcome_field_order = ["probe_id", "result_code", "input_sha256_optional", "raw_output_locator_optional", "unavailable_reason_optional"]
+probe_outcome_field_types = ["ASCII from closed candidate probe_ids", "U8: 0=UNAVAILABLE, 1=PASS, 2=FAIL", "OPTIONAL raw32", "OPTIONAL NESTED_TLV SameTreeBlobLocatorV1", "OPTIONAL ASCII 1..512 bytes"]
+probe_result_rule = "PASS and FAIL require exact input digest and raw output locator; UNAVAILABLE requires absent raw output and a nonempty reason; no result is inferred"
+evidence_profile_ref_rule = "validate candidate_profile_ref under QualifiedProfileRefV1, then require exact definition digest from the explicit reviewed candidate"
+same_tree_resolution = "authority envelope and raw output blobs resolve only within the exact commit that contains this evidence manifest"
+manifest_contains_own_locator = false
+manifest_contains_containing_commit = false
+outcome_cardinality_and_order = "exactly one outcome for each mandatory_probe_ids entry, in that exact order; no duplicate, omitted or additional probe ID"
+operator_signature_trailer = "append ASCII SIG1 followed by exactly 5 ordinary TLVs with ordinals 1..5 and types [ASCII QualifiedProfileRefV1, ASCII ActorIdentity, raw32 actor key_id, raw32 signed body SHA-256, RAW_BYTES exact 64-byte P1363 signature]; no count prefix"
+operator_signature_preimage = "ASCII ELIOT-SEARCH/LOCAL-PROFILE-BOOTSTRAP-EVIDENCE/V1 || 0x00 || u16be(1) || LP16(candidate_profile_ref ASCII) || raw32(SHA-256(exact evidence body bytes before SIG1)) || raw32(root_key_id) || LP16(operator_actor_identity ASCII) || raw32(operator_key_id)"
+operator_signature_digest_equality = "the raw32 signed body SHA-256 in trailer ordinal 4 must equal SHA-256(exact evidence body bytes before SIG1)"
+operator_signature_verification = "actor_identity and key_id must equal the operator authorization in the root-signed envelope; verify trailer signature over the exact preimage; signature trailer and its signature artifact are excluded from the evidence body hash"
+
+[review_binding_v1]
+artifact_kind = "INDEPENDENT_REVIEW_BINDING_V1"
+field_order_before_signature = ["schema_version", "artifact_kind", "review_task_id", "evidence_ref", "evidence_exact_sha256", "profile_definition_sha256", "root_key_id", "operator_actor_identity", "reviewer_actor_identity", "reviewer_key_id", "independent_verifier_version", "independent_verifier_sha256", "review_result", "reviewed_probe_ids", "raw_review_output_locator"]
+field_types = ["U16BE exact 1", "ASCII exact INDEPENDENT_REVIEW_BINDING_V1", "ASCII OpaqueId", "NESTED_TLV BootstrapEvidenceRefV1", "raw32", "raw32", "raw32", "ASCII ActorIdentity", "ASCII ActorIdentity", "raw32", "ASCII 1..128 bytes", "raw32", "U8: 0=UNAVAILABLE, 1=ACCEPTED, 2=REJECTED", "ORDERED_ARRAY of unique closed probe IDs", "NESTED_TLV SameTreeBlobLocatorV1"]
+independent_task_rule = "review_task_id differs from operator_task_id; reviewer ActorIdentity and root-mapped key ID differ from operator; actual separate reviewer task must inspect the exact evidence commit"
+independent_verifier_rule = "review task uses a separately built verifier executable; its exact version and SHA-256 are required evidence inputs and must differ from the implementation-under-review executable"
+review_result_rule = "ACCEPTED only if every mandatory probe is PASS and all raw inputs/outputs, identity mappings and current root pin verify; otherwise REJECTED or UNAVAILABLE"
+accepted_review_probe_order = "reviewed_probe_ids must exactly equal mandatory_probe_ids, in declared order, when review_result is ACCEPTED; other results must not claim a complete accepted set"
+signature_trailer = "after the exact pre-signature body append ASCII SIG1 || ordered signature TLVs for profile_ref QualifiedProfileRefV1, actor_identity ActorIdentity, actor_key_id raw32, signed_payload_sha256 raw32 and signature_bytes raw64 P1363"
+signature_trailer_exact_framing = "ASCII SIG1 followed by exactly 5 ordinary TLVs with ordinals 1..5, wire types [0x01 ASCII, 0x01 ASCII, 0x02 SHA256_RAW32, 0x02 SHA256_RAW32, 0x09 RAW_BYTES], exact value lengths [profile_ref length, actor identity length, 32, 32, 64]; no count prefix and no trailing bytes"
+signature_body_boundary = "the pre-signature body is the exact review bytes before the first byte of ASCII SIG1; SIG1 and all five TLVs are excluded"
+signature_digest_equality = "trailer field signed_payload_sha256 must equal SHA-256(exact review body bytes before SIG1)"
+signature_preimage = "ASCII ELIOT-SEARCH/LOCAL-PROFILE-BOOTSTRAP-REVIEW/V1 || 0x00 || u16be(1) || LP16(profile_ref ASCII) || raw32(SHA-256(exact pre-signature body bytes)) || raw32(evidence_exact_sha256) || LP16(reviewer_actor_identity ASCII) || raw32(root_key_id)"
+signature_trailer_excluded_from_preimage = true
+review_binding_contains_own_git_commit = false
+signature_verification = "map actor_identity to reviewer_key_id in the root-signed authority envelope; verify exact 64-byte signature with the separately identified verifier; readback-check review artifact bytes and SHA-256"
+review_signature_is_profile_qualification = false
+
+[activation_snapshot_v2]
+manifest_kind = "actor_trust_manifest_v2"
+head_kind = "actor_trust_head_v2"
+manifest_path_pattern = "swarm/control-trust/v2/actor-manifests/<20-digit-generation>.toml"
+head_path = "swarm/control-trust/v2/actor-trust-head.toml"
+manifest_max_file_bytes = 262144
+head_max_file_bytes = 65536
+canonical_file_encoding = "UTF-8 without BOM, LF only, exactly one final LF, fixed field order, no comments, no escapes, no duplicate keys or unknown fields"
+canonical_serializer_rule = "use authority_envelope_v1.canonical_text_rules with manifest_field_order and actor_field_order; locator tables use locator_inline_table_field_order and exact no-extra-space key-value syntax"
+locator_inline_table_field_order = ["repository", "commit", "path", "git_blob_id", "exact_bytes", "sha256", "artifact_kind"]
+manifest_field_order = ["schema_version", "record_kind", "status", "generation", "root_key_id", "profile_ref", "profile_definition_sha256", "actors", "profile_evidence_ref", "profile_review_binding_ref", "signature"]
+manifest_field_types = ["u16 exact 2", "ASCII exact actor_trust_manifest_v2", "ASCII exact ACTIVE", "u64 generation starting 1", "sha256- plus 64 lowercase hex", "QualifiedProfileRefV1", "64 lowercase hex SHA-256", "exactly 2 ordered actor tables", "BootstrapEvidenceRefV1", "BootstrapReviewBindingRefV1", "final signature table"]
+manifest_reference_inline_encoding = "each reference is one inline TOML table with fields in locator_inline_table_field_order; strings are exact quoted ASCII, exact_bytes is unsigned decimal, no omitted/extra fields"
+actor_field_order = ["actor_identity", "key_id", "key_container_name", "public_key_blob_hex", "allowed_operation_domains", "registration_evidence_ref", "independent_review_ref"]
+actor_field_types = ["ASCII ActorIdentity", "sha256- plus 64 lowercase hex", "key_container_pattern", "144 lowercase hex characters", "ordered unique ASCII domains", "BootstrapEvidenceRefV1", "BootstrapReviewBindingRefV1"]
+actor_ordering_and_bounds = "exactly two entries sorted bytewise by ActorIdentity; identities and key IDs distinct; maximum 16 domains per actor, each 1..128 ASCII bytes; total canonical manifest <=262144 bytes"
+operation_domain_activation_gate = "the authority envelope authorizes bootstrap domains only; any issuance operation domain may enter an ACTIVE trust manifest only after integration owner accepts the profile definition, the exact profile-instance binding, and independent qualification evidence; the domain set must equal an explicit accepted registry assignment and is never inferred from actor names or envelope fields"
+manifest_path_derivation = "replace the final path component with the unsigned decimal generation left-padded with zeroes to exactly 20 ASCII digits and suffix .toml; create-only; generation starts at 1"
+manifest_signature = "final [signature] table fields signed_payload_sha256 then signature_bytes_hex; use root P-256 key from the explicit external pin and exact 64-byte P1363 candidate encoding; domain ELIOT-SEARCH/LOCAL-PROFILE-ACTOR-TRUST-MANIFEST/V2"
+manifest_signature_preimage = "ASCII ELIOT-SEARCH/LOCAL-PROFILE-ACTOR-TRUST-MANIFEST/V2 || 0x00 || u16be(2) || raw32(SHA-256(exact manifest body before [signature])) || raw32(decoded 64-hex suffix of root_key_id) || u64be(generation)"
+head_field_types = ["u16 exact 2", "ASCII exact actor_trust_head_v2", "ASCII exact ACTIVE", "u64 generation equal manifest generation", "exact RepositoryName", "full tagged manifest commit OID", "exact manifest path", "full tagged manifest Git blob ID", "u64 exact manifest byte count", "64 lowercase hex SHA-256 of exact manifest file bytes", "sha256- plus 64 lowercase hex", "final root signature table"]
+head_manifest_reference = "the repository, manifest commit, path, Git blob ID, exact byte count, SHA-256 and artifact kind together equal the full TrustManifestRefV2 locator; no abbreviated ID or moving ref is permitted"
+head_signature_preimage = "ASCII ELIOT-SEARCH/LOCAL-PROFILE-ACTOR-TRUST-HEAD/V2 || 0x00 || u16be(2) || raw32(SHA-256(exact head body before [signature])) || raw32(decoded 64-hex suffix of root_key_id) || u64be(generation)"
+signature_file_boundary = "as for authority_envelope_v1: exact body prefix through the LF immediately before [signature]; final signature table excluded"
+signature_encoding = "signed_payload_sha256 is lowercase 64-hex SHA-256 of exact body; signature_bytes_hex is lowercase hex of exactly 64-byte P1363 r[32]||s[32]"
+registration_evidence_ref_type = "BootstrapEvidenceRefV1, not ImmutableRecordRef"
+independent_review_ref_type = "BootstrapReviewBindingRefV1, not independent_review_v1 or ImmutableRecordRef"
+head_field_order = ["schema_version", "record_kind", "status", "generation", "manifest_repository", "manifest_commit", "manifest_path", "manifest_git_blob_id", "manifest_exact_bytes", "manifest_exact_record_file_sha256", "root_key_id", "signature"]
+current_head_locator = "exact repository identity plus one explicitly configured full Git ref under refs/heads/; resolve that ref to a full GitObjectId commit, read swarm/control-trust/v2/actor-trust-head.toml from that exact commit tree, and reject absent, ambiguous, symbolic, non-blob or non-canonical content"
+head_currentness = "read exact head from the current bound control-ref commit on every authoritative operation; verify root signature, referenced manifest blob/file SHA, generation, and explicit expected-root-key-id equality; all trust-head transitions use compare-and-swap on the same configured ref with exact old full commit OID"
+activation_publish_order = "commit immutable manifest first as a child of the exact old control-ref commit; construct signed head with exact manifest outer locator; create the head-containing commit as a child of the manifest commit; CAS the configured control ref from exact old commit OID directly to the head-containing commit; read back that exact ref and head before reporting publication; lost response is OUTCOME_UNKNOWN until readback"
+head_ref_cannot_self_reference_commit = "head names the exact manifest commit/blob/file digest; head does not contain its own containing commit OID; the external current control ref binds the head-containing commit"
+root_generation = "starts at 1 and increases by exactly one; no wall-clock authority"
+head_ref = "exact Git ref selected in integration-owned immutable configuration, full name under refs/heads/; no branch aliases, remote-tracking names, symbolic refs or environment fallback"
+activation_registration_state = "PROPOSAL_ONLY; both record kinds/statuses remain unregistered and no instance exists"
+closed_kind_boundary = "these proposed activation records would require later integration-owned schema/type registration; bootstrap evidence artifacts above remain outside ClosedControlRecordKind"
+
+[retention]
+published_artifacts = "append-only and create-only; never rewrite or delete a blob, evidence manifest, review binding, trust manifest or signed head referenced by an active or historical trust-head commit"
+local_git_reachability = "the configured trust-head ref and its commit ancestry keep accepted artifacts reachable in this one repository; ref rewrite or repository loss is integrity/availability failure"
+backup_and_retention_policy = "REQUIRED_EXTERNAL_INPUT: integration owner must define retention and recovery/backup policy before authoritative use; this proposal adds no remote backup, purge workflow or cross-clone guarantee"
+automatic_purge = false
+
+[currentness_and_threat_model]
+root_pin_checked_on_every_authoritative_operation = true
+head_root_must_equal_explicit_external_pin = true
+head_root_must_equal_manifest_root = true
+caller_currentness_duty = "obtain the presently authorized fingerprint/envelope from the actual external authority channel; if channel freshness or authorization cannot be confirmed, keep result UNAVAILABLE"
+tool_external_channel_claim = "the tool verifies local bytes and signatures only; it cannot authenticate a channel label or discover later external revocation"
+local_head_scope = "one exact repository and bound control ref; no cross-clone or remote-global currentness"
+same_user_process_isolation = false
+actor_distinction_rule = "distinct exact ActorIdentity strings, distinct root-mapped key IDs and an actual separate reviewer task; never infer distinct humans or OS principals"
+hardware = "optional separately qualified custody only; not a baseline prerequisite"
+
+[standalone_sequence]
+steps = [
+  "1. Integration owner obtains the actual current root public key and expected fingerprint through the externally authorized channel and explicitly supplies the fingerprint to the native command. No pin or unverifiable freshness means stop; the signed actor envelope is not yet available.",
+  "2. Under the explicitly stated trusted cooperative host assumption, the operator creates two current-user Software KSP keys with separate exact containers, records only public blobs and runtime facts, and submits exact actor IDs, public blobs and container labels through the authorized channel. The root authority owner verifies that request and returns a root-signed envelope mapping both IDs and bootstrap-only domains. No key or actor is inferred from a display name.",
+  "3. Operator supplies the returned envelope as --authority-envelope; the native tool verifies it against the explicit root pin, executes bounded probes and signs PROFILE_EVIDENCE_V1 with the mapped operator key. One Git commit publishes the manifest, exact envelope copy and raw outputs at create-only SHA-256 paths; no control record, ticket or Search process is written or required.",
+  "4. A separate reviewer task obtains the outer BootstrapEvidenceRefV1 after that evidence commit exists, replays checks with the independent verifier, and writes/signs INDEPENDENT_REVIEW_BINDING_V1 in a later commit. It binds the exact evidence locator, full digest, operator/reviewer identities, probe outcomes and verifier executable digest.",
+  "5. The externally authorized root signer verifies the evidence and review bindings, then creates and root-signs the proposed actor_trust_manifest_v2 and actor_trust_head_v2; publish the manifest first, then CAS the exact configured control ref to the head-containing commit and read it back. The head names the pinned root and exact immutable evidence/review refs.",
+  "6. Integration owner independently accepts the reviewed profile definition, instance and qualification evidence through the appropriate registry process. This bootstrap sequence itself does not qualify a profile, issue an assignment ticket, create package submission/review records or authorize implementation.",
+]
+ticket_dependency = false
+package_submission_dependency = false
+search_runtime_dependency = false
+actual_separate_reviewer_task_required = true
+
+[qualification_plan]
+suite_id = "local_profile_bootstrap_v1"
+executed = false
+all_results = "UNAVAILABLE"
+mandatory_probe_ids = [
+  "QualifiedProfileRefV1_grammar_and_existing_qualified_opaque_id_consumers_fail_closed",
+  "external_expected_pin_required_and_self_signed_or_mismatched_root_rejected",
+  "root_authority_envelope_exact_preimage_signature_and_mutation_rejection",
+  "actor_identity_and_public_key_mapping_matches_explicit_envelope",
+  "current_user_key_create_only_and_exact_public_blob_readback",
+  "export_policy_readback_and_private_export_denial",
+  "CNG_P1363_sign_verify_matches_separately_built_verifier",
+  "signature_domain_actor_profile_and_payload_mutations_reject_without_fallback",
+  "exact_git_content_addressed_blob_and_outer_immutable_locator_readback",
+  "trust_head_root_pin_manifest_generation_and_same_ref_CAS_currentness",
+  "actual_separate_reviewer_task_binds_exact_evidence_and_raw_outcome",
+  "same_user_processes_can_reach_account_keys_and_no_isolation_claim_is_emitted",
+  "missing_channel_or_stale_external_root_pin_stays_UNAVAILABLE",
+  "bootstrap_evidence_and_review_complete_without_ticket_submission_or_search_runtime",
+  "signature_trailer_and_own_digest_excluded_from_signed_payload_preimage",
+  "binary_TLV_order_bounds_and_trailing_bytes_rejected",
+]
+pass_rule = "every mandatory probe has exact immutable raw input/output, the separate reviewer accepts the exact refs, and the integration owner accepts the profile; no prose-only or inferred PASS"
+no_pass_created = true
+
+[required_external_inputs]
+items = [
+  "identity of the real external authority owner/channel, its authenticated delivery and root-pin currentness procedure; none is invented here",
+  "the currently authorized root public BCRYPT_ECCPUBLIC_BLOB and exact expected root_key_id delivered through that channel",
+  "root-signed authority envelope mapping exact operator/reviewer ActorIdentity values, public keys and allowed bootstrap domains",
+  "actual repository identity, object format, Git executable identity, control-ref name and native Rust/CNG runtime hashes",
+  "actual operator and reviewer current-user key material created by a future provisioning run; no keys are generated by this proposal",
+  "separately built independent verifier executable identity and SHA-256",
+  "integration-owned acceptance of QualifiedOpaqueId grammar, bootstrap artifact schema, actor_trust_manifest_v2/head_v2 and profile instance/qualification refs",
+  "actual raw outcomes and independent review binding; all remain UNAVAILABLE",
+  "a separately reviewed root-key rotation and external-revocation procedure before any root change",
+]
