@@ -17,13 +17,13 @@ fn read(root: &Path, relative: &str) -> String {
 fn live_direct_composition_enters_canonical_admission_and_identity_owners() {
     let root = repository_root();
     let entry = read(&root, "bins/eliot-searchd/src/entry.rs");
-    assert!(entry.contains("#[path = \"direct_store/composition.rs\"]\nmod source_composition;"));
+    assert!(entry.contains("#[path = \"direct_store/composition/mod.rs\"]\nmod source_composition;"));
     assert!(entry.contains("#[path = \"source_composition.rs\"]\nmod git_source_composition;"));
     assert_eq!(entry.matches("mod source_composition;").count(), 1);
 
     let facade = read(
         &root,
-        "bins/eliot-searchd/src/direct_store/composition.rs",
+        "bins/eliot-searchd/src/direct_store/composition/mod.rs",
     );
     assert!(facade.contains("mod admission;"));
     assert!(facade.contains("mod classifier;"));

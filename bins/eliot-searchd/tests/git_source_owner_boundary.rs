@@ -18,7 +18,7 @@ fn git_composition_reuses_canonical_source_owners() {
     let root = repository_root();
     let git = read(&root, "bins/eliot-searchd/src/source_composition.rs");
     assert!(git.len() < 12_000, "Git adapter grew to {} bytes", git.len());
-    assert!(git.contains("direct_store/composition.rs"));
+    assert!(git.contains("direct_store/composition/mod.rs"));
     assert!(git.contains("derive_git_stable_digest"));
     assert!(git.contains("plan_snapshot("));
     assert!(git.contains("search_safe_reader::git"));
@@ -46,7 +46,7 @@ fn git_composition_reuses_canonical_source_owners() {
 
     let canonical = read(
         &root,
-        "bins/eliot-searchd/src/direct_store/composition.rs",
+        "bins/eliot-searchd/src/direct_store/composition/mod.rs",
     );
     assert!(canonical.contains("pub(crate) use identity::derive_git_stable_digest;"));
 
