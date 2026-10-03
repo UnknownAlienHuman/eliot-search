@@ -105,7 +105,7 @@ packages = []
             r#"schema_version = 6
 active_stage = "P00"
 active_wave = 0
-orchestration_registry_schema_version = 5
+orchestration_registry_schema_version = 6
 orchestration_registry_path = "swarm/orchestration.toml"
 authorized_packages = ["search-contracts"]
 conditional_packages = ["search-domain", "search-ports"]
@@ -120,7 +120,7 @@ requires = ["accepted contracts handoff"]
         self.write_text(
             "swarm/orchestration.toml",
             concat!(
-                "schema_version = 5\n",
+                "schema_version = 6\n",
                 "workflow_policy = \"manual_only\"\n",
                 "consumer_uses_branch_head = false\n",
                 "consumer_requires_exact_commit_and_api_digest = true\n",
