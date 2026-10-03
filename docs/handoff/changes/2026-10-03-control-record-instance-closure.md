@@ -1,6 +1,6 @@
 # Contract change request — control-record instance closure
 
-**Status:** PARTIALLY_ACCEPTED_INTEGRATION_CONTRACT (2026-10-03). The four instance-status values and exact registry bindings are accepted below. Nested enum bindings remain PROPOSED_REVIEW_PENDING. Neither decision creates an issued record.
+**Status:** PARTIALLY_ACCEPTED_INTEGRATION_CONTRACT (2026-10-03). The four instance-status values and exact registry bindings are accepted below. The five ticket enum fields and their reused output vocabularies are accepted separately in `2026-10-03-ticket-enum-adoption.md`; their implementation remains pending. No decision creates an issued record.
 
 ## Identity
 
@@ -100,7 +100,7 @@ schema version 1, every reason mapping, field, rule and order. This changes desc
 instance wire fields or their canonical order. Typed profile binding must require the root array and
 reject a nested-only fallback. No Architecture Part I change is needed.
 
-All nested enum choices, full-schema validation, canonical record rendering, actor/signature trust,
+Nested enums outside the separately accepted ticket subset, full-schema validation, canonical record rendering, actor/signature trust,
 artifact/approval profiles, qualification and issuance remain unresolved and unaccepted by this partial
 decision. A structural validator's `NON_AUTHORITATIVE` result satisfies none of those obligations.
 The seven prior profile tests belong to the recorded candidate; they do not prove the subsequent fix.
