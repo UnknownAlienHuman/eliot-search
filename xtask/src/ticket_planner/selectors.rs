@@ -134,7 +134,8 @@ pub fn resolve_selector(
 ///
 /// Historical selectors retain [`resolve_selector`]'s grammar. The additive module form is
 /// limited to `swarm/modules/w0.toml::package[name=<package>]` and must resolve exactly once
-/// in a document whose stage is `W0`.
+/// in a document with the exact W0 header identity: schema_version 1, project eliot-search,
+/// and earliest_wave 0.
 #[must_use]
 pub fn resolve_selector_with_w0_module(
     docs: &SelectorDocs<'_>,
@@ -173,8 +174,11 @@ fn resolve_w0_module_selector(
     let Some(document) = document else {
         return (NotUnique, "W0 module registry is missing or invalid");
     };
-    if document.get("stage").and_then(Value::as_str) != Some("W0") {
-        return (Unsupported, "module document is not the W0 registry");
+    if document.get("schema_version").and_then(Value::as_u64) != Some(1)
+        || document.get("project").and_then(Value::as_str) != Some("eliot-search")
+        || document.get("earliest_wave").and_then(Value::as_u64) != Some(0)
+    {
+        return (Unsupported, "module document header does not identify W0");
     }
 
     let matches = document

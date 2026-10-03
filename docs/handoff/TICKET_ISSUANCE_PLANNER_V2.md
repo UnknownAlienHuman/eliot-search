@@ -178,8 +178,10 @@ or multiple semantic records is `CONTEXT_SELECTOR_NOT_UNIQUE`; unsupported spell
 
 The W0 module selector must use the exact `swarm/modules/w0.toml` path and `package[name=<package>]`
 expression. Its package value must equal the validated caller package, and exactly one matching `package`
-row must exist in the W0 module document loaded from the same immutable Git tree. A missing module document
-or zero or multiple matching rows is `CONTEXT_SELECTOR_NOT_UNIQUE`; a wrong path, stage, expression or
+row must exist in the W0 module document loaded from the same immutable Git tree.
+The module header must identify W0 with `schema_version = 1`, `project = "eliot-search"` and `earliest_wave = 0`.
+A missing module document
+or zero or multiple matching rows is `CONTEXT_SELECTOR_NOT_UNIQUE`; a wrong path, header identity, expression or
 package identity is `CONTEXT_SELECTOR_INVALID`.
 
 ## 6. Accepted handoffs
