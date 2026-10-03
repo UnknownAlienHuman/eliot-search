@@ -1,1 +1,0 @@
-cargo +1.98.0 test --locked --offline --no-fail-fast -p xtask --test control_record_enum_bindings --test control_record_instance_profiles --test ticket_issuance_builder

@@ -1,1 +1,0 @@
-pwsh -NoProfile -File tools/validate-ticket-issuance-contracts.ps1 -Json

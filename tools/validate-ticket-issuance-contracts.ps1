@@ -62,45 +62,6 @@ function Get-Array([string]$Text, [string]$Key) {
     )
 }
 
-# This narrow grammar validates the complete adopted enum allowlist literal; it is not a TOML parser.
-function Get-ExactEnumArray([string]$Text, [string]$Key) {
-    $pattern = '(?ms)^{0}[ \t]*=[ \t]*\[(?<body>.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)
-    $arrayMatches = [regex]::Matches($Text, $pattern)
-    if ($arrayMatches.Count -ne 1) { return @() }
-
-    $body = $arrayMatches[0].Groups['body'].Value
-    $literalPattern = '\A[ \t\r\n]*"[A-Z][A-Z0-9_]*"(?:[ \t\r\n]*,[ \t\r\n]*"[A-Z][A-Z0-9_]*")*[ \t\r\n]*,?[ \t\r\n]*\z'
-    if (-not [regex]::IsMatch($body, $literalPattern)) { return @() }
-
-    @(Get-Array $Text $Key)
-}
-
-# This narrow identifier-array grammar validates the complete literal; it is not a TOML parser.
-function Get-ExactIdentifierArray([string]$Text, [string]$Key) {
-    $pattern = '(?ms)^{0}[ \t]*=[ \t]*\[(?<body>.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)
-    $arrayMatches = [regex]::Matches($Text, $pattern)
-    if ($arrayMatches.Count -ne 1) { return @() }
-
-    $body = $arrayMatches[0].Groups['body'].Value
-    $literalPattern = '\A[ \t\r\n]*"[A-Za-z_][A-Za-z0-9_]*"(?:[ \t\r\n]*,[ \t\r\n]*"[A-Za-z_][A-Za-z0-9_]*")*[ \t\r\n]*,?[ \t\r\n]*\z'
-    if (-not [regex]::IsMatch($body, $literalPattern)) { return @() }
-
-    @(Get-Array $Text $Key)
-}
-function Test-ExactTrueBoolean([string]$Text, [string]$Key) {
-    $pattern = '(?m)^{0}[ \t]*=[ \t]*(true|false)[ \t]*\r?$' -f [regex]::Escape($Key)
-    $booleanMatches = [regex]::Matches($Text, $pattern)
-    if ($booleanMatches.Count -ne 1) { return $false }
-    $booleanMatches[0].Groups[1].Value -ceq 'true'
-}
-
-function Get-AssignmentKeys([string]$Text) {
-    @(
-        [regex]::Matches($Text, '(?m)^([A-Za-z0-9_]+)\s*=') |
-            ForEach-Object { $_.Groups[1].Value }
-    )
-}
-
 function Get-Section([string]$Text, [string]$Name) {
     $pattern = '(?ms)^\[{0}\]\s*(.*?)(?=^\[|\z)' -f [regex]::Escape($Name)
     $match = [regex]::Match($Text, $pattern)
@@ -289,193 +250,6 @@ for ($i = 1; $i -lt $typeBlocks.Count; $i++) {
     }
 }
 
-if ($typeMap.Count -ne 52) {
-    Fail 'Type registry must contain exactly 52 declared types.'
-}
-
-$qualifiedTypeExpectedRules = @(
-    'exactly_one_ascii_forward_slash',
-    'namespace_uses_lowercase_ascii_hyphen_segments',
-    'local_component_uses_OpaqueId_pattern',
-    'preserve_exact_bytes_and_case_without_normalization'
-)
-if (-not $typeMap.ContainsKey('QualifiedOpaqueId')) {
-    Fail 'Missing adopted QualifiedOpaqueId syntax type.'
-} else {
-    $qualifiedType = [string]$typeMap['QualifiedOpaqueId']
-    $qualifiedTypeKeys = @(Get-AssignmentKeys $qualifiedType)
-    if ($qualifiedTypeKeys.Count -ne 8 -or
-        -not (Same-Set $qualifiedTypeKeys @('name', 'representation', 'pattern', 'max_bytes', 'namespace_max_bytes', 'local_max_bytes', 'canonical', 'rules'))) {
-        Fail 'QualifiedOpaqueId has unknown, missing or duplicate definition keys.'
-    }
-    if ((Get-String $qualifiedType 'name') -cne 'QualifiedOpaqueId' -or
-        (Get-String $qualifiedType 'representation') -cne 'string' -or
-        (Get-String $qualifiedType 'pattern') -cne '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' -or
-        (Get-Int $qualifiedType 'max_bytes') -ne 225 -or
-        (Get-Int $qualifiedType 'namespace_max_bytes') -ne 96 -or
-        (Get-Int $qualifiedType 'local_max_bytes') -ne 128 -or
-        -not (Test-ExactTrueBoolean $qualifiedType 'canonical') -or
-        -not (Same-Sequence @(Get-ExactIdentifierArray $qualifiedType 'rules') $qualifiedTypeExpectedRules)) {
-        Fail 'QualifiedOpaqueId does not match the accepted bounded ASCII grammar.'
-    }
-}
-
-$expectedEnumValues = [ordered]@{
-    FixtureQualificationStatus = @('FAILED', 'QUALIFIED', 'UNAVAILABLE')
-    NormalProcessExitClass = @('EXIT_NONZERO', 'EXIT_ZERO')
-    EvidenceArtifactClass = @('PACKAGE_HANDOFF_CANDIDATE', 'PUBLIC_API_SCHEMA_DIGEST', 'QUALIFICATION_PROBE_RESULT', 'RESIDUAL_RISK_RECORD', 'TEST_RESULT')
-    ExpectedBehaviorClass = @('FAILURE', 'POLICY', 'RECOVERY', 'SUCCESS')
-}
-foreach ($entry in $expectedEnumValues.GetEnumerator()) {
-    $name = [string]$entry.Key
-    if (-not $typeMap.ContainsKey($name)) {
-        Fail "Missing adopted enum type: $name"
-        continue
-    }
-    $block = [string]$typeMap[$name]
-    $keys = @(Get-AssignmentKeys $block)
-    if ($keys.Count -ne 4 -or -not (Same-Set $keys @('name', 'representation', 'allowed', 'canonical'))) {
-        Fail "Adopted enum type has unknown, missing or duplicate keys: $name"
-    }
-    if ((Get-String $block 'name') -cne $name -or
-        (Get-String $block 'representation') -cne 'string' -or
-        -not (Test-ExactTrueBoolean $block 'canonical') -or
-        -not (Same-Sequence @(Get-ExactEnumArray $block 'allowed') @($entry.Value))) {
-        Fail "Adopted enum definition mismatch: $name"
-    }
-}
-
-$enumBindings = @(
-    [pscustomobject]@{ owner_type = 'OrderedFixtureRef'; field_name = 'qualification_status'; target_type = 'FixtureQualificationStatus' }
-    [pscustomobject]@{ owner_type = 'BoundedCommandSpec'; field_name = 'expected_exit_class'; target_type = 'NormalProcessExitClass' }
-    [pscustomobject]@{ owner_type = 'OrderedRawCommandOutcomeRef'; field_name = 'exit_class'; target_type = 'NormalProcessExitClass' }
-    [pscustomobject]@{ owner_type = 'BoundedCommandSpec'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
-    [pscustomobject]@{ owner_type = 'EvidenceRequirement'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
-    [pscustomobject]@{ owner_type = 'OrderedEvidenceRef'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
-    [pscustomobject]@{ owner_type = 'OrderedAcceptedEvidenceRef'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
-    [pscustomobject]@{ owner_type = 'EvidenceRequirement'; field_name = 'acceptance_class'; target_type = 'ExpectedBehaviorClass' }
-    [pscustomobject]@{ owner_type = 'OrderedEvidenceRef'; field_name = 'acceptance_class'; target_type = 'ExpectedBehaviorClass' }
-)
-foreach ($binding in $enumBindings) {
-    $owner = [string]$binding.owner_type
-    $field = [string]$binding.field_name
-    $rule = $field + '_is_' + [string]$binding.target_type
-    $legacyRule = $field + '_is_ClosedEnum'
-
-    if (-not $typeMap.ContainsKey($owner)) {
-        Fail "Missing adopted binding owner: $owner"
-        continue
-    }
-    $block = [string]$typeMap[$owner]
-    $ownerKeys = @(Get-AssignmentKeys $block)
-    if ($ownerKeys.Count -ne 4 -or -not (Same-Set $ownerKeys @('name', 'representation', 'canonical_fields', 'rules')) -or
-        (Get-String $block 'name') -cne $owner -or
-        (Get-String $block 'representation') -cne 'ordered_record') {
-        Fail "Adopted binding owner definition mismatch: $owner"
-    }
-
-    $fields = @(Get-Array $block 'canonical_fields')
-    $fieldMatches = @($fields | Where-Object { $_ -ceq $field })
-    if ($fieldMatches.Count -ne 1) {
-        Fail "Adopted binding field is missing or duplicated: $owner.$field"
-    }
-    $rules = @(Get-Array $block 'rules')
-    $ruleMatches = @($rules | Where-Object { $_ -ceq $rule })
-    if ($ruleMatches.Count -ne 1 -or $rules -ccontains $legacyRule) {
-        Fail "Adopted enum rule binding is missing, duplicate or generic: $owner.$field"
-    }
-
-}
-
-$qualifiedFieldBindings = @(
-    [pscustomobject]@{
-        owner_type = 'ImmutableArtifactRef'
-        field_name = 'store_profile_ref'
-        rule = 'store_profile_ref_is_qualified_opaque_id'
-        canonical_fields = @('store_profile_ref', 'artifact_id', 'bytes', 'sha256')
-    }
-    [pscustomobject]@{
-        owner_type = 'ImmutableSignatureRef'
-        field_name = 'approval_profile_ref'
-        rule = 'approval_profile_ref_is_qualified_opaque_id'
-        canonical_fields = @('approval_profile_ref', 'approval_artifact_ref', 'signed_payload_sha256', 'actor_identity')
-    }
-)
-foreach ($binding in $qualifiedFieldBindings) {
-    $owner = [string]$binding.owner_type
-    if (-not $typeMap.ContainsKey($owner)) {
-        Fail "Missing qualified-identifier binding owner: $owner"
-        continue
-    }
-    $block = [string]$typeMap[$owner]
-    $ownerKeys = @(Get-AssignmentKeys $block)
-    if ($ownerKeys.Count -ne 4 -or
-        -not (Same-Set $ownerKeys @('name', 'representation', 'canonical_fields', 'rules')) -or
-        (Get-String $block 'name') -cne $owner -or
-        (Get-String $block 'representation') -cne 'ordered_record') {
-        Fail "Qualified-identifier owner definition mismatch: $owner"
-    }
-
-    if (-not (Same-Sequence @(Get-ExactIdentifierArray $block 'canonical_fields') @($binding.canonical_fields))) {
-        Fail "Qualified-identifier owner field order mismatch: $owner"
-    }
-    $rules = @(Get-ExactIdentifierArray $block 'rules')
-    $ruleMatches = @($rules | Where-Object { $_ -ceq [string]$binding.rule })
-    if ($ruleMatches.Count -ne 1) {
-        Fail "Qualified-identifier field rule is missing, duplicate or malformed: $owner.$($binding.field_name)"
-    }
-}
-
-$qualifiedRuleOwners = @{}
-foreach ($binding in $qualifiedFieldBindings) {
-    $qualifiedRuleOwners[[string]$binding.rule] = [string]$binding.owner_type
-}
-$typeBlocksForQualifiedRules = [regex]::Split($types, '(?m)^\[\[type\]\]\s*$')
-for ($i = 1; $i -lt $typeBlocksForQualifiedRules.Count; $i++) {
-    $candidateBlock = [string]$typeBlocksForQualifiedRules[$i]
-    $candidateName = Get-String $candidateBlock 'name' $false
-    foreach ($qualifiedRule in @($qualifiedRuleOwners.Keys)) {
-        $literal = '"' + [string]$qualifiedRule + '"'
-        $occurrences = [regex]::Matches($candidateBlock, [regex]::Escape($literal)).Count
-        if ($occurrences -gt 0 -and
-            ($candidateName -cne [string]$qualifiedRuleOwners[$qualifiedRule] -or $occurrences -ne 1)) {
-            Fail "Qualified-identifier rule is duplicated or cross-bound: $qualifiedRule"
-        }
-    }
-}
-foreach ($candidateName in @($typeMap.Keys)) {
-    foreach ($rule in @(Get-Array ([string]$typeMap[$candidateName]) 'rules')) {
-        if ($rule.EndsWith('_is_qualified_opaque_id', [StringComparison]::Ordinal)) {
-            $acceptedQualifiedRules = @($qualifiedRuleOwners.Keys)
-            if ($acceptedQualifiedRules -cnotcontains $rule -or
-                $candidateName -cne [string]$qualifiedRuleOwners[$rule]) {
-                Fail "Unknown or cross-bound qualified-identifier rule: $candidateName"
-            }
-        }
-    }
-}
-foreach ($candidateName in @($typeMap.Keys)) {
-    foreach ($rule in @(Get-Array ([string]$typeMap[$candidateName]) 'rules')) {
-        $matchingOwners = @(
-            foreach ($binding in $enumBindings) {
-                $boundRule = [string]$binding.field_name + '_is_' + [string]$binding.target_type
-                if ($boundRule -ceq $rule) { [string]$binding.owner_type }
-            }
-        )
-        if ($matchingOwners.Count -gt 0) {
-            if ($matchingOwners -cnotcontains [string]$candidateName) {
-                Fail "Adopted enum rule is cross-bound: $rule"
-            }
-            continue
-        }
-        foreach ($enumName in @($expectedEnumValues.Keys)) {
-            $suffix = '_is_' + [string]$enumName
-            if ($rule.EndsWith($suffix, [StringComparison]::Ordinal)) {
-                Fail "Unknown binding to adopted enum type: $candidateName"
-            }
-        }
-    }
-}
 $terminalRepresentations = @('string', 'tagged_string', 'ordered_record')
 foreach ($name in @($typeMap.Keys)) {
     $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -535,7 +309,7 @@ if ((@(Get-Array ([string]$typeMap['OrderedConsumerAction']) 'rules')) -notconta
     Fail 'OrderedConsumerAction is not bound to ConsumerActionCode.'
 }
 
-if ((Get-Int $control 'schema_version') -ne 4 -or (Get-String $control 'type_registry') -cne $typesPath) {
+if ((Get-Int $control 'schema_version') -ne 3 -or (Get-String $control 'type_registry') -cne $typesPath) {
     Fail 'Invalid control-plane registry identity.'
 }
 if ((Get-Int $control 'type_registry_schema_version') -ne 2) {
@@ -571,33 +345,12 @@ $expectedSchemaFiles = @($typesPath) + @($schemas.Values | ForEach-Object { $_[0
 if (-not (Same-Set $requiredSchemaFiles $expectedSchemaFiles)) {
     Fail 'required_schema_files is not closed.'
 }
-$instanceProfilePaths = [ordered]@{
-    context_manifest_v1 = 'swarm/context-manifest-instance-v1.toml'
-    assignment_ticket_v1 = 'swarm/assignment-ticket-instance-v1.toml'
-    writer_lease_v1 = 'swarm/writer-lease-instance-v1.toml'
-    lease_event_v1 = 'swarm/lease-event-instance-v1.toml'
-}
-$requiredInstanceProfileFiles = @(Get-Array $control 'required_instance_profile_files')
-$expectedInstanceProfileFiles = @($instanceProfilePaths.Values)
-if (-not (Same-Sequence $requiredInstanceProfileFiles $expectedInstanceProfileFiles)) {
-    Fail 'required_instance_profile_files is not the exact first-four profile set.'
-}
-if ([regex]::Matches($control, '(?m)^\[current_disposition\][ \t]*\r?$').Count -ne 1) {
-    Fail 'Control-plane current_disposition table must occur exactly once.'
-}
-$currentDisposition = Get-Section $control 'current_disposition'
-$currentDispositionKeys = @(Get-AssignmentKeys $currentDisposition)
-$registeredTypeKeys = @($currentDispositionKeys | Where-Object { $_ -ceq 'registered_types' })
-if ($registeredTypeKeys.Count -ne 1) {
-    Fail 'current_disposition must declare registered_types exactly once.'
-}
-if ((Get-Int $currentDisposition 'registered_types' $false) -ne $typeMap.Count) {
+if ((Get-Int $control 'registered_types') -ne $typeMap.Count) {
     Fail 'Control-plane registered_types count mismatch.'
 }
 
 $recordMap = @{}
 $layoutMap = @{}
-$instanceProfileMap = @{}
 $recordBlocks = [regex]::Split($control, '(?m)^\[\[record\]\]\s*$')
 for ($i = 1; $i -lt $recordBlocks.Count; $i++) {
     $kind = Get-String $recordBlocks[$i] 'kind'
@@ -607,27 +360,9 @@ for ($i = 1; $i -lt $recordBlocks.Count; $i++) {
     }
     $recordMap[$kind] = Get-String $recordBlocks[$i] 'path'
     $layoutMap[$kind] = Get-String $recordBlocks[$i] 'canonical_layout'
-    $instanceProfile = Get-String $recordBlocks[$i] 'instance_profile' $false
-    if ($instanceProfilePaths.Contains($kind)) {
-        $expectedInstanceProfile = [string]$instanceProfilePaths[$kind]
-        if ($instanceProfile -cne $expectedInstanceProfile) {
-            Fail "Instance profile binding mismatch: $kind"
-        } else {
-            [void](Read-File $expectedInstanceProfile)
-        }
-        if ($instanceProfileMap.ContainsKey($kind)) {
-            Fail "Duplicate instance profile binding: $kind"
-        }
-        $instanceProfileMap[$kind] = $instanceProfile
-    } elseif ($instanceProfile -cne '') {
-        Fail "Unexpected instance profile binding: $kind"
-    }
 }
 if (-not (Same-Set @($recordMap.Keys) @($schemas.Keys))) {
     Fail 'Control record set mismatch.'
-}
-if ($instanceProfileMap.Count -ne $instanceProfilePaths.Count) {
-    Fail 'Control record instance-profile binding set is incomplete.'
 }
 
 $closedKinds = @(Get-Array ([string]$typeMap['ClosedControlRecordKind']) 'allowed')
@@ -796,8 +531,8 @@ foreach ($entry in $schemas.GetEnumerator()) {
     $schemaFieldKinds[$kind] = $fieldKindMap
 }
 
-if ((Get-Int $orchestration 'schema_version') -ne 6) {
-    Fail 'Orchestration schema_version must be 6.'
+if ((Get-Int $orchestration 'schema_version') -ne 5) {
+    Fail 'Orchestration schema_version must be 5.'
 }
 $orchestrationPaths = [ordered]@{
     control_plane_schema_registry = $controlPath
@@ -844,8 +579,8 @@ Require-Tokens $orchestrationPath $orchestration @(
     'new materialized context and assignment-ticket revision exist, launch/dependencies remain valid and no active lease exists'
 )
 
-if ((Get-Int $launch 'orchestration_registry_schema_version') -ne 6 -or (Get-String $launch 'orchestration_registry_path') -cne $orchestrationPath) {
-    Fail 'Launch state does not pin orchestration schema v6.'
+if ((Get-Int $launch 'orchestration_registry_schema_version') -ne 5 -or (Get-String $launch 'orchestration_registry_path') -cne $orchestrationPath) {
+    Fail 'Launch state does not pin orchestration schema v5.'
 }
 
 Require-Tokens $canonicalizationPath $canonicalization @(

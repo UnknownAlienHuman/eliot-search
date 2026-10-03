@@ -5,9 +5,7 @@ use super::super::super::model::PackageModel;
 use super::super::super::super::bool_text;
 use super::super::super::super::load::{boolean, integer, string, strings};
 
-pub(in crate::package_maps::generator::render) fn render_relations(
-    package: &PackageModel,
-) -> String {
+pub(super) fn render_relations(package: &PackageModel) -> String {
     let mut lines = vec![
         "schema_version = 1".to_owned(),
         "project = \"eliot-search\"".to_owned(),

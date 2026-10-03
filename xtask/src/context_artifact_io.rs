@@ -419,9 +419,7 @@ mod tests {
     #[test]
     fn identical_replay_is_idempotent_and_difference_conflicts() {
         let root = scratch();
-        let canonical_root = fs::canonicalize(&root).expect("canonical scratch root");
-        let target =
-            canonical_root.join("artifacts/context-artifact-candidates/p/demo.json");
+        let target = root.join("artifacts/context-artifact-candidates/p/demo.json");
         write_exact_idempotent(&root, &target, b"one\n").expect("first write");
         write_exact_idempotent(&root, &target, b"one\n").expect("identical replay");
         let error = write_exact_idempotent(&root, &target, b"two\n")

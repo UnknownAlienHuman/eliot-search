@@ -397,15 +397,16 @@ fn grammar_matrix_pass() {
     assert!(!actor_identity_valid("actor:user:alice:extra"));
 }
 
-// Historical marker-only vectors remain immutable, but none are canonical signed TOML records.
+// signed_payload_digest: single marker only.
 #[test]
 fn signed_payload_matrix_pass() {
     let v = vectors();
     for row in v["signed_payload"].as_array().unwrap() {
         let raw = hex_decode(row["raw_hex"].as_str().unwrap());
-        assert!(
-            signed_payload_digest(&raw).is_none(),
-            "marker-only legacy bytes are not canonical signed records: {:?}",
+        assert_eq!(
+            signed_payload_digest(&raw).as_deref(),
+            row["digest"].as_str(),
+            "raw={:?}",
             row["raw_hex"]
         );
     }

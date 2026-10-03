@@ -4,8 +4,8 @@ use serde_json::{Value as JsonValue, json};
 
 use crate::git_tree::GitTree;
 use crate::ticket_planner::{
-    CONTEXT_TOTAL_BYTE_CEILING, SelectorDocs, SelectorStatus, context_source_forbidden,
-    exact_sha256_hex, resolve_selector_with_w0_module,
+    CONTEXT_TOTAL_BYTE_CEILING, SelectorDocs, SelectorStatus,
+    context_source_forbidden, exact_sha256_hex, resolve_selector,
 };
 
 use super::model::{Checks, DraftPair};
@@ -82,7 +82,6 @@ pub(super) fn validate_context(
     let functions = selector_document(tree, "swarm/function-packets.toml");
     let stages = selector_document(tree, "swarm/stages.toml");
     let launch = selector_document(tree, "swarm/launch-state.toml");
-    let w0_module = selector_document(tree, "swarm/modules/w0.toml");
     let docs = SelectorDocs {
         crates: crates.as_ref(),
         functions: functions.as_ref(),
@@ -90,8 +89,7 @@ pub(super) fn validate_context(
         launch: launch.as_ref(),
     };
     for (index, selector) in pair.selectors.iter().enumerate() {
-        let (status, detail) =
-            resolve_selector_with_w0_module(&docs, w0_module.as_ref(), selector, package);
+        let (status, detail) = resolve_selector(&docs, selector, package);
         let check_id = format!("selector-{index:02}");
         match status {
             SelectorStatus::Ok => checks.pass(

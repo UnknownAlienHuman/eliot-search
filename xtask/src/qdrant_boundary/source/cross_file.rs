@@ -17,13 +17,13 @@ use super::use_tree::{
 
 /// One bridge source retained from the bounded repository walk.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(in crate::qdrant_boundary) struct BridgeSource {
+pub(super) struct BridgeSource {
     relative: String,
     source: String,
 }
 
 impl BridgeSource {
-    pub(in crate::qdrant_boundary) fn new(relative: String, source: String) -> Self {
+    pub(super) fn new(relative: String, source: String) -> Self {
         Self { relative, source }
     }
 
@@ -68,7 +68,7 @@ type TaintedItems = BTreeMap<Vec<String>, BTreeMap<String, TaintInfo>>;
 /// Literal `include!`, direct `#[path]` module overrides, glob imports and
 /// fully qualified public paths are resolved inside the bounded bridge source
 /// inventory.
-pub(in crate::qdrant_boundary) fn find_cross_file_vendor_surfaces(
+pub(super) fn find_cross_file_vendor_surfaces(
     sources: &[BridgeSource],
     bridge_root: &str,
     vendor_module: &str,
@@ -335,7 +335,7 @@ fn add_imported_taint(
                 )
             {
                 visible.insert(resolved.name);
-                visible.insert(leaf.binding.clone());
+                visible.insert(leaf.binding);
             }
         }
     }

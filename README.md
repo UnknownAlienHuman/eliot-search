@@ -1,94 +1,120 @@
 # ELIOT Search
 
-Local-first data preparation and retrieval. **Target architecture: Rust + Qdrant.**
-Implementation is incomplete; this is not a qualified production release.
+Local-first source preparation and retrieval for ELIOT, implemented as a **standalone Rust search
+product around Qdrant**.
 
-## Runtime
+ELIOT Search can run independently through `eliot-searchd` and `eliot-search`. Integration with ELIOT
+Memory OS is optional and uses typed provider contracts over the same standalone product owners.
 
-The supported entrypoints are `eliot-searchd` and `eliot-search`, both built from
-`src/entry.rs` in their respective packages. The six sealed prototypes and two
-snapshot programs are now test-harness targets, not installable product binaries
-or runnable examples. Their source and regression tests remain in all-target checks.
-The snapshot/BM25 experiment is not an alternative product index.
+## Product boundary
 
-The primary DIRECT runtime retains and verifies source revisions. File/directory
-ingestion uses the shared materializer/unitizer and saves a profile-bound line/unit
-layout before publishing source metadata. Search reopens that preparation and uses
-the cross-unit literal matcher without rebuilding or writing it. Windows protects
-both revisions and preparation bodies using the existing DPAPI protector. Existing
-SHA-256 identities are not relabeled as BLAKE3 or replaced by fabricated receipts.
+ELIOT Search owns:
 
-Old roots require explicit preparation or reindexing; missing preparation is a
-source gap, not an empty successful search. Use retained bytes with:
+- source admission, revision retention and preparation;
+- lexical/projection construction;
+- Qdrant supervision, schema, publication and retrieval;
+- access-scoped query planning, candidate validation and result projection;
+- currentness, handles, rebuild, retention and recovery;
+- standalone daemon/CLI and optional provider adapters.
+
+It does **not** own Tasks, WorkScopes, GM/Governor state, agent scheduling, native harness lifecycle,
+assignment tickets, writer leases, mailboxes, review acceptance or finish authority. Those responsibilities
+belong to [`eliot-swarm-controller`](https://github.com/UnknownAlienHuman/eliot-swarm-controller) and,
+after integration, [`eliot-memory-os`](https://github.com/UnknownAlienHuman/eliot-memory-os).
+
+The repository's `swarm/**` files are historical/advisory development metadata. They are not runtime
+inputs and are not prerequisites for implementing or running Search. See ADR 0005.
+
+## Architecture baseline
+
+- Rust 1.98 workspace;
+- Qdrant is the only indexed/search database;
+- redb stores bounded technical control state, not a searchable corpus;
+- immutable source/preparation evidence remains outside Qdrant;
+- Qdrant payload is projection metadata and never authoritative source evidence;
+- standalone DIRECT remains independent of indexed-mode availability;
+- ELIOT integration is a leaf adapter, not a reverse authority path.
+
+The normative implementation master is:
 
 ```text
-eliot-searchd --prepare-revision ROOT REVISION_ID
+docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md
 ```
 
-Persistent root registration is connected. Missing catalog state with retained
-objects is rejected rather than recreated as an empty corpus. A damaged proxy
-exchange is not reused for another client. The primary service now stops after
-an uncertain mutation or failed response, discards handles and refuses queued
-commands; invalid or oversized frames also terminate the session.
+## Current status
 
-The main unfinished integrations are **primary control-state migration to redb,
-full canonical source/residency/preparation contracts, and the real Qdrant data plane**.
-`PersistentControlJournal` already performs real redb I/O, but the primary source
-catalog has not switched to it. The Qdrant bridge remains an in-memory model.
-The saved DIRECT layout is not full canonical UnitManifest/H5 qualification.
-Native Windows security, full ownership/currentness/access/lifecycle behavior and
-release qualification still require their corresponding implementation and evidence.
+Implementation is incomplete and this is not a qualified production release.
 
-## Build and tests
+The active completion work is the real product spine:
 
-Rust is pinned to 1.98.0. Build the main executables explicitly:
+```text
+source admission / immutable revisions / preparation
+→ typed projections
+→ real Qdrant publication
+→ access-scoped retrieval and filtered IDF
+→ authoritative candidate readback and validation
+→ bounded standalone/provider results
+```
 
-```sh
-cargo +1.98.0 build --release --locked -p eliot-searchd -p eliot-search --bins
+Indexed readiness remains disabled until the exact Qdrant artifact, bridge, schema, query, restart and
+end-to-end qualification gates pass. Planning records, source presence and mock/oracle execution are not
+qualification.
+
+## Workspace
+
+The workspace contains product libraries under `crates/` and supported binaries under `bins/`.
+Key entrypoints:
+
+- `bins/eliot-searchd` — long-lived standalone daemon/composition root;
+- `bins/eliot-search` — local client/CLI;
+- `crates/search-index-qdrant/search-qdrant-bridge` — sole Qdrant vendor adapter;
+- `crates/search-index-qdrant/search-publication` — epoch-safe publication coordinator;
+- `crates/search-query/*` — access, planning, retrieval, validation and result projection;
+- `crates/search-source/*` — admission, identity, revisions, materialization and unitization;
+- `crates/search-control-redb` — bounded technical control state.
+
+## Build
+
+Use the pinned Rust toolchain and locked dependencies:
+
+```powershell
 cargo +1.98.0 check --workspace --all-targets --all-features --locked
-cargo +1.98.0 test --workspace --all-targets --all-features --locked
+cargo +1.98.0 clippy --workspace --all-targets --all-features --locked -- -D warnings
 ```
 
-Focused tests:
+During implementation, run the smallest applicable package gate first:
 
-```sh
-cargo +1.98.0 test --locked -p search-control-redb --lib
-cargo +1.98.0 test --locked -p search-materializer -p search-unitizer -p search-exact --lib
-cargo +1.98.0 test --locked -p eliot-searchd --bin eliot-searchd --test persistent_roots_process --test direct_preparation_process --test catalog_loss_process --test service_failure_process --test product_targets
-cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-sealed-recover
+```powershell
+cargo +1.98.0 check --locked -p <package> --all-features
+cargo +1.98.0 clippy --locked -p <package> --all-features -- -D warnings
 ```
 
-[Manual workspace check](.github/workflows/manual-workspace-check.yml) remains
-`workflow_dispatch` only, read-only and exact-SHA. `core_tests` runs the primary
-regressions and all eight retained legacy harnesses. Native DPAPI tests require
-the Windows runner; they are not validated by a Linux run. No fresh passing
-Rust build or test run is claimed by this change.
+Full product/process tests are performed after the implementation spine is complete, with focused tests
+added earlier where a change needs immediate causal proof.
 
-## Boundaries and documentation
+## Running
 
-Qdrant is the only indexed retrieval backend. DIRECT works independently of it.
-redb stores technical control state, never searchable content. Immutable revisions
-and derived artifacts belong in scoped CAS. Candidates require source-backed
-validation; handles never grant access. Exact negative claims require a frozen
-source denominator, not top-k results. Logical deletion is not physical erasure.
-Optional models/documents stay behind their explicit qualification gates.
+The supported baseline is standalone. Exact startup syntax is still evolving with the provider transport,
+redb cutover and Qdrant supervisor integration; do not infer readiness from legacy experimental commands.
 
-Read [AGENTS.md](AGENTS.md) and package `FUNCTIONS.md` before changing code. The
-[normative architecture](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md)
-remains authoritative. Existing task PRs track completion; landing code in `main`
-does not fabricate accepted gates or independent review.
+The final baseline must support:
 
-[DIRECT smoke commands](QUICKSTART.md) ·
-[service fail-stop and target isolation](docs/runtime/SERVICE_FAIL_STOP.md) ·
-[root registration](docs/runtime/SOURCE_ROOT_REGISTRATION.md) ·
-[revision writes](docs/runtime/DIRECT_REVISION_WRITES.md) ·
-[DIRECT preparation](docs/runtime/DIRECT_PREPARATION.md) ·
-[redb adapter](docs/runtime/CONTROL_REDB.md) ·
-[catalog/proxy guards](docs/runtime/CATALOG_LOSS_AND_CHANNEL_FAILURE.md)
+- installation and first startup without ELIOT Memory OS;
+- source registration/ingestion;
+- durable restart-safe state;
+- real Qdrant indexing and search;
+- rebuild after index loss;
+- local CLI use;
+- optional ELIOT provider integration without a second state owner.
 
-Required repository tooling is Rust/Cargo-owned. PowerShell compatibility
-wrappers and manual workflows may invoke the locked `xtask` commands, but no
-required Python or Node runtime remains. This does not replace finishing or
-qualifying the product runtime.
+## Repository workflow
 
-MIT. See [LICENSE](LICENSE).
+Read `AGENTS.md`, the architecture master, the nearest package instructions and the named issue/PR before
+editing. Use one branch/worktree per manager and avoid overlapping package writers.
+
+No ticket/lease/signature issuance protocol is required. Do not implement generic agent-controller
+features in this repository. Keep GitHub Actions manual-only and never claim unexecuted gates.
+
+## License
+
+See [`LICENSE`](LICENSE).

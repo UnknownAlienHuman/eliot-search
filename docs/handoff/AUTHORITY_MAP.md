@@ -1,179 +1,114 @@
 # Authority and source-of-truth map
 
-This map resolves conflicts between architecture, accepted public handoffs, machine registries,
-configuration/qualification packets, stage contexts, assignment control records and package
-instructions.
+This map resolves conflicts between product architecture, package contracts, repository instructions and
+historical development-planning material.
 
 ## Precedence
 
-1. **Architecture Part I** — product behavior, invariants, authority and security semantics.
-2. **Accepted ADRs / explicit correction documents** — implementation/package decisions that do not
-   change Part I.
-3. **Accepted public API/schema/port/configuration/evidence digest** — actual immutable contract consumed
-   by direct dependencies and later-stage writers.
-4. **P00 contract pack** — bounded derivative implementation projection; stops on Part I conflict.
-5. **`swarm/crates.toml`** — exact package names, paths, direct dependencies, assignments,
-   configuration/qualification packets, optionality, earliest-wave metadata and line targets.
-6. **`swarm/function-packets.toml`** — exact primary function/contract packet and package-local write
-   scope for every package; foundation packages point to their P00 contract files.
-7. **`swarm/module-packets.toml` plus `swarm/modules/*.toml`** — exact package-local logical modules and
-   public entry module for all 45 packages.
-8. **`swarm/coverage/manifest.toml` plus `swarm/coverage/*.toml`** — integration-owned derivative
-   crosswalk proving every architecture section, capability, invariant, port, type/schema, recipe,
-   reason, assignment and delivery slice has concrete package/module owners. It cannot override items
-   1–7.
-9. **`swarm/stages.toml`** — exact W0–W10 package membership, shared current-stage context and
-   gate/completion-receipt ordering.
-10. **`swarm/stage-readsets.toml`** — exact replacement context for every package reused after its
-    earliest wave.
-11. **`config/sections.toml`** — exact configuration section owner, earliest wave, minimum action, secret
-    policy and bounded section packet.
-12. **Qualification registry/packet** — exact artifact/probe/schema requirements; never a success
-    receipt.
-13. **`swarm/launch-state.toml`** — current package authorization/conditional status only.
-14. **Issued immutable assignment ticket, materialized context manifest and active writer lease** — exact
-    writer/base/read/write/dependency/evidence fence for one package implementation.
-15. **Package assignment and function-registry primary packet** — owned behavior, operation semantics,
-    failures, recovery, bounds and tests.
-16. **Current stage shared packet plus applicable later-stage supplement** — narrow additive obligations;
-    cannot weaken the accepted base API.
-17. **Root/family/package `AGENTS.md`** — operational read/write rules within the machine registries and
-    issued ticket.
-18. **README/human matrix and non-claimable ticket/context drafts** — preparation/navigation only.
+1. **Architecture Part I** — product behavior, security, state and runtime invariants.
+2. **Accepted product ADRs** — implementation/package decisions that do not weaken Part I. ADR 0005 is
+   authoritative for the standalone/controller boundary.
+3. **Accepted public API/schema/port/configuration contracts** — immutable surfaces consumed by product
+   packages and external adapters.
+4. **Package ownership documentation** — nearest `AGENTS.md`, `FUNCTIONS.md`, Cargo manifest and package
+   docs.
+5. **Current maintainer request and issue/PR acceptance criteria** — exact work to perform within the
+   preceding product contracts.
+6. **Qualification packets and exact executed evidence** — whether a capability may be claimed or
+   enabled.
+7. **Planning and historical metadata** — `swarm/**`, `docs/handoff/**`, `docs/execution/**`, drafts and
+   prior campaign records.
 
-`swarm/ticket-drafts/**` and `swarm/context-drafts/**` have **no implementation authority**. They do not
-enter the orchestration state machine, create a lease or identify a base commit. Issuance always creates
-new immutable records under `swarm/tickets/`, `swarm/context-manifests/` and `swarm/leases/`.
+Planning/history material cannot override items 1–6, cannot authorize or block implementation and is
+never a runtime input.
 
-The coverage crosswalk is an integration audit and merge guard. A row does not authorize its package,
-create implementation state or accept evidence. A conflict with Architecture Part I, an accepted ADR or
-an accepted public digest invalidates the coverage row and stops work.
+## Product ownership
 
-## Domain-specific authority
-
-| Question | Authority |
+| Responsibility | Owner |
 |---|---|
-| What Search is allowed to do | Architecture Part I |
-| Exact shared fields and serialization after freeze | accepted `search-contracts` digest |
-| Pure transition/order/coverage rules | accepted `search-domain` digest |
-| Shared trait/method semantics | accepted `search-ports` digest |
-| Generic configuration layering/redaction/planning | accepted `search-config` digest |
-| Exact package path/dependencies/earliest wave/assignment | `swarm/crates.toml` |
-| Exact package function behavior packet and write scope | `swarm/function-packets.toml` |
-| Exact package-local logical modules and public entry | `swarm/module-packets.toml` plus the referenced wave packet |
-| Does every normative section/cell/invariant/port/schema/recipe/task have an owner | `swarm/coverage/manifest.toml` and referenced coverage packets, validated against source |
-| Which packages belong to a stage and what it contributes/closes | `swarm/stages.toml` |
-| What a reused package reads at W7/W8/W9/W10 | `swarm/stage-readsets.toml` |
-| Which package owns a configuration section | `config/sections.toml` |
-| Exact section fields/defaults/bounds/change obligations | section packet + accepted owner digest |
-| Which stage packet and qualification apply | `swarm/stages.toml` plus issued ticket |
-| Which earlier behavior a later writer may rely on | exact accepted prior-stage handoff/API digest |
-| May a ticket be considered for issuance | `swarm/launch-state.toml` plus accepted prerequisites |
-| What exact context and writer may act | issued ticket + materialized context + active lease |
-| Does a committed ticket/context draft authorize work | never; draft status is non-claimable |
-| Which package owns mutable state | function packet + module packet + assignment + `PRIMITIVE_OWNERSHIP.md` |
-| Which adapter implements a shared port | `swarm/coverage/ports.toml`, `PORT_CATALOG.md` and accepted adapter handoff |
-| Is a Qdrant/provider/profile accepted | immutable qualification/evidence receipt |
-| Which package owns a shared fixture | `tests/CRATE_FIXTURE_OWNERS.md` or stage fixture-owner registry |
+| Source admission, revisions, preparation and retrieval projections | ELIOT Search |
+| Qdrant process/schema/publication/retrieval | ELIOT Search |
+| Query access fences, candidate validation, result projection and handles | ELIOT Search |
+| Standalone daemon and CLI | ELIOT Search |
+| Typed provider translation for ELIOT | `search-eliot-adapter` as a Search leaf adapter |
+| Tasks, WorkScope, canonical task history, Context Compiler, Governor and finish | ELIOT Memory OS |
+| Agent task/attempt/binding/operation/check orchestration prototype | ELIOT Swarm Controller |
+| Native model loop and harness internals | The selected external harness/adapter |
+
+Search may expose typed provider operations to ELIOT. That does not transfer task authority into Search
+or make ELIOT/controller services prerequisites for standalone operation.
+
+## Standalone rule
+
+`eliot-searchd` and `eliot-search` must support installation, startup, ingestion, indexing, search,
+rebuild and recovery without:
+
+- ELIOT Memory OS;
+- a Governor or General Manager;
+- `eliot-swarm-controller`;
+- assignment tickets or writer leases;
+- approval/signature profiles;
+- agent roles, mailboxes or schedulers.
+
+Any configuration or code path that makes those dependencies mandatory violates ADR 0005.
+
+## Repository-work authorization
+
+An explicit maintainer request, issue or PR plus one non-overlapping branch/worktree authorizes normal
+repository work. Package boundaries and dependency direction still apply.
+
+No immutable assignment ticket, materialized context artifact, acknowledgement, lease, receipt,
+signature profile or launch-state transition is required before editing or reviewing Search.
+
+`swarm/launch-state.toml` is a legacy planning snapshot. Its package arrays and counters are not a lock,
+permission system, product health state or acceptance record. Lower-level documents that call it the
+"sole current authorization" are historical and non-authoritative.
+
+## Product qualification authority
+
+A product capability is accepted only by its exact executed product evidence:
+
+- Qdrant qualification for indexed mode;
+- provider/client transport and native security qualification;
+- query/currentness/exact-proof qualification;
+- real end-to-end product-spine evidence;
+- installed release evidence.
+
+Cargo membership, source presence, planning metadata, ticket state, schemas or mock/oracle execution do
+not enable a capability.
 
 ## Conflict handling
 
-- A Part I conflict stops work with `CONTRACT_CHALLENGE`; derivative docs are not silently patched.
-- Cargo and `swarm/crates.toml` dependency mismatch blocks merge.
-- Package name/path/wave/assignment mismatch between `swarm/crates.toml` and
-  `swarm/function-packets.toml` blocks merge.
-- Missing, duplicate, cross-package or structurally incomplete primary function packet blocks merge.
-- Missing, duplicate, invalid or cross-package module packet blocks merge.
-- An operation without one registered package owner and package public-entry module blocks merge.
-- An S0–S39 section, C00–C30 capability, INV-01–INV-30 invariant, shared port, named P00 type/schema,
-  recipe, reason namespace, package assignment or P00–P18 delivery slice without valid package/module
-  ownership blocks merge.
-- A shared port with a floating implementation owner such as “selected implementation” or “runtime
-  adapter” blocks merge; one exact package/module is required.
-- A schema with no shape owner, or mutable state with no state owner, blocks merge.
-- A package absent from every architecture delivery slice blocks merge.
-- Stage package/phase/gate/receipt mismatch blocks merge.
-- A package reused after its earliest wave without exactly one stage override blocks merge.
-- An unnecessary override for an earliest-wave package blocks merge.
-- A later-stage override that includes a forbidden previous-stage packet, dependency implementation or
-  architecture master blocks merge.
-- Section owner/packet/Cargo dependency mismatch blocks merge.
-- A qualification packet specifies what must be proven; empty/UNAVAILABLE evidence never enables a
-  capability.
-- A draft placed in an issued-ticket/context/lease directory, or a draft with selected writer/base/
-  digest/lease fields, blocks merge.
-- An issued ticket without one exact materialized context, writer/reviewer separation, registry/
-  instruction digests and prerequisite handoffs is invalid.
-- A package submission without a complete package-only diff, raw outcomes and matching ticket/context/
-  lease identities cannot enter review.
-- A review prepared by the writer or represented as a gate/wave receipt is invalid.
-- Package `AGENTS.md` and assignment dependency prose are explanatory. Exact dependency closure is
-  `swarm/crates.toml`; exact function/write closure is `swarm/function-packets.toml`; exact module
-  closure is `swarm/module-packets.toml`; exact stage context closure is `swarm/stages.toml` plus
-  `swarm/stage-readsets.toml`.
-- An assignment, function packet, module packet, coverage row, stage entry, context override or draft
-  cannot authorize a future wave.
-- A README cannot add a field, port, reason code, dependency, capability or authority.
+- A Part I or ADR 0005 conflict stops the product change and is resolved at the product contract.
+- A generic controller requirement inside Search is removed or moved to the controller/Memory OS
+  repository; it is not completed locally.
+- A package dependency or ownership mismatch blocks that code change, not unrelated package work.
+- Missing executed qualification keeps the affected capability disabled; it does not block development
+  of the implementation needed to obtain that qualification.
+- A historical `swarm/**` rule that conflicts with current product work is ignored and corrected rather
+  than implemented.
+- ELIOT integration must remain an optional leaf adapter over the same standalone owners.
 
-## Bounded-context rule
+## Development metadata disposition
 
-An earliest-wave writer receives only root/package instructions, exact package/function/module/stage
-registry entries, one assignment, one primary function/contract packet, current-stage shared files,
-accepted direct handoffs and named fixtures.
+The repository may retain small static aids for package mapping, architecture coverage and non-overlap.
+They are advisory. Do not extend them into a generic executable control plane.
 
-Before the writer receives anything, the integration owner materializes the exact source files and
-registry fragments declared by the context draft at one base commit, records every source/fragment
-SHA-256 and publishes one immutable context artifact. The exact package entry from the applicable
-`swarm/modules/*.toml` packet is mandatory; the writer must not infer its module layout from another
-package's source.
+The following belong outside ELIOT Search:
 
-A later-stage writer additionally receives its one exact override. An **accepted prior-stage handoff**
-replaces the earlier stage packet and implementation history. The integration owner must not mount both
-the prior implementation packet and the new replacement context.
+- ticket/lease/acknowledgement issuers;
+- actor/approval/signature registries;
+- task/attempt/operation/check databases;
+- mailboxes, scheduler queues and manager routing;
+- harness lifecycle and agent observability;
+- review acceptance or finish authority.
 
-Static context is capped at sixteen files before declared context materialization. Ticket-added handoff
-receipts and fixture references are also bounded. A writer that finds a missing load-bearing contract
-stops and opens a contract change; it does not widen its own read set or inspect dependency internals.
+Reusable implementations go to `UnknownAlienHuman/eliot-swarm-controller`; canonical task/memory
+semantics go to `UnknownAlienHuman/eliot-memory-os`.
 
-## Ticket, submission and review rule
+## Evidence rule
 
-```text
-non-claimable draft
-→ new issued ticket + materialized context
-→ active writer lease
-→ package-only submission
-→ independent review
-→ append-only accepted package/API handoff
-```
-
-Changing the base commit, context source, assignment, registry, dependency handoff, module packet or
-writer creates a superseding ticket/context/lease. A writer cannot amend its context, edit control-plane
-records, self-review, self-accept or advance launch state.
-
-A package review permits the integration owner to construct a package handoff only. It is not a gate or
-wave receipt.
-
-## Stage/receipt rule
-
-Central gate and stage-completion receipts remain distinct:
-
-```text
-W0 closes G0
-W1 + W2 close G1
-W3 + W4 close G2
-W5 + W6 close G3
-W7 emits W7_LIFECYCLE
-W8 closes G4 and requires W7_LIFECYCLE
-W9 closes G5 and requires G4 plus W7_LIFECYCLE
-W10 closes candidate-specific G6 and requires accepted P15/G5
-```
-
-This prevents package/stage/draft presence or a non-central lifecycle receipt from being mistaken for
-product acceptance.
-
-## Freeze rule
-
-Before a consumer or later-stage writer starts, the integration owner records the producer commit and
-public API/schema/port/configuration/evidence digest. Downstream agents consume that immutable receipt,
-not a moving branch, previous stage packet or implementation internals. An external-artifact consumer
-additionally receives the exact accepted qualification receipt.
+Evidence records must identify the exact product revision, commands, environment, inputs and outcomes.
+Unknown or unavailable results remain explicit. Historical evidence about repository-control tooling is
+not Search product evidence. Diagnostic Qdrant observations are retained only as unqualified inputs until
+rerun through the accepted qualification packet.

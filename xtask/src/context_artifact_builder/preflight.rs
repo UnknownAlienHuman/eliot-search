@@ -10,7 +10,7 @@ use crate::context_artifact::{ARTIFACT_FORMAT, ARTIFACT_ROOT, RECORD_KIND};
 use crate::git_tree::{GitTree, GitTreeError};
 use crate::ticket_planner::{
     exact_sha256_hex, opaque_id_valid, package_name_valid, safe_path,
-    sha256_hex_valid, signed_payload_digest, under,
+    sha256_hex_valid, under,
 };
 
 use super::model::{
@@ -83,7 +83,7 @@ pub(super) fn run(
     require(
         function_scope == Some(expected_scope.as_str())
             && integer(&function_row, "wave") == Some(0)
-            && w0_phase_registry_matches_p00(&stage_row),
+            && text(&stage_row, "phase") == Some("P00"),
         &mut checks,
         "registry-parity",
         "PACKAGE_REGISTRY_MISMATCH",
@@ -131,12 +131,6 @@ pub(super) fn run(
         package_path: package_path.to_owned(),
         handoffs,
         checks,
-    })
-}
-
-fn w0_phase_registry_matches_p00(stage_row: &Value) -> bool {
-    stage_row.get("phases").and_then(Value::as_array).is_some_and(|phases| {
-        phases.len() == 1 && phases.first().and_then(Value::as_str) == Some("P00")
     })
 }
 
@@ -588,10 +582,9 @@ fn validate_handoffs(
         let api = public.get("api_schema_digest").and_then(Value::as_str).unwrap_or_default();
         let reasons = public.get("error_reason_digest").and_then(Value::as_str).unwrap_or_default();
         let record_digest = signature.get("record_sha256").and_then(Value::as_str).unwrap_or_default();
-        let expected_path = format!("swarm/handoffs/{package}/{handoff_id}.toml");
         let valid = package_name_valid(package)
             && opaque_id_valid(handoff_id)
-            && path.as_str() == expected_path.as_str()
+            && path == format!("swarm/handoffs/{package}/{handoff_id}.toml")
             && integer(&record, "schema_version") == Some(1)
             && text(&record, "record_kind") == Some("package_handoff_v1")
             && text(&record, "status") == Some("ACCEPTED")
@@ -671,6 +664,19 @@ fn superseded_handoffs(
         }
     }
     Ok(result)
+}
+
+fn signed_payload_digest(raw: &[u8]) -> Option<String> {
+    const MARKER: &[u8] = b"\n[signature]\n";
+    let positions = raw
+        .windows(MARKER.len())
+        .enumerate()
+        .filter_map(|(index, window)| (window == MARKER).then_some(index))
+        .collect::<Vec<_>>();
+    if positions.len() != 1 || positions[0] == 0 {
+        return None;
+    }
+    Some(exact_sha256_hex(&raw[..positions[0] + 1]))
 }
 
 fn launch_class<'a>(launch: &'a Value, package: &str) -> Option<&'a str> {
