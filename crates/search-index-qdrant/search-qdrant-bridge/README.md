@@ -1,99 +1,63 @@
 # search-qdrant-bridge
 
-**C15 — Qdrant data-plane bridge.**
+**C15 — sole Qdrant vendor/data-plane adapter.**
 
-**Status:** implemented vendor-neutral oracle, exact qualification gate and
-live/real Qdrant transport. Qualification remains receipt-gated; no automatic
-upgrade or fallback is permitted.
+**Status:** substantial vendor-neutral oracle, live qualification harness and real `qdrant-client 1.19.0`
+transport exist. The active `main` payload/filter surface still reflects the legacy membership/digest
+contract and is not the canonical S9.5/S10.3 product generation. No live indexed capability is qualified
+or enabled.
 
-Own qualified Qdrant collection, point and query operations behind
-vendor-neutral Eliot types.
+Draft PR #200 contains the aligned typed S9.5 payload, exact 19-index schema and single S10.3 retrieval /
+filtered-IDF/count/scroll eligibility contract. It must be integrated with #207, #209, #210 and daemon
+composition rather than partially copied into the legacy generation.
 
 ## Owns
 
-- capability and collection-schema probes
-- strict-mode indexes and filter translation
-- exact point mutation/readback/delete transport
-- filtered query/count operations
-- private vendor-type translation
-- client/server qualification identity checks
+- the only `qdrant-client` dependency and every vendor type translation;
+- exact server/client/build qualification identity;
+- authenticated loopback endpoint admission after the secret contract is resolved;
+- collection creation, schema/index verification and strict-mode checks;
+- bounded point mutation, readback, count, scroll and sparse query transport;
+- wait/readback/strong-order semantics;
+- exact response validation and stable Eliot-owned errors;
+- possible-external-write `OUTCOME_UNKNOWN` classification;
+- disposable live capability probes;
+- in-memory behavioral oracle for tests only.
 
 ## Must not own
 
-- executable/process/ACL/Job Object lifecycle
-- secret storage
-- recipe, access, publication or result semantics
-- vendor types in public ports
-- automatic download, upgrade or silent fallback
+- executable/process/ACL/Job Object lifecycle;
+- secret storage or plaintext credential persistence;
+- recipe, access, publication, fusion or result semantics;
+- source truth or evidence interpretation;
+- vendor types in public ports;
+- automatic download, upgrade, provider switching or oracle fallback.
 
-The live T22 disposable-server harness is qualification-only. Its internals are
-split into exact artifact measurement, loopback endpoint/client construction,
-bounded diagnostics and child orchestration. Product process ownership remains
-in `search-qdrant-supervisor`; daemon composition consumes a qualified endpoint
-rather than adopting the fixture lifecycle.
+## Product rules
 
-Startup diagnostics read at most the final 1 KiB from each captured Qdrant log.
-They never load an unbounded log and use lossy UTF-8 only for failure evidence.
+- Qdrant is the only indexed/search database.
+- Retrieval and `idf.corpus` use one canonical eligibility contract.
+- Qdrant payload is metadata, never source evidence.
+- Every emitted candidate is resolved through exact typed point readback and then authoritative source
+  validation.
+- A missing/mismatched collection schema, profile, route or qualification gate fails closed.
+- Mutation timeout/cancellation after possible dispatch remains `QDRANT_MUTATION_OUTCOME_UNKNOWN` until
+  exact reconciliation.
 
-Live probes are split by responsibility: exact server identity,
-collection topology/index creation, wait=true ingest/readback, strict-mode
-negative behavior, signed-range transport, independent IDF, sparse modifier,
-missing-upper-bound semantics, exact CRUD readback and schema readback. Fixture
-constants, eligibility filters and point/payload construction are separate
-private modules. IDF noninterference compares exact ID/score populations without
-depending on Qdrant's unspecified ordering among equal-score candidates.
+## Current blockers
 
-The suite keeps one explicit mandatory probe order and emits no product
-authority.
+- integrate the aligned S9.5/S10.3/S11 stack;
+- resolve exact epoch range transport in #205;
+- supply the Qdrant API key through the accepted redacted secret handoff (#201);
+- wire the real bridge into daemon publication/query composition;
+- execute real-server restart, noninterference, unknown-outcome and end-to-end qualification.
 
-The real data-plane read surface is split into exact readback, count, scroll and
-filtered-search operation files behind the existing `RealDataPlane` methods.
-Exact readback rejects duplicate vendor IDs and returns points, missing IDs and
-unexpected IDs in deterministic point-ID order. Filtered nominations preserve
-Qdrant ranking order but reject duplicate point IDs and non-finite scores.
+The in-memory bridge is never a production fallback, and a successful Qdrant CRUD smoke is not product
+qualification.
 
-Private vendor codecs are split into update-status/order translation, payload
-codec, sparse-vector codec and point assembly. The split preserves all exact
-payload field names, digest fields, sparse ordering, finite-value and dimension
-checks; no vendor type is exported by the codec surface.
-
-Connection admission, collection creation/index setup and schema readback are
-separate private operation files. Connection still requires the exact executed
-qualified gate and rechecks server version/build; creation still installs all
-mandatory indexes with wait=true and strong ordering before exact schema
-readback.
-
-Before collection creation is dispatched, cancellation is definite. After the
-collection may exist, cancellation, transport loss or unusable readback returns
-`QDRANT_MUTATION_OUTCOME_UNKNOWN`; the bridge never reports a definite no-write
-outcome after possible durable schema effects.
-
-Vendor failure mapping is split by read, mutation and schema-creation class.
-Read transport loss remains `QDRANT_TRANSPORT_FAILED`; mutation and possible
-schema-write loss remain `QDRANT_MUTATION_OUTCOME_UNKNOWN`. Exact server schema
-verification is isolated from transport-error classification.
-
-Private identity translation is split into deterministic collection-route
-naming, 32-byte digest hex and full 128-bit point-ID/UUID conversion. The
-collection name remains the fixed 28-byte domain-separated form and point IDs
-retain all 128 bits across numeric/UUID vendor responses.
-
-The dependency and upgrade boundary is defined in
+The dependency and upgrade boundary is documented in
 [`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
 
-Validate it from the repository root:
-
-```powershell
-cargo run --locked -p xtask -- validate qdrant-boundary --json
-cargo test --locked -p search-qdrant-bridge --test live_server_module_ownership
-cargo test --locked -p search-qdrant-bridge --test live_probe_module_ownership
-cargo test --locked -p search-qdrant-bridge --test real_query_module_ownership
-cargo test --locked -p search-qdrant-bridge --test real_codec_module_ownership
-cargo test --locked -p search-qdrant-bridge --test real_schema_module_ownership
-cargo test --locked -p search-qdrant-bridge --test real_error_schema_module_ownership
-cargo test --locked -p search-qdrant-bridge --test real_identity_module_ownership
-```
-
-- **Delivery wave:** W3 / P05
-- **Soft source-line target:** 7,000
+- **Product area:** Architecture S9/S10
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
+- **Current status matrix:** [../../../docs/product/IMPLEMENTATION_STATUS.md](../../../docs/product/IMPLEMENTATION_STATUS.md)
