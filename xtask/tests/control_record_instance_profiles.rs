@@ -187,7 +187,7 @@ fn profile_shape_rejects_unknown_keys_and_unresolved_instance_statuses() {
     );
 
     let missing_profile_field = IsolatedFixture::new();
-    missing_profile_field.replace_once(profile, "unknown_instance_status = \"reject\"\n", "");
+    missing_profile_field.replace_once(profile, "unknown_instance_status = \"reject\"", "");
     assert_eq!(
         validate_control_record_instance_profiles(&missing_profile_field.root).unwrap_err(),
         ControlRecordInstanceProfileError::ProfileDefinitionInvalid
