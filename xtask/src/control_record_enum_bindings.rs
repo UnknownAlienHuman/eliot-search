@@ -17,6 +17,7 @@ const DECLARED_TYPE_COUNT: usize = 51;
 const REGISTERED_TYPE_COUNT: i64 = 51;
 const MAX_CONTROL_REGISTRY_BYTES: usize = 16 * 1024;
 const MAX_TYPE_REGISTRY_BYTES: usize = 64 * 1024;
+const MAX_ENUM_VALUE_CHECK_INPUT_BYTES: usize = 128;
 
 /// Maximum combined bytes read from the exact control and type registries.
 pub const MAX_TOTAL_INPUT_BYTES: usize = MAX_CONTROL_REGISTRY_BYTES + MAX_TYPE_REGISTRY_BYTES;
@@ -151,6 +152,8 @@ pub enum ControlRecordEnumBindingsError {
     EnumDefinitionInvalid,
     /// An adopted field binding is missing, duplicated, wrong, or cross-bound.
     BindingInvalid,
+    /// A public exact-value check received an unapproved token or oversized input.
+    EnumValueInvalid,
 }
 
 impl ControlRecordEnumBindingsError {
@@ -163,6 +166,7 @@ impl ControlRecordEnumBindingsError {
             Self::TypeRegistryDefinitionInvalid => "CONTROL_ENUM_TYPE_REGISTRY_INVALID",
             Self::EnumDefinitionInvalid => "CONTROL_ENUM_DEFINITION_INVALID",
             Self::BindingInvalid => "CONTROL_ENUM_BINDING_INVALID",
+            Self::EnumValueInvalid => "CONTROL_ENUM_VALUE_INVALID",
         }
     }
 }
@@ -181,7 +185,11 @@ pub fn validate_control_record_enum_bindings(
     let control_registry = control_registry
         .as_table()
         .ok_or(ControlRecordEnumBindingsError::ControlRegistryDefinitionInvalid)?;
-    validate_control_registry(control_registry)?;
+    let current_disposition = control_registry
+        .get("current_disposition")
+        .and_then(Value::as_table)
+        .ok_or(ControlRecordEnumBindingsError::ControlRegistryDefinitionInvalid)?;
+    validate_control_registry(control_registry, current_disposition)?;
 
     let type_registry = read_toml(
         root,
@@ -216,15 +224,51 @@ pub fn validate_control_record_enum_bindings(
     })
 }
 
+/// Check one exact adopted enum value for a registered owner-field pair.
+///
+/// This pure check is `NON_AUTHORITATIVE`: it validates only the bounded input
+/// token and its exact binding. It does not validate a record instance, qualify
+/// fixtures, verify execution evidence, or authorize issuance.
+pub fn validate_adopted_enum_field_value(
+    owner_type: &str,
+    field_name: &str,
+    value: &str,
+) -> Result<(), ControlRecordEnumBindingsError> {
+    if owner_type
+        .len()
+        .saturating_add(field_name.len())
+        .saturating_add(value.len())
+        > MAX_ENUM_VALUE_CHECK_INPUT_BYTES
+    {
+        return Err(ControlRecordEnumBindingsError::EnumValueInvalid);
+    }
+
+    let binding = BINDING_SPECS
+        .iter()
+        .find(|binding| binding.owner_type == owner_type && binding.field_name == field_name)
+        .ok_or(ControlRecordEnumBindingsError::BindingInvalid)?;
+    let enum_spec = ENUM_SPECS
+        .iter()
+        .find(|enum_spec| enum_spec.name == binding.target_type)
+        .ok_or(ControlRecordEnumBindingsError::BindingInvalid)?;
+
+    if enum_spec.allowed.contains(&value) {
+        Ok(())
+    } else {
+        Err(ControlRecordEnumBindingsError::EnumValueInvalid)
+    }
+}
+
 fn validate_control_registry(
     registry: &Map<String, Value>,
+    current_disposition: &Map<String, Value>,
 ) -> Result<(), ControlRecordEnumBindingsError> {
     if integer(registry, "schema_version") != Some(CONTROL_REGISTRY_SCHEMA_VERSION)
         || string(registry, "project") != Some("eliot-search")
         || string(registry, "status") != Some("SCHEMA_ONLY_NOT_IMPLEMENTED")
         || string(registry, "type_registry") != Some(TYPE_REGISTRY_PATH)
         || integer(registry, "type_registry_schema_version") != Some(TYPE_REGISTRY_SCHEMA_VERSION)
-        || integer(registry, "registered_types") != Some(REGISTERED_TYPE_COUNT)
+        || integer(current_disposition, "registered_types") != Some(REGISTERED_TYPE_COUNT)
         || string(registry, "unknown_load_bearing_fields") != Some("reject")
     {
         return Err(ControlRecordEnumBindingsError::ControlRegistryDefinitionInvalid);
@@ -319,50 +363,37 @@ fn validate_field_bindings(types: &[Value]) -> Result<(), ControlRecordEnumBindi
         {
             return Err(ControlRecordEnumBindingsError::BindingInvalid);
         }
-
-        let mut global_rule_count = 0;
-        for ty in types {
-            let Some(table) = ty.as_table() else {
-                return Err(ControlRecordEnumBindingsError::BindingInvalid);
-            };
-            let Some(type_name) = string(table, "name") else {
-                return Err(ControlRecordEnumBindingsError::BindingInvalid);
-            };
-            let Some(type_rules) = table.get("rules").and_then(Value::as_array) else {
-                continue;
-            };
-            if type_rules.iter().any(|rule| !rule.is_str()) {
-                return Err(ControlRecordEnumBindingsError::BindingInvalid);
-            }
-            let occurrences = type_rules
-                .iter()
-                .filter(|rule| rule.as_str() == Some(expected_rule.as_str()))
-                .count();
-            if occurrences > 0 && type_name != expected.owner_type {
-                return Err(ControlRecordEnumBindingsError::BindingInvalid);
-            }
-            global_rule_count += occurrences;
-        }
-        if global_rule_count != 1 {
-            return Err(ControlRecordEnumBindingsError::BindingInvalid);
-        }
     }
 
     for ty in types {
         let Some(table) = ty.as_table() else {
             return Err(ControlRecordEnumBindingsError::BindingInvalid);
         };
+        let Some(type_name) = string(table, "name") else {
+            return Err(ControlRecordEnumBindingsError::BindingInvalid);
+        };
         let Some(rules) = table.get("rules").and_then(Value::as_array) else {
             continue;
         };
+        if rules.iter().any(|rule| !rule.is_str()) {
+            return Err(ControlRecordEnumBindingsError::BindingInvalid);
+        }
         for rule in rules.iter().filter_map(Value::as_str) {
+            let accepted_rule = BINDING_SPECS
+                .iter()
+                .any(|binding| binding.rule() == rule);
+            if accepted_rule {
+                if !BINDING_SPECS
+                    .iter()
+                    .any(|binding| binding.rule() == rule && binding.owner_type == type_name)
+                {
+                    return Err(ControlRecordEnumBindingsError::BindingInvalid);
+                }
+                continue;
+            }
             for adopted_type in ENUM_SPECS.map(|spec| spec.name) {
                 let suffix = format!("_is_{adopted_type}");
-                if rule.ends_with(suffix.as_str())
-                    && !BINDING_SPECS
-                        .iter()
-                        .any(|binding| binding.rule().as_str() == rule)
-                {
+                if rule.ends_with(suffix.as_str()) {
                     return Err(ControlRecordEnumBindingsError::BindingInvalid);
                 }
             }

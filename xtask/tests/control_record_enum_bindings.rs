@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use xtask::control_record_enum_bindings::{
-    ControlRecordEnumBindingsError, validate_control_record_enum_bindings,
+    ControlRecordEnumBindingsError, validate_adopted_enum_field_value,
+    validate_control_record_enum_bindings,
 };
 
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
@@ -10,6 +11,78 @@ static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 const INPUTS: &[&str] = &[
     "swarm/control-plane-schema.toml",
     "swarm/schemas/types-v1.toml",
+];
+
+const ACCEPTED_BINDING_VALUES: &[(&str, &str, &[&str])] = &[
+    (
+        "OrderedFixtureRef",
+        "qualification_status",
+        &["FAILED", "QUALIFIED", "UNAVAILABLE"],
+    ),
+    (
+        "BoundedCommandSpec",
+        "expected_exit_class",
+        &["EXIT_NONZERO", "EXIT_ZERO"],
+    ),
+    (
+        "OrderedRawCommandOutcomeRef",
+        "exit_class",
+        &["EXIT_NONZERO", "EXIT_ZERO"],
+    ),
+    (
+        "BoundedCommandSpec",
+        "evidence_class",
+        &[
+            "PACKAGE_HANDOFF_CANDIDATE",
+            "PUBLIC_API_SCHEMA_DIGEST",
+            "QUALIFICATION_PROBE_RESULT",
+            "RESIDUAL_RISK_RECORD",
+            "TEST_RESULT",
+        ],
+    ),
+    (
+        "EvidenceRequirement",
+        "evidence_class",
+        &[
+            "PACKAGE_HANDOFF_CANDIDATE",
+            "PUBLIC_API_SCHEMA_DIGEST",
+            "QUALIFICATION_PROBE_RESULT",
+            "RESIDUAL_RISK_RECORD",
+            "TEST_RESULT",
+        ],
+    ),
+    (
+        "OrderedEvidenceRef",
+        "evidence_class",
+        &[
+            "PACKAGE_HANDOFF_CANDIDATE",
+            "PUBLIC_API_SCHEMA_DIGEST",
+            "QUALIFICATION_PROBE_RESULT",
+            "RESIDUAL_RISK_RECORD",
+            "TEST_RESULT",
+        ],
+    ),
+    (
+        "OrderedAcceptedEvidenceRef",
+        "evidence_class",
+        &[
+            "PACKAGE_HANDOFF_CANDIDATE",
+            "PUBLIC_API_SCHEMA_DIGEST",
+            "QUALIFICATION_PROBE_RESULT",
+            "RESIDUAL_RISK_RECORD",
+            "TEST_RESULT",
+        ],
+    ),
+    (
+        "EvidenceRequirement",
+        "acceptance_class",
+        &["FAILURE", "POLICY", "RECOVERY", "SUCCESS"],
+    ),
+    (
+        "OrderedEvidenceRef",
+        "acceptance_class",
+        &["FAILURE", "POLICY", "RECOVERY", "SUCCESS"],
+    ),
 ];
 
 fn repository_root() -> PathBuf {
@@ -106,7 +179,7 @@ impl Drop for IsolatedFixture {
 }
 
 #[test]
-fn checked_in_enum_definitions_and_nine_bindings_validate_non_authoritatively() {
+fn checked_in_enum_definitions_accept_reused_rules_non_authoritatively() {
     let report = validate_control_record_enum_bindings(&repository_root())
         .expect("accepted enum definitions and bindings are structurally closed");
 
@@ -116,6 +189,80 @@ fn checked_in_enum_definitions_and_nine_bindings_validate_non_authoritatively() 
     assert_eq!(report.declared_type_count, 51);
     assert_eq!(report.enum_count, 4);
     assert_eq!(report.binding_count, 9);
+}
+
+#[test]
+fn exact_value_checker_accepts_all_tokens_for_all_nine_bindings() {
+    for &(owner_type, field_name, values) in ACCEPTED_BINDING_VALUES {
+        for &value in values {
+            assert_eq!(
+                validate_adopted_enum_field_value(owner_type, field_name, value),
+                Ok(()),
+                "accepted token for {owner_type}.{field_name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn exact_value_checker_rejects_unknown_bindings_values_case_aliases_and_oversize() {
+    assert_eq!(
+        validate_adopted_enum_field_value(
+            "UnreviewedOwner",
+            "evidence_class",
+            "TEST_RESULT",
+        ),
+        Err(ControlRecordEnumBindingsError::BindingInvalid)
+    );
+    assert_eq!(
+        validate_adopted_enum_field_value(
+            "BoundedCommandSpec",
+            "unreviewed_field",
+            "TEST_RESULT",
+        ),
+        Err(ControlRecordEnumBindingsError::BindingInvalid)
+    );
+    assert_eq!(
+        validate_adopted_enum_field_value(
+            "OrderedFixtureRef",
+            "qualification_status",
+            "PENDING",
+        ),
+        Err(ControlRecordEnumBindingsError::EnumValueInvalid)
+    );
+    assert_eq!(
+        validate_adopted_enum_field_value(
+            "OrderedFixtureRef",
+            "qualification_status",
+            "qualified",
+        ),
+        Err(ControlRecordEnumBindingsError::EnumValueInvalid)
+    );
+    assert_eq!(
+        validate_adopted_enum_field_value(
+            "EvidenceRequirement",
+            "acceptance_class",
+            "PASS",
+        ),
+        Err(ControlRecordEnumBindingsError::EnumValueInvalid)
+    );
+    assert_eq!(
+        validate_adopted_enum_field_value(
+            "BoundedCommandSpec",
+            "evidence_class",
+            "EXIT_ZERO",
+        ),
+        Err(ControlRecordEnumBindingsError::EnumValueInvalid)
+    );
+    let oversized = "X".repeat(129);
+    assert_eq!(
+        validate_adopted_enum_field_value(
+            "OrderedFixtureRef",
+            "qualification_status",
+            &oversized,
+        ),
+        Err(ControlRecordEnumBindingsError::EnumValueInvalid)
+    );
 }
 
 #[test]
@@ -219,6 +366,29 @@ fn missing_wrong_duplicate_and_cross_bound_rules_are_rejected() {
         validate_control_record_enum_bindings(&unknown_binding.root).unwrap_err(),
         ControlRecordEnumBindingsError::BindingInvalid
     );
+
+    let unreviewed_owner = IsolatedFixture::new();
+    unreviewed_owner.replace_once(
+        "swarm/schemas/types-v1.toml",
+        "name = \"OpaqueId\"",
+        "name = \"UnreviewedOwner\"",
+    );
+    unreviewed_owner.replace_once(
+        "swarm/schemas/types-v1.toml",
+        concat!(
+            "rules = [\"non_empty\", \"case_sensitive\", ",
+            "\"no_path_separator\", \"no_whitespace\"]"
+        ),
+        concat!(
+            "rules = [\"non_empty\", \"case_sensitive\", ",
+            "\"no_path_separator\", \"no_whitespace\", ",
+            "\"qualification_status_is_FixtureQualificationStatus\"]"
+        ),
+    );
+    assert_eq!(
+        validate_control_record_enum_bindings(&unreviewed_owner.root).unwrap_err(),
+        ControlRecordEnumBindingsError::BindingInvalid
+    );
 }
 
 #[test]
@@ -238,15 +408,53 @@ fn duplicate_enum_definition_is_rejected() {
 }
 
 #[test]
-fn registry_pin_and_type_registry_size_are_bounded() {
-    let wrong_registry_pin = IsolatedFixture::new();
-    wrong_registry_pin.replace_once(
+fn current_disposition_count_and_type_registry_size_are_bounded() {
+    let missing_disposition_count = IsolatedFixture::new();
+    missing_disposition_count.replace_once(
+        "swarm/control-plane-schema.toml",
+        "registered_types = 51",
+        "disposition_type_count = 51",
+    );
+    assert_eq!(
+        validate_control_record_enum_bindings(&missing_disposition_count.root).unwrap_err(),
+        ControlRecordEnumBindingsError::ControlRegistryDefinitionInvalid
+    );
+
+    let duplicate_disposition_count = IsolatedFixture::new();
+    duplicate_disposition_count.replace_once(
+        "swarm/control-plane-schema.toml",
+        "registered_types = 51",
+        "registered_types = 51\nregistered_types = 51",
+    );
+    assert_eq!(
+        validate_control_record_enum_bindings(&duplicate_disposition_count.root).unwrap_err(),
+        ControlRecordEnumBindingsError::ControlRegistryDefinitionInvalid
+    );
+
+    let wrong_disposition_count = IsolatedFixture::new();
+    wrong_disposition_count.replace_once(
         "swarm/control-plane-schema.toml",
         "registered_types = 51",
         "registered_types = 50",
     );
     assert_eq!(
-        validate_control_record_enum_bindings(&wrong_registry_pin.root).unwrap_err(),
+        validate_control_record_enum_bindings(&wrong_disposition_count.root).unwrap_err(),
+        ControlRecordEnumBindingsError::ControlRegistryDefinitionInvalid
+    );
+
+    let root_only_count = IsolatedFixture::new();
+    root_only_count.replace_once(
+        "swarm/control-plane-schema.toml",
+        "registered_types = 51",
+        "disposition_type_count = 51",
+    );
+    root_only_count.replace_once(
+        "swarm/control-plane-schema.toml",
+        "schema_version = 4",
+        "registered_types = 51\nschema_version = 4",
+    );
+    assert_eq!(
+        validate_control_record_enum_bindings(&root_only_count.root).unwrap_err(),
         ControlRecordEnumBindingsError::ControlRegistryDefinitionInvalid
     );
 

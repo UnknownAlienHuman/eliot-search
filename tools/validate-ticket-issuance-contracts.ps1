@@ -62,6 +62,26 @@ function Get-Array([string]$Text, [string]$Key) {
     )
 }
 
+# This narrow grammar validates the complete adopted enum allowlist literal; it is not a TOML parser.
+function Get-ExactEnumArray([string]$Text, [string]$Key) {
+    $pattern = '(?ms)^{0}[ \t]*=[ \t]*\[(?<body>.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)
+    $arrayMatches = [regex]::Matches($Text, $pattern)
+    if ($arrayMatches.Count -ne 1) { return @() }
+
+    $body = $arrayMatches[0].Groups['body'].Value
+    $literalPattern = '\A[ \t\r\n]*"[A-Z][A-Z0-9_]*"(?:[ \t\r\n]*,[ \t\r\n]*"[A-Z][A-Z0-9_]*")*[ \t\r\n]*,?[ \t\r\n]*\z'
+    if (-not [regex]::IsMatch($body, $literalPattern)) { return @() }
+
+    @(Get-Array $Text $Key)
+}
+
+function Test-ExactTrueBoolean([string]$Text, [string]$Key) {
+    $pattern = '(?m)^{0}[ \t]*=[ \t]*(true|false)[ \t]*\r?$' -f [regex]::Escape($Key)
+    $booleanMatches = [regex]::Matches($Text, $pattern)
+    if ($booleanMatches.Count -ne 1) { return $false }
+    $booleanMatches[0].Groups[1].Value -ceq 'true'
+}
+
 function Get-AssignmentKeys([string]$Text) {
     @(
         [regex]::Matches($Text, '(?m)^([A-Za-z0-9_]+)\s*=') |
@@ -280,8 +300,8 @@ foreach ($entry in $expectedEnumValues.GetEnumerator()) {
     }
     if ((Get-String $block 'name') -cne $name -or
         (Get-String $block 'representation') -cne 'string' -or
-        -not (Get-Bool $block 'canonical') -or
-        -not (Same-Sequence @(Get-Array $block 'allowed') @($entry.Value))) {
+        -not (Test-ExactTrueBoolean $block 'canonical') -or
+        -not (Same-Sequence @(Get-ExactEnumArray $block 'allowed') @($entry.Value))) {
         Fail "Adopted enum definition mismatch: $name"
     }
 }
@@ -297,13 +317,11 @@ $enumBindings = @(
     [pscustomobject]@{ owner_type = 'EvidenceRequirement'; field_name = 'acceptance_class'; target_type = 'ExpectedBehaviorClass' }
     [pscustomobject]@{ owner_type = 'OrderedEvidenceRef'; field_name = 'acceptance_class'; target_type = 'ExpectedBehaviorClass' }
 )
-$expectedBindingRules = @()
 foreach ($binding in $enumBindings) {
     $owner = [string]$binding.owner_type
     $field = [string]$binding.field_name
     $rule = $field + '_is_' + [string]$binding.target_type
     $legacyRule = $field + '_is_ClosedEnum'
-    $expectedBindingRules += $rule
 
     if (-not $typeMap.ContainsKey($owner)) {
         Fail "Missing adopted binding owner: $owner"
@@ -328,27 +346,25 @@ foreach ($binding in $enumBindings) {
         Fail "Adopted enum rule binding is missing, duplicate or generic: $owner.$field"
     }
 
-    $globalOccurrences = 0
-    foreach ($candidateName in @($typeMap.Keys)) {
-        $candidateRules = @(Get-Array ([string]$typeMap[$candidateName]) 'rules')
-        $candidateMatches = @($candidateRules | Where-Object { $_ -ceq $rule })
-        if ($candidateMatches.Count -gt 0) {
-            if ([string]$candidateName -cne $owner) {
-                Fail "Adopted enum rule is cross-bound: $rule"
-            }
-            $globalOccurrences += $candidateMatches.Count
-        }
-    }
-    if ($globalOccurrences -ne 1) {
-        Fail "Adopted enum rule does not occur exactly once: $owner.$field"
-    }
 }
 
 foreach ($candidateName in @($typeMap.Keys)) {
     foreach ($rule in @(Get-Array ([string]$typeMap[$candidateName]) 'rules')) {
+        $matchingOwners = @(
+            foreach ($binding in $enumBindings) {
+                $boundRule = [string]$binding.field_name + '_is_' + [string]$binding.target_type
+                if ($boundRule -ceq $rule) { [string]$binding.owner_type }
+            }
+        )
+        if ($matchingOwners.Count -gt 0) {
+            if ($matchingOwners -cnotcontains [string]$candidateName) {
+                Fail "Adopted enum rule is cross-bound: $rule"
+            }
+            continue
+        }
         foreach ($enumName in @($expectedEnumValues.Keys)) {
             $suffix = '_is_' + [string]$enumName
-            if ($rule.EndsWith($suffix, [StringComparison]::Ordinal) -and $expectedBindingRules -cnotcontains $rule) {
+            if ($rule.EndsWith($suffix, [StringComparison]::Ordinal)) {
                 Fail "Unknown binding to adopted enum type: $candidateName"
             }
         }
@@ -460,7 +476,16 @@ $expectedInstanceProfileFiles = @($instanceProfilePaths.Values)
 if (-not (Same-Sequence $requiredInstanceProfileFiles $expectedInstanceProfileFiles)) {
     Fail 'required_instance_profile_files is not the exact first-four profile set.'
 }
-if ((Get-Int $control 'registered_types') -ne $typeMap.Count) {
+if ([regex]::Matches($control, '(?m)^\[current_disposition\][ \t]*\r?$').Count -ne 1) {
+    Fail 'Control-plane current_disposition table must occur exactly once.'
+}
+$currentDisposition = Get-Section $control 'current_disposition'
+$currentDispositionKeys = @(Get-AssignmentKeys $currentDisposition)
+$registeredTypeKeys = @($currentDispositionKeys | Where-Object { $_ -ceq 'registered_types' })
+if ($registeredTypeKeys.Count -ne 1) {
+    Fail 'current_disposition must declare registered_types exactly once.'
+}
+if ((Get-Int $currentDisposition 'registered_types' $false) -ne $typeMap.Count) {
     Fail 'Control-plane registered_types count mismatch.'
 }
 
