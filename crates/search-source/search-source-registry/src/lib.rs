@@ -36,11 +36,15 @@ pub mod legacy_root_catalog;
 pub mod membership;
 pub mod portfolio;
 pub mod recovery;
+pub mod revision;
 pub mod root;
 pub mod root_currentness;
 pub mod snapshot;
 pub mod source;
 pub mod view;
+
+#[cfg(test)]
+mod revision_tests;
 
 #[path = "source/legacy_direct.rs"]
 mod source_legacy_direct;
@@ -60,11 +64,18 @@ pub use recovery::{
     NamespaceCutover, RegistryBatch, RegistryChange, RegistryOperation, RegistryReceipt,
     SourceRegistry,
 };
+pub use revision::{
+    SourceRevisionControlPort, SourceRevisionCurrentness, SourceRevisionHead, SourceRevisionIdPort,
+    SourceRevisionMutation, SourceRevisionMutationReadback, SourceRevisionRegistrationReceipt,
+    SourceRevisionRegistrationRequest, SourceRevisionSourceState,
+    decode_source_revision_mutation_readback, decode_source_revision_record,
+    encode_source_revision_mutation_readback, encode_source_revision_record,
+    register_source_revision,
+};
 pub use root_currentness::{
-    CurrentWorkspaceTruth, MAX_SOURCE_ROOT_OBSERVATION_GAPS,
-    MAX_SOURCE_ROOT_WATCHER_HINTS, ObservationGap, ObservationGapReason,
-    ReconciliationCursor, SourceRootCurrentness, SourceRootCurrentnessError,
-    SourceRootState, WatcherHint, WatcherHintKind,
+    CurrentWorkspaceTruth, MAX_SOURCE_ROOT_OBSERVATION_GAPS, MAX_SOURCE_ROOT_WATCHER_HINTS,
+    ObservationGap, ObservationGapReason, ReconciliationCursor, SourceRootCurrentness,
+    SourceRootCurrentnessError, SourceRootState, WatcherHint, WatcherHintKind,
 };
 pub use source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 pub use source_legacy_direct::{

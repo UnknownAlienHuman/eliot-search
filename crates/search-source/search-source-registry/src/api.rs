@@ -30,6 +30,14 @@ pub use crate::recovery::{
     RegistryChange, RegistryMutationRecovery, RegistryOperation, RegistryReceipt, SourceRegistry,
     apply_admission_batch as recovery_apply_batch, recover_registry_mutation as recovery_recover,
 };
+pub use crate::revision::{
+    SourceRevisionControlPort, SourceRevisionCurrentness, SourceRevisionHead, SourceRevisionIdPort,
+    SourceRevisionMutation, SourceRevisionMutationReadback, SourceRevisionRegistrationReceipt,
+    SourceRevisionRegistrationRequest, SourceRevisionSourceState,
+    decode_source_revision_mutation_readback, decode_source_revision_record,
+    encode_source_revision_mutation_readback, encode_source_revision_record,
+    register_source_revision,
+};
 pub use crate::root::{
     RegisterRootRequest, RootPolicyChangeReceipt, RootPolicyObligation, RootRecord,
     RootRegistrationReceipt, RootStatus, RootUnbindReceipt,
