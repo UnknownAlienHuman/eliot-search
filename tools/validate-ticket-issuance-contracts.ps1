@@ -75,6 +75,18 @@ function Get-ExactEnumArray([string]$Text, [string]$Key) {
     @(Get-Array $Text $Key)
 }
 
+# This narrow identifier-array grammar validates the complete literal; it is not a TOML parser.
+function Get-ExactIdentifierArray([string]$Text, [string]$Key) {
+    $pattern = '(?ms)^{0}[ \t]*=[ \t]*\[(?<body>.*?)\][ \t]*\r?$' -f [regex]::Escape($Key)
+    $arrayMatches = [regex]::Matches($Text, $pattern)
+    if ($arrayMatches.Count -ne 1) { return @() }
+
+    $body = $arrayMatches[0].Groups['body'].Value
+    $literalPattern = '\A[ \t\r\n]*"[A-Za-z_][A-Za-z0-9_]*"(?:[ \t\r\n]*,[ \t\r\n]*"[A-Za-z_][A-Za-z0-9_]*")*[ \t\r\n]*,?[ \t\r\n]*\z'
+    if (-not [regex]::IsMatch($body, $literalPattern)) { return @() }
+
+    @(Get-Array $Text $Key)
+}
 function Test-ExactTrueBoolean([string]$Text, [string]$Key) {
     $pattern = '(?m)^{0}[ \t]*=[ \t]*(true|false)[ \t]*\r?$' -f [regex]::Escape($Key)
     $booleanMatches = [regex]::Matches($Text, $pattern)
@@ -277,8 +289,35 @@ for ($i = 1; $i -lt $typeBlocks.Count; $i++) {
     }
 }
 
-if ($typeMap.Count -ne 51) {
-    Fail 'Type registry must contain exactly 51 declared types.'
+if ($typeMap.Count -ne 52) {
+    Fail 'Type registry must contain exactly 52 declared types.'
+}
+
+$qualifiedTypeExpectedRules = @(
+    'exactly_one_ascii_forward_slash',
+    'namespace_uses_lowercase_ascii_hyphen_segments',
+    'local_component_uses_OpaqueId_pattern',
+    'preserve_exact_bytes_and_case_without_normalization'
+)
+if (-not $typeMap.ContainsKey('QualifiedOpaqueId')) {
+    Fail 'Missing adopted QualifiedOpaqueId syntax type.'
+} else {
+    $qualifiedType = [string]$typeMap['QualifiedOpaqueId']
+    $qualifiedTypeKeys = @(Get-AssignmentKeys $qualifiedType)
+    if ($qualifiedTypeKeys.Count -ne 8 -or
+        -not (Same-Set $qualifiedTypeKeys @('name', 'representation', 'pattern', 'max_bytes', 'namespace_max_bytes', 'local_max_bytes', 'canonical', 'rules'))) {
+        Fail 'QualifiedOpaqueId has unknown, missing or duplicate definition keys.'
+    }
+    if ((Get-String $qualifiedType 'name') -cne 'QualifiedOpaqueId' -or
+        (Get-String $qualifiedType 'representation') -cne 'string' -or
+        (Get-String $qualifiedType 'pattern') -cne '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' -or
+        (Get-Int $qualifiedType 'max_bytes') -ne 225 -or
+        (Get-Int $qualifiedType 'namespace_max_bytes') -ne 96 -or
+        (Get-Int $qualifiedType 'local_max_bytes') -ne 128 -or
+        -not (Test-ExactTrueBoolean $qualifiedType 'canonical') -or
+        -not (Same-Sequence @(Get-ExactIdentifierArray $qualifiedType 'rules') $qualifiedTypeExpectedRules)) {
+        Fail 'QualifiedOpaqueId does not match the accepted bounded ASCII grammar.'
+    }
 }
 
 $expectedEnumValues = [ordered]@{
@@ -348,6 +387,73 @@ foreach ($binding in $enumBindings) {
 
 }
 
+$qualifiedFieldBindings = @(
+    [pscustomobject]@{
+        owner_type = 'ImmutableArtifactRef'
+        field_name = 'store_profile_ref'
+        rule = 'store_profile_ref_is_qualified_opaque_id'
+        canonical_fields = @('store_profile_ref', 'artifact_id', 'bytes', 'sha256')
+    }
+    [pscustomobject]@{
+        owner_type = 'ImmutableSignatureRef'
+        field_name = 'approval_profile_ref'
+        rule = 'approval_profile_ref_is_qualified_opaque_id'
+        canonical_fields = @('approval_profile_ref', 'approval_artifact_ref', 'signed_payload_sha256', 'actor_identity')
+    }
+)
+foreach ($binding in $qualifiedFieldBindings) {
+    $owner = [string]$binding.owner_type
+    if (-not $typeMap.ContainsKey($owner)) {
+        Fail "Missing qualified-identifier binding owner: $owner"
+        continue
+    }
+    $block = [string]$typeMap[$owner]
+    $ownerKeys = @(Get-AssignmentKeys $block)
+    if ($ownerKeys.Count -ne 4 -or
+        -not (Same-Set $ownerKeys @('name', 'representation', 'canonical_fields', 'rules')) -or
+        (Get-String $block 'name') -cne $owner -or
+        (Get-String $block 'representation') -cne 'ordered_record') {
+        Fail "Qualified-identifier owner definition mismatch: $owner"
+    }
+
+    if (-not (Same-Sequence @(Get-ExactIdentifierArray $block 'canonical_fields') @($binding.canonical_fields))) {
+        Fail "Qualified-identifier owner field order mismatch: $owner"
+    }
+    $rules = @(Get-ExactIdentifierArray $block 'rules')
+    $ruleMatches = @($rules | Where-Object { $_ -ceq [string]$binding.rule })
+    if ($ruleMatches.Count -ne 1) {
+        Fail "Qualified-identifier field rule is missing, duplicate or malformed: $owner.$($binding.field_name)"
+    }
+}
+
+$qualifiedRuleOwners = @{}
+foreach ($binding in $qualifiedFieldBindings) {
+    $qualifiedRuleOwners[[string]$binding.rule] = [string]$binding.owner_type
+}
+$typeBlocksForQualifiedRules = [regex]::Split($types, '(?m)^\[\[type\]\]\s*$')
+for ($i = 1; $i -lt $typeBlocksForQualifiedRules.Count; $i++) {
+    $candidateBlock = [string]$typeBlocksForQualifiedRules[$i]
+    $candidateName = Get-String $candidateBlock 'name' $false
+    foreach ($qualifiedRule in @($qualifiedRuleOwners.Keys)) {
+        $literal = '"' + [string]$qualifiedRule + '"'
+        $occurrences = [regex]::Matches($candidateBlock, [regex]::Escape($literal)).Count
+        if ($occurrences -gt 0 -and
+            ($candidateName -cne [string]$qualifiedRuleOwners[$qualifiedRule] -or $occurrences -ne 1)) {
+            Fail "Qualified-identifier rule is duplicated or cross-bound: $qualifiedRule"
+        }
+    }
+}
+foreach ($candidateName in @($typeMap.Keys)) {
+    foreach ($rule in @(Get-Array ([string]$typeMap[$candidateName]) 'rules')) {
+        if ($rule.EndsWith('_is_qualified_opaque_id', [StringComparison]::Ordinal)) {
+            $acceptedQualifiedRules = @($qualifiedRuleOwners.Keys)
+            if ($acceptedQualifiedRules -cnotcontains $rule -or
+                $candidateName -cne [string]$qualifiedRuleOwners[$rule]) {
+                Fail "Unknown or cross-bound qualified-identifier rule: $candidateName"
+            }
+        }
+    }
+}
 foreach ($candidateName in @($typeMap.Keys)) {
     foreach ($rule in @(Get-Array ([string]$typeMap[$candidateName]) 'rules')) {
         $matchingOwners = @(

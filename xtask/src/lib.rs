@@ -28,6 +28,7 @@ pub mod milestone_packets;
 pub mod p00_acceptance;
 pub mod package_maps;
 pub mod qualified_profile_id;
+pub mod qualified_profile_id_registry;
 pub mod qdrant_boundary;
 pub mod ticket_drafts;
 pub mod ticket_issuance_builder;

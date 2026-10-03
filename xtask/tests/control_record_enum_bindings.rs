@@ -186,7 +186,7 @@ fn checked_in_enum_definitions_accept_reused_rules_non_authoritatively() {
     assert_eq!(report.authority, "NON_AUTHORITATIVE");
     assert_eq!(report.scope, "CONTROL_RECORD_ENUM_BINDINGS_ONLY");
     assert_eq!(report.max_total_input_bytes, 80 * 1024);
-    assert_eq!(report.declared_type_count, 51);
+    assert_eq!(report.declared_type_count, 52);
     assert_eq!(report.enum_count, 4);
     assert_eq!(report.binding_count, 9);
 }
@@ -412,7 +412,7 @@ fn current_disposition_count_and_type_registry_size_are_bounded() {
     let missing_disposition_count = IsolatedFixture::new();
     missing_disposition_count.replace_once(
         "swarm/control-plane-schema.toml",
-        "registered_types = 51",
+        "registered_types = 52",
         "disposition_type_count = 51",
     );
     assert_eq!(
@@ -423,8 +423,8 @@ fn current_disposition_count_and_type_registry_size_are_bounded() {
     let duplicate_disposition_count = IsolatedFixture::new();
     duplicate_disposition_count.replace_once(
         "swarm/control-plane-schema.toml",
-        "registered_types = 51",
-        "registered_types = 51\nregistered_types = 51",
+        "registered_types = 52",
+        "registered_types = 52\nregistered_types = 52",
     );
     assert_eq!(
         validate_control_record_enum_bindings(&duplicate_disposition_count.root).unwrap_err(),
@@ -434,7 +434,7 @@ fn current_disposition_count_and_type_registry_size_are_bounded() {
     let wrong_disposition_count = IsolatedFixture::new();
     wrong_disposition_count.replace_once(
         "swarm/control-plane-schema.toml",
-        "registered_types = 51",
+        "registered_types = 52",
         "registered_types = 50",
     );
     assert_eq!(
@@ -445,13 +445,13 @@ fn current_disposition_count_and_type_registry_size_are_bounded() {
     let root_only_count = IsolatedFixture::new();
     root_only_count.replace_once(
         "swarm/control-plane-schema.toml",
-        "registered_types = 51",
+        "registered_types = 52",
         "disposition_type_count = 51",
     );
     root_only_count.replace_once(
         "swarm/control-plane-schema.toml",
         "schema_version = 4",
-        "registered_types = 51\nschema_version = 4",
+        "registered_types = 52\nschema_version = 4",
     );
     assert_eq!(
         validate_control_record_enum_bindings(&root_only_count.root).unwrap_err(),

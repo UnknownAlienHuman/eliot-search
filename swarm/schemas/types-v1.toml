@@ -211,6 +211,16 @@ allowed = ["FAILURE", "POLICY", "RECOVERY", "SUCCESS"]
 canonical = true
 
 [[type]]
+name = "QualifiedOpaqueId"
+representation = "string"
+pattern = "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+max_bytes = 225
+namespace_max_bytes = 96
+local_max_bytes = 128
+canonical = true
+rules = ["exactly_one_ascii_forward_slash", "namespace_uses_lowercase_ascii_hyphen_segments", "local_component_uses_OpaqueId_pattern", "preserve_exact_bytes_and_case_without_normalization"]
+
+[[type]]
 name = "ClosedControlRecordKind"
 representation = "string"
 allowed = [
