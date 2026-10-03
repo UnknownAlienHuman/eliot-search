@@ -146,7 +146,7 @@ pub async fn spawn_disposable_server(
         .map_err(|_| LiveError::StorageSetupFailed)?;
     let stderr = std::fs::File::create(dir.join("qdrant-err.log"))
         .map_err(|_| LiveError::StorageSetupFailed)?;
-    let child = Command::new(exe_path)
+    let mut child = Command::new(exe_path)
         .arg("--config-path")
         .arg(dir.join("config.yaml"))
         .current_dir(&dir)
