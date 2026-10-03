@@ -193,26 +193,6 @@ impl LaunchPlan {
     pub const fn observed_tick(&self) -> NonZeroU64 {
         self.observed_tick
     }
-
-    pub(crate) const fn secret_binding(&self) -> SecretLeaseBinding {
-        self.secret_binding
-    }
-
-    pub(crate) const fn expected_secret_purpose(&self) -> Blake3Digest32 {
-        self.expected_secret_purpose
-    }
-
-    pub(crate) fn executable_path(&self) -> &Path {
-        &self.executable_path
-    }
-
-    pub(crate) const fn executable_bytes(&self) -> u64 {
-        self.executable_bytes
-    }
-
-    pub(crate) const fn data_dir(&self) -> &PathBuf {
-        &self.data_dir
-    }
 }
 
 /// Printable argv without secrets: executable plus config path only.

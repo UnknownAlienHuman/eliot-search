@@ -173,7 +173,7 @@ mod windows_impl {
             let current_dir = wide_path(&canonical_data_dir)?;
             let application_name = wide_path(&exe_final_path)?;
             let mut command_line = make_command_line(&exe_final_path, &config_final_path)?;
-            let mut environment = child_environment_block(&temp_dir, secret.secret_bytes())?;
+            let environment = child_environment_block(&temp_dir, secret.secret_bytes())?;
             let retained_config_bytes = config_bytes.to_vec();
             let retained_operation_id = operation_id.clone();
             let retained_config_path = canonical_config_path.clone();

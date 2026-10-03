@@ -98,20 +98,6 @@ pub struct VerifiedExecutable {
 }
 
 impl VerifiedExecutable {
-    pub(crate) fn from_native(
-        canonical_path: PathBuf,
-        sha256: Sha256Digest32,
-        bytes: u64,
-        version: String,
-    ) -> Self {
-        Self {
-            canonical_path,
-            sha256,
-            bytes,
-            version,
-        }
-    }
-
     #[must_use]
     pub const fn canonical_path(&self) -> &PathBuf {
         &self.canonical_path
