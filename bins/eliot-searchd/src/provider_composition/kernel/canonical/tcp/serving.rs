@@ -1,5 +1,6 @@
 //! Bounded single-owner serving loop over the actual canonical TCP transport.
 
+#[path = "serving/work.rs"]
 mod work;
 pub use work::{CanonicalRecipeHost, CanonicalRecipeTask, CanonicalServingAuthority, CanonicalWorkBudget, CanonicalWorkOutput};
 

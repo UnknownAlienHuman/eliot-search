@@ -1,9 +1,14 @@
 //! Sealed-store composition behind the stable module facade.
 
+#[path = "kernel/api.rs"]
 mod api;
+#[path = "kernel/envelope.rs"]
 mod envelope;
+#[path = "kernel/model.rs"]
 mod model;
+#[path = "kernel/platform.rs"]
 mod platform;
+#[path = "kernel/spec.rs"]
 mod spec;
 
 pub use api::{delete_sealed, open_sealed, seal_immutable, verify_sealed};

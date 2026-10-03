@@ -2,12 +2,19 @@
 
 #![allow(dead_code)]
 
+#[path = "kernel/binding.rs"]
 mod binding;
+#[path = "kernel/composer.rs"]
 mod composer;
+#[path = "kernel/receipts.rs"]
 mod receipts;
+#[path = "kernel/revocation.rs"]
 mod revocation;
+#[path = "kernel/rotation.rs"]
 mod rotation;
+#[path = "kernel/spec.rs"]
 mod spec;
+#[path = "kernel/vault.rs"]
 mod vault;
 
 pub use binding::*;

@@ -6,11 +6,17 @@
 use super::exchange::{Reply, forward_reply};
 use super::{Terminal, MAX_PROXY_COMMAND_BYTES};
 
+#[path = "proxy_child/lifecycle.rs"]
 mod lifecycle;
+#[path = "proxy_child/model.rs"]
 mod model;
+#[path = "proxy_child/pipe.rs"]
 mod pipe;
+#[path = "proxy_child/spec.rs"]
 mod spec;
+#[path = "proxy_child/time.rs"]
 mod time;
+#[path = "proxy_child/worker.rs"]
 mod worker;
 
 pub(super) use lifecycle::ChildIo;

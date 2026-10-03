@@ -1,9 +1,14 @@
 //! Service-output composition behind the stable facade.
 
+#[path = "kernel/codec.rs"]
 mod codec;
+#[path = "kernel/indexed.rs"]
 mod indexed;
+#[path = "kernel/page.rs"]
 mod page;
+#[path = "kernel/provider.rs"]
 mod provider;
+#[path = "kernel/streaming.rs"]
 mod streaming;
 
 pub use codec::{MAX_RESPONSE_BYTES, json_string, write_error, write_line};

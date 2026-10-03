@@ -12,7 +12,8 @@ mod kernel;
 pub use kernel::{PreparationBatch, PreparationCursor};
 
 pub(super) use kernel::{
-    PreparationEvidence, inspect, load, persist, persist_source,
+    PreparationEvidence, inspect_preparation as inspect,
+    load_preparation as load, persist_preparation as persist, persist_source,
 };
 
 // Compatibility surface for the read-only migration inventory child. These

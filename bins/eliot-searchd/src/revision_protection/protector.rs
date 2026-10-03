@@ -5,4 +5,4 @@ mod operations;
 #[cfg(windows)]
 mod windows;
 
-pub(super) use model::{PROTECTED_OBJECT_EXTENSION, RevisionProtector};
+pub(crate) use model::{PROTECTED_OBJECT_EXTENSION, RevisionProtector};

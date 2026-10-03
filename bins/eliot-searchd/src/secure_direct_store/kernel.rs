@@ -1,8 +1,12 @@
 //! Revision-protected DIRECT store composition.
 
+#[path = "kernel/catalog.rs"]
 mod catalog;
+#[path = "kernel/lifecycle.rs"]
 mod lifecycle;
+#[path = "kernel/read.rs"]
 mod read;
+#[path = "kernel/search.rs"]
 mod search;
 
 use core::fmt;

@@ -4,9 +4,13 @@
 //! Admission policy/receipts are owned by `search-source-admission`; durable
 //! identity formulas and matching are owned by `search-source-identity`.
 
+#[path = "composition/admission.rs"]
 mod admission;
+#[path = "composition/classifier.rs"]
 mod classifier;
+#[path = "composition/identity.rs"]
 mod identity;
+#[path = "composition/registry.rs"]
 mod registry;
 
 pub(crate) use admission::{
