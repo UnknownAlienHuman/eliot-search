@@ -1,0 +1,296 @@
+proposal_status = "PROPOSED_REVIEW_PENDING"
+claimability = "NONCLAIMABLE"
+type_name = "WriterAcknowledgementV1"
+type_version = 1
+representation = "ordered_record_value"
+embedded_at = "event.writer_acknowledgement"
+acknowledgement_digest_at = "event.writer_acknowledgement_digest"
+digest_field_inside_payload = false
+unknown_fields = "reject"
+free_text_allowed = false
+source_bytes_allowed = false
+secrets_allowed = false
+execution_results_allowed = false
+qualification_or_pass_claims_allowed = false
+canonical_field_order = [
+  "writer_identity",
+  "lease_ref",
+  "assignment_ticket_ref",
+  "context_manifest_ref",
+  "context_artifact_sha256",
+  "base_commit",
+  "worktree_ref",
+  "write_scope_digest",
+  "dependency_handoffs_digest",
+  "required_commands_digest",
+  "required_evidence_digest",
+  "unavailable_checks_digest",
+  "line_limits_digest",
+  "ticket_type_registry_sha256",
+  "statement",
+]
+
+[payload_digest]
+algorithm = "SHA-256"
+domain = "ELIOT-SEARCH/WRITER-ACKNOWLEDGEMENT-PAYLOAD/V1"
+domain_encoding = "ASCII(domain) || 0x00 || canonical_payload_bytes"
+payload_field_order = "canonical_field_order"
+payload_encoding = "UTF-8 TOML assignments in declared order, LF line endings, one final LF, no BOM, comments, trailing whitespace, nulls, or implicit map ordering"
+string_encoding = "TOML basic strings; current referenced type grammars are ASCII and forbid quotes, backslashes, controls, and whitespace where relevant; emit admitted ASCII bytes directly with no escapes"
+record_ref_encoding = "compact inline table with ImmutableRecordRef canonical_fields order and ', ' separators"
+optional_encoding = "use the registered OptionalV1 ordered record with state and value; ABSENT is state='ABSENT', value=''; PRESENT is state='PRESENT', value is canonical wrapped value; never TOML null"
+integer_encoding = "unsigned decimal without sign or leading zeroes"
+boolean_encoding = "lowercase true or false"
+digest_scope = "Only the 15 payload fields are serialized; no payload digest, event signature, generated event ID, timestamp, operation ID, output digest, or containing commit is included."
+
+[type_registry_binding]
+digest_field = "ticket_type_registry_sha256"
+registry_path = "swarm/schemas/types-v1.toml"
+registry_lookup = "Resolve the exact path from swarm/control-plane-schema.toml at the acknowledgement ticket base_commit."
+control_plane_schema_version = 5
+control_plane_schema_version_scope = "Proposed future v5 for this ACK design only; the pinned accepted current registry is v4 and v5 is not current or enabled until separately accepted."
+registry_schema_version = 2
+record_schema_version = 1
+registered_types_after_accepted_enum_adoption_as_of_e58 = 51
+registered_types_after_WriterAcknowledgementV1_is_added_as_of_e58 = 52
+historical_count_scope = "The 52-type value is only the e58 proposal snapshot: 51 after the accepted four-domain/nine-binding enum adoption plus this proposed ACK value type."
+later_QualifiedOpaqueId_grammar_adoption = "Accepted separately after e58; excluded from the pinned e58 source set and historical 52-type count."
+future_cumulative_registered_type_count_if_both_adoptions_are_materialized = 53
+future_count_formula = "51 accepted-enum types + 1 QualifiedOpaqueId + 1 WriterAcknowledgementV1"
+digest_semantics = "SHA-256 of the exact complete committed Git-blob bytes for the accepted types-v1.toml selected at base_commit; the ACK carries the resolved digest value, not a placeholder."
+binding_semantics = "Before constructing the ACK, validate the selected registry contains the four accepted enum domains, all nine accepted ticket-field bindings, every other type adoption accepted at that exact ticket base commit, and WriterAcknowledgementV1 at version 1. The historical e58 count of 52 is not a current-registry requirement; if both the later QualifiedOpaqueId adoption and this ACK type are materialized, the future cumulative count is 53."
+ticket_value_validation = "Validate every value at each adopted ticket field path against that field's exact named-type allowlist before computing the ordered ticket obligation digests."
+accepted_contract_state = "The four enum domains and nine bindings are accepted by docs/handoff/changes/2026-10-03-ticket-enum-adoption.md; the QualifiedOpaqueId grammar was accepted separately after e58. Canonical types-v1.toml implementation remains pending."
+final_registry_digest_status = "UNKNOWN_UNTIL_CANONICAL_REGISTRY_IMPLEMENTATION_IS_ACCEPTED; do not copy the 47-type pre-implementation baseline digest into an ACK or imply the historical 52-type count is current."
+self_reference = "No cycle: the digest names the immutable type-registry file at base_commit; it is not a value stored inside that file or the ACK payload schema."
+
+[[ticket_enum_binding]]
+type_name = "FixtureQualificationStatus"
+representation = "case-sensitive canonical string enum"
+allowed = ["FAILED", "QUALIFIED", "UNAVAILABLE"]
+field_paths = ["OrderedFixtureRef.qualification_status"]
+decision_state = "ACCEPTED_INTEGRATION_CONTRACT"
+
+[[ticket_enum_binding]]
+type_name = "NormalProcessExitClass"
+representation = "case-sensitive canonical string enum"
+allowed = ["EXIT_NONZERO", "EXIT_ZERO"]
+field_paths = ["BoundedCommandSpec.expected_exit_class", "OrderedRawCommandOutcomeRef.exit_class"]
+decision_state = "ACCEPTED_INTEGRATION_CONTRACT"
+
+[[ticket_enum_binding]]
+type_name = "EvidenceArtifactClass"
+representation = "case-sensitive canonical string enum"
+allowed = ["PACKAGE_HANDOFF_CANDIDATE", "PUBLIC_API_SCHEMA_DIGEST", "QUALIFICATION_PROBE_RESULT", "RESIDUAL_RISK_RECORD", "TEST_RESULT"]
+field_paths = ["BoundedCommandSpec.evidence_class", "EvidenceRequirement.evidence_class", "OrderedEvidenceRef.evidence_class", "OrderedAcceptedEvidenceRef.evidence_class"]
+decision_state = "ACCEPTED_INTEGRATION_CONTRACT"
+
+[[ticket_enum_binding]]
+type_name = "ExpectedBehaviorClass"
+representation = "case-sensitive canonical string enum"
+allowed = ["FAILURE", "POLICY", "RECOVERY", "SUCCESS"]
+field_paths = ["EvidenceRequirement.acceptance_class", "OrderedEvidenceRef.acceptance_class"]
+decision_state = "ACCEPTED_INTEGRATION_CONTRACT"
+
+[enum_adoption_boundary]
+accepted_binding_count = 9
+accepted_domain_count = 4
+not_adopted_as_requirements = ["producer-command links", "unavailable-check command links", "exactly-once coverage of every planned command by outcome arrays"]
+no_array_order_association = true
+
+[ticket_enum_semantics]
+representation = "canonical case-sensitive string values only"
+unknown_values = "reject"
+aliases = "reject"
+qualified_token = "QUALIFIED requires immutable evidence for the exact fixture digest and independent review in the owning registry; the token alone establishes neither."
+normal_exit_observation = "Retain the actual EXIT_ZERO or EXIT_NONZERO observation even when it differs from expected_exit_class; unknown normal termination is unavailable, not EXIT_NONZERO."
+expected_behavior = "SUCCESS is an expected behavior class, not an actual PASS verdict."
+evidence_class = "An evidence-class value names an artifact category and does not accept the artifact."
+automatic_pass_or_acceptance = false
+
+[[field]]
+path = "writer_identity"
+kind = "ActorIdentity"
+required = true
+canonical_order = 1
+rules = ["equals_assignment_ticket_actors_writer", "equals_writer_lease_actors_writer", "equals_event_actor_identity"]
+
+[[field]]
+path = "lease_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 2
+rules = ["record_kind_writer_lease_v1", "exact_complete_file_digest_present", "equals_operation_lease_input_and_event_lease_ref"]
+
+[[field]]
+path = "assignment_ticket_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 3
+rules = ["record_kind_assignment_ticket_v1", "exact_complete_file_digest_present", "equals_operation_ticket_input_and_related_records_item_1"]
+
+[[field]]
+path = "context_manifest_ref"
+kind = "ImmutableRecordRef"
+required = true
+canonical_order = 4
+rules = ["record_kind_context_manifest_v1", "exact_complete_file_digest_present", "equals_ticket_context_and_lease_context_refs_and_related_records_item_2"]
+
+[[field]]
+path = "context_artifact_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 5
+rules = ["equals_ticket_context_artifact_sha256", "equals_lease_context_artifact_sha256", "artifact_readback_is_external_authority_evidence"]
+
+[[field]]
+path = "base_commit"
+kind = "GitObjectId"
+required = true
+canonical_order = 6
+rules = ["equals_ticket_repository_fence_base_commit", "equals_lease_scope_base_commit"]
+
+[[field]]
+path = "worktree_ref"
+kind = "OpaqueWorktreeRef"
+required = true
+canonical_order = 7
+rules = ["equals_ticket_repository_fence_branch_or_worktree", "equals_lease_scope_branch_or_worktree", "opaque_locator_only"]
+
+[[field]]
+path = "write_scope_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 8
+rules = ["digest_of_exact_ticket_repository_fence_write_scope", "ticket_and_lease_scope_values_must_match_before_hashing"]
+
+[[field]]
+path = "dependency_handoffs_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 9
+rules = ["digest_of_exact_ticket_dependencies_array", "ticket_and_lease_dependency_arrays_must_be_byte_equal_before_hashing", "preserve_ticket_declared_order"]
+
+[[field]]
+path = "required_commands_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 10
+rules = ["digest_of_exact_ticket_evidence_required_commands_array", "preserve_ticket_declared_order"]
+
+[[field]]
+path = "required_evidence_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 11
+rules = ["digest_of_exact_ticket_evidence_required_evidence_array", "preserve_ticket_declared_order", "source_schema_has_no_finite_cardinality_or_record_byte_bound"]
+
+[[field]]
+path = "unavailable_checks_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 12
+rules = ["digest_of_exact_ticket_evidence_unavailable_checks_array", "preserve_ticket_declared_order"]
+
+[[field]]
+path = "line_limits_digest"
+kind = "Sha256Digest"
+required = true
+canonical_order = 13
+rules = ["digest_only_soft_src_lines_split_review_total_lines_hard_total_lines_in_that_order", "exclude_static_context_artifacts"]
+
+[[field]]
+path = "ticket_type_registry_sha256"
+kind = "Sha256Digest"
+required = true
+canonical_order = 14
+rules = ["equals_exact_committed_file_sha256_of_types_v1_selected_by_control_plane_at_ticket_base_commit", "selected_registry_schema_version_is_2_and_record_schema_version_is_1", "selected_registry_matches_all_type_adoptions_accepted_at_ticket_base_commit", "historical_e58_enum_plus_ACK_target_was_52_only", "if_QualifiedOpaqueId_and_ACK_are_both_materialized_future_cumulative_target_is_53", "validate_the_exact_nine_named_field_bindings", "future_canonical_registry_digest_is_unknown_until_implementation_is_accepted"]
+
+[[field]]
+path = "statement"
+kind = "ClosedEnum"
+required = true
+canonical_order = 15
+allowed = ["ACKNOWLEDGED_PREIMPLEMENTATION"]
+meaning = "The exact assigned writer acknowledges the exact issued pre-implementation obligations; this says nothing about execution, evidence availability, PASS, acceptance, handoff, gate, or authority."
+
+[[projection]]
+digest_field = "write_scope_digest"
+projection_id = "ack_write_scope_projection_v1"
+source_path = "assignment_ticket_v1.repository_fence.write_scope"
+domain = "ELIOT-SEARCH/ACK-WRITE-SCOPE/V1"
+document_field_order = ["projection", "write_scope"]
+projection_value_kind = "RepositoryGlob"
+projection_value_order = "one exact value"
+
+[[projection]]
+digest_field = "dependency_handoffs_digest"
+projection_id = "ack_dependency_handoffs_projection_v1"
+source_path = "assignment_ticket_v1.dependencies[]"
+domain = "ELIOT-SEARCH/ACK-DEPENDENCY-HANDOFFS/V1"
+document_field_order = ["projection", "items"]
+projection_value_kind = "ordered array of OrderedAcceptedPackageHandoff"
+projection_item_field_order = ["package", "handoff_ref", "accepted_commit", "api_schema_digest", "configuration_digest", "evidence_digest", "compatibility"]
+projection_value_order = "ticket order; ticket schema additionally requires sort by package"
+nested_record_order = "ImmutableRecordRef canonical_fields are repository, commit, path, git_blob_id, exact_record_file_sha256, record_kind; OptionalSha256Digest uses OptionalV1 state,value"
+
+[[projection]]
+digest_field = "required_commands_digest"
+projection_id = "ack_required_commands_projection_v1"
+source_path = "assignment_ticket_v1.evidence.required_commands[]"
+domain = "ELIOT-SEARCH/ACK-REQUIRED-COMMANDS/V1"
+document_field_order = ["projection", "items"]
+projection_value_kind = "ordered array of BoundedCommandSpec"
+projection_item_field_order = ["command_id", "command_digest", "environment_profile", "timeout_seconds", "expected_exit_class", "evidence_class"]
+projection_value_order = "exact issued ticket order; no sorting, normalization, or omission"
+
+[[projection]]
+digest_field = "required_evidence_digest"
+projection_id = "ack_required_evidence_projection_v1"
+source_path = "assignment_ticket_v1.evidence.required_evidence[]"
+domain = "ELIOT-SEARCH/ACK-REQUIRED-EVIDENCE/V1"
+document_field_order = ["projection", "items"]
+projection_value_kind = "ordered array of EvidenceRequirement"
+projection_item_field_order = ["requirement_id", "evidence_class", "owner_package", "acceptance_class", "artifact_required"]
+projection_value_order = "exact issued ticket order; no sorting, normalization, or omission"
+boundedness = "blocked: current assignment-ticket-v1 declares no max_required_evidence and no finite ticket-file byte ceiling"
+
+[[projection]]
+digest_field = "unavailable_checks_digest"
+projection_id = "ack_unavailable_checks_projection_v1"
+source_path = "assignment_ticket_v1.evidence.unavailable_checks[]"
+domain = "ELIOT-SEARCH/ACK-UNAVAILABLE-CHECKS/V1"
+document_field_order = ["projection", "items"]
+projection_value_kind = "ordered array of UnavailableCheckRequirement"
+projection_item_field_order = ["check_id", "reason_code", "required_visibility", "fallback_allowed"]
+projection_value_order = "exact issued ticket order; preserve typed unavailable and failure visibility"
+
+[[projection]]
+digest_field = "line_limits_digest"
+projection_id = "ack_line_limits_projection_v1"
+source_paths = ["assignment_ticket_v1.limits.soft_src_lines", "assignment_ticket_v1.limits.split_review_total_lines", "assignment_ticket_v1.limits.hard_total_lines"]
+domain = "ELIOT-SEARCH/ACK-LINE-LIMITS/V1"
+document_field_order = ["projection", "soft_src_lines", "split_review_total_lines", "hard_total_lines"]
+projection_value_kind = "three u32 fields"
+projection_value_order = "soft_src_lines, split_review_total_lines, hard_total_lines; static_context_artifacts is intentionally excluded"
+
+[projection_encoding]
+document_grammar = "Write root assignments in the declared document_field_order; projection field equals the exact projection_id literal declared in the matching projection table; key = value, one ASCII space around '=', one LF after each assignment, final LF required."
+string_values = "Quote with TOML basic-string double quotes; emit admitted ASCII bytes directly; current referenced canonical type grammars contain no quote, backslash, or control values."
+ordered_record_values = "Render as one-line TOML inline tables; use the registered canonical_fields order, ' = ' around equals, ', ' between fields, recursively apply this rule."
+ordered_array_values = "Render as '[' + elements in source order separated by ', ' + ']'; an empty array is exactly '[]'."
+optional_values = "Render exact OptionalV1 ordered records with both state and value fields; do not collapse ABSENT, omit a field, or emit TOML null."
+integer_values = "Base-10 unsigned integers without sign or leading zeroes."
+boolean_values = "Exactly true or false in lowercase."
+digest_formula = "SHA-256(ASCII(domain) || 0x00 || exact_projection_document_utf8_lf_bytes)"
+type_registry_digest_input = "ticket_type_registry_sha256 is the exact complete committed Git-blob SHA-256 of types-v1.toml resolved from the accepted control-plane registry at base_commit; payload digest commits to it directly. Do not use the 47-type baseline file digest as a future value."
+reject = ["BOM", "CR", "missing_final_LF", "comments", "trailing_whitespace", "unknown_fields", "duplicate_or_reordered_record_fields", "array_reordering", "implicit_null", "unicode_or_whitespace_normalization"]
+
+[bounds]
+canonical_acknowledgement_payload_max_bytes = 16384
+complete_lease_event_v2_max_bytes = 32768
+payload_bound_basis = "Three ImmutableRecordRef values with bounded RepositoryName, RepositoryRelativeSafePath, GitObjectId and Sha256Digest fields; ActorIdentity max 160 bytes; OpaqueWorktreeRef max 265 bytes; eight 64-character digest strings; one singleton statement. The canonical payload remains below 5 KiB under those scalar maxima."
+event_bound_basis = "Fixed event fields, one lease ref, at most two ACK related refs, at most one previous ref on a non-first event, and the ACK payload cap; bounded path/id/signature-ref components keep the event below 32 KiB."
+ticket_plan_array_caps = ["max_dependency_handoffs=32", "max_required_commands=64", "max_unavailable_checks=64"]
+unbounded_existing_input = "required_evidence[] has no declared count or ticket-record byte bound; its digest can be streamed, but a bounded issuance operation remains blocked until that existing contract is closed."
+no_new_global_cap = true
