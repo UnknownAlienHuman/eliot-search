@@ -81,7 +81,7 @@ pub struct MutationReceipt {
     pub replayed: bool,
 }
 
-pub(super) fn validate_point(
+pub fn validate_point(
     point: &PointRecord,
     schema: &CollectionSchema,
     limits: BridgeLimits,
@@ -106,7 +106,7 @@ pub(super) fn validate_point(
     Ok(())
 }
 
-pub(super) fn validate_exact_ids(
+pub fn validate_exact_ids(
     mut ids: Vec<QdrantPointId>,
     limit: usize,
 ) -> Result<Vec<QdrantPointId>, BridgeError> {

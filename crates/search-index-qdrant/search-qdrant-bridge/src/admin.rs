@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub(super) struct CollectionState {
+pub struct CollectionState {
     pub(crate) schema: CollectionSchema,
     pub(crate) points: BTreeMap<QdrantPointId, PointRecord>,
 }

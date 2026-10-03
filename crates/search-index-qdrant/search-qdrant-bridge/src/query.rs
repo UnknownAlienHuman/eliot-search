@@ -48,14 +48,14 @@ pub struct CandidateNomination {
     pub identity_digest: Blake3Digest32,
 }
 
-pub(super) fn validate_filter(filter: &EligibilityFilter) -> Result<(), BridgeError> {
+pub fn validate_filter(filter: &EligibilityFilter) -> Result<(), BridgeError> {
     if filter.allowed_source_memberships.is_empty() {
         return Err(BridgeError::InvalidFilter);
     }
     Ok(())
 }
 
-pub(super) fn ensure_filter_indexes(
+pub fn ensure_filter_indexes(
     schema: &CollectionSchema,
 ) -> Result<(), BridgeError> {
     for field in EligibilityFilter::INDEXED_FIELDS {
@@ -66,7 +66,7 @@ pub(super) fn ensure_filter_indexes(
     Ok(())
 }
 
-pub(super) fn validate_query_vector(
+pub fn validate_query_vector(
     query: &[(u32, f32)],
     dimensions: u32,
 ) -> Result<(), BridgeError> {
