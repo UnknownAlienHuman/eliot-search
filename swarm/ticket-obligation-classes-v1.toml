@@ -1,0 +1,219 @@
+proposal_id = "ticket-obligation-classes-v1"
+proposal_version = 1
+proposal_state = "PROPOSED_REVIEW_PENDING"
+reviewed_base_commit = "24ab0876ecff1bbf990a5ed140ee72403e865187"
+purpose = "Finite candidate values for the five unspecified ticket obligation ClosedEnum fields, with reused output compatibility recorded."
+authority = "proposal_only_not_normative_not_accepted"
+
+not_authorized = [
+  "ticket_issuance",
+  "writer_lease_creation",
+  "writer_acknowledgement",
+  "signature_or_signature_store_trust",
+  "package_qualification_or_acceptance",
+  "gate_or_wave_acceptance",
+  "launch_state_advance",
+]
+
+[[source]]
+path = "swarm/schemas/types-v1.toml"
+sha256 = "BF27C94C86224E64AA59809FCB0117A3913F66B86A5582B7BFADBB704C7828C7"
+anchors = ["117-151 ClosedReasonCode", "176-181 ClosedEnum", "298-318 fixture and command outcome records", "378-412 command/evidence/unavailable requirement records", "426-480 evidence output records"]
+use = "Defines the exact field paths, ordered shapes, generic enum rule, typed reason-code set, and reused output fields."
+
+[[source]]
+path = "swarm/schemas/assignment-ticket-v1.toml"
+sha256 = "5DACF76CAA74DFF1766393267AC9F44E5455439F8E760999B9184B9BE9DCE339"
+anchors = ["163-189 fixtures, required commands, required evidence, unavailable checks"]
+use = "Defines ticket ordering, exact type use, owner/acceptance explicitness, and unavailable visibility."
+
+[[source]]
+path = "swarm/ticket-drafts/p00/search-contracts.toml"
+sha256 = "4B345160CA1471FB8C5E00C95B42994D67DBE9D434C855EE0318555C959166EE"
+anchors = ["1-6 nonclaimable draft state", "56-80 required outputs and fifteen named evidence obligations"]
+use = "Provides concrete first-assignment output and test-result categories; remains a nonclaimable draft."
+
+[[source]]
+path = "qualification/ticket-issuance/baseline.toml"
+sha256 = "4660AEDD1808DBE1A8E2099A931981FF5D9451C96D805F082B70EFDD7C0D3240"
+anchors = ["127-133 result values, initial unavailable state, raw-output/reviewer requirements, mandatory probe rule"]
+use = "Separates result state from expected behavior class and limits PASS rules to that qualification profile."
+
+[[source]]
+path = "qualification/ticket-issuance/probes.toml"
+sha256 = "76BEDD3653905916BE0B87968CA25A19B5E22FFE8F413D84EBAB9FD75C45B3C1"
+anchors = ["10-12 result/expected-class values", "652-655 explicit UNAVAILABLE evidence requirement", "912-918 qualification invariants"]
+use = "Grounds the proposed expected-behavior classes and the evidence/unavailable boundary."
+
+[[source]]
+path = "qualification/ticket-issuance/TICKET_ISSUANCE_QUALIFICATION.md"
+sha256 = "4176B919D1AA56047E6C3412EF74202708430B00F2698BA8984CF463726F4C10"
+anchors = ["124-151 evidence model and qualification-specific acceptance rule", "154-162 current unexecuted disposition"]
+use = "Confirms that UNAVAILABLE is the pre-execution state and qualification acceptance does not accept a package or gate."
+
+[[source]]
+path = "swarm/p00-foundation-acceptance.toml"
+sha256 = "2D2C06DC8C747B646C053F5127BEE4EDD9090AE4402C38321610428E47FF3F8C"
+anchors = ["P00 evidence records: required_state PASS, current_state UNAVAILABLE, raw output and independent review required"]
+use = "Grounds the P00 gate-specific PASS obligation without generalizing it to every ticket requirement."
+
+[[source]]
+path = "docs/handoff/P00_FOUNDATION_ACCEPTANCE_MATRIX.md"
+sha256 = "EDBF0CA4FD2BDA1C0BA2E409D92BF4ED29D5F1AAFC06941A61EC3E58EC37AA0C"
+anchors = ["130-138 submission evidence and visible unavailability", "159-194 P00-D and G0-specific acceptance"]
+use = "Separates package submission evidence from the ten G0 rows that explicitly require PASS."
+
+[[source]]
+path = "docs/handoff/TICKET_ISSUANCE_OPERATIONS.md"
+sha256 = "AE93D8165A56FA1773077E9471CF7D7446FB8A9D099FF0D5C5281760F9556B46"
+anchors = ["320-353 cancellation, deadlines and unknown outcomes", "355-392 closed failure registry"]
+use = "Grounds typed failure and unknown-outcome preservation; does not define a generic command-execution reason."
+
+[canonicalization]
+representation = "literal UTF-8 uppercase ASCII enum tokens"
+case_sensitive = true
+aliases_or_normalization_allowed = false
+unknown_values = "reject_as_schema_error"
+allowed_values_order = "lexicographic"
+ordered_record_field_order = "unchanged_from_types_v1"
+status_of_every_value = "PROPOSED_REVIEW_PENDING"
+
+[separation]
+result_values = ["FAIL", "PASS", "UNAVAILABLE"]
+result_values_source = "qualification/ticket-issuance/probes.toml"
+expected_behavior_values = ["FAILURE", "POLICY", "RECOVERY", "SUCCESS"]
+expected_behavior_source = "qualification/ticket-issuance/probes.toml"
+rule = "A class value is not a probe verdict, process exit, qualification receipt, package acceptance, or authority state."
+unavailable_rule = "UNAVAILABLE remains explicit and never becomes PASS, a default, or silent omission."
+
+[[closed_enum]]
+enum_id = "fixture_qualification_status_candidate"
+field_paths = ["OrderedFixtureRef.qualification_status"]
+proposal_state = "PROPOSED_REVIEW_PENDING"
+allowed = ["FAILED", "QUALIFIED", "UNAVAILABLE"]
+meaning = "State of qualification evidence for this exact fixture_id and fixture_digest, not package or ticket qualification. A not-yet-run check remains UNAVAILABLE."
+
+  [[closed_enum.value]]
+  value = "FAILED"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The exact fixture digest was evaluated and failed its declared qualification criteria; preserve the associated typed failure evidence."
+
+  [[closed_enum.value]]
+  value = "QUALIFIED"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The exact fixture digest has an immutable qualification result and independent accepted reviewer evidence in its owning registry. The token alone grants no package or ticket authority."
+
+  [[closed_enum.value]]
+  value = "UNAVAILABLE"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "Qualification was not run or could not be evaluated for this exact fixture digest; it does not satisfy a qualification prerequisite."
+
+[[closed_enum]]
+enum_id = "process_exit_class_candidate"
+field_paths = ["BoundedCommandSpec.expected_exit_class", "OrderedRawCommandOutcomeRef.exit_class"]
+proposal_state = "PROPOSED_REVIEW_PENDING"
+allowed = ["EXIT_NONZERO", "EXIT_ZERO"]
+meaning = "Normal process termination class only. It is independent of the command's test verdict and evidence acceptance class."
+
+  [[closed_enum.value]]
+  value = "EXIT_NONZERO"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The process started and terminated with a nonzero exit status. This does not mean the evidence assertion failed or passed."
+
+  [[closed_enum.value]]
+  value = "EXIT_ZERO"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The process started and terminated with exit status zero. This does not mean the evidence assertion passed or the package was accepted."
+
+[[closed_enum]]
+enum_id = "evidence_artifact_class_candidate"
+field_paths = [
+  "BoundedCommandSpec.evidence_class",
+  "EvidenceRequirement.evidence_class",
+  "OrderedEvidenceRef.evidence_class",
+  "OrderedAcceptedEvidenceRef.evidence_class",
+]
+proposal_state = "PROPOSED_REVIEW_PENDING"
+allowed = ["PACKAGE_HANDOFF_CANDIDATE", "PUBLIC_API_SCHEMA_DIGEST", "QUALIFICATION_PROBE_RESULT", "RESIDUAL_RISK_RECORD", "TEST_RESULT"]
+meaning = "Kind of required/produced evidence artifact; raw process output remains separately identified by OrderedRawCommandOutcomeRef."
+
+  [[closed_enum.value]]
+  value = "PACKAGE_HANDOFF_CANDIDATE"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "A package handoff candidate artifact; candidate status is not accepted handoff status."
+
+  [[closed_enum.value]]
+  value = "PUBLIC_API_SCHEMA_DIGEST"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The public API/schema digest deliverable named by the P00 draft; it is not a compatibility or handoff acceptance by itself."
+
+  [[closed_enum.value]]
+  value = "QUALIFICATION_PROBE_RESULT"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "An immutable probe result artifact with its raw output and reviewer receipt bound where the applicable qualification contract requires them."
+
+  [[closed_enum.value]]
+  value = "RESIDUAL_RISK_RECORD"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The required residual-risks-and-contract-changes record; recording a risk does not waive it."
+
+  [[closed_enum.value]]
+  value = "TEST_RESULT"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "A package-local test or contract/property/negative-test result, including the fifteen named P00 evidence obligations."
+
+[[closed_enum]]
+enum_id = "expected_behavior_acceptance_class_candidate"
+field_paths = ["EvidenceRequirement.acceptance_class", "OrderedEvidenceRef.acceptance_class"]
+proposal_state = "PROPOSED_REVIEW_PENDING"
+allowed = ["FAILURE", "POLICY", "RECOVERY", "SUCCESS"]
+meaning = "Expected behavior family for a requirement, reusing the qualification packet's expected_classes vocabulary. It is not the result state."
+
+  [[closed_enum.value]]
+  value = "FAILURE"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The behavior under test is an expected typed rejection. A matching ClosedReasonCode must be bound by the exact fixture/probe contract; a conformance probe can still have result PASS."
+
+  [[closed_enum.value]]
+  value = "POLICY"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The behavior under test is a policy invariant, including prohibited authority or control-record mutation where specified."
+
+  [[closed_enum.value]]
+  value = "RECOVERY"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The behavior under test is a named recovery disposition; the exact disposition must be bound by the fixture/probe contract."
+
+  [[closed_enum.value]]
+  value = "SUCCESS"
+  proposal_state = "PROPOSED_REVIEW_PENDING"
+  meaning = "The behavior under test is the specified successful operation outcome."
+
+[compatibility]
+expected_exit_class_equals_observed_exit_class = "For a completed command, OrderedRawCommandOutcomeRef.exit_class must equal its BoundedCommandSpec.expected_exit_class."
+unlinked_command_and_requirement = "The ticket schema has no producer command_id on EvidenceRequirement. Do not infer a command-to-requirement association from array order; exact evidence-class equality is enforceable only after an explicit immutable association is supplied."
+evidence_requirement_to_evidence_ref = "For the same requirement_id, OrderedEvidenceRef.evidence_class and acceptance_class must copy the exact EvidenceRequirement values."
+accepted_evidence_class = "OrderedAcceptedEvidenceRef.evidence_class must equal the referenced EvidenceRequirement.evidence_class; requirement_id must resolve through the immutable ticket."
+failure_semantics = "EXIT_NONZERO is not a typed failure reason. FAILURE acceptance_class requires the exact ClosedReasonCode from the bound fixture/probe; unknown or missing reason evidence remains a failure, not an inferred match."
+unavailable_semantics = "A command that never starts, times out, is cancelled, or has unknown completion is not EXIT_NONZERO. Preserve it as an explicit unavailable check with a semantically applicable ClosedReasonCode; if none exists, stop for a separate reason-registry contract change."
+qualification_semantics = "QUALIFIED is copied only from the owning fixture registry after its evidence requirements are met; the proposed status enum cannot execute probes or promote status."
+pass_scope = "The ticket-issuance qualification packet and P00 G0 each define their own PASS requirements. This proposal does not make every evidence class or every ticket requirement PASS-required."
+
+[follow_up_contract_gaps]
+status = "PROPOSED_REVIEW_PENDING"
+additional_closed_enum_fields = ["OrderedAcceptedEvidenceRef.availability", "OrderedUnavailableCheck.status"]
+additional_field_rules = [
+  "Bind each EvidenceRequirement to its producing command or immutable fixture/probe; current schema has no producer_command_id or equivalent link.",
+  "Define how artifact_required=false is represented by OrderedEvidenceRef, whose current artifact_ref and artifact_sha256 fields are required.",
+  "Define exact failure-code/recovery-disposition linkage for acceptance_class=FAILURE or RECOVERY.",
+  "Add a typed command execution failure/unavailability reason only if existing ClosedReasonCode values cannot accurately represent start failure, timeout, cancellation, or unknown completion.",
+  "Confirm accepted evidence can resolve acceptance_class through requirement_id and the bound immutable ticket; OrderedAcceptedEvidenceRef has no acceptance_class field."
+]
+
+[review_boundary]
+requires_independent_integration_review = true
+requires_types_and_assignment_schema_change_before_enforcement = true
+draft_or_probe_presence_is_execution = false
+qualification_result_is_package_acceptance = false
+package_handoff_is_gate_or_wave_acceptance = false
+automatic_control_record_creation = false
