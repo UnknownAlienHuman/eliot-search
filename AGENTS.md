@@ -1,277 +1,138 @@
-# AGENTS.md — ELIOT Search swarm contract
+# ELIOT Search repository instructions
 
-This repository is implementation-scaffolded, not implemented. Architecture Part I remains normative;
-ordinary agents use bounded packets and accepted handoffs instead of loading the 145 KB master.
+## Product identity
 
-## Read set
+ELIOT Search is a **standalone Rust search product** and an optional typed provider for the wider ELIOT
+ecosystem. The implementation target is Architecture 8.4: local source preparation and retrieval around
+Qdrant, with redb for technical control state and scoped immutable source/preparation storage.
 
-A writer reads only:
+The supported product must start and operate without ELIOT Memory OS, a Governor, a swarm controller,
+agent roles, assignment tickets or writer leases.
 
-1. this file and nearest family/package `AGENTS.md`;
-2. `docs/handoff/AUTHORITY_MAP.md`;
-3. its exact package entry in `swarm/crates.toml`;
-4. its exact foundation/function entry in `swarm/function-packets.toml`;
-5. its exact package entry in the applicable `swarm/modules/*.toml` packet;
-6. its exact current stage entry in `swarm/stages.toml`;
-7. when the package is reused after its earliest wave, its one exact override in
-   `swarm/stage-readsets.toml`;
-8. `swarm/ASSIGNMENT_PROTOCOL.md` and one package assignment;
-9. the exact primary contract or package-local `FUNCTIONS.md` declared by the function registry;
-10. the current stage `shared_read_set` and only the stage-override supplements/additional files;
-11. accepted public dependency and prior-stage handoff/API/configuration/evidence digests named by the
-    immutable ticket;
-12. named package-local/shared fixture references owned by the applicable qualification registry.
+### Owned here
 
-At issuance, these sources and exact registry fragments are materialized at one exact base commit into
-the immutable writer-context artifact bound by the ticket and lease. The writer does not browse the
-repository to assemble additional context.
+- source admission, identity, revision retention and preparation;
+- lexical/projection construction;
+- Qdrant lifecycle, schema, publication and retrieval;
+- access-scoped query planning and candidate validation;
+- result projection, handles, currentness, rebuild, retention and recovery;
+- standalone daemon/CLI and optional typed provider adapters.
 
-W0 foundation writers consume their exact P00 contract-pack entry rather than a package-local
-`FUNCTIONS.md`. For a reused package, accepted public handoffs **replace previous-stage documents**;
-prior stage packets and dependency implementation internals are not accumulated into the new context.
+### Not owned here
 
-The architecture master is exception-only: a demonstrated contradiction or missing load-bearing field
-stops work and uses `CONTRACT_CHANGE_TEMPLATE.md`. The integration-owned coverage crosswalk may be used
-to diagnose the missing owner, but it cannot override Part I or authorize implementation.
+- Tasks, WorkScopes, Attempts or canonical task history;
+- General Manager/Governor state, agent scheduling or native harness lifecycle;
+- mailboxes, steer/goal routing, model loops or subagent observation;
+- generic assignment-ticket issuance, writer leases, approval/signature profiles;
+- review acceptance, finish authority or cross-project orchestration.
 
-## Exact dependencies, functions, modules, stages and launch
+Those responsibilities belong to `eliot-swarm-controller` and, after integration, `eliot-memory-os`.
+Search may be called by those systems; it must not embed or reimplement them.
 
-- `swarm/crates.toml` is the exact package/path/dependency/earliest-wave/assignment/configuration/
-  qualification registry.
-- `swarm/function-packets.toml` is the exact primary function/contract packet and package write-scope
-  registry for all 45 packages.
-- `swarm/module-packets.toml` plus `swarm/modules/*.toml` is the exact one-per-package logical module and
-  public-entry registry.
-- `swarm/coverage/manifest.toml` plus `swarm/coverage/*.toml` is the integration-owned exhaustive
-  section/capability/invariant/port/type/schema/recipe/reason/task/delivery ownership crosswalk.
-- `swarm/stages.toml` is the exact W0–W10 package set, shared stage context and gate/receipt ordering
-  registry.
-- `swarm/stage-readsets.toml` is the exact replacement-context registry for every package reused after
-  its earliest wave.
-- `swarm/orchestration.toml` is the exact issued-ticket/context/lease/submission/review/handoff state
-  machine.
-- Dependency prose in package instructions is explanatory and cannot override any machine registry.
-- Cargo manifest and `swarm/crates.toml` dependency sets must match before merge.
-- `swarm/launch-state.toml` alone decides whether an **issued ticket** may be considered for readiness.
-- Presence in Cargo, a future stage, README, function/module/coverage packet, qualification packet,
-  assignment or ticket/context draft is not authorization.
-- A package agent never selects an external artifact version or marks a qualification probe `PASS`
-  without an integration-owned ticket and immutable executed evidence.
+## Authority order
 
-## Draft, ticket and lease rule
+Resolve conflicts in this order:
 
-Files under:
+1. `docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`;
+2. accepted product ADRs, especially ADR 0005;
+3. accepted public contracts, provider schemas and product qualification contracts;
+4. nearest package `AGENTS.md`, `FUNCTIONS.md` and package-owned documentation;
+5. the current maintainer request, issue/PR acceptance criteria and exact dependency contracts;
+6. Cargo manifests and compiled source reality;
+7. planning/history material under `swarm/**`, `docs/handoff/**` and `docs/execution/**`.
 
-```text
-swarm/ticket-drafts/**
-swarm/context-drafts/**
-```
+`swarm/launch-state.toml`, ticket drafts, context manifests, leases, submissions, reviews and handoffs are
+**advisory or historical repository metadata only**. They are not product inputs. Their presence, absence
+or status cannot authorize, block or widen implementation. Any lower-precedence text saying otherwise is
+superseded by ADR 0005.
 
-are non-claimable preparation only. An agent must not interpret `launch_class = AUTHORIZED` inside a
-draft as an issued assignment. A valid implementation start requires all of:
+A maintainer request, issue or PR plus one non-overlapping branch/worktree is sufficient authorization to
+work. Do not build a ticket issuer, lease service, PKI, role database or other controller inside Search.
 
-```text
-new issued immutable ticket
-+ exact materialized context manifest/artifact
-+ active writer lease
-+ writer acknowledgement
-+ launch/prerequisite checks
-```
+## Required working method
 
-Drafts retain unresolved writer/reviewer/base/context/ticket identities and never create a lease. The
-writer cannot edit ticket/context/lease/submission/review/handoff/launch records, add files to an
-acknowledged context, substitute a moving branch or self-review.
+1. Read the architecture section, root instructions, nearest package instructions and named issue/PR
+   before editing.
+2. Use one branch/worktree per manager and one active writer per overlapping package scope.
+3. Fix the product code first. Do not replace missing implementation with planning documents, registries,
+   schemas or evidence prose.
+4. Keep changes within the actual owning package. Cross-package composition belongs in the daemon or a
+   separately reviewed integration branch.
+5. Run the smallest meaningful compilation gate after each implementation slice:
 
-`search-domain` and `search-ports` remain conditional even though drafts exist; their tickets cannot be
-issued before the accepted `search-contracts` package/API handoff is bound.
+   ```text
+   cargo +1.98.0 check --locked -p <package> --all-features
+   cargo +1.98.0 clippy --locked -p <package> --all-features -- -D warnings
+   ```
 
-## Stage-context rule
+   Use the applicable target flags when the package is library-only. Full product/process tests are
+   deferred until the implementation is complete unless a change requires an immediate focused proof.
+6. Never claim execution that was not performed at the exact revision.
+7. Keep GitHub Actions manual-only. Do not add push/pull-request triggers merely to obtain a build.
+8. Do not commit generated local paths, credentials, API keys, source contents or unredacted logs.
 
-The integration owner builds one static package context from:
+## Product invariants
 
-```text
-root/package instructions
-+ package, function, module and stage registry entries
-+ assignment and primary function/contract
-+ current stage shared_read_set
-+ one later-stage override when applicable
-```
+- Qdrant is the only indexed/search database. No SQLite/FTS, Tantivy, Lucene, local postings database or
+  alternate production search engine.
+- redb stores bounded technical control state, never a second searchable corpus.
+- Qdrant payload is projection metadata, never source evidence. Candidates require authoritative exact
+  source/revision readback and validation.
+- Retrieval, filtered IDF population and exact denominator use one eligibility contract. Denied data must
+  not influence permitted ranking/statistics.
+- Paths are locators, not identities. File/native identity, source identity, revision identity,
+  representation identity and projection identity remain distinct.
+- Immutable revisions and manifests are never rewritten in place. Publication is generation/epoch safe.
+- Unknown external mutation outcome is not success and is not blindly replayed.
+- Restrictive access/purge/shadow changes fail closed across retrieval, handles and continuations.
+- The standalone daemon/CLI and ELIOT adapter share one underlying state and query authority. No adapter
+  may create a second implementation path.
+- Optional model/document workers remain disabled until independently qualified and are not required for
+  the standalone baseline.
+- Vendor Qdrant types stay inside `search-qdrant-bridge`; public package boundaries use Eliot-owned types.
+- Search never executes indexed source code or delegates query interpretation to an LLM.
 
-An ordinary package context is capped at sixteen declared source files before canonical materialization.
-The sole P00 exception is `search-contracts`: its exact manifest-closed P00 contract pack may contain up
-to twenty-four declared source files because one writer owns the shared schema freeze. That exception:
+## Standalone and ELIOT integration
 
-- must equal the exact P00 manifest plus the fixed integration instructions/registry fragments;
-- must include the exact package module entry;
-- must materialize to exactly one writer-visible artifact;
-- may not add ad-hoc architecture, dependency-source or unrelated stage files;
-- does not apply to `search-domain`, `search-ports` or any W1+ package.
+Standalone operation is the baseline, not a fallback. The daemon owns its installation/root/process and
+serves the public local client contract without any external controller.
 
-A ticket may add only bounded exact accepted handoff receipts and named fixture references. It may not add
-the architecture master, previous stage packets or another package's source tree.
+ELIOT integration is a leaf translation layer over accepted provider protocols. Search returns bounded
+candidate/result records, coverage, freshness, assurance, reason codes and opaque handles. It does not
+receive canonical ELIOT credentials, task authority, Context Compiler admission or finish authority.
 
-A package first used at its earliest wave needs no override. A package reused later must have exactly one
-`stage.package` override with:
+No Search configuration option may make ELIOT Memory OS or `eliot-swarm-controller` mandatory for normal
+startup, ingestion, indexing, search, rebuild or recovery.
 
-```text
-replace_previous_stage_context = true
-accepted_prior_stage_handoff_only = true
-dependency_implementation_reads_allowed = false
-shared_registry_edits_allowed = false
-```
+## Repository metadata boundary
 
-Missing or contradictory context stops the ticket. The writer may not widen its own read set.
+Static package maps and ownership crosswalks may help humans avoid overlapping edits. Keep them small and
+non-executable. Do not extend the active tree with generic:
 
-## Write ownership
+- assignment/lease event state machines;
+- approval/signature/profile registries;
+- task/attempt/mailbox/scheduler records;
+- orchestrator credentials or actor roles;
+- controller qualification suites;
+- large captures proving only the repository-control tooling itself.
 
-- one writer, one Cargo package, one isolated worktree;
-- writer edits only the exact `write_scope` from `swarm/function-packets.toml`;
-- stage overrides and module packets never widen write scope;
-- root Cargo/lockfile/toolchain/CI, architecture, contract pack, generated schemas, `swarm/`,
-  `config/sections.toml`, qualification registries, shared fixtures and cross-package changes belong to
-  the integration owner;
-- a package that owns a configuration section implements the section validator/digest/change behavior
-  inside its package but does not edit the central registry or another owner's settings;
-- package agents do not repair/redefine dependencies, shared types, ports, module ownership or an
-  accepted prior-stage API; they request a contract/port/configuration/coverage change.
+Reusable controller work belongs in `UnknownAlienHuman/eliot-swarm-controller`. Canonical ELIOT task and
+memory authority belongs in `UnknownAlienHuman/eliot-memory-os`.
 
-## Global invariants
+## Evidence and acceptance
 
-1. Qdrant is the only search/index database; redb is never a searchable corpus.
-2. Original bytes or an immutable admitted revision are source truth.
-3. Retrieval proposes candidates; clients own interpretation and admission.
-4. One point has one `ProjectionMembership`; membership arrays are forbidden.
-5. Access/currentness apply before retrieval, IDF, facets, counts and traces.
-6. Indexed top-k never narrows an exact-proof denominator.
-7. Restrictive access and purge fences override snapshots immediately.
-8. Uncommitted epochs are never current and are never reused.
-9. Publication is serialized and acknowledged/read back before control commit.
-10. Unsaved bytes remain memory-only until explicit admission.
-11. A workspace is not current across an observation gap.
-12. One source namespace has one active mutable identity/revision owner.
-13. Possessing a handle never grants access; expansion reauthorizes live state.
-14. Ordinary retired-point reclaim and security/legal purge have separate owners and receipts.
-15. Partial/degraded outcomes remain typed data and are never relabeled success.
-16. A configuration snapshot becomes effective only after every required live/barrier/restart/rebuild/
-    generation/gate receipt succeeds; mixed partial configuration is never published.
-17. Indexed mode requires one exact qualified server/client/artifact/profile set; automatic upgrade or
-    silent provider switching is forbidden.
-18. Mutation timeout/cancellation after a possible external write is `OUTCOME_UNKNOWN` until exact
-    readback/recovery resolves it.
-19. Paths are locators, not source identity; final opened handle/object must remain inside an admitted
-    root before bytes can be accepted.
-20. Source admission, identity, registry, reads, revision storage, materialization and unitization retain
-    separate owners and immutable handoffs.
-21. A later-stage package consumes the accepted prior public API/configuration/evidence receipt, never a
-    replayed earlier implementation packet or dependency internals.
-22. W7 lifecycle completion is a separate prerequisite receipt; it is not silently equated with a
-    central gate.
-23. A package draft, structural validator or review candidate is not an issued assignment, accepted
-    handoff, gate or wave receipt.
-24. Every normative architecture section, capability, invariant, shared port, named type/schema, recipe,
-    reason namespace, package task and delivery slice has explicit package/module ownership; an orphan
-    obligation blocks merge and ticket issuance.
-25. Every shared port has one exact implementation owner; floating “selected implementation” or generic
-    “runtime adapter” ownership is forbidden.
+Compilation is necessary but not product qualification. Product claims require the exact named evidence:
 
-## Layer ownership
+- real Qdrant artifact/client/schema/query/restart probes for indexed capability;
+- native platform evidence for Windows identity, containment, secrets and named pipes;
+- real source → durable state → Qdrant → validated result for the product spine;
+- restart/recovery, deny, unknown-outcome and rebuild cases;
+- installed baseline evidence before release.
 
-```text
-search-contracts  shared records, IDs, schemas and reason registries
-  ├─ search-domain  pure meaning
-  ├─ search-ports   shared vendor-neutral operations
-  └─ search-config  pure configuration mechanics
-       ↑ capability-owned settings and behavior
-       ↑ concrete adapters
-       ↑ eliot-searchd composition
-```
+Planning records, ticket status, source presence and mock/oracle success cannot substitute for those gates.
 
-Vendor/native types, credentials, raw collection names, point IDs and generic vendor strings do not
-cross public boundaries. Concrete adapters are constructed only by daemon composition.
+## GitHub connector use
 
-## Function contract rule
-
-Every non-foundation package has exactly one primary package-local `FUNCTIONS.md` in
-`swarm/function-packets.toml`. The three P00 foundation packages have exact primary contract-pack files.
-Each operation defines:
-
-- validated inputs and sole state owner;
-- preconditions and successful postconditions;
-- typed failures and retryability;
-- idempotency/mutation identity;
-- cancellation and deadline behavior;
-- crash or unknown-outcome recovery;
-- finite resource/content/disclosure bounds;
-- configuration interaction;
-- deterministic, negative, property, fault and qualification fixtures.
-
-The function packet specifies behavior, not mandatory Rust spelling. A later-stage supplement may add
-narrow obligations but cannot weaken or replace the accepted base operation contract. A writer may
-improve internal module layout but cannot add a second owner, widen context/write boundaries or infer
-unspecified behavior from another package's implementation.
-
-## Module and coverage rule
-
-Every package has exactly one logical module packet. Module names are package-local; the public entry
-module is the only cross-package entry. An implementation may split an internal file only inside the
-same declared responsibility and line budget. It may not create a second state owner, public bypass or
-cross-package internal dependency.
-
-The integration owner validates the coverage crosswalk directly against normative sources. Static
-coverage means an owner is named; it does not mean the module or operation exists in Rust or that its
-behavior is accepted. Package submission must prove that its implemented public operations and private
-state correspond to the exact function and module packets.
-
-## Configuration rule
-
-- `config/sections.toml` names one semantic owner and one packet per section.
-- `search-config` parses/layers/redacts/plans but owns no capability setting.
-- The section owner supplies compiled defaults, typed validation, digest and change planning.
-- Only fields classified `APPLY_LIVE` may use package-local live application.
-- Security, restart, rebuild, collection-generation and optional-gate obligations are composed by the
-  daemon and may coexist; one dominant enum must not erase required steps.
-- Plaintext secrets, automatic artifact download/upgrade and optional-profile self-authorization fail
-  closed.
-
-## Size and implementation rules
-
-- normal target ≤7,500 hand-written `src/` lines or the lower package target;
-- split review before 8,500 total hand-written lines;
-- hard stop at 10,000 including local tests;
-- no forwarding-only or crate-per-type shells;
-- begin with failing contract/property/fault tests;
-- no `todo!()`, fake receipt, placeholder success, silent fallback or unbounded queue;
-- Windows x64 is first qualified runtime;
-- no wildcard/floating git dependency or baseline Python/Node runtime;
-- preserve exact commands, artifacts and unavailable checks in the submission/handoff.
-
-## GitHub connector access
-
-Before claiming GitHub is read-only, reload the full catalog without a query filter, verify push
-permission and use an unattached blob probe when needed. VM network and connector API access are
-separate.
-
-## GitHub Actions policy
-
-Automatic GitHub Actions runs are disabled.
-
-- Every workflow may use only `on: workflow_dispatch`.
-- Never create, restore, enable, or retain `push`, `pull_request`, `pull_request_target`, `merge_group`,
-  `schedule`, `workflow_run`, `repository_dispatch`, `workflow_call`, release, issue, discussion,
-  branch, tag, package, page-build, status, watch, or any other automatic trigger.
-- Never add a temporary, PR-only, audit, export, validation, packaging, merge, or release workflow with
-  an automatic trigger.
-- Package and integration verification runs locally. A GitHub-hosted workflow runs only after an
-  explicit manual dispatch by a person.
-- Do not enable CodeQL default setup, Dependabot schedules, Pages builds, release automation, or status
-  bots by convention.
-
-## Submission and handoff
-
-The writer submits through `SUBMISSION_TEMPLATE.md`; independent review uses
-`REVIEW_RECEIPT_TEMPLATE.md`. An accepted review allows the integration owner to publish an immutable
-package/API handoff following `PACKAGE_HANDOFF_TEMPLATE.md` and `REVIEW_CHECKLIST.md`.
-
-A package submission/review cannot self-accept, advance launch state or satisfy a wave/gate receipt.
-Published handoffs must give downstream and later-stage work exact API/port/configuration digests without
-implementation internals, prior-stage documents or the architecture master.
+Before concluding GitHub is read-only, load the full unfiltered GitHub tool catalog, confirm
+`permissions.push == true`, and use GitHub API write actions. A harmless unattached blob may be used as a
+write probe. Do not infer capabilities from a filtered tool list or from missing local Git credentials.

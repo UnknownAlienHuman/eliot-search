@@ -1,34 +1,42 @@
-# docs
+# Documentation map
 
 | Directory | Contents |
 |---|---|
-| `architecture/` | Authoritative single-file Architecture 8.4 implementation master. |
-| `contracts/p00/` | Compact field-level W0 projection, canonicalization, recipes, reasons and ports. |
-| `config/` | Configuration format, section ownership and composite reconfiguration contracts. |
-| `current/` | W5 observation continuity, saved/unsaved overlay and Rust syntax contracts. |
-| `client/` | Generic provider edge, standalone client and optional leaf-profile contracts. |
-| `evaluation/` | Product Pulse, Windows qualification, corpus/metric and verdict contracts. |
-| `optional/` | Post-P15 model, document, advanced-scale and candidate-evaluation contracts. |
-| `handoff/` | Package/stage packets, stage-specific read-set resolver, dependency/ownership maps and readiness audits. |
-| `adr/` | Load-bearing implementation/package decisions. |
-| `audit/` | Dated current-head measurement reports. They record build, test and integration facts; they accept nothing and authorize nothing. |
-| `generated/` | Generated schemas/registries/descriptors after P00; never hand-edited. |
+| `architecture/` | Normative Architecture 8.4 implementation master. |
+| `adr/` | Accepted implementation and product-boundary decisions. |
+| `contracts/p00/` | Bounded field-level contract projection, recipes, reasons and ports. |
+| `config/` | Product configuration contracts and section ownership. |
+| `current/` | Current-workspace, observation and overlay contracts. |
+| `client/` | Standalone client and optional provider-edge contracts. |
+| `evaluation/` | Product and release evaluation contracts. |
+| `optional/` | Disabled-by-default optional depth profiles. |
+| `handoff/` | Historical/package planning and dependency notes; not implementation authority. |
+| `audit/` | Dated observations; they accept and authorize nothing. |
+| `execution/` | Historical run records and diagnostics; not product architecture. |
+| `generated/` | Generated product schemas/descriptors after their owning contracts are accepted. |
 
-The stage-context entry points are:
+## Authority
 
-```text
-handoff/SWARM_LAUNCH_INDEX.md
-handoff/SWARM_STAGE_READSETS.md
-handoff/STAGE_READSET_AUDIT.md
-```
+Use this order:
 
-Their machine sources are repository-root `swarm/stages.toml` and `swarm/stage-readsets.toml`. They
-describe future bounded context only; `swarm/launch-state.toml` remains the sole current authorization.
+1. Architecture Part I;
+2. accepted product ADRs, including ADR 0005;
+3. accepted public product contracts;
+4. nearest package instructions and current issue/PR;
+5. historical planning material.
 
-External-artifact, provider and product-evidence qualification inputs live under repository-root
-`qualification/`; they remain unaccepted until exact executed evidence and an independent reviewer
-receipt exist.
+`swarm/**`, `docs/handoff/**` and `docs/execution/**` do not authorize or block implementation. In
+particular, `swarm/launch-state.toml`, ticket drafts and lease records are legacy/advisory coordination
+metadata, not a current permission system.
 
-Part I of the architecture master remains normative. Contract/configuration/qualification/stage/read-set
-projections are derivative bounded-agent inputs and stop on contradiction. None of them authorizes a
-package, provider, topology, runtime behavior, Product Pulse or optional-depth acceptance.
+## Standalone boundary
+
+ELIOT Search is independently installable and runnable. ELIOT Memory OS and ELIOT Swarm Controller are
+external consumers/controllers, not Search runtime dependencies. Search integration with ELIOT remains a
+typed leaf adapter over the same standalone state and query owners.
+
+## Qualification
+
+External-artifact and product-evidence inputs live under repository-root `qualification/`. A packet or
+captured diagnostic is not a passing receipt. Capabilities remain disabled until the exact accepted probes
+run at the exact product revision and receive independent review.
