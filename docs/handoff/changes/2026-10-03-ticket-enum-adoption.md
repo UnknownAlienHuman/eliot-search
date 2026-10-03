@@ -52,3 +52,9 @@ and bounded native Rust validators/tests in `xtask`. A pure enum-binding/value v
 `NON_AUTHORITATIVE`, enforce finite input limits, and reject missing/duplicate/wrong bindings and
 unknown values. It must not claim fixture qualification, process execution, signature verification,
 store readback or issuance. No product-package edits are authorized by this integration correction.
+
+The bounded implementation is integrated at `82315138f337ecbcab5ccb1a3f01b67330930572` after
+independent review of exact candidate `b585f835a941a12e1db6afa2dc1d14ccdfb3ec54`. The
+[execution record](../../execution/2026-10-03/TICKET_ENUM_BINDINGS_REVIEW.md) preserves 18/18 focused
+tests, structural exit 0, original raw captures and earlier failures. These results do not complete
+canonical instance validation or any authority/qualification prerequisite above.

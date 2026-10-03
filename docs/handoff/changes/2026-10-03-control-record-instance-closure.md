@@ -1,6 +1,6 @@
 # Contract change request — control-record instance closure
 
-**Status:** PARTIALLY_ACCEPTED_INTEGRATION_CONTRACT (2026-10-03). The four instance-status values and exact registry bindings are accepted below. The five ticket enum fields and their reused output vocabularies are accepted separately in `2026-10-03-ticket-enum-adoption.md`; their implementation remains pending. No decision creates an issued record.
+**Status:** PARTIALLY_ACCEPTED_INTEGRATION_CONTRACT (2026-10-03). The four instance-status values and exact registry bindings are accepted below. The five ticket enum fields and their reused output vocabularies are accepted separately in `2026-10-03-ticket-enum-adoption.md`; bounded binding/value validation is implemented at `82315138f337ecbcab5ccb1a3f01b67330930572`, while full canonical instance validation remains unresolved. No decision creates an issued record.
 
 ## Identity
 

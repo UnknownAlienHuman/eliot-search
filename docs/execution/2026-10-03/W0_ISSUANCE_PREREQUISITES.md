@@ -5,6 +5,10 @@ three focused targets: **17/17 tests, exit 0**. Independent Luna source review o
 returned `ACCEPTABLE_FOR_BOUNDED_INTEGRATION_PUBLICATION`. This is integration-tool publication,
 not package acceptance, profile qualification or issued authority. No product package was edited.
 
+This record retains that source's historical capture basis. The separately accepted ticket-enum
+subset is now implemented and reviewed at `82315138`; its [later execution record](TICKET_ENUM_BINDINGS_REVIEW.md)
+has 18/18 on the affected targets. The older result here is not evidence for that newer source.
+
 ## Accepted changes
 
 - Explicit first-four instance profiles bind `MATERIALIZED`, `ISSUED`, `LEASED` and `RECORDED` to
