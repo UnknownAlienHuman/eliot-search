@@ -126,7 +126,7 @@ requires = ["accepted contracts handoff"]
                 "consumer_requires_exact_commit_and_api_digest = true\n",
             ),
         );
-        self.write_text("swarm/control-plane-schema.toml", "schema_version = 3\n");
+        self.write_text("swarm/control-plane-schema.toml", "schema_version = 4\n");
         self.write_text("swarm/schemas/types-v1.toml", "schema_version = 2\n");
         self.write_text(
             "swarm/ticket-issuance-plan-schema-v2.toml",

@@ -1,0 +1,12 @@
+schema_version = 1
+profile = "lease_event_instance_v1"
+record_kind = "lease_event_v1"
+instance_status = "RECORDED"
+status_values = ["RECORDED"]
+unknown_instance_status = "reject"
+schema_template_status_is_instance_status = false
+
+[invariants]
+record_is_append_only = true
+complete_file_digest_is_external = true
+signed_payload_digest_is_embedded = true

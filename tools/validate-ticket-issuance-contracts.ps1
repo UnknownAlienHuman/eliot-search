@@ -309,7 +309,7 @@ if ((@(Get-Array ([string]$typeMap['OrderedConsumerAction']) 'rules')) -notconta
     Fail 'OrderedConsumerAction is not bound to ConsumerActionCode.'
 }
 
-if ((Get-Int $control 'schema_version') -ne 3 -or (Get-String $control 'type_registry') -cne $typesPath) {
+if ((Get-Int $control 'schema_version') -ne 4 -or (Get-String $control 'type_registry') -cne $typesPath) {
     Fail 'Invalid control-plane registry identity.'
 }
 if ((Get-Int $control 'type_registry_schema_version') -ne 2) {
@@ -345,12 +345,24 @@ $expectedSchemaFiles = @($typesPath) + @($schemas.Values | ForEach-Object { $_[0
 if (-not (Same-Set $requiredSchemaFiles $expectedSchemaFiles)) {
     Fail 'required_schema_files is not closed.'
 }
+$instanceProfilePaths = [ordered]@{
+    context_manifest_v1 = 'swarm/context-manifest-instance-v1.toml'
+    assignment_ticket_v1 = 'swarm/assignment-ticket-instance-v1.toml'
+    writer_lease_v1 = 'swarm/writer-lease-instance-v1.toml'
+    lease_event_v1 = 'swarm/lease-event-instance-v1.toml'
+}
+$requiredInstanceProfileFiles = @(Get-Array $control 'required_instance_profile_files')
+$expectedInstanceProfileFiles = @($instanceProfilePaths.Values)
+if (-not (Same-Sequence $requiredInstanceProfileFiles $expectedInstanceProfileFiles)) {
+    Fail 'required_instance_profile_files is not the exact first-four profile set.'
+}
 if ((Get-Int $control 'registered_types') -ne $typeMap.Count) {
     Fail 'Control-plane registered_types count mismatch.'
 }
 
 $recordMap = @{}
 $layoutMap = @{}
+$instanceProfileMap = @{}
 $recordBlocks = [regex]::Split($control, '(?m)^\[\[record\]\]\s*$')
 for ($i = 1; $i -lt $recordBlocks.Count; $i++) {
     $kind = Get-String $recordBlocks[$i] 'kind'
@@ -360,9 +372,27 @@ for ($i = 1; $i -lt $recordBlocks.Count; $i++) {
     }
     $recordMap[$kind] = Get-String $recordBlocks[$i] 'path'
     $layoutMap[$kind] = Get-String $recordBlocks[$i] 'canonical_layout'
+    $instanceProfile = Get-String $recordBlocks[$i] 'instance_profile' $false
+    if ($instanceProfilePaths.Contains($kind)) {
+        $expectedInstanceProfile = [string]$instanceProfilePaths[$kind]
+        if ($instanceProfile -cne $expectedInstanceProfile) {
+            Fail "Instance profile binding mismatch: $kind"
+        } else {
+            [void](Read-File $expectedInstanceProfile)
+        }
+        if ($instanceProfileMap.ContainsKey($kind)) {
+            Fail "Duplicate instance profile binding: $kind"
+        }
+        $instanceProfileMap[$kind] = $instanceProfile
+    } elseif ($instanceProfile -cne '') {
+        Fail "Unexpected instance profile binding: $kind"
+    }
 }
 if (-not (Same-Set @($recordMap.Keys) @($schemas.Keys))) {
     Fail 'Control record set mismatch.'
+}
+if ($instanceProfileMap.Count -ne $instanceProfilePaths.Count) {
+    Fail 'Control record instance-profile binding set is incomplete.'
 }
 
 $closedKinds = @(Get-Array ([string]$typeMap['ClosedControlRecordKind']) 'allowed')

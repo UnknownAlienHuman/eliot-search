@@ -1,0 +1,12 @@
+schema_version = 1
+profile = "writer_lease_instance_v1"
+record_kind = "writer_lease_v1"
+instance_status = "LEASED"
+status_values = ["LEASED"]
+unknown_instance_status = "reject"
+schema_template_status_is_instance_status = false
+
+[invariants]
+record_is_append_only = true
+complete_file_digest_is_external = true
+signed_payload_digest_is_embedded = true

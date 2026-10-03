@@ -277,7 +277,7 @@ pub(super) fn validate_control_schema(
 ) {
     let required = [
         ("swarm/orchestration.toml", 5_i64),
-        ("swarm/control-plane-schema.toml", 3),
+        ("swarm/control-plane-schema.toml", 4),
         ("swarm/schemas/types-v1.toml", 2),
         ("swarm/ticket-issuance-plan-schema-v2.toml", 2),
         ("swarm/ticket-issuance-plan-digest-v2.toml", 2),

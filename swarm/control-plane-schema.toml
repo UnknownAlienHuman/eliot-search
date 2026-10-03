@@ -1,4 +1,4 @@
-schema_version = 3
+schema_version = 4
 project = "eliot-search"
 architecture_version = "8.4"
 status = "SCHEMA_ONLY_NOT_IMPLEMENTED"
@@ -39,12 +39,20 @@ required_schema_files = [
   "swarm/schemas/supersession-receipt-v1.toml",
 ]
 
+required_instance_profile_files = [
+  "swarm/context-manifest-instance-v1.toml",
+  "swarm/assignment-ticket-instance-v1.toml",
+  "swarm/writer-lease-instance-v1.toml",
+  "swarm/lease-event-instance-v1.toml",
+]
+
 [[record]]
 kind = "context_manifest_v1"
 path = "swarm/schemas/context-manifest-v1.toml"
 canonical_layout = "swarm/context-manifests/<package>/<context_record_sha256>.toml"
 producer = "integration-owner"
 consumer = "ticket_issuer_and_writer"
+instance_profile = "swarm/context-manifest-instance-v1.toml"
 
 [[record]]
 kind = "assignment_ticket_v1"
@@ -52,6 +60,7 @@ path = "swarm/schemas/assignment-ticket-v1.toml"
 canonical_layout = "swarm/tickets/<package>/<ticket_id>.toml"
 producer = "integration-owner"
 consumer = "writer_lease_issuer"
+instance_profile = "swarm/assignment-ticket-instance-v1.toml"
 
 [[record]]
 kind = "writer_lease_v1"
@@ -59,6 +68,7 @@ path = "swarm/schemas/writer-lease-v1.toml"
 canonical_layout = "swarm/leases/<package>/<lease_id>.toml"
 producer = "integration-owner"
 consumer = "writer_and_orchestrator"
+instance_profile = "swarm/writer-lease-instance-v1.toml"
 
 [[record]]
 kind = "lease_event_v1"
@@ -66,6 +76,7 @@ path = "swarm/schemas/lease-event-v1.toml"
 canonical_layout = "swarm/leases/<package>/events/<event_id>.toml"
 producer = "writer_or_integration_owner_under_closed_event_rules"
 consumer = "orchestrator"
+instance_profile = "swarm/lease-event-instance-v1.toml"
 
 [[record]]
 kind = "package_submission_v1"
