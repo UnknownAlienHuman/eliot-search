@@ -62,6 +62,13 @@ function Get-Array([string]$Text, [string]$Key) {
     )
 }
 
+function Get-AssignmentKeys([string]$Text) {
+    @(
+        [regex]::Matches($Text, '(?m)^([A-Za-z0-9_]+)\s*=') |
+            ForEach-Object { $_.Groups[1].Value }
+    )
+}
+
 function Get-Section([string]$Text, [string]$Name) {
     $pattern = '(?ms)^\[{0}\]\s*(.*?)(?=^\[|\z)' -f [regex]::Escape($Name)
     $match = [regex]::Match($Text, $pattern)
@@ -250,6 +257,103 @@ for ($i = 1; $i -lt $typeBlocks.Count; $i++) {
     }
 }
 
+if ($typeMap.Count -ne 51) {
+    Fail 'Type registry must contain exactly 51 declared types.'
+}
+
+$expectedEnumValues = [ordered]@{
+    FixtureQualificationStatus = @('FAILED', 'QUALIFIED', 'UNAVAILABLE')
+    NormalProcessExitClass = @('EXIT_NONZERO', 'EXIT_ZERO')
+    EvidenceArtifactClass = @('PACKAGE_HANDOFF_CANDIDATE', 'PUBLIC_API_SCHEMA_DIGEST', 'QUALIFICATION_PROBE_RESULT', 'RESIDUAL_RISK_RECORD', 'TEST_RESULT')
+    ExpectedBehaviorClass = @('FAILURE', 'POLICY', 'RECOVERY', 'SUCCESS')
+}
+foreach ($entry in $expectedEnumValues.GetEnumerator()) {
+    $name = [string]$entry.Key
+    if (-not $typeMap.ContainsKey($name)) {
+        Fail "Missing adopted enum type: $name"
+        continue
+    }
+    $block = [string]$typeMap[$name]
+    $keys = @(Get-AssignmentKeys $block)
+    if ($keys.Count -ne 4 -or -not (Same-Set $keys @('name', 'representation', 'allowed', 'canonical'))) {
+        Fail "Adopted enum type has unknown, missing or duplicate keys: $name"
+    }
+    if ((Get-String $block 'name') -cne $name -or
+        (Get-String $block 'representation') -cne 'string' -or
+        -not (Get-Bool $block 'canonical') -or
+        -not (Same-Sequence @(Get-Array $block 'allowed') @($entry.Value))) {
+        Fail "Adopted enum definition mismatch: $name"
+    }
+}
+
+$enumBindings = @(
+    [pscustomobject]@{ owner_type = 'OrderedFixtureRef'; field_name = 'qualification_status'; target_type = 'FixtureQualificationStatus' }
+    [pscustomobject]@{ owner_type = 'BoundedCommandSpec'; field_name = 'expected_exit_class'; target_type = 'NormalProcessExitClass' }
+    [pscustomobject]@{ owner_type = 'OrderedRawCommandOutcomeRef'; field_name = 'exit_class'; target_type = 'NormalProcessExitClass' }
+    [pscustomobject]@{ owner_type = 'BoundedCommandSpec'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
+    [pscustomobject]@{ owner_type = 'EvidenceRequirement'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
+    [pscustomobject]@{ owner_type = 'OrderedEvidenceRef'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
+    [pscustomobject]@{ owner_type = 'OrderedAcceptedEvidenceRef'; field_name = 'evidence_class'; target_type = 'EvidenceArtifactClass' }
+    [pscustomobject]@{ owner_type = 'EvidenceRequirement'; field_name = 'acceptance_class'; target_type = 'ExpectedBehaviorClass' }
+    [pscustomobject]@{ owner_type = 'OrderedEvidenceRef'; field_name = 'acceptance_class'; target_type = 'ExpectedBehaviorClass' }
+)
+$expectedBindingRules = @()
+foreach ($binding in $enumBindings) {
+    $owner = [string]$binding.owner_type
+    $field = [string]$binding.field_name
+    $rule = $field + '_is_' + [string]$binding.target_type
+    $legacyRule = $field + '_is_ClosedEnum'
+    $expectedBindingRules += $rule
+
+    if (-not $typeMap.ContainsKey($owner)) {
+        Fail "Missing adopted binding owner: $owner"
+        continue
+    }
+    $block = [string]$typeMap[$owner]
+    $ownerKeys = @(Get-AssignmentKeys $block)
+    if ($ownerKeys.Count -ne 4 -or -not (Same-Set $ownerKeys @('name', 'representation', 'canonical_fields', 'rules')) -or
+        (Get-String $block 'name') -cne $owner -or
+        (Get-String $block 'representation') -cne 'ordered_record') {
+        Fail "Adopted binding owner definition mismatch: $owner"
+    }
+
+    $fields = @(Get-Array $block 'canonical_fields')
+    $fieldMatches = @($fields | Where-Object { $_ -ceq $field })
+    if ($fieldMatches.Count -ne 1) {
+        Fail "Adopted binding field is missing or duplicated: $owner.$field"
+    }
+    $rules = @(Get-Array $block 'rules')
+    $ruleMatches = @($rules | Where-Object { $_ -ceq $rule })
+    if ($ruleMatches.Count -ne 1 -or $rules -ccontains $legacyRule) {
+        Fail "Adopted enum rule binding is missing, duplicate or generic: $owner.$field"
+    }
+
+    $globalOccurrences = 0
+    foreach ($candidateName in @($typeMap.Keys)) {
+        $candidateRules = @(Get-Array ([string]$typeMap[$candidateName]) 'rules')
+        $candidateMatches = @($candidateRules | Where-Object { $_ -ceq $rule })
+        if ($candidateMatches.Count -gt 0) {
+            if ([string]$candidateName -cne $owner) {
+                Fail "Adopted enum rule is cross-bound: $rule"
+            }
+            $globalOccurrences += $candidateMatches.Count
+        }
+    }
+    if ($globalOccurrences -ne 1) {
+        Fail "Adopted enum rule does not occur exactly once: $owner.$field"
+    }
+}
+
+foreach ($candidateName in @($typeMap.Keys)) {
+    foreach ($rule in @(Get-Array ([string]$typeMap[$candidateName]) 'rules')) {
+        foreach ($enumName in @($expectedEnumValues.Keys)) {
+            $suffix = '_is_' + [string]$enumName
+            if ($rule.EndsWith($suffix, [StringComparison]::Ordinal) -and $expectedBindingRules -cnotcontains $rule) {
+                Fail "Unknown binding to adopted enum type: $candidateName"
+            }
+        }
+    }
+}
 $terminalRepresentations = @('string', 'tagged_string', 'ordered_record')
 foreach ($name in @($typeMap.Keys)) {
     $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)

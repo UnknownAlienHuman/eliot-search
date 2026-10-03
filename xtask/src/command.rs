@@ -3,6 +3,7 @@ mod context_artifact;
 mod context_artifact_build;
 mod context_materialization_build;
 mod control_record_profiles;
+mod control_record_enum_bindings;
 mod coverage_graph;
 mod drafts;
 mod evidence;
@@ -38,6 +39,7 @@ const USAGE: &str = "usage:\n\
   xtask validate context-materialization-plan [--json]\n\
   xtask validate ticket-issuance-plan [--root <path>] [--json]\n\
   xtask validate control-record-instance-profiles [--root <path>] [--json]\n\
+  xtask validate control-record-enum-bindings [--root <path>] [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
@@ -112,6 +114,9 @@ fn run_validate(args: &[String]) -> ExitCode {
     }
     if let Some(options) = options_for(args, "ticket-issuance-plan") {
         return ticket_issuance::validate(options);
+    }
+    if let Some(options) = options_for(args, "control-record-enum-bindings") {
+        return control_record_enum_bindings::validate(options);
     }
     if let Some(options) = options_for(args, "control-record-instance-profiles") {
         return control_record_profiles::validate(options);

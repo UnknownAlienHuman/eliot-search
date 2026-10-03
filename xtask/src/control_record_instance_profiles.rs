@@ -161,7 +161,7 @@ fn validate_current_non_authority_disposition(
     if integer(disposition, "schema_files") != Some(9)
         || integer(disposition, "type_registry_files") != Some(1)
         || integer(disposition, "record_schema_files") != Some(8)
-        || integer(disposition, "registered_types") != Some(47)
+        || integer(disposition, "registered_types") != Some(51)
         || string(disposition, "implementation") != Some("ABSENT")
         || string(disposition, "executed_schema_conformance") != Some("UNAVAILABLE")
         || integer(disposition, "issued_records") != Some(0)
