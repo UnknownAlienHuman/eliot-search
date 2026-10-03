@@ -73,12 +73,6 @@ impl ExecutableExpectation {
         })
     }
 
-    /// Test-only version override to prove version mismatches fail closed
-    /// against the real executable.
-    pub fn set_expected_version_for_tests(&mut self, version: String) {
-        self.version = version;
-    }
-
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
@@ -104,16 +98,17 @@ pub struct VerifiedExecutable {
 }
 
 impl VerifiedExecutable {
-    /// Test-only synthetic identity for lifecycle fixtures (sleepers and
-    /// immediate-exit helpers). Never produced by verification and never
-    /// accepted for qualification or readiness admission.
-    #[must_use]
-    pub fn for_tests(label: &'static str) -> Self {
+    pub(crate) fn from_native(
+        canonical_path: PathBuf,
+        sha256: Sha256Digest32,
+        bytes: u64,
+        version: String,
+    ) -> Self {
         Self {
-            canonical_path: PathBuf::from(label),
-            sha256: Sha256Digest32::from_bytes([0xF0; 32]),
-            bytes: 1,
-            version: "test-only".to_owned(),
+            canonical_path,
+            sha256,
+            bytes,
+            version,
         }
     }
 
@@ -241,6 +236,25 @@ mod tests {
         ExecutableExpectation, QUALIFIED_EXE_BYTES, QUALIFIED_QDRANT_VERSION, is_plausible_version,
     };
     use crate::SupervisorError;
+
+    #[test]
+    fn version_output_parser_accepts_only_exact_identity() {
+        assert_eq!(
+            super::parse_qdrant_version_output("qdrant 1.19.0\r\n").unwrap(),
+            "1.19.0"
+        );
+        for forged in [
+            "Qdrant 1.19.0",
+            "qdrant",
+            "qdrant 1.19.0 extra",
+            "qdrant 1.19.0;execute",
+        ] {
+            assert_eq!(
+                super::parse_qdrant_version_output(forged).unwrap_err(),
+                SupervisorError::InvalidArtifact
+            );
+        }
+    }
 
     #[test]
     fn qualified_default_pins_exact_artifact() {

@@ -1,88 +1,66 @@
-//! Qualified launch: from an accepted plan to a spawned owned child.
-//!
-//! [`spawn_qualified`] executes the pure [`StartProcessEffect`] on the exact
-//! verified executable. Ordered checks, cheapest first:
-//!
-//! 1. containment evidence ([`evaluate_containment`]);
-//! 2. loopback port availability (never adopt a foreign listener);
-//! 3. secret lease binding and header-safe secret material;
-//! 4. executable identity: size, SHA-256, `--version` ([`identity`]);
-//! 5. owner-scoped storage canonicalization;
-//! 6. secret-free config materialization and argv audit;
-//! 7. spawn of the owned child.
-//!
-//! The secret travels only in the child environment block under
-//! [`QDRANT_API_KEY_ENV`]. It never appears in argv, the config file,
-//! logs, snapshots, or receipts.
-//!
-//! [`StartProcessEffect`]: crate::StartProcessEffect
-//! [`evaluate_containment`]: crate::containment::evaluate_containment
-//! [`identity`]: crate::identity
+//! Lease-bound Qdrant launch planning and native process creation.
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use search_contracts::{Blake3Digest32, OpaqueId, Sha256Digest32};
+use search_contracts::{Blake3Digest32, OpaqueId};
 
-use crate::containment::{
-    ContainmentEvidence, ContainmentReport, LoopbackHost, evaluate_containment,
-};
-use crate::identity::{ExecutableExpectation, VerifiedExecutable, verify_executable_identity};
-use crate::secret::SecretMaterial;
+use crate::containment::{ContainmentReport, LoopbackHost};
+use crate::secret::{QdrantSecretLease, SecretLeaseBinding, SecretMaterial};
+use crate::win32::{NativeProcess, NativeSpawnError};
 use crate::{
-    QdrantOwnerFence, QualifiedArtifact, QualifiedProcessConfig, SecretLeaseEvidence,
-    SupervisorError, spawn_unix_millis,
+    QdrantEndpointIdentity, QdrantOwnerFence, QualifiedArtifact, QualifiedProcessConfig,
+    SupervisorError,
 };
 
 /// Environment variable carrying the API key into the child.
 pub const QDRANT_API_KEY_ENV: &str = "QDRANT__SERVICE__API_KEY";
 /// CLI flag carrying the materialized config path.
 pub const QDRANT_CONFIG_ARG: &str = "--config-path";
-/// Materialized config file name inside the data directory.
+/// Materialized Qdrant config file name inside the data directory.
 pub const CONFIG_FILE_NAME: &str = "config.yaml";
 /// Lower bound for startup/shutdown timeouts.
 pub const MIN_LAUNCH_TIMEOUT: Duration = Duration::from_secs(1);
 /// Upper bound for startup/shutdown timeouts.
 pub const MAX_LAUNCH_TIMEOUT: Duration = Duration::from_secs(600);
-/// Deadline for the pre-spawn `--version` identity probe.
-pub const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Maximum absolute data-root path length before the native adapter is invoked.
+pub const MAX_DATA_ROOT_PATH_UTF16_UNITS: usize = 96;
 /// Per-attempt TCP connect timeout for the pre-spawn port check.
 pub const PORT_CHECK_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// Exact launch plan binding one qualified artifact, config, lease, and
-/// owner fence to literal paths, ports, timeouts, and containment evidence.
+/// Exact launch plan binding one qualified artifact, process config, secret
+/// lease and owner fence to one executable, root, endpoint pair and deadline.
 pub struct LaunchPlan {
     operation_id: OpaqueId,
     owner_fence: QdrantOwnerFence,
     artifact: QualifiedArtifact,
     config: QualifiedProcessConfig,
-    secret_lease: SecretLeaseEvidence,
+    endpoint_identity: QdrantEndpointIdentity,
+    secret_binding: SecretLeaseBinding,
     expected_secret_purpose: Blake3Digest32,
     executable_path: PathBuf,
-    executable_sha256: Sha256Digest32,
     executable_bytes: u64,
-    executable_version: String,
     data_dir: PathBuf,
     host: LoopbackHost,
     http_port: u16,
     grpc_port: u16,
     startup_timeout: Duration,
     shutdown_timeout: Duration,
-    containment: ContainmentEvidence,
     observed_tick: NonZeroU64,
 }
 
 impl LaunchPlan {
-    /// Builds a plan, rejecting incoherent bindings fail-closed.
+    /// Builds a coherent plan from the exact opaque lease capability.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         operation_id: OpaqueId,
         owner_fence: QdrantOwnerFence,
         artifact: QualifiedArtifact,
         config: QualifiedProcessConfig,
-        secret_lease: SecretLeaseEvidence,
+        secret_lease: &impl QdrantSecretLease,
         expected_secret_purpose: Blake3Digest32,
         executable_path: PathBuf,
         executable_bytes: u64,
@@ -92,12 +70,13 @@ impl LaunchPlan {
         grpc_port: u16,
         startup_timeout: Duration,
         shutdown_timeout: Duration,
-        containment: ContainmentEvidence,
         observed_tick: NonZeroU64,
     ) -> Result<Self, SupervisorError> {
         if executable_path.as_os_str().is_empty()
             || data_dir.as_os_str().is_empty()
             || executable_bytes == 0
+            || !data_dir.is_absolute()
+            || data_dir.to_string_lossy().encode_utf16().count() > MAX_DATA_ROOT_PATH_UTF16_UNITS
         {
             return Err(SupervisorError::InvalidProcessConfig);
         }
@@ -111,43 +90,50 @@ impl LaunchPlan {
         {
             return Err(SupervisorError::InvalidProcessConfig);
         }
-        let configured_port = config.config().endpoint.port.get();
-        let http_port_wide = u32::from(http_port);
-        if configured_port != http_port_wide {
-            return Err(SupervisorError::EndpointIdentityMismatch);
-        }
         let candidate = artifact.candidate();
-        let executable_sha256 = candidate.sha256;
-        let executable_version = candidate.version.clone();
-        if secret_lease.installation_incarnation_id != owner_fence.installation_incarnation_id
-            || secret_lease.installation_incarnation_id
-                != config.config().owner_fence.installation_incarnation_id
-            || secret_lease.expires_at_tick <= observed_tick
-            || secret_lease.purpose_digest != expected_secret_purpose
+        let lease_binding = SecretLeaseBinding::from_lease(secret_lease);
+        if config.secret_binding() != lease_binding
+            || lease_binding.purpose_digest() != expected_secret_purpose
+            || lease_binding.installation_incarnation_id()
+                != owner_fence.installation_incarnation_id
+            || lease_binding.expires_at_tick() <= observed_tick
         {
             return Err(SupervisorError::SecretLeaseInvalid);
         }
-        if owner_fence != config.config().owner_fence {
+        if owner_fence != config.config().owner_fence
+            || config.artifact_digest() != candidate.artifact_digest
+        {
             return Err(SupervisorError::OwnerFenceMismatch);
         }
+        if !config.config().bind_is_loopback || !config.config().single_node {
+            return Err(if config.config().bind_is_loopback {
+                SupervisorError::MultiNodeTopologyDenied
+            } else {
+                SupervisorError::NonLoopbackEndpoint
+            });
+        }
+        let endpoint_identity = QdrantEndpointIdentity::from_launch(
+            host,
+            http_port,
+            grpc_port,
+            config.config().endpoint,
+        )?;
         Ok(Self {
             operation_id,
             owner_fence,
             artifact,
             config,
-            secret_lease,
+            endpoint_identity,
+            secret_binding: lease_binding,
             expected_secret_purpose,
             executable_path,
-            executable_sha256,
             executable_bytes,
-            executable_version,
             data_dir,
             host,
             http_port,
             grpc_port,
             startup_timeout,
             shutdown_timeout,
-            containment,
             observed_tick,
         })
     }
@@ -173,26 +159,6 @@ impl LaunchPlan {
     }
 
     #[must_use]
-    pub const fn secret_lease(&self) -> &SecretLeaseEvidence {
-        &self.secret_lease
-    }
-
-    #[must_use]
-    pub const fn expected_secret_purpose(&self) -> Blake3Digest32 {
-        self.expected_secret_purpose
-    }
-
-    #[must_use]
-    pub fn executable_path(&self) -> &Path {
-        &self.executable_path
-    }
-
-    #[must_use]
-    pub const fn data_dir(&self) -> &PathBuf {
-        &self.data_dir
-    }
-
-    #[must_use]
     pub const fn host(&self) -> LoopbackHost {
         self.host
     }
@@ -207,6 +173,12 @@ impl LaunchPlan {
         self.grpc_port
     }
 
+    /// Endpoint tuple sealed into the process identity and owned guard.
+    #[must_use]
+    pub const fn endpoint_identity(&self) -> QdrantEndpointIdentity {
+        self.endpoint_identity
+    }
+
     #[must_use]
     pub const fn startup_timeout(&self) -> Duration {
         self.startup_timeout
@@ -218,36 +190,36 @@ impl LaunchPlan {
     }
 
     #[must_use]
-    pub const fn containment(&self) -> &ContainmentEvidence {
-        &self.containment
-    }
-
-    #[must_use]
     pub const fn observed_tick(&self) -> NonZeroU64 {
         self.observed_tick
     }
 
-    pub(crate) fn expectation(&self) -> Result<ExecutableExpectation, SupervisorError> {
-        ExecutableExpectation::custom(
-            self.executable_path.clone(),
-            self.executable_sha256,
-            self.executable_bytes,
-            self.executable_version.clone(),
-        )
+    pub(crate) const fn secret_binding(&self) -> SecretLeaseBinding {
+        self.secret_binding
+    }
+
+    pub(crate) const fn expected_secret_purpose(&self) -> Blake3Digest32 {
+        self.expected_secret_purpose
+    }
+
+    pub(crate) fn executable_path(&self) -> &Path {
+        &self.executable_path
+    }
+
+    pub(crate) const fn executable_bytes(&self) -> u64 {
+        self.executable_bytes
+    }
+
+    pub(crate) const fn data_dir(&self) -> &PathBuf {
+        &self.data_dir
     }
 }
 
-/// Printable argv without secrets: executable plus `--config-path` only.
+/// Printable argv without secrets: executable plus config path only.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArgvSnapshot(String);
 
 impl ArgvSnapshot {
-    /// Test-only snapshot for lifecycle fixtures. Never built from secrets.
-    #[must_use]
-    pub fn for_tests(label: &'static str) -> Self {
-        Self(label.to_owned())
-    }
-
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -264,79 +236,18 @@ pub fn build_argv_snapshot(exe: &Path, config_path: &Path) -> ArgvSnapshot {
     ))
 }
 
-/// Writes the secret-free Qdrant config file into the data directory.
+/// Process-owning guard returned immediately after CreateProcessW succeeds.
 ///
-/// The file carries storage location and loopback ports only. Authentication
-/// travels exclusively through the leased secret in the child environment.
-pub fn materialize_config_yaml(
-    data_dir: &Path,
-    host: LoopbackHost,
-    http_port: u16,
-    grpc_port: u16,
-) -> Result<PathBuf, SupervisorError> {
-    if http_port == 0 || grpc_port == 0 || http_port == grpc_port {
-        return Err(SupervisorError::InvalidProcessConfig);
-    }
-    let text = format!(
-        "storage:\n  storage_path: ./storage\nservice:\n  host: {}\n  http_port: {}\n  grpc_port: {}\n",
-        host.as_str(),
-        http_port,
-        grpc_port
-    );
-    let path = data_dir.join(CONFIG_FILE_NAME);
-    std::fs::write(&path, text).map_err(|_| SupervisorError::StartFailed)?;
-    Ok(path)
-}
-
-/// Proves no listener currently answers on a loopback port.
-///
-/// A connectable port means a foreign process owns it: the supervisor must
-/// never adopt it. Unreachable/refused means free. Any other observation
-/// fails closed.
-pub fn check_loopback_port_free(host: &LoopbackHost, port: u16) -> Result<(), SupervisorError> {
-    if port == 0 {
-        return Err(SupervisorError::InvalidProcessConfig);
-    }
-    let address: SocketAddr = match host {
-        LoopbackHost::V4 => SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
-        LoopbackHost::V6 => SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
-    };
-    match TcpStream::connect_timeout(&address, PORT_CHECK_TIMEOUT) {
-        Err(error)
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::TimedOut
-            ) =>
-        {
-            Ok(())
-        }
-        _ => Err(SupervisorError::EndpointUnavailable),
-    }
-}
-
-/// Spawned owned child plus the evidence that authorized the spawn.
+/// All post-create observations remain methods on this retained guard; an
+/// uncertain identity/readiness outcome never discards it.
 pub struct SpawnedChild {
-    child: Child,
-    pid: NonZeroU32,
-    verified: VerifiedExecutable,
+    native: NativeProcess,
     argv_snapshot: ArgvSnapshot,
     containment: ContainmentReport,
-    spawn_unix_millis: NonZeroU64,
-    canonical_data_dir: PathBuf,
-    canonical_config_path: PathBuf,
 }
 
 impl SpawnedChild {
     #[must_use]
-    pub const fn pid(&self) -> NonZeroU32 {
-        self.pid
-    }
-
-    #[must_use]
-    pub const fn verified(&self) -> &VerifiedExecutable {
-        &self.verified
-    }
-
     #[must_use]
     pub const fn argv_snapshot(&self) -> &ArgvSnapshot {
         &self.argv_snapshot
@@ -347,229 +258,200 @@ impl SpawnedChild {
         self.containment
     }
 
-    #[must_use]
-    pub const fn spawn_unix_millis(&self) -> NonZeroU64 {
-        self.spawn_unix_millis
-    }
-
-    #[must_use]
-    pub const fn canonical_data_dir(&self) -> &PathBuf {
-        &self.canonical_data_dir
-    }
-
-    #[must_use]
-    pub const fn canonical_config_path(&self) -> &PathBuf {
-        &self.canonical_config_path
-    }
-
-    pub(crate) fn into_child(self) -> Child {
-        self.child
+    pub(crate) fn into_native(self) -> NativeProcess {
+        self.native
     }
 }
 
-/// Spawns the qualified executable after all ordered checks pass.
-///
-/// Returns the owned [`Child`] wrapper; the caller reaps it through
-/// `owned` primitives with finite drain/reap deadlines. Never adopts an
-/// existing process: only the handle just spawned is owned.
+/// Native start result. `OutcomeUnknown` owns the recovery guard and must not
+/// be converted to an ordinary pre-spawn failure or dropped before recovery.
+pub enum SpawnOutcome {
+    Started(SpawnedChild),
+    OutcomeUnknown {
+        reason: SupervisorError,
+        guard: SpawnedChild,
+    },
+}
+
+impl SpawnOutcome {
+    /// Reason attached to an ambiguous CreateProcessW return, if any.
+    #[must_use]
+    pub const fn unknown_reason(&self) -> Option<SupervisorError> {
+        match self {
+            Self::Started(_) => None,
+            Self::OutcomeUnknown { reason, .. } => Some(*reason),
+        }
+    }
+
+    /// Consumes the result while preserving its process/job guard.
+    #[must_use]
+    pub fn into_guard(self) -> SpawnedChild {
+        match self {
+            Self::Started(guard) | Self::OutcomeUnknown { guard, .. } => guard,
+        }
+    }
+
+    /// Preserves both the owned guard and any ambiguous post-create result.
+    #[must_use]
+    pub fn into_parts(self) -> (SpawnedChild, Option<SupervisorError>) {
+        match self {
+            Self::Started(guard) => (guard, None),
+            Self::OutcomeUnknown { reason, guard } => (guard, Some(reason)),
+        }
+    }
+}
+
+/// Spawns the exact qualified artifact after loopback, lease, config, ACL,
+/// executable-handle and Job Object checks succeed.
 pub fn spawn_qualified(
     plan: &LaunchPlan,
-    secret: &SecretMaterial,
-) -> Result<SpawnedChild, SupervisorError> {
-    let containment = evaluate_containment(plan.containment())?;
-    check_loopback_port_free(&plan.host(), plan.http_port())?;
-    check_loopback_port_free(&plan.host(), plan.grpc_port())?;
-    secret.validate_header_safe()?;
-    let verified = verify_executable_identity(&plan.expectation()?, VERSION_PROBE_TIMEOUT)?;
-    let canonical_data_dir = canonical_data_dir(&plan.data_dir)?;
-    let config_path = materialize_config_yaml(
-        &canonical_data_dir,
-        plan.host(),
-        plan.http_port(),
-        plan.grpc_port(),
-    )?;
-    let snapshot = build_argv_snapshot(verified.canonical_path(), &config_path);
-    if secret.appears_in(snapshot.as_str()) {
-        return Err(SupervisorError::SecretLeaseInvalid);
-    }
-    let secret_text = core::str::from_utf8(secret.secret_bytes())
-        .map_err(|_| SupervisorError::SecretLeaseInvalid)?;
-    let stdout_log = std::fs::File::create(canonical_data_dir.join("run-stdout.log"))
-        .map_err(|_| SupervisorError::StartFailed)?;
-    let stderr_log = std::fs::File::create(canonical_data_dir.join("run-stderr.log"))
-        .map_err(|_| SupervisorError::StartFailed)?;
-    let mut child = Command::new(verified.canonical_path())
-        .arg(QDRANT_CONFIG_ARG)
-        .arg(&config_path)
-        .current_dir(&canonical_data_dir)
-        .env(QDRANT_API_KEY_ENV, secret_text)
-        .stdin(Stdio::null())
-        .stdout(stdout_log)
-        .stderr(stderr_log)
-        .spawn()
-        .map_err(|_| SupervisorError::StartFailed)?;
-    // Re-check liveness immediately: a spawn that exited before we observe
-    // it is still our owned child (same handle), never a foreign process.
-    let pid = NonZeroU32::new(child.id()).ok_or(SupervisorError::StartFailed)?;
-    let _ = child.try_wait().map_err(|_| SupervisorError::StartFailed)?;
-    Ok(SpawnedChild {
-        child,
-        pid,
-        verified,
-        argv_snapshot: snapshot,
-        containment,
-        spawn_unix_millis: spawn_unix_millis(),
-        canonical_data_dir,
-        canonical_config_path: config_path,
-    })
-}
-
-/// Canonicalizes the owner-scoped data directory; refuses missing/non-dir paths.
-fn canonical_data_dir(data_dir: &Path) -> Result<PathBuf, SupervisorError> {
-    let metadata = std::fs::metadata(data_dir).map_err(|_| SupervisorError::StartFailed)?;
-    if !metadata.is_dir() {
+    secret_lease: &impl QdrantSecretLease,
+    now_tick: NonZeroU64,
+    cancel: &AtomicBool,
+) -> Result<SpawnOutcome, SupervisorError> {
+    if cancel.load(Ordering::Acquire) {
         return Err(SupervisorError::StartFailed);
     }
-    std::fs::canonicalize(data_dir).map_err(|_| SupervisorError::StartFailed)
+    let binding = SecretLeaseBinding::from_lease(secret_lease);
+    if binding != plan.secret_binding
+        || binding.purpose_digest() != plan.expected_secret_purpose
+        || binding.installation_incarnation_id() != plan.owner_fence.installation_incarnation_id
+        || binding.expires_at_tick() <= now_tick
+    {
+        return Err(SupervisorError::SecretLeaseInvalid);
+    }
+    check_loopback_port_free(&plan.host, plan.http_port)?;
+    check_loopback_port_free(&plan.host, plan.grpc_port)?;
+    let secret = SecretMaterial::from_lease(secret_lease, plan.secret_binding, now_tick)?;
+    secret.validate_header_safe()?;
+    let requested_argv =
+        build_argv_snapshot(&plan.executable_path, &plan.data_dir.join(CONFIG_FILE_NAME));
+    if secret.appears_in(requested_argv.as_str()) {
+        return Err(SupervisorError::SecretLeaseInvalid);
+    }
+    let config_bytes = render_config_yaml(plan.host, plan.http_port, plan.grpc_port)?;
+    if secret.appears_in(core::str::from_utf8(&config_bytes).unwrap_or_default()) {
+        return Err(SupervisorError::SecretLeaseInvalid);
+    }
+    let config_path = plan.data_dir.join(CONFIG_FILE_NAME);
+    let candidate = plan.artifact.candidate();
+    if cancel.load(Ordering::Acquire) {
+        return Err(SupervisorError::StartFailed);
+    }
+    let native = match NativeProcess::spawn(
+        &plan.executable_path,
+        candidate.sha256,
+        plan.executable_bytes,
+        &candidate.version,
+        plan.operation_id.clone(),
+        candidate.artifact_digest,
+        plan.owner_fence,
+        plan.endpoint_identity,
+        plan.config.config().config_digest,
+        plan.expected_secret_purpose,
+        &plan.data_dir,
+        &config_path,
+        &config_bytes,
+        secret,
+    ) {
+        Ok(native) => native,
+        Err(NativeSpawnError::Definite(error)) => return Err(error),
+        Err(NativeSpawnError::Unknown {
+            reason,
+            guard,
+            containment,
+        }) => {
+            let guard = SpawnedChild {
+                native: guard,
+                argv_snapshot: build_argv_snapshot(&plan.executable_path, &config_path),
+                containment,
+            };
+            return Ok(SpawnOutcome::OutcomeUnknown { reason, guard });
+        }
+    };
+    let argv_snapshot = build_argv_snapshot(&plan.executable_path, native.config_path());
+    if cancel.load(Ordering::Acquire) || native.secret_appears_in(argv_snapshot.as_str()) {
+        // This is post-CreateProcess. Preserve the native guard in the typed
+        // unknown result instead of dropping a possibly running process.
+        let guard = SpawnedChild {
+            native,
+            argv_snapshot,
+            containment: ContainmentReport::windows_verified(),
+        };
+        return Ok(SpawnOutcome::OutcomeUnknown {
+            reason: if cancel.load(Ordering::Acquire) {
+                SupervisorError::StartupOutcomeUnknown
+            } else {
+                SupervisorError::SecretLeaseInvalid
+            },
+            guard,
+        });
+    }
+    Ok(SpawnOutcome::Started(SpawnedChild {
+        native,
+        argv_snapshot,
+        containment: ContainmentReport::windows_verified(),
+    }))
+}
+
+fn render_config_yaml(
+    host: LoopbackHost,
+    http_port: u16,
+    grpc_port: u16,
+) -> Result<Vec<u8>, SupervisorError> {
+    if http_port == 0 || grpc_port == 0 || http_port == grpc_port {
+        return Err(SupervisorError::InvalidProcessConfig);
+    }
+    Ok(format!(
+        "storage:\n  storage_path: ./storage\nservice:\n  host: {}\n  http_port: {}\n  grpc_port: {}\n",
+        host.as_str(),
+        http_port,
+        grpc_port
+    )
+    .into_bytes())
+}
+
+/// Proves no listener currently answers on a loopback port. A connectable or
+/// inconclusive port is foreign/unknown and is never adopted.
+pub fn check_loopback_port_free(host: &LoopbackHost, port: u16) -> Result<(), SupervisorError> {
+    if port == 0 {
+        return Err(SupervisorError::InvalidProcessConfig);
+    }
+    let address = socket_for(*host, port);
+    match TcpStream::connect_timeout(&address, PORT_CHECK_TIMEOUT) {
+        Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => Ok(()),
+        _ => Err(SupervisorError::EndpointUnavailable),
+    }
+}
+
+fn socket_for(host: LoopbackHost, port: u16) -> SocketAddr {
+    match host {
+        LoopbackHost::V4 => SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        LoopbackHost::V6 => SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::num::{NonZeroU32, NonZeroU64};
-    use std::path::PathBuf;
-    use std::time::Duration;
+    use std::path::Path;
 
-    use search_contracts::{
-        ArtifactDigest, Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueId,
-        OwnerEpoch, ReceiptRef, Sha256Digest32,
-    };
-
-    use super::{
-        LaunchPlan, build_argv_snapshot, check_loopback_port_free, materialize_config_yaml,
-    };
-    use crate::containment::{ContainmentEvidence, parse_loopback_host};
-    use crate::secret::SecretMaterial;
-    use crate::{
-        ArtifactArchitecture, ArtifactCandidate, ArtifactQualificationManifest, LoopbackEndpoint,
-        ProcessConfig, QdrantOwnerFence, SecretLeaseEvidence, SupervisorError, qualify_artifact,
-        validate_process_config,
-    };
-
-    fn plan_for_ports(http_port: u16, grpc_port: u16) -> LaunchPlan {
-        let fence = QdrantOwnerFence {
-            data_root_id: DataRootId::from_bytes([1; 16]),
-            installation_incarnation_id: InstallationIncarnationId::from_bytes([2; 16]),
-            owner_epoch: OwnerEpoch::new(3).unwrap(),
-        };
-        let candidate = ArtifactCandidate {
-            file_identity_digest: Blake3Digest32::from_bytes([4; 32]),
-            sha256: Sha256Digest32::from_bytes([5; 32]),
-            artifact_digest: ArtifactDigest::from_bytes([6; 32]),
-            version: "1.19.0".to_owned(),
-            build_identity: "74f3e85b".to_owned(),
-            architecture: ArtifactArchitecture::X86_64Windows,
-        };
-        let manifest = ArtifactQualificationManifest {
-            expected_sha256: Sha256Digest32::from_bytes([5; 32]),
-            expected_artifact_digest: ArtifactDigest::from_bytes([6; 32]),
-            expected_version: "1.19.0".to_owned(),
-            expected_build_identity: "74f3e85b".to_owned(),
-            expected_architecture: ArtifactArchitecture::X86_64Windows,
-            source_receipt: ReceiptRef::new("source").unwrap(),
-            license_receipt: ReceiptRef::new("license").unwrap(),
-            probe_manifest_digest: Blake3Digest32::from_bytes([7; 32]),
-        };
-        let artifact =
-            qualify_artifact(candidate, &manifest, Blake3Digest32::from_bytes([8; 32])).unwrap();
-        let config = ProcessConfig {
-            owner_fence: fence,
-            data_directory_digest: Blake3Digest32::from_bytes([9; 32]),
-            endpoint: LoopbackEndpoint {
-                endpoint_digest: Blake3Digest32::from_bytes([10; 32]),
-                port: NonZeroU32::new(u32::from(http_port)).unwrap(),
-            },
-            bind_is_loopback: true,
-            single_node: true,
-            startup_timeout_ticks: NonZeroU64::new(100).unwrap(),
-            shutdown_timeout_ticks: NonZeroU64::new(100).unwrap(),
-            restart_window_ticks: NonZeroU64::new(1000).unwrap(),
-            max_restarts_per_window: 2,
-            config_digest: Blake3Digest32::from_bytes([11; 32]),
-        };
-        let lease = SecretLeaseEvidence {
-            secret_reference_digest: Blake3Digest32::from_bytes([12; 32]),
-            installation_incarnation_id: InstallationIncarnationId::from_bytes([2; 16]),
-            purpose_digest: Blake3Digest32::from_bytes([13; 32]),
-            expires_at_tick: NonZeroU64::new(1_000_000).unwrap(),
-        };
-        let qualified =
-            validate_process_config(config, &artifact, lease, NonZeroU64::new(7).unwrap()).unwrap();
-        LaunchPlan::new(
-            OpaqueId::new("plan-unit").unwrap(),
-            fence,
-            artifact,
-            qualified,
-            lease,
-            Blake3Digest32::from_bytes([13; 32]),
-            PathBuf::from("qdrant.exe"),
-            84_184_576,
-            PathBuf::from("data"),
-            parse_loopback_host("127.0.0.1").unwrap(),
-            http_port,
-            grpc_port,
-            Duration::from_secs(60),
-            Duration::from_secs(20),
-            ContainmentEvidence::explicit_uncontained_test_only(),
-            NonZeroU64::new(7).unwrap(),
-        )
-        .unwrap()
-    }
+    use super::{build_argv_snapshot, render_config_yaml};
+    use crate::LoopbackHost;
 
     #[test]
-    fn materialized_config_carries_no_secret_and_pins_loopback() {
-        let dir = std::env::temp_dir().join(format!(
-            "eliot-t23-cfg-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let secret = SecretMaterial::from_bytes(b"config-audit-key".to_vec()).unwrap();
-        let path =
-            materialize_config_yaml(&dir, parse_loopback_host("127.0.0.1").unwrap(), 6333, 6334)
-                .unwrap();
-        let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("host: 127.0.0.1"));
-        assert!(text.contains("http_port: 6333"));
-        assert!(!secret.appears_in(&text));
-        let snapshot = build_argv_snapshot(PathBuf::from("qdrant.exe").as_path(), &path);
-        assert!(!secret.appears_in(snapshot.as_str()));
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn plan_with_distinct_ports_is_accepted() {
-        let plan = plan_for_ports(6333, 6334);
-        assert_eq!(plan.http_port(), 6333);
-        assert_eq!(plan.grpc_port(), 6334);
-    }
-
-    #[test]
-    fn invalid_port_combinations_are_rejected() {
-        assert_eq!(
-            materialize_config_yaml(
-                std::path::Path::new("data"),
-                parse_loopback_host("127.0.0.1").unwrap(),
-                6333,
-                6333
-            )
-            .unwrap_err(),
-            SupervisorError::InvalidProcessConfig
+    fn argv_and_materialized_config_have_no_secret_channel() {
+        let secret = "fixture-api-key-that-must-not-appear";
+        let argv = build_argv_snapshot(
+            Path::new("C:\\Tools\\Qdrant\\qdrant.exe"),
+            Path::new("C:\\qtmp\\owned\\config.yaml"),
         );
-        assert_eq!(
-            check_loopback_port_free(&parse_loopback_host("127.0.0.1").unwrap(), 0).unwrap_err(),
-            SupervisorError::InvalidProcessConfig
-        );
+        let config = render_config_yaml(LoopbackHost::V4, 6333, 6334).unwrap();
+        let config = String::from_utf8(config).unwrap();
+        assert!(!argv.as_str().contains(secret));
+        assert!(!config.contains(secret));
+        assert!(!config.contains("api_key"));
+        assert!(config.contains("host: 127.0.0.1"));
+        assert!(config.contains("http_port: 6333"));
+        assert!(config.contains("grpc_port: 6334"));
     }
 }

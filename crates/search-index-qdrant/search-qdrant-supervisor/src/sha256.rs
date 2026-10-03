@@ -220,7 +220,12 @@ pub fn sha256_bytes(data: &[u8]) -> [u8; 32] {
 /// Streams SHA-256 over a file without loading it into memory.
 pub fn sha256_file(path: &Path) -> Result<[u8; 32], std::io::Error> {
     let file = std::fs::File::open(path)?;
-    let mut reader = std::io::BufReader::with_capacity(65_536, file);
+    sha256_reader(file)
+}
+
+/// Streams SHA-256 from an already-open handle so path substitutions cannot
+/// change the file object whose identity was inspected.
+pub(crate) fn sha256_reader(mut reader: impl Read) -> Result<[u8; 32], std::io::Error> {
     let mut hasher = Sha256::new();
     let mut chunk = vec![0_u8; 65_536];
     loop {

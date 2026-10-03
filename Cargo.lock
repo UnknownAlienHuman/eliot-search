@@ -1322,6 +1322,7 @@ dependencies = [
  "search-contracts",
  "search-domain",
  "search-ports",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
