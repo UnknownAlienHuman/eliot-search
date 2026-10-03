@@ -1,0 +1,33 @@
+{
+  "authority": "NON_AUTHORITATIVE",
+  "evidence_basis": "worker reconstruction from its original tool transcript; original stream files not retained",
+  "source_candidate": "6749a6e31b080bd991accedeb13f5b187dd33a25",
+  "integrated_source": "e88ab688d3b5cc6fb2562b5024448ed132a9a6da",
+  "three_integrated_git_blobs_equal_candidate": true,
+  "original_stream_byte_identity_claimed": false,
+  "test_repeated": false,
+  "test_executable_copied": false,
+  "copied_at_utc": "2026-10-03T09:50:44.5086383Z",
+  "files": [
+    {
+      "path": "verification-metadata.json",
+      "bytes": 2439,
+      "sha256": "3797F82961A7112CC04AAD6AE0C02A4A8761019466396F6F6B9CE0D441E1CB6A"
+    },
+    {
+      "path": "verification-result.json",
+      "bytes": 723,
+      "sha256": "61F2866564D7BBB1FDA6034C0A1EEC24316817BC1AF0AF63DFA9BD3A8C42D48E"
+    },
+    {
+      "path": "stream-retention.txt",
+      "bytes": 377,
+      "sha256": "28E3EF168A858D10836125157467C523138741F2D2ACDC345363C4FD470C6A83"
+    },
+    {
+      "path": "SHA256SUMS.txt",
+      "bytes": 274,
+      "sha256": "362454AE7F354B7A85A53E550321BB8E11821961E749A5F6E8A7A0E2CEA458C9"
+    }
+  ]
+}

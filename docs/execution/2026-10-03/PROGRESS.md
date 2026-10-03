@@ -8,6 +8,11 @@ passes. The [qualified-profile identifier syntax](../../handoff/changes/2026-10-
 is separately accepted for pure parsing only. The reviewed [CNG primitive evidence](CNG_PRIMITIVE_DIAGNOSTIC.md)
 does not qualify a persistent signing profile. The sections below retain their original capture bases.
 
+The [pure qualified-ID parser](QUALIFIED_PROFILE_ID_REVIEW.md) is now integrated at `e88ab688` after
+independent source review and exact Git-blob comparison. Its worker transcript reports the single
+target passed 6/6; original stream files were not retained, and reconstructed metadata is labeled
+accordingly. No profile registration or authority follows from syntax validation.
+
 ## Delivered code
 
 `git fetch origin` discovered that local main was 471 commits behind. A clean fast-forward moved it from `aabb12e915ba5fb7aa568756d5a37891bf1d3a11` to `9d61b759189464a01b93ca4efcb80c5398344bb4`.

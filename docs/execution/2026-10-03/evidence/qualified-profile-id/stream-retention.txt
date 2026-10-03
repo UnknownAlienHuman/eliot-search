@@ -1,0 +1,1 @@
+Raw stdout and stderr were captured in memory by the original test command and included in the Codex tool transcript (exec_command chunk_id 28d70a). The command did not redirect those streams to files. This folder therefore contains transcript-derived metadata and result data only; it does not contain the original raw stream files and makes no byte-identity claim for them.

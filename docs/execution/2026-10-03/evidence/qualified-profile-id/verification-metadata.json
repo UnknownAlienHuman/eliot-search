@@ -1,0 +1,33 @@
+{
+  "artifact_kind": "verification metadata reconstructed from existing Codex tool transcript",
+  "capture_basis": "functions.exec result containing exec_command chunk_id 28d70a; the command serialized Process.ReadToEndAsync stdout_raw and stderr_raw into its returned JSON",
+  "raw_stream_files": false,
+  "raw_stream_files_limitation": "The original stdout/stderr strings were not redirected to disk during the test. This bundle does not claim byte identity with the original process streams; consult the tool transcript for the returned strings.",
+  "command": "cargo +1.98.0 test --locked --offline -p xtask --test qualified_profile_id",
+  "cwd": "C:\\Users\\kleym\\.codex\\worktrees\\qualified-profile-id\\eliot-search",
+  "base_commit_sha": "e996427a0c0c46bec7fa91090060e01818e3882c",
+  "source_commit_sha_before_and_after": "6749a6e31b080bd991accedeb13f5b187dd33a25",
+  "clean_worktree_before_and_after": true,
+  "started_utc": "2026-10-03T09:42:29.5910803Z",
+  "finished_utc": "2026-10-03T09:42:38.7682647Z",
+  "cargo_version": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+  "rustc_version": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "runtime_environment": {
+    "os": "Microsoft Windows 10.0.26200",
+    "powershell": "7.6.6",
+    "cargo_target_dir": "C:\\Development\\Rust\\targets\\eliot-search-qualified-id",
+    "rustup_toolchain": "unset; selected explicitly as +1.98.0"
+  },
+  "exit_code": 0,
+  "stdout_summary": "6 tests passed, 0 failed, 0 ignored, 0 measured, 0 filtered out; finished in 0.00s.",
+  "stderr_summary": "Compilation output with 11 warnings in unrelated existing xtask modules; no warning referenced the new parser or test.",
+  "test_executable_path_from_transcript": "C:\\Development\\Rust\\targets\\eliot-search-qualified-id\\debug\\deps\\qualified_profile_id-85c7c146604bfcbe.exe",
+  "test_executable_exists_at_capture": true,
+  "test_executable_sha256_at_capture": "be9e91a228ea293a8cbd533d9813b5041eb69802b57c15b940e810ec6c4c8569",
+  "source_file_sha256": {
+    "xtask/src/lib.rs": "4bda75c9ace8d560e056917911e42e93fb377f8a6d340b747656cbd256e61a3e",
+    "xtask/src/qualified_profile_id.rs": "345282ea65aaf3ae69dfdd7d64e84413a84faa8e361556f7ef62f468a0123b6a",
+    "xtask/tests/qualified_profile_id.rs": "daa3f965fa6f41777b7e6d9c6c9f9c73fde0efa4e228d4cdfa4fb843e171f357"
+  },
+  "changed_source_bundle_sha256": "85007abc99d1d84250ddf4b696382a257174c0e20b6d1cf08985898b2727846b"
+}

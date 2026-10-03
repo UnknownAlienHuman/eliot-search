@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "commit_sha": "6749a6e31b080bd991accedeb13f5b187dd33a25",
+  "command": "cargo +1.98.0 test --locked --offline -p xtask --test qualified_profile_id",
+  "test_count": 6,
+  "passed": 6,
+  "failed": 0,
+  "tests": [
+    "accepts_all_grammar_character_classes_and_preserves_case",
+    "accepts_independent_component_limits_and_the_225_byte_total",
+    "rejects_each_component_over_its_own_limit",
+    "rejects_total_length_over_limit_before_syntax_scanning",
+    "rejects_malformed_syntax_with_stable_bounded_errors",
+    "preserves_the_exact_borrowed_full_value_and_components"
+  ],
+  "exit_code": 0,
+  "raw_stdout_stderr_retained_to_files": false,
+  "transcript_chunk_id": "28d70a"
+}
