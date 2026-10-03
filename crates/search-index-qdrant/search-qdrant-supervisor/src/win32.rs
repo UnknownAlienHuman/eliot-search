@@ -129,14 +129,20 @@ mod windows_impl {
             let mut exe_file = open_pinned_executable(executable_path)?;
             let observed_bytes = file_size(&exe_file)?;
             if observed_bytes != expected_bytes {
-                return Err(SupervisorError::ArtifactDigestMismatch);
+                return Err(NativeSpawnError::Definite(
+                    SupervisorError::ArtifactDigestMismatch,
+                ));
             }
             let observed_sha = hash_open_file(&mut exe_file)?;
             if observed_sha != expected_sha256 {
-                return Err(SupervisorError::ArtifactDigestMismatch);
+                return Err(NativeSpawnError::Definite(
+                    SupervisorError::ArtifactDigestMismatch,
+                ));
             }
             if expected_version.is_empty() || expected_version.len() > 128 {
-                return Err(SupervisorError::ArtifactVersionMismatch);
+                return Err(NativeSpawnError::Definite(
+                    SupervisorError::ArtifactVersionMismatch,
+                ));
             }
 
             let (mut retained_dirs, canonical_data_dir) = secure_data_tree(data_dir)?;
@@ -146,7 +152,9 @@ mod windows_impl {
                     .ok_or(SupervisorError::InvalidProcessConfig)?,
             );
             if config_path.file_name() != Some(OsStr::new("config.yaml")) {
-                return Err(SupervisorError::DataRootMismatch);
+                return Err(NativeSpawnError::Definite(
+                    SupervisorError::DataRootMismatch,
+                ));
             }
             let config_file = write_secure_config(&canonical_config_path, config_bytes)?;
 
@@ -154,7 +162,9 @@ mod windows_impl {
             fs::create_dir_all(&temp_dir).map_err(|_| SupervisorError::ContainmentUnavailable)?;
             let temp_handles = secure_data_tree(&temp_dir)?;
             if !is_beneath(&canonical_data_dir, &temp_handles.1) {
-                return Err(SupervisorError::DataRootMismatch);
+                return Err(NativeSpawnError::Definite(
+                    SupervisorError::DataRootMismatch,
+                ));
             }
             retained_dirs.extend(temp_handles.0);
 
@@ -809,7 +819,7 @@ mod windows_impl {
 
     impl PrivateSecurityDescriptor {
         fn new(sddl: &str) -> Result<Self, SupervisorError> {
-            let sddl_wide = wide_path(OsStr::new(sddl))?;
+            let sddl_wide = wide_path(Path::new(sddl))?;
             let mut descriptor = null_mut();
             // SAFETY: SDDL is NUL-terminated for this call and descriptor is a
             // writable output pointer; successful output is freed by Drop.
@@ -900,7 +910,7 @@ mod windows_impl {
             lpSecurityDescriptor: null_mut(),
             bInheritHandle: 1,
         };
-        let name = wide_path(OsStr::new("NUL"))?;
+        let name = wide_path(Path::new("NUL"))?;
         // SAFETY: the name and SECURITY_ATTRIBUTES remain alive for the call; the
         // returned handle is explicitly inheritable and later constrained by the
         // process attribute handle list.
@@ -950,7 +960,7 @@ mod windows_impl {
     fn hash_open_file(file: &mut File) -> Result<Sha256Digest32, SupervisorError> {
         file.seek(SeekFrom::Start(0))
             .map_err(|_| SupervisorError::ExecutableProbeFailed)?;
-        let digest = crate::sha256::sha256_reader(file)
+        let digest = crate::sha256::sha256_reader(&mut *file)
             .map_err(|_| SupervisorError::ExecutableProbeFailed)?;
         file.seek(SeekFrom::Start(0))
             .map_err(|_| SupervisorError::ExecutableProbeFailed)?;
@@ -1061,7 +1071,7 @@ mod windows_impl {
         } else {
             SAFE_FILE_SDDL
         };
-        let sddl_wide = wide_path(OsStr::new(sddl))?;
+        let sddl_wide = wide_path(Path::new(sddl))?;
         let mut expected_descriptor = null_mut();
         // SAFETY: SDDL input is a valid, NUL-terminated constant and output pointer
         // is writable. The resulting LocalAlloc descriptor is freed below.
@@ -1282,8 +1292,8 @@ mod windows_impl {
             .to_lowercase()
     }
 
-    fn wide_path(path: &OsStr) -> Result<Vec<u16>, SupervisorError> {
-        let mut wide: Vec<u16> = path.encode_wide().collect();
+    fn wide_path(path: &Path) -> Result<Vec<u16>, SupervisorError> {
+        let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
         if wide.is_empty() || wide.contains(&0) || wide.len() >= MAX_WIN32_PATH_UNITS {
             return Err(SupervisorError::InvalidProcessConfig);
         }
@@ -1366,7 +1376,7 @@ mod windows_impl {
         if !values.contains_key("systemroot") {
             return Err(SupervisorError::PlatformUnavailable);
         }
-        let temp = temp_dir.encode_wide().collect::<Vec<_>>();
+        let temp = temp_dir.as_os_str().encode_wide().collect::<Vec<_>>();
         values.insert("temp".to_owned(), temp.clone());
         values.insert("tmp".to_owned(), temp);
         let secret_name = CHILD_API_KEY_NAME.to_ascii_lowercase();

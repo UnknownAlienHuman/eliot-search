@@ -163,7 +163,7 @@ impl OwnedChild {
         Ok(Some(ExitObservation::from_process_handle(
             identity,
             expected_shutdown,
-            exit_code,
+            Some(exit_code),
             observed_tick,
             job_empty,
         )))
