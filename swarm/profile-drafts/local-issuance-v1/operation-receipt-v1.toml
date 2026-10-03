@@ -77,6 +77,14 @@ record_signature_artifacts_in_input = false
 output_record_digests_in_input = false
 containing_commit_id_in_input = false
 complete_receipt_file_digest_in_receipt = false
+
+[canonical_input.qualified_profile_ref_contract]
+affected_fields = ["artifact_profile_ref", "approval_profile_ref", "ImmutableArtifactRef.store_profile_ref", "ImmutableSignatureRef.approval_profile_ref", "trust-signature signature_profile_ref"]
+required_type = "QualifiedOpaqueId"
+grammar_status = "UNRESOLVED_REQUIRED_CONTRACT_NOT_PROVISIONING_ONLY"
+reason = "current OpaqueId grammar rejects separators and no accepted QualifiedOpaqueId grammar is registered; slash-qualified candidate refs are illustrative design labels only"
+authoritative_use_blocked_until = "integration owner registers and accepts exact grammar, canonical bytes and field validation for QualifiedOpaqueId"
+
 [canonical_input.common_field_order]
 fields = [
   "schema_version", "operation_kind", "operation_schema_version", "repository", "base_commit", "actor_identity",
@@ -178,7 +186,9 @@ mandatory_fields = [
   "ordered_output_record_locators",
   "ordered_output_ImmutableArtifactRefs",
   "signature.signed_payload_sha256",
-  "signature.signature_ref",
+  "signature.approval_profile_ref",
+  "signature.approval_artifact_ref",
+  "signature.actor_identity",
 ]
 
 [receipt_layout.output_locator]
@@ -228,10 +238,31 @@ recovery_disposition_persistence = "not stored as a fabricated initial value; re
 field_order = ["repository_relative_path", "git_blob_id", "exact_record_file_sha256", "record_kind"]
 order_rule = "one primary output record first; no receipt self-reference"
 
-[receipt_layout.output_artifact]
+[receipt_layout.pre_signature_payload]
+field_order = ["schema_version", "record_kind", "status", "identity", "operation", "repository", "base", "actor", "input", "profiles", "publication", "output_records", "output_artifacts"]
+digest_boundary = "SHA-256 of exact UTF-8/LF bytes ending immediately before the trailing [signature] table"
+output_artifacts_is_signed = true
+output_artifacts_semantics = "ordered immutable artifact refs for the canonical input and operation-produced outputs, including signature artifacts for other created records"
+own_receipt_signature_excluded = true
+own_receipt_signature_exclusion = "never put this receipt's own ImmutableSignatureRef.approval_artifact_ref, artifact ID, byte count or SHA-256 in output_artifacts or any pre-signature field"
+other_record_signatures_included = true
+
+[receipt_layout.post_signature_verification_binding]
+type = "existing ImmutableSignatureRef"
+field_order = ["approval_profile_ref", "approval_artifact_ref", "signed_payload_sha256", "actor_identity"]
+location = "trailing [signature] table, after and outside the pre-signature payload digest boundary"
+verification = "resolve approval_artifact_ref inside the exact containing receipt commit; verify its byte count and SHA-256, recompute signed_payload_sha256 over exact pre-signature bytes, recompute the approval preimage and verify with the mapped public key from the captured trust snapshot"
+binding_to_receipt = "consumer retains the exact containing commit and complete receipt-file SHA-256 externally; these identify the committed signed bytes but are never included in the receipt preimage"
+self_reference_excluded = true
+no_signature_digest_cycle = "signature artifact bytes and digest exist only in trailing ImmutableSignatureRef and external post-signature readback; neither is among signed output_artifacts"
+
+[receipt_layout.output_artifacts]
 type = "existing ImmutableArtifactRef"
 resolution = "path is derived from artifact_id and read from the exact containing receipt commit"
-signature_bytes_are_output = true
+includes_input_artifact = true
+includes_created_record_signature_artifacts = true
+includes_this_receipt_signature_artifact = false
+this_receipt_signature_reference_field = "signature.approval_artifact_ref"
 [outcome_model]
 attempt_outcome_states = ["NO_WRITE", "PREPARED_UNREACHABLE", "COMMITTED", "OUTCOME_UNKNOWN"]
 attempt_outcome_state_persisted_in_receipt = false
@@ -262,5 +293,7 @@ cases = [
   "fault before ref update, after possible ref update, missing object, diverged ref and lost response map to the four exact recovery dispositions",
   "context operation returns MATERIALIZED only; ticket does not create a lease; lease does not authorize implementation; acknowledgement requires the accepted signed writer event",
   "actor/profile/trust absence or revocation blocks mutation without a fallback",
+  "receipt output_artifacts omits its own ImmutableSignatureRef.approval_artifact_ref and its artifact ID/length/digest while retaining signatures for other created records",
+  "trailing ImmutableSignatureRef plus external exact containing commit/file digest verifies the receipt without a signature/output-artifact self-reference",
   "all first-four qualification cases retain UNAVAILABLE until raw output and independent reviewer receipt exist",
 ]

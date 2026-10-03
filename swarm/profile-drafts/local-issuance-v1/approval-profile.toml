@@ -12,6 +12,14 @@ qualification_result = "UNAVAILABLE"
 owner = "integration-owner/native-rust-control-plane-tooling"
 target_runtime = "Windows x64"
 
+[profile_reference_contract]
+candidate_profile_ref = "eliot-search/local-windows-cng-software-ecdsa-p256-v1"
+affected_profile_reference_fields = ["profile_ref", "ImmutableSignatureRef.approval_profile_ref", "trust-signature signature_profile_ref"]
+required_existing_type = "QualifiedOpaqueId via ImmutableSignatureRef.approval_profile_ref"
+grammar_status = "UNRESOLVED_REQUIRED_CONTRACT_NOT_PROVISIONING_ONLY"
+reason = "the current OpaqueId grammar rejects separators and the repository does not define an accepted QualifiedOpaqueId grammar; the slash-qualified candidate string is a design label, not an accepted typed value"
+authoritative_use_blocked_until = "integration owner registers and accepts the exact QualifiedOpaqueId grammar and canonical serialization"
+
 [signing]
 api = "Windows CNG NCrypt/BCrypt through the native Win32 ABI"
 key_storage_provider = "Microsoft Software Key Storage Provider"
@@ -111,6 +119,10 @@ revoked_key_entry_field_order = ["key_id", "effective_generation", "reason_sha25
 head_top_level_field_order = ["schema_version", "record_kind", "status", "generation", "manifest_path", "manifest_git_blob_id", "manifest_exact_record_file_sha256", "root_key_id", "signature"]
 manifest_field_types = ["schema_version=u16 exact 1", "record_kind=ASCII exact actor_trust_manifest_v1", "status=ASCII exact TRUST_SNAPSHOT", "generation=u64 in 1..18446744073709551615", "root_key_id=sha256- plus 64 lowercase hex", "actors=array of actor_entry_v1", "revoked_keys=array of revoked_key_entry_v1", "signature=trust_signature_v1"]
 actor_entry_field_types = ["actor_identity=registered ActorIdentity pattern, at most 160 ASCII bytes", "key_id=sha256- plus 64 lowercase hex and equal to exact public BCRYPT_ECCPUBLIC_BLOB SHA-256", "key_container_name=exact pattern above, at most 120 ASCII bytes", "public_key_blob_hex=exactly 144 lowercase hex characters", "allowed_operation_domains=unique ordered ASCII strings, each 1..128 bytes", "registration_evidence_ref=existing ImmutableRecordRef exact field/type order"]
+registration_evidence_ref_status = "UNRESOLVED_REQUIRED_BOOTSTRAP_EVIDENCE_CONTRACT"
+registration_evidence_gap = "ImmutableRecordRef requires one of the existing ClosedControlRecordKind values, but this proposal identifies no accepted record kind and noncyclic procedure that proves initial root-to-ActorIdentity/key registration before this approval profile is qualified"
+registration_evidence_must_not_assume = "do not select independent_review_v1 or another existing record kind by analogy, invent a new accepted kind, or require evidence signed by the not-yet-qualified approval profile; integration owner must define and accept an eligible kind or external bootstrap evidence grammar and verify a noncyclic provisioning order"
+actor_mapping_authority_blocked_until = "the initial root fingerprint, actor/key registration evidence type and trust-bootstrap sequence are externally verified and accepted; a root fingerprint alone does not supply a missing evidence record kind"
 revoked_key_entry_field_types = ["key_id=sha256- plus 64 lowercase hex", "effective_generation=u64 equal to enclosing manifest generation", "reason_sha256=exactly 64 lowercase hex"]
 head_field_types = ["schema_version=u16 exact 1", "record_kind=ASCII exact actor_trust_head_v1", "status=ASCII exact TRUST_HEAD", "generation=u64 equal to referenced manifest generation", "manifest_path=exact generation-derived repository-relative path", "manifest_git_blob_id=full algorithm-tagged GitObjectId", "manifest_exact_record_file_sha256=exactly 64 lowercase hex", "root_key_id=sha256- plus 64 lowercase hex", "signature=trust_signature_v1"]
 actor_entries_sorted_by = "bytewise ASCII ActorIdentity ascending; exactly one active key per actor"
@@ -158,6 +170,7 @@ items = [
   "exact software KSP instance and signed native Git/CNG runtime identity",
   "per-actor provisioned key, exact root-mapped CNG key-container name and public BCRYPT_ECCPUBLIC_BLOB; no key generation occurs in this design",
   "out-of-band verified trust-root fingerprint and root-signed actor mapping",
+  "accepted noncyclic bootstrap-evidence kind/grammar and procedure for each initial ActorIdentity-to-key registration",
   "explicit root-signed ActorIdentity-to-public-key mapping and ticket actor assignment under a trusted cooperative host/launcher assumption",
   "accepted profile definition digest and executed independent crypto/readback qualification",
   "accepted first-four instance and nested ClosedEnum schemas",

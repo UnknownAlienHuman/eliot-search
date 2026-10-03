@@ -12,6 +12,14 @@ qualification_result = "UNAVAILABLE"
 owner = "integration-owner/native-rust-control-plane-tooling"
 target_runtime = "Windows x64"
 
+[profile_reference_contract]
+candidate_profile_ref = "eliot-search/local-git-sha256-artifact-store-v1"
+affected_profile_reference_fields = ["profile_ref", "ImmutableArtifactRef.store_profile_ref"]
+required_existing_type = "QualifiedOpaqueId via ImmutableArtifactRef.store_profile_ref"
+grammar_status = "UNRESOLVED_REQUIRED_CONTRACT_NOT_PROVISIONING_ONLY"
+reason = "the current OpaqueId grammar rejects separators and the repository does not define an accepted QualifiedOpaqueId grammar; the slash-qualified candidate string is a design label, not an accepted typed value"
+authoritative_use_blocked_until = "integration owner registers and accepts the exact QualifiedOpaqueId grammar and canonical serialization"
+
 [implementation]
 storage = "existing repository Git object database and committed trees"
 orchestration_service = "none"
