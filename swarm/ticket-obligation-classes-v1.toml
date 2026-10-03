@@ -190,7 +190,7 @@ meaning = "Expected behavior family for a requirement, reusing the qualification
   meaning = "The behavior under test is the specified successful operation outcome."
 
 [compatibility]
-expected_exit_class_equals_observed_exit_class = "For a completed command, OrderedRawCommandOutcomeRef.exit_class must equal its BoundedCommandSpec.expected_exit_class."
+expected_vs_observed_exit_class = "For every completed command, retain the actual EXIT_ZERO or EXIT_NONZERO in OrderedRawCommandOutcomeRef.exit_class, even when it differs from BoundedCommandSpec.expected_exit_class. Compare expected and observed classes only in the separate acceptance evaluation; a mismatch fails that acceptance evaluation but does not make the observed record schema-invalid, omitted, or rewritten."
 unlinked_command_and_requirement = "The ticket schema has no producer command_id on EvidenceRequirement. Do not infer a command-to-requirement association from array order; exact evidence-class equality is enforceable only after an explicit immutable association is supplied."
 evidence_requirement_to_evidence_ref = "For the same requirement_id, OrderedEvidenceRef.evidence_class and acceptance_class must copy the exact EvidenceRequirement values."
 accepted_evidence_class = "OrderedAcceptedEvidenceRef.evidence_class must equal the referenced EvidenceRequirement.evidence_class; requirement_id must resolve through the immutable ticket."
