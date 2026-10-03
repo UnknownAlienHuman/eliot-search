@@ -69,6 +69,18 @@ sha256 = "AE93D8165A56FA1773077E9471CF7D7446FB8A9D099FF0D5C5281760F9556B46"
 anchors = ["320-353 cancellation, deadlines and unknown outcomes", "355-392 closed failure registry"]
 use = "Grounds typed failure and unknown-outcome preservation; does not define a generic command-execution reason."
 
+[[source]]
+path = "swarm/schemas/package-submission-v1.toml"
+sha256 = "AE995F6EAFD839D697F9E7EADE6CA78BB2E59373D195F970FC7BFB5C812A2853"
+anchors = ["205-209 command_outcomes[] uses OrderedRawCommandOutcomeRef and requires exact command/environment/artifact/exit/output digests", "219-223 unavailable_checks[] uses OrderedUnavailableCheck and accounts ticket unavailable checks"]
+use = "Requires command outcome records but does not link an unavailable check to a command_id or define total planned-command coverage."
+
+[[source]]
+path = "swarm/schemas/package-handoff-v1.toml"
+sha256 = "DF91A9834D383762B3D3988A78A37C24C6B097F153AD1570478B1A6D7E550A04"
+anchors = ["147-152 evidence[] uses OrderedAcceptedEvidenceRef with raw outcome digest and explicit unavailable rule"]
+use = "Pins the accepted evidence output contract and its requirement to preserve unavailable evidence explicitly."
+
 [canonicalization]
 representation = "literal UTF-8 uppercase ASCII enum tokens"
 case_sensitive = true
@@ -83,7 +95,7 @@ result_values = ["FAIL", "PASS", "UNAVAILABLE"]
 result_values_source = "qualification/ticket-issuance/probes.toml"
 expected_behavior_values = ["FAILURE", "POLICY", "RECOVERY", "SUCCESS"]
 expected_behavior_source = "qualification/ticket-issuance/probes.toml"
-rule = "A class value is not a probe verdict, process exit, qualification receipt, package acceptance, or authority state."
+rule = "Only EvidenceRequirement.acceptance_class values (the expected_behavior_values vocabulary) describe expected behavior; they are not probe verdicts, process exits, qualification receipts, package acceptance, or authority states."
 unavailable_rule = "UNAVAILABLE remains explicit and never becomes PASS, a default, or silent omission."
 
 [[closed_enum]]
@@ -195,7 +207,7 @@ unlinked_command_and_requirement = "The ticket schema has no producer command_id
 evidence_requirement_to_evidence_ref = "For the same requirement_id, OrderedEvidenceRef.evidence_class and acceptance_class must copy the exact EvidenceRequirement values."
 accepted_evidence_class = "OrderedAcceptedEvidenceRef.evidence_class must equal the referenced EvidenceRequirement.evidence_class; requirement_id must resolve through the immutable ticket."
 failure_semantics = "EXIT_NONZERO is not a typed failure reason. FAILURE acceptance_class requires the exact ClosedReasonCode from the bound fixture/probe; unknown or missing reason evidence remains a failure, not an inferred match."
-unavailable_semantics = "A command that never starts, times out, is cancelled, or has unknown completion is not EXIT_NONZERO. Preserve it as an explicit unavailable check with a semantically applicable ClosedReasonCode; if none exists, stop for a separate reason-registry contract change."
+unavailable_semantics = "A command that never starts, times out, is cancelled, or has unknown completion is not EXIT_NONZERO. Preserve it as an explicit unavailable check with a semantically applicable ClosedReasonCode and an explicit link to its planned command_id; current OrderedUnavailableCheck has no command_id, so this path is unresolved and cannot support authoritative submission yet. If no applicable ClosedReasonCode exists, stop for a separate reason-registry contract change."
 qualification_semantics = "QUALIFIED is copied only from the owning fixture registry after its evidence requirements are met; the proposed status enum cannot execute probes or promote status."
 pass_scope = "The ticket-issuance qualification packet and P00 G0 each define their own PASS requirements. This proposal does not make every evidence class or every ticket requirement PASS-required."
 
@@ -204,6 +216,8 @@ status = "PROPOSED_REVIEW_PENDING"
 additional_closed_enum_fields = ["OrderedAcceptedEvidenceRef.availability", "OrderedUnavailableCheck.status"]
 additional_field_rules = [
   "Bind each EvidenceRequirement to its producing command or immutable fixture/probe; current schema has no producer_command_id or equivalent link.",
+  "Add an explicit command_id-to-unavailable_check link. OrderedUnavailableCheck currently carries check_id but no command_id; do not infer this relation from names, array position, or missing command outcome records.",
+  "Require every planned command_id to be accounted for exactly once: either by its observed OrderedRawCommandOutcomeRef in command_outcomes[] or by a separately typed unavailable record explicitly linked to that command. Reject duplicates, omissions, and simultaneous normal/unavailable representation. No authoritative package submission is allowed until an accepted representation enforces this total coverage rule.",
   "Define how artifact_required=false is represented by OrderedEvidenceRef, whose current artifact_ref and artifact_sha256 fields are required.",
   "Define exact failure-code/recovery-disposition linkage for acceptance_class=FAILURE or RECOVERY.",
   "Add a typed command execution failure/unavailability reason only if existing ClosedReasonCode values cannot accurately represent start failure, timeout, cancellation, or unknown completion.",
