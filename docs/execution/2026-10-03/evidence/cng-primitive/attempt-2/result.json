@@ -1,0 +1,47 @@
+{
+  "source_base": "bac90ff7753ef7d4d107836c60480df216acfe7f",
+  "source_file": "cng_ephemeral_probe.rs",
+  "source_sha256": "E03C0285331382FED3FFDCAEB6DEDE557DCF416F71EB68CA0932A02EA2108132",
+  "compile_command": "rustc +1.98.0 --edition=2024 -C opt-level=1 C:\\Development\\Rust\\targets\\eliot-search-cng-diagnostic\\attempt-2\\cng_ephemeral_probe.rs -o C:\\Development\\Rust\\targets\\eliot-search-cng-diagnostic\\attempt-2\\cng_ephemeral_probe.exe",
+  "execution_command": "C:\\Development\\Rust\\targets\\eliot-search-cng-diagnostic\\attempt-2\\cng_ephemeral_probe.exe",
+  "started_at_utc": "2026-10-03T08:56:44.5084923Z",
+  "finished_at_utc": "2026-10-03T08:56:44.8084927Z",
+  "compile_exit_code": 0,
+  "execution_exit_code": 0,
+  "authority": "NON_AUTHORITATIVE",
+  "scope": "EPHEMERAL_CNG_PRIMITIVES_ONLY",
+  "profile_qualified": false,
+  "private_export_denial_verified": false,
+  "files": [
+    {
+      "path": "cng_ephemeral_probe.rs",
+      "bytes": 7292,
+      "sha256": "E03C0285331382FED3FFDCAEB6DEDE557DCF416F71EB68CA0932A02EA2108132"
+    },
+    {
+      "path": "cng_ephemeral_probe.exe",
+      "bytes": 141312,
+      "sha256": "9FD878D99C75C211C1A7F5216C0127ADA4B010ED00046B7240E2106B47792DD2"
+    },
+    {
+      "path": "rustc.stdout.raw.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "rustc.stderr.raw.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "probe.stdout.raw.json",
+      "bytes": 542,
+      "sha256": "6999E8DAD1B4D7CE24638C7B828F0CDC8174081C766D7067DCEC2C00AC70F15A"
+    },
+    {
+      "path": "probe.stderr.raw.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+CNG_DIAGNOSTIC_FAILED:private_export_size_query_not_permission_denied
