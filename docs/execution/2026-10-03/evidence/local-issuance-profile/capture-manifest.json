@@ -1,0 +1,21 @@
+{
+  "source_candidate": "0f691f1b3fd10755a3c8e650ddea6f9311842978",
+  "reported_exit_code": 0,
+  "files": [
+    {
+      "path": "taplo-capture.txt",
+      "bytes": 1366,
+      "sha256": "101003512013E9DD25319D22843CB2D892136EC1972DB844B3BFB25AEE5C3E94"
+    },
+    {
+      "path": "taplo.stdout.raw.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "taplo.stderr.raw.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  ]
+}
