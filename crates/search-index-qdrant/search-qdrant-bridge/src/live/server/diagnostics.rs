@@ -20,10 +20,8 @@ pub(super) fn read_log_tail(dir: &Path) -> String {
         if file.seek(SeekFrom::Start(start)).is_err() {
             continue;
         }
-        let mut bytes = Vec::with_capacity(
-            usize::try_from(metadata.len().saturating_sub(start))
-                .unwrap_or(LOG_TAIL_BYTES as usize),
-        );
+        let tail_len = metadata.len().saturating_sub(start).min(LOG_TAIL_BYTES);
+        let mut bytes = Vec::with_capacity(usize::try_from(tail_len).unwrap_or(0));
         if file
             .take(LOG_TAIL_BYTES)
             .read_to_end(&mut bytes)
