@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn sealed_store_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/sealed_store.rs");
-    assert!(entry.contains("#[path = \"sealed_store/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"sealed_store/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -31,7 +31,7 @@ fn sealed_store_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/sealed_store/kernel.rs");
+    let kernel = read(&root, "src/sealed_store/kernel/mod.rs");
     for module in ["api", "envelope", "model", "platform", "spec"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
@@ -139,7 +139,7 @@ fn unsafe_and_regressions_stay_isolated() {
     let root = crate_root();
     for relative in [
         "src/sealed_store.rs",
-        "src/sealed_store/kernel.rs",
+        "src/sealed_store/kernel/mod.rs",
         "src/sealed_store/kernel/api.rs",
         "src/sealed_store/kernel/envelope.rs",
         "src/sealed_store/kernel/model.rs",

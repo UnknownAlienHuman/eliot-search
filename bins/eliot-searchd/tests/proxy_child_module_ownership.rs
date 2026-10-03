@@ -12,7 +12,7 @@ fn read(root: &Path, relative: &str) -> String {
 #[test]
 fn proxy_child_facade_is_thin() {
     let root = crate_root();
-    let facade = read(&root, "src/proxy_child.rs");
+    let facade = read(&root, "src/proxy_child/mod.rs");
     for module in ["lifecycle", "model", "pipe", "spec", "time", "worker"] {
         assert!(facade.contains(&format!("mod {module};")));
     }

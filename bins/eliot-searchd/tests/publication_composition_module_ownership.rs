@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn publication_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/publication_composition.rs");
-    assert!(entry.contains("#[path = \"publication_composition/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"publication_composition/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 2_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -31,7 +31,7 @@ fn publication_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/publication_composition/kernel.rs");
+    let kernel = read(&root, "src/publication_composition/kernel/mod.rs");
     for module in [
         "compensation",
         "guards",

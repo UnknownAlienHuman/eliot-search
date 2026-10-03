@@ -13,11 +13,11 @@ fn read(root: &Path, relative: &str) -> String {
 fn app_entry_and_kernel_are_thin_stable_facades() {
     let root = crate_root();
     let entry = read(&root, "src/app.rs");
-    assert!(entry.contains("#[path = \"app/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"app/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "facade grew to {} bytes", entry.len());
 
-    let kernel = read(&root, "src/app/kernel.rs");
+    let kernel = read(&root, "src/app/kernel/mod.rs");
     for module in [
         "commands", "dispatch", "output", "protocol", "source_root_commands",
         "spec", "status",

@@ -13,11 +13,11 @@ fn read(root: &Path, relative: &str) -> String {
 fn public_runtime_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/public_runtime_service.rs");
-    assert!(entry.contains("#[path = \"public_runtime_service/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"public_runtime_service/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::maybe_run;"));
     assert!(entry.len() < 1_200, "entry grew to {} bytes", entry.len());
 
-    let kernel = read(&root, "src/public_runtime_service/kernel.rs");
+    let kernel = read(&root, "src/public_runtime_service/kernel/mod.rs");
     for module in [
         "codec", "diagnostics", "dispatch", "entry", "mutation", "query",
         "reporting", "runtime", "session", "spec", "state",

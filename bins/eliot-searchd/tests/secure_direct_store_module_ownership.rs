@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn secure_direct_store_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/secure_direct_store.rs");
-    assert!(entry.contains("#[path = \"secure_direct_store/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"secure_direct_store/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::DirectStore;"));
     assert!(entry.len() < 4_000, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -30,7 +30,7 @@ fn secure_direct_store_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/secure_direct_store/kernel.rs");
+    let kernel = read(&root, "src/secure_direct_store/kernel/mod.rs");
     for module in ["catalog", "lifecycle", "read", "search"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
@@ -141,7 +141,7 @@ fn direct_store_compatibility_and_query_regression_stay_closed() {
         assert!(entry.contains(compatibility_name), "lost compatibility name {compatibility_name}");
     }
 
-    let kernel = read(&root, "src/secure_direct_store/kernel.rs");
+    let kernel = read(&root, "src/secure_direct_store/kernel/mod.rs");
     assert!(kernel.contains(
         "LEGACY_REVISION_DIRECTORY as REVISION_DIRECTORY"
     ));

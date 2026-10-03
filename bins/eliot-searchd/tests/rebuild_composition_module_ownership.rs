@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn rebuild_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/rebuild_composition.rs");
-    assert!(entry.contains("#[path = \"rebuild_composition/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"rebuild_composition/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 2_000, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -31,7 +31,7 @@ fn rebuild_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/rebuild_composition/kernel.rs");
+    let kernel = read(&root, "src/rebuild_composition/kernel/mod.rs");
     for module in ["cutover", "error", "manifest", "pins", "plan", "reclaim"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
@@ -142,7 +142,7 @@ fn rebuild_reason_and_public_surface_stay_closed() {
         assert!(error.contains(code), "lost rebuild reason {code}");
     }
 
-    let kernel = read(&root, "src/rebuild_composition/kernel.rs");
+    let kernel = read(&root, "src/rebuild_composition/kernel/mod.rs");
     for public_name in [
         "RetainedManifest",
         "RetainedPoint",

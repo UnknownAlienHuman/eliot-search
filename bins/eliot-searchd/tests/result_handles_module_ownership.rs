@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn result_handle_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/result_handles.rs");
-    assert!(entry.contains("#[path = \"result_handles/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"result_handles/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -29,7 +29,7 @@ fn result_handle_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/result_handles/kernel.rs");
+    let kernel = read(&root, "src/result_handles/kernel/mod.rs");
     for module in ["catalog", "error", "expand", "model", "spec"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

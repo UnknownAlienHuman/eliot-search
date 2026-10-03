@@ -37,7 +37,7 @@ fn legacy_snapshot_target_is_harness_only() {
 fn legacy_snapshot_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/snapshot.rs");
-    assert!(entry.contains("#[path = \"snapshot/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"snapshot/kernel/mod.rs\"]"));
     assert!(entry.contains("pub(crate) use kernel::*;"));
     assert!(entry.len() < 1_500, "snapshot facade grew to {} bytes", entry.len());
     for forbidden in [
@@ -53,7 +53,7 @@ fn legacy_snapshot_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/snapshot/kernel.rs");
+    let kernel = read(&root, "src/snapshot/kernel/mod.rs");
     for module in [
         "capture",
         "fingerprint",

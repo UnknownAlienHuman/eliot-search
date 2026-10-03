@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn service_output_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/service_output.rs");
-    assert!(entry.contains("#[path = \"service_output/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"service_output/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -29,7 +29,7 @@ fn service_output_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/service_output/kernel.rs");
+    let kernel = read(&root, "src/service_output/kernel/mod.rs");
     for module in ["codec", "indexed", "page", "provider", "streaming"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

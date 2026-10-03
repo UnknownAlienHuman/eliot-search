@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn preparation_store_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/preparation_store.rs");
-    assert!(entry.contains("#[path = \"preparation_store/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"preparation_store/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::{PreparationBatch, PreparationCursor};"));
     assert!(entry.len() < 2_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -30,7 +30,7 @@ fn preparation_store_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/preparation_store/kernel.rs");
+    let kernel = read(&root, "src/preparation_store/kernel/mod.rs");
     for module in [
         "batch", "codec", "inspect", "load", "paths", "persist", "spec",
     ] {

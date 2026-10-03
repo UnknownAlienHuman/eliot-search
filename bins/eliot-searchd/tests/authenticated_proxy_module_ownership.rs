@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn authenticated_proxy_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/authenticated_proxy.rs");
-    assert!(entry.contains("#[path = \"authenticated_proxy/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"authenticated_proxy/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::maybe_run;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -29,15 +29,15 @@ fn authenticated_proxy_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/authenticated_proxy/kernel.rs");
+    let kernel = read(&root, "src/authenticated_proxy/kernel/mod.rs");
     for module in [
         "child", "dispatch", "entry", "envelope", "hello", "key",
         "operation", "server", "spec", "terminal", "wire",
     ] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
-    assert!(kernel.contains("#[path = \"../proxy_exchange.rs\"]"));
-    assert!(kernel.contains("#[path = \"../proxy_child.rs\"]"));
+    assert!(kernel.contains("#[path = \"../../proxy_exchange/mod.rs\"]"));
+    assert!(kernel.contains("#[path = \"../../proxy_child/mod.rs\"]"));
     assert!(kernel.contains("pub use entry::maybe_run;"));
     assert!(kernel.len() < 2_500, "kernel grew to {} bytes", kernel.len());
 }
@@ -97,12 +97,12 @@ fn authenticated_proxy_responsibilities_stay_separated() {
     assert!(server.contains("DirectChild::spawn"));
     assert!(!server.contains("decode_envelope_frame"));
 
-    let child_adapter = read(&root, "src/proxy_child.rs");
+    let child_adapter = read(&root, "src/proxy_child/mod.rs");
     assert!(child_adapter.contains("use super::{Terminal, MAX_PROXY_COMMAND_BYTES};"));
     assert!(child_adapter.contains("pub(super) use lifecycle::ChildIo;"));
     assert!(child_adapter.contains("pub(super) use spec::ChildLimits;"));
 
-    let exchange_adapter = read(&root, "src/proxy_exchange.rs");
+    let exchange_adapter = read(&root, "src/proxy_exchange/mod.rs");
     assert!(exchange_adapter.contains("pub(super) use fence::ExchangeFence;"));
     assert!(exchange_adapter.contains("pub(super) use forward::forward_reply;"));
     assert!(exchange_adapter.contains("pub(super) use parser::event_name;"));

@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn directory_manifest_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/directory_manifest.rs");
-    assert!(entry.contains("#[path = \"directory_manifest/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"directory_manifest/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -29,7 +29,7 @@ fn directory_manifest_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/directory_manifest/kernel.rs");
+    let kernel = read(&root, "src/directory_manifest/kernel/mod.rs");
     for module in [
         "codec", "load", "migration", "model", "paths", "persist",
         "spec", "sync",
