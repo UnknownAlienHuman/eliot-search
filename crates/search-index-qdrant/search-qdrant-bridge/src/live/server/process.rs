@@ -155,7 +155,7 @@ pub async fn spawn_disposable_server(
         .stderr(Stdio::from(stderr))
         .spawn()
         .map_err(|_| LiveError::SpawnFailed)?;
-    let binding = match fixture_connection_binding(endpoint.clone(), child.id(), nanos) {
+    let binding = match fixture_connection_binding(&endpoint, child.id(), nanos) {
         Ok(binding) => binding,
         Err(error) => {
             let _ = child.kill();
@@ -231,7 +231,7 @@ impl QdrantApiKeyLeaseProvider for FixtureApiKeyLeaseProvider {
 }
 
 fn fixture_connection_binding(
-    endpoint: LiveEndpoint,
+    endpoint: &LiveEndpoint,
     pid: u32,
     creation_tick: u128,
 ) -> Result<QdrantConnectionBinding, LiveError> {

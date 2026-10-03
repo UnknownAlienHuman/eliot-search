@@ -86,11 +86,12 @@ impl QdrantEndpointIdentity {
     }
 }
 
-/// Exact current supervisor identity and its purpose-bound API-key lease
-/// metadata. The values are equality bindings supplied by trusted daemon
-/// composition; they are not signatures or independently verified process
-/// evidence. The provider must compare them against its current OS process
-/// guard, owner fence, endpoint plan and secret lease on every dispatch.
+/// Immutable content-free supervisor and API-key lease binding.
+///
+/// Trusted daemon composition supplies these equality fields; they are not
+/// signatures or independently verified process evidence. The provider must
+/// compare them against its current OS process guard, owner fence, endpoint
+/// plan and secret lease on every dispatch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct QdrantConnectionBinding {
     process_id: NonZeroU32,
@@ -339,7 +340,7 @@ impl fmt::Debug for QdrantApiKeyLease {
 
 const MAX_API_KEY_BYTES: usize = 4096;
 
-fn normalize_provider_error(error: BridgeError) -> BridgeError {
+const fn normalize_provider_error(error: BridgeError) -> BridgeError {
     match error {
         BridgeError::AuthenticationLeaseExpired
         | BridgeError::AuthenticationInvalid
