@@ -1,0 +1,29 @@
+{
+  "scope": "READ_ONLY_ADVISORY_DIAGNOSTIC_NOT_AUTHORITY",
+  "source_commit": "e49e9d675f3ad21942b9b29def37c56d33dcfdcc",
+  "executable": "cargo",
+  "arguments": [
+    "+1.98.0",
+    "run",
+    "--locked",
+    "--offline",
+    "-p",
+    "xtask",
+    "--",
+    "build",
+    "ticket-issuance-plan",
+    "--root",
+    "C:\\Development\\Rust\\projects\\eliot-search",
+    "--package",
+    "search-contracts",
+    "--base-commit",
+    "sha1:e49e9d675f3ad21942b9b29def37c56d33dcfdcc",
+    "--output",
+    "-"
+  ],
+  "started_at": "2026-10-03T07:34:18.3155299+00:00",
+  "finished_at": "2026-10-03T07:34:34.6583000+00:00",
+  "exit_code": 2,
+  "stdout_sha256": "7571A4E9B8A15CCD2AC3DE9F29D31BF5CEB0D232F689F4995F9B20E9459864F3",
+  "stderr_sha256": "0426C041CD0870C02C7FA302F447E44E855463B2A66D4BB4F5D73CFB2582F2A4"
+}

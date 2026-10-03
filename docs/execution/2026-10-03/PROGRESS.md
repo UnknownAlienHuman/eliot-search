@@ -111,6 +111,14 @@ The sanitized study summary is [STANDALONE_STUDY.md](STANDALONE_STUDY.md). Raw e
 source/search output remains local. Six anchor blobs exist at its pinned base and six are explicitly
 absent there; all twelve working-tree hashes still matched despite a concurrent corpus commit.
 
-Review-pending contract requests under `docs/handoff/changes/` identify missing external profile/trust
-definitions, instance-status bindings and acknowledgement encoding. Their publication is proposal
-publication only. No request creates an issued record, accepts qualification or advances launch state.
+The bounded native issuance prerequisites now pass **17/17** focused tests at exact source
+`166a4a2f59cc21998293f50071efa774220c4501`: profiles 8/8, actual-repository builder 3/3 and W0 selectors
+6/6. Independent Luna review accepted that source for bounded integration publication. The
+[detailed record](W0_ISSUANCE_PREREQUISITES.md) preserves earlier failures and exact captured output.
+The final structural validator also reports zero issued records.
+
+Integration decisions accept only the four explicit instance-status bindings, the descriptor's root
+canonical-order placement and the closed W0 selector correction. Nested enum bindings, external
+profile/trust definitions and acknowledgement encoding remain unresolved. The ticket-obligation enum
+proposal is published as a non-normative candidate. No decision creates an issued record, accepts
+qualification or advances launch state.

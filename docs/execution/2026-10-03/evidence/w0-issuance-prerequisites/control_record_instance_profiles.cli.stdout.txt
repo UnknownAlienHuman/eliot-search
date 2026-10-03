@@ -1,0 +1,1 @@
+{"authority":"NON_AUTHORITATIVE","max_total_input_bytes":294912,"record_kinds":["context_manifest_v1","assignment_ticket_v1","writer_lease_v1","lease_event_v1"],"scope":"FIRST_FOUR_INSTANCE_PROFILE_STRUCTURE_ONLY","validation":"PASS"}

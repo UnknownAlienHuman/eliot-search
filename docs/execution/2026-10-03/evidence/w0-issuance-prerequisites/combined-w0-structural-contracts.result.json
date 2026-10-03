@@ -1,0 +1,18 @@
+{
+  "scope": "STRUCTURAL_VALIDATION_ONLY_NOT_QUALIFICATION",
+  "source_commit": "166a4a2f59cc21998293f50071efa774220c4501",
+  "executable": "pwsh",
+  "arguments": [
+    "-NoProfile",
+    "-File",
+    "C:\\Development\\Rust\\projects\\eliot-search\\tools\\validate-ticket-issuance-contracts.ps1",
+    "-Root",
+    "C:\\Development\\Rust\\projects\\eliot-search",
+    "-Json"
+  ],
+  "started_at": "2026-10-03T07:48:21.2840045+00:00",
+  "finished_at": "2026-10-03T07:48:21.8420983+00:00",
+  "exit_code": 0,
+  "stdout_sha256": "844B6397FE22865A4BBF409357A367929D140639699ACC90FB282110A23FEDAA",
+  "stderr_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+}

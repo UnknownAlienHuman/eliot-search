@@ -1,0 +1,78 @@
+
+running 8 tests
+test checked_in_first_four_profiles_validate_as_non_authoritative ... ok
+test context_profile_is_loaded_from_its_registry_binding ... ok
+test oversized_profile_is_rejected_before_toml_parsing ... ok
+test missing_profile_file_is_rejected_by_the_read_only_validator ... ok
+test ticket_lease_and_event_statuses_are_exact_and_closed ... ok
+test registry_requires_exact_separate_profile_list_and_unique_bindings ... ok
+test serialized_status_must_be_root_string_and_listed_once ... ok
+test profile_shape_rejects_unknown_keys_and_unresolved_instance_statuses ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 3 tests
+test output_outside_advisory_root_is_invalid_and_not_writable ... ok
+test partial_selection_is_a_conflict_without_authority ... FAILED
+test current_zero_selection_is_deterministic_and_non_authoritative ... FAILED
+
+failures:
+
+---- partial_selection_is_a_conflict_without_authority stdout ----
+
+thread 'partial_selection_is_a_conflict_without_authority' (56652) panicked at xtask\tests\ticket_issuance_builder.rs:80:5:
+assertion `left == right` failed
+  left: Some("INVALID_REPOSITORY_STATE")
+ right: Some("BLOCKED_CONFLICT")
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: core::panicking::assert_failed_inner
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:439
+   3: core::panicking::assert_failed<enum2$<core::option::Option<ref$<str$> > >,enum2$<core::option::Option<ref$<str$> > > >
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:394
+   4: ticket_issuance_builder::partial_selection_is_a_conflict_without_authority
+             at .\tests\ticket_issuance_builder.rs:80
+   5: ticket_issuance_builder::partial_selection_is_a_conflict_without_authority::closure$0
+             at .\tests\ticket_issuance_builder.rs:75
+   6: core::ops::function::FnOnce::call_once<ticket_issuance_builder::partial_selection_is_a_conflict_without_authority::closure_env$0,tuple$<> >
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+   7: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- current_zero_selection_is_deterministic_and_non_authoritative stdout ----
+
+thread 'current_zero_selection_is_deterministic_and_non_authoritative' (36112) panicked at xtask\tests\ticket_issuance_builder.rs:26:5:
+assertion `left == right` failed
+  left: Some("INVALID_REPOSITORY_STATE")
+ right: Some("BLOCKED_MISSING_SELECTION")
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: core::panicking::assert_failed_inner
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:439
+   3: core::panicking::assert_failed<enum2$<core::option::Option<ref$<str$> > >,enum2$<core::option::Option<ref$<str$> > > >
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:394
+   4: ticket_issuance_builder::current_zero_selection_is_deterministic_and_non_authoritative
+             at .\tests\ticket_issuance_builder.rs:26
+   5: ticket_issuance_builder::current_zero_selection_is_deterministic_and_non_authoritative::closure$0
+             at .\tests\ticket_issuance_builder.rs:19
+   6: core::ops::function::FnOnce::call_once<ticket_issuance_builder::current_zero_selection_is_deterministic_and_non_authoritative::closure_env$0,tuple$<> >
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+   7: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    current_zero_selection_is_deterministic_and_non_authoritative
+    partial_selection_is_a_conflict_without_authority
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.70s
+
