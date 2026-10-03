@@ -276,8 +276,8 @@ pub(super) fn validate_control_schema(
     checks: &mut Checks,
 ) {
     let required = [
-        ("swarm/orchestration.toml", 6_i64),
-        ("swarm/control-plane-schema.toml", 4),
+        ("swarm/orchestration.toml", 5_i64),
+        ("swarm/control-plane-schema.toml", 3),
         ("swarm/schemas/types-v1.toml", 2),
         ("swarm/ticket-issuance-plan-schema-v2.toml", 2),
         ("swarm/ticket-issuance-plan-digest-v2.toml", 2),
@@ -317,7 +317,7 @@ pub(super) fn validate_control_schema(
             orchestration,
             "consumer_requires_exact_commit_and_api_digest",
         ) == Some(true)
-        && integer(launch, "orchestration_registry_schema_version") == Some(6)
+        && integer(launch, "orchestration_registry_schema_version") == Some(5)
         && text(launch, "orchestration_registry_path")
             == Some("swarm/orchestration.toml");
     if coherent {

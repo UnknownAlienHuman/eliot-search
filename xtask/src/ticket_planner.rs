@@ -31,7 +31,7 @@ pub use path::{
 };
 pub use selectors::{
     SelectorDocs, SelectorStatus, launch_membership_at_path, one_table,
-    resolve_selector, resolve_selector_with_w0_module,
+    resolve_selector,
 };
 pub use spec::{
     CLOSED_REASON_CODES, CONFLICT_REASONS, CONTEXT_ALLOWED,

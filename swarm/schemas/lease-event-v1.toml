@@ -10,16 +10,17 @@ event_kinds = ["ACKNOWLEDGED", "SUBMITTED", "REVOKED", "SUPERSEDED"]
 event_reason_type = "LeaseEventReasonCode"
 source_content_allowed = false
 secret_content_allowed = false
-canonical_field_order = [
-  "schema_version", "record_kind", "status", "identity", "lease", "event",
-  "actor", "related_records", "chain", "signature",
-]
 
 [event_reason_codes]
 ACKNOWLEDGED = "WRITER_ACKNOWLEDGED"
 SUBMITTED = "PACKAGE_SUBMITTED"
 REVOKED = "LEASE_REVOKED"
 SUPERSEDED = "LEASE_SUPERSEDED"
+
+canonical_field_order = [
+  "schema_version", "record_kind", "status", "identity", "lease", "event",
+  "actor", "related_records", "chain", "signature",
+]
 
 [[field]]
 path = "identity.event_id"
