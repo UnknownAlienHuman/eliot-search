@@ -184,6 +184,10 @@ where
 ///
 /// Returns a typed failure for invalid names/bounds, I/O or platform failure,
 /// immutable conflict, changed identity, uncertain publication or cleanup.
+#[expect(
+    clippy::case_sensitive_file_extension_comparisons,
+    reason = "Canonical temporary artifact names require the exact lowercase .tmp suffix; case-insensitive matching would widen the closed filename grammar."
+)]
 pub fn publish_legacy_preparation_artifact<P>(
     platform: &P,
     directory: &Path,
