@@ -1,0 +1,1 @@
+cargo +1.98.0 run --locked -p xtask -- validate control-record-enum-bindings --root C:\Users\kleym\.codex\worktrees\issuance-instance-profiles\eliot-search --json

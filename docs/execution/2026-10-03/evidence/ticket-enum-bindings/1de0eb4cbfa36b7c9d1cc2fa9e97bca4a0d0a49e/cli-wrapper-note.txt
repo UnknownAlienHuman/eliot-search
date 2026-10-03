@@ -1,0 +1,1 @@
+The cargo process exited 101 during compilation before the validator ran. cargo stdout is empty; cargo stderr is preserved in cli-stderr.txt. A PowerShell display expression then attempted .Trim() on empty stdout and emitted an uncaptured wrapper diagnostic; this did not modify the raw cargo files or exit code.

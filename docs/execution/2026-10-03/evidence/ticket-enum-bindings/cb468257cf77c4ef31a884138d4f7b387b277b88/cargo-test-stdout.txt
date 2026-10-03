@@ -1,0 +1,54 @@
+
+running 5 tests
+test checked_in_enum_definitions_and_nine_bindings_validate_non_authoritatively ... FAILED
+test enum_allowlists_are_ordered_exact_and_reject_unknown_fields ... FAILED
+test missing_wrong_duplicate_and_cross_bound_rules_are_rejected ... FAILED
+test duplicate_enum_definition_is_rejected ... FAILED
+test registry_pin_and_type_registry_size_are_bounded ... FAILED
+
+failures:
+
+---- checked_in_enum_definitions_and_nine_bindings_validate_non_authoritatively stdout ----
+
+thread 'checked_in_enum_definitions_and_nine_bindings_validate_non_authoritatively' (12720) panicked at xtask\tests\control_record_enum_bindings.rs:111:10:
+accepted enum definitions and bindings are structurally closed: ControlRegistryDefinitionInvalid
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- enum_allowlists_are_ordered_exact_and_reject_unknown_fields stdout ----
+
+thread 'enum_allowlists_are_ordered_exact_and_reject_unknown_fields' (103680) panicked at xtask\tests\control_record_enum_bindings.rs:129:5:
+assertion `left == right` failed
+  left: ControlRegistryDefinitionInvalid
+ right: EnumDefinitionInvalid
+
+---- missing_wrong_duplicate_and_cross_bound_rules_are_rejected stdout ----
+
+thread 'missing_wrong_duplicate_and_cross_bound_rules_are_rejected' (87412) panicked at xtask\tests\control_record_enum_bindings.rs:175:5:
+assertion `left == right` failed
+  left: ControlRegistryDefinitionInvalid
+ right: BindingInvalid
+
+---- duplicate_enum_definition_is_rejected stdout ----
+
+thread 'duplicate_enum_definition_is_rejected' (68448) panicked at xtask\tests\control_record_enum_bindings.rs:233:5:
+assertion `left == right` failed: duplicate adopted type name must fail closed
+  left: ControlRegistryDefinitionInvalid
+ right: EnumDefinitionInvalid
+
+---- registry_pin_and_type_registry_size_are_bounded stdout ----
+
+thread 'registry_pin_and_type_registry_size_are_bounded' (82700) panicked at xtask\tests\control_record_enum_bindings.rs:259:5:
+assertion `left == right` failed
+  left: ControlRegistryDefinitionInvalid
+ right: TypeRegistryDefinitionInvalid
+
+
+failures:
+    checked_in_enum_definitions_and_nine_bindings_validate_non_authoritatively
+    duplicate_enum_definition_is_rejected
+    enum_allowlists_are_ordered_exact_and_reject_unknown_fields
+    missing_wrong_duplicate_and_cross_bound_rules_are_rejected
+    registry_pin_and_type_registry_size_are_bounded
+
+test result: FAILED. 0 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
