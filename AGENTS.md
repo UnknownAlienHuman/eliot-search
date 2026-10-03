@@ -1,5 +1,14 @@
 # AGENTS.md — ELIOT Search swarm contract
 
+## Current standalone implementation phase — 2026-10-03
+
+The project owner directs the current work to Qdrant wrapping and standalone Search first.
+Eliot Governor and Eliot Memory OS are not prerequisites for this phase. The ticket, materialized
+writer-context, approval-profile, writer-lease and acknowledgement orchestration below is deferred
+until Eliot Memory OS is running and that development mode is enabled; it must not block current
+package implementation. Preserve scoped ownership, bounded behavior, exact Qdrant artifact/client
+pins, security and vendor boundaries, honest verification evidence, and manual-only CI.
+
 This repository is implementation-scaffolded, not implemented. Architecture Part I remains normative;
 ordinary agents use bounded packets and accepted handoffs instead of loading the 145 KB master.
 

@@ -1,5 +1,10 @@
 # Local Git artifact adapter: first implementation boundary
 
+**Implementation deferred:** the project owner's 2026-10-03 clarification places this agent-management
+component after Eliot Memory OS startup. Current implementation priority is the Qdrant wrapper and
+standalone Search. Preserve the component's draft work for that later phase; it does not gate current
+package changes.
+
 **Decision:** accepted for bounded integration-tooling implementation only. This freezes the small
 object preparation/readback component below. It does not adopt the complete local issuance profile,
 qualify a store instance, authorize control-record publication, or create an assignment or lease.
