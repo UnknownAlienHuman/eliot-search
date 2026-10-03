@@ -8,6 +8,12 @@ Turn a materialization into deterministic unit occurrences and an immutable unit
 
 ## Owns
 
+Durable manifests use `exact-unit-manifest/v2` with BLAKE3-framed profile,
+unit and manifest identities. The decoder quarantines v1 manifests because
+their stored `Blake3_256` label was backed by a non-cryptographic digest; they
+must be regenerated from exact retained inputs before reunitization and
+reprojection.
+
 - unitizer profiles
 - `UnitOccurrence` creation
 - native anchor preservation

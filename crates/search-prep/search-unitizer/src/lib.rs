@@ -26,7 +26,8 @@ pub use layout::{UnitSpan, unitize_text};
 
 mod manifest;
 pub use manifest::{
-    CanonicalUnitManifestBytes, MaterializerProvenance, UNIT_MANIFEST_DIGEST_ALGORITHM,
+    CanonicalUnitManifestBytes, MaterializerProvenance, MAX_UNITIZER_PROFILE_NAME_BYTES,
+    UNIT_MANIFEST_DIGEST_ALGORITHM,
     UNIT_MANIFEST_FORMAT, UNIT_MANIFEST_VERSION, UnitDescriptor, UnitManifest, UnitManifestDiff,
     UnitManifestVerificationReceipt, UnitizerProfileChange, UnitizerProfileDescriptor,
     UnitizerProfileId, ValidatedUnitizerProfile, build_unit_manifest, canonicalize_unit_manifest,

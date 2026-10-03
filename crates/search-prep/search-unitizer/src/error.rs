@@ -41,6 +41,8 @@ pub enum UnitizationError {
     UnitizerProfileMismatch,
     /// Unit manifest binding is incomplete for the claimed provenance.
     UnitManifestIncomplete,
+    /// Legacy unit-manifest v1 uses an unqualified digest and must be rebuilt.
+    UnitManifestLegacyUnsupported,
     /// A recomputed unit or manifest digest differs from the stored manifest.
     UnitManifestDigestMismatch,
     /// A stored manifest is internally inconsistent across rebuilds.
@@ -70,6 +72,7 @@ impl UnitizationError {
             Self::UnitizerProfileInvalid => "UNITIZER_PROFILE_INVALID",
             Self::UnitizerProfileMismatch => "UNITIZER_PROFILE_MISMATCH",
             Self::UnitManifestIncomplete => "UNIT_MANIFEST_INCOMPLETE",
+            Self::UnitManifestLegacyUnsupported => "UNIT_MANIFEST_LEGACY_UNSUPPORTED",
             Self::UnitManifestDigestMismatch => "UNIT_MANIFEST_DIGEST_MISMATCH",
             Self::UnitizationNondeterministic => "UNITIZATION_NONDETERMINISTIC",
         }

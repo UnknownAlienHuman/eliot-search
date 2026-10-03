@@ -1,41 +1,53 @@
-//! Deterministic domain-separated identity digest used by manifest v1.
+//! Deterministic domain-separated identity digest used by manifest v2.
 
-/// Domain-separated 32-byte digest over an ordered byte preimage.
+/// Computes BLAKE3 over an explicitly framed domain and ordered byte chunks.
 ///
-/// Four independent FNV-1a 64-bit lanes absorb the domain, a domain
-/// separator, then each length-delimited chunk. Fixed little-endian lane
-/// encoding keeps the digest byte-identical across runs and platforms. This
-/// is an identity digest, not a cryptographic commitment over source bytes.
+/// Every length and count uses an unsigned 64-bit little-endian encoding. This
+/// framing distinguishes different domain/chunk boundaries before the bytes
+/// are passed to BLAKE3. The result is an identity digest, not a raw-content
+/// digest; raw source bytes are hashed directly by their owning producer.
 pub(super) fn digest32(domain: &[u8], chunks: &[&[u8]]) -> [u8; 32] {
-    const SEED: [u64; 4] = [
-        0xcbf2_9ce4_8422_2325,
-        0x8422_2325_cbf2_9ce4,
-        0x4822_2325_cbf2_9ce4,
-        0x2325_cbf2_9ce4_8422,
-    ];
-    const PRIME: u64 = 0x1_0000_0000_01B3;
-    let mut lanes = SEED;
-    let mut index = 0_usize;
-    let mut absorb = |byte: u8| {
-        let slot = index % 4;
-        lanes[slot] ^= u64::from(byte);
-        lanes[slot] = lanes[slot].wrapping_mul(PRIME);
-        index = index.wrapping_add(1);
-    };
-    for byte in domain {
-        absorb(*byte);
-    }
-    absorb(0xFF);
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(
+        &u64::try_from(domain.len())
+            .expect("domain length fits the supported 64-bit wire format")
+            .to_le_bytes(),
+    );
+    hasher.update(domain);
+    hasher.update(
+        &u64::try_from(chunks.len())
+            .expect("chunk count fits the supported 64-bit wire format")
+            .to_le_bytes(),
+    );
     for chunk in chunks {
-        for byte in *chunk {
-            absorb(*byte);
-        }
-        absorb(0xFE);
+        hasher.update(
+            &u64::try_from(chunk.len())
+                .expect("chunk length fits the supported 64-bit wire format")
+                .to_le_bytes(),
+        );
+        hasher.update(chunk);
     }
-    let mut out = [0_u8; 32];
-    for (slot, lane) in lanes.iter().enumerate() {
-        let start = slot * 8;
-        out[start..start + 8].copy_from_slice(&lane.to_le_bytes());
+    *hasher.finalize().as_bytes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::digest32;
+
+    #[test]
+    fn blake3_dependency_matches_the_published_empty_input_vector() {
+        assert_eq!(
+            blake3::hash(b"").to_hex().as_str(),
+            "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        );
     }
-    out
+
+    #[test]
+    fn chunk_boundaries_are_part_of_the_v2_hash_input() {
+        let domain = b"eliot-search/unitizer/test/v2";
+        assert_ne!(
+            digest32(domain, &[b"ab", b"c"]),
+            digest32(domain, &[b"a", b"bc"])
+        );
+    }
 }
