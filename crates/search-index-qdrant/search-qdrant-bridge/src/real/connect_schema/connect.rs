@@ -17,13 +17,10 @@ impl RealDataPlane {
             .skip_compatibility_check()
             .build()
             .map_err(|_| BridgeError::TransportFailed)?;
-        let reply = tokio::time::timeout(
-            Duration::from_secs(15),
-            client.health_check(),
-        )
-        .await
-        .map_err(|_| BridgeError::TransportFailed)?
-        .map_err(|_| BridgeError::TransportFailed)?;
+        let reply = tokio::time::timeout(Duration::from_secs(15), client.health_check())
+            .await
+            .map_err(|_| BridgeError::TransportFailed)?
+            .map_err(|_| BridgeError::TransportFailed)?;
         if reply.version != QUALIFIED_SERVER_VERSION
             || reply.version != gate.server_version()
             || reply
@@ -38,6 +35,7 @@ impl RealDataPlane {
             gate,
             limits,
             schemas: BTreeMap::new(),
+            generations: BTreeMap::new(),
             operations: BTreeMap::new(),
         })
     }

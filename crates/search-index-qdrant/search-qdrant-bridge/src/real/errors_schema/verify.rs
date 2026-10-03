@@ -7,7 +7,10 @@ fn verify_server_schema(
         .as_ref()
         .and_then(|config| config.params.as_ref())
         .ok_or(BridgeError::CollectionSchemaMismatch)?;
-    if params.shard_number != 1 {
+    if params.shard_number != 1
+        || params.replication_factor != Some(1)
+        || params.write_consistency_factor != Some(1)
+    {
         return Err(BridgeError::CollectionSchemaMismatch);
     }
     let sparse = params
@@ -31,11 +34,29 @@ fn verify_server_schema(
             return Err(BridgeError::CollectionSchemaMismatch);
         }
     }
-    for field in EligibilityFilter::INDEXED_FIELDS {
-        if !info.payload_schema.contains_key(field) {
-            return Err(BridgeError::PayloadIndexMissing);
+
+    if schema
+        .indexed_payload_fields
+        .iter()
+        .any(|field| !info.payload_schema.contains_key(field))
+    {
+        return Err(BridgeError::PayloadIndexMissing);
+    }
+    if info.payload_schema.len() != schema.indexed_payload_fields.len()
+        || schema.indexed_payload_fields.len() != PointPayload::INDEXED_FIELDS.len()
+    {
+        return Err(BridgeError::CollectionSchemaMismatch);
+    }
+    for (field, kind) in payload_index_specs() {
+        let remote = info
+            .payload_schema
+            .get(field)
+            .ok_or(BridgeError::PayloadIndexMissing)?;
+        if remote.data_type() != vendor_schema_type(kind) {
+            return Err(BridgeError::CollectionSchemaMismatch);
         }
     }
+
     let strict = info
         .config
         .as_ref()

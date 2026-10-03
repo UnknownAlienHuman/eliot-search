@@ -1,9 +1,9 @@
 # Function contract — `search-qdrant-bridge`
 
-**Status:** W3/P05 data-plane contract; no server/client pair is accepted yet.
+**Status:** W3/P05 data-plane contract; indexed product admission remains receipt-gated.
 
-Vendor types remain private. Every public operation consumes/returns Search contract or port-support
-types and binds an accepted `QdrantCapabilityReceipt`.
+Vendor types remain private. Every public operation consumes or returns Eliot-owned contract or
+package-owned support types and binds an accepted `QdrantCapabilityReceipt`.
 
 ## Connection and admission
 
@@ -14,57 +14,84 @@ secret lease. It never discovers or starts a process.
 
 ### `probe_capabilities(disposable_route, probe_manifest, context) -> Result<QdrantCapabilityReceipt, BridgeError>`
 
-Executes every probe in `qualification/qdrant/probes.toml`: build/auth identity, one shard, signed-i64
-range behavior, missing upper bound under `must_not`, sparse IDF, independent `idf.corpus`, strict mode,
-payload indexes, `wait=true`, strong ordering, exact count/readback and named sparse vectors.
-Any missing probe rejects indexed admission.
+Executes every mandatory probe in `qualification/qdrant/probes.toml`: build/auth identity, one shard,
+signed-i64 range behavior, missing upper bound under `must_not`, sparse IDF, independent `idf.corpus`,
+strict mode, payload indexes, `wait=true`, strong ordering, exact count/readback and named sparse
+vectors. Any missing probe rejects indexed admission.
 
 ### `create_candidate_collection(schema, context) -> Result<CollectionCreateReceipt, BridgeError>`
 
-Creates one new opaque physical generation only. It creates mandatory payload indexes before ingest,
-then enables the exact strict-mode restrictions and verifies the resulting schema digest.
+Creates one new opaque physical generation only. It creates the exact S9.5 payload-index set and types
+before enabling strict mode, then verifies topology, vectors, every index type and strict-mode floors.
+Unknown indexes or incompatible payload/filter changes require a new collection generation.
 
 ### `verify_collection_schema(route, expected) -> Result<SchemaReceipt, BridgeError>`
 
-Reads back topology, named vectors, payload indexes, strict-mode limits and schema identity. Version
-strings alone are insufficient.
+Reads back topology, named vectors, exact payload index names/types and strict settings. Version strings
+alone are insufficient, and an existing collection is never adopted without the caller-supplied exact
+schema expectation.
+
+## Point and filter contracts
+
+`PointPayload` is the exact closed S9.5 payload. It contains typed installation, collection,
+projection-membership, access/scoring partition, source/revision/representation/unit, point identity,
+scoring-document, profile-set, modality/format and epoch coordinates. It contains no source-membership
+array/name, ACL subject, display path, source/query text, payload digest or vector digest.
+
+Access/scoring policy changes mint new immutable partition identifiers under S8.2. Restrictive
+deny/shadow/purge/abandoned fences are compiled by the access owner into the allowed projection
+membership set before the bridge is called. `EligibilityFilter` renders the one S10.3 base predicate
+over installation, collection generation, allowed projection memberships, access/scoring partitions,
+profile set and visible epoch. Retrieval, `idf.corpus`, exact count and scroll use that same value.
+
+Expected payload and named-vector digests remain in the immutable projection manifest. Exact bridge
+readback returns the closed typed payload and actual vector values so publication/readback owners can
+verify that manifest; Qdrant payload is never source evidence.
 
 ## Exact mutation operations
 
 ### `upsert_exact(batch, mutation, context) -> Result<MutationReceipt, BridgeError>`
 
-Uses explicit point IDs, `wait=true` and strong ordering. Same mutation identity plus same canonical
-batch is idempotent. Same identity plus different input is rejected.
+Uses explicit point IDs, `wait=true` and strong ordering. Before dispatch it reads any existing IDs and
+compares the full 256-bit point identity plus every independently represented S11.1 identity coordinate.
+A mismatch returns `POINT_ID_COLLISION` and does not overwrite. Same mutation identity plus the same
+canonical batch is idempotent; the same identity plus different input is rejected.
 
 ### `close_exact(ids, valid_until_epoch, mutation, context) -> Result<MutationReceipt, BridgeError>`
 
-Updates only the exact ID list. Broad-filter closure is absent from the correctness API.
+Updates only the exact ID list after exact generation-bound preflight. Broad-filter closure is absent
+from the correctness API.
 
 ### `delete_exact(ids, mutation, context) -> Result<MutationReceipt, BridgeError>`
 
-Deletes only exact IDs for ordinary reclaim/compensation. It does not create a security-purge receipt.
+Deletes only exact IDs for ordinary reclaim/compensation after generation-bound preflight and proves
+absence through readback. It does not create a security-purge receipt.
 
 ### `readback_exact(ids, context) -> Result<BoundedPointReadback, BridgeError>`
 
-Returns exact identity/payload/vector digests and explicit missing/unexpected IDs.
+Returns closed typed S9.5 payloads, actual named-vector values and explicit missing/unexpected IDs.
+Unknown payload fields, wrong field types, duplicate responses or foreign collection generations fail
+closed.
 
 ### `count_exact(filter, context) -> Result<ExactCount, BridgeError>`
 
-Permitted only for the closed accepted filter AST and indexed fields.
+Permitted only for the closed admitted S10.3 filter and exact indexed collection generation.
 
 ## Query operations
 
 ### `query_filtered(request, context) -> Result<BoundedCandidateStream, BridgeError>`
 
-Compiles the accepted vendor-neutral eligibility AST privately. Retrieval and `idf.corpus` receive the
-same canonical base eligibility plan; unindexed or capability-unsupported filters fail rather than
-scan. Results are bounded nominations, never evidence.
+Compiles the accepted vendor-neutral eligibility filter privately. Retrieval and `idf.corpus` receive
+the same canonical base filter; unindexed or capability-unsupported filters fail rather than scan.
+Returned scores and point identities are bounded nominations, never evidence. Every response payload is
+decoded as the closed S9.5 type and rechecked against the exact filter before the nomination is returned.
 
 ## Timeout, cancellation and recovery
 
-Cancellation is checked before dispatch and between bounded pages/batches. A timeout after a mutation
-may have committed; callers receive `OUTCOME_UNKNOWN` and must resolve through exact readback and the
-same mutation identity. The bridge never converts timeout into a definite rollback claim.
+One finite monotonic operation budget covers validation, preflight, dispatch and readback. Cancellation
+or expiry before any possible write is definite. Once a mutation may have reached Qdrant, timeout,
+cancellation or unusable readback returns `QDRANT_MUTATION_OUTCOME_UNKNOWN`; callers resolve it through
+exact readback and the same mutation identity.
 
 ## Configuration operations
 
@@ -74,6 +101,8 @@ floors.
 
 ## Required fixtures
 
-Disposable full capability suite; strict unindexed retrieve/update rejection; payload indexes before
-ingest; signed-i64/missing-field filter; filtered-IDF noninterference; wait/strong/readback; exact
-delete; timeout unknown-outcome recovery; vendor-type API guard; no process lifecycle duplication.
+Exact S9.5 payload field-set/unknown-field rejection; exact 19-index schema/type equality; disposable
+full capability suite; strict unindexed retrieve/update rejection; signed-i64/missing-field filter;
+filtered-IDF noninterference; retrieval/IDF filter identity; wait/strong/readback; point collision
+non-overwrite; exact close/delete; deadline/unknown-outcome recovery; vendor-type API guard; no process
+lifecycle duplication.

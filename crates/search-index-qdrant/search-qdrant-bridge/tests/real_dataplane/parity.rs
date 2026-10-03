@@ -7,7 +7,7 @@ async fn t24_real_crud_query_parity_with_oracle() {
         let context = ctx();
         let route = make_route("t24_parity", 0x11);
         let schema = schema();
-        let filter = permitted_filter();
+        let filter = permitted_filter(&route);
 
         let mut oracle = oracle();
         oracle
@@ -22,7 +22,7 @@ async fn t24_real_crud_query_parity_with_oracle() {
             .await
             .expect("real schema verifies");
 
-        let batch = parity_points();
+        let batch = parity_points(&route);
         let create_mutation = mutation("t24-parity-upsert-1", 0x21);
         let oracle_receipt = oracle
             .upsert_exact(&route, batch.clone(), create_mutation.clone())
@@ -35,8 +35,7 @@ async fn t24_real_crud_query_parity_with_oracle() {
         assert!(!real_receipt.replayed);
         assert_eq!(real_receipt.affected_ids, oracle_receipt.affected_ids);
 
-        let oracle_count =
-            oracle.count_exact(&route, &filter).expect("oracle count");
+        let oracle_count = oracle.count_exact(&route, &filter).expect("oracle count");
         let real_count = plane
             .count_exact(&route, &filter, &context)
             .await
@@ -77,19 +76,14 @@ async fn t24_real_crud_query_parity_with_oracle() {
             .filter(|hit| hit.score > 0.0)
             .map(|hit| hit.point_id)
             .collect();
-        let real_ids: Vec<QdrantPointId> =
-            real_hits.iter().map(|hit| hit.point_id).collect();
+        let real_ids: Vec<QdrantPointId> = real_hits.iter().map(|hit| hit.point_id).collect();
         assert_eq!(real_ids, oracle_ids, "single-term ranking parity");
         for hit in &real_hits {
             assert!(hit.score.is_finite(), "finite scores only");
-            assert!(
-                hit.score > 0.0,
-                "server returns positively-matching nominations"
-            );
+            assert!(hit.score > 0.0, "server returns positively-matching nominations");
         }
 
-        let scrolled =
-            scroll_all_ids(&plane, &route, &filter, &context, 2).await;
+        let scrolled = scroll_all_ids(&plane, &route, &filter, &context, 2).await;
         assert_eq!(
             scrolled,
             vec![point_id(1), point_id(2), point_id(3), point_id(4)]

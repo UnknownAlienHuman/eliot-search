@@ -5,24 +5,21 @@ impl RealDataPlane {
     /// Qdrant response order is not part of the bridge contract. Returned
     /// points and missing IDs therefore follow the sorted validated request;
     /// unexpected IDs are sorted independently. Duplicate response IDs fail
-    /// closed as a malformed response.
+    /// closed as a malformed response. The exact route generation must have
+    /// been admitted in this process before any read is dispatched.
     pub async fn readback_exact(
         &self,
         route: &CollectionRoute,
         ids: Vec<QdrantPointId>,
         context: &OpContext,
     ) -> Result<BoundedPointReadback, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
-        let name = collection_name(route)?;
-        let schema = self
-            .schemas
-            .get(&name)
-            .ok_or(BridgeError::CollectionNotFound)?;
+        let (name, schema) = self.admitted_schema(route)?;
         let readback = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.get_points(GetPoints {
-                collection_name: name.clone(),
+                collection_name: name,
                 ids: ids.iter().map(vendor_point_id).collect(),
                 with_payload: Some(true.into()),
                 with_vectors: Some(true.into()),
@@ -30,7 +27,7 @@ impl RealDataPlane {
             }),
         )
         .await
-        .map_err(|_| BridgeError::TransportFailed)?
+        .map_err(|_| BridgeError::DeadlineExceeded)?
         .map_err(map_read_error)?;
         if readback.result.len() > ids.len() {
             return Err(BridgeError::MalformedResponse);
@@ -57,7 +54,9 @@ impl RealDataPlane {
                 retrieved.vectors.as_ref(),
                 schema,
             )?;
-            if returned.insert(id, point).is_some() {
+            if point.payload.collection_generation_id != route.generation
+                || returned.insert(id, point).is_some()
+            {
                 return Err(BridgeError::MalformedResponse);
             }
         }

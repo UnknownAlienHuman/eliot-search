@@ -1,5 +1,5 @@
 use crate::mutation::validate_exact_ids;
-use crate::query::{ensure_filter_indexes, validate_filter};
+use crate::query::{ensure_filter_indexes, validate_filter_for_route};
 use crate::{
     BridgeError, CollectionRoute, EligibilityFilter, PointRecord, QdrantBridge,
     QdrantPointId,
@@ -35,7 +35,10 @@ impl QdrantBridge {
         let mut missing_ids = Vec::new();
         for id in ids {
             match collection.points.get(&id) {
-                Some(point) => points.push(point.clone()),
+                Some(point) if point.payload.collection_generation_id == route.generation => {
+                    points.push(point.clone());
+                }
+                Some(_) => return Err(BridgeError::MalformedResponse),
                 None => missing_ids.push(id),
             }
         }
@@ -52,7 +55,7 @@ impl QdrantBridge {
         route: &CollectionRoute,
         filter: &EligibilityFilter,
     ) -> Result<ExactCount, BridgeError> {
-        validate_filter(filter)?;
+        validate_filter_for_route(filter, route)?;
         let collection = self
             .collections
             .get(route)

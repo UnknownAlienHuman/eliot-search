@@ -5,13 +5,14 @@ use std::collections::BTreeSet;
 use search_contracts::Epoch;
 
 use super::{
-    BridgeMutation, MutationReceipt, PointRecord, QdrantPointId, validate_exact_ids,
-    validate_point,
+    BridgeMutation, MutationReceipt, PointRecord, QdrantPointId, same_point_identity,
+    validate_close_epoch, validate_exact_ids, validate_point,
 };
 use crate::{BridgeError, CollectionRoute, QdrantBridge};
 
 impl QdrantBridge {
-    /// Upserts only explicit point IDs with exact idempotency.
+    /// Upserts only explicit point IDs with exact idempotency and collision
+    /// refusal before any point is changed.
     pub fn upsert_exact(
         &mut self,
         route: &CollectionRoute,
@@ -33,7 +34,17 @@ impl QdrantBridge {
             if !seen.insert(point.point_id) {
                 return Err(BridgeError::DuplicatePointId);
             }
+            if point.payload.collection_generation_id != route.generation {
+                return Err(BridgeError::PointPayloadInvalid);
+            }
             validate_point(point, &collection.schema, self.limits)?;
+            if collection
+                .points
+                .get(&point.point_id)
+                .is_some_and(|existing| !same_point_identity(existing, point))
+            {
+                return Err(BridgeError::PointIdCollision);
+            }
         }
         let mut affected_ids = Vec::with_capacity(points.len());
         for point in points {
@@ -68,9 +79,10 @@ impl QdrantBridge {
             .ok_or(BridgeError::CollectionNotFound)?;
         for id in &ids {
             let point = collection.points.get(id).ok_or(BridgeError::PointNotFound)?;
-            if valid_until_epoch_exclusive <= point.payload.valid_from_epoch {
+            if point.payload.collection_generation_id != route.generation {
                 return Err(BridgeError::ExactReadbackMismatch);
             }
+            validate_close_epoch(&point.payload, valid_until_epoch_exclusive)?;
         }
         for id in &ids {
             collection
@@ -98,6 +110,15 @@ impl QdrantBridge {
             .collections
             .get_mut(route)
             .ok_or(BridgeError::CollectionNotFound)?;
+        for id in &ids {
+            if collection
+                .points
+                .get(id)
+                .is_some_and(|point| point.payload.collection_generation_id != route.generation)
+            {
+                return Err(BridgeError::ExactReadbackMismatch);
+            }
+        }
         for id in &ids {
             collection.points.remove(id);
         }

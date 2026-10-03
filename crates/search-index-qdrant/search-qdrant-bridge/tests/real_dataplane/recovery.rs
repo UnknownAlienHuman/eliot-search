@@ -1,11 +1,12 @@
 use super::support::*;
 
 #[tokio::test]
-async fn t24_real_unknown_write_recovery_and_replay() {
+async fn t24_real_pre_dispatch_deadline_and_replay() {
     let outcome = tokio::time::timeout(Duration::from_secs(240), async {
         let (_server, mut plane) = live_plane().await;
         let context = ctx();
         let route = make_route("t24_recovery", 0x51);
+        let filter = permitted_filter(&route);
         plane
             .create_collection(&route, &schema(), &context)
             .await
@@ -13,16 +14,16 @@ async fn t24_real_unknown_write_recovery_and_replay() {
 
         // Pre-dispatch cancellation is definite and commits nothing.
         let flag = Arc::new(AtomicBool::new(true));
-        let cancelled =
-            OpContext::with_cancel(Duration::from_secs(20), Arc::clone(&flag));
+        let cancelled = OpContext::with_cancel(Duration::from_secs(20), Arc::clone(&flag));
         assert_eq!(
             plane
                 .upsert_exact(
                     &route,
                     vec![point(
+                        &route,
                         21,
                         0xA1,
-                        "t24-member-a",
+                        0xB1,
                         10,
                         None,
                         vec![(0, 1.0)],
@@ -36,21 +37,22 @@ async fn t24_real_unknown_write_recovery_and_replay() {
         );
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
             0
         );
 
-        // A zero deadline forces an ambiguous timeout. Exact replay with the
-        // same identity converges to one effective write.
+        // A zero total budget expires before preflight or mutation dispatch,
+        // so the result is definite and no point may exist afterward.
         let squeezed = OpContext::new(Duration::ZERO);
         let mutation_id = mutation("t24-recovery-unknown", 0x62);
         let batch = vec![point(
+            &route,
             22,
             0xA1,
-            "t24-member-a",
+            0xB1,
             10,
             None,
             vec![(0, 1.0)],
@@ -64,17 +66,27 @@ async fn t24_real_unknown_write_recovery_and_replay() {
                     &squeezed,
                 )
                 .await
-                .expect_err("timeout is unknown"),
-            BridgeError::MutationOutcomeUnknown
+                .expect_err("zero budget expires before dispatch"),
+            BridgeError::DeadlineExceeded
         );
-        let replay = plane
-            .upsert_exact(&route, batch, mutation_id, &context)
-            .await
-            .expect("replay resolves");
-        assert!(replay.affected_ids.contains(&point_id(22)));
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
+                .await
+                .expect("count after definite timeout")
+                .count,
+            0
+        );
+
+        let first = plane
+            .upsert_exact(&route, batch, mutation_id, &context)
+            .await
+            .expect("first admitted write");
+        assert!(!first.replayed);
+        assert!(first.affected_ids.contains(&point_id(22)));
+        assert_eq!(
+            plane
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -85,9 +97,10 @@ async fn t24_real_unknown_write_recovery_and_replay() {
             .upsert_exact(
                 &route,
                 vec![point(
+                    &route,
                     22,
                     0xA1,
-                    "t24-member-a",
+                    0xB1,
                     10,
                     None,
                     vec![(0, 1.0)],
@@ -100,7 +113,7 @@ async fn t24_real_unknown_write_recovery_and_replay() {
         assert!(again.replayed);
         assert_eq!(
             plane
-                .count_exact(&route, &permitted_filter(), &context)
+                .count_exact(&route, &filter, &context)
                 .await
                 .expect("count")
                 .count,
@@ -113,9 +126,10 @@ async fn t24_real_unknown_write_recovery_and_replay() {
                 .upsert_exact(
                     &route,
                     vec![point(
+                        &route,
                         23,
                         0xA1,
-                        "t24-member-a",
+                        0xB1,
                         10,
                         None,
                         vec![(1, 1.0)],

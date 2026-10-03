@@ -18,9 +18,8 @@ fn full_ledger_rejects_every_mutation_without_changing_points() {
 fn full_ledger_still_replays_and_reports_identity_conflicts() {
     for kind in [Kind::Upsert, Kind::Close, Kind::Delete] {
         let (mut bridge, route) = seeded(2);
-        let mut expected =
-            apply(&mut bridge, &route, kind, mutation("accepted", 2))
-                .expect("accepted mutation");
+        let mut expected = apply(&mut bridge, &route, kind, mutation("accepted", 2))
+            .expect("accepted mutation");
         let before = state(&bridge, &route);
         expected.replayed = true;
         assert_eq!(
@@ -83,6 +82,42 @@ fn invalid_close_batch_neither_writes_nor_consumes_a_receipt() {
             mutation("retry", 3),
         )
         .expect("valid retry");
+    assert!(!receipt.replayed);
+}
+
+#[test]
+fn close_epoch_is_immutable_but_same_value_recovery_is_allowed() {
+    let (mut bridge, route) = seeded(4);
+    bridge
+        .close_exact(
+            &route,
+            vec![id(1)],
+            epoch(20),
+            mutation("close-first", 2),
+        )
+        .expect("first close");
+    bridge
+        .close_exact(
+            &route,
+            vec![id(1)],
+            epoch(20),
+            mutation("close-recovery", 3),
+        )
+        .expect("same-value recovery");
+    let before = state(&bridge, &route);
+    assert_eq!(
+        bridge.close_exact(
+            &route,
+            vec![id(1)],
+            epoch(21),
+            mutation("stale-close", 4),
+        ),
+        Err(BridgeError::ExactReadbackMismatch)
+    );
+    assert_eq!(state(&bridge, &route), before);
+    let receipt = bridge
+        .delete_exact(&route, vec![id(1)], mutation("stale-close", 5))
+        .expect("failed close did not consume operation identity");
     assert!(!receipt.replayed);
 }
 

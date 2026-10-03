@@ -4,14 +4,15 @@ use core::cmp::Ordering;
 
 use super::ranking::TopCandidates;
 use super::{
-    CandidateNomination, EligibilityFilter, ensure_filter_indexes, validate_filter,
-    validate_query_vector,
+    CandidateNomination, EligibilityFilter, ensure_filter_indexes,
+    validate_filter_for_route, validate_query_vector,
 };
 use crate::{BridgeError, CollectionRoute, QdrantBridge};
 
 impl QdrantBridge {
     /// Returns bounded filtered nominations. These are not evidence until exact
-    /// candidate readback and access revalidation occur outside the bridge.
+    /// point readback, authoritative projection-membership resolution and live
+    /// access revalidation occur outside the bridge.
     /// The reference scan retains at most `limit` nominations while still
     /// checking every eligible score. It is not the production query engine.
     pub fn query_filtered(
@@ -22,7 +23,7 @@ impl QdrantBridge {
         query: &[(u32, f32)],
         limit: usize,
     ) -> Result<Vec<CandidateNomination>, BridgeError> {
-        validate_filter(filter)?;
+        validate_filter_for_route(filter, route)?;
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
@@ -51,8 +52,7 @@ impl QdrantBridge {
             candidates.consider(CandidateNomination {
                 point_id: point.point_id,
                 score,
-                payload_digest: point.payload.payload_digest,
-                identity_digest: point.payload.identity_digest,
+                point_identity_digest_256: point.payload.point_identity_digest_256,
             })?;
         }
         Ok(candidates.finish())

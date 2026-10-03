@@ -56,7 +56,7 @@ pub(crate) fn bridge(
     )
     .expect("reference bridge");
     let route = CollectionRoute {
-        generation: CollectionGenerationId::from_bytes([1; 16]),
+        generation: generation(),
         physical_name: opaque("oracle-contracts"),
     };
     let schema = CollectionSchema {
@@ -68,7 +68,7 @@ pub(crate) fn bridge(
                 idf_enabled: true,
             },
         )]),
-        indexed_payload_fields: EligibilityFilter::INDEXED_FIELDS
+        indexed_payload_fields: PointPayload::INDEXED_FIELDS
             .into_iter()
             .map(str::to_owned)
             .collect(),
@@ -121,12 +121,8 @@ pub(crate) fn apply(
     mutation: BridgeMutation,
 ) -> Result<MutationReceipt, BridgeError> {
     match kind {
-        Kind::Upsert => {
-            bridge.upsert_exact(route, vec![point(2, 2.0)], mutation)
-        }
-        Kind::Close => {
-            bridge.close_exact(route, vec![id(1)], epoch(20), mutation)
-        }
+        Kind::Upsert => bridge.upsert_exact(route, vec![point(2, 2.0)], mutation),
+        Kind::Close => bridge.close_exact(route, vec![id(1)], epoch(20), mutation),
         Kind::Delete => bridge.delete_exact(route, vec![id(1)], mutation),
     }
 }

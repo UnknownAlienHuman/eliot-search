@@ -11,8 +11,7 @@ fn public_query_matches_full_sort_with_ties_and_negative_scores() {
         .map(|point| CandidateNomination {
             point_id: point.point_id,
             score: point.vectors[VECTOR].values[0].1,
-            payload_digest: point.payload.payload_digest,
-            identity_digest: point.payload.identity_digest,
+            point_identity_digest_256: point.payload.point_identity_digest_256,
         })
         .collect();
     expected.sort_by(|left, right| {
@@ -33,13 +32,7 @@ fn public_query_matches_full_sort_with_ties_and_negative_scores() {
     }
     for limit in [0, BridgeLimits::BASELINE.max_query_candidates + 1] {
         assert_eq!(
-            bridge.query_filtered(
-                &route,
-                &filter(),
-                VECTOR,
-                &[(0, 1.0)],
-                limit,
-            ),
+            bridge.query_filtered(&route, &filter(), VECTOR, &[(0, 1.0)], limit),
             Err(BridgeError::QueryBudgetExceeded)
         );
     }
@@ -50,9 +43,9 @@ fn access_and_epoch_exclusions_happen_before_scoring() {
     let (mut bridge, route) = bridge(1);
     // Every excluded point would overflow if scoring happened before filtering.
     let mut partition = point(2, f32::MAX);
-    partition.payload.access_partition_digest = digest(99);
+    partition.payload.access_partition_id = access_partition(0x99);
     let mut membership = point(3, f32::MAX);
-    membership.payload.source_membership_id = opaque("denied");
+    membership.payload.projection_membership_id = projection(0x99);
     let mut future = point(4, f32::MAX);
     future.payload.valid_from_epoch = epoch(43);
     let mut expired = point(5, f32::MAX);
@@ -76,10 +69,7 @@ fn access_and_epoch_exclusions_happen_before_scoring() {
     let actual = bridge
         .query_filtered(&route, &filter(), VECTOR, &[(0, 2.0)], 2)
         .expect("filtered query");
-    let ids: Vec<_> = actual
-        .iter()
-        .map(|candidate| candidate.point_id)
-        .collect();
+    let ids: Vec<_> = actual.iter().map(|candidate| candidate.point_id).collect();
     assert_eq!(ids, vec![id(1), id(6)]);
     assert_eq!(
         bridge

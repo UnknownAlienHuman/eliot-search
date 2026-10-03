@@ -3,13 +3,14 @@ use super::super::{DeletePoints, GetPoints, PointsIdsList, PointsSelector, point
 use super::check_acknowledgement;
 use super::super::{
     BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    QdrantPointId, RealDataPlane, collection_name, map_mutation_error,
+    OperationBudget, QdrantPointId, RealDataPlane, map_mutation_error,
     strong_ordering, update_completed, validate_exact_ids, vendor_point_id,
 };
 
 impl RealDataPlane {
     /// Deletes only explicit exact point IDs with `wait=true` and strong
-    /// ordering, then proves absence through exact readback.
+    /// ordering, then proves absence through exact readback. The exact route
+    /// generation must have passed live schema admission in this process.
     pub async fn delete_exact(
         &mut self,
         route: &CollectionRoute,
@@ -17,7 +18,7 @@ impl RealDataPlane {
         mutation: BridgeMutation,
         context: &OpContext,
     ) -> Result<MutationReceipt, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         if let Some(replay) = self.replay(&mutation)? {
             return Ok(replay);
         }
@@ -25,10 +26,24 @@ impl RealDataPlane {
             return Err(BridgeError::MutationTooLarge);
         }
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
-        let name = collection_name(route)?;
-        context.check()?;
+        let (name, schema) = self.admitted_schema(route)?;
+        let schema = schema.clone();
+        self.fetch_points(
+            &name,
+            &ids,
+            &schema,
+            route.generation,
+            budget.remaining(context)?,
+        )
+        .await
+        .map_err(|error| match error {
+            BridgeError::TransportFailed
+            | BridgeError::CollectionNotFound
+            | BridgeError::DeadlineExceeded => error,
+            _ => BridgeError::ExactReadbackMismatch,
+        })?;
         let acked = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.delete_points(DeletePoints {
                 collection_name: name.clone(),
                 wait: Some(true),
@@ -51,7 +66,7 @@ impl RealDataPlane {
             context,
         )?;
         let present = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining_after_dispatch(context)?,
             self.client.get_points(GetPoints {
                 collection_name: name,
                 ids: ids.iter().map(vendor_point_id).collect(),

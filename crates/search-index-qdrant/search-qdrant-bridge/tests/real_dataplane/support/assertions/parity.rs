@@ -1,6 +1,8 @@
 use super::super::*;
 
-/// Asserts per-point digest/epoch parity between oracle and real readback.
+/// Asserts exact typed S9.5 payload and vector parity between oracle and real
+/// readback. The projection manifest owns expected digests; the bridge proves
+/// the actual typed fields and vector values round-trip without extra payload.
 pub(crate) fn assert_readback_parity(
     oracle_readback: &BoundedPointReadback,
     real_readback: &BoundedPointReadback,
@@ -14,21 +16,6 @@ pub(crate) fn assert_readback_parity(
             .iter()
             .find(|point| point.point_id == expected.point_id)
             .expect("parity point present");
-        assert_eq!(
-            actual.payload.payload_digest,
-            expected.payload.payload_digest
-        );
-        assert_eq!(
-            actual.payload.identity_digest,
-            expected.payload.identity_digest
-        );
-        assert_eq!(
-            actual.payload.valid_from_epoch,
-            expected.payload.valid_from_epoch
-        );
-        assert_eq!(
-            actual.payload.valid_until_epoch_exclusive,
-            expected.payload.valid_until_epoch_exclusive
-        );
+        assert_eq!(actual, expected);
     }
 }

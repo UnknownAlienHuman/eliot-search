@@ -6,6 +6,7 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
         let (_server, mut plane) = live_plane().await;
         let context = ctx();
         let route = make_route("t24_pages", 0x71);
+        let filter = permitted_filter(&route);
         plane
             .create_collection(&route, &schema(), &context)
             .await
@@ -13,9 +14,10 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
         let mut batch = Vec::new();
         for number in 31..=35 {
             batch.push(point(
+                &route,
                 number,
                 0xA1,
-                "t24-member-a",
+                0xB1,
                 10,
                 None,
                 vec![(0, 1.0)],
@@ -31,14 +33,7 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
             .await
             .expect("upsert five");
 
-        let seen = scroll_all_ids(
-            &plane,
-            &route,
-            &permitted_filter(),
-            &context,
-            2,
-        )
-        .await;
+        let seen = scroll_all_ids(&plane, &route, &filter, &context, 2).await;
         assert_eq!(
             seen,
             vec![
@@ -52,8 +47,7 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
 
         let flag = Arc::new(AtomicBool::new(true));
         flag.store(true, Ordering::SeqCst);
-        let cancelled =
-            OpContext::with_cancel(Duration::from_secs(20), Arc::clone(&flag));
+        let cancelled = OpContext::with_cancel(Duration::from_secs(20), Arc::clone(&flag));
         assert_reads_cancelled(&plane, &route, &cancelled).await;
 
         // Typed errors carry stable redacted codes only.
@@ -69,7 +63,7 @@ async fn t24_real_pagination_cancellation_and_error_redaction() {
             plane
                 .count_exact(
                     &make_route("t24_pages_missing", 0x71),
-                    &permitted_filter(),
+                    &filter,
                     &context,
                 )
                 .await

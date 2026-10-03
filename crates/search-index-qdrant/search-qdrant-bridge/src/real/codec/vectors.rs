@@ -14,7 +14,6 @@ fn encode_vectors(point: &PointRecord) -> Vectors {
 
 fn decode_vectors(
     output: Option<&qdrant_client::qdrant::VectorsOutput>,
-    payload: &HashMap<String, Value>,
     schema: &CollectionSchema,
 ) -> Result<BTreeMap<String, StoredVector>, BridgeError> {
     let named = match output.and_then(|vectors| vectors.vectors_options.as_ref()) {
@@ -41,27 +40,15 @@ fn decode_vectors(
             }
             values.push((*index, *score));
         }
-        if values.is_empty()
-            || values.windows(2).any(|pair| pair[0].0 >= pair[1].0)
-            || values
-                .last()
-                .is_some_and(|(index, _)| *index >= vector_schema.dimensions)
-        {
-            return Err(BridgeError::MalformedResponse);
-        }
-        let digest = hex_to_32(&get_string(
-            payload,
-            &format!("vector_digest_{name}"),
-        )?)?;
-        decoded.insert(
-            name.clone(),
-            StoredVector {
-                dimensions: vector_schema.dimensions,
-                sparse: vector_schema.sparse,
-                values,
-                digest: search_contracts::Blake3Digest32::from_bytes(digest),
-            },
-        );
+        let stored = StoredVector {
+            dimensions: vector_schema.dimensions,
+            sparse: vector_schema.sparse,
+            values,
+        };
+        stored
+            .validate(*vector_schema)
+            .map_err(|_| BridgeError::MalformedResponse)?;
+        decoded.insert(name.clone(), stored);
     }
     Ok(decoded)
 }
