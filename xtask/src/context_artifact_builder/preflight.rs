@@ -10,7 +10,7 @@ use crate::context_artifact::{ARTIFACT_FORMAT, ARTIFACT_ROOT, RECORD_KIND};
 use crate::git_tree::{GitTree, GitTreeError};
 use crate::ticket_planner::{
     exact_sha256_hex, opaque_id_valid, package_name_valid, safe_path,
-    sha256_hex_valid, under,
+    sha256_hex_valid, signed_payload_digest, under,
 };
 
 use super::model::{
@@ -671,19 +671,6 @@ fn superseded_handoffs(
         }
     }
     Ok(result)
-}
-
-fn signed_payload_digest(raw: &[u8]) -> Option<String> {
-    const MARKER: &[u8] = b"\n[signature]\n";
-    let positions = raw
-        .windows(MARKER.len())
-        .enumerate()
-        .filter_map(|(index, window)| (window == MARKER).then_some(index))
-        .collect::<Vec<_>>();
-    if positions.len() != 1 || positions[0] == 0 {
-        return None;
-    }
-    Some(exact_sha256_hex(&raw[..positions[0] + 1]))
 }
 
 fn launch_class<'a>(launch: &'a Value, package: &str) -> Option<&'a str> {

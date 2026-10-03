@@ -15,6 +15,7 @@ pub mod context_artifact_validation;
 pub mod context_materialization;
 pub mod context_materialization_builder;
 pub mod context_materialization_validation;
+pub mod control_record_bytes;
 pub mod coverage_graph;
 pub mod coverage_graph_generation;
 pub mod coverage_graph_validation;
