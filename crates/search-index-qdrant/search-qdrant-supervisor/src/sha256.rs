@@ -6,7 +6,7 @@
 //! against the pinned qualification manifest grants identity; this module
 //! never decides trust itself.
 
-use std::io::Read as _;
+use std::io::Read;
 use std::path::Path;
 
 const BLOCK_BYTES: usize = 64;

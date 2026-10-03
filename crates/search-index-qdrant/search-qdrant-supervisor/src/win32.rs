@@ -4,7 +4,12 @@
 //! handles, environment blocks, or secret bytes.
 
 #[cfg(windows)]
+use crate::SupervisorError;
+
+#[cfg(windows)]
 mod windows_impl {
+
+    use super::NativeSpawnError;
 
     use core::mem::{size_of, zeroed};
     use core::ptr::{null, null_mut};
@@ -23,7 +28,8 @@ mod windows_impl {
 
     use search_contracts::{ArtifactDigest, Blake3Digest32, Sha256Digest32};
     use windows_sys::Win32::Foundation::{
-        CloseHandle, FILETIME, HANDLE, INVALID_HANDLE_VALUE, LocalFree, WAIT_OBJECT_0, WAIT_TIMEOUT,
+        CloseHandle, FILETIME, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
+        LocalFree, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
     };
     use windows_sys::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityInfo, SE_FILE_OBJECT,
@@ -32,14 +38,13 @@ mod windows_impl {
     use windows_sys::Win32::Security::{
         ACL, ACL_SIZE_INFORMATION, AclSizeInformation, DACL_SECURITY_INFORMATION,
         PROTECTED_DACL_SECURITY_INFORMATION, SE_DACL_PROTECTED, SECURITY_ATTRIBUTES,
-        SECURITY_DESCRIPTOR_CONTROL, SECURITY_DESCRIPTOR_REVISION,
+        SECURITY_DESCRIPTOR_CONTROL,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
         FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-        FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE,
-        GetFileInformationByHandle, GetFinalPathNameByHandleW, OPEN_ALWAYS, OPEN_EXISTING,
-        READ_CONTROL, WRITE_DAC,
+        FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
+        GetFinalPathNameByHandleW, OPEN_ALWAYS, OPEN_EXISTING, READ_CONTROL, WRITE_DAC,
     };
     use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent};
     use windows_sys::Win32::System::JobObjects::{
@@ -54,7 +59,7 @@ mod windows_impl {
         GetProcessId, GetProcessTimes, InitializeProcThreadAttributeList,
         PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROC_THREAD_ATTRIBUTE_JOB_LIST, PROCESS_INFORMATION,
         QueryFullProcessImageNameW, STARTF_USESTDHANDLES, STARTUPINFOEXW,
-        UpdateProcThreadAttribute, WAIT_FAILED, WaitForSingleObject,
+        UpdateProcThreadAttribute, WaitForSingleObject,
     };
 
     use crate::launch::MAX_DATA_ROOT_PATH_UTF16_UNITS;
@@ -64,6 +69,7 @@ mod windows_impl {
         StartRecoveryReceipt, SupervisorError,
     };
 
+    const SECURITY_DESCRIPTOR_REVISION: u32 = 1;
     const MAX_DIRECTORY_ENTRIES: usize = 100_000;
     const MAX_DIRECTORY_DEPTH: usize = 64;
     const MAX_WIN32_PATH_UNITS: usize = 32_768;

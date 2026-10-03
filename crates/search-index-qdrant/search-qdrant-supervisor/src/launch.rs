@@ -248,7 +248,6 @@ pub struct SpawnedChild {
 
 impl SpawnedChild {
     #[must_use]
-    #[must_use]
     pub const fn argv_snapshot(&self) -> &ArgvSnapshot {
         &self.argv_snapshot
     }
