@@ -9,14 +9,14 @@ fn push_u64(out: &mut Vec<u8>, value: u64) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
-/// Serializes descriptors, maps and warnings deterministically with source
-/// content referenced by digest rather than embedded.
+/// Serializes v2 descriptors, maps and warnings deterministically with source
+/// content referenced by direct BLAKE3 digest rather than embedded.
 pub fn canonicalize_materialization(
     product: &MaterializationProduct,
 ) -> Result<CanonicalMaterializationBytes, MaterializationError> {
     let mut out = Vec::new();
-    out.extend_from_slice(b"ELIOT-MAT-V1");
-    out.extend_from_slice(&1_u16.to_le_bytes());
+    out.extend_from_slice(b"ELIOT-MAT-V2");
+    out.extend_from_slice(&2_u16.to_le_bytes());
     out.extend_from_slice(product.profile_id().as_bytes());
     out.extend_from_slice(product.representation_id().as_bytes());
     out.extend_from_slice(product.input_digest().as_bytes());

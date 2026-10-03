@@ -1,8 +1,6 @@
 //! End-to-end bounded baseline materialization pipeline.
 
-use super::digest::{
-    digest_coordinate_map, digest_loss_map, digest_representation, warnings_for,
-};
+use super::digest::{digest_coordinate_map, digest_loss_map, digest_representation, warnings_for};
 use super::model::{MaterializationContext, MaterializationProduct, ResourceReceipt};
 use super::read::{RevisionReadPort, open_exact_revision};
 use crate::MaterializationError;
@@ -12,7 +10,7 @@ use crate::maps::{
     MapBundle, MapIdentities, build_coordinate_map, build_loss_map, validate_map_bundle,
 };
 use crate::normalize::normalize_representation;
-use crate::profile::digest32;
+use crate::profile::digest_content_bytes;
 use crate::request::ValidatedMaterializationRequest;
 use search_contracts::Blake3Digest32;
 
@@ -80,10 +78,8 @@ pub fn materialize_text_or_code(
         u64::try_from(warnings.len()).map_err(|_| MaterializationError::OffsetOverflow)?;
     let assurance = derive_assurance(&bundle, warnings_count, profile)?;
     validate_map_bundle(&canonical, &bundle, profile)?;
-    let canonical_digest = Blake3Digest32::from_bytes(digest32(
-        b"eliot-search/materializer/canonical/v1",
-        &[canonical.text().as_bytes()],
-    ));
+    let canonical_digest =
+        Blake3Digest32::from_bytes(digest_content_bytes(canonical.text().as_bytes()));
     let coordinate_digest = digest_coordinate_map(&bundle);
     let loss_digest = digest_loss_map(&bundle);
     let representation_id = digest_representation(

@@ -7,7 +7,7 @@ use super::model::{
 use crate::MaterializationError;
 use crate::assurance::derive_assurance;
 use crate::maps::validate_map_bundle;
-use crate::profile::{ValidatedMaterializerProfile, digest32};
+use crate::profile::{ValidatedMaterializerProfile, digest_content_bytes};
 use crate::request::ValidatedMaterializationRequest;
 use search_contracts::{Blake3Digest32, OpaqueId};
 
@@ -27,10 +27,8 @@ pub fn verify_materialization(
     if request.revision() != product.revision() || *request.source_id() != *product.source_id() {
         return Err(MaterializationError::RevisionDigestMismatch);
     }
-    let canonical_digest = Blake3Digest32::from_bytes(digest32(
-        b"eliot-search/materializer/canonical/v1",
-        &[product.canonical_text().as_bytes()],
-    ));
+    let canonical_digest =
+        Blake3Digest32::from_bytes(digest_content_bytes(product.canonical_text().as_bytes()));
     if canonical_digest != product.canonical_digest() {
         return Err(MaterializationError::RevisionDigestMismatch);
     }

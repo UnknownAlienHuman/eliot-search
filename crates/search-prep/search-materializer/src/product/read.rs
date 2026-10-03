@@ -1,10 +1,11 @@
 //! Exact retained-revision acquisition through an injected read port.
 
 use crate::MaterializationError;
+use crate::profile::digest_content_bytes;
 use crate::request::{CancellationToken, ValidatedMaterializationRequest};
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId};
 
-/// Revision bytes attested by the revision pipeline for one exact revision.
+/// Revision bytes and digest attestation returned by the revision pipeline.
 #[derive(Clone, Eq, PartialEq)]
 pub struct StoredRevisionBytes {
     bytes: Vec<u8>,
@@ -13,8 +14,8 @@ pub struct StoredRevisionBytes {
 }
 
 impl StoredRevisionBytes {
-    /// Builds port-attested revision bytes. The port owns digest correctness;
-    /// [`open_exact_revision`] binds it to the validated request.
+    /// Builds revision bytes with a port-supplied BLAKE3 attestation;
+    /// [`open_exact_revision`] recomputes and verifies it against the request.
     #[must_use]
     pub const fn new(bytes: Vec<u8>, content_digest: Blake3Digest32, residency: OpaqueId) -> Self {
         Self {
@@ -30,7 +31,7 @@ impl StoredRevisionBytes {
         &self.bytes
     }
 
-    /// Port-attested content digest.
+    /// Port-attested BLAKE3-256 digest; [`open_exact_revision`] checks it against the bytes.
     #[must_use]
     pub const fn content_digest(&self) -> Blake3Digest32 {
         self.content_digest
@@ -153,11 +154,12 @@ impl core::fmt::Debug for RevisionBytesGuard {
     }
 }
 
-/// Reopens exactly the retained revision and binds it to the request.
+/// Reopens exactly the retained revision, recomputes BLAKE3 over the held bytes,
+/// and binds the result to both digest claims in the request and read port.
 ///
-/// Verifies port-attested residency, content digest and byte length against
-/// the validated request. Mismatch, unavailable residency or retention loss
-/// is an explicit typed error, never substituted content.
+/// Verifies port-attested residency, byte length, and direct BLAKE3-256 over
+/// the held bytes against both digest claims. Mismatch, unavailable residency
+/// or retention loss is an explicit typed error, never substituted content.
 pub fn open_exact_revision(
     request: &ValidatedMaterializationRequest,
     port: &dyn RevisionReadPort,
@@ -174,9 +176,6 @@ pub fn open_exact_revision(
     if stored.residency != *request.residency() {
         return Err(MaterializationError::ResidencyMismatch);
     }
-    if stored.content_digest != request.content_digest() {
-        return Err(MaterializationError::RevisionDigestMismatch);
-    }
     let actual =
         u64::try_from(stored.bytes.len()).map_err(|_| MaterializationError::OffsetOverflow)?;
     if actual != request.byte_count() {
@@ -184,6 +183,13 @@ pub fn open_exact_revision(
     }
     if stored.bytes.is_empty() {
         return Err(MaterializationError::EmptyInput);
+    }
+    let actual_digest = Blake3Digest32::from_bytes(digest_content_bytes(&stored.bytes));
+    if stored.content_digest != request.content_digest()
+        || actual_digest != stored.content_digest
+        || actual_digest != request.content_digest()
+    {
+        return Err(MaterializationError::RevisionDigestMismatch);
     }
     Ok(RevisionBytesGuard {
         bytes: stored.bytes,

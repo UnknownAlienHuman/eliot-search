@@ -1,21 +1,15 @@
 use super::*;
 use crate::MaterializationError;
-use crate::profile::{
-    SourceEncoding, ValidatedMaterializerProfile, baseline_profile_descriptor,
-};
+use crate::profile::{SourceEncoding, ValidatedMaterializerProfile, baseline_profile_descriptor};
 use crate::request::{
-    AcceptedProfiles, CancellationToken, DEFAULT_MATERIALIZATION_BUDGET,
-    MaterializationRequest, ValidatedMaterializationRequest,
-    validate_materialization_request,
+    AcceptedProfiles, CancellationToken, DEFAULT_MATERIALIZATION_BUDGET, MaterializationRequest,
+    ValidatedMaterializationRequest, validate_materialization_request,
 };
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId};
 
 fn profile() -> ValidatedMaterializerProfile {
-    crate::profile::validate_materializer_profile(&baseline_profile_descriptor(
-        "product-test",
-        1,
-    ))
-    .expect("profile")
+    crate::profile::validate_materializer_profile(&baseline_profile_descriptor("product-test", 1))
+        .expect("profile")
 }
 
 struct FakePort {
@@ -53,11 +47,7 @@ impl RevisionReadPort for FailingPort {
 }
 
 fn digest_for(bytes: &[u8]) -> Blake3Digest32 {
-    let mut out = [0_u8; 32];
-    for (index, byte) in bytes.iter().enumerate() {
-        out[index % 32] ^= byte.wrapping_add(index.to_le_bytes()[0]);
-    }
-    Blake3Digest32::from_bytes(out)
+    Blake3Digest32::from_bytes(*blake3::hash(bytes).as_bytes())
 }
 
 fn validated(
@@ -142,11 +132,32 @@ fn revision_open_binds_digest_residency_length() {
 }
 
 #[test]
+fn revision_open_rejects_bytes_that_disagree_with_both_digest_claims() {
+    let profile = profile();
+    let bytes = b"same length".as_slice();
+    let request = validated(bytes, &profile);
+    let port = FakePort {
+        bytes: b"wrong bytes".to_vec(),
+        digest: request.content_digest(),
+        residency: request.residency().clone(),
+    };
+
+    assert_eq!(
+        open_exact_revision(&request, &port, CancellationToken::never()),
+        Err(MaterializationError::RevisionDigestMismatch)
+    );
+}
+
+#[test]
 fn end_to_end_product_is_deterministic() {
     let first = materialize(b"same\nbytes\n");
     let second = materialize(b"same\nbytes\n");
     assert_eq!(first.representation_id(), second.representation_id());
     assert_eq!(first.canonical_digest(), second.canonical_digest());
+    assert_eq!(
+        first.canonical_digest().as_bytes(),
+        blake3::hash(first.canonical_text().as_bytes()).as_bytes()
+    );
     assert_eq!(
         canonicalize_materialization(&first)
             .expect("canonical")
@@ -157,6 +168,41 @@ fn end_to_end_product_is_deterministic() {
     );
     let changed = materialize(b"same\nBYTES\n");
     assert_ne!(first.representation_id(), changed.representation_id());
+}
+
+#[test]
+fn canonical_materialization_bytes_advertise_v2() {
+    let product = materialize(b"versioned\n");
+    let canonical = canonicalize_materialization(&product).expect("canonical");
+    assert_eq!(&canonical.as_slice()[..12], b"ELIOT-MAT-V2");
+    assert_eq!(&canonical.as_slice()[12..14], &2_u16.to_le_bytes());
+}
+
+#[test]
+fn coordinate_digest_binds_v2_count_and_map_bytes() {
+    let product = materialize(b"same\nbytes\n");
+    let segments = product.maps().coordinate_map().segments();
+    let mut map_bytes = Vec::new();
+    for segment in segments {
+        map_bytes.extend_from_slice(&segment.native_start.to_le_bytes());
+        map_bytes.extend_from_slice(&segment.native_end.to_le_bytes());
+        map_bytes.extend_from_slice(&segment.decoded_start.to_le_bytes());
+        map_bytes.extend_from_slice(&segment.decoded_end.to_le_bytes());
+        map_bytes.extend_from_slice(&segment.canonical_start.to_le_bytes());
+        map_bytes.extend_from_slice(&segment.canonical_end.to_le_bytes());
+        map_bytes.push(match segment.relation {
+            crate::maps::SegmentRelation::Exact => 1,
+            crate::maps::SegmentRelation::Range => 2,
+            crate::maps::SegmentRelation::Ambiguous => 3,
+            crate::maps::SegmentRelation::Unmapped => 4,
+        });
+    }
+    let segment_count = segments.len() as u64;
+    let expected = Blake3Digest32::from_bytes(crate::profile::digest32(
+        b"eliot-search/materializer/coordinates/v2",
+        &[&segment_count.to_le_bytes(), &map_bytes],
+    ));
+    assert_eq!(product.coordinate_digest(), expected);
 }
 
 #[test]

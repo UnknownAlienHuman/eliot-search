@@ -78,7 +78,8 @@ pub struct MaterializationProduct {
 }
 
 impl MaterializationProduct {
-    /// Deterministic identity over revision, profile, encoding, bytes and maps.
+    /// V2 BLAKE3 identity commitment over revision, profile, encoding, bytes
+    /// and maps. This digest differs from the contract's UUID `RepresentationId`.
     #[must_use]
     pub const fn representation_id(&self) -> Blake3Digest32 {
         self.representation_id

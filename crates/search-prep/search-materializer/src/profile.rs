@@ -10,6 +10,7 @@ mod model;
 mod validate;
 
 pub use change::{MaterializerProfileChange, classify_profile_change};
+pub(crate) use digest::digest_content_bytes;
 pub use digest::{digest32, profile_digest};
 pub use model::{
     BomPolicy, CoordinateSpace, DEFAULT_PROFILE_LIMITS, InvalidSequencePolicy, LossBehavior,

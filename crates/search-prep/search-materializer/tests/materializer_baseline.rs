@@ -48,14 +48,7 @@ impl RevisionReadPort for FakePort {
 }
 
 fn digest_for(bytes: &[u8]) -> Blake3Digest32 {
-    let mut out = [0_u8; 32];
-    for (index, byte) in bytes.iter().enumerate() {
-        let low = index.to_le_bytes()[0];
-        out[index % 32] ^= byte.wrapping_add(low);
-    }
-    let len_low = bytes.len().to_le_bytes()[0];
-    out[0] ^= len_low;
-    Blake3Digest32::from_bytes(out)
+    Blake3Digest32::from_bytes(*blake3::hash(bytes).as_bytes())
 }
 
 fn byte_count(bytes: &[u8]) -> u64 {
