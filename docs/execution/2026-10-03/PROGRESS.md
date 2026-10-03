@@ -18,6 +18,19 @@ Product work resumed on 2026-10-03. The Goal is active. This record supplements 
 Independent review accepted the authentication source and the subsequent harness/reclaimer/pin
 delta. The latter review was performed on clean `d963c7a`; it did not claim runtime qualification.
 
+The next independent source slice was pushed and read back at
+`88c7e3a954be2bab99676f764dd5232923160e86`: `search-control-redb` strict-Clippy repairs and one
+missing test-module import. The mapping helper decomposition preserves predecessor validation,
+identifier allocation order and errors. Conditional authority commands retain their exact keys;
+transaction, serialized-record and unknown-outcome semantics were independently reviewed unchanged.
+
+On clean `88c7e3a`, package check and strict Clippy with all features passed at 17:13:24 and
+17:14:01 UTC. The single corrected-source focused invocation
+`cargo +1.98.0 test --locked --offline -p search-control-redb --lib migration::mapping::tests`
+ran 17:14:22–17:14:25 UTC: 3 passed, 0 failed. This verifies the bounded refactor, not whole-product
+durability qualification. Its stdout SHA-256 is
+`5a163dbe774d955e38c424fec3686bea5093093adb67623488e3a0427169572d`.
+
 ## Checks performed
 
 Windows x64, Cargo/rustc 1.98.0. On clean `d963c7a`:
@@ -54,10 +67,17 @@ the fixture credential was absent from that output. Machine paths and raw captur
 
 ## Current work and limits
 
-The Windows supervisor is undergoing source safety fixes and strict-Clippy cleanup before independent
-review and native execution. Package-owned `qdrant_data` configuration is being implemented with
-enforced transport/batch bounds. Canonical S11 identity is prepared separately; its planner,
-publication, bridge and daemon consumers must be ported coherently before that stack lands on main.
+Independent source review of the Windows supervisor candidate found stale lease-time checks,
+unbound config/root observations, missing process-liveness checks before RPC, and an uncontained
+version helper. These are being corrected before native execution; compilation alone did not admit
+the candidate. Connected-socket ownership must also close the check/connect port-rebind race.
+
+Package-owned `qdrant_data` configuration is being implemented with enforced transport/batch bounds.
+The private generated transport must reject oversized responses before allocation; earlier high-level
+SDK probe evidence cannot qualify a different adapter. Canonical S11 identity, typed projection
+planning and the daemon caller port are being assembled separately. Publication and bridge consumers
+must be coherent before that stack lands on main. The live DIRECT preparation path still lacks several
+typed producer records; legacy paths, digests and ordinals are not substituted for those identities.
 
 [Issue #199](https://github.com/UnknownAlienHuman/eliot-search/issues/199) still needs an explicit
 policy/fence-generation encoding decision. [Issue #205](https://github.com/UnknownAlienHuman/eliot-search/issues/205)
@@ -69,5 +89,7 @@ does not enable production retrieval. W3 and installed-product qualification rem
 native ownership, complete epoch/payload/eligibility qualification and the real
 source → durable state → Qdrant → validated source-readback path are outstanding.
 
-ELIOT/codebase-memory MCP tools were not exposed in this session. Source inspection and available
-local structural tools were used; no unavailable semantic tool execution is claimed.
+ELIOT/codebase-memory MCP tools were not exposed in this session. The installed
+`codebase-memory-mcp` CLI was used successfully for index-status and code discovery. Indexed Git
+metadata does not prove graph freshness; exact local source remains authoritative. Available local
+structural tools were also used; no unavailable ELIOT tool execution is claimed.
