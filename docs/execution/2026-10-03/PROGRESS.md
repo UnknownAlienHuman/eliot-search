@@ -15,7 +15,7 @@ accordingly. No profile registration or authority follows from syntax validation
 
 The [corrected ticket enum implementation](TICKET_ENUM_BINDINGS_REVIEW.md) is integrated at `82315138`
 after independent source review: 18/18 in one combined run and structural exit 0, with original raw
-captures retained. The type count is 51 and issued-record count stays zero. No passing target was
+captures retained. Its captured type count was 51 and issued-record count stayed zero. No passing target was
 repeated after integration.
 
 The [local bootstrap proposal](LOCAL_PROFILE_BOOTSTRAP_REVIEW.md) is integrated at `d4266f5` after
@@ -27,6 +27,11 @@ The independently reviewed [ACK and P00 proposals](ACK_P00_PROPOSAL_REVIEW.md) a
 `a9c1134`, with their original parser inputs and outcomes. They remain nonclaimable. A bounded native
 Git object adapter is now explicitly authorized for integration-tooling implementation; activation
 of issuance operations remains separate from implementing and testing that component.
+
+The [qualified-ID registry implementation](QUALIFIED_PROFILE_ID_REGISTRY_REVIEW.md) is integrated at
+`3e763ee` with all nine reviewed Git blobs preserved. Its one combined run passed 25/25 tests and its
+one structural check reported 52 types and zero issued records. Original stdout/stderr and metadata
+are retained. No passing command was repeated after integration.
 
 ## Delivered code
 
