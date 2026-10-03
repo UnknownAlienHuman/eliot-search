@@ -83,7 +83,7 @@ pub(super) fn run(
     require(
         function_scope == Some(expected_scope.as_str())
             && integer(&function_row, "wave") == Some(0)
-            && text(&stage_row, "phase") == Some("P00"),
+            && w0_phase_registry_matches_p00(&stage_row),
         &mut checks,
         "registry-parity",
         "PACKAGE_REGISTRY_MISMATCH",
@@ -131,6 +131,12 @@ pub(super) fn run(
         package_path: package_path.to_owned(),
         handoffs,
         checks,
+    })
+}
+
+fn w0_phase_registry_matches_p00(stage_row: &Value) -> bool {
+    stage_row.get("phases").and_then(Value::as_array).is_some_and(|phases| {
+        phases.len() == 1 && phases.first().and_then(Value::as_str) == Some("P00")
     })
 }
 
