@@ -1,7 +1,9 @@
 //! Owner, endpoint and local-token filesystem state for the legacy harness.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
-use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{self, ErrorKind, Seek, SeekFrom, Write};
+#[cfg(unix)]
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
