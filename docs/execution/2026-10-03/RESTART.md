@@ -1,5 +1,9 @@
 # Saved checkpoint for the Codex update
 
+This is the historical pre-update checkpoint. Product work resumed on 2026-10-03; the Goal is active.
+See [PROGRESS.md](PROGRESS.md) for subsequent delivered source and verification. The checks below
+describe their original revisions and have not been relabeled as current acceptance.
+
 Saved at the maintainer's request on 2026-10-03. Stop after delivering this checkpoint; resume product
 implementation after the update and a continuation request. The product Goal is paused, not completed.
 Read [QUEUE.md](QUEUE.md) for the reviewed PR/task order.
