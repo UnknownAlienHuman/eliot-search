@@ -161,9 +161,15 @@ async fn live_plane() -> (search_qdrant_bridge::live::DisposableServer, RealData
         "all mandatory probes executed"
     );
     let gate = QualifiedGate::admit(&report.receipt).expect("live receipt admits gate");
-    let plane = RealDataPlane::connect(server.endpoint(), gate, limits())
-        .await
-        .expect("real data plane connects");
+    let plane = RealDataPlane::connect(
+        server.endpoint(),
+        server.fixture_connection_binding(),
+        server.fixture_api_key_lease(),
+        gate,
+        limits(),
+    )
+    .await
+    .expect("authenticated real data plane connects");
     (server, plane)
 }
 
