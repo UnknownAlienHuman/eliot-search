@@ -34,6 +34,7 @@ impl EpochPinGuard {
             }
         }
         let removed = inner.remove(self.pin_id);
+        drop(inner);
         self.released = true;
         Ok(PinReleaseReceipt { released_pins: usize::from(removed) })
     }
@@ -157,6 +158,7 @@ impl ContinuationPins {
         if record.kind != (PinKind::ContinuationEpoch { expires_at_ms: binding.expires_at_ms }) {
             return Err(PinError::InvalidExpiry);
         }
+        drop(inner);
         Ok(())
     }
 
