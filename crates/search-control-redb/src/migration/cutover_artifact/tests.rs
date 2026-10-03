@@ -3,6 +3,8 @@ use std::io;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::migration::CONTROL_CUTOVER_STAGED_DATABASE_SCHEMA;
+
 use search_contracts::{DataRootId, InstallationIncarnationId, SourceNamespaceId};
 
 use super::*;
