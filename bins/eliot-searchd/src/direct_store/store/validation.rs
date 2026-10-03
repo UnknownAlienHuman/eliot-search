@@ -2,10 +2,7 @@
 
 use crate::sha256;
 
-pub(super) fn validate_digest_text(
-    value: &str,
-    error: &'static str,
-) -> Result<(), String> {
+pub(super) fn validate_digest_text(value: &str, error: &'static str) -> Result<(), String> {
     if sha256::decode_digest(value).is_some() {
         Ok(())
     } else {
