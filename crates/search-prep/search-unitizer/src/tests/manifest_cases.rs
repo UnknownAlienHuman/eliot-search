@@ -133,6 +133,93 @@ fn legacy_v1_manifest_is_quarantined_for_rebuild() {
 }
 
 #[test]
+fn codec_closedness_rejects_sha256_tag_with_valid_blake3_trailer() {
+    const MANIFEST_DOMAIN: &[u8] = b"eliot-search/unitizer/manifest/v2";
+    let manifest = build_unit_manifest(
+        &manifest_input("alpha\nbeta\n"),
+        &manifest_provenance(),
+        &manifest_profile(1),
+        UNIT_MANIFEST_DIGEST_ALGORITHM,
+        1_048_576,
+    )
+    .expect("manifest");
+    let mut bytes = canonicalize_unit_manifest(&manifest)
+        .expect("canonical manifest")
+        .as_slice()
+        .to_vec();
+    const TRAILER_BYTES: usize = 32;
+    let body_len = bytes.len() - TRAILER_BYTES;
+    bytes[10] = 2;
+    let trailer = framed_blake3(MANIFEST_DOMAIN, &[&bytes[..body_len]]);
+    bytes[body_len..].copy_from_slice(&trailer);
+    assert_eq!(bytes[body_len..], trailer);
+
+    assert_eq!(
+        decode_unit_manifest(&bytes, 1_048_576),
+        Err(UnitizationError::UnitManifestDigestMismatch)
+    );
+}
+
+#[test]
+fn codec_closedness_rejects_wrapping_unit_count_before_reserve() {
+    const MANIFEST_DOMAIN: &[u8] = b"eliot-search/unitizer/manifest/v2";
+    const MAGIC_BYTES: usize = 8;
+    const VERSION_BYTES: usize = 2;
+    const ALGORITHM_BYTES: usize = 1;
+    const SOURCE_LENGTH_BYTES: usize = 2;
+    const UNIT_RECORD_BYTES: usize = 73;
+    const DIGEST_TRAILER_BYTES: usize = 32;
+    const WRAPPING_UNIT_COUNT: u64 = 9_097_024_474_706_080_249;
+
+    let manifest = build_unit_manifest(
+        &manifest_input("alpha\nbeta\n"),
+        &manifest_provenance(),
+        &manifest_profile(1),
+        UNIT_MANIFEST_DIGEST_ALGORITHM,
+        1_048_576,
+    )
+    .expect("manifest");
+    assert_eq!(
+        WRAPPING_UNIT_COUNT.wrapping_mul(UNIT_RECORD_BYTES as u64),
+        1
+    );
+    let mut bytes = canonicalize_unit_manifest(&manifest)
+        .expect("canonical manifest")
+        .as_slice()
+        .to_vec();
+    let source_id_len = manifest.source_id().as_str().len();
+    let limits_start = MAGIC_BYTES
+        + VERSION_BYTES
+        + ALGORITHM_BYTES
+        + SOURCE_LENGTH_BYTES
+        + source_id_len
+        + 8
+        + 32 * 6
+        + 32
+        + 8;
+    let max_units_offset = limits_start + 8 * 4;
+    let unit_count_offset = limits_start + 8 * 5 + 8 * 2;
+    let unit_payload_start =
+        bytes.len() - DIGEST_TRAILER_BYTES - manifest.units().len() * UNIT_RECORD_BYTES;
+    assert_eq!(unit_payload_start, unit_count_offset + 16);
+
+    bytes.truncate(unit_payload_start + 1);
+    bytes[max_units_offset..max_units_offset + 8]
+        .copy_from_slice(&WRAPPING_UNIT_COUNT.to_le_bytes());
+    bytes[unit_count_offset..unit_count_offset + 8]
+        .copy_from_slice(&WRAPPING_UNIT_COUNT.to_le_bytes());
+    let trailer = framed_blake3(MANIFEST_DOMAIN, &[&bytes]);
+    bytes.extend_from_slice(&trailer);
+
+    let expected_error = if usize::try_from(WRAPPING_UNIT_COUNT).is_ok() {
+        UnitizationError::UnitManifestIncomplete
+    } else {
+        UnitizationError::OffsetOverflow
+    };
+    assert_eq!(decode_unit_manifest(&bytes, 1_048_576), Err(expected_error));
+}
+
+#[test]
 fn changed_profile_revision_changes_manifest_identity() {
     let text = "alpha\nbeta\ngamma\n";
     let provenance = manifest_provenance();
@@ -343,6 +430,30 @@ fn hex_fixture(hex: &str) -> Vec<u8> {
         .chunks(2)
         .map(|pair| (hex_nibble(pair[0]) << 4) | hex_nibble(pair[1]))
         .collect()
+}
+
+fn framed_blake3(domain: &[u8], chunks: &[&[u8]]) -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(
+        &u64::try_from(domain.len())
+            .expect("test domain length fits u64")
+            .to_le_bytes(),
+    );
+    hasher.update(domain);
+    hasher.update(
+        &u64::try_from(chunks.len())
+            .expect("test chunk count fits u64")
+            .to_le_bytes(),
+    );
+    for chunk in chunks {
+        hasher.update(
+            &u64::try_from(chunk.len())
+                .expect("test chunk length fits u64")
+                .to_le_bytes(),
+        );
+        hasher.update(chunk);
+    }
+    *hasher.finalize().as_bytes()
 }
 
 fn hex_nibble(byte: u8) -> u8 {

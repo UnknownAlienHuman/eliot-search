@@ -11,17 +11,16 @@ use super::spec::{
     UNIT_CODEC_BYTES, UNIT_MANIFEST_VERSION,
 };
 
-const fn digest_tag(algorithm: DigestAlgorithm) -> u8 {
+const fn digest_tag(algorithm: DigestAlgorithm) -> Result<u8, UnitizationError> {
     match algorithm {
-        DigestAlgorithm::Blake3_256 => 1,
-        DigestAlgorithm::Sha256 => 2,
+        DigestAlgorithm::Blake3_256 => Ok(1),
+        DigestAlgorithm::Sha256 => Err(UnitizationError::UnitManifestDigestMismatch),
     }
 }
 
 const fn parse_digest_tag(value: u8) -> Result<DigestAlgorithm, UnitizationError> {
     match value {
         1 => Ok(DigestAlgorithm::Blake3_256),
-        2 => Ok(DigestAlgorithm::Sha256),
         _ => Err(UnitizationError::UnitManifestDigestMismatch),
     }
 }
@@ -158,10 +157,20 @@ pub fn decode_unit_manifest(
     if unit_count_usize > unitizer_limits.max_units {
         return Err(UnitizationError::TooManyUnits);
     }
-    if body.len() - cursor != unit_count_usize * UNIT_CODEC_BYTES {
+    let encoded_unit_bytes = unit_count_usize
+        .checked_mul(UNIT_CODEC_BYTES)
+        .ok_or(UnitizationError::UnitManifestIncomplete)?;
+    let remaining_body_bytes = body
+        .len()
+        .checked_sub(cursor)
+        .ok_or(UnitizationError::UnitManifestIncomplete)?;
+    if remaining_body_bytes != encoded_unit_bytes {
         return Err(UnitizationError::UnitManifestIncomplete);
     }
-    let mut units = Vec::with_capacity(unit_count_usize);
+    let mut units = Vec::new();
+    units
+        .try_reserve_exact(unit_count_usize)
+        .map_err(|_| UnitizationError::UnitManifestIncomplete)?;
     let mut expected_start = 0_u64;
     for ordinal in 0..unit_count_usize {
         let stored_ordinal = count_at(&mut cursor)?;
@@ -194,8 +203,7 @@ pub fn decode_unit_manifest(
         });
         expected_start = source_end;
     }
-    let mut ordered: Vec<Blake3Digest32> =
-        units.iter().map(UnitDescriptor::unit_digest).collect();
+    let mut ordered: Vec<Blake3Digest32> = units.iter().map(UnitDescriptor::unit_digest).collect();
     ordered.sort();
     if ordered.windows(2).any(|pair| pair[0] == pair[1]) {
         return Err(UnitizationError::UnitizationNondeterministic);
@@ -276,9 +284,10 @@ pub(super) fn encode_body(
     manifest: &UnitManifest,
     out: &mut Vec<u8>,
 ) -> Result<(), UnitizationError> {
+    let algorithm_tag = digest_tag(manifest.digest_algorithm)?;
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&UNIT_MANIFEST_VERSION.to_le_bytes());
-    out.push(digest_tag(manifest.digest_algorithm));
+    out.push(algorithm_tag);
     let source = manifest.source_id.as_str().as_bytes();
     out.extend_from_slice(
         &u16::try_from(source.len())
@@ -323,10 +332,47 @@ pub(super) fn encode_body(
         out.extend_from_slice(&unit.logical_line_start.to_le_bytes());
         out.extend_from_slice(&unit.logical_line_end.to_le_bytes());
         out.push(
-            u8::from(unit.starts_at_line_boundary)
-                | (u8::from(unit.ends_at_line_boundary) << 1),
+            u8::from(unit.starts_at_line_boundary) | (u8::from(unit.ends_at_line_boundary) << 1),
         );
         out.extend_from_slice(unit.unit_digest.as_bytes());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::canonicalize_unit_manifest;
+    use crate::manifest::model::UnitManifest;
+    use crate::manifest::profile::UnitizerProfileId;
+    use crate::{DEFAULT_UNITIZATION_LIMITS, UnitizationError};
+    use search_contracts::{Blake3Digest32, DigestAlgorithm, NonZeroRevision, OpaqueId};
+
+    #[test]
+    fn codec_closedness_encoder_rejects_sha256_manifest() {
+        let digest = Blake3Digest32::from_bytes([0; 32]);
+        let manifest = UnitManifest {
+            source_id: OpaqueId::new("source:test").expect("valid source ID"),
+            revision: NonZeroRevision::new(1).expect("nonzero revision"),
+            content_digest: digest,
+            representation_id: digest,
+            materializer_profile_digest: [0; 32],
+            canonical_digest: digest,
+            coordinate_digest: digest,
+            loss_digest: digest,
+            unitizer_profile_id: UnitizerProfileId::from_bytes([0; 32]),
+            unitizer_profile_revision: 1,
+            unitizer_limits: DEFAULT_UNITIZATION_LIMITS,
+            digest_algorithm: DigestAlgorithm::Sha256,
+            input_bytes: 0,
+            emitted_bytes: 0,
+            line_count: 0,
+            units: Vec::new(),
+            manifest_digest: digest,
+        };
+
+        assert_eq!(
+            canonicalize_unit_manifest(&manifest),
+            Err(UnitizationError::UnitManifestDigestMismatch)
+        );
+    }
 }
