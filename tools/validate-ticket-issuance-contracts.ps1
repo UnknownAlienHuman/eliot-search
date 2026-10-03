@@ -531,8 +531,8 @@ foreach ($entry in $schemas.GetEnumerator()) {
     $schemaFieldKinds[$kind] = $fieldKindMap
 }
 
-if ((Get-Int $orchestration 'schema_version') -ne 5) {
-    Fail 'Orchestration schema_version must be 5.'
+if ((Get-Int $orchestration 'schema_version') -ne 6) {
+    Fail 'Orchestration schema_version must be 6.'
 }
 $orchestrationPaths = [ordered]@{
     control_plane_schema_registry = $controlPath
@@ -579,8 +579,8 @@ Require-Tokens $orchestrationPath $orchestration @(
     'new materialized context and assignment-ticket revision exist, launch/dependencies remain valid and no active lease exists'
 )
 
-if ((Get-Int $launch 'orchestration_registry_schema_version') -ne 5 -or (Get-String $launch 'orchestration_registry_path') -cne $orchestrationPath) {
-    Fail 'Launch state does not pin orchestration schema v5.'
+if ((Get-Int $launch 'orchestration_registry_schema_version') -ne 6 -or (Get-String $launch 'orchestration_registry_path') -cne $orchestrationPath) {
+    Fail 'Launch state does not pin orchestration schema v6.'
 }
 
 Require-Tokens $canonicalizationPath $canonicalization @(
