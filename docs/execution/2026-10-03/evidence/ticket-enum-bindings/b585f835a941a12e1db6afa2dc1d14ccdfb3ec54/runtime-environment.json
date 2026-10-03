@@ -1,0 +1,10 @@
+{
+  "toolchain_selector": "+1.98.0",
+  "cargo_executable": "C:\\Users\\kleym\\.cargo\\bin\\cargo.exe",
+  "rustc_executable": "C:\\Users\\kleym\\.cargo\\bin\\rustc.exe",
+  "CARGO_TARGET_DIR": "C:\\Development\\Rust\\targets\\eliot-search-instance-profiles",
+  "CARGO_HOME": null,
+  "RUSTUP_HOME": null,
+  "RUSTUP_TOOLCHAIN": null,
+  "CARGO_NET_OFFLINE": null
+}

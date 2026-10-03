@@ -1,0 +1,24 @@
+{
+  "source_commit": "b585f835a941a12e1db6afa2dc1d14ccdfb3ec54",
+  "cwd": "C:\\Users\\kleym\\.codex\\worktrees\\issuance-instance-profiles\\eliot-search",
+  "command": "cargo +1.98.0 test --locked --offline --no-fail-fast -p xtask --test control_record_enum_bindings --test control_record_instance_profiles --test ticket_issuance_builder",
+  "clean_before": true,
+  "clean_after": true,
+  "runtime_environment": {
+    "toolchain_selector": "+1.98.0",
+    "cargo_executable": "C:\\Users\\kleym\\.cargo\\bin\\cargo.exe",
+    "rustc_executable": "C:\\Users\\kleym\\.cargo\\bin\\rustc.exe",
+    "CARGO_TARGET_DIR": "C:\\Development\\Rust\\targets\\eliot-search-instance-profiles",
+    "CARGO_HOME": null,
+    "RUSTUP_HOME": null,
+    "RUSTUP_TOOLCHAIN": null,
+    "CARGO_NET_OFFLINE": null
+  },
+  "started_at_utc": "2026-10-03T09:51:16.0186746+00:00",
+  "finished_at_utc": "2026-10-03T09:52:08.1850495+00:00",
+  "exit_code": 0,
+  "stdout_path": "C:\\Development\\Rust\\targets\\eliot-search-instance-profiles\\control-record-enum-bindings-b585f835a941a12e1db6afa2dc1d14ccdfb3ec54\\cargo-test-stdout.txt",
+  "stdout_sha256": "EBC148CCD03E71688EDBB6A0E43E5C4748A782880F0F89721DB170D9CD4A69C9",
+  "stderr_path": "C:\\Development\\Rust\\targets\\eliot-search-instance-profiles\\control-record-enum-bindings-b585f835a941a12e1db6afa2dc1d14ccdfb3ec54\\cargo-test-stderr.txt",
+  "stderr_sha256": "62AE15DC48EC9FEC12B1B2E5F8A69D014628F5384F5461B66B4287D2CB06D7D5"
+}

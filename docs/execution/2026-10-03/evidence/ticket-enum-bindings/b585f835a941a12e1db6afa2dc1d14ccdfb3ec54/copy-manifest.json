@@ -1,0 +1,130 @@
+{
+  "source_candidate": "b585f835a941a12e1db6afa2dc1d14ccdfb3ec54",
+  "integrated_source": "82315138f337ecbcab5ccb1a3f01b67330930572",
+  "authority": "NON_AUTHORITATIVE",
+  "scope": "EXECUTED_BOUNDED_ENUM_PROFILE_BUILDER_TARGETS_AND_STRUCTURAL_CHECK",
+  "integration_blob_comparison": "eight reviewed changed blobs exact; lib.rs preserves candidate lines plus separately accepted qualified_profile_id module",
+  "copied_at_utc": "2026-10-03T09:58:57.7675193Z",
+  "files": [
+    {
+      "path": "cargo-test-command.txt",
+      "bytes": 170,
+      "sha256": "A58E00FFD5235FD18E77BBDE0BCC6FA0F23E19F76A46F5213529022F11630FE5"
+    },
+    {
+      "path": "cargo-test-exit.txt",
+      "bytes": 3,
+      "sha256": "13BF7B3039C63BF5A50491FA3CFD8EB4E699D1BA1436315AEF9CBE5711530354"
+    },
+    {
+      "path": "cargo-test-finished-at-utc.txt",
+      "bytes": 35,
+      "sha256": "42D42CE9C67591180B398A7A512FC1F79BA00414970D4A642FE130689FF35565"
+    },
+    {
+      "path": "cargo-test-started-at-utc.txt",
+      "bytes": 35,
+      "sha256": "BE29873308EEC1E77D3B15838139CE48E6F66836C858992ABFE543EB1461BDAC"
+    },
+    {
+      "path": "cargo-test-stderr.txt",
+      "bytes": 4179,
+      "sha256": "62AE15DC48EC9FEC12B1B2E5F8A69D014628F5384F5461B66B4287D2CB06D7D5"
+    },
+    {
+      "path": "cargo-test-stdout.txt",
+      "bytes": 1614,
+      "sha256": "EBC148CCD03E71688EDBB6A0E43E5C4748A782880F0F89721DB170D9CD4A69C9"
+    },
+    {
+      "path": "clean-status.txt",
+      "bytes": 7,
+      "sha256": "F7199FF527B8909C4EFEECDFC8F9B7B48C96FABE1E3EBF2328EFB915FE645221"
+    },
+    {
+      "path": "cwd.txt",
+      "bytes": 73,
+      "sha256": "97BC31B3B40B57D5ECBBF2715DB2C391756E1587533F911B47685DD873053836"
+    },
+    {
+      "path": "git-status-short-branch.txt",
+      "bytes": 21,
+      "sha256": "D1E4C059FA4C1A64288BE0CBD64AD5DD255760CC65B4CB93BE3C376424A8F3FF"
+    },
+    {
+      "path": "ps-structural-clean-status.txt",
+      "bytes": 7,
+      "sha256": "F7199FF527B8909C4EFEECDFC8F9B7B48C96FABE1E3EBF2328EFB915FE645221"
+    },
+    {
+      "path": "ps-structural-command.txt",
+      "bytes": 74,
+      "sha256": "1940B67F19FF1D6B14AA59972B153D1BBD734E4D2A0C81B938284CFD51FCA02E"
+    },
+    {
+      "path": "ps-structural-cwd.txt",
+      "bytes": 73,
+      "sha256": "97BC31B3B40B57D5ECBBF2715DB2C391756E1587533F911B47685DD873053836"
+    },
+    {
+      "path": "ps-structural-exit.txt",
+      "bytes": 3,
+      "sha256": "13BF7B3039C63BF5A50491FA3CFD8EB4E699D1BA1436315AEF9CBE5711530354"
+    },
+    {
+      "path": "ps-structural-finished-at-utc.txt",
+      "bytes": 35,
+      "sha256": "108702791976EE75ABA036CE52A18981946078AA7500BC88ACC61D0A912EC6D5"
+    },
+    {
+      "path": "ps-structural-git-status-short-branch.txt",
+      "bytes": 21,
+      "sha256": "D1E4C059FA4C1A64288BE0CBD64AD5DD255760CC65B4CB93BE3C376424A8F3FF"
+    },
+    {
+      "path": "ps-structural-result.json",
+      "bytes": 1247,
+      "sha256": "D3A3D77171FA7E055C00DC210E9A2F66403A6EDC8BD1044045098429B4C2DF35"
+    },
+    {
+      "path": "ps-structural-runtime-environment.json",
+      "bytes": 236,
+      "sha256": "FCCA57462C00401F289EA3331672478541D825BAAEF8E34C73DA16F638E9DDD9"
+    },
+    {
+      "path": "ps-structural-source-sha.txt",
+      "bytes": 42,
+      "sha256": "0E44344502A5B9F62D357F87451A1214570328D977F99148B613C77E4EBE4219"
+    },
+    {
+      "path": "ps-structural-started-at-utc.txt",
+      "bytes": 35,
+      "sha256": "A48CE10867A2AE232660325D107D58B9EC1CADCBC52A1A94FE6BCDACB729529F"
+    },
+    {
+      "path": "ps-structural-stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "path": "ps-structural-stdout.txt",
+      "bytes": 156,
+      "sha256": "3DA61A9284935DAFD50DE6F96E2816775355B23551E0CB77636FF3830DBC180D"
+    },
+    {
+      "path": "result.json",
+      "bytes": 1477,
+      "sha256": "3B0E3CA822CD1BAE3F2DB955DE790A901DF901F3450B8501A099788B9931DE96"
+    },
+    {
+      "path": "runtime-environment.json",
+      "bytes": 370,
+      "sha256": "459BE8EA4A184635589A368E03E0A87715D6A8D9AAE2053664440A65436BDDCA"
+    },
+    {
+      "path": "source-sha.txt",
+      "bytes": 42,
+      "sha256": "0E44344502A5B9F62D357F87451A1214570328D977F99148B613C77E4EBE4219"
+    }
+  ]
+}

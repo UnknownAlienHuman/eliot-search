@@ -13,6 +13,11 @@ independent source review and exact Git-blob comparison. Its worker transcript r
 target passed 6/6; original stream files were not retained, and reconstructed metadata is labeled
 accordingly. No profile registration or authority follows from syntax validation.
 
+The [corrected ticket enum implementation](TICKET_ENUM_BINDINGS_REVIEW.md) is integrated at `82315138`
+after independent source review: 18/18 in one combined run and structural exit 0, with original raw
+captures retained. The type count is 51 and issued-record count stays zero. No passing target was
+repeated after integration.
+
 ## Delivered code
 
 `git fetch origin` discovered that local main was 471 commits behind. A clean fast-forward moved it from `aabb12e915ba5fb7aa568756d5a37891bf1d3a11` to `9d61b759189464a01b93ca4efcb80c5398344bb4`.
@@ -130,7 +135,7 @@ The final structural validator also reports zero issued records.
 
 Integration decisions accept the four explicit instance-status bindings, the descriptor's root
 canonical-order placement and the closed W0 selector correction. The separate accepted ticket-enum
-decision adopts four vocabularies and nine field bindings; its corrected implementation is still under
-verification. Other nested enum bindings, profile/trust definitions and acknowledgement encoding
+decision adopts four vocabularies and nine field bindings; its corrected bounded implementation is
+independently reviewed and verified above. Other nested enum bindings, profile/trust definitions and acknowledgement encoding
 remain unresolved. The broader ticket-obligation proposal remains non-normative outside that accepted
 subset. No decision creates an issued record, accepts qualification or advances launch state.
