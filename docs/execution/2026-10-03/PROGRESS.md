@@ -2,6 +2,12 @@
 
 Status: **PARTIAL_PROGRESS**. The completion Goal remains active. This report is diagnostic evidence, not an issued assignment, package/API handoff, qualification receipt, gate, or wave acceptance.
 
+The latest [restart recovery](RESTART_RECOVERY.md) revalidated Git and retained candidates, restarted
+the scoped Luna Max work, and recovered the failed new enum checks without substituting historical
+passes. The [qualified-profile identifier syntax](../../handoff/changes/2026-10-03-qualified-profile-id-adoption.md)
+is separately accepted for pure parsing only. The reviewed [CNG primitive evidence](CNG_PRIMITIVE_DIAGNOSTIC.md)
+does not qualify a persistent signing profile. The sections below retain their original capture bases.
+
 ## Delivered code
 
 `git fetch origin` discovered that local main was 471 commits behind. A clean fast-forward moved it from `aabb12e915ba5fb7aa568756d5a37891bf1d3a11` to `9d61b759189464a01b93ca4efcb80c5398344bb4`.
@@ -117,8 +123,9 @@ The bounded native issuance prerequisites now pass **17/17** focused tests at ex
 [detailed record](W0_ISSUANCE_PREREQUISITES.md) preserves earlier failures and exact captured output.
 The final structural validator also reports zero issued records.
 
-Integration decisions accept only the four explicit instance-status bindings, the descriptor's root
-canonical-order placement and the closed W0 selector correction. Nested enum bindings, external
-profile/trust definitions and acknowledgement encoding remain unresolved. The ticket-obligation enum
-proposal is published as a non-normative candidate. No decision creates an issued record, accepts
-qualification or advances launch state.
+Integration decisions accept the four explicit instance-status bindings, the descriptor's root
+canonical-order placement and the closed W0 selector correction. The separate accepted ticket-enum
+decision adopts four vocabularies and nine field bindings; its corrected implementation is still under
+verification. Other nested enum bindings, profile/trust definitions and acknowledgement encoding
+remain unresolved. The broader ticket-obligation proposal remains non-normative outside that accepted
+subset. No decision creates an issued record, accepts qualification or advances launch state.
