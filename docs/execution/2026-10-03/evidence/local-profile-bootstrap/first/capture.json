@@ -1,0 +1,32 @@
+{
+  "command": "& 'C:\\Users\\kleym\\.cargo\\bin\\taplo.exe' lint --no-auto-config --no-schema --colors never 'C:\\Users\\kleym\\.codex\\worktrees\\native-issuance-profile-design\\eliot-search\\swarm\\schema-drafts\\local-profile-bootstrap-v1\\bootstrap-evidence-v1.toml' 'C:\\Users\\kleym\\.codex\\worktrees\\native-issuance-profile-design\\eliot-search\\swarm\\schema-drafts\\local-profile-bootstrap-v1\\qualified-profile-ref-v1.toml'",
+  "cwd": "C:\\Users\\kleym\\.codex\\worktrees\\native-issuance-profile-design\\eliot-search",
+  "started_utc": "2026-10-03T09:50:44.9748989+00:00",
+  "ended_utc": "2026-10-03T09:50:45.0109176+00:00",
+  "exit_code": 0,
+  "inputs": [
+    {
+      "source": "C:\\Users\\kleym\\.codex\\worktrees\\native-issuance-profile-design\\eliot-search\\swarm\\schema-drafts\\local-profile-bootstrap-v1\\bootstrap-evidence-v1.toml",
+      "capture": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-local-profile-bootstrap-taplo-14433f3b362e4b80a2e9947235df2c16\\input-1.toml",
+      "sha256_source": "64da004dfbae5c5125860709bbbb01d3c08f71c69a42229458fcc0a0ed192468",
+      "sha256_capture": "64da004dfbae5c5125860709bbbb01d3c08f71c69a42229458fcc0a0ed192468"
+    },
+    {
+      "source": "C:\\Users\\kleym\\.codex\\worktrees\\native-issuance-profile-design\\eliot-search\\swarm\\schema-drafts\\local-profile-bootstrap-v1\\qualified-profile-ref-v1.toml",
+      "capture": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-local-profile-bootstrap-taplo-14433f3b362e4b80a2e9947235df2c16\\input-2.toml",
+      "sha256_source": "abfde01de6300984d37888e0e0d11a0956be3d109f75e9ef327347de468d2c31",
+      "sha256_capture": "abfde01de6300984d37888e0e0d11a0956be3d109f75e9ef327347de468d2c31"
+    }
+  ],
+  "final_input_hashes": [
+    {
+      "path": "C:\\Users\\kleym\\.codex\\worktrees\\native-issuance-profile-design\\eliot-search\\swarm\\schema-drafts\\local-profile-bootstrap-v1\\bootstrap-evidence-v1.toml",
+      "sha256": "64da004dfbae5c5125860709bbbb01d3c08f71c69a42229458fcc0a0ed192468"
+    },
+    {
+      "path": "C:\\Users\\kleym\\.codex\\worktrees\\native-issuance-profile-design\\eliot-search\\swarm\\schema-drafts\\local-profile-bootstrap-v1\\qualified-profile-ref-v1.toml",
+      "sha256": "abfde01de6300984d37888e0e0d11a0956be3d109f75e9ef327347de468d2c31"
+    }
+  ],
+  "raw_output": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-local-profile-bootstrap-taplo-14433f3b362e4b80a2e9947235df2c16\\taplo-output.raw"
+}

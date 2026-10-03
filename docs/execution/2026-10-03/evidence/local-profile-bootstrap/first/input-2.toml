@@ -1,0 +1,71 @@
+schema_version = 1
+project = "eliot-search"
+candidate_id = "qualified-profile-ref-v1"
+status = "PROPOSED_REVIEW_PENDING"
+claimable = false
+registered = false
+qualified = false
+owner = "integration-owner"
+based_on_commit = "0f691f1b3fd10755a3c8e650ddea6f9311842978"
+
+[type_proposal]
+type_name = "QualifiedOpaqueId"
+semantic_alias = "QualifiedProfileRefV1"
+representation = "one canonical ASCII string: namespace '/' local_opaque_id"
+pattern = "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+max_bytes = 225
+minimum_bytes = 3
+encoding = "exact ASCII bytes; no Unicode, whitespace, URL encoding, escapes, normalization, case folding or NUL"
+separator = "exactly one literal forward slash (0x2f) between namespace and local_opaque_id"
+empty_segments = "reject"
+extra_separators = "reject"
+dot_segments = "reject namespace '.' or '..'; local segment is checked by OpaqueId, whose first character cannot be '.'"
+
+[namespace_component]
+pattern = "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+minimum_bytes = 1
+max_bytes = 96
+case_rule = "lowercase ASCII only"
+scope_binding = "for a record in this repository, namespace must equal the project namespace explicitly bound by the accepted project/profile registry; the current candidate namespace literal is eliot-search"
+unknown_namespace = "typed value may parse but profile lookup fails closed; never infer ownership from the Git remote, directory name or display name"
+
+[local_opaque_id_component]
+existing_type = "OpaqueId"
+pattern = "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+minimum_bytes = 1
+max_bytes = 128
+case_rule = "case-sensitive; retain exact bytes"
+preserved_rules = ["non_empty", "no_path_separator", "no_whitespace"]
+
+[existing_type_rule_binding]
+source_type_registry = "swarm/schemas/types-v1.toml"
+new_type_definition_required = "add QualifiedOpaqueId with type_proposal.pattern, type_proposal.max_bytes and exact encoding; do not weaken OpaqueId"
+field_rules_to_preserve = [
+  "ImmutableArtifactRef.store_profile_ref_is_qualified_opaque_id",
+  "ImmutableSignatureRef.approval_profile_ref_is_qualified_opaque_id",
+]
+rule_semantics = "each listed field validates the complete QualifiedOpaqueId string; the single slash is the namespace delimiter, while each component separately obeys its own grammar"
+additional_profile_ref_sites = ["profile definitions", "actor-trust signature_profile_ref", "operation canonical profile_ref fields"]
+registration_effect = "this draft proposes the missing type contract only; the type registry and consumer schemas remain unchanged until integration-owner acceptance"
+
+[current_candidate_examples]
+valid_syntax_only = [
+  "eliot-search/local-git-sha256-artifact-store-v1",
+  "eliot-search/local-windows-cng-software-ecdsa-p256-v1",
+]
+example_meaning = "syntactic examples only; neither string resolves to a registered, provisioned or qualified profile"
+
+[reject_vectors]
+values = [
+  "eliot-search/", "/profile", "eliot-search/a/b", "Eliot-Search/profile",
+  "eliot search/profile", "eliot-search/../profile", "eliot-search/.", "eliot-search/profile?version=1",
+  "eliot-search/profile%2Fv1", "eliot-search\\profile", "eliot-search/profile\n",
+]
+all_results = "NOT_EXECUTED"
+
+[required_acceptance]
+items = [
+  "integration owner accepts the QualifiedOpaqueId type definition and namespace-to-project lookup rule",
+  "integration owner audits every existing *_profile_ref_is_qualified_opaque_id consumer against this exact grammar",
+  "machine schema/conformance evidence proves maximum lengths, single-separator parsing and fail-closed lookup",
+]

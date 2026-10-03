@@ -18,6 +18,11 @@ after independent source review: 18/18 in one combined run and structural exit 0
 captures retained. The type count is 51 and issued-record count stays zero. No passing target was
 repeated after integration.
 
+The [local bootstrap proposal](LOCAL_PROFILE_BOOTSTRAP_REVIEW.md) is integrated at `d4266f5` after
+independent review for proposal publication. Its local owner pinning and actor/evidence bindings add
+no Governor or Memory OS dependency. Both actual parser captures are retained with their distinct
+input provenance. No key, host pin, profile qualification or issued record exists as a result.
+
 ## Delivered code
 
 `git fetch origin` discovered that local main was 471 commits behind. A clean fast-forward moved it from `aabb12e915ba5fb7aa568756d5a37891bf1d3a11` to `9d61b759189464a01b93ca4efcb80c5398344bb4`.
