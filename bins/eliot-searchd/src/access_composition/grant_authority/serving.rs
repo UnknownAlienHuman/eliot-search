@@ -106,7 +106,7 @@ where
         request: &mut AdmittedProviderRequest,
         task: &mut Self::Task,
         operation: impl FnOnce(
-            CanonicalServingAuthority<'_>,
+            CanonicalServingAuthority<'_, '_>,
             &mut AdmittedProviderRequest,
             &mut Self::Task,
         ) -> Result<R, CanonicalServingError>,

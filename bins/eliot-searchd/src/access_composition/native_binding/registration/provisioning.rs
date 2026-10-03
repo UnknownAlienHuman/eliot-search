@@ -185,7 +185,7 @@ impl StandaloneRegistrationProvisioning {
     /// recovery before credential/final writes. COMMITTED starts in
     /// `RegistrationUnresolved`; its authority-bearing snapshot is never published
     /// here before required barriers.
-    pub fn restore_durable<C: CancellationProbe>(
+    pub fn restore_durable<C: CancellationProbe + Clone>(
         journal: &PersistentControlJournal,
         binding_id: BindingId,
         operation_id: MutationId,

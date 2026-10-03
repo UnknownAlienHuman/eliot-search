@@ -212,7 +212,7 @@ impl CanonicalAdmittedRecipeTask for RegisteredAdmittedRecipeTask {
     fn poll_authorized(
         &mut self,
         admission: &StandalonePreRetrievalAdmission,
-        output: &mut CanonicalWorkOutput<'_, '_>,
+        output: &mut CanonicalWorkOutput<'_, '_, '_>,
         budget: CanonicalWorkBudget,
     ) -> Result<Poll<()>, CanonicalServingError> {
         budget.check()?;

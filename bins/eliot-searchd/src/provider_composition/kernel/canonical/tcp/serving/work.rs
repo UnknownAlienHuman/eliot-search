@@ -84,17 +84,17 @@ impl CanonicalWorkBudget {
 
 /// Borrowed live authority held by the native host for one work/output turn.
 /// None of these values may be reconstructed from client claims or capabilities.
-pub struct CanonicalServingAuthority<'a> {
+pub struct CanonicalServingAuthority<'authority, 'grant> {
     /// Current active standalone policy borrowed from the held native lock.
     /// The standalone adapter requires Some; other peer roles may use None.
     /// Never supply a detached policy snapshot or reconstruct one from claims.
-    pub standalone_policy: Option<&'a AuthoritativeGrantPolicy>,
+    pub standalone_policy: Option<&'authority AuthoritativeGrantPolicy>,
     /// Exact issuer-ledger grant verification retained for this authority turn.
     ///
     /// Only the standalone grant adapter supplies `Some`, after current policy,
     /// binding, request and lifetime validation inside the same host lock. Other
     /// roles use `None`; client claims or a transport MAC cannot construct it.
-    pub(crate) standalone_grant: Option<VerifiedStandaloneGrant<'a>>,
+    pub(crate) standalone_grant: Option<VerifiedStandaloneGrant<'grant>>,
     /// Canonical pre-retrieval compiler borrowed from the same held authority
     /// lock as the policy, access snapshot, source resolver and native domain.
     ///
@@ -102,20 +102,23 @@ pub struct CanonicalServingAuthority<'a> {
     /// verification above. Tasks cannot obtain the template separately and must
     /// use this callback before source reads, provider dispatch, IDF or counts.
     pub(crate) standalone_admission: Option<
-        &'a mut dyn FnMut(
+        &'authority mut dyn FnMut(
             &RequestBody,
             &StandaloneGrantTemplate,
         ) -> Result<StandalonePreRetrievalAdmission, AccessError>,
     >,
     /// Restored native domain under the actual serving/mutation lock.
-    pub domain: &'a NativeSecurityDomain,
+    pub domain: &'authority NativeSecurityDomain,
     /// Complete authoritative influence population, not only displayed hits.
-    pub fence: &'a RequestSecurityFence,
+    pub fence: &'authority RequestSecurityFence,
     /// Conservative monotonic expiry of the current grant/binding authorization.
     pub valid_until: MonotonicMillis,
     /// Current scope/disclosure/byte-limit validation of the actual output body.
     /// This callback must not write output or release the host's authority lock.
-    pub validate_output: &'a mut dyn FnMut(&RequestBody, &ProviderBodyV1) -> Result<(), AccessError>,
+    pub validate_output: &'authority mut dyn FnMut(
+        &RequestBody,
+        &ProviderBodyV1,
+    ) -> Result<(), AccessError>,
 }
 
 /// Native grant/plan owner injected into the serving loop. There is deliberately
@@ -154,7 +157,7 @@ pub trait CanonicalRecipeHost {
         request: &mut AdmittedProviderRequest,
         task: &mut Self::Task,
         operation: impl FnOnce(
-            CanonicalServingAuthority<'_>,
+            CanonicalServingAuthority<'_, '_>,
             &mut AdmittedProviderRequest,
             &mut Self::Task,
         ) -> Result<R, CanonicalServingError>,
@@ -177,7 +180,7 @@ pub trait CanonicalRecipeTask {
     /// request/authority lifetime.
     fn poll(
         &mut self,
-        output: &mut CanonicalWorkOutput<'_, '_>,
+        output: &mut CanonicalWorkOutput<'_, '_, '_>,
         budget: CanonicalWorkBudget,
     ) -> Result<Poll<()>, CanonicalServingError>;
 
@@ -198,16 +201,16 @@ pub trait CanonicalRecipeTask {
 
 /// Single-event output capability valid only inside the live host/domain borrow.
 /// Executors never receive the socket or mutable protocol session.
-pub struct CanonicalWorkOutput<'io, 'authority> {
+pub struct CanonicalWorkOutput<'io, 'authority, 'grant> {
     pub(super) transport: &'io mut CanonicalTcpConnection,
     pub(super) request: &'io mut AdmittedProviderRequest,
-    pub(super) authority: CanonicalServingAuthority<'authority>,
+    pub(super) authority: CanonicalServingAuthority<'authority, 'grant>,
     pub(super) budget: CanonicalWorkBudget,
     pub(super) emitted_terminal: Option<bool>,
     pub(super) failed: bool,
 }
 
-impl CanonicalWorkOutput<'_, '_> {
+impl CanonicalWorkOutput<'_, '_, '_> {
     /// Exact admitted request, still subject to the host's live authorization.
     #[must_use]
     pub fn request(&self) -> &RequestBody { self.request.body() }
