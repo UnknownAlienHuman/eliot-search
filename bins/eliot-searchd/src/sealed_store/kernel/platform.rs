@@ -4,6 +4,7 @@
 mod unsupported;
 #[cfg(windows)]
 #[allow(unsafe_code)]
+#[path = "platform/windows.rs"]
 mod windows;
 
 #[cfg(not(windows))]

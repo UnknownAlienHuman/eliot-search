@@ -1,9 +1,14 @@
 //! Sealed owner-epoch composition behind the stable module facade.
 
+#[path = "kernel/codec.rs"]
 mod codec;
+#[path = "kernel/identity.rs"]
 mod identity;
+#[path = "kernel/model.rs"]
 mod model;
+#[path = "kernel/platform.rs"]
 mod platform;
+#[path = "kernel/spec.rs"]
 mod spec;
 
 pub use codec::OwnerEpochRecord;

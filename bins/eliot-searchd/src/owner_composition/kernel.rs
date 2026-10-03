@@ -1,12 +1,20 @@
 //! Durable owner composition behind the stable daemon-local facade.
 
+#[path = "kernel/codec.rs"]
 mod codec;
+#[path = "kernel/installation.rs"]
 mod installation;
+#[path = "kernel/lifecycle.rs"]
 mod lifecycle;
+#[path = "kernel/observation.rs"]
 mod observation;
+#[path = "kernel/record.rs"]
 mod record;
+#[path = "kernel/slots.rs"]
 mod slots;
+#[path = "kernel/spec.rs"]
 mod spec;
+#[path = "kernel/succession.rs"]
 mod succession;
 
 pub use lifecycle::{LiveOwner, ShutdownReceipt};

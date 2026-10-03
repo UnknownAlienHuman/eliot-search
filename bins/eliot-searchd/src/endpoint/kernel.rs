@@ -1,10 +1,16 @@
 //! Loopback endpoint composition behind the stable daemon-local facade.
 
+#[path = "kernel/codec.rs"]
 mod codec;
+#[path = "kernel/input.rs"]
 mod input;
+#[path = "kernel/pairing.rs"]
 mod pairing;
+#[path = "kernel/server.rs"]
 mod server;
+#[path = "kernel/spec.rs"]
 mod spec;
+#[path = "kernel/wire.rs"]
 mod wire;
 
 pub use input::EndpointInput;

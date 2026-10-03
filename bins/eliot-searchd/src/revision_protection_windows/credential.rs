@@ -11,7 +11,7 @@ use search_os_secrets_windows::{
 
 use super::inventory::contains_protected_objects;
 
-pub(super) fn load_or_create_root_secret(
+pub(in crate::revision_protection) fn load_or_create_root_secret(
     namespace_id: [u8; 32],
     revision_root: &Path,
 ) -> Result<LegacyRevisionRootSecret, String> {

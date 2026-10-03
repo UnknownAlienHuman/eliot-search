@@ -4,9 +4,13 @@
 //! model/error vocabulary, finite window state and regression coverage have
 //! separate private owners behind the existing continuation surface.
 
+#[path = "kernel/catalog.rs"]
 mod catalog;
+#[path = "kernel/entropy.rs"]
 mod entropy;
+#[path = "kernel/model.rs"]
 mod model;
+#[path = "kernel/spec.rs"]
 mod spec;
 
 pub use catalog::*;

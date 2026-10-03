@@ -1,5 +1,6 @@
 //! Finite session-local continuation catalog.
 
+#[path = "catalog/prepared.rs"]
 mod prepared;
 
 pub(crate) use prepared::PreparedPage;

@@ -1,8 +1,11 @@
 //! Concrete typed TCP I/O after authoritative pairing/bootstrap handoff.
 
+#[path = "tcp/io.rs"]
 mod io;
+#[path = "tcp/handshake.rs"]
 mod handshake;
 #[cfg(feature = "wave4-query")]
+#[path = "tcp/serving.rs"]
 mod serving;
 
 #[cfg(feature = "wave4-query")]

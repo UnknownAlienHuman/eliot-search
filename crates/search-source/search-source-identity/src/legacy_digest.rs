@@ -94,6 +94,12 @@ impl std::error::Error for LegacyDigestIdentityError {}
 ///
 /// Malformed evidence, excessive candidates, malformed prior identities, or
 /// collisions return a closed [`LegacyDigestIdentityError`].
+///
+/// # Panics
+///
+/// The single-match branch relies on `BTreeSet` yielding its element after
+/// reporting a length of one; a violation of that collection invariant would
+/// panic during extraction.
 pub fn resolve_legacy_digest_identity(
     stable_identity_digest: &str,
     identity_strength: &str,
@@ -203,7 +209,8 @@ fn decode_digest(value: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut output = [0_u8; 32];
-    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+    let (pairs, _) = value.as_bytes().as_chunks::<2>();
+    for (index, pair) in pairs.iter().enumerate() {
         let high = hex_nibble(pair[0])?;
         let low = hex_nibble(pair[1])?;
         output[index] = (high << 4) | low;

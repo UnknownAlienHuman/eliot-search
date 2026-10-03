@@ -15,6 +15,7 @@ use search_provider_protocol::{
 use super::pairing::verify_envelope;
 use super::spec::PROVIDER_PROTOCOL_RANGE;
 
+#[path = "router/terminal.rs"]
 mod terminal;
 
 pub use terminal::PreparedProviderTerminal;

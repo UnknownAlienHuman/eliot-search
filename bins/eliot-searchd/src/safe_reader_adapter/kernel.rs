@@ -1,9 +1,14 @@
 //! Final-handle adapter composition behind the stable daemon-local facade.
 
+#[path = "kernel/backend.rs"]
 mod backend;
+#[path = "kernel/identity.rs"]
 mod identity;
+#[path = "kernel/path.rs"]
 mod path;
+#[path = "kernel/read.rs"]
 mod read;
+#[path = "kernel/spec.rs"]
 mod spec;
 
 pub use backend::{FinalHandle, FinalHandleBackend};

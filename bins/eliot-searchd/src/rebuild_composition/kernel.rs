@@ -1,10 +1,16 @@
 //! Rebuild composition behind the stable module facade.
 
+#[path = "kernel/cutover.rs"]
 mod cutover;
+#[path = "kernel/error.rs"]
 mod error;
+#[path = "kernel/manifest.rs"]
 mod manifest;
+#[path = "kernel/pins.rs"]
 mod pins;
+#[path = "kernel/plan.rs"]
 mod plan;
+#[path = "kernel/reclaim.rs"]
 mod reclaim;
 
 pub use cutover::{

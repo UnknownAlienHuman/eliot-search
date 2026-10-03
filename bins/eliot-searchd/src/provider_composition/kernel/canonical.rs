@@ -23,6 +23,7 @@ use crate::access_composition::{
 
 use super::router::monotonic_millis;
 
+#[path = "canonical/tcp.rs"]
 mod tcp;
 
 pub use tcp::{CanonicalTcpConnection, CanonicalTcpError, CanonicalTcpGrantError};

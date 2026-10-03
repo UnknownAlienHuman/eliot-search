@@ -5,14 +5,14 @@ use search_os_secrets_windows::{
     unprotect_legacy_revision_current_user,
 };
 
-pub(super) fn protect_data(
+pub(in crate::revision_protection) fn protect_data(
     input: &mut [u8],
     entropy: &[u8; 32],
 ) -> Result<Vec<u8>, String> {
     protect_legacy_revision_current_user(input, entropy).map_err(direct_reason)
 }
 
-pub(super) fn unprotect_data(
+pub(in crate::revision_protection) fn unprotect_data(
     input: &mut [u8],
     entropy: &[u8; 32],
 ) -> Result<Vec<u8>, String> {

@@ -1,10 +1,16 @@
 //! Publication composition behind the stable module facade.
 
+#[path = "kernel/compensation.rs"]
 mod compensation;
+#[path = "kernel/guards.rs"]
 mod guards;
+#[path = "kernel/publisher.rs"]
 mod publisher;
+#[path = "kernel/recovery.rs"]
 mod recovery;
+#[path = "kernel/retirement.rs"]
 mod retirement;
+#[path = "kernel/spec.rs"]
 mod spec;
 
 pub use compensation::{

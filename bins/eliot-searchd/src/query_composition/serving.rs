@@ -97,7 +97,7 @@ pub(crate) trait CanonicalAdmittedRecipeTask {
     fn poll_authorized(
         &mut self,
         admission: &StandalonePreRetrievalAdmission,
-        output: &mut CanonicalWorkOutput<'_, '_>,
+        output: &mut CanonicalWorkOutput<'_, '_, '_>,
         budget: CanonicalWorkBudget,
     ) -> Result<Poll<()>, CanonicalServingError>;
 
@@ -160,7 +160,7 @@ where
         request: &mut AdmittedProviderRequest,
         task: &mut Self::Task,
         operation: impl FnOnce(
-            CanonicalServingAuthority<'_>,
+            CanonicalServingAuthority<'_, '_>,
             &mut AdmittedProviderRequest,
             &mut Self::Task,
         ) -> Result<R, CanonicalServingError>,
@@ -266,7 +266,7 @@ where
 impl<T: CanonicalAdmittedRecipeTask> CanonicalRecipeTask for AuthorityBoundRecipeTask<T> {
     fn poll(
         &mut self,
-        output: &mut CanonicalWorkOutput<'_, '_>,
+        output: &mut CanonicalWorkOutput<'_, '_, '_>,
         budget: CanonicalWorkBudget,
     ) -> Result<Poll<()>, CanonicalServingError> {
         if self.admission.is_none() {
