@@ -315,7 +315,7 @@ fn validate_field_bindings(types: &[Value]) -> Result<(), ControlRecordEnumBindi
                 != 1
             || rules
                 .iter()
-                .any(|rule| **rule == legacy_rule.as_str())
+                .any(|rule| *rule == legacy_rule.as_str())
         {
             return Err(ControlRecordEnumBindingsError::BindingInvalid);
         }
