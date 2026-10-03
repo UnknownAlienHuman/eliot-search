@@ -119,7 +119,10 @@ pub fn verify_control_record_bytes(
 
     let parsed = toml::from_str::<Value>(text).map_err(|_| ControlRecordBytesError::InvalidToml)?;
     let boundary = scan_record_structure(raw)?;
-    if boundary.header_count != 1 {
+    if boundary.header_count != 1
+        || boundary.header_offset == 0
+        || raw[boundary.header_offset - 1] != b'\n'
+    {
         return Err(ControlRecordBytesError::SignatureHeaderInvalid);
     }
 

@@ -78,6 +78,19 @@ fn requires_a_positive_caller_bound_and_checks_it_before_parsing() {
 }
 
 #[test]
+fn rejects_a_signature_header_without_a_preceding_payload_line_feed() {
+    let raw = concat!(
+        "[signature]\n",
+        "record_sha256 = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n",
+    )
+    .as_bytes();
+    assert_eq!(
+        error(raw, raw.len()),
+        ControlRecordBytesError::SignatureHeaderInvalid
+    );
+}
+
+#[test]
 fn rejects_noncanonical_byte_encodings_and_whitespace() {
     let raw = record("record_kind = \"sample_v1\"\n");
 
