@@ -356,10 +356,26 @@ fn validate_record_schema(
         || string(schema, "status") != Some(TEMPLATE_STATUS)
         || boolean(schema, "immutable") != Some(true)
         || string(schema, "unknown_fields") != Some("reject")
+        || !serialized_status_is_listed_once(schema)
     {
         return Err(ControlRecordInstanceProfileError::RecordSchemaDefinitionInvalid);
     }
     Ok(())
+}
+
+fn serialized_status_is_listed_once(schema: &Map<String, Value>) -> bool {
+    let Some(field_order) = schema
+        .get("canonical_field_order")
+        .and_then(Value::as_array)
+    else {
+        return false;
+    };
+    field_order.iter().all(Value::is_str)
+        && field_order
+            .iter()
+            .filter(|field| field.as_str() == Some("status"))
+            .count()
+            == 1
 }
 
 fn read_toml(

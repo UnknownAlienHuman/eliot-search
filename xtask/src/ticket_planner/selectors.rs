@@ -130,6 +130,71 @@ pub fn resolve_selector(
     (Unsupported, "unsupported selector expression")
 }
 
+/// Resolves one selector using the existing registries plus the exact W0 module document.
+///
+/// Historical selectors retain [`resolve_selector`]'s grammar. The additive module form is
+/// limited to `swarm/modules/w0.toml::package[name=<package>]` and must resolve exactly once
+/// in a document whose stage is `W0`.
+#[must_use]
+pub fn resolve_selector_with_w0_module(
+    docs: &SelectorDocs<'_>,
+    w0_module: Option<&Value>,
+    selector: &str,
+    package: &str,
+) -> (SelectorStatus, &'static str) {
+    if selector
+        .split_once("::")
+        .is_some_and(|(path, _)| path == "swarm/modules/w0.toml")
+    {
+        return resolve_w0_module_selector(w0_module, selector, package);
+    }
+    resolve_selector(docs, selector, package)
+}
+
+fn resolve_w0_module_selector(
+    document: Option<&Value>,
+    selector: &str,
+    package: &str,
+) -> (SelectorStatus, &'static str) {
+    use SelectorStatus::{NotUnique, Ok, Unsupported};
+
+    let Some((_, expression)) = selector.split_once("::") else {
+        return (Unsupported, "missing :: separator");
+    };
+    let Some(name) = bracketed(expression, "package[name=") else {
+        return (Unsupported, "unsupported selector expression");
+    };
+    if !selector_name_valid(name) || !selector_name_valid(package) || name != package {
+        return (
+            Unsupported,
+            "module package selector or caller identity mismatch",
+        );
+    }
+    let Some(document) = document else {
+        return (NotUnique, "W0 module registry is missing or invalid");
+    };
+    if document.get("stage").and_then(Value::as_str) != Some("W0") {
+        return (Unsupported, "module document is not the W0 registry");
+    }
+
+    let matches = document
+        .get("package")
+        .and_then(Value::as_array)
+        .map_or(0, |rows| {
+            rows.iter()
+                .filter(|row| row.get("name").and_then(Value::as_str) == Some(package))
+                .count()
+        });
+    if matches == 1 {
+        (Ok, "one W0 module package row")
+    } else {
+        (
+            NotUnique,
+            "W0 module package selector did not resolve exactly once",
+        )
+    }
+}
+
 fn resolve_bracketed(
     path: &str,
     document: &Value,

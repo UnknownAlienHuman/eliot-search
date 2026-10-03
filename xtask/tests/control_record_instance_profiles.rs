@@ -303,3 +303,88 @@ fn oversized_profile_is_rejected_before_toml_parsing() {
         ControlRecordInstanceProfileError::ProfileInputInvalid
     );
 }
+
+#[test]
+fn serialized_status_must_be_root_string_and_listed_once() {
+    let missing_order = IsolatedFixture::new();
+    missing_order.replace_once(
+        "swarm/schemas/context-manifest-v1.toml",
+        "canonical_field_order",
+        "unreviewed_field_order",
+    );
+    assert_eq!(
+        validate_control_record_instance_profiles(&missing_order.root).unwrap_err(),
+        ControlRecordInstanceProfileError::RecordSchemaDefinitionInvalid
+    );
+
+    let missing_status = IsolatedFixture::new();
+    missing_status.replace_once(
+        "swarm/schemas/context-manifest-v1.toml",
+        "\"schema_version\", \"record_kind\", \"status\", \"identity\", \"draft\", \"artifact\",",
+        "\"schema_version\", \"record_kind\", \"identity\", \"draft\", \"artifact\",",
+    );
+    assert_eq!(
+        validate_control_record_instance_profiles(&missing_status.root).unwrap_err(),
+        ControlRecordInstanceProfileError::RecordSchemaDefinitionInvalid
+    );
+
+    let duplicate_status = IsolatedFixture::new();
+    duplicate_status.replace_once(
+        "swarm/schemas/context-manifest-v1.toml",
+        "\"schema_version\", \"record_kind\", \"status\", \"identity\", \"draft\", \"artifact\",",
+        "\"schema_version\", \"record_kind\", \"status\", \"status\", \"identity\", \"draft\", \"artifact\",",
+    );
+    assert_eq!(
+        validate_control_record_instance_profiles(&duplicate_status.root).unwrap_err(),
+        ControlRecordInstanceProfileError::RecordSchemaDefinitionInvalid
+    );
+
+    let malformed_order = IsolatedFixture::new();
+    malformed_order.replace_once(
+        "swarm/schemas/context-manifest-v1.toml",
+        "\"schema_version\", \"record_kind\", \"status\", \"identity\", \"draft\", \"artifact\",",
+        "\"schema_version\", \"record_kind\", 7, \"status\", \"identity\", \"draft\", \"artifact\",",
+    );
+    assert_eq!(
+        validate_control_record_instance_profiles(&malformed_order.root).unwrap_err(),
+        ControlRecordInstanceProfileError::RecordSchemaDefinitionInvalid
+    );
+
+    let nested_order = IsolatedFixture::new();
+    move_root_canonical_order_under_event_reason_codes(
+        &nested_order.root,
+        "swarm/schemas/lease-event-v1.toml",
+    );
+    assert_eq!(
+        validate_control_record_instance_profiles(&nested_order.root).unwrap_err(),
+        ControlRecordInstanceProfileError::RecordSchemaDefinitionInvalid
+    );
+}
+
+fn move_root_canonical_order_under_event_reason_codes(root: &Path, relative: &str) {
+    let path = root.join(relative);
+    let mut contents = std::fs::read_to_string(&path).expect("schema fixture is readable");
+    let field_start = contents
+        .find("canonical_field_order = [")
+        .expect("root canonical field order is present");
+    let field_end = field_start
+        + contents[field_start..]
+            .find(']')
+            .expect("canonical field order array is closed")
+        + 1;
+    let field_order = contents[field_start..field_end].to_owned();
+    contents.replace_range(field_start..field_end, "");
+
+    let table_marker = "[event_reason_codes]";
+    let insert_at = contents
+        .find(table_marker)
+        .expect("event reason table is present")
+        + table_marker.len();
+    let newline = if contents.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    contents.insert_str(insert_at, &format!("{newline}{field_order}"));
+    std::fs::write(path, contents).expect("write nested-only isolated schema mutation");
+}
