@@ -1,7 +1,8 @@
 # Execution queue after the Codex update
 
 Prepared 2026-10-03 at the maintainer's request. This is a continuation plan, not a capability,
-qualification or controller receipt. Read [RESTART.md](RESTART.md) first for the saved source and gates.
+qualification or controller receipt. Read [CLOSEOUT.md](CLOSEOUT.md) first for the latest saved source,
+failed gates and immediate next steps; [RESTART.md](RESTART.md) retains the earlier checkpoint.
 
 ## Authority and reviewed updates
 

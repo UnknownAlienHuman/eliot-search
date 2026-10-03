@@ -1,6 +1,8 @@
 # Progress after the Codex update
 
-Product work resumed on 2026-10-03. The Goal is active. This record supplements the historical
+Product work resumed on 2026-10-03 and was paused at the maintainer's closeout request. Read
+[CLOSEOUT.md](CLOSEOUT.md) first for the latest delivered source, saved branches and next steps.
+The observations below retain their original revisions. This record supplements the historical
 [RESTART.md](RESTART.md) and [QUEUE.md](QUEUE.md); it is not a capability or qualification receipt.
 
 ## Delivered source
