@@ -12,25 +12,25 @@ use super::spec::{
     FIELD_UNTIL, VECTOR_CODE, VECTOR_TEXT,
 };
 
-pub(super) const fn strong_ordering() -> WriteOrdering {
+pub(in crate::live) const fn strong_ordering() -> WriteOrdering {
     WriteOrdering {
         r#type: WriteOrderingType::Strong as i32,
     }
 }
 
-pub(super) const fn int_value(value: i64) -> Value {
+pub(in crate::live) const fn int_value(value: i64) -> Value {
     Value {
         kind: Some(value::Kind::IntegerValue(value)),
     }
 }
 
-pub(super) fn string_value(value: &str) -> Value {
+pub(in crate::live) fn string_value(value: &str) -> Value {
     Value {
         kind: Some(value::Kind::StringValue(value.to_owned())),
     }
 }
 
-pub(super) fn sparse_named(
+pub(in crate::live) fn sparse_named(
     code: Vec<(u32, f32)>,
     text: Vec<(u32, f32)>,
 ) -> Vectors {
@@ -52,7 +52,7 @@ pub(super) fn sparse_named(
     }
 }
 
-pub(super) fn point(
+pub(in crate::live) fn point(
     id: u64,
     tenant: &str,
     from: i64,
@@ -75,13 +75,13 @@ pub(super) fn point(
     }
 }
 
-pub(super) const fn num_point_id(id: u64) -> PointId {
+pub(in crate::live) const fn num_point_id(id: u64) -> PointId {
     PointId {
         point_id_options: Some(point_id::PointIdOptions::Num(id)),
     }
 }
 
-pub(super) fn snapshot_id(id: Option<&PointId>) -> String {
+pub(in crate::live) fn snapshot_id(id: Option<&PointId>) -> String {
     match id.and_then(|point| point.point_id_options.as_ref()) {
         Some(point_id::PointIdOptions::Num(number)) => number.to_string(),
         Some(point_id::PointIdOptions::Uuid(uuid)) => uuid.clone(),
@@ -89,7 +89,7 @@ pub(super) fn snapshot_id(id: Option<&PointId>) -> String {
     }
 }
 
-pub(super) fn update_completed(status: i32) -> bool {
+pub(in crate::live) fn update_completed(status: i32) -> bool {
     UpdateStatus::try_from(status)
         .is_ok_and(|parsed| parsed == UpdateStatus::Completed)
 }
