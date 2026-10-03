@@ -1,6 +1,6 @@
 # Contract change request — control-record instance closure
 
-**Status:** PROPOSED_REVIEW_PENDING. Proposed values below are integration design choices, not existing normative values or issued records.
+**Status:** PARTIALLY_ACCEPTED_INTEGRATION_CONTRACT (2026-10-03). The four instance-status values and exact registry bindings are accepted below. Nested enum bindings remain PROPOSED_REVIEW_PENDING. Neither decision creates an issued record.
 
 ## Identity
 
@@ -82,3 +82,25 @@ These are future acceptance cases, not executed qualification evidence.
 ## Decision needed
 
 **Compatible control-plane contract extension**, subject to independent review and an explicit integration-owner decision on the proposed statuses and missing class profiles. Until that decision and its registry changes are accepted, validators may report the gaps but issuance cannot guess them.
+
+## Partial integration decision — 2026-10-03
+
+The integration owner accepts only the four exact kind/status pairs above and their versioned profile
+bindings in `swarm/control-plane-schema.toml` version 4. Independent Luna review of source candidate
+`231fa170ec33b385ea9591e2f689d520823083ee` found these values correctly separated from current authority
+and orchestration state. The registry remains schema-only, with zero issued records and no accepted
+handoffs. Serialized `status` must occur exactly once in each bound descriptor's canonical field order;
+the audit found that this check still needs implementation before structural binding acceptance.
+
+The integration owner also accepts the independently reviewed lease-event descriptor correction:
+move its unchanged `canonical_field_order` array before `[event_reason_codes]`, so the array is root
+metadata like the other descriptors. The original TOML table scope nested it inside the reason map;
+the earlier PowerShell regex check ignored table scope and did not prove this layout correct. Preserve
+schema version 1, every reason mapping, field, rule and order. This changes descriptor placement, not
+instance wire fields or their canonical order. Typed profile binding must require the root array and
+reject a nested-only fallback. No Architecture Part I change is needed.
+
+All nested enum choices, full-schema validation, canonical record rendering, actor/signature trust,
+artifact/approval profiles, qualification and issuance remain unresolved and unaccepted by this partial
+decision. A structural validator's `NON_AUTHORITATIVE` result satisfies none of those obligations.
+The seven prior profile tests belong to the recorded candidate; they do not prove the subsequent fix.
