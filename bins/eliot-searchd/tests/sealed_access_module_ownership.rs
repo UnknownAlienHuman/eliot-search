@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn sealed_access_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/sealed_access.rs");
-    assert!(entry.contains("#[path = \"sealed_access/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"sealed_access/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -29,7 +29,7 @@ fn sealed_access_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/sealed_access/kernel.rs");
+    let kernel = read(&root, "src/sealed_access/kernel/mod.rs");
     for module in ["append", "chain", "model", "platform", "read", "spec"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

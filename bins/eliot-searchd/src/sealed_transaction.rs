@@ -4,7 +4,7 @@
 //! durable transaction models, exact Windows metadata coding, lock/file I/O,
 //! put reconciliation and read-only status inspection.
 
-#[path = "sealed_transaction/kernel.rs"]
+#[path = "sealed_transaction/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

@@ -10,6 +10,7 @@ use core::fmt;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io;
 
+use eliot_searchd::native_file::{self, Observation, ObservationError};
 use search_contracts::{BindingId, Blake3Digest32, OwnerEpoch};
 use search_continuation::{ContinuationCleanup, ContinuationLimits};
 use search_control_redb::{
@@ -21,7 +22,6 @@ use search_handles::HandlePolicy;
 use search_ports::{CancellationProbe, OperationContext};
 
 use crate::development::DataRootGuard;
-use crate::native_file::{self, Observation, ObservationError};
 
 use super::{
     NativeBindingExpectation, StandaloneProcessError, StandaloneProcessOwner,

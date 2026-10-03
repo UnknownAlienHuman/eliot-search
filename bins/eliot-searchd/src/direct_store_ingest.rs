@@ -5,5 +5,5 @@
 //! planning, all-before-write batch execution and the ingestion regression
 //! corpus. Denied or ambiguous sources remain unable to reach CAS.
 
-#[path = "direct_store_ingest/kernel.rs"]
+#[path = "direct_store_ingest/kernel/mod.rs"]
 mod kernel;

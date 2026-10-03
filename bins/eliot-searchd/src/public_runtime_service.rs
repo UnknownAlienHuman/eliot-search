@@ -2,7 +2,7 @@
 //!
 //! The stable process entry delegates to bounded runtime-service owners.
 
-#[path = "public_runtime_service/kernel.rs"]
+#[path = "public_runtime_service/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::maybe_run;

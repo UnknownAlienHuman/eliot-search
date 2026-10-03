@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn secure_commands_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/secure_commands.rs");
-    assert!(entry.contains("#[path = \"secure_commands/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"secure_commands/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::maybe_run;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -29,7 +29,7 @@ fn secure_commands_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/secure_commands/kernel.rs");
+    let kernel = read(&root, "src/secure_commands/kernel/mod.rs");
     for module in ["commands", "dispatch", "entry", "output", "store", "support"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

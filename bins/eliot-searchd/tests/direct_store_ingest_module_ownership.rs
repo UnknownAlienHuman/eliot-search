@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn direct_ingest_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/direct_store_ingest.rs");
-    assert!(entry.contains("#[path = \"direct_store_ingest/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"direct_store_ingest/kernel/mod.rs\"]"));
     assert!(entry.contains("mod kernel;"));
     assert!(entry.len() < 2_000, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -30,7 +30,7 @@ fn direct_ingest_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/direct_store_ingest/kernel.rs");
+    let kernel = read(&root, "src/direct_store_ingest/kernel/mod.rs");
     for module in ["batch", "entry", "plan", "policy", "spec"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

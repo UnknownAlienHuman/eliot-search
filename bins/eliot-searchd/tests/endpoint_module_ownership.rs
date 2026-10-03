@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn endpoint_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/endpoint.rs");
-    assert!(entry.contains("#[path = \"endpoint/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"endpoint/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -30,7 +30,7 @@ fn endpoint_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/endpoint/kernel.rs");
+    let kernel = read(&root, "src/endpoint/kernel/mod.rs");
     for module in ["codec", "pairing", "server", "spec", "wire"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

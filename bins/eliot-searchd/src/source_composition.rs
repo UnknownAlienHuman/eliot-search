@@ -6,7 +6,7 @@
 //! through the same canonical DIRECT composition used by live file ingestion.
 
 #[cfg(test)]
-#[path = "direct_store/composition.rs"]
+#[path = "direct_store/composition/mod.rs"]
 mod canonical;
 
 #[cfg(test)]

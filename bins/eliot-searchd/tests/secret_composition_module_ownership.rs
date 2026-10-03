@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn secret_composition_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/secret_composition.rs");
-    assert!(entry.contains("#[path = \"secret_composition/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"secret_composition/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -30,7 +30,7 @@ fn secret_composition_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/secret_composition/kernel.rs");
+    let kernel = read(&root, "src/secret_composition/kernel/mod.rs");
     for module in [
         "binding",
         "composer",

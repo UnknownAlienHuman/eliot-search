@@ -3,7 +3,7 @@
 //! Framing, indexed/search/page/provider renderers and regressions live in
 //! bounded private owners behind this stable module surface.
 
-#[path = "service_output/kernel.rs"]
+#[path = "service_output/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

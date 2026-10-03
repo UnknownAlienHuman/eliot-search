@@ -6,7 +6,7 @@
 
 #![cfg_attr(not(windows), allow(dead_code))]
 
-#[path = "sealed_recovery/kernel.rs"]
+#[path = "sealed_recovery/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

@@ -4,7 +4,7 @@
 //! owners for persisted records, installation identity, native observation,
 //! alternating slots, guarded succession and live drain/release lifecycle.
 
-#[path = "owner_composition/kernel.rs"]
+#[path = "owner_composition/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::{LiveOwner, ShutdownReceipt, establish};

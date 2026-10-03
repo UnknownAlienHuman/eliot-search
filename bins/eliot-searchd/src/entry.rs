@@ -79,7 +79,7 @@ mod sha256;
 #[allow(dead_code)]
 #[path = "source_composition.rs"]
 mod git_source_composition;
-#[path = "direct_store/composition.rs"]
+#[path = "direct_store/composition/mod.rs"]
 mod source_composition;
 mod source_fence;
 mod source_migration_command;

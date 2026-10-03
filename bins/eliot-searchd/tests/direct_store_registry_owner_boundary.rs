@@ -33,6 +33,7 @@ fn legacy_direct_journal_semantics_belong_to_source_registry() {
     let facade = read(&root, "bins/eliot-searchd/src/direct_store.rs");
     assert!(facade.len() < 4_096, "DIRECT facade grew to {} bytes", facade.len());
     assert!(facade.contains("search-source-registry"));
+    assert!(facade.contains("direct_store/store/mod.rs"));
     assert!(!facade.contains("enum SourceState"));
     assert!(!facade.contains("struct SourceRecord"));
     assert!(!facade.contains("ELIOT_SEARCH_SOURCE_EVENTS_V1"));
@@ -44,11 +45,29 @@ fn legacy_direct_journal_semantics_belong_to_source_registry() {
     assert!(!model.contains("enum SourceState"));
     assert!(!model.contains("struct SourceRecord"));
 
-    let store = read(&root, "bins/eliot-searchd/src/direct_store/store.rs");
-    assert!(store.contains("plan_append::<DirectDigest>"));
-    assert!(store.contains("OpenOptions"));
-    assert!(!store.contains("canonical_without_digest"));
-    assert!(!store.contains("ELIOT_SEARCH_SOURCE_EVENTS_V1"));
+    let store = read(&root, "bins/eliot-searchd/src/direct_store/store/mod.rs");
+    for module in [
+        "filesystem",
+        "journal",
+        "lifecycle",
+        "revision",
+        "snapshot",
+        "validation",
+    ] {
+        assert!(store.contains(&format!("mod {module};")));
+    }
+    assert!(store.len() < 3_000, "DIRECT store facade grew to {} bytes", store.len());
+    assert!(!store.contains("OpenOptions"));
+    assert!(!store.contains("plan_append::<DirectDigest>"));
+
+    let journal = read(
+        &root,
+        "bins/eliot-searchd/src/direct_store/store/journal.rs",
+    );
+    assert!(journal.contains("plan_append::<DirectDigest>"));
+    assert!(journal.contains("OpenOptions"));
+    assert!(!journal.contains("canonical_without_digest"));
+    assert!(!journal.contains("ELIOT_SEARCH_SOURCE_EVENTS_V1"));
 
     let catalog = read(&root, "bins/eliot-searchd/src/direct_store_catalog.rs");
     assert!(catalog.contains("parse_record::<DirectDigest>"));

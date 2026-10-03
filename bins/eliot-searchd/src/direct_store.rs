@@ -13,7 +13,7 @@ use crate::sha256;
 
 #[path = "direct_store/model.rs"]
 mod model;
-#[path = "direct_store/store.rs"]
+#[path = "direct_store/store/mod.rs"]
 mod store;
 #[path = "direct_store_ingest.rs"]
 mod ingest;

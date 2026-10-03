@@ -4,7 +4,7 @@
 //! the `eliot-search-snapshotd` test target retained for compatibility and
 //! regression comparison.
 
-#[path = "snapshot/kernel.rs"]
+#[path = "snapshot/kernel/mod.rs"]
 mod kernel;
 
 pub(crate) use kernel::*;

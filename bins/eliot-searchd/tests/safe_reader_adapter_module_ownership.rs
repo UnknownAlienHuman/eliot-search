@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn safe_reader_adapter_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/safe_reader_adapter.rs");
-    assert!(entry.contains("#[path = \"safe_reader_adapter/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"safe_reader_adapter/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -30,7 +30,7 @@ fn safe_reader_adapter_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/safe_reader_adapter/kernel.rs");
+    let kernel = read(&root, "src/safe_reader_adapter/kernel/mod.rs");
     for module in ["backend", "identity", "path", "read", "spec"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

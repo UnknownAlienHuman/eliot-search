@@ -4,7 +4,7 @@
 //! persisted registry, root/path policy, live catalog state and explicit
 //! currentness gaps. Registration remains observation configuration only.
 
-#[path = "source_roots/kernel.rs"]
+#[path = "source_roots/kernel/mod.rs"]
 mod kernel;
 
 pub use kernel::*;

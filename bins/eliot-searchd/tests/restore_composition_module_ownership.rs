@@ -13,7 +13,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn restore_composition_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/restore_composition.rs");
-    assert!(entry.contains("#[path = \"restore_composition/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"restore_composition/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.contains("#![forbid(unsafe_code)]"));
     assert!(entry.len() < 2_000, "entry grew to {} bytes", entry.len());
@@ -31,7 +31,7 @@ fn restore_composition_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/restore_composition/kernel.rs");
+    let kernel = read(&root, "src/restore_composition/kernel/mod.rs");
     for module in [
         "cutover", "fixture", "lifecycle", "manifest", "model", "receipt", "spec",
     ] {

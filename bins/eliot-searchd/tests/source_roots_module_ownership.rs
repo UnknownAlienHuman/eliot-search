@@ -21,7 +21,7 @@ fn read(root: &Path, relative: &str) -> String {
 fn source_roots_entry_and_kernel_are_thin() {
     let root = crate_root();
     let entry = read(&root, "src/source_roots.rs");
-    assert!(entry.contains("#[path = \"source_roots/kernel.rs\"]"));
+    assert!(entry.contains("#[path = \"source_roots/kernel/mod.rs\"]"));
     assert!(entry.contains("pub use kernel::*;"));
     assert!(entry.len() < 1_500, "entry grew to {} bytes", entry.len());
     for forbidden in [
@@ -37,7 +37,7 @@ fn source_roots_entry_and_kernel_are_thin() {
         );
     }
 
-    let kernel = read(&root, "src/source_roots/kernel.rs");
+    let kernel = read(&root, "src/source_roots/kernel/mod.rs");
     for module in ["catalog", "error", "model", "path", "registry", "spec"] {
         assert!(kernel.contains(&format!("mod {module};")));
     }

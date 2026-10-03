@@ -7,7 +7,7 @@
 
 #[path = "provider_composition/local_stream.rs"]
 mod local_stream;
-#[path = "provider_composition/kernel.rs"]
+#[path = "provider_composition/kernel/mod.rs"]
 mod kernel;
 
 pub(crate) use local_stream::LocalByteStream;

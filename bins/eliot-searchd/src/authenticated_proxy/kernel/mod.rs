@@ -1,8 +1,8 @@
 //! Authenticated provider routing over one owner-fenced DIRECT child.
 
-#[path = "../proxy_exchange.rs"]
+#[path = "../../proxy_exchange/mod.rs"]
 mod exchange;
-#[path = "../proxy_child.rs"]
+#[path = "../../proxy_child/mod.rs"]
 mod child_io;
 
 mod child;
