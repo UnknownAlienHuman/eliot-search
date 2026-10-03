@@ -13,6 +13,11 @@ pub trait SourceImportOutputArtifactPlatform:
     type Identity: Clone + Eq;
 
     /// Observes the stable identity of the already-open file.
+    ///
+    /// # Errors
+    ///
+    /// Returns the platform error when it cannot determine the file's stable
+    /// native identity.
     fn identity(
         &self,
         file: &File,

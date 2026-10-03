@@ -1,4 +1,5 @@
 //! Typed policy-record persistence on the existing conditional redb journal.
+//!
 //! This boundary stores metadata; it neither compiles grants nor publishes a
 //! live restriction. A historical transaction receipt is not a current head.
 

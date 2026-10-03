@@ -63,7 +63,7 @@ pub(super) fn encode_binding(
             .to_be_bytes(),
         ControlError::InvalidValue,
     )?;
-    for profile in record.permitted_profile_ids.iter() {
+    for profile in &record.permitted_profile_ids {
         write_text(
             &mut output,
             profile.as_str(),
@@ -420,7 +420,7 @@ impl Writer {
                 .map_err(|_| ControlError::InvalidValue)?
                 .to_be_bytes(),
         )?;
-        for value in values.iter() {
+        for value in values {
             put(self, value)?;
         }
         Ok(())
@@ -514,7 +514,7 @@ impl<'a> Reader<'a> {
         BoundedSet::from_items(values).map_err(|_| ControlError::StoreCorrupt)
     }
 
-    fn finish(self) -> Result<(), ControlError> {
+    const fn finish(self) -> Result<(), ControlError> {
         if self.position == self.bytes.len() {
             Ok(())
         } else {

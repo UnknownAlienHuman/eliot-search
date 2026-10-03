@@ -6,7 +6,7 @@ use super::model::{
     SourceImportOutputArtifactError, SourceImportOutputArtifactPlatform,
 };
 use super::super::output_lock::{
-    SourceImportOutputLock, SourceImportOutputLockPlatform,
+    SourceImportOutputLock,
 };
 
 #[derive(Debug)]

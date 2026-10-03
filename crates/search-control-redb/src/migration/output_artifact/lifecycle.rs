@@ -8,7 +8,7 @@ use super::model::{
     SourceImportPendingArtifact, SourceImportPublishedArtifact,
 };
 use super::super::output_lock::{
-    SourceImportOutputLock, SourceImportOutputLockPlatform,
+    SourceImportOutputLock,
 };
 
 /// Exclusive package owner for `.pending`, final and crash-alias lifecycle.
@@ -28,6 +28,11 @@ where
     P: SourceImportOutputArtifactPlatform,
 {
     /// Acquires the exact output lock and derives bounded local locators.
+    ///
+    /// # Errors
+    ///
+    /// Returns an artifact error when the name, lock, directory, or platform
+    /// observations are invalid or cannot be verified.
     pub fn acquire(
         directory: &Path,
         artifact_name: &str,
@@ -52,6 +57,11 @@ where
     }
 
     /// Opens the current final artifact, or returns `None` when it is absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an artifact error when the lock, locator, file type, file
+    /// identity, or platform observation cannot be verified.
     pub fn open_final(
         &self,
         deadline: Instant,
@@ -86,6 +96,11 @@ where
     }
 
     /// Creates one empty pending file or reopens the admitted nonempty pending file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an artifact error when the pending object cannot be created,
+    /// reopened, or verified against the lock and platform observations.
     pub fn open_or_create_pending(
         &self,
         deadline: Instant,
@@ -132,6 +147,11 @@ where
     }
 
     /// Makes a newly initialized pending directory entry durable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an artifact error when the lock cannot be reverified or the
+    /// directory cannot be synchronized.
     pub fn sync_pending_creation(
         &self,
         deadline: Instant,
@@ -144,6 +164,11 @@ where
     }
 
     /// Reopens the pending object and requires its exact original identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an artifact error when the lock, locator, platform observation,
+    /// or expected native identity does not match.
     pub fn open_pending_matching(
         &self,
         expected: &P::Identity,
@@ -172,6 +197,12 @@ where
     ///
     /// Existing final state is never overwritten. A reused final object must
     /// still undergo caller-owned exact redb readback before it is trusted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an artifact error when the pending identity changes, the final
+    /// locator or platform observations are invalid, or hard-link publication
+    /// fails with an outcome that cannot be resolved.
     pub fn publish_pending(
         &self,
         expected_pending: &P::Identity,
@@ -204,7 +235,7 @@ where
         let final_artifact = self
             .open_final(deadline)?
             .ok_or(SourceImportOutputArtifactError::OpenFailed)?;
-        if !reused && &final_artifact.identity != &pending.identity {
+        if !reused && final_artifact.identity != pending.identity {
             return Err(SourceImportOutputArtifactError::IdentityChanged);
         }
         self.verify_lock(deadline)?;
@@ -219,6 +250,11 @@ where
     ///
     /// `verified_final` must be captured from the same opened final file whose
     /// complete redb contents were successfully checked by the caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns an artifact error when either locator, identity, lock, removal,
+    /// or directory synchronization cannot be verified.
     pub fn cleanup_verified_alias(
         &self,
         verified_final: &P::Identity,
@@ -253,7 +289,7 @@ where
             &self.pending_path,
             deadline,
         )?;
-        if &pending.identity != &final_artifact.identity {
+        if pending.identity != final_artifact.identity {
             self.verify_lock(deadline)?;
             return Ok(false);
         }
@@ -276,7 +312,7 @@ where
         Ok(true)
     }
 
-    fn platform(&self) -> &P {
+    const fn platform(&self) -> &P {
         &self.platform
     }
 

@@ -186,7 +186,7 @@ pub const fn current_journal_schema_descriptor() -> JournalSchemaDescriptor {
 ///
 /// Returns the existing closed [`ControlError`] when the composed journal
 /// identity violates its nonzero schema/epoch invariants.
-pub fn derive_journal_identity(
+pub const fn derive_journal_identity(
     owner: JournalOwnerBinding,
     path: JournalPathIdentity,
     schema: JournalSchemaIdentity,

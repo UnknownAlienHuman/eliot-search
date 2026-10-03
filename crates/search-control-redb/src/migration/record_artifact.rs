@@ -785,7 +785,7 @@ where
 fn valid_temporary_name(name: &str) -> bool {
     valid_local_name(name)
         && name.starts_with(".source-map.")
-        && name.ends_with(".tmp")
+        && name.as_bytes().ends_with(b".tmp")
 }
 
 fn valid_local_name(name: &str) -> bool {

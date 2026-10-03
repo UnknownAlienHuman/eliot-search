@@ -128,6 +128,12 @@ pub struct SourceMappingHeader {
 
 impl SourceMappingHeader {
     /// Validate and construct one mapping header.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceMappingError::TargetNamespaceInvalid`] for the zero
+    /// namespace and [`SourceMappingError::Limit`] for inconsistent or
+    /// over-limit event/source counts.
     pub fn new(
         namespace: SourceNamespaceId,
         legacy_namespace: [u8; 32],
@@ -253,6 +259,11 @@ pub struct SourceMappingPlanner {
 
 impl SourceMappingPlanner {
     /// Start one bounded deterministic mapping pass.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceMappingError::Limit`] when the declared event count
+    /// exceeds the pass bound or the derived identifier bound overflows.
     pub fn new(
         header: SourceMappingHeader,
         max_events: usize,
@@ -275,27 +286,17 @@ impl SourceMappingPlanner {
     }
 
     /// Map the next validated legacy event.
+    ///
+    /// # Errors
+    ///
+    /// Returns a mapping error when event order, source predecessors, lifecycle
+    /// transitions, counters, or deterministic identifier allocation are invalid.
     pub fn map(
         &mut self,
         event: LegacySourceMappingEvent,
     ) -> Result<MappedSourceEvent, SourceMappingError> {
-        if event.sequence == 0
-            || event.sequence != self.summary.events + 1
-            || event.sequence > self.header.expected_events
-        {
-            return Err(SourceMappingError::OrderInvalid);
-        }
-
+        let prior = self.prior_position(&event)?;
         let source_key = *event.legacy_source.as_bytes();
-        let prior = self.sources.get(&source_key).copied();
-        if prior.is_some() != event.previous_source_event.is_some()
-            || prior.zip(event.previous_source_event).is_some_and(
-                |(position, predecessor)| position.last_event != predecessor,
-            )
-        {
-            return Err(SourceMappingError::PredecessorInvalid);
-        }
-
         let opens_source = prior.is_none();
         let old_revision = prior.map(|position| position.revision);
         let old_occurrence = prior.map_or(0, |position| position.occurrence);
@@ -303,17 +304,7 @@ impl SourceMappingPlanner {
             .map_or(0, |position| position.ordinal)
             .checked_add(1)
             .ok_or(SourceMappingError::OrdinalExhausted)?;
-        let source_id = if let Some(position) = prior {
-            position.id
-        } else {
-            let target = *self.header.namespace.as_bytes();
-            let legacy_namespace = self.header.legacy_namespace;
-            let legacy_source_hex = lower_hex_bytes(event.legacy_source.as_bytes());
-            SourceId::from_bytes(self.allocate_id(
-                SOURCE_ID_DOMAIN,
-                &[&target, &legacy_namespace, &legacy_source_hex],
-            )?)
-        };
+        let source_id = self.source_id(&event, prior)?;
 
         let active = event.state == LegacySourceMappingState::Active;
         let opens_revision = active
@@ -328,22 +319,13 @@ impl SourceMappingPlanner {
         } else {
             old_occurrence
         };
-        let revision_id = if opens_revision {
-            let target = *self.header.namespace.as_bytes();
-            let event_hex = lower_hex_bytes(event.event.as_bytes());
-            let occurrence_bytes = occurrence_sequence.to_be_bytes();
-            SourceRevisionId::from_bytes(self.allocate_id(
-                REVISION_ID_DOMAIN,
-                &[
-                    &target,
-                    source_id.as_bytes(),
-                    &event_hex,
-                    &occurrence_bytes,
-                ],
-            )?)
-        } else {
-            old_revision.ok_or(SourceMappingError::RetirementInvalid)?
-        };
+        let revision_id = self.revision_id(
+            &event,
+            source_id,
+            opens_revision,
+            occurrence_sequence,
+            old_revision,
+        )?;
         let retires_source = event.state == LegacySourceMappingState::Retired;
         let lifecycle = SourceLifecycleFlags::new([
             opens_source,
@@ -405,6 +387,71 @@ impl SourceMappingPlanner {
         })
     }
 
+    fn prior_position(
+        &self,
+        event: &LegacySourceMappingEvent,
+    ) -> Result<Option<SourcePosition>, SourceMappingError> {
+        if event.sequence == 0
+            || event.sequence != self.summary.events + 1
+            || event.sequence > self.header.expected_events
+        {
+            return Err(SourceMappingError::OrderInvalid);
+        }
+        let source_key = *event.legacy_source.as_bytes();
+        let prior = self.sources.get(&source_key).copied();
+        if prior.is_some() != event.previous_source_event.is_some()
+            || prior.zip(event.previous_source_event).is_some_and(
+                |(position, predecessor)| position.last_event != predecessor,
+            )
+        {
+            return Err(SourceMappingError::PredecessorInvalid);
+        }
+        Ok(prior)
+    }
+
+    fn source_id(
+        &mut self,
+        event: &LegacySourceMappingEvent,
+        prior: Option<SourcePosition>,
+    ) -> Result<SourceId, SourceMappingError> {
+        if let Some(position) = prior {
+            return Ok(position.id);
+        }
+        let target = *self.header.namespace.as_bytes();
+        let legacy_namespace = self.header.legacy_namespace;
+        let legacy_source_hex = lower_hex_bytes(event.legacy_source.as_bytes());
+        Ok(SourceId::from_bytes(self.allocate_id(
+            SOURCE_ID_DOMAIN,
+            &[&target, &legacy_namespace, &legacy_source_hex],
+        )?))
+    }
+
+    fn revision_id(
+        &mut self,
+        event: &LegacySourceMappingEvent,
+        source_id: SourceId,
+        opens_revision: bool,
+        occurrence_sequence: u64,
+        old_revision: Option<SourceRevisionId>,
+    ) -> Result<SourceRevisionId, SourceMappingError> {
+        if !opens_revision {
+            return old_revision.ok_or(SourceMappingError::RetirementInvalid);
+        }
+        let target = *self.header.namespace.as_bytes();
+        let event_hex = lower_hex_bytes(event.event.as_bytes());
+        let occurrence_bytes = occurrence_sequence.to_be_bytes();
+        self.allocate_id(
+            REVISION_ID_DOMAIN,
+            &[
+                &target,
+                source_id.as_bytes(),
+                &event_hex,
+                &occurrence_bytes,
+            ],
+        )
+        .map(SourceRevisionId::from_bytes)
+    }
+
     /// Current accounting, useful for bounded streaming diagnostics.
     #[must_use]
     pub const fn summary(&self) -> SourceMappingSummary {
@@ -412,6 +459,11 @@ impl SourceMappingPlanner {
     }
 
     /// Finish only after exact event/source and lifecycle accounting matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceMappingError::SummaryMismatch`] when final event, source,
+    /// occurrence, path-only, or retirement counts differ from the frozen header.
     pub fn finish(self) -> Result<SourceMappingSummary, SourceMappingError> {
         if self.summary.events != self.header.expected_events
             || self.summary.sources != self.header.expected_sources
