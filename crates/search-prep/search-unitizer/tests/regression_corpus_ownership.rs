@@ -44,6 +44,8 @@ fn regression_corpus_is_split_without_dropping_contracts() {
         assert!(manifest.contains(test), "manifest corpus missing {test}");
     }
     assert!(manifest.contains("../testdata/unit_manifest_v1.hex"));
+    assert!(manifest.contains("legacy_v1_manifest_is_quarantined_for_rebuild"));
+    assert!(manifest.contains("../testdata/unit_manifest_v2.hex"));
 
     for source in [layout, manifest] {
         for forbidden in ["std::fs", "std::process", "qdrant_client", "tokio::", "reqwest::"] {

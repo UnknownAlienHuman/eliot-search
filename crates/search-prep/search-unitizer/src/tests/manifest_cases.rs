@@ -99,24 +99,37 @@ fn manifest_canonical_bytes_and_digest_are_golden() {
     .expect("manifest");
     assert_eq!(
         manifest.unitizer_profile_id().to_string(),
-        "da31031a7fd84d455e0cb4e37ca71979f12091e069eadcb70aaa4e028970044b"
+        "cc11d1b861fb2665892d41a021104f60ff2e49a2d9413e7726b118fbda7802dd"
     );
     assert_eq!(manifest.units().len(), 2);
     assert_eq!(
         manifest.units()[0].unit_digest().to_string(),
-        "5be178cc7bbbc66e836333d0d6d5df12aee142a04a80fd561f21a802050ebb3a"
+        "327fabee6494d69a63cdabb7b92c9a0edca1e0605b1462fc48f5b0983a2756d1"
     );
     assert_eq!(
         manifest.units()[1].unit_digest().to_string(),
-        "e9c489bfc08b96b065eb71cf48c024e46683be72663558fbddb8a3a976433f6d"
+        "071c58274e66471e93eca5b91bb2f05427f07949d46480e9fa7cd29ee5c96e4d"
     );
     assert_eq!(
         manifest_digest(&manifest).to_string(),
-        "e8ccef05ef1f0fd89c1244cbf4e5d1b2ac910d06cbe339a7caffe3469be605d0"
+        "5e2cc298d28ccd2916f7822fca22a8e4ad99fb16955eb23787160a1bbe3ad7a4"
     );
     let canonical = canonicalize_unit_manifest(&manifest).expect("canonical");
     assert_eq!(canonical.len(), 514);
     assert_eq!(canonical.as_slice(), hex_manifest_golden().as_slice());
+}
+
+#[test]
+fn legacy_v1_manifest_is_quarantined_for_rebuild() {
+    let bytes = hex_fixture(include_str!("../testdata/unit_manifest_v1.hex"));
+    assert_eq!(
+        decode_unit_manifest(&bytes, 1_048_576),
+        Err(UnitizationError::UnitManifestLegacyUnsupported)
+    );
+    assert_eq!(
+        UnitizationError::UnitManifestLegacyUnsupported.code(),
+        "UNIT_MANIFEST_LEGACY_UNSUPPORTED"
+    );
 }
 
 #[test]
@@ -320,8 +333,11 @@ fn manifest_provenance_tampered() -> MaterializerProvenance {
 }
 
 fn hex_manifest_golden() -> Vec<u8> {
-    const HEX: &str = include_str!("../testdata/unit_manifest_v1.hex");
-    let bytes = HEX.trim().as_bytes();
+    hex_fixture(include_str!("../testdata/unit_manifest_v2.hex"))
+}
+
+fn hex_fixture(hex: &str) -> Vec<u8> {
+    let bytes = hex.trim().as_bytes();
     assert_eq!(bytes.len() % 2, 0);
     bytes
         .chunks(2)

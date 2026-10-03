@@ -7,8 +7,8 @@ use super::digest::digest32;
 use super::model::{CanonicalUnitManifestBytes, UnitDescriptor, UnitManifest};
 use super::profile::UnitizerProfileId;
 use super::spec::{
-    DIGEST_TRAILER_BYTES, MAGIC, MANIFEST_DOMAIN, UNIT_CODEC_BYTES,
-    UNIT_MANIFEST_VERSION,
+    DIGEST_TRAILER_BYTES, LEGACY_MAGIC, LEGACY_UNIT_MANIFEST_VERSION, MAGIC, MANIFEST_DOMAIN,
+    UNIT_CODEC_BYTES, UNIT_MANIFEST_VERSION,
 };
 
 const fn digest_tag(algorithm: DigestAlgorithm) -> u8 {
@@ -42,10 +42,11 @@ pub fn canonicalize_unit_manifest(
 
 /// Parses durable manifest bytes without source text or profile state.
 ///
-/// Structural defects (magic, version, lengths, counts, ordering, encoded
-/// limits) fail closed; an unknown digest-algorithm tag or a mismatched
-/// digest trailer fails as a digest mismatch instead of being reinterpreted.
-/// Full provenance still requires [`super::verify_unit_manifest`].
+/// Version 1 is quarantined because it was labeled BLAKE3 while using a
+/// non-cryptographic digest; callers must regenerate it from retained exact
+/// inputs. Other structural defects (magic, version, lengths, counts,
+/// ordering, encoded limits) fail closed. Full provenance still requires
+/// [`super::verify_unit_manifest`].
 pub fn decode_unit_manifest(
     bytes: &[u8],
     max_encoded_bytes: usize,
@@ -58,14 +59,18 @@ pub fn decode_unit_manifest(
         return Err(UnitizationError::UnitManifestIncomplete);
     }
     let mut cursor = 0_usize;
-    if take(body, &mut cursor, MAGIC.len())? != MAGIC {
-        return Err(UnitizationError::UnitManifestIncomplete);
-    }
+    let magic = take(body, &mut cursor, MAGIC.len())?;
     let version = u16::from_le_bytes(
         take(body, &mut cursor, 2)?
             .try_into()
             .map_err(|_| UnitizationError::UnitManifestIncomplete)?,
     );
+    if magic == LEGACY_MAGIC && version == LEGACY_UNIT_MANIFEST_VERSION {
+        return Err(UnitizationError::UnitManifestLegacyUnsupported);
+    }
+    if magic != MAGIC {
+        return Err(UnitizationError::UnitManifestIncomplete);
+    }
     if version != UNIT_MANIFEST_VERSION {
         return Err(UnitizationError::UnitManifestIncomplete);
     }
