@@ -30,6 +30,7 @@ shared shapes.
 - `QUERY_AND_RESULTS.md` — grants, plans, validated candidates, gaps and exact reports.
 - `RECIPE_RESULTS.md` — eleven field-level result variants.
 - `PROTOCOL_AND_LIFECYCLE.md` — protocol, opaque handles, server records and lifecycle.
+- `PUBLICATION_GUARDS_CORRECTION.md` — required publication-guard compatibility and verification rules.
 - `REASON_CODES.md` — error namespaces.
 - `PORT_OPERATIONS.md` — shared port operation inventory.
 
