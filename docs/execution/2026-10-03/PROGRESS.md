@@ -13,6 +13,10 @@ Status: **PARTIAL_PROGRESS**. The completion Goal remains active. This report is
 
 All four code commits were pushed to GitHub main; remote readback confirmed `41feb8c876c1b54ed11a8aa56cd3f59eeac95119`.
 
+The additional byte-verifier commits described below are local at this report's pre-publication
+capture. Independent review binds corrected source `6e57c317233e138e178db634696cbfdc8f6bf124`;
+their delivery requires a separate push and remote readback.
+
 ## Executed verification
 
 Native toolchain: Rust/Cargo 1.98.0, Windows x64 MSVC.
@@ -64,7 +68,7 @@ Portable sanitized evidence is in [qdrant-auth-crud-restart.json](evidence/qdran
 
 The [W0 independent review](../2026-10-02/W0_FOUNDATION_REVIEW.md) remains NOT_ACCEPTED: typed public-record JSON/CBOR round-trips/closed decoding are absent, and exported authorization schemas are outside the P00 contract/module registry.
 
-Only P00/search-contracts is launch-authorized. There are no issued materialized contexts, tickets, or active writer leases. AGENTS.md requires issued ticket, exact context, active lease, writer acknowledgment, and launch/prerequisite checks before package implementation. A clarification asking the user to authorize existing-product-package compile repairs outside this procedure is pending. No product source under `crates/**` or `bins/**` has been changed in this execution.
+Only P00/search-contracts is launch-authorized. There are no issued materialized contexts, tickets, or active writer leases. AGENTS.md requires issued ticket, exact context, active lease, writer acknowledgment, and launch/prerequisite checks before package implementation. The user directed implementation to follow the documentation; the earlier bypass clarification is no longer pending. Integration work continues through the documented procedure. No product source under `crates/**` or `bins/**` has been changed in this execution.
 
 Concrete unapplied proposals are retained at `C:\Development\Rust\targets\eliot-search-luna-native\evidence\proposals`:
 
@@ -74,3 +78,39 @@ Concrete unapplied proposals are retained at `C:\Development\Rust\targets\eliot-
 Both pass read-only `git apply --check` against `8dc3ef1`; compilation and behavior of the proposals remain unverified. The manifest records exact commands, source blobs, and patch hashes.
 
 Codebase Memory 0.9.0 indexed the repository as project `eliot-search`; scoped graph queries were executed. Native ELIOT Governor was inspected, but its default instance could not start because `C:\Users\kleym\AppData\Local\Eliot\config\governor.toml` was missing. No ELIOT verification or memory writeback is claimed. GitHub Actions remains manual-only; no workflow was dispatched.
+
+## Standalone product direction
+
+The user explicitly authorized assigning Luna a local-repository study and comparing retrieval results,
+and required Eliot Search to run independently of Eliot Governor and Memory OS. The existing example
+configuration selects the DIRECT profile and standalone instance mode. The W8 packet makes the ELIOT
+adapter optional and excludes it from standalone G4 prerequisites. Development-ticket requirements are
+separate from product runtime dependencies; no Governor service or Memory OS store is required or being
+added for the standalone product.
+
+A Luna Max worker studied `C:\Development\Rust\projects\eliot-swarm-controller` read-only and prepared
+five same-term retrieval questions with ordinary-search anchors and per-file hashes. The configured
+Cargo target directory, local target directories and PATH contained no source-matched CLI or daemon
+executable at the availability observation. Eliot Search retrieval is therefore **UNAVAILABLE** for this
+study; no corpus was admitted, indexed or searched with Eliot Search. Baseline findings do not establish
+Search quality. The corpus contains pre-existing user changes and concurrent additions, which are
+preserved; the exact anchor hashes must still match before a later comparison.
+
+Native integration changes now target the missing issuance prerequisites. The byte verifier commit
+`b2876eb348da898d090cc9da5741c1da5e6a94eb` distinguishes signed-payload and complete-file digests,
+checks canonical bytes and the embedded payload digest, and delegates both prior helper consumers to
+the same bounded verifier. Its focused new tests passed 8/8 and historical negative-vector coverage
+passed 1/1. Review then identified acceptance of a header at byte zero, where the required preceding LF
+was absent. The regression reproduced that failure; the correction at
+`6e57c317233e138e178db634696cbfdc8f6bf124` passed the expanded target 9/9. Independent review of that
+exact corrected source found no remaining blocker for its bounded scope, recorded in
+[CONTROL_RECORD_BYTES_REVIEW.md](CONTROL_RECORD_BYTES_REVIEW.md). These checks establish no actor,
+signature, complete schema, store qualification or issuance authority.
+
+The sanitized study summary is [STANDALONE_STUDY.md](STANDALONE_STUDY.md). Raw external-repository
+source/search output remains local. Six anchor blobs exist at its pinned base and six are explicitly
+absent there; all twelve working-tree hashes still matched despite a concurrent corpus commit.
+
+Review-pending contract requests under `docs/handoff/changes/` identify missing external profile/trust
+definitions, instance-status bindings and acknowledgement encoding. Their publication is proposal
+publication only. No request creates an issued record, accepts qualification or advances launch state.
