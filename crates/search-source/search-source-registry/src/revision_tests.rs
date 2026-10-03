@@ -91,6 +91,12 @@ impl SourceRevisionIdPort for TestIds {
 struct TestControl {
     heads: BTreeMap<(SourceNamespaceId, SourceId), SourceRevisionHead>,
     revisions: BTreeMap<(SourceNamespaceId, SourceId, SourceRevisionId), SourceRevision>,
+    revision_override: Option<(
+        SourceNamespaceId,
+        SourceId,
+        SourceRevisionId,
+        SourceRevision,
+    )>,
     operations: BTreeMap<OpaqueId, SourceRevisionMutationReadback>,
     fail_reads_after_commit: bool,
     fail_next_commit_readback: bool,
@@ -148,6 +154,14 @@ impl SourceRevisionControlPort for TestControl {
         revision_id: &SourceRevisionId,
         _context: &OperationContext<Self::Cancellation>,
     ) -> Result<Option<SourceRevision>, Self::Error> {
+        if let Some((namespace, source, requested_revision, returned_revision)) =
+            &self.revision_override
+            && namespace == source_namespace_id
+            && source == source_id
+            && requested_revision == revision_id
+        {
+            return self.read(Some(returned_revision.clone()));
+        }
         self.read(
             self.revisions
                 .get(&(*source_namespace_id, *source_id, *revision_id))
@@ -423,4 +437,59 @@ fn expected_head_conflict_is_rejected_before_identity_mint() {
         RegistryError::SourceRevisionConflict
     );
     assert_eq!(ids.issued, 0);
+}
+
+#[test]
+fn operation_replay_rejects_wrong_predecessor_id_with_matching_source_and_sequence() {
+    let source_id = SourceId::from_bytes([0x61; 16]);
+    let source_namespace_id = SourceNamespaceId::from_bytes([0x20; 16]);
+    let mut control = TestControl::default();
+    control.admit(source_namespace_id, source_id);
+    let mut ids = TestIds {
+        ids: VecDeque::from([uuid_v4(0x62), uuid_v4(0x63)]),
+        issued: 0,
+    };
+    let first_request = request(
+        "revision-op:parent",
+        source_id,
+        None,
+        0x64,
+        "2026-10-03T15:00:00.000000Z",
+        "stable-read:parent",
+    );
+    let first = register_source_revision(&first_request, &mut ids, &mut control, &context())
+        .expect("first occurrence");
+    let second_request = request(
+        "revision-op:child",
+        source_id,
+        Some(first.revision.revision_id),
+        0x65,
+        "2026-10-03T15:01:00.000000Z",
+        "stable-read:child",
+    );
+    let second = register_source_revision(&second_request, &mut ids, &mut control, &context())
+        .expect("second occurrence");
+    assert_eq!(second.revision.occurrence_sequence, 2);
+
+    let mut wrong_predecessor = first.revision.clone();
+    wrong_predecessor.revision_id = uuid_v4(0x66);
+    assert_eq!(wrong_predecessor.source_id, first.revision.source_id);
+    assert_eq!(
+        wrong_predecessor.occurrence_sequence,
+        first.revision.occurrence_sequence
+    );
+    assert_ne!(wrong_predecessor.revision_id, first.revision.revision_id);
+    control.revision_override = Some((
+        source_namespace_id,
+        source_id,
+        first.revision.revision_id,
+        wrong_predecessor,
+    ));
+
+    assert_eq!(
+        register_source_revision(&second_request, &mut ids, &mut control, &context())
+            .expect_err("wrong predecessor identity makes the operation readback unknown"),
+        RegistryError::MutationOutcomeUnknown
+    );
+    assert_eq!(ids.issued, 2, "operation replay must not mint another ID");
 }

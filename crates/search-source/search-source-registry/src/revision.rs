@@ -720,7 +720,8 @@ where
             )
             .map_err(|_| RegistryError::MutationOutcomeUnknown)?
             .ok_or(RegistryError::MutationOutcomeUnknown)?;
-            if predecessor.source_id != request.source_id
+            if predecessor.revision_id != expected_head
+                || predecessor.source_id != request.source_id
                 || predecessor.occurrence_sequence.checked_add(1)
                     != Some(revision.occurrence_sequence)
             {
