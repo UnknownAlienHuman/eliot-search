@@ -1,0 +1,266 @@
+schema_version = 1
+project = "eliot-search"
+candidate_id = "control-operation-receipt-v1"
+record_kind = "control_operation_receipt_v1"
+record_schema_version = 1
+status = "PROPOSED_REVIEW_PENDING"
+claimable = false
+instance_status = "NOT_PROVISIONED"
+qualified = false
+qualification_result = "UNAVAILABLE"
+owner = "integration-owner"
+record_path = "swarm/control-operation-receipts/v1/<lowercase-64-hex-operation_id>.toml"
+registry_changes_required = [
+  "register the new record kind and schema in swarm/control-plane-schema.toml and ClosedControlRecordKind",
+  "define and accept instance status RECORDED for this record kind",
+  "register the schema in the exact manual qualification packet",
+]
+
+[canonical_input]
+schema_id = "control_operation_input_v1"
+encoding = "binary TLV v1; exact bytes, not TOML serialization"
+magic_ascii = "ELIOT-SEARCH-CONTROL-INPUT"
+magic_terminator = "one 0x00 byte"
+wire_schema_version = "u16 big-endian value 1 immediately after magic terminator"
+operation_id_formula = "SHA-256(ASCII(existing_operation_domain_separator) || canonical_input_bytes); no inserted separator"
+field_header = "u16be ordinal || u8 wire_type || u32be value_length || exact value bytes"
+field_order = "common fields in common_field_order, then one nested operation_specific_inputs TLV in its own declared order"
+field_ordinals = "1-based sequential by declared order; nested ordinals restart at 1; duplicate, missing, unknown or reordered ordinals reject"
+wire_types = "ASCII=0x01; SHA256_RAW32=0x02; U16BE=0x03; U32BE=0x04; U64BE=0x05; GIT_OBJECT_ID=0x06; IMMUTABLE_RECORD_REF=0x07; IMMUTABLE_ARTIFACT_REF=0x08; ORDERED_ARRAY=0x09; OPTIONAL=0x0A; NESTED_TLV=0x0B"
+text_encoding = "raw canonical ASCII bytes satisfying the registered field type grammar; no quoting, normalization, BOM, whitespace trimming or Unicode"
+digest_encoding = "exactly 32 raw bytes"
+integer_encoding = "unsigned fixed-width big-endian; no sign, padding or alternate width"
+git_object_id_encoding = "one algorithm byte (0x01 SHA-1, 0x02 SHA-256) followed by exactly 20 or 32 raw object-ID bytes; algorithm must match repository object format"
+immutable_record_ref_encoding = "nested TLV subfields in the existing exact ImmutableRecordRef field order repository ASCII, commit GitObjectId, path ASCII, git_blob_id GitObjectId, exact_record_file_sha256 raw32, record_kind ASCII"
+immutable_artifact_ref_encoding = "nested TLV subfields in the existing exact ImmutableArtifactRef field order store_profile_ref ASCII, artifact_id ASCII, bytes U64BE, sha256 raw32"
+ordered_array_encoding = "u32be element_count followed by repeated u32be element_length and exact canonical element bytes; declared input order retained"
+optional_encoding = "outer TLV type code is 0x0A; value begins 0x00 for ABSENT or 0x01 followed by exact raw inner canonical value bytes for PRESENT; the inner value has no second type or length header; inner width is fixed by the field declaration; no null, omission or other marker"
+nested_tlv_encoding = "value begins u16be field_count followed by exactly field_count ordinary TLV fields; no additional type or length header inside the nested value"
+immutable_record_ref_field_order = ["repository", "commit", "path", "git_blob_id", "exact_record_file_sha256", "record_kind"]
+immutable_record_ref_wire_types = ["ASCII", "GIT_OBJECT_ID", "ASCII", "GIT_OBJECT_ID", "SHA256_RAW32", "ASCII"]
+immutable_record_ref_max_encoded_bytes = 16384
+immutable_artifact_ref_field_order = ["store_profile_ref", "artifact_id", "bytes", "sha256"]
+immutable_artifact_ref_wire_types = ["ASCII", "ASCII", "U64BE", "SHA256_RAW32"]
+immutable_artifact_ref_max_encoded_bytes = 8192
+ordered_array_wire_type = "outer TLV type code 0x09; value is exactly ordered_array_encoding"
+ordered_array_element_max_bytes = 16384
+primitive_value_bounds = ["ASCII: 0..4096 bytes, except required nonempty identifiers use their registered type minimum", "SHA256_RAW32: exactly 32 bytes", "U16BE: exactly 2 bytes", "U32BE: exactly 4 bytes", "U64BE: exactly 8 bytes", "GIT_OBJECT_ID: exactly 21 bytes for SHA-1 or 33 bytes for SHA-256 including algorithm byte"]
+trailing_bytes = "forbidden"
+wire_type_codes = ["0x01=ASCII", "0x02=SHA256_RAW32", "0x03=U16BE", "0x04=U32BE", "0x05=U64BE", "0x06=GIT_OBJECT_ID", "0x07=IMMUTABLE_RECORD_REF", "0x08=IMMUTABLE_ARTIFACT_REF", "0x09=ORDERED_ARRAY", "0x0A=OPTIONAL", "0x0B=NESTED_TLV"]
+field_tag_rule = "u16be ordinal equals the 1-based position in common_field_order or the operation-specific order; exact order is mandatory"
+operation_specific_container = "u16be element_count followed by that operation's nested TLVs; the operation_kind selects exactly one declared operation_input schema"
+max_canonical_input_bytes = 1048576
+max_top_level_fields = 23
+max_operation_specific_fields = 16
+max_nested_depth = 3
+max_ascii_field_bytes = 4096
+max_record_ref_value_bytes = 16384
+max_artifact_ref_value_bytes = 8192
+max_array_elements = 256
+max_array_encoded_bytes = 524288
+max_accepted_handoffs = 16
+max_ticket_base_source_refs = 64
+max_materialize_resolved_sources = 24
+max_package_lease_refs = 256
+max_event_refs_per_lease_chain = 256
+max_total_lease_event_refs = 4096
+max_acknowledgement_payload_bytes = 262144
+hash_hex = "lowercase hexadecimal in records; raw 32-byte digest in canonical-input TLV values"
+git_object_id = "full algorithm-tagged GitObjectId matching the repository object format"
+text_domain = "canonical ASCII bytes for the exact closed type grammar; reject controls, non-ASCII and noncanonical identifiers"
+float_or_toml_datetime = false
+arrays = "ordered as declared by source contract; reject duplicates where identity is unique"
+unknown_or_missing_fields = "reject"
+operation_id_in_input = false
+generated_record_ids_in_input = false
+record_signature_artifacts_in_input = false
+output_record_digests_in_input = false
+containing_commit_id_in_input = false
+complete_receipt_file_digest_in_receipt = false
+[canonical_input.common_field_order]
+fields = [
+  "schema_version", "operation_kind", "operation_schema_version", "repository", "base_commit", "actor_identity",
+  "deadline_budget_ms", "cancellation_token", "artifact_profile_ref", "artifact_profile_definition_sha256",
+  "artifact_profile_instance_ref", "artifact_profile_qualification_ref", "approval_profile_ref",
+  "approval_profile_definition_sha256", "approval_profile_instance_ref", "approval_profile_qualification_ref",
+  "trust_head_path", "trust_head_git_blob_id", "trust_head_exact_record_file_sha256", "trust_manifest_path",
+  "trust_manifest_git_blob_id", "trust_manifest_exact_record_file_sha256", "operation_specific_inputs",
+]
+wire_types = [
+  "U16BE", "ASCII", "U16BE", "ASCII", "GIT_OBJECT_ID", "ASCII", "OPTIONAL", "OPTIONAL",
+  "ASCII", "SHA256_RAW32", "IMMUTABLE_RECORD_REF", "IMMUTABLE_RECORD_REF", "ASCII", "SHA256_RAW32",
+  "IMMUTABLE_RECORD_REF", "IMMUTABLE_RECORD_REF", "ASCII", "GIT_OBJECT_ID", "SHA256_RAW32", "ASCII",
+  "GIT_OBJECT_ID", "SHA256_RAW32", "NESTED_TLV",
+]
+optional_encoding = "deadline_budget_ms and cancellation_token use their OPTIONAL wire type with 0x00 ABSENT or 0x01 followed by the exact inner value"
+optional_inner_types = ["deadline_budget_ms=U32BE", "cancellation_token=ASCII"]
+deadline_rule = "first-four mutations require PRESENT integer milliseconds 1..120000; ABSENT is representable but rejected for these operations"
+cancellation_rule = "stable canonical ASCII caller token or explicit ABSENT; every retry of the same request reuses the original choice"
+profile_rule = "bind exact definition digests plus provisioned instance and immutable qualification refs; missing refs block mutation"
+trust_rule = "bind exact current head and manifest repository paths, full Git blob IDs and exact-file digests read from the expected current control-ref tree; omit containing commit from the idempotency preimage so unrelated control commits do not change request identity"
+[[operation_input]]
+operation_kind = "materialize_context"
+current_domain_separator = "materialize_context_v1"
+operation_specific_field_order = ["context_draft_repository_relative_path", "context_draft_git_blob_id", "context_draft_exact_sha256", "accepted_handoffs_in_declared_order"]
+operation_specific_wire_types = ["ASCII", "GIT_OBJECT_ID", "SHA256_RAW32", "ORDERED_ARRAY<AcceptedHandoffRefV1>"]
+read_set = "draft and selectors resolve only at base_commit; every accepted handoff binds exact ImmutableRecordRef and API digest"
+result = "context_manifest_v1 plus exactly one writer-visible artifact"
+
+[[operation_input]]
+operation_kind = "issue_assignment_ticket"
+current_domain_separator = "issue_assignment_ticket_v1"
+operation_specific_field_order = ["ticket_draft_repository_relative_path", "ticket_draft_git_blob_id", "ticket_draft_exact_sha256", "context_manifest_ImmutableRecordRef", "context_manifest_exact_record_file_sha256", "context_artifact_ImmutableArtifactRef", "launch_state_and_registry_exact_source_refs", "accepted_prerequisite_handoff_refs_in_declared_order", "writer_ActorIdentity", "reviewer_ActorIdentity"]
+operation_specific_wire_types = ["ASCII", "GIT_OBJECT_ID", "SHA256_RAW32", "IMMUTABLE_RECORD_REF", "SHA256_RAW32", "IMMUTABLE_ARTIFACT_REF", "ORDERED_ARRAY<BaseSourceRefV1>", "ORDERED_ARRAY<AcceptedHandoffRefV1>", "ASCII", "ASCII"]
+read_set = "draft, launch and registry source bytes are at base_commit; each prerequisite handoff is immutable and digest-bound"
+result = "assignment_ticket_v1; no lease or implementation authority"
+
+[[operation_input]]
+operation_kind = "issue_writer_lease"
+current_domain_separator = "issue_writer_lease_v1"
+operation_specific_field_order = ["assignment_ticket_ImmutableRecordRef", "assignment_ticket_exact_record_file_sha256", "context_manifest_ImmutableRecordRef", "context_manifest_exact_record_file_sha256", "context_artifact_ImmutableArtifactRef", "current_package_lease_set_in_canonical_lease_id_order", "all_event_chain_refs_in_declared_chain_order"]
+operation_specific_wire_types = ["IMMUTABLE_RECORD_REF", "SHA256_RAW32", "IMMUTABLE_RECORD_REF", "SHA256_RAW32", "IMMUTABLE_ARTIFACT_REF", "ORDERED_ARRAY<ImmutableRecordRef>", "ORDERED_ARRAY<LeaseEventChainV1>"]
+read_set = "current active-lease exclusion is recomputed from the exact current control state; no snapshot or display value substitutes"
+result = "writer_lease_v1; no automatic expiry"
+
+[[operation_input]]
+operation_kind = "acknowledge_writer_lease"
+current_domain_separator = "acknowledge_writer_lease_v1"
+domain_revision_note = "use a new exact domain and input schema if an accepted registry revision changes the acknowledgement contract"
+operation_specific_field_order = ["writer_lease_ImmutableRecordRef", "writer_lease_exact_record_file_sha256", "assignment_ticket_ImmutableRecordRef", "assignment_ticket_exact_record_file_sha256", "context_manifest_ImmutableRecordRef", "context_manifest_exact_record_file_sha256", "context_artifact_sha256", "accepted_writer_acknowledgement_schema_sha256", "writer_acknowledgement_canonical_payload_sha256", "writer_acknowledgement_exact_ImmutableArtifactRef", "opaque_worktree_ref"]
+operation_specific_wire_types = ["IMMUTABLE_RECORD_REF", "SHA256_RAW32", "IMMUTABLE_RECORD_REF", "SHA256_RAW32", "IMMUTABLE_RECORD_REF", "SHA256_RAW32", "SHA256_RAW32", "SHA256_RAW32", "SHA256_RAW32", "IMMUTABLE_ARTIFACT_REF", "ASCII"]
+acknowledgement_contract = "requires the sibling writer-acknowledgement schema/domain decision; current v1 has no registered payload type, so the operation remains disabled until that gap is accepted"
+acknowledgement_v2_rule = "if a v2 event/domain is accepted, bind its new operation schema/domain exactly; never alias v1 and v2 or infer missing payload fields"
+result = "only the accepted signed acknowledgement event; current draft proposes lease_event_v2 but has not accepted it"
+
+[canonical_input.compound_wire_types]
+ImmutableRecordRef = "nested TLV: u16be field_count=6; fields in existing schema order repository ASCII, commit GitObjectId, path ASCII, git_blob_id GitObjectId, exact_record_file_sha256 raw32, record_kind ASCII"
+ImmutableArtifactRef = "nested TLV: u16be field_count=4; fields in existing schema order store_profile_ref ASCII, artifact_id ASCII, bytes U64BE, sha256 raw32"
+OrderedArray = "u32be count (0..256), then u32be length plus exact item bytes; total encoded array value at most 524288 bytes; each item at most 16384 bytes"
+AcceptedHandoffRefV1 = "nested TLV: u16be field_count=3; fields handoff ImmutableRecordRef, exact record-file SHA256 raw32, accepted public API digest raw32; no source-body fields"
+BaseSourceRefV1 = "nested TLV: u16be field_count=3; fields base-commit repository-relative path ASCII, full Git blob GitObjectId, exact source SHA256 raw32"
+LeaseEventChainV1 = "nested TLV: u16be field_count=2; field 1 lease ImmutableRecordRef; field 2 OrderedArray of that lease's lease_event_v1 ImmutableRecordRefs, at most 256 refs"
+[receipt_layout]
+canonical_field_order = [
+  "schema_version",
+  "record_kind",
+  "status",
+  "identity",
+  "operation",
+  "repository",
+  "base",
+  "actor",
+  "input",
+  "profiles",
+  "publication",
+  "output_records",
+  "output_artifacts",
+  "signature",
+]
+status_value = "RECORDED"
+status_meaning = "this immutable operation receipt is present in the containing commit tree; it does not itself prove the bound control ref moved or that post-write readback succeeded"
+mandatory_fields = [
+  "operation_id",
+  "operation_kind",
+  "operation_schema_version",
+  "input_schema_id",
+  "input_canonical_sha256",
+  "input_byte_count",
+  "input_ImmutableArtifactRef",
+  "repository_identity",
+  "immutable_base_commit",
+  "actor_identity",
+  "artifact_profile_definition_digest_and_instance_ref",
+  "approval_profile_definition_digest_and_instance_ref",
+  "trust_head_locator_bound_to_expected_parent_commit",
+  "trust_manifest_locator_bound_to_expected_parent_commit",
+  "expected_parent_control_commit",
+  "publication_intent",
+  "ordered_output_record_locators",
+  "ordered_output_ImmutableArtifactRefs",
+  "signature.signed_payload_sha256",
+  "signature.signature_ref",
+]
+
+[receipt_layout.output_locator]
+field_order = ["repository_relative_path", "git_blob_id", "exact_record_file_sha256", "record_kind"]
+commit_source = "the exact containing operation-receipt commit"
+reason_for_no_commit_field = "the receipt is in that commit; embedding its own commit ID would form a self-reference"
+consumer_ref = "construct standard ImmutableRecordRef by combining repository and containing commit with this locator"
+
+[receipt_layout.identity]
+field_order = ["operation_id"]
+
+[receipt_layout.operation]
+field_order = ["operation_kind", "operation_schema_version", "operation_domain_separator", "input_schema_id"]
+
+[receipt_layout.repository]
+field_order = ["repository", "base_commit"]
+
+[receipt_layout.actor]
+field_order = ["actor_identity", "trust_head_path", "trust_head_git_blob_id", "trust_head_exact_record_file_sha256", "trust_manifest_path", "trust_manifest_git_blob_id", "trust_manifest_exact_record_file_sha256"]
+ref_resolution = "construct each ImmutableRecordRef from the exact expected_parent_control_commit plus the path, blob ID, digest and record kind recorded here"
+[receipt_layout.input]
+field_order = ["schema_id", "canonical_sha256", "byte_count", "artifact_ref"]
+
+[receipt_layout.profiles]
+field_order = [
+  "artifact_profile_ref",
+  "artifact_profile_definition_sha256",
+  "artifact_profile_instance_ref",
+  "artifact_profile_qualification_ref",
+  "approval_profile_ref",
+  "approval_profile_definition_sha256",
+  "approval_profile_instance_ref",
+  "approval_profile_qualification_ref",
+]
+
+[receipt_layout.publication]
+field_order = ["control_ref_name", "expected_parent_commit", "publication_intent"]
+publication_intent = "CAS_TO_BOUND_CONTROL_REF"
+readback_policy = "exact post-ref-CAS readback is mandatory before reporting mutation success; the receipt records intent, not observed success"
+expected_parent_commit = "record the exact old control-ref OID used for compare-and-swap"
+new_commit_id = "not embedded; derive from the exact receipt ref/ancestry after publication"
+receipt_exact_record_file_sha256 = "external consumer digest only"
+recovery_disposition = "computed by the read-only recovery operation; never rewrite or append to this receipt to change it"
+recovery_disposition_persistence = "not stored as a fabricated initial value; receipt carries the operation/input/output evidence needed for read-only recovery"
+
+[receipt_layout.output_records]
+field_order = ["repository_relative_path", "git_blob_id", "exact_record_file_sha256", "record_kind"]
+order_rule = "one primary output record first; no receipt self-reference"
+
+[receipt_layout.output_artifact]
+type = "existing ImmutableArtifactRef"
+resolution = "path is derived from artifact_id and read from the exact containing receipt commit"
+signature_bytes_are_output = true
+[outcome_model]
+attempt_outcome_states = ["NO_WRITE", "PREPARED_UNREACHABLE", "COMMITTED", "OUTCOME_UNKNOWN"]
+attempt_outcome_state_persisted_in_receipt = false
+success_condition = "COMMITTED means the bound control ref CAS succeeded and exact post-write readback verified the receipt, output records, signature artifacts, profile and actor trust"
+same_operation_same_input = "return the original exact committed result and references; the trust locator content is in the idempotency input while containing parent commit is transaction metadata"
+same_operation_different_input = "CONTROL_OPERATION_CONFLICT"
+blind_retry_after_possible_write = false
+partial_record_receipt_commit = false
+recovery_is_read_only = true
+recovery_dispositions = ["RECOVERED_SUCCEEDED", "SAFE_TO_RETRY", "CONFLICT", "PRESERVE_OUTCOME_UNKNOWN"]
+RECOVERED_SUCCEEDED = "receipt, canonical input, target records, Git blob IDs, exact file digests and signatures match the trust snapshot captured by that operation; later revocation does not rewrite the historical result"
+SAFE_TO_RETRY = "no matching receipt or target exists and the bound control ref still equals the exact expected parent; any changed or possibly rewritten ref without exact success evidence remains unknown"
+CONFLICT = "target or operation ID exists with different canonical input, record digest or actor/profile binding"
+PRESERVE_OUTCOME_UNKNOWN = "repository/readback is unavailable, inconsistent, rewritten, missing an object or otherwise cannot prove absence or exact success"
+recovery_deadline_seconds = 30
+
+[qualification_plan]
+suite_id = "control_operation_receipt_v1"
+all_results = "UNAVAILABLE"
+executed = false
+cases = [
+  "binary TLV input golden bytes for each of the first four mutation operations",
+  "field order, optional ABSENT/PRESENT, list order and operation-domain changes alter operation identity",
+  "generated IDs, signatures, output hashes and containing commit never enter their own preimage",
+  "receipt exact input artifact and output record/artifact byte readback",
+  "one Git commit and one exact-old-ref compare-and-swap publish all records atomically",
+  "same-input retry returns identical committed record refs; same-operation altered input conflicts",
+  "fault before ref update, after possible ref update, missing object, diverged ref and lost response map to the four exact recovery dispositions",
+  "context operation returns MATERIALIZED only; ticket does not create a lease; lease does not authorize implementation; acknowledgement requires the accepted signed writer event",
+  "actor/profile/trust absence or revocation blocks mutation without a fallback",
+  "all first-four qualification cases retain UNAVAILABLE until raw output and independent reviewer receipt exist",
+]
