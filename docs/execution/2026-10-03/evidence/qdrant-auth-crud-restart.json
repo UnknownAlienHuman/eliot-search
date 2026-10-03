@@ -1,0 +1,258 @@
+{
+  "run": "continuation CRUD and restart persistence on existing short-path collection; not a W3 qualification receipt",
+  "status": "PASS",
+  "started_utc": "2026-10-03T04:50:08.5910996Z",
+  "completed_utc": "2026-10-03T04:50:13.7447283Z",
+  "executable": {
+    "path": "C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe",
+    "bytes": 84184576,
+    "sha256": "369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4",
+    "expected_version": "1.19.0",
+    "expected_build_prefix": "74f3e85b"
+  },
+  "server_identity": {
+    "title": "qdrant - vector search engine",
+    "version": "1.19.0",
+    "commit": "74f3e85b9473c62560006c043e13737ce6b48412"
+  },
+  "config_fingerprint_sha256_excluding_secret": "36f3a0ce15a17897ee635033e2ec63505918bb808e28a7448df03060ae979fa1",
+  "runtime_root": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb",
+  "storage_path": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb\\storage",
+  "snapshots_path": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb\\snapshots",
+  "network": {
+    "bind": "127.0.0.1",
+    "http_port": 16333,
+    "grpc_port": 16334,
+    "cluster_enabled": false,
+    "p2p_port_expected_unbound": 16335,
+    "listeners": [
+      {
+        "address": "127.0.0.1",
+        "port": 16334,
+        "pid": 69332
+      },
+      {
+        "address": "127.0.0.1",
+        "port": 16333,
+        "pid": 69332
+      }
+    ],
+    "owned_final_listener_count": 0
+  },
+  "authentication": {
+    "valid_key_status": 200,
+    "missing_key_status": 401,
+    "wrong_key_status": 401
+  },
+  "existing_collection_create_evidence": "short-path smoke evidence trace reports HTTP 200 and shard_count=1",
+  "operations": {
+    "collection_name": "eliot_smoke_8835ac43faf044b8ba08909db8d01cef",
+    "shard_count": 1,
+    "payload_index": "smoke_scope keyword via /index",
+    "upsert_wait": true,
+    "ordering": "strong",
+    "exact_id_readback": true,
+    "filtered_query_exact_id": true,
+    "count_before_restart": 1,
+    "count_after_restart": 1,
+    "count_after_delete": 0
+  },
+  "process_identities": [
+    {
+      "phase": "initial",
+      "pid": 69332,
+      "executable_path": "C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe",
+      "command_line": "\"C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe\"",
+      "parent_pid": 63816,
+      "launch": "hidden new console and process group"
+    },
+    {
+      "phase": "restart",
+      "pid": 42356,
+      "executable_path": "C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe",
+      "command_line": "\"C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe\"",
+      "parent_pid": 63816,
+      "launch": "hidden new console and process group"
+    }
+  ],
+  "server_log": {
+    "path": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb\\qdrant.log",
+    "present": true,
+    "secret_redaction_applied": true,
+    "bytes": 7442,
+    "sha256": "01BFA84A846474C510C5A01B19A647B121E1F2B6BBED13F24BC47312E1ADA55D"
+  },
+  "shutdowns": [
+    {
+      "phase": "persistence restart",
+      "pid": 69332,
+      "mode": "ctrl_break_signal",
+      "native_result": "stopped:3221225786",
+      "exit_code": "3221225786"
+    },
+    {
+      "phase": "final",
+      "pid": 42356,
+      "mode": "ctrl_break_signal",
+      "native_result": "stopped:3221225786",
+      "exit_code": "3221225786"
+    }
+  ],
+  "qualification_disposition": "UNQUALIFIED; indexed mode disabled; no registry or probe status changed",
+  "failure": null,
+  "request_trace": [
+    {
+      "step": "authenticated readiness",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"collections\":[{\"name\":\"eliot_smoke_8835ac43faf044b8ba08909db8d01cef\"}]},\"status\":\"ok\",\"time\":7.3e-6}",
+      "body_chars": 112
+    },
+    {
+      "step": "server identity",
+      "method": "GET",
+      "path": "/",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"title\":\"qdrant - vector search engine\",\"version\":\"1.19.0\",\"commit\":\"74f3e85b9473c62560006c043e13737ce6b48412\"}",
+      "body_chars": 112
+    },
+    {
+      "step": "collections valid key",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"collections\":[{\"name\":\"eliot_smoke_8835ac43faf044b8ba08909db8d01cef\"}]},\"status\":\"ok\",\"time\":4.3e-6}",
+      "body_chars": 112
+    },
+    {
+      "step": "collections no key",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "none",
+      "status": 401,
+      "response_body_redacted": "Must provide an API key or an Authorization bearer token",
+      "body_chars": 56
+    },
+    {
+      "step": "collections wrong key",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "wrong",
+      "status": 401,
+      "response_body_redacted": "Invalid API key or JWT",
+      "body_chars": 22
+    },
+    {
+      "step": "verify persisted short-path collection",
+      "method": "GET",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"status\":\"green\",\"optimizer_status\":\"ok\",\"indexed_vectors_count\":0,\"points_count\":0,\"segments_count\":8,\"config\":{\"params\":{\"vectors\":{\"size\":4,\"distance\":\"Cosine\"},\"shard_number\":1,\"replication_factor\":1,\"write_consistency_factor\":1,\"on_disk_payload\":true},\"hnsw_config\":{\"m\":16,\"ef_construct\":100,\"full_scan_threshold\":10000,\"max_indexing_threads\":0,\"on_disk\":false},\"optimizer_config\":{\"deleted_threshold\":0.2,\"vacuum_min_vector_number\":1000,\"default_segment_number\":0,\"max_segment_size\":null,\"memmap_threshold\":null,\"indexing_threshold\":10000,\"flush_interval_sec\":5,\"max_optimization_threads\":null,\"prevent_unoptimized\":null},\"wal_config\":{\"wal_capacity_mb\":32,\"wal_segments_ahead\":0,\"wal_retain_closed\":1},\"quantization_config\":null},\"payload_schema\":{},\"update_queue\":{\"length\":0}},\"status\":\"ok\",\"time\":0.0003152}",
+      "body_chars": 829
+    },
+    {
+      "step": "create payload index via collection index endpoint",
+      "method": "PUT",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/index?wait=true",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"operation_id\":2,\"status\":\"completed\"},\"status\":\"ok\",\"time\":0.2214267}",
+      "body_chars": 81
+    },
+    {
+      "step": "synchronous strong upsert",
+      "method": "PUT",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points?wait=true&ordering=strong",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"operation_id\":3,\"status\":\"completed\"},\"status\":\"ok\",\"time\":0.0030529}",
+      "body_chars": 81
+    },
+    {
+      "step": "exact ID readback",
+      "method": "POST",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":[{\"id\":\"9676fa2c-b055-4bb8-84d3-4dd0dab3f4db\",\"payload\":{\"smoke_scope\":\"short-path-733be2baa3a54611a612cb8ad8cd87a3\"},\"vector\":[0.18257418,0.36514837,0.5477226,0.73029673]}],\"status\":\"ok\",\"time\":0.0003}",
+      "body_chars": 212
+    },
+    {
+      "step": "filtered vector query",
+      "method": "POST",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points/query",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"points\":[{\"id\":\"9676fa2c-b055-4bb8-84d3-4dd0dab3f4db\",\"version\":3,\"score\":1.0,\"payload\":{\"smoke_scope\":\"short-path-733be2baa3a54611a612cb8ad8cd87a3\"}}]},\"status\":\"ok\",\"time\":0.0006419}",
+      "body_chars": 196
+    },
+    {
+      "step": "exact count before restart",
+      "method": "POST",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points/count",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"count\":1},\"status\":\"ok\",\"time\":0.0000855}",
+      "body_chars": 53
+    },
+    {
+      "step": "authenticated readiness",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"collections\":[{\"name\":\"eliot_smoke_8835ac43faf044b8ba08909db8d01cef\"}]},\"status\":\"ok\",\"time\":9.7e-6}",
+      "body_chars": 112
+    },
+    {
+      "step": "server identity after restart",
+      "method": "GET",
+      "path": "/",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"title\":\"qdrant - vector search engine\",\"version\":\"1.19.0\",\"commit\":\"74f3e85b9473c62560006c043e13737ce6b48412\"}",
+      "body_chars": 112
+    },
+    {
+      "step": "exact ID persistence readback",
+      "method": "POST",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":[{\"id\":\"9676fa2c-b055-4bb8-84d3-4dd0dab3f4db\",\"payload\":{\"smoke_scope\":\"short-path-733be2baa3a54611a612cb8ad8cd87a3\"},\"vector\":[0.18257418,0.36514837,0.5477226,0.73029673]}],\"status\":\"ok\",\"time\":0.0002841}",
+      "body_chars": 215
+    },
+    {
+      "step": "exact count after restart",
+      "method": "POST",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points/count",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"count\":1},\"status\":\"ok\",\"time\":0.0000766}",
+      "body_chars": 53
+    },
+    {
+      "step": "delete exact ID wait true strong",
+      "method": "POST",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points/delete?wait=true&ordering=strong",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"operation_id\":4,\"status\":\"completed\"},\"status\":\"ok\",\"time\":0.0020122}",
+      "body_chars": 81
+    },
+    {
+      "step": "exact count after delete",
+      "method": "POST",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points/count",
+      "authentication": "valid",
+      "status": 200,
+      "response_body_redacted": "{\"result\":{\"count\":0},\"status\":\"ok\",\"time\":0.0000356}",
+      "body_chars": 53
+    }
+  ]
+}

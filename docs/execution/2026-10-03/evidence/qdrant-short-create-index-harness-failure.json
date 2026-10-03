@@ -1,0 +1,145 @@
+{
+  "run": "standalone authenticated Qdrant Windows x64 smoke; not a W3 qualification receipt",
+  "status": "FAIL",
+  "started_utc": "2026-10-03T04:41:52.0221373Z",
+  "completed_utc": "2026-10-03T04:41:55.1953704Z",
+  "executable": {
+    "path": "C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe",
+    "bytes": 84184576,
+    "sha256": "369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4",
+    "expected_version": "1.19.0",
+    "expected_build_prefix": "74f3e85b"
+  },
+  "server_identity": {
+    "title": "qdrant - vector search engine",
+    "version": "1.19.0",
+    "commit": "74f3e85b9473c62560006c043e13737ce6b48412"
+  },
+  "config_fingerprint_sha256_excluding_secret": "36f3a0ce15a17897ee635033e2ec63505918bb808e28a7448df03060ae979fa1",
+  "runtime_root": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb",
+  "storage_path": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb\\storage",
+  "snapshots_path": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb\\snapshots",
+  "network": {
+    "bind": "127.0.0.1",
+    "http_port": 16333,
+    "grpc_port": 16334,
+    "cluster_enabled": false,
+    "p2p_port_expected_unbound": 16335,
+    "initial_listeners": [],
+    "owned_final_listener_count": 0
+  },
+  "authentication": {
+    "valid_key_status": 200,
+    "missing_key_status": 401,
+    "wrong_key_status": 401
+  },
+  "operations": {},
+  "process_identities": [
+    {
+      "phase": "initial",
+      "pid": 55248,
+      "executable_path": "C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe",
+      "command_line": "\"C:\\Tools\\Qdrant\\1.19.0\\qdrant.exe\"",
+      "parent_pid": 97472,
+      "launch": "hidden new console and process group"
+    }
+  ],
+  "server_log": {
+    "path": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb\\qdrant.log",
+    "present": true,
+    "secret_redaction_applied": true,
+    "bytes": 1875,
+    "sha256": "97E20DA2D34AA248874F34CD571D0A9325CF04DBF0CD549A287A7BA097445C41"
+  },
+  "shutdowns": [
+    {
+      "phase": "cleanup",
+      "pid": 55248,
+      "mode": "ctrl_break_signal",
+      "native_result": "stopped:3221225786",
+      "exit_code": "3221225786"
+    }
+  ],
+  "qualification_disposition": "UNQUALIFIED; indexed mode disabled; no registry or probe status changed",
+  "failure": "System.Management.Automation.RuntimeException: Payload index create expected HTTP 200, got 404; sanitized response body: ",
+  "request_trace": [
+    {
+      "step": "authenticated readiness",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "valid",
+      "status": 200,
+      "summary": {
+        "ready": true
+      }
+    },
+    {
+      "step": "server identity",
+      "method": "GET",
+      "path": "/",
+      "authentication": "valid",
+      "status": 200,
+      "summary": {
+        "title": "qdrant - vector search engine",
+        "version": "1.19.0",
+        "commit": "74f3e85b9473c62560006c043e13737ce6b48412"
+      }
+    },
+    {
+      "step": "collections valid key",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "valid",
+      "status": 200,
+      "summary": {
+        "access": "allowed"
+      }
+    },
+    {
+      "step": "collections no key",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "none",
+      "status": 401,
+      "summary": {
+        "denied": true
+      }
+    },
+    {
+      "step": "collections wrong key",
+      "method": "GET",
+      "path": "/collections",
+      "authentication": "wrong",
+      "status": 401,
+      "summary": {
+        "denied": true
+      }
+    },
+    {
+      "step": "create one-shard collection",
+      "method": "PUT",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef",
+      "authentication": "valid",
+      "status": 200,
+      "summary": {
+        "response_body_redacted": "{\"result\":true,\"status\":\"ok\",\"time\":0.1216846}",
+        "body_chars": 46,
+        "response_data": {
+          "result": true,
+          "status": "ok",
+          "time": 0.1216846
+        }
+      }
+    },
+    {
+      "step": "verify one shard",
+      "method": "GET",
+      "path": "/collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef",
+      "authentication": "valid",
+      "status": 200,
+      "summary": {
+        "shard_number": 1
+      }
+    }
+  ]
+}

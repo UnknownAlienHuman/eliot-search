@@ -1,0 +1,60 @@
+{
+  "captured_utc": "2026-10-03T04:41:18.9933112Z",
+  "source_root": "C:\\Users\\kleym\\AppData\\Local\\ELIOT\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308",
+  "file_count": 40,
+  "longest_partial_files": [
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\7790f259-3ebd-41b0-8bcc-c403c5c91272\\payload_storage\\tracker.dat",
+      "path_chars": 266,
+      "bytes": 1048576
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\fa17ffef-933a-4a09-a832-9eae05b80a6d\\payload_storage\\bitmask.dat",
+      "path_chars": 266,
+      "bytes": 32768
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\f15e1d04-68db-449b-ac72-219272d348e5\\payload_storage\\tracker.dat",
+      "path_chars": 266,
+      "bytes": 1048576
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\f15e1d04-68db-449b-ac72-219272d348e5\\payload_storage\\bitmask.dat",
+      "path_chars": 266,
+      "bytes": 32768
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\e6ffa40c-247a-4def-a703-9bc98ca6fcef\\payload_storage\\tracker.dat",
+      "path_chars": 266,
+      "bytes": 1048576
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\e6ffa40c-247a-4def-a703-9bc98ca6fcef\\payload_storage\\bitmask.dat",
+      "path_chars": 266,
+      "bytes": 32768
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\b0ea15e2-8899-49ea-8486-095bab028819\\payload_storage\\tracker.dat",
+      "path_chars": 266,
+      "bytes": 1048576
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\b0ea15e2-8899-49ea-8486-095bab028819\\payload_storage\\bitmask.dat",
+      "path_chars": 266,
+      "bytes": 32768
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\a85797ce-581f-4226-98d0-44c522bb6205\\payload_storage\\tracker.dat",
+      "path_chars": 266,
+      "bytes": 1048576
+    },
+    {
+      "path": "C:\\Users\\kleym\\AppData\\Local\\Eliot\\Search\\Qdrant\\qualification\\w3-1.19.0-diagnostic-20261003-d236dddb1fc74da58c859bddd9323308\\storage\\collections\\eliot_smoke_db6f263772354abfb0dd7b7185195f4c\\0\\segments\\a85797ce-581f-4226-98d0-44c522bb6205\\payload_storage\\bitmask.dat",
+      "path_chars": 266,
+      "bytes": 32768
+    }
+  ],
+  "comparison_root": "C:\\Tools\\Qdrant\\1.19.0\\smoke-638e27fb",
+  "active_qdrant_processes": [],
+  "ports_16333_16335": []
+}

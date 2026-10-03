@@ -1,0 +1,62 @@
+2026-10-03T04:41:53.640921Z  WARN qdrant::settings: Config file not found: config/config
+2026-10-03T04:41:53.641015Z  WARN qdrant::settings: Config file not found: config/development
+2026-10-03T04:41:53.643128Z  WARN qdrant: There is a potential issue with the filesystem for storage path C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage. Details: Filesystem type check is not supported on this platform
+2026-10-03T04:41:53.643262Z  INFO storage::content_manager::consensus::persistent: Initializing new raft state at C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage\raft_state.json
+2026-10-03T04:41:53.653923Z  INFO qdrant: Distributed mode disabled
+2026-10-03T04:41:53.654057Z  INFO qdrant: Telemetry reporting disabled
+2026-10-03T04:41:53.654870Z  WARN qdrant::actix::web_ui: Static content folder for Web UI './static' does not exist
+2026-10-03T04:41:53.655029Z  INFO qdrant::actix: REST transport settings: keep_alive=5s, client_request_timeout=5s, client_disconnect_timeout=5s
+2026-10-03T04:41:53.655096Z  INFO qdrant::actix: TLS disabled for REST API
+2026-10-03T04:41:53.656693Z  INFO qdrant::actix: Qdrant HTTP listening on 16333
+2026-10-03T04:41:53.656801Z  INFO actix_server::builder: starting 31 workers
+2026-10-03T04:41:53.656881Z  INFO actix_server::server: Actix runtime found; starting in Actix runtime
+2026-10-03T04:41:53.656965Z  INFO actix_server::server: starting service: "actix-web-service-127.0.0.1:16333", workers: 31, listening on: 127.0.0.1:16333
+2026-10-03T04:41:53.658875Z  INFO qdrant::tonic: Qdrant gRPC listening on 16334
+2026-10-03T04:41:53.658961Z  INFO qdrant::tonic: TLS disabled for gRPC API
+2026-10-03T04:41:54.124148Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections HTTP/1.1" 200 57 "-" "-" 0.000157
+2026-10-03T04:41:54.142342Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections HTTP/1.1" 200 57 "-" "-" 0.000074
+2026-10-03T04:50:10.059822Z  WARN qdrant::settings: Config file not found: config/config
+2026-10-03T04:50:10.059907Z  WARN qdrant::settings: Config file not found: config/development
+2026-10-03T04:50:10.062083Z  WARN qdrant: There is a potential issue with the filesystem for storage path C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage. Details: Filesystem type check is not supported on this platform
+2026-10-03T04:50:10.062258Z  INFO storage::content_manager::consensus::persistent: Loading raft state from C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage\raft_state.json
+2026-10-03T04:50:10.064171Z  INFO storage::content_manager::toc: Loading collection: eliot_smoke_8835ac43faf044b8ba08909db8d01cef
+2026-10-03T04:50:10.069517Z  INFO collection::shards::local_shard: Recovering shard C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage\collections\eliot_smoke_8835ac43faf044b8ba08909db8d01cef\0: 0/1 (0%)
+2026-10-03T04:50:10.069742Z  INFO collection::shards::local_shard: Recovered collection eliot_smoke_8835ac43faf044b8ba08909db8d01cef: 1/1 (100%)
+2026-10-03T04:50:10.070128Z  INFO qdrant: Distributed mode disabled
+2026-10-03T04:50:10.070200Z  INFO qdrant: Telemetry reporting disabled
+2026-10-03T04:50:10.070682Z  WARN qdrant::actix::web_ui: Static content folder for Web UI './static' does not exist
+2026-10-03T04:50:10.070756Z  INFO qdrant::actix: REST transport settings: keep_alive=5s, client_request_timeout=5s, client_disconnect_timeout=5s
+2026-10-03T04:50:10.070824Z  INFO qdrant::actix: TLS disabled for REST API
+2026-10-03T04:50:10.072265Z  INFO qdrant::actix: Qdrant HTTP listening on 16333
+2026-10-03T04:50:10.072349Z  INFO actix_server::builder: starting 31 workers
+2026-10-03T04:50:10.072434Z  INFO actix_server::server: Actix runtime found; starting in Actix runtime
+2026-10-03T04:50:10.072520Z  INFO actix_server::server: starting service: "actix-web-service-127.0.0.1:16333", workers: 31, listening on: 127.0.0.1:16333
+2026-10-03T04:50:10.074451Z  INFO qdrant::tonic: Qdrant gRPC listening on 16334
+2026-10-03T04:50:10.074563Z  INFO qdrant::tonic: TLS disabled for gRPC API
+2026-10-03T04:50:10.481305Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections HTTP/1.1" 200 112 "-" "-" 0.000156
+2026-10-03T04:50:10.502343Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections HTTP/1.1" 200 112 "-" "-" 0.000064
+2026-10-03T04:50:10.503012Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections HTTP/1.1" 401 56 "-" "-" 0.000031
+2026-10-03T04:50:10.509172Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections HTTP/1.1" 401 22 "-" "-" 0.000035
+2026-10-03T04:50:10.512517Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef HTTP/1.1" 200 829 "-" "-" 0.000393
+2026-10-03T04:50:12.479961Z  WARN qdrant::settings: Config file not found: config/config
+2026-10-03T04:50:12.480049Z  WARN qdrant::settings: Config file not found: config/development
+2026-10-03T04:50:12.481986Z  WARN qdrant: There is a potential issue with the filesystem for storage path C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage. Details: Filesystem type check is not supported on this platform
+2026-10-03T04:50:12.482145Z  INFO storage::content_manager::consensus::persistent: Loading raft state from C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage\raft_state.json
+2026-10-03T04:50:12.484117Z  INFO storage::content_manager::toc: Loading collection: eliot_smoke_8835ac43faf044b8ba08909db8d01cef
+2026-10-03T04:50:12.510202Z  INFO collection::shards::local_shard: Recovering shard C:\Tools\Qdrant\1.19.0\smoke-638e27fb\storage\collections\eliot_smoke_8835ac43faf044b8ba08909db8d01cef\0: 0/4 (0%)
+2026-10-03T04:50:12.641399Z  INFO collection::shards::local_shard: Recovered collection eliot_smoke_8835ac43faf044b8ba08909db8d01cef: 4/4 (100%)
+2026-10-03T04:50:12.641953Z  INFO qdrant: Distributed mode disabled
+2026-10-03T04:50:12.642144Z  INFO qdrant: Telemetry reporting disabled
+2026-10-03T04:50:12.642735Z  WARN qdrant::actix::web_ui: Static content folder for Web UI './static' does not exist
+2026-10-03T04:50:12.642834Z  INFO qdrant::actix: REST transport settings: keep_alive=5s, client_request_timeout=5s, client_disconnect_timeout=5s
+2026-10-03T04:50:12.642905Z  INFO qdrant::actix: TLS disabled for REST API
+2026-10-03T04:50:12.644493Z  INFO qdrant::actix: Qdrant HTTP listening on 16333
+2026-10-03T04:50:12.644582Z  INFO actix_server::builder: starting 31 workers
+2026-10-03T04:50:12.644697Z  INFO actix_server::server: Actix runtime found; starting in Actix runtime
+2026-10-03T04:50:12.644806Z  INFO actix_server::server: starting service: "actix-web-service-127.0.0.1:16333", workers: 31, listening on: 127.0.0.1:16333
+2026-10-03T04:50:12.646566Z  INFO qdrant::tonic: Qdrant gRPC listening on 16334
+2026-10-03T04:50:12.646668Z  INFO qdrant::tonic: TLS disabled for gRPC API
+2026-10-03T04:50:12.938611Z  INFO actix_web::middleware::logger: 127.0.0.1 "GET /collections HTTP/1.1" 200 112 "-" "-" 0.000214
+2026-10-03T04:50:12.941459Z  INFO actix_web::middleware::logger: 127.0.0.1 "POST /collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points HTTP/1.1" 200 215 "-" "-" 0.000846
+2026-10-03T04:50:12.942454Z  INFO actix_web::middleware::logger: 127.0.0.1 "POST /collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points/count HTTP/1.1" 200 53 "-" "-" 0.000176
+2026-10-03T04:50:12.945200Z  INFO actix_web::middleware::logger: 127.0.0.1 "POST /collections/eliot_smoke_8835ac43faf044b8ba08909db8d01cef/points/delete?wait=true&ordering=strong HTTP/1.1" 200 81 "-" "-" 0.002112
