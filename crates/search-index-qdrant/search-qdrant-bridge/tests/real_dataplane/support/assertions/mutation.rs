@@ -74,18 +74,10 @@ pub(crate) async fn assert_partial_batch_rejected(
     context: &OpContext,
 ) {
     let partial = vec![
+        point(route, 24, 10, None, vec![(0, 1.0)]),
         point(
-            24,
-            0xA1,
-            "t24-member-a",
-            10,
-            None,
-            vec![(0, 1.0)],
-        ),
-        point(
+            route,
             25,
-            0xA1,
-            "t24-member-a",
             10,
             None,
             vec![(1, 1.0), (0, 1.0)],

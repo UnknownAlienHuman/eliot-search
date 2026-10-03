@@ -10,7 +10,7 @@ use super::super::super::fixtures::{
 use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
-pub(super) async fn probe_missing_upper_bound(
+pub(in crate::live) async fn probe_missing_upper_bound(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     let open = suite

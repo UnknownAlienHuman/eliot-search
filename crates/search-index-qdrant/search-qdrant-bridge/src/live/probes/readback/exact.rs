@@ -12,7 +12,7 @@ use super::super::super::fixtures::{
 use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
-pub(super) async fn probe_count_and_readback(
+pub(in crate::live) async fn probe_count_and_readback(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     let count = suite

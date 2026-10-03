@@ -10,10 +10,8 @@ impl RealDataPlane {
         limit: usize,
         context: &OpContext,
     ) -> Result<ScrollPage, BridgeError> {
-        context.check()?;
-        if filter.allowed_source_memberships.is_empty() {
-            return Err(BridgeError::InvalidFilter);
-        }
+        let budget = OperationBudget::begin(context)?;
+        validate_filter_for_route(filter, route)?;
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
@@ -22,9 +20,10 @@ impl RealDataPlane {
             .schemas
             .get(&name)
             .ok_or(BridgeError::CollectionNotFound)?;
+        ensure_filter_indexes(schema)?;
         let vendor_filter = base_filter(filter)?;
         let scrolled = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.scroll(ScrollPoints {
                 collection_name: name,
                 filter: Some(vendor_filter),
@@ -39,14 +38,15 @@ impl RealDataPlane {
             }),
         )
         .await
-        .map_err(|_| BridgeError::TransportFailed)?
+        .map_err(|_| BridgeError::DeadlineExceeded)?
         .map_err(map_read_error)?;
         if scrolled.result.len() > limit {
             return Err(BridgeError::MalformedResponse);
         }
         let mut points = Vec::with_capacity(scrolled.result.len());
+        let mut seen = BTreeSet::new();
         for retrieved in &scrolled.result {
-            points.push(decode_point(
+            let point = decode_point(
                 retrieved
                     .id
                     .as_ref()
@@ -54,7 +54,11 @@ impl RealDataPlane {
                 &retrieved.payload,
                 retrieved.vectors.as_ref(),
                 schema,
-            )?);
+            )?;
+            if !seen.insert(point.point_id) || !filter.matches(&point.payload) {
+                return Err(BridgeError::MalformedResponse);
+            }
+            points.push(point);
         }
         let next_offset = if scrolled.result.is_empty() {
             None
@@ -65,6 +69,9 @@ impl RealDataPlane {
                 .map(bridge_point_id)
                 .transpose()?
         };
+        if next_offset.is_some() && next_offset == offset {
+            return Err(BridgeError::MalformedResponse);
+        }
         Ok(ScrollPage {
             points,
             next_offset,

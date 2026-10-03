@@ -1,7 +1,6 @@
-use crate::mutation::validate_exact_ids;
-use crate::query::validate_query_vector;
+use crate::query::validate_filter;
 
-fn keyword_condition(key: &str, text: String) -> Condition {
+pub(super) fn keyword_condition(key: &str, text: String) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
             key: key.to_owned(),
@@ -13,7 +12,7 @@ fn keyword_condition(key: &str, text: String) -> Condition {
     }
 }
 
-fn keywords_condition(key: &str, texts: Vec<String>) -> Condition {
+pub(super) fn keywords_condition(key: &str, texts: Vec<String>) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
             key: key.to_owned(),
@@ -27,7 +26,7 @@ fn keywords_condition(key: &str, texts: Vec<String>) -> Condition {
     }
 }
 
-fn range_condition(key: &str, gte: Option<f64>, lte: Option<f64>) -> Condition {
+pub(super) fn range_condition(key: &str, gte: Option<f64>, lte: Option<f64>) -> Condition {
     Condition {
         condition_one_of: Some(condition::ConditionOneOf::Field(FieldCondition {
             key: key.to_owned(),
@@ -46,7 +45,7 @@ fn range_condition(key: &str, gte: Option<f64>, lte: Option<f64>) -> Condition {
 /// Qdrant `Range` bounds travel as doubles; only exactly representable
 /// integers are admitted so a large epoch can never silently truncate into a
 /// wider filter.
-const fn epoch_bound(number: i64) -> Result<f64, BridgeError> {
+pub(super) const fn epoch_bound(number: i64) -> Result<f64, BridgeError> {
     #[allow(clippy::cast_precision_loss)]
     let as_float = number as f64;
     #[allow(clippy::cast_possible_truncation)]
@@ -56,38 +55,54 @@ const fn epoch_bound(number: i64) -> Result<f64, BridgeError> {
     Ok(as_float)
 }
 
-/// Canonical base eligibility plan: the one closed filter value shared
+/// Canonical S10.3 base eligibility plan: the one closed filter value shared
 /// verbatim by retrieval and the IDF corpus.
-fn base_filter(filter: &EligibilityFilter) -> Result<Filter, BridgeError> {
-    if filter.allowed_source_memberships.is_empty() {
-        return Err(BridgeError::InvalidFilter);
-    }
-    let members: Vec<String> = filter
-        .allowed_source_memberships
+pub(super) fn base_filter(filter: &EligibilityFilter) -> Result<Filter, BridgeError> {
+    validate_filter(filter)?;
+    let projection_memberships = filter
+        .allowed_projection_memberships
         .iter()
-        .map(|member| member.as_str().to_owned())
+        .map(ToString::to_string)
         .collect();
-    let from = epoch_bound(filter.visible_epoch.get())?;
-    let until = epoch_bound(filter.visible_epoch.get())?;
+    let visible = epoch_bound(filter.visible_epoch.get())?;
     Ok(Filter {
         must: vec![
             keyword_condition(
-                EligibilityFilter::INDEXED_FIELDS[0],
-                hex_from_32(filter.access_partition_digest.as_bytes()),
+                PointPayload::INSTALLATION_INCARNATION_FIELD,
+                filter.installation_incarnation_id.to_string(),
             ),
-            keywords_condition(EligibilityFilter::INDEXED_FIELDS[1], members),
-            range_condition(EligibilityFilter::INDEXED_FIELDS[2], None, Some(from)),
+            keyword_condition(
+                PointPayload::COLLECTION_GENERATION_FIELD,
+                filter.collection_generation_id.to_string(),
+            ),
+            keywords_condition(
+                PointPayload::PROJECTION_MEMBERSHIP_FIELD,
+                projection_memberships,
+            ),
+            keyword_condition(
+                PointPayload::ACCESS_PARTITION_FIELD,
+                filter.access_partition_id.to_string(),
+            ),
+            keyword_condition(
+                PointPayload::SCORING_PARTITION_FIELD,
+                filter.scoring_partition_id.to_string(),
+            ),
+            keyword_condition(
+                PointPayload::PROJECTION_PROFILE_SET_FIELD,
+                filter.projection_profile_set_id.as_str().to_owned(),
+            ),
+            range_condition(PointPayload::VALID_FROM_FIELD, None, Some(visible)),
         ],
         must_not: vec![range_condition(
-            EligibilityFilter::INDEXED_FIELDS[3],
+            PointPayload::VALID_UNTIL_FIELD,
             None,
-            Some(until),
+            Some(visible),
         )],
         ..Default::default()
     })
 }
 
-fn validate_point(
+pub(super) fn validate_point(
     point: &PointRecord,
     schema: &CollectionSchema,
     limits: BridgeLimits,

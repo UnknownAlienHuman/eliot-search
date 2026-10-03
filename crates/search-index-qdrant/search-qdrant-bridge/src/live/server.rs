@@ -13,7 +13,7 @@ mod process;
 pub use artifact::verify_executable;
 pub use endpoint::{LiveEndpoint, free_loopback_ports};
 pub use process::{DisposableServer, spawn_disposable_server};
-pub(super) use endpoint::connect;
+pub(in crate::live) use endpoint::connect;
 
 /// Pinned native server under qualification.
 pub const NATIVE_EXE_PATH: &str = r"C:\Tools\Qdrant\1.19.0\qdrant.exe";

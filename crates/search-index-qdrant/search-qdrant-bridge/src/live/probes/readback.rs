@@ -3,5 +3,5 @@
 mod exact;
 mod schema;
 
-pub(super) use exact::probe_count_and_readback;
-pub(super) use schema::probe_schema_digest;
+pub(in crate::live) use exact::probe_count_and_readback;
+pub(in crate::live) use schema::probe_schema_digest;

@@ -8,4 +8,4 @@ mod state;
 pub use client::verify_compiled_client;
 pub use report::LiveSuiteReport;
 pub use run::run_qualification_suite;
-pub(super) use state::Suite;
+pub(in crate::live) use state::Suite;

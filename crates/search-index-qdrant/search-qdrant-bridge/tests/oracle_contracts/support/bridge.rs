@@ -56,7 +56,7 @@ pub(crate) fn bridge(
     )
     .expect("reference bridge");
     let route = CollectionRoute {
-        generation: CollectionGenerationId::from_bytes([1; 16]),
+        generation: collection_generation(),
         physical_name: opaque("oracle-contracts"),
     };
     let schema = CollectionSchema {
@@ -68,7 +68,7 @@ pub(crate) fn bridge(
                 idf_enabled: true,
             },
         )]),
-        indexed_payload_fields: EligibilityFilter::INDEXED_FIELDS
+        indexed_payload_fields: PointPayload::INDEXED_FIELDS
             .into_iter()
             .map(str::to_owned)
             .collect(),

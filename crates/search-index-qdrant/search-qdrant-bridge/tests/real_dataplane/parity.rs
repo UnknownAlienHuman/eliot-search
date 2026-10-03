@@ -7,7 +7,7 @@ async fn t24_real_crud_query_parity_with_oracle() {
         let context = ctx();
         let route = make_route("t24_parity", 0x11);
         let schema = schema();
-        let filter = permitted_filter();
+        let filter = permitted_filter(&route);
 
         let mut oracle = oracle();
         oracle
@@ -22,7 +22,7 @@ async fn t24_real_crud_query_parity_with_oracle() {
             .await
             .expect("real schema verifies");
 
-        let batch = parity_points();
+        let batch = parity_points(&route);
         let create_mutation = mutation("t24-parity-upsert-1", 0x21);
         let oracle_receipt = oracle
             .upsert_exact(&route, batch.clone(), create_mutation.clone())
@@ -67,7 +67,6 @@ async fn t24_real_crud_query_parity_with_oracle() {
                 VECTOR_NAME,
                 &[(0, 1.0)],
                 10,
-                IdfScope::ScopedToRetrieval,
                 &context,
             )
             .await

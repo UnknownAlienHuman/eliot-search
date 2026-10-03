@@ -18,6 +18,8 @@ pub enum BridgeError {
     MutationTooLarge,
     DuplicatePointId,
     PointNotFound,
+    PointPayloadInvalid,
+    PointIdCollision,
     OperationConflict,
     MutationOutcomeUnknown,
     ExactReadbackMismatch,
@@ -28,6 +30,8 @@ pub enum BridgeError {
     InvalidScore,
     /// The operation was cancelled before dispatch or between bounded pages.
     Cancelled,
+    /// The finite operation budget elapsed before any possible external write.
+    DeadlineExceeded,
     /// The transport failed without a possible external write (reads and
     /// pre-send connect failures). Mutations that may have committed after
     /// dispatch report [`BridgeError::MutationOutcomeUnknown`] instead.
@@ -57,6 +61,8 @@ impl BridgeError {
             Self::MutationTooLarge => "QDRANT_MUTATION_TOO_LARGE",
             Self::DuplicatePointId => "QDRANT_DUPLICATE_POINT_ID",
             Self::PointNotFound => "QDRANT_POINT_NOT_FOUND",
+            Self::PointPayloadInvalid => "QDRANT_POINT_PAYLOAD_INVALID",
+            Self::PointIdCollision => "POINT_ID_COLLISION",
             Self::OperationConflict => "QDRANT_OPERATION_CONFLICT",
             Self::MutationOutcomeUnknown => "QDRANT_MUTATION_OUTCOME_UNKNOWN",
             Self::ExactReadbackMismatch => "QDRANT_EXACT_READBACK_MISMATCH",
@@ -66,6 +72,7 @@ impl BridgeError {
             Self::QueryBudgetExceeded => "QDRANT_QUERY_BUDGET_EXCEEDED",
             Self::InvalidScore => "QDRANT_INVALID_SCORE",
             Self::Cancelled => "QDRANT_OPERATION_CANCELLED",
+            Self::DeadlineExceeded => "QDRANT_DEADLINE_EXCEEDED",
             Self::TransportFailed => "QDRANT_TRANSPORT_FAILED",
             Self::MalformedResponse => "QDRANT_MALFORMED_RESPONSE",
         }

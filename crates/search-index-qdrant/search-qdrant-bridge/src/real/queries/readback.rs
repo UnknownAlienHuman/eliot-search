@@ -12,7 +12,7 @@ impl RealDataPlane {
         ids: Vec<QdrantPointId>,
         context: &OpContext,
     ) -> Result<BoundedPointReadback, BridgeError> {
-        context.check()?;
+        let budget = OperationBudget::begin(context)?;
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
         let name = collection_name(route)?;
         let schema = self
@@ -20,7 +20,7 @@ impl RealDataPlane {
             .get(&name)
             .ok_or(BridgeError::CollectionNotFound)?;
         let readback = tokio::time::timeout(
-            context.deadline(),
+            budget.remaining(context)?,
             self.client.get_points(GetPoints {
                 collection_name: name.clone(),
                 ids: ids.iter().map(vendor_point_id).collect(),
@@ -30,7 +30,7 @@ impl RealDataPlane {
             }),
         )
         .await
-        .map_err(|_| BridgeError::TransportFailed)?
+        .map_err(|_| BridgeError::DeadlineExceeded)?
         .map_err(map_read_error)?;
         if readback.result.len() > ids.len() {
             return Err(BridgeError::MalformedResponse);
@@ -57,7 +57,9 @@ impl RealDataPlane {
                 retrieved.vectors.as_ref(),
                 schema,
             )?;
-            if returned.insert(id, point).is_some() {
+            if point.payload.collection_generation_id != route.generation
+                || returned.insert(id, point).is_some()
+            {
                 return Err(BridgeError::MalformedResponse);
             }
         }

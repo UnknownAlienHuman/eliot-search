@@ -5,7 +5,7 @@ use crate::qualified::{QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION};
 use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
-pub(super) async fn probe_server_identity(
+pub(in crate::live) async fn probe_server_identity(
     suite: &mut Suite,
 ) -> Result<(), LiveError> {
     let reply = suite

@@ -13,11 +13,11 @@ pub use spec::{
     UUID_POINT, VECTOR_CODE, VECTOR_TEXT, VISIBLE_EPOCH, VISIBLE_EPOCH_I64,
 };
 
-pub(super) use filter::{
+pub(in crate::live) use filter::{
     base_eligibility, base_filter, exact_f64, keyword_condition,
     range_condition,
 };
-pub(super) use points::{
+pub(in crate::live) use points::{
     int_value, num_point_id, point, snapshot_id, sparse_named, string_value,
     strong_ordering, update_completed,
 };

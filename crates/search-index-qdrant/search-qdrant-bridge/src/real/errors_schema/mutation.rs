@@ -1,7 +1,7 @@
 /// Maps a vendor failure after a mutation dispatch. Definite server
 /// rejections keep their typed codes; any loss, deadline or ambiguous status
 /// becomes `MutationOutcomeUnknown` because the write may have committed.
-fn map_mutation_error(error: qdrant_client::QdrantError) -> BridgeError {
+pub(super) fn map_mutation_error(error: qdrant_client::QdrantError) -> BridgeError {
     match error {
         qdrant_client::QdrantError::ResponseError { status }
         | qdrant_client::QdrantError::ResourceExhaustedError { status, .. } => {
@@ -18,7 +18,7 @@ fn map_mutation_error(error: qdrant_client::QdrantError) -> BridgeError {
     }
 }
 
-const fn map_mutation_status(code: i32) -> BridgeError {
+pub(super) const fn map_mutation_status(code: i32) -> BridgeError {
     match code {
         CODE_NOT_FOUND => BridgeError::CollectionNotFound,
         CODE_ALREADY_EXISTS => BridgeError::CollectionAlreadyExists,

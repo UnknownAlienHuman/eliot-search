@@ -11,12 +11,12 @@ use super::super::super::suite::Suite;
 use super::super::super::LiveError;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct ScoredSnapshot {
-    pub(super) id: String,
-    pub(super) score: f32,
+pub(in crate::live) struct ScoredSnapshot {
+    pub(in crate::live) id: String,
+    pub(in crate::live) score: f32,
 }
 
-pub(super) async fn query_tenant_a(
+pub(in crate::live) async fn query_tenant_a(
     suite: &Suite,
     term: u32,
     with_idf_corpus: bool,
@@ -59,7 +59,7 @@ pub(super) async fn query_tenant_a(
 
 /// Compares the exact ID/score population without depending on Qdrant's
 /// unspecified ordering among equal-score candidates.
-pub(super) fn same_scores(
+pub(in crate::live) fn same_scores(
     left: &[ScoredSnapshot],
     right: &[ScoredSnapshot],
 ) -> bool {
