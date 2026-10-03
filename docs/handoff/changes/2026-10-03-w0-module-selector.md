@@ -64,6 +64,11 @@ from its same immutable `GitTree`. Existing callers and captured selector fixtur
 their original entry point. The extended entry point delegates all previously supported forms to that
 original resolver. A new public helper is integration tooling, not a Search package API or wire change.
 
+The module document identity is its existing header: `schema_version = 1`, `project = "eliot-search"`,
+and `earliest_wave = 0`. It has no `stage` field. Check those exact values with the exact W0 path;
+do not invent a registry field. Focused coverage must include the actual checked-in W0 packet, plus
+wrong schema/project/wave headers, to avoid a synthetic fixture hiding a real-input mismatch.
+
 Acceptance of this correction is a contract decision. It is not an executed test, authoritative review
 receipt, qualification, package handoff, or implementation completion. The corrected source and focused
 negative coverage require subsequent independent review before publication.
