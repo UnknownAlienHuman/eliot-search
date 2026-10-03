@@ -14,8 +14,8 @@ use tokio::runtime::{Builder, Handle, Runtime};
 use crate::live::LiveEndpoint;
 use crate::qualified::QualifiedGate;
 use crate::{
-    BoundedPointReadback, BridgeError, BridgeLimits, CandidateNomination,
-    CollectionRoute, CollectionSchema, EligibilityFilter, ExactCount,
+    BoundedPointReadback, BridgeError, BridgeLimits, CandidateNomination, CollectionRoute,
+    CollectionSchema, EligibilityFilter, ExactCount, QdrantApiKeyLease, QdrantConnectionBinding,
     QdrantPointId,
 };
 
@@ -41,6 +41,8 @@ impl BlockingRealQueryPlane {
     /// [`BridgeError::TransportFailed`].
     pub fn connect(
         endpoint: &LiveEndpoint,
+        supervisor: QdrantConnectionBinding,
+        auth_lease: QdrantApiKeyLease,
         gate: QualifiedGate,
         limits: BridgeLimits,
     ) -> Result<Self, BridgeError> {
@@ -51,7 +53,9 @@ impl BlockingRealQueryPlane {
             .enable_all()
             .build()
             .map_err(|_| BridgeError::TransportFailed)?;
-        let plane = runtime.block_on(RealDataPlane::connect(endpoint, gate, limits))?;
+        let plane = runtime.block_on(RealDataPlane::connect(
+            endpoint, supervisor, auth_lease, gate, limits,
+        ))?;
         Ok(Self { plane, runtime })
     }
 

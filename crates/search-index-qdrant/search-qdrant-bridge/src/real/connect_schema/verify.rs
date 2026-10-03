@@ -5,15 +5,13 @@ impl RealDataPlane {
         schema: &CollectionSchema,
         context: &OpContext,
     ) -> Result<(), BridgeError> {
-        let info = tokio::time::timeout(
-            context.deadline(),
-            self.client.collection_info(name),
-        )
-        .await
-        .map_err(|_| BridgeError::TransportFailed)?
-        .map_err(map_read_error)?
-        .result
-        .ok_or(BridgeError::MalformedResponse)?;
+        self.authorize_dispatch()?;
+        let info = tokio::time::timeout(context.deadline(), self.client.collection_info(name))
+            .await
+            .map_err(|_| BridgeError::TransportFailed)?
+            .map_err(map_read_error)?
+            .result
+            .ok_or(BridgeError::MalformedResponse)?;
         verify_server_schema(&info, schema)
     }
 

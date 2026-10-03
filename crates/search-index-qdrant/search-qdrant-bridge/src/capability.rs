@@ -18,7 +18,11 @@ pub struct SupervisorReceipt {
     pub endpoint_digest: Blake3Digest32,
 }
 
-/// Purpose-bound authentication-lease proof.
+/// Synthetic purpose-bound authentication evidence for the in-memory model.
+///
+/// `valid` is a fixture assertion only. It contains no secret and does not
+/// authenticate a real Qdrant connection; real transport uses the callback
+/// capability in [`crate::QdrantApiKeyLease`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AuthLeaseEvidence {
     pub reference_digest: Blake3Digest32,

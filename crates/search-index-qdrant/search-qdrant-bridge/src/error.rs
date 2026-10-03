@@ -5,6 +5,7 @@ use core::fmt;
 pub enum BridgeError {
     EndpointNotLoopback,
     AuthenticationInvalid,
+    AuthenticationLeaseExpired,
     SupervisorReceiptMismatch,
     CapabilityProbeFailed,
     CapabilityReceiptMismatch,
@@ -44,6 +45,7 @@ impl BridgeError {
         match self {
             Self::EndpointNotLoopback => "QDRANT_ENDPOINT_NOT_LOOPBACK",
             Self::AuthenticationInvalid => "QDRANT_AUTHENTICATION_INVALID",
+            Self::AuthenticationLeaseExpired => "QDRANT_AUTHENTICATION_LEASE_EXPIRED",
             Self::SupervisorReceiptMismatch => "QDRANT_SUPERVISOR_RECEIPT_MISMATCH",
             Self::CapabilityProbeFailed => "QDRANT_CAPABILITY_PROBE_FAILED",
             Self::CapabilityReceiptMismatch => "QDRANT_CAPABILITY_RECEIPT_MISMATCH",

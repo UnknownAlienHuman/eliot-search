@@ -6,7 +6,10 @@ const fn map_post_create_error(error: BridgeError) -> BridgeError {
     match error {
         BridgeError::Cancelled
         | BridgeError::TransportFailed
-        | BridgeError::MalformedResponse => BridgeError::MutationOutcomeUnknown,
+        | BridgeError::MalformedResponse
+        | BridgeError::AuthenticationInvalid
+        | BridgeError::AuthenticationLeaseExpired
+        | BridgeError::SupervisorReceiptMismatch => BridgeError::MutationOutcomeUnknown,
         other => other,
     }
 }
@@ -36,6 +39,7 @@ impl RealDataPlane {
         if self.schemas.contains_key(&name) {
             return Err(BridgeError::CollectionAlreadyExists);
         }
+        self.authorize_dispatch()?;
         if self
             .client
             .collection_exists(name.clone())
@@ -72,13 +76,12 @@ impl RealDataPlane {
             }),
             ..Default::default()
         };
-        let created = tokio::time::timeout(
-            context.deadline(),
-            self.client.create_collection(create),
-        )
-        .await
-        .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-        .map_err(map_create_error)?;
+        self.authorize_dispatch()?;
+        let created =
+            tokio::time::timeout(context.deadline(), self.client.create_collection(create))
+                .await
+                .map_err(|_| BridgeError::MutationOutcomeUnknown)?
+                .map_err(map_create_error)?;
         if !created.result {
             return Err(BridgeError::MutationOutcomeUnknown);
         }
@@ -90,6 +93,7 @@ impl RealDataPlane {
             (EligibilityFilter::INDEXED_FIELDS[3], FieldType::Integer),
         ] {
             post_create_check(context)?;
+            self.authorize_dispatch().map_err(map_post_create_error)?;
             let indexed = tokio::time::timeout(
                 context.deadline(),
                 self.client.create_field_index(CreateFieldIndexCollection {
@@ -134,6 +138,9 @@ mod create_tests {
             BridgeError::Cancelled,
             BridgeError::TransportFailed,
             BridgeError::MalformedResponse,
+            BridgeError::AuthenticationInvalid,
+            BridgeError::AuthenticationLeaseExpired,
+            BridgeError::SupervisorReceiptMismatch,
         ] {
             assert_eq!(
                 map_post_create_error(error),
@@ -143,10 +150,6 @@ mod create_tests {
         assert_eq!(
             map_post_create_error(BridgeError::CollectionSchemaMismatch),
             BridgeError::CollectionSchemaMismatch
-        );
-        assert_eq!(
-            map_post_create_error(BridgeError::AuthenticationInvalid),
-            BridgeError::AuthenticationInvalid
         );
     }
 }

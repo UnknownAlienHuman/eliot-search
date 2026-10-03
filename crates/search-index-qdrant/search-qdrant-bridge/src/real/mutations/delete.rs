@@ -1,11 +1,11 @@
 use super::super::{DeletePoints, GetPoints, PointsIdsList, PointsSelector, points_selector};
 
-use super::check_acknowledgement;
 use super::super::{
-    BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    QdrantPointId, RealDataPlane, collection_name, map_mutation_error,
-    strong_ordering, update_completed, validate_exact_ids, vendor_point_id,
+    BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext, QdrantPointId,
+    RealDataPlane, collection_name, map_mutation_error, strong_ordering, update_completed,
+    validate_exact_ids, vendor_point_id,
 };
+use super::check_acknowledgement;
 
 impl RealDataPlane {
     /// Deletes only explicit exact point IDs with `wait=true` and strong
@@ -27,6 +27,7 @@ impl RealDataPlane {
         let ids = validate_exact_ids(ids, self.limits.max_points_per_mutation)?;
         let name = collection_name(route)?;
         context.check()?;
+        self.authorize_dispatch()?;
         let acked = tokio::time::timeout(
             context.deadline(),
             self.client.delete_points(DeletePoints {
@@ -47,9 +48,14 @@ impl RealDataPlane {
         .map_err(|_| BridgeError::MutationOutcomeUnknown)?
         .map_err(map_mutation_error)?;
         check_acknowledgement(
-            acked.result.as_ref().is_some_and(|result| update_completed(result.status)),
+            acked
+                .result
+                .as_ref()
+                .is_some_and(|result| update_completed(result.status)),
             context,
         )?;
+        self.authorize_dispatch()
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)?;
         let present = tokio::time::timeout(
             context.deadline(),
             self.client.get_points(GetPoints {

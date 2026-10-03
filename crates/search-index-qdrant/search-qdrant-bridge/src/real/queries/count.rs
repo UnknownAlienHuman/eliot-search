@@ -14,6 +14,7 @@ impl RealDataPlane {
         }
         let name = collection_name(route)?;
         let vendor_filter = base_filter(filter)?;
+        self.authorize_dispatch()?;
         let counted = tokio::time::timeout(
             context.deadline(),
             self.client.count(CountPoints {
@@ -32,8 +33,7 @@ impl RealDataPlane {
             .ok_or(BridgeError::MalformedResponse)?
             .count;
         Ok(ExactCount {
-            count: usize::try_from(count)
-                .map_err(|_| BridgeError::MalformedResponse)?,
+            count: usize::try_from(count).map_err(|_| BridgeError::MalformedResponse)?,
         })
     }
 }

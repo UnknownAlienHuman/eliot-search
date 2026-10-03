@@ -17,16 +17,18 @@ mod probes;
 mod server;
 mod suite;
 
+/// Fixed disposable-fixture credential. This is never used outside the
+/// private native-server fixture and is passed to its child only via env.
+pub(crate) const FIXTURE_API_KEY: &str = "eliot-qdrant-live-fixture-key-v1";
+
 pub use error::LiveError;
 pub use fixtures::{
-    ACCESS_A, EPOCH_MAX, EPOCH_MIN, FIELD_ACCESS, FIELD_FROM, FIELD_TENANT,
-    FIELD_UNINDEXED, FIELD_UNTIL, QUALIFICATION_COLLECTION, TENANT_A, TENANT_B,
-    UUID_POINT, VECTOR_CODE, VECTOR_TEXT, VISIBLE_EPOCH, VISIBLE_EPOCH_I64,
+    ACCESS_A, EPOCH_MAX, EPOCH_MIN, FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNINDEXED,
+    FIELD_UNTIL, QUALIFICATION_COLLECTION, TENANT_A, TENANT_B, UUID_POINT, VECTOR_CODE,
+    VECTOR_TEXT, VISIBLE_EPOCH, VISIBLE_EPOCH_I64,
 };
 pub use server::{
-    DisposableServer, LiveEndpoint, NATIVE_EXE_PATH, free_loopback_ports,
-    spawn_disposable_server, verify_executable,
+    DisposableServer, LiveEndpoint, NATIVE_EXE_PATH, free_loopback_ports, spawn_disposable_server,
+    verify_executable,
 };
-pub use suite::{
-    LiveSuiteReport, run_qualification_suite, verify_compiled_client,
-};
+pub use suite::{LiveSuiteReport, run_qualification_suite, verify_compiled_client};
