@@ -1,0 +1,301 @@
+schema_version = 1
+proposal_id = "p00-authority-records-2026-10-03"
+proposal_status = "PROPOSED_REVIEW_PENDING"
+contract_challenge = true
+canonical = false
+implementation_authorized = false
+contract_owner = "search-contracts"
+base_commit = "bac90ff7753ef7d4d107836c60480df216acfe7f"
+architecture_version = "8.4"
+architecture_file_sha256_at_base = "b80f4283ae2f1c6add097e45c2a17075215e4348fa82c4527610f71cb0080a12"
+architecture_hash_basis_reconciled = true
+architecture_hash_basis_note = "P00 pins the bounded Architecture 8.4 Part I digest; architecture_file_sha256_at_base is the raw full-master file digest. These hashes cover different byte scopes."
+p00_manifest_declared_architecture_sha256 = "ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c"
+architecture_sections_examined = ["S19.1 SearchReadGrant", "S32 Client integration contract", "S33 Standalone contract"]
+provider_wire_schema = "SearchReadGrantClaims"
+provider_wire_schema_path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+server_record_visibility = "ServerRecord"
+unknown_fields = "reject"
+unknown_enum_tags = "reject"
+empty_scope_intersection = "deny"
+
+[finite_bounds]
+set_item_limits = "exact accepted ContractBoundsV1 values from the W0 bounds digest"
+identifier_and_opaque_limits = "exact accepted P00 typed-wrapper bounds"
+encoded_record_bytes = "exact accepted ContractBoundsV1 max_bytes value; class key remains to be assigned"
+policy_maximum_ttl = "explicit positive u64 per policy; global duration ceiling is unresolved"
+
+[[server_record]]
+name = "ProviderBindingRecord"
+record_kind = "durable_server_record"
+shape_owner = "search-contracts"
+shape_module_proposal = "search-contracts::authority"
+mutable_state_owner = "search-provider-protocol::binding"
+durability_adapter = "search-control-redb::provider_authority"
+construction_authorizes = false
+provider_wire_visible = false
+fields = [
+  { name = "binding_id", type = "BindingId", presence = "required", basis = "S19.1 and S32.0", rule = "Strong identity; never supplied as authoritative request input." },
+  { name = "installation_id", type = "InstallationId", presence = "required", basis = "S19.1", rule = "Must equal the daemon installation identity." },
+  { name = "installation_incarnation_id", type = "InstallationIncarnationId", presence = "required", basis = "S19.1 and S32.0", rule = "Must equal the live installation incarnation." },
+  { name = "peer_role", type = "closed PeerRole enum", presence = "required", basis = "proposed from S32.0 mutual-authenticated hello", rule = "Exact variants are owned by search-provider-protocol; arbitrary strings are forbidden." },
+  { name = "peer_identity_digest", type = "Blake3Digest32", presence = "required", basis = "proposed from S32.0 mutual-authenticated hello", rule = "Stable comparison value only; never proof of authentication or a raw vendor/native identity." },
+  { name = "pairing_generation", type = "NonZeroRevision", presence = "required", basis = "proposed currentness fence", rule = "Identifies one pairing; never zero, wraps, or reuses a retired value." },
+  { name = "permitted_profile_ids", type = "BoundedSet<ProfileId>", presence = "required", basis = "proposed from S32.2 binding-filtered available_profiles", rule = "Filters capability exposure only and never grants recipe, read, exact-scan, or retrieval permission; empty means none." },
+  { name = "issued_at", type = "UtcTimestamp", presence = "required", basis = "proposed lifecycle metadata", rule = "Explicit record time; not a substitute for current readback." },
+  { name = "expires_at", type = "Option<UtcTimestamp>", presence = "required", basis = "proposed lifecycle ceiling", rule = "Null explicitly means no time-based binding expiry; otherwise strictly later than issued_at." },
+  { name = "revocation_generation", type = "NonZeroRevision", presence = "required", basis = "S19.1 revocation fence", rule = "Sole owner of binding revocation generation; copied from the same current row into each grant." },
+  { name = "status", type = "ProviderBindingStatus", presence = "required", basis = "proposed explicit lifecycle", rule = "Closed tags ACTIVE, REVOKED, EXPIRED; terminal rows cannot reactivate in place." },
+]
+excluded_existing_fields = [
+  { name = "disclosure_ceiling_ref", reason = "P00 does not close its referent, owner, or relationship to SearchReadGrantClaims.disclosure_ceiling; an opaque reference cannot silently become authority." },
+]
+
+[[server_record]]
+name = "AuthoritativeGrantPolicy"
+record_kind = "nested_server_policy_value"
+shape_owner = "search-contracts"
+shape_module_proposal = "search-contracts::authority"
+mutable_state_owner = "UNCONFIRMED"
+proposed_mutable_state_owner = "search-access::grant"
+mutable_state_owner_status = "UNCONFIRMED_PROPOSAL"
+mutable_state_owner_basis = "The current search-access grant contract establishes validation and scope intersection, not standalone policy creation or replacement."
+durability_adapter = "embedded in StandalonePolicyRecord via search-control-redb::provider_authority"
+construction_authorizes = false
+provider_wire_visible = false
+fields = [
+  { name = "binding_id", type = "BindingId", presence = "required", basis = "S19.1", rule = "Must match the paired binding exactly." },
+  { name = "binding_generation", type = "NonZeroRevision", presence = "required", basis = "proposed currentness fence", rule = "Must equal the paired binding pairing_generation." },
+  { name = "policy_generation", type = "NonZeroRevision", presence = "required", basis = "proposed policy-state revision", rule = "Advances on every policy replacement and is never reused." },
+  { name = "installation_id", type = "InstallationId", presence = "required", basis = "S19.1", rule = "Must match the paired binding and live daemon." },
+  { name = "installation_incarnation_id", type = "InstallationIncarnationId", presence = "required", basis = "S19.1", rule = "Must match the paired binding and live daemon." },
+  { name = "principal_opaque_id", type = "OpaqueId", presence = "required", basis = "S19.1", rule = "Server-authoritative principal; opaque and bounded." },
+  { name = "client_scope_ref", type = "OpaqueRef", presence = "required", basis = "S19.1", rule = "Server-authoritative scope reference; possession grants no authority." },
+  { name = "scope_domain_id", type = "ScopeDomainId", presence = "required", basis = "S19.1", rule = "Server-authoritative domain identity." },
+  { name = "allowed_membership_ids", type = "BoundedSet<SourceMembershipId>", presence = "required", basis = "S19.1", rule = "Finite ceiling; duplicate members reject; empty authorizes none." },
+  { name = "allowed_corpus_or_portfolio_ids", type = "BoundedSet<CorpusOrPortfolioId>", presence = "required", basis = "S19.1", rule = "Finite ceiling; duplicate members reject; empty authorizes none." },
+  { name = "reference_portfolio_revision", type = "Option<PortfolioRevision>", presence = "required", basis = "S19.1", rule = "Preserve the single optional wire field. Its mapping to allowed_corpus_or_portfolio_ids when one or more portfolio IDs are present is unresolved; do not derive a multi-portfolio mapping or add a new wire field in this proposal." },
+  { name = "allowed_access_partitions", type = "BoundedSet<AccessPartitionId>", presence = "required", basis = "S19.1", rule = "Finite ceiling; duplicate members reject; empty authorizes none." },
+  { name = "allowed_modalities", type = "BoundedSet<Modality>", presence = "required", basis = "S19.1", rule = "Finite ceiling; duplicate members reject; empty authorizes none." },
+  { name = "permitted_recipe_families", type = "BoundedSet<RecipeFamilyId>", presence = "required", basis = "S19.1", rule = "Finite ceiling; duplicate members reject; empty authorizes none." },
+  { name = "allowed_budget_classes", type = "BoundedSet<ProfileId>", presence = "required", basis = "proposed durable policy ceiling", rule = "Finite set; request selects one member for maximum_budget_class; no ordering or default selection." },
+  { name = "sensitivity_ceiling", type = "SensitivityClass", presence = "required", basis = "S19.1", rule = "Request cannot widen this ceiling." },
+  { name = "disclosure_ceiling", type = "DisclosureCeiling", presence = "required", basis = "S19.1", rule = "Request cannot widen this ceiling." },
+  { name = "source_read_permission", type = "bool", presence = "required", basis = "S19.1", rule = "Request cannot widen; false forbids source read." },
+  { name = "exact_scan_permission", type = "bool", presence = "required", basis = "S19.1", rule = "Request cannot widen; true requires source_read_permission." },
+  { name = "maximum_ttl_ms", type = "positive u64 milliseconds", presence = "required", basis = "proposed finite policy ceiling", rule = "The policy value is an explicit finite upper ceiling; checked timestamp addition overflow denies issuance. Whether to add a global TTL ceiling is unresolved." },
+]
+excluded_existing_fields = [
+  { name = "issued_boot_id", reason = "S19.1 makes this a per-grant claim; mint it from current daemon state rather than persist it as policy." },
+  { name = "revocation_generation", reason = "The paired binding row is the sole owner; copy its current generation into the grant after atomic read." },
+]
+
+[[server_record]]
+name = "StandalonePolicyRecord"
+record_kind = "durable_server_record"
+shape_owner = "search-contracts"
+shape_module_proposal = "search-contracts::authority"
+mutable_state_owner = "UNCONFIRMED"
+proposed_mutable_state_owner = "search-access::grant"
+mutable_state_owner_status = "UNCONFIRMED_PROPOSAL"
+mutable_state_owner_basis = "The current search-access grant contract establishes validation and scope intersection, not standalone policy creation or replacement."
+durability_adapter = "search-control-redb::provider_authority"
+construction_authorizes = false
+provider_wire_visible = false
+fields = [
+  { name = "policy", type = "AuthoritativeGrantPolicy", presence = "required", basis = "server policy contract", rule = "Embedded value; never encoded as SearchReadGrantClaims." },
+  { name = "state", type = "StandalonePolicyState", presence = "required", basis = "proposed explicit lifecycle", rule = "Closed tags ACTIVE, REVOKED, EXPIRED; terminal rows cannot reactivate in place." },
+  { name = "issued_at", type = "UtcTimestamp", presence = "required", basis = "proposed lifecycle metadata", rule = "Explicit policy issuance time." },
+  { name = "expires_at", type = "Option<UtcTimestamp>", presence = "required", basis = "proposed lifecycle ceiling", rule = "Null explicitly means no time-based policy expiry; otherwise strictly later than issued_at." },
+]
+
+[atomic_read]
+required = true
+snapshot = "one current published control generation"
+absence = "both rows absent means unregistered and grants nothing"
+half_pair = "fail closed"
+identity_match = ["binding_id", "installation_id", "installation_incarnation_id"]
+generation_match = ["policy.binding_generation equals binding.pairing_generation"]
+lifecycle_match = "both binding and policy are ACTIVE and unexpired"
+stale_publication = "fail closed"
+commit_receipt = "historical evidence only"
+recovery_after_possible_write = "OUTCOME_UNKNOWN until exact readback with original mutation identity resolves it"
+
+[grant_derivation]
+input_policy = "current atomic ProviderBindingRecord plus StandalonePolicyRecord"
+wire_output = "SearchReadGrantClaims"
+wire_fields_generated_per_grant = ["grant_id", "issued_boot_id", "issued_at", "expires_at", "nonce"]
+wire_revocation_generation_source = "current ProviderBindingRecord.revocation_generation"
+wire_maximum_budget_class = "exactly one explicitly requested member of AuthoritativeGrantPolicy.allowed_budget_classes"
+scope = "intersect explicit membership, corpus, access-partition, modality, and recipe requests with current policy; empty intersection denies; portfolio scope derivation remains blocked pending the single-revision mapping decision"
+portfolio_revision_mapping = "BLOCKED_UNRESOLVED: preserve the existing set and singular optional revision wire fields; do not invent an array, order-based association, or architecture semantics"
+request_may_widen = false
+expires_at_rule = "no later than request TTL, policy.maximum_ttl_ms, binding expiry, or policy expiry"
+protocol_auth_owner = "search-provider-protocol::binding"
+grant_validation_and_intersection_owner = "search-access::grant"
+concrete_composition_owner = "eliot-searchd"
+
+[visibility]
+provider_wire = false
+server_record_result_variants = false
+raw_credentials = false
+plaintext_keys = false
+vendor_native_types = false
+vendor_identifiers = false
+collection_names = false
+point_ids = false
+source_content = false
+
+[canonical_changes_if_accepted]
+add_shapes_to = "docs/contracts/p00/TYPE_REGISTRY.md"
+add_module_name = "authority"
+module_packet = "swarm/modules/w0.toml"
+module_total_before = 38
+module_total_after = 39
+package_module_count_before = 13
+package_module_count_after = 14
+public_entry_unchanged = "lib"
+w0_manifest_already_covers_type_registry = true
+w0_shared_read_set_already_covers_manifest = true
+w0_shared_read_set_change = false
+stage_readsets_change = false
+launch_or_ticket_change = false
+coverage_crosswalk_update_required = true
+coverage_schema_rows_required = ["ProviderBindingRecord", "AuthoritativeGrantPolicy", "StandalonePolicyRecord"]
+coverage_update_owner = "integration"
+coverage_state_owner_attribution = "blocked until explicit policy mutation owner decision; no row is authorized by this draft"
+
+[[source]]
+path = "AGENTS.md"
+sha256 = "5877e380dd623b6423364a71164c4a2e751cf18c6f68dd0ac8dd4a6b6a9a80f9"
+used_for = "read/write boundaries, owner layers, invariants, and access/currentness constraints"
+
+[[source]]
+path = "docs/handoff/AUTHORITY_MAP.md"
+sha256 = "222a7fa1eeafdfc54564064675caadac0c1f3f0522527f760aca8754d909d7f2"
+used_for = "source precedence and authority owners"
+
+[[source]]
+path = "swarm/CONTRACT_CHANGE_TEMPLATE.md"
+sha256 = "8d662dee969f60f298904f9aba7bc434853b80686d963198bca11f7d36049ac6"
+used_for = "required challenge, impact, tests, and decision sections"
+
+[[source]]
+path = "swarm/crates.toml"
+sha256 = "8f1dd6374342b248718eb6b8c6d6a68cde061f7efbdf260892debe1a17557412"
+used_for = "exact search-contracts path, wave, assignment, and dependencies"
+
+[[source]]
+path = "swarm/function-packets.toml"
+sha256 = "cddf29a99be178616477cd6c27ac9811aaffb58f5d9eb7887a253c3555b8ae16"
+used_for = "exact foundation packet and neighboring owner functions"
+
+[[source]]
+path = "swarm/modules/w0.toml"
+sha256 = "cbc44f3df2b0687af9270ecf3d84aae6f23d4c39f22d841d9605844d243a1232"
+used_for = "exact W0 search-contracts module list and public entry"
+
+[[source]]
+path = "swarm/stages.toml"
+sha256 = "985db52aa036b33585aba51f714ab249f4c186df95783d1c4fa03475757dbe96"
+used_for = "exact W0 shared read set and package composition"
+
+[[source]]
+path = "docs/contracts/p00/manifest.toml"
+sha256 = "31da62f3e23fdec0d318825196d82a0e8561c886b4b3e3bf5a5464e32deb9c23"
+used_for = "P00 exact source manifest and declared architecture digest"
+
+[[source]]
+path = "docs/handoff/P00_BOOTSTRAP.md"
+sha256 = "c8f569886a00a64823c2a43ec6cedab76374defd4e859edb5f3a99c912398619"
+used_for = "P00 owner roles and gate boundary"
+
+[[source]]
+path = "swarm/ASSIGNMENT_PROTOCOL.md"
+sha256 = "fbee03c2ec11feacba5d9705f110812bbf3dd6e4162b63a992e4030ab414c7fa"
+used_for = "immutable context, write-scope, and state owner rules"
+
+[[source]]
+path = "swarm/assignments/search-contracts.md"
+sha256 = "5ec22ef5e570d2afed236c79fba561970bd20c1c3f55b4f325cf6efea584bc51"
+used_for = "foundation package scope and schema responsibilities"
+
+[[source]]
+path = "docs/contracts/p00/TYPE_REGISTRY.md"
+sha256 = "8d501f60766056f71f5648db2833c33452641bd84c891a186952785793b7e047"
+used_for = "ServerRecord visibility, exact bound classes, strong IDs, and generic-type rules"
+
+[[source]]
+path = "docs/contracts/p00/SUPPORT_SCHEMAS.md"
+sha256 = "019add07f202ec113d26079ce70964b071213de585b727d790ca7ed03b389d59"
+used_for = "bounded support types and prohibition on reusable authorization decisions"
+
+[[source]]
+path = "docs/contracts/p00/QUERY_AND_RESULTS.md"
+sha256 = "1ce9e4567d81e2e3f0a2a7b4c1acb0c96fa09c03b6e7ef93a242e85cde750b66"
+used_for = "exact SearchReadGrantClaims wire fields and scope-ceiling semantics"
+
+[[source]]
+path = "docs/contracts/p00/PROTOCOL_AND_LIFECYCLE.md"
+sha256 = "b32ad7de0b68c2c2d11355b81912d8c4861265951a1b834a80ff07e8f41304f9"
+used_for = "P00 lifecycle generations and publication/readback invariants"
+
+[[source]]
+path = "crates/search-provider-protocol/FUNCTIONS.md"
+sha256 = "802274c389616fb3c3bde56ef46f5d356ac6ae288a26c95573d28fe7448a76d8"
+used_for = "binding/session ownership and authenticated grant request boundary"
+
+[[source]]
+path = "crates/search-query/search-access/FUNCTIONS.md"
+sha256 = "985a09d4afdbc7090013197ac9bb7d56832c8c2b9ccb0277e91852b77e189f7c"
+used_for = "grant validation, scope intersection, live fences, and pre-retrieval checks"
+
+[[source]]
+path = "docs/handoff/PORT_CATALOG.md"
+sha256 = "3652d39761159925e565d79b4d05c3f32e390fd4f16eea2485088a85719046ad"
+used_for = "control, snapshot, clock, and secret store port ownership"
+
+[[source]]
+path = "docs/handoff/PRIMITIVE_OWNERSHIP.md"
+sha256 = "9df75735a609ce04c3fbc15d4955fe109e408978deeac2cea97a044434cd2f26"
+used_for = "grant intersection and binding state owners"
+
+[[source]]
+path = "docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md"
+sha256 = "b80f4283ae2f1c6add097e45c2a17075215e4348fa82c4527610f71cb0080a12"
+used_for = "only S19.1 lines 1195-1226, S32 lines 1831-2000, and S33 lines 2002-2006"
+
+[[source]]
+path = "crates/search-contracts/src/authority.rs"
+sha256 = "d009fb6b884a99f50d39fcecbc761196cc56bb0fbb20dc23de5d4977e7b372c6"
+used_for = "existing public record shapes; implementation shape only, not authority"
+
+[[source]]
+path = "crates/search-contracts/src/lib.rs"
+sha256 = "8d470b053d8d59252720901f18a2a87158309d213c4940ac10a7b59d7196c70e"
+used_for = "existing authority module export and public entry"
+
+[[source]]
+path = "crates/search-control-redb/src/provider_authority.rs"
+sha256 = "c993aaeaeab6c0f092ab7346fa3e331536de889ca7cfaad55443643e1f46061e"
+used_for = "current atomic pair mutation, readback, and unknown-outcome recovery behavior"
+
+[[source]]
+path = "crates/search-control-redb/src/provider_authority/codec.rs"
+sha256 = "0c3b7e2518a0df0c7e752230d729e11e50f8da9d214a8ba7442506021e6342f0"
+used_for = "existing private adapter codec only; no shared codec contract inferred"
+
+[[source]]
+path = "bins/eliot-searchd/src/access_composition/native_binding/codec.rs"
+sha256 = "95ddde98fe11b2e93eef74f502aabf07a1f04702babddb9ce5647df566f13421"
+used_for = "actual binding consumer shape and decoding boundary"
+
+[[source]]
+path = "bins/eliot-searchd/src/access_composition/native_grant_policy/codec.rs"
+sha256 = "0bc2390ac5b014a869407736faa9759bb1a64b8e9893d906cc8d7205ec31413a"
+used_for = "actual policy consumer shape and decoding boundary"
+
+[[source]]
+path = "bins/eliot-searchd/src/access_composition/native_binding/registration/readback.rs"
+sha256 = "c8684dd4d293fc616b66081d713a3b976e75b5a67cd4b6d1235c6da8a486eb35"
+used_for = "current exact pair readback and live use boundary"

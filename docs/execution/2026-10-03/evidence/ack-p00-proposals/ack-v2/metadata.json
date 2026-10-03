@@ -1,0 +1,72 @@
+{
+  "source_commit": "74ce16e897b8c37c5fc54b1729d09d64632d71cf",
+  "working_directory": "C:\\Users\\kleym\\.codex\\worktrees\\control-record-prerequisites\\eliot-search",
+  "capture_directory": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z",
+  "executable": "C:\\Users\\kleym\\.cargo\\bin\\taplo.exe",
+  "argv": [
+    "check",
+    "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\01-manifest.toml",
+    "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\02-writer-acknowledgement-v1.toml",
+    "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\03-lease-event-v2.toml",
+    "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\04-lease-event-instance-v2.toml",
+    "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\05-operations-v2.toml"
+  ],
+  "full_command_line": "\"C:\\Users\\kleym\\.cargo\\bin\\taplo.exe\" \"check\" \"C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\01-manifest.toml\" \"C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\02-writer-acknowledgement-v1.toml\" \"C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\03-lease-event-v2.toml\" \"C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\04-lease-event-instance-v2.toml\" \"C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\05-operations-v2.toml\"",
+  "started_at_utc": "2026-10-03T10:18:40.5393155+00:00",
+  "finished_at_utc": "2026-10-03T10:18:40.5650087+00:00",
+  "runtime_milliseconds": 24,
+  "exit_code": 0,
+  "inputs": [
+    {
+      "repository_path": "swarm/schema-drafts/lease-event-v2/manifest.toml",
+      "commit": "74ce16e897b8c37c5fc54b1729d09d64632d71cf",
+      "git_blob_id": "7aac6afafe3e23f21e178d0865dcb0405b78811a",
+      "temp_path": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\01-manifest.toml",
+      "input_bytes": 14870,
+      "input_sha256": "0c65b34607fc6ae0c001e09aedd14ed8807c0850681b17ec91d02fca35697e9b",
+      "input_scope": "raw decompressed Git blob bytes"
+    },
+    {
+      "repository_path": "swarm/schema-drafts/lease-event-v2/writer-acknowledgement-v1.toml",
+      "commit": "74ce16e897b8c37c5fc54b1729d09d64632d71cf",
+      "git_blob_id": "d4419f4ab34bd464d1b7a3caa5705262bf0b0bd5",
+      "temp_path": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\02-writer-acknowledgement-v1.toml",
+      "input_bytes": 17287,
+      "input_sha256": "76f2466037cbed164c5715df64d597b383a11d21770aac00a5b17c8aae1f1c22",
+      "input_scope": "raw decompressed Git blob bytes"
+    },
+    {
+      "repository_path": "swarm/schema-drafts/lease-event-v2/lease-event-v2.toml",
+      "commit": "74ce16e897b8c37c5fc54b1729d09d64632d71cf",
+      "git_blob_id": "f5fe8eef401a6dc60fb9817d3eee8ecabf078735",
+      "temp_path": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\03-lease-event-v2.toml",
+      "input_bytes": 11442,
+      "input_sha256": "0186ee8aae77dde8ef12a34003bf8552280b27b25514aaa8c863302db95457f8",
+      "input_scope": "raw decompressed Git blob bytes"
+    },
+    {
+      "repository_path": "swarm/schema-drafts/lease-event-v2/lease-event-instance-v2.toml",
+      "commit": "74ce16e897b8c37c5fc54b1729d09d64632d71cf",
+      "git_blob_id": "dc8a9c38c9e37fad5bf313d9851b8c2cbaaacaf8",
+      "temp_path": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\04-lease-event-instance-v2.toml",
+      "input_bytes": 756,
+      "input_sha256": "f87402f02054844fa113d6a7c0ca07b0493e384977bbfa1fa4ef0816a8bce657",
+      "input_scope": "raw decompressed Git blob bytes"
+    },
+    {
+      "repository_path": "swarm/schema-drafts/lease-event-v2/operations-v2.toml",
+      "commit": "74ce16e897b8c37c5fc54b1729d09d64632d71cf",
+      "git_blob_id": "525c261bc0eb33741ea7cd5debe215292354272b",
+      "temp_path": "C:\\Users\\kleym\\AppData\\Local\\Temp\\eliot-search-ack-enum-v2-final-20261003T101840160Z\\05-operations-v2.toml",
+      "input_bytes": 10758,
+      "input_sha256": "4c86f6c390041ee0eb4e3eb30ebfd71753d0bdf7c31364255c9c499205fb6f7a",
+      "input_scope": "raw decompressed Git blob bytes"
+    }
+  ],
+  "stdout_file": "stdout.raw",
+  "stdout_bytes": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_file": "stderr.raw",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

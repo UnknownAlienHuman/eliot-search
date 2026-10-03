@@ -23,6 +23,11 @@ independent review for proposal publication. Its local owner pinning and actor/e
 no Governor or Memory OS dependency. Both actual parser captures are retained with their distinct
 input provenance. No key, host pin, profile qualification or issued record exists as a result.
 
+The independently reviewed [ACK and P00 proposals](ACK_P00_PROPOSAL_REVIEW.md) are published at
+`a9c1134`, with their original parser inputs and outcomes. They remain nonclaimable. A bounded native
+Git object adapter is now explicitly authorized for integration-tooling implementation; activation
+of issuance operations remains separate from implementing and testing that component.
+
 ## Delivered code
 
 `git fetch origin` discovered that local main was 471 commits behind. A clean fast-forward moved it from `aabb12e915ba5fb7aa568756d5a37891bf1d3a11` to `9d61b759189464a01b93ca4efcb80c5398344bb4`.
