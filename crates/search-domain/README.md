@@ -1,24 +1,33 @@
 # search-domain
 
-**shared pure kernel — Pure invariant algebra.**
+**Shared pure kernel — deterministic product invariant algebra.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
-
-Implement pure state transitions and deterministic decision rules over search-contracts types without owning any external capability.
+**Status:** substantive pure Rust source exists for assurance, coverage, currentness, eligibility,
+visibility, ordering, mutation outcomes, ownership/publication transitions and plan/snapshot fingerprint
+verification. The package performs no I/O and does not by itself integrate or qualify a product path.
 
 ## Owns
 
-- pure validation and transition functions
-- canonical ordering and plan-fingerprint rules
-- eligibility/filter AST semantics
-- coverage classification and invariant proofs
+- pure validation and transition functions;
+- assurance/currentness/visibility decisions;
+- eligibility and retrieval/IDF equivalence semantics;
+- coverage classification and complete-negative rules;
+- deterministic candidate ordering;
+- query-snapshot and plan fingerprint computation/verification;
+- mutation outcome/retry classification;
+- publication and source-ownership transition checks.
 
 ## Must not own
 
-- I/O, clocks, process handles or vendor clients
-- becoming a dumping ground for capability-specific logic
-- owning source, query, publication or access state
+- I/O, clocks, process handles or vendor clients;
+- mutable source, query, publication or access state;
+- capability-specific adapters;
+- client task/admission/finish authority;
+- becoming a dumping ground for behavior owned by a concrete package.
 
-- **Delivery wave:** W0 / P00
-- **Soft source-line target:** 7,000
+This package is `SOURCE`. Its functions become product evidence only through the concrete owners and
+executed integration/qualification paths that consume them.
+
+- **Product area:** Architecture S3/S34 and shared semantics
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
+- **Current status matrix:** [../../docs/product/IMPLEMENTATION_STATUS.md](../../docs/product/IMPLEMENTATION_STATUS.md)
