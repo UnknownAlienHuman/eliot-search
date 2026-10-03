@@ -226,7 +226,7 @@ fn resolve_launchish(
         let table = document.get("conditional_activation");
         if table
             .and_then(|value| value.get(package))
-            .is_some_and(Value::is_table)
+            .is_some_and(Value::is_object)
         {
             return Some((Ok, "one conditional activation table"));
         }

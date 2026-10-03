@@ -391,13 +391,13 @@ fn push_handoff(
     lines: &mut Vec<String>,
     handoff: &Value,
 ) -> Result<(), MaterializationPlanError> {
-    let object = object(handoff, "accepted handoff")?;
+    let handoff_object = object(handoff, "accepted handoff")?;
     lines.push(format!(
         "package = {}",
-        quote(string_value(object, "package")?)
+        quote(string_value(handoff_object, "package")?)
     ));
     let reference = object(
-        object
+        handoff_object
             .get("handoff_ref")
             .ok_or_else(|| render_invalid("handoff_ref missing"))?,
         "handoff_ref",
@@ -405,14 +405,14 @@ fn push_handoff(
     lines.push(format!("handoff_ref = {}", record_ref_inline(reference)?));
     lines.push(format!(
         "accepted_commit = {}",
-        quote(string_value(object, "accepted_commit")?)
+        quote(string_value(handoff_object, "accepted_commit")?)
     ));
     lines.push(format!(
         "api_schema_digest = {}",
-        quote(string_value(object, "api_schema_digest")?)
+        quote(string_value(handoff_object, "api_schema_digest")?)
     ));
     let configuration = object(
-        object
+        handoff_object
             .get("configuration_digest")
             .ok_or_else(|| render_invalid("configuration_digest missing"))?,
         "configuration_digest",
@@ -424,11 +424,11 @@ fn push_handoff(
     ));
     lines.push(format!(
         "evidence_digest = {}",
-        quote(string_value(object, "evidence_digest")?)
+        quote(string_value(handoff_object, "evidence_digest")?)
     ));
     lines.push(format!(
         "compatibility = {}",
-        quote(string_value(object, "compatibility")?)
+        quote(string_value(handoff_object, "compatibility")?)
     ));
     Ok(())
 }

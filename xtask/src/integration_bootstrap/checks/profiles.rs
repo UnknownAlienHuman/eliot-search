@@ -4,7 +4,7 @@ use toml::Value;
 
 use super::super::{EXPECTED_PROFILES, Finding, load_toml};
 
-pub(super) fn validate_build_profiles(
+pub(in crate::integration_bootstrap) fn validate_build_profiles(
     root: &Path,
     findings: &mut Vec<Finding>,
 ) {

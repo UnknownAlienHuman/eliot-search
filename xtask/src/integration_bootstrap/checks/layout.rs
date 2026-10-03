@@ -4,7 +4,7 @@ use toml::Value;
 
 use super::super::{EXPECTED_LAYOUT_DIRECTORIES, Finding, load_toml};
 
-pub(super) fn validate_data_layout(
+pub(in crate::integration_bootstrap) fn validate_data_layout(
     root: &Path,
     findings: &mut Vec<Finding>,
 ) {

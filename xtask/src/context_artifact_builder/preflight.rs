@@ -582,9 +582,10 @@ fn validate_handoffs(
         let api = public.get("api_schema_digest").and_then(Value::as_str).unwrap_or_default();
         let reasons = public.get("error_reason_digest").and_then(Value::as_str).unwrap_or_default();
         let record_digest = signature.get("record_sha256").and_then(Value::as_str).unwrap_or_default();
+        let expected_path = format!("swarm/handoffs/{package}/{handoff_id}.toml");
         let valid = package_name_valid(package)
             && opaque_id_valid(handoff_id)
-            && path == format!("swarm/handoffs/{package}/{handoff_id}.toml")
+            && path.as_str() == expected_path.as_str()
             && integer(&record, "schema_version") == Some(1)
             && text(&record, "record_kind") == Some("package_handoff_v1")
             && text(&record, "status") == Some("ACCEPTED")

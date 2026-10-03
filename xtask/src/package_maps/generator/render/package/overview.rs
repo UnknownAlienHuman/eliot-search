@@ -5,7 +5,9 @@ use super::super::super::model::PackageModel;
 use super::super::super::super::load::{boolean, integer, string, strings};
 use super::super::super::super::bool_text;
 
-pub(super) fn render_overview(package: &PackageModel) -> String {
+pub(in crate::package_maps::generator::render) fn render_overview(
+    package: &PackageModel,
+) -> String {
     let row = &package.row;
     let counts = package.counts;
     let mut lines = vec![
