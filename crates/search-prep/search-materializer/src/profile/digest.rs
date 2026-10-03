@@ -27,7 +27,7 @@ pub fn digest32(domain: &[u8], chunks: &[&[u8]]) -> [u8; 32] {
 }
 
 /// Direct BLAKE3-256 content digest over the exact supplied bytes.
-pub(crate) fn digest_content_bytes(bytes: &[u8]) -> [u8; 32] {
+pub fn digest_content_bytes(bytes: &[u8]) -> [u8; 32] {
     *blake3::hash(bytes).as_bytes()
 }
 
