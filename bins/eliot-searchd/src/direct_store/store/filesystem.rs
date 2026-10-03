@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 use super::super::model::{MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_FILES};
 
 #[cfg(unix)]
-pub(super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
+pub(in super::super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;
     path.as_os_str().as_bytes().to_vec()
 }
 
 #[cfg(windows)]
-pub(super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
+pub(in super::super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
     use std::os::windows::ffi::OsStrExt;
     path.as_os_str()
         .encode_wide()
@@ -23,11 +23,11 @@ pub(super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
 }
 
 #[cfg(not(any(unix, windows)))]
-pub(super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
+pub(in super::super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
     path.to_string_lossy().as_bytes().to_vec()
 }
 
-pub(super) fn collect_regular_files(
+pub(in super::super) fn collect_regular_files(
     directory: &Path,
     data_root: &Path,
     depth: usize,
@@ -77,7 +77,7 @@ pub(super) fn collect_regular_files(
     Ok(())
 }
 
-pub(super) fn ensure_directory(path: &Path) -> Result<(), String> {
+pub(in super::super) fn ensure_directory(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| format!("DIRECT_DIRECTORY_METADATA_ERROR:{error}"))?;
     if metadata.file_type().is_symlink() || is_reparse(&metadata) || !metadata.is_dir() {
@@ -93,7 +93,7 @@ pub(super) fn ensure_child_directory(path: &Path) -> Result<(), String> {
     ensure_directory(path)
 }
 
-pub(super) fn ensure_regular_file(path: &Path) -> Result<(), String> {
+pub(in super::super) fn ensure_regular_file(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| format!("DIRECT_FILE_METADATA_ERROR:{error}"))?;
     if metadata.file_type().is_symlink() || is_reparse(&metadata) || !metadata.is_file() {
@@ -103,14 +103,14 @@ pub(super) fn ensure_regular_file(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-pub(super) fn is_reparse(metadata: &Metadata) -> bool {
+pub(in super::super) fn is_reparse(metadata: &Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
     metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
 #[cfg(not(windows))]
-pub(super) fn is_reparse(_metadata: &Metadata) -> bool {
+pub(in super::super) fn is_reparse(_metadata: &Metadata) -> bool {
     false
 }
 

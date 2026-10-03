@@ -11,7 +11,7 @@ use crate::{safe_reader_adapter, sha256};
 use super::super::model::{FileSnapshot, IdentityStrength};
 use super::filesystem::path_identity_bytes;
 
-pub(super) fn read_file_snapshot(
+pub(in super::super) fn read_file_snapshot(
     path: &Path,
     data_root: &Path,
     remaining_batch_bytes: usize,
