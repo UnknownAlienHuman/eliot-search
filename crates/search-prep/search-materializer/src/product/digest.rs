@@ -30,6 +30,7 @@ pub(super) fn warnings_for(
 }
 
 pub(super) fn digest_coordinate_map(bundle: &MapBundle) -> Blake3Digest32 {
+    let segment_count = bundle.coordinate_map().segments().len() as u64;
     let mut bytes = Vec::with_capacity(bundle.coordinate_map().segments().len() * 49);
     for segment in bundle.coordinate_map().segments() {
         bytes.extend_from_slice(&segment.native_start.to_le_bytes());
@@ -46,12 +47,13 @@ pub(super) fn digest_coordinate_map(bundle: &MapBundle) -> Blake3Digest32 {
         });
     }
     Blake3Digest32::from_bytes(digest32(
-        b"eliot-search/materializer/coordinates/v1",
-        &[&bytes],
+        b"eliot-search/materializer/coordinates/v2",
+        &[&segment_count.to_le_bytes(), &bytes],
     ))
 }
 
 pub(super) fn digest_loss_map(bundle: &MapBundle) -> Blake3Digest32 {
+    let record_count = bundle.loss_map().records().len() as u64;
     let mut bytes = Vec::with_capacity(bundle.loss_map().records().len() * 49);
     for record in bundle.loss_map().records() {
         bytes.push(match record.kind {
@@ -66,7 +68,10 @@ pub(super) fn digest_loss_map(bundle: &MapBundle) -> Blake3Digest32 {
         bytes.extend_from_slice(&record.canonical_start.to_le_bytes());
         bytes.extend_from_slice(&record.canonical_end.to_le_bytes());
     }
-    Blake3Digest32::from_bytes(digest32(b"eliot-search/materializer/loss/v1", &[&bytes]))
+    Blake3Digest32::from_bytes(digest32(
+        b"eliot-search/materializer/loss/v2",
+        &[&record_count.to_le_bytes(), &bytes],
+    ))
 }
 
 pub(super) fn digest_representation(
@@ -77,7 +82,7 @@ pub(super) fn digest_representation(
     loss_digest: &Blake3Digest32,
 ) -> Blake3Digest32 {
     Blake3Digest32::from_bytes(digest32(
-        b"eliot-search/materializer/product/v1",
+        b"eliot-search/materializer/product/v2",
         &[
             request.source_id().as_str().as_bytes(),
             &request.revision().get().to_le_bytes(),

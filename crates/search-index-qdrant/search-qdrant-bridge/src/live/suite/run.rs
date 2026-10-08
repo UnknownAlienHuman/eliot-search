@@ -2,24 +2,24 @@
 
 use crate::qualified::QUALIFIED_CLIENT_VERSION;
 
+use super::super::LiveError;
 use super::super::fixtures::QUALIFICATION_COLLECTION;
 use super::super::probes::{
-    probe_count_and_readback, probe_create_and_topology,
-    probe_independent_idf, probe_ingest_batch_a, probe_missing_upper_bound,
-    probe_payload_indexes, probe_schema_digest, probe_server_identity,
-    probe_signed_range, probe_sparse_modifier, probe_strict_negatives,
+    probe_count_and_readback, probe_create_and_topology, probe_independent_idf,
+    probe_ingest_batch_a, probe_missing_upper_bound, probe_payload_indexes, probe_schema_digest,
+    probe_server_identity, probe_signed_range, probe_sparse_modifier, probe_strict_negatives,
 };
 use super::super::server::{DisposableServer, connect};
-use super::super::LiveError;
 use super::report::LiveSuiteReport;
 use super::state::Suite;
 
 /// Executes every bridge-owned mandatory probe against a disposable server.
 ///
-/// The suite owns no secrets and binds only loopback. Any transport failure
-/// aborts with [`LiveError`]; per-probe expectations that do not hold are
-/// recorded as failed outcomes and reject final receipt construction — never
-/// as silent success.
+/// The private disposable server receives a fixed test-only API key through
+/// its child environment; the suite never handles a production lease or key
+/// and binds only loopback. Any transport failure aborts with [`LiveError`];
+/// per-probe expectations that do not hold are recorded as failed outcomes
+/// and reject final receipt construction — never as silent success.
 pub async fn run_qualification_suite(
     server: &DisposableServer,
 ) -> Result<LiveSuiteReport, LiveError> {

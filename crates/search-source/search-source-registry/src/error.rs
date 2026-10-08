@@ -175,6 +175,12 @@ pub enum RegistryError {
     DurabilityRejected,
     /// Durability port has no capacity for another journal entry.
     DurabilityExhausted,
+    /// Source revision data failed its canonical record validation.
+    SourceRevisionRecordInvalid,
+    /// The qualified source revision ID capability failed or returned a non-v4 UUID.
+    RevisionIdUnavailable,
+    /// A fresh source revision UUID already identifies another immutable occurrence.
+    SourceRevisionIdCollision,
 }
 
 impl RegistryError {
@@ -229,6 +235,9 @@ impl RegistryError {
             Self::CancelledBeforeCommit => "REGISTRY_CANCELLED_BEFORE_COMMIT",
             Self::DurabilityRejected => "REGISTRY_DURABILITY_REJECTED",
             Self::DurabilityExhausted => "REGISTRY_DURABILITY_EXHAUSTED",
+            Self::SourceRevisionRecordInvalid => "REGISTRY_SOURCE_REVISION_RECORD_INVALID",
+            Self::RevisionIdUnavailable => "REGISTRY_REVISION_ID_UNAVAILABLE",
+            Self::SourceRevisionIdCollision => "REGISTRY_SOURCE_REVISION_ID_COLLISION",
         }
     }
 }

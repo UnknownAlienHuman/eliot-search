@@ -73,8 +73,6 @@ impl fmt::Debug for ProviderAuthorityRecord {
 #[derive(Clone)]
 pub struct ProviderAuthorityMutation {
     identity: JournalIdentity,
-    binding_key: ControlKey,
-    policy_key: ControlKey,
     replacement: ProviderAuthorityRecord,
     command: ConditionalControlMutation,
 }
@@ -150,8 +148,8 @@ impl ProviderAuthorityMutation {
         conditions.sort_unstable_by(|left, right| left.key().cmp(right.key()));
 
         let mut writes = vec![
-            ControlWrite { key: binding_key.clone(), value: binding_value },
-            ControlWrite { key: policy_key.clone(), value: policy_value },
+            ControlWrite { key: binding_key, value: binding_value },
+            ControlWrite { key: policy_key, value: policy_value },
         ];
         writes.sort_unstable_by(|left, right| left.key.cmp(&right.key));
         let mutation = ControlMutation::new(
@@ -163,8 +161,6 @@ impl ProviderAuthorityMutation {
         );
         Ok(Self {
             identity,
-            binding_key,
-            policy_key,
             replacement,
             command: ConditionalControlMutation::new(mutation, conditions),
         })
@@ -453,14 +449,14 @@ impl PersistentControlJournal {
         }
         let binding_key = binding_key(identity.installation_incarnation_id, binding_id)?;
         let policy_key = policy_key(identity.installation_incarnation_id, binding_id)?;
-        let (generation, [binding, policy]) = self.read_published_record_pair(
+        let (generation, pair) = self.read_published_record_pair(
             publisher,
             [&binding_key, &policy_key],
             context,
         )?;
-        let record = match (binding, policy) {
-            (None, None) => None,
-            (Some(binding), Some(policy)) => {
+        let record = match pair {
+            [None, None] => None,
+            [Some(binding), Some(policy)] => {
                 let binding = decode_binding(&binding)?;
                 let policy = decode_policy(&policy)?;
                 if binding.binding_id != binding_id
@@ -474,7 +470,7 @@ impl PersistentControlJournal {
                         .map_err(|_| ControlError::StoreCorrupt)?,
                 )
             }
-            (None, Some(_)) | (Some(_), None) => {
+            [None, Some(_)] | [Some(_), None] => {
                 return Err(ControlError::StoreCorrupt.into());
             }
         };

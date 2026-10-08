@@ -26,7 +26,7 @@ const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
 const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 
 /// Reads and authenticates only the sealed epoch head.
-pub(super) fn latest_head(
+pub(in crate::sealed_owner_epoch::kernel) fn latest_head(
     data_root: &Path,
 ) -> Result<Option<OwnerEpochRecord>, OwnerEpochError> {
     let records = discover_epoch_objects(data_root)?;
@@ -41,7 +41,7 @@ pub(super) fn latest_head(
     Ok(Some(record))
 }
 
-pub(super) fn acquire(
+pub(in crate::sealed_owner_epoch::kernel) fn acquire(
     data_root: &Path,
 ) -> Result<OwnerEpochGuard, OwnerEpochError> {
     let root_lease = SealedRootLease::acquire(data_root)?;

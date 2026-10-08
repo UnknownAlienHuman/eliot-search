@@ -16,6 +16,7 @@
 
 mod admin;
 mod api;
+mod auth;
 mod capability;
 mod config;
 mod error;
@@ -25,22 +26,22 @@ mod readback;
 mod schema;
 
 pub use api::QdrantBridge;
+pub use auth::{
+    QdrantApiKeyLease, QdrantApiKeyLeaseProvider, QdrantConnectionBinding, QdrantEndpointIdentity,
+    QdrantLoopbackHost,
+};
 pub use capability::{
-    AuthLeaseEvidence, BridgeEndpoint, CapabilityProbeResults, ConsistencyGates,
-    FilterGates, IndexGates, QdrantCapabilityReceipt, SupervisorReceipt,
-    TopologyGates, probe_capabilities,
+    AuthLeaseEvidence, BridgeEndpoint, CapabilityProbeResults, ConsistencyGates, FilterGates,
+    IndexGates, QdrantCapabilityReceipt, SupervisorReceipt, TopologyGates, probe_capabilities,
 };
 pub use config::BridgeLimits;
 pub use error::BridgeError;
 pub use mutation::{
-    BridgeMutation, MutationReceipt, PointPayload, PointRecord, QdrantPointId,
-    StoredVector,
+    BridgeMutation, MutationReceipt, PointPayload, PointRecord, QdrantPointId, StoredVector,
 };
 pub use query::{CandidateNomination, EligibilityFilter};
 pub use readback::{BoundedPointReadback, ExactCount};
-pub use schema::{
-    CollectionRoute, CollectionSchema, StrictnessFloors, VectorSchema,
-};
+pub use schema::{CollectionRoute, CollectionSchema, StrictnessFloors, VectorSchema};
 
 /// Live T22 qualification path beside the in-memory oracle.
 pub mod live;

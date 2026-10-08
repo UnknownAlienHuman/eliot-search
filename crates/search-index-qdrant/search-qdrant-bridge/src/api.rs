@@ -4,12 +4,16 @@ use search_contracts::OpaqueId;
 
 use crate::admin::CollectionState;
 use crate::{
-    AuthLeaseEvidence, BridgeEndpoint, BridgeError, BridgeLimits,
-    CollectionRoute, MutationReceipt, QdrantCapabilityReceipt,
-    SupervisorReceipt,
+    AuthLeaseEvidence, BridgeEndpoint, BridgeError, BridgeLimits, CollectionRoute, MutationReceipt,
+    QdrantCapabilityReceipt, SupervisorReceipt,
 };
 
-/// Deterministic reference bridge after capability admission.
+/// Deterministic in-memory reference bridge after capability admission.
+///
+/// This model does not connect to Qdrant. In particular,
+/// [`AuthLeaseEvidence`] is a synthetic harness assertion, not a credential or
+/// runtime authentication proof. Concrete authenticated transport belongs to
+/// [`crate::real::RealDataPlane`].
 #[derive(Clone, Debug)]
 pub struct QdrantBridge {
     supervisor: SupervisorReceipt,
@@ -20,7 +24,7 @@ pub struct QdrantBridge {
 }
 
 impl QdrantBridge {
-    /// Connects only to the exact authenticated loopback process.
+    /// Admits the in-memory model from synthetic capability evidence.
     pub fn connect(
         endpoint: BridgeEndpoint,
         auth: AuthLeaseEvidence,

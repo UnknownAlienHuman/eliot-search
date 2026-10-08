@@ -13,7 +13,11 @@ fn read(root: &Path, relative: &str) -> String {
 fn regression_corpus_is_split_without_dropping_contracts() {
     let root = package_root();
     let facade = read(&root, "src/tests.rs");
-    assert!(facade.len() < 4_500, "test facade grew to {} bytes", facade.len());
+    assert!(
+        facade.len() < 4_500,
+        "test facade grew to {} bytes",
+        facade.len()
+    );
     assert!(facade.contains("mod layout_cases;"));
     assert!(facade.contains("mod manifest_cases;"));
     assert!(!facade.contains("#[test]"));
@@ -40,13 +44,23 @@ fn regression_corpus_is_split_without_dropping_contracts() {
         "verify_accepts_exact_and_rejects_tamper",
         "build_rejects_wrong_digest_algorithm_without_reinterpretation",
         "invalid_profile_descriptors_fail_closed",
+        "codec_closedness_rejects_sha256_tag_with_valid_blake3_trailer",
+        "codec_closedness_rejects_wrapping_unit_count_before_reserve",
     ] {
         assert!(manifest.contains(test), "manifest corpus missing {test}");
     }
     assert!(manifest.contains("../testdata/unit_manifest_v1.hex"));
+    assert!(manifest.contains("legacy_v1_manifest_is_quarantined_for_rebuild"));
+    assert!(manifest.contains("../testdata/unit_manifest_v2.hex"));
 
     for source in [layout, manifest] {
-        for forbidden in ["std::fs", "std::process", "qdrant_client", "tokio::", "reqwest::"] {
+        for forbidden in [
+            "std::fs",
+            "std::process",
+            "qdrant_client",
+            "tokio::",
+            "reqwest::",
+        ] {
             assert!(
                 !source.contains(forbidden),
                 "unitizer regression corpus acquired forbidden token {forbidden}"

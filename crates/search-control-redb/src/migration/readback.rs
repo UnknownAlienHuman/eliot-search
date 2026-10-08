@@ -2,13 +2,13 @@ use std::fs::File;
 use std::time::Instant;
 
 use redb::{
-    Database, ReadTransaction, ReadableTable, ReadableTableMetadata, TableHandle,
+    Database, ReadTransaction, ReadableTableMetadata, TableHandle,
 };
 
 use crate::ControlError;
 
 use super::codec::{
-    check, check_file, decode_progress, hash_field, validate_counts,
+    check, check_file, decode_progress, validate_counts,
 };
 use super::content::SourceContentManifest;
 use super::model::{

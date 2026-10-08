@@ -6,6 +6,8 @@ use super::model::{
 };
 use super::scan::{check_byte_limits, reject_binary_controls, scan_lines};
 use crate::error::MaterializationError;
+use crate::profile::digest_content_bytes;
+use search_contracts::Blake3Digest32;
 
 /// Prepares exact UTF-8 bytes without manufacturing a revision or receipt.
 ///
@@ -29,8 +31,9 @@ pub fn materialize_utf8(
 
 /// Materializes a receipt-bound retained revision without normalization.
 ///
-/// The supplied digest and revision receipt are retained, not invented or
-/// cryptographically verified here. Storage readback owns those checks.
+/// The supplied revision receipt is retained. The exact supplied bytes are
+/// independently hashed with BLAKE3 and must match the supplied content
+/// digest before a revision-bound result is returned.
 pub fn materialize(
     input: RetainedRevision,
     limits: MaterializationLimits,
@@ -50,6 +53,10 @@ pub fn materialize(
     let revision_receipt = input
         .revision_receipt
         .ok_or(MaterializationError::MissingRevisionReceipt)?;
+    let actual_digest = Blake3Digest32::from_bytes(digest_content_bytes(&input.bytes));
+    if actual_digest != content_digest {
+        return Err(MaterializationError::RevisionDigestMismatch);
+    }
     let MaterializedText {
         text,
         lines,

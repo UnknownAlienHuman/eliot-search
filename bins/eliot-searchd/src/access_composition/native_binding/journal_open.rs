@@ -21,7 +21,7 @@ use search_handles::HandlePolicy;
 use search_ports::{CancellationProbe, OperationContext};
 
 use crate::development::DataRootGuard;
-use crate::native_file::{self, Observation, ObservationError};
+use eliot_searchd::native_file::{self, Observation, ObservationError};
 
 use super::{
     NativeBindingExpectation, StandaloneProcessError, StandaloneProcessOwner,

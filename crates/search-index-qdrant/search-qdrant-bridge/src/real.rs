@@ -10,6 +10,13 @@
 //! probes passed) and rechecks the live server identity on connect. Collection
 //! names, filters and batches are validated before dispatch.
 //!
+//! The API key is borrowed only inside the lease-provider callback while the
+//! SDK client is built. Qdrant client 1.19.0 retains a `String` copy in its
+//! interceptor for the lifetime of that client; the bridge does not claim to
+//! zeroize SDK-owned copies. The provider revalidates the current process,
+//! owner, endpoint and lease before every RPC. SDK calls have a 10-second
+//! transport timeout, with operation contexts imposing their own deadlines.
+//!
 //! Single-contract retrieval + IDF (invariant 5): [`RealDataPlane::query_filtered`]
 //! takes one [`EligibilityFilter`](crate::EligibilityFilter) and renders both
 //! the retrieval `filter` and the `idf.corpus` population filter from that
@@ -44,26 +51,22 @@ use std::time::Duration;
 
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
-    CollectionInfo, Condition, CountPoints, CreateCollection,
-    CreateFieldIndexCollection, DeletePoints, FieldCondition, FieldType,
-    Filter, GetPoints, IdfParams, Match, Modifier, PointId, PointStruct,
-    PointsIdsList, PointsSelector, Query, QueryPoints, Range, RepeatedStrings,
-    ScrollPoints, SearchParams, SetPayloadPoints, SparseVectorConfig,
-    SparseVectorParams, StrictModeConfig, UpdateStatus, UpsertPoints, Value,
-    Vector, VectorInput, Vectors, WriteOrdering, WriteOrderingType, condition,
-    point_id, points_selector, r#match, value, vector_output, vectors,
-    vectors_output,
+    CollectionInfo, Condition, CountPoints, CreateCollection, CreateFieldIndexCollection,
+    DeletePoints, FieldCondition, FieldType, Filter, GetPoints, IdfParams, Match, Modifier,
+    PointId, PointStruct, PointsIdsList, PointsSelector, Query, QueryPoints, Range,
+    RepeatedStrings, ScrollPoints, SearchParams, SetPayloadPoints, SparseVectorConfig,
+    SparseVectorParams, StrictModeConfig, UpdateStatus, UpsertPoints, Value, Vector, VectorInput,
+    Vectors, WriteOrdering, WriteOrderingType, condition, r#match, point_id, points_selector,
+    value, vector_output, vectors, vectors_output,
 };
 use search_contracts::{OpaqueId, ReceiptRef};
 
 use crate::live::LiveEndpoint;
-use crate::qualified::{
-    QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate,
-};
+use crate::qualified::{QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate};
 use crate::{
-    BoundedPointReadback, BridgeError, BridgeLimits, BridgeMutation,
-    CandidateNomination, CollectionRoute, CollectionSchema, EligibilityFilter,
-    ExactCount, MutationReceipt, PointPayload, PointRecord, QdrantPointId,
+    BoundedPointReadback, BridgeError, BridgeLimits, BridgeMutation, CandidateNomination,
+    CollectionRoute, CollectionSchema, EligibilityFilter, ExactCount, MutationReceipt,
+    PointPayload, PointRecord, QdrantApiKeyLease, QdrantConnectionBinding, QdrantPointId,
     StoredVector,
 };
 
@@ -103,10 +106,7 @@ impl OpContext {
 
     /// Builds a context with a finite deadline and a shared cancellation flag.
     #[must_use]
-    pub const fn with_cancel(
-        deadline: Duration,
-        cancelled: Arc<AtomicBool>,
-    ) -> Self {
+    pub const fn with_cancel(deadline: Duration, cancelled: Arc<AtomicBool>) -> Self {
         Self {
             deadline,
             cancelled: Some(cancelled),
@@ -172,6 +172,7 @@ include!("real/errors_schema.rs");
 /// ledger for exact replay. There is no fallback to the in-memory oracle.
 pub struct RealDataPlane {
     client: Qdrant,
+    auth_lease: QdrantApiKeyLease,
     gate: QualifiedGate,
     limits: BridgeLimits,
     schemas: BTreeMap<String, CollectionSchema>,

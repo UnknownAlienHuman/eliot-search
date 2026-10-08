@@ -6,9 +6,13 @@
 //! frozen envelope/digest composition, historical `DIRECT_*` reason translation,
 //! namespace-file parsing, and test cleanup orchestration.
 
+#[path = "revision_protection_windows/credential.rs"]
 mod credential;
+#[path = "revision_protection_windows/dpapi.rs"]
 mod dpapi;
+#[path = "revision_protection_windows/existing.rs"]
 mod existing;
+#[path = "revision_protection_windows/inventory.rs"]
 mod inventory;
 #[cfg(test)]
 mod test_cleanup;

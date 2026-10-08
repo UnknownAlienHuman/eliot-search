@@ -23,16 +23,14 @@ impl RealDataPlane {
             .get(&name)
             .ok_or(BridgeError::CollectionNotFound)?;
         let vendor_filter = base_filter(filter)?;
+        self.authorize_dispatch()?;
         let scrolled = tokio::time::timeout(
             context.deadline(),
             self.client.scroll(ScrollPoints {
                 collection_name: name,
                 filter: Some(vendor_filter),
                 offset: offset.as_ref().map(vendor_point_id),
-                limit: Some(
-                    u32::try_from(limit)
-                        .map_err(|_| BridgeError::QueryBudgetExceeded)?,
-                ),
+                limit: Some(u32::try_from(limit).map_err(|_| BridgeError::QueryBudgetExceeded)?),
                 with_payload: Some(true.into()),
                 with_vectors: Some(true.into()),
                 ..Default::default()

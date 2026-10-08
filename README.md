@@ -1,26 +1,29 @@
 # ELIOT Search
 
 ELIOT Search is a **standalone Qdrant-backed analysis and retrieval framework for AI agents and human
-operators**. It turns very large repositories, portfolios of repositories, research collections and mixed
-text corpora into a fast, grounded navigation surface.
+operators**. It is designed to turn very large repositories, portfolios of repositories, research
+collections and mixed text corpora into a fast, grounded navigation surface.
 
 The product is not another model loop and not a second search database. Qdrant provides the indexed
-retrieval substrate; ELIOT Search supplies source acquisition, durable identity, preparation, projections,
-query planning, exact verification, provenance, currentness and compact agent-oriented results.
+retrieval substrate; ELIOT Search supplies the product semantics around it: source acquisition, durable
+identity, preparation, projections, query planning, exact verification, provenance, currentness and
+compact agent-oriented results.
 
 ELIOT Search runs independently through `eliot-searchd` and `eliot-search`. Integration with ELIOT
 Memory OS is optional and uses typed provider contracts over the same standalone owners.
 
 ## Product mission
 
-An agent should be able to enter an unfamiliar large corpus and quickly determine:
+An agent should be able to enter an unfamiliar large corpus and quickly answer:
 
 - what repositories, documents, modules, files, sections and symbols exist;
-- where likely implementation, evidence, tests, documentation and configuration live;
+- where the likely implementation, evidence, tests, documentation and configuration live;
 - which exact files or source ranges should be read next;
 - which `grep`, regex, symbol or structural checks should verify a hypothesis;
 - how implementations differ across repositories and lineages;
 - whether a claim is grounded, partial, stale, ambiguous or not exactly proven.
+
+The intended analysis loop is:
 
 ```text
 orient the scope
@@ -34,12 +37,8 @@ orient the scope
 Heuristic ranking is candidate generation, not truth. Every emitted citation/result is checked against an
 exact retained source revision, and complete negative claims require an explicit exact denominator.
 
-Read:
-
-- [ADR 0006](docs/adr/0006-agent-analysis-framework-product-scope.md);
-- [agent-analysis product guide](docs/product/AGENT_ANALYSIS_FRAMEWORK.md);
-- [current implementation status](docs/product/IMPLEMENTATION_STATUS.md);
-- [latest documentation/product audit](docs/audit/DOCUMENTATION_CONTRACT_AUDIT_2026-10-03.md).
+See [ADR 0006](docs/adr/0006-agent-analysis-framework-product-scope.md) and the
+[agent-analysis product guide](docs/product/AGENT_ANALYSIS_FRAMEWORK.md).
 
 ## Qdrant and Search responsibilities
 
@@ -58,7 +57,7 @@ Read:
 - deterministic lexical encoding and structural enrichment;
 - projection manifests, collision-safe identities, publication epochs and rebuild;
 - coherent workspaces, repository lineages and explicit multi-repository portfolios;
-- exact, keyword, structural, sparse lexical and optional semantic query planning;
+- exact, keyword, structural, sparse lexical and optional semantic retrieval planning;
 - access/currentness filtering before retrieval and IDF;
 - deterministic fusion, diversity, lineage collapse and evidence-role balancing;
 - exact source readback, candidate validation, provenance and coverage;
@@ -78,23 +77,33 @@ Tantivy/Lucene/SQLite-FTS/local-postings fallback in the production design.
   tables and coordinates as qualified materializers become available.
 - **Current workspace search:** combine published Qdrant projections with saved/unsaved overlays without
   silently serving stale results.
-- **Exact verification:** execute complete grep/regex/symbol/structural scans independently of top-k.
+- **Exact verification:** compile and execute complete grep/regex/symbol/structural scans independently of
+  top-k retrieval.
 - **Corpus intelligence:** profile and diff corpora, trace provenance and expose truthful coverage gaps.
 
-The closed eleven-recipe v1 surface covers exact navigation, entity inspection, comparison, corpus
-profile/delta, provenance and exact scans. General free-text retrieval and scope orientation require the
-versioned extension in #213.
+The current eleven v1 recipes cover exact navigation, entity inspection, comparison, corpus profile/delta,
+provenance and exact scans. The missing first-class free-text retrieval and scope-orientation contracts
+are tracked in [#213](https://github.com/UnknownAlienHuman/eliot-search/issues/213).
 
 ## Product boundary
 
-ELIOT Search owns source preparation, Qdrant-backed retrieval, validation and standalone delivery. It does
-**not** own Tasks, WorkScopes, GM/Governor state, agent scheduling, native harness lifecycle, assignment
-tickets, writer leases, mailboxes, review acceptance or finish authority. Those responsibilities belong
-to [`eliot-swarm-controller`](https://github.com/UnknownAlienHuman/eliot-swarm-controller) and, after
-integration, [`eliot-memory-os`](https://github.com/UnknownAlienHuman/eliot-memory-os).
+ELIOT Search owns:
 
-Remaining `swarm/**` files are advisory/historical development metadata, not runtime inputs or permission
-gates. Residual controller tooling is removal work under #214.
+- source admission, identity, revision retention and preparation;
+- lexical, structural and optional semantic projection construction;
+- Qdrant supervision, schema, publication and retrieval;
+- access-scoped query planning, candidate validation and result projection;
+- currentness, handles, rebuild, retention and recovery;
+- standalone daemon/CLI and optional provider adapters.
+
+It does **not** own Tasks, WorkScopes, GM/Governor state, agent scheduling, native harness lifecycle,
+assignment tickets, writer leases, mailboxes, review acceptance or finish authority. Those responsibilities
+belong to [`eliot-swarm-controller`](https://github.com/UnknownAlienHuman/eliot-swarm-controller) and,
+after integration, [`eliot-memory-os`](https://github.com/UnknownAlienHuman/eliot-memory-os).
+
+The repository's remaining `swarm/**` files are advisory/historical development metadata. They are not
+runtime inputs or prerequisites for implementing or running Search. Residual controller tooling is tracked
+for removal in [#214](https://github.com/UnknownAlienHuman/eliot-search/issues/214).
 
 ## Architecture baseline
 
@@ -102,20 +111,18 @@ gates. Residual controller tooling is removal work under #214.
 - Qdrant is the only indexed/search database;
 - redb stores bounded technical control state;
 - immutable source/preparation evidence remains outside Qdrant;
-- one source view and coherent access/currentness snapshot bind each query;
+- one source view and one coherent access/currentness snapshot bind each query;
 - Qdrant nominations require exact source/revision validation before emission;
 - standalone DIRECT remains independent of indexed-mode availability;
 - ELIOT integration is a leaf adapter, not a reverse authority path.
 
 Read the [architecture entry point](docs/architecture/README.md). Architecture Part I is the normative
-product contract. The embedded Part II Codex handoff is historical scaffolding; its permanent extraction
-and archive cleanup are tracked by #220.
+product contract. The embedded Part II Codex handoff is historical scaffolding and does not reinstate a
+P00/ticket/lease implementation gate.
 
 ## Current status
 
-Implementation is incomplete and this is not a qualified production release. The status matrix separates
-contract, source, integration, compile evidence, qualification and public enablement; do not infer one from
-another.
+Implementation is incomplete and this is not a qualified production release.
 
 The active completion spine is:
 
@@ -132,21 +139,14 @@ Indexed readiness remains disabled until the exact Qdrant artifact, bridge, sche
 end-to-end qualification gates pass. Planning records, source presence and mock/oracle execution are not
 qualification.
 
-### Product-contract and user-path work
+Important open product work includes:
 
-- #213 — free-text retrieval and scope orientation;
-- #218 — corpus and repository-portfolio management;
-- #219 — generic agent tool adapter;
-- #221 — baseline lexical/structural ranking profile;
-- #215 — large multi-repository scale qualification;
-- #216 — research/document materialization and navigation.
-
-### Integration and repository work
-
-- #200, #207, #209, #210, #211 — aligned Qdrant identity/projection/publication/daemon stack;
-- #205 — exact epoch transport decision;
-- #214 — remove residual Search-local controller tooling;
-- #220 — split normative architecture from historical handoff and reconcile status docs.
+- agent free-text retrieval and scope orientation: #213;
+- cleanup of residual controller tooling: #214;
+- large multi-repository scale qualification: #215;
+- research/document materialization and navigation: #216;
+- the existing Qdrant identity/projection/publication/daemon integration stack: #200, #207, #209, #210,
+  #211.
 
 ## Workspace
 
@@ -186,8 +186,8 @@ Standalone is the supported baseline. Exact startup syntax is still evolving wit
 redb cutover and Qdrant supervisor integration; do not infer readiness from legacy experimental commands.
 
 The final baseline must support installation without ELIOT Memory OS, source/corpus registration, durable
-restart-safe state, real Qdrant indexing/search, index rebuild, local CLI use and optional leaf adapters
-without a second state owner.
+restart-safe state, real Qdrant indexing/search, index rebuild, local CLI use and optional ELIOT provider
+integration without a second state owner.
 
 ## Repository workflow
 

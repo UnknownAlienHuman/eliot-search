@@ -1,10 +1,16 @@
 //! Observation-root composition behind the stable daemon-local facade.
 
+#[path = "kernel/catalog.rs"]
 mod catalog;
+#[path = "kernel/error.rs"]
 mod error;
+#[path = "kernel/model.rs"]
 mod model;
+#[path = "kernel/path.rs"]
 mod path;
+#[path = "kernel/registry.rs"]
 mod registry;
+#[path = "kernel/spec.rs"]
 mod spec;
 
 pub use catalog::SourceRootCatalog;

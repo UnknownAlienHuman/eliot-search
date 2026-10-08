@@ -3,6 +3,7 @@
 #[cfg(not(windows))]
 mod unsupported;
 #[cfg(windows)]
+#[path = "platform/windows.rs"]
 mod windows;
 
 #[cfg(not(windows))]

@@ -2,44 +2,33 @@
 
 use super::model::{MaterializerProfileId, ValidatedMaterializerProfile};
 
-/// Domain-separated 32-byte digest over an ordered byte preimage.
+/// BLAKE3-256 over the versioned, unambiguous identity envelope.
 ///
-/// Four independent FNV-1a 64-bit lanes absorb the domain, a domain
-/// separator, then each length-delimited chunk. Fixed little-endian lane
-/// encoding keeps the digest byte-identical across runs and platforms. This
-/// is an identity digest, not a cryptographic commitment over source bytes.
+/// The envelope is `u64_le(domain length) || domain || u64_le(chunk count) ||`
+/// followed by `u64_le(chunk length) || chunk` for each chunk. Content digests
+/// use [`digest_content_bytes`] instead and hash the exact content bytes
+/// directly, without this identity envelope.
 pub fn digest32(domain: &[u8], chunks: &[&[u8]]) -> [u8; 32] {
-    const SEED: [u64; 4] = [
-        0xcbf2_9ce4_8422_2325,
-        0x8422_2325_cbf2_9ce4,
-        0x4822_2325_cbf2_9ce4,
-        0x2325_cbf2_9ce4_8422,
-    ];
-    const PRIME: u64 = 0x1_0000_0000_01B3;
-    let mut lanes = SEED;
-    let mut index = 0_usize;
-    let mut absorb = |byte: u8| {
-        let slot = index % 4;
-        lanes[slot] ^= u64::from(byte);
-        lanes[slot] = lanes[slot].wrapping_mul(PRIME);
-        index = index.wrapping_add(1);
-    };
-    for byte in domain {
-        absorb(*byte);
+    fn update_length(hasher: &mut blake3::Hasher, length: usize) {
+        // Rust slice lengths fit in u64 on the supported 32- and 64-bit
+        // targets. This is the fixed-width representation used by v2.
+        hasher.update(&(length as u64).to_le_bytes());
     }
-    absorb(0xFF);
+
+    let mut hasher = blake3::Hasher::new();
+    update_length(&mut hasher, domain.len());
+    hasher.update(domain);
+    update_length(&mut hasher, chunks.len());
     for chunk in chunks {
-        for byte in *chunk {
-            absorb(*byte);
-        }
-        absorb(0xFE);
+        update_length(&mut hasher, chunk.len());
+        hasher.update(chunk);
     }
-    let mut out = [0_u8; 32];
-    for (slot, lane) in lanes.iter().enumerate() {
-        let start = slot * 8;
-        out[start..start + 8].copy_from_slice(&lane.to_le_bytes());
-    }
-    out
+    *hasher.finalize().as_bytes()
+}
+
+/// Direct BLAKE3-256 content digest over the exact supplied bytes.
+pub fn digest_content_bytes(bytes: &[u8]) -> [u8; 32] {
+    *blake3::hash(bytes).as_bytes()
 }
 
 /// Domain-separated canonical digest over every load-bearing behavior and
@@ -85,5 +74,5 @@ pub fn profile_digest(profile: &ValidatedMaterializerProfile) -> MaterializerPro
         &space_tags,
         profile.golden.as_bytes(),
     ];
-    MaterializerProfileId::from_bytes(digest32(b"eliot-search/materializer/profile/v1", chunks))
+    MaterializerProfileId::from_bytes(digest32(b"eliot-search/materializer/profile/v2", chunks))
 }

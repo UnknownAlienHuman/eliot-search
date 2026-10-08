@@ -265,7 +265,7 @@ fn canonical_digest(text: &str) -> Result<[u8; 32], ControlCutoverMarkerError> {
         return Err(ControlCutoverMarkerError::Corrupt);
     }
     let mut output = [0_u8; 32];
-    for (index, pair) in text.as_bytes().chunks_exact(2).enumerate() {
+    for (index, pair) in text.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let high = hex_nibble(pair[0]).ok_or(ControlCutoverMarkerError::Corrupt)?;
         let low = hex_nibble(pair[1]).ok_or(ControlCutoverMarkerError::Corrupt)?;
         output[index] = (high << 4) | low;

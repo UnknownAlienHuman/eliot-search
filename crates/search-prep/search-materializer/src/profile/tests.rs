@@ -118,6 +118,24 @@ fn digest_is_deterministic() {
 }
 
 #[test]
+fn digest32_uses_b3_with_unambiguous_v2_chunk_framing() {
+    let domain = b"test/materializer/v2";
+    let chunks: &[&[u8]] = &[b"ab", b"c"];
+    let digest = digest32(domain, chunks);
+
+    let mut envelope = Vec::new();
+    envelope.extend_from_slice(&(domain.len() as u64).to_le_bytes());
+    envelope.extend_from_slice(domain);
+    envelope.extend_from_slice(&(chunks.len() as u64).to_le_bytes());
+    for chunk in chunks {
+        envelope.extend_from_slice(&(chunk.len() as u64).to_le_bytes());
+        envelope.extend_from_slice(chunk);
+    }
+    assert_eq!(digest, *blake3::hash(&envelope).as_bytes());
+    assert_ne!(digest, digest32(domain, &[b"a", b"bc"]));
+}
+
+#[test]
 fn change_classification_is_fail_closed() {
     let old = validate_materializer_profile(&valid_descriptor()).expect("old");
     let same = validate_materializer_profile(&valid_descriptor()).expect("same");

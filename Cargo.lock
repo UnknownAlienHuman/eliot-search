@@ -1215,6 +1215,7 @@ dependencies = [
 name = "search-materializer"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
  "search-domain",
  "search-ports",
@@ -1460,6 +1461,7 @@ dependencies = [
 name = "search-source-registry"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
  "search-domain",
  "search-ports",
@@ -1479,6 +1481,7 @@ dependencies = [
 name = "search-unitizer"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
  "search-domain",
  "search-ports",

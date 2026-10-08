@@ -3,7 +3,7 @@
 | Directory | Contents |
 |---|---|
 | `architecture/` | Architecture entry point and normative Architecture 8.4 Part I. |
-| `product/` | Product mission, agent-analysis behavior and current implementation status. |
+| `product/` | Product mission and agent-analysis behavior derived from the architecture. |
 | `adr/` | Accepted product, implementation and boundary decisions. |
 | `contracts/p00/` | Bounded field-level contract projection, recipes, reasons and ports. |
 | `config/` | Product configuration contracts and section ownership. |
@@ -25,11 +25,7 @@ Read in this order:
 3. [`adr/0005-standalone-search-product-and-controller-boundary.md`](adr/0005-standalone-search-product-and-controller-boundary.md);
 4. [`adr/0006-agent-analysis-framework-product-scope.md`](adr/0006-agent-analysis-framework-product-scope.md);
 5. [`product/AGENT_ANALYSIS_FRAMEWORK.md`](product/AGENT_ANALYSIS_FRAMEWORK.md);
-6. [`product/IMPLEMENTATION_STATUS.md`](product/IMPLEMENTATION_STATUS.md);
-7. the nearest accepted contract/package instructions and current product issue/PR.
-
-The latest documentation/product audit is
-[`audit/DOCUMENTATION_CONTRACT_AUDIT_2026-10-03.md`](audit/DOCUMENTATION_CONTRACT_AUDIT_2026-10-03.md).
+6. the nearest accepted contract/package instructions and current product issue/PR.
 
 Architecture Part I defines the source/Qdrant/query/evidence system. ADR 0005 defines the external
 controller boundary. ADR 0006 clarifies that the product is an agent-oriented large-corpus analysis
@@ -46,12 +42,8 @@ Use this order:
 5. compiled source/dependency reality;
 6. historical planning material.
 
-The implementation-status matrix is orientation, not authority or qualification. It must cite exact
-source/PR/evidence and keep `SOURCE`, `INTEGRATED`, `CHECKED`, `QUALIFIED` and `ENABLED` separate.
-
 Part II (`Codex Handoff 2.7`) inside the master is historical scaffolding. Its P00 sequencing and old
-repository-control assumptions do not authorize or block current product work. Permanent extraction and
-archive cleanup are tracked by #220.
+repository-control assumptions do not authorize or block current product work.
 
 `swarm/**`, `docs/handoff/**` and `docs/execution/**` do not authorize or block implementation. In
 particular, `swarm/launch-state.toml`, ticket drafts and lease records are legacy/advisory coordination

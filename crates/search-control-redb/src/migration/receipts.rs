@@ -78,6 +78,10 @@ pub struct SourceMigrationStagedPlan {
 
 /// Closed read-only authority state for the cutover-status projection.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Preserve the public committed-marker shape consumed by the daemon status projection."
+)]
 pub enum ControlCutoverStatusState {
     /// No cutover marker exists and the preserved file journal remains primary.
     FileJournal,

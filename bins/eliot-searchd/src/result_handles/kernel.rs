@@ -1,9 +1,14 @@
 //! Result-handle composition behind the stable daemon-local facade.
 
+#[path = "kernel/catalog.rs"]
 mod catalog;
+#[path = "kernel/error.rs"]
 mod error;
+#[path = "kernel/expand.rs"]
 mod expand;
+#[path = "kernel/model.rs"]
 mod model;
+#[path = "kernel/spec.rs"]
 mod spec;
 
 pub use catalog::ResultHandleCatalog;

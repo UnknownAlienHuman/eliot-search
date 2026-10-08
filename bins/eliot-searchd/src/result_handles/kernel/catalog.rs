@@ -1,5 +1,6 @@
 //! Ephemeral handle minting, finite catalog state and token lifecycle.
 
+#[path = "catalog/prepared.rs"]
 mod prepared;
 
 pub(crate) use prepared::PreparedHandles;

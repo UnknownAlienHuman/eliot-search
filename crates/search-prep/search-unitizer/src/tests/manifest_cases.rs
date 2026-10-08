@@ -99,24 +99,124 @@ fn manifest_canonical_bytes_and_digest_are_golden() {
     .expect("manifest");
     assert_eq!(
         manifest.unitizer_profile_id().to_string(),
-        "da31031a7fd84d455e0cb4e37ca71979f12091e069eadcb70aaa4e028970044b"
+        "cc11d1b861fb2665892d41a021104f60ff2e49a2d9413e7726b118fbda7802dd"
     );
     assert_eq!(manifest.units().len(), 2);
     assert_eq!(
         manifest.units()[0].unit_digest().to_string(),
-        "5be178cc7bbbc66e836333d0d6d5df12aee142a04a80fd561f21a802050ebb3a"
+        "327fabee6494d69a63cdabb7b92c9a0edca1e0605b1462fc48f5b0983a2756d1"
     );
     assert_eq!(
         manifest.units()[1].unit_digest().to_string(),
-        "e9c489bfc08b96b065eb71cf48c024e46683be72663558fbddb8a3a976433f6d"
+        "071c58274e66471e93eca5b91bb2f05427f07949d46480e9fa7cd29ee5c96e4d"
     );
     assert_eq!(
         manifest_digest(&manifest).to_string(),
-        "e8ccef05ef1f0fd89c1244cbf4e5d1b2ac910d06cbe339a7caffe3469be605d0"
+        "5e2cc298d28ccd2916f7822fca22a8e4ad99fb16955eb23787160a1bbe3ad7a4"
     );
     let canonical = canonicalize_unit_manifest(&manifest).expect("canonical");
     assert_eq!(canonical.len(), 514);
     assert_eq!(canonical.as_slice(), hex_manifest_golden().as_slice());
+}
+
+#[test]
+fn legacy_v1_manifest_is_quarantined_for_rebuild() {
+    let bytes = hex_fixture(include_str!("../testdata/unit_manifest_v1.hex"));
+    assert_eq!(
+        decode_unit_manifest(&bytes, 1_048_576),
+        Err(UnitizationError::UnitManifestLegacyUnsupported)
+    );
+    assert_eq!(
+        UnitizationError::UnitManifestLegacyUnsupported.code(),
+        "UNIT_MANIFEST_LEGACY_UNSUPPORTED"
+    );
+}
+
+#[test]
+fn codec_closedness_rejects_sha256_tag_with_valid_blake3_trailer() {
+    const MANIFEST_DOMAIN: &[u8] = b"eliot-search/unitizer/manifest/v2";
+    let manifest = build_unit_manifest(
+        &manifest_input("alpha\nbeta\n"),
+        &manifest_provenance(),
+        &manifest_profile(1),
+        UNIT_MANIFEST_DIGEST_ALGORITHM,
+        1_048_576,
+    )
+    .expect("manifest");
+    let mut bytes = canonicalize_unit_manifest(&manifest)
+        .expect("canonical manifest")
+        .as_slice()
+        .to_vec();
+    const TRAILER_BYTES: usize = 32;
+    let body_len = bytes.len() - TRAILER_BYTES;
+    bytes[10] = 2;
+    let trailer = framed_blake3(MANIFEST_DOMAIN, &[&bytes[..body_len]]);
+    bytes[body_len..].copy_from_slice(&trailer);
+    assert_eq!(bytes[body_len..], trailer);
+
+    assert_eq!(
+        decode_unit_manifest(&bytes, 1_048_576),
+        Err(UnitizationError::UnitManifestDigestMismatch)
+    );
+}
+
+#[test]
+fn codec_closedness_rejects_wrapping_unit_count_before_reserve() {
+    const MANIFEST_DOMAIN: &[u8] = b"eliot-search/unitizer/manifest/v2";
+    const MAGIC_BYTES: usize = 8;
+    const VERSION_BYTES: usize = 2;
+    const ALGORITHM_BYTES: usize = 1;
+    const SOURCE_LENGTH_BYTES: usize = 2;
+    const UNIT_RECORD_BYTES: usize = 73;
+    const DIGEST_TRAILER_BYTES: usize = 32;
+    const WRAPPING_UNIT_COUNT: u64 = 9_097_024_474_706_080_249;
+
+    let manifest = build_unit_manifest(
+        &manifest_input("alpha\nbeta\n"),
+        &manifest_provenance(),
+        &manifest_profile(1),
+        UNIT_MANIFEST_DIGEST_ALGORITHM,
+        1_048_576,
+    )
+    .expect("manifest");
+    assert_eq!(
+        WRAPPING_UNIT_COUNT.wrapping_mul(UNIT_RECORD_BYTES as u64),
+        1
+    );
+    let mut bytes = canonicalize_unit_manifest(&manifest)
+        .expect("canonical manifest")
+        .as_slice()
+        .to_vec();
+    let source_id_len = manifest.source_id().as_str().len();
+    let limits_start = MAGIC_BYTES
+        + VERSION_BYTES
+        + ALGORITHM_BYTES
+        + SOURCE_LENGTH_BYTES
+        + source_id_len
+        + 8
+        + 32 * 6
+        + 32
+        + 8;
+    let max_units_offset = limits_start + 8 * 4;
+    let unit_count_offset = limits_start + 8 * 5 + 8 * 2;
+    let unit_payload_start =
+        bytes.len() - DIGEST_TRAILER_BYTES - manifest.units().len() * UNIT_RECORD_BYTES;
+    assert_eq!(unit_payload_start, unit_count_offset + 16);
+
+    bytes.truncate(unit_payload_start + 1);
+    bytes[max_units_offset..max_units_offset + 8]
+        .copy_from_slice(&WRAPPING_UNIT_COUNT.to_le_bytes());
+    bytes[unit_count_offset..unit_count_offset + 8]
+        .copy_from_slice(&WRAPPING_UNIT_COUNT.to_le_bytes());
+    let trailer = framed_blake3(MANIFEST_DOMAIN, &[&bytes]);
+    bytes.extend_from_slice(&trailer);
+
+    let expected_error = if usize::try_from(WRAPPING_UNIT_COUNT).is_ok() {
+        UnitizationError::UnitManifestIncomplete
+    } else {
+        UnitizationError::OffsetOverflow
+    };
+    assert_eq!(decode_unit_manifest(&bytes, 1_048_576), Err(expected_error));
 }
 
 #[test]
@@ -320,13 +420,40 @@ fn manifest_provenance_tampered() -> MaterializerProvenance {
 }
 
 fn hex_manifest_golden() -> Vec<u8> {
-    const HEX: &str = include_str!("../testdata/unit_manifest_v1.hex");
-    let bytes = HEX.trim().as_bytes();
+    hex_fixture(include_str!("../testdata/unit_manifest_v2.hex"))
+}
+
+fn hex_fixture(hex: &str) -> Vec<u8> {
+    let bytes = hex.trim().as_bytes();
     assert_eq!(bytes.len() % 2, 0);
     bytes
         .chunks(2)
         .map(|pair| (hex_nibble(pair[0]) << 4) | hex_nibble(pair[1]))
         .collect()
+}
+
+fn framed_blake3(domain: &[u8], chunks: &[&[u8]]) -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(
+        &u64::try_from(domain.len())
+            .expect("test domain length fits u64")
+            .to_le_bytes(),
+    );
+    hasher.update(domain);
+    hasher.update(
+        &u64::try_from(chunks.len())
+            .expect("test chunk count fits u64")
+            .to_le_bytes(),
+    );
+    for chunk in chunks {
+        hasher.update(
+            &u64::try_from(chunk.len())
+                .expect("test chunk length fits u64")
+                .to_le_bytes(),
+        );
+        hasher.update(chunk);
+    }
+    *hasher.finalize().as_bytes()
 }
 
 fn hex_nibble(byte: u8) -> u8 {

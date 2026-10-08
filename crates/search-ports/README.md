@@ -2,32 +2,25 @@
 
 **C00 support — vendor-neutral capability and infrastructure ports.**
 
-**Status:** substantive trait and conformance source exists for control, source, preparation, lexical,
-index, access, exact, handle, clock and process boundaries. This package deliberately provides no concrete
-adapter or mutable runtime implementation.
+**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
 
-It depends only on Eliot-owned contracts and keeps Qdrant, redb, filesystem, Windows and client-vendor
-types out of shared public APIs.
+This package owns the shared trait boundary between pure contracts/domain logic, capability
+orchestration and concrete adapters. It depends only on `search-contracts`.
 
 ## Owns
 
-- vendor-neutral port traits and operation contexts;
-- cancellation, deadline and finite-result semantics at port boundaries;
-- idempotency and possible-external-write outcome contracts;
-- fake/scripted conformance helpers for consumers;
-- the public boundary that prevents vendor/OS/database types from leaking upward.
+- vendor-neutral port traits and operation contexts
+- idempotency, cancellation, deadline and bounded-result semantics at port boundaries
+- fake/in-memory conformance interfaces for consumer tests
+- proof that vendor, OS and database types cannot cross public APIs
 
 ## Must not own
 
-- concrete redb, Qdrant, filesystem, process, secret-store or client implementations;
-- mutable runtime state or capability algorithms;
-- duplicate wire/domain records already owned by `search-contracts`;
-- policy interpretation owned by `search-domain` or capability packages;
-- a generic runtime service locator or floating adapter selection.
+- concrete redb, Qdrant, filesystem, process, secret-store or client implementations
+- mutable runtime state or capability algorithms
+- duplicate wire/domain records already owned by `search-contracts`
+- policy interpretation owned by `search-domain` or a capability package
 
-The package is `SOURCE`; that is its intended role. Concrete product readiness is established by each
-adapter and daemon composition, not by adding behavior here.
-
-- **Product area:** Architecture S4/H4 shared boundaries
+- **Delivery wave:** W0 / P00 after accepted `search-contracts`
+- **Soft source-line target:** 5,500
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
-- **Current status matrix:** [../../docs/product/IMPLEMENTATION_STATUS.md](../../docs/product/IMPLEMENTATION_STATUS.md)

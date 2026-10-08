@@ -1,6 +1,6 @@
 # Architecture entry point
 
-The current combined master is:
+The combined master is:
 
 ```text
 ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md
@@ -24,9 +24,9 @@ source of truth for:
 ### Part II — Codex Handoff 2.7
 
 Part II is historical implementation scaffolding. Its P00-only entry sequence predates the current
-workspace and accepted product-boundary corrections. It may explain package intent, but it is **not
-current implementation authorization** and cannot require ticket issuance, launch-state, writer leases or
-replay of an obsolete wave plan.
+implemented workspace and the accepted product-boundary corrections. It may help explain package intent,
+but it is **not current implementation authorization** and cannot require ticket issuance, launch-state,
+writer leases or replay of an obsolete wave plan.
 
 When Part II conflicts with current source, an accepted product ADR, accepted public contract or a current
 maintainer issue/PR, use the current product source/decision while preserving Part I invariants.
@@ -46,21 +46,6 @@ proof that a capability has been implemented or qualified.
 These ADRs clarify implementation ownership and product interpretation without weakening Part I's
 source-truth, access, currentness, Qdrant, exact-proof or qualification requirements.
 
-## Status and permanent cleanup
-
-Use the [current implementation status](../product/IMPLEMENTATION_STATUS.md) to distinguish contract,
-source presence, integration, compile evidence, qualification and public enablement.
-
-The permanent documentation fix is tracked by #220:
-
-- extract byte-identical Part I into a standalone normative file;
-- preserve and verify its recorded SHA-256;
-- archive Part II and audit appendices explicitly;
-- reconcile package status documents.
-
-Until that work lands, do not quote the combined file's top-level `Codex entry point: P00 only` as a
-current instruction.
-
 ## Working rule
 
 For implementation work, read:
@@ -68,8 +53,7 @@ For implementation work, read:
 1. relevant Part I sections;
 2. accepted ADRs;
 3. the accepted public/package contract;
-4. the current issue/PR and compiled source reality;
-5. the implementation-status matrix for non-authoritative orientation.
+4. the current issue/PR and compiled source reality.
 
 Do not restart from P00 merely because Part II says `Entry point: P00 only`. Do not implement generic
 repository ticket/lease/controller machinery in Search. Continue the actual product spine around Qdrant,

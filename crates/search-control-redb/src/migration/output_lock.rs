@@ -17,12 +17,25 @@ pub trait SourceImportOutputLockPlatform {
     type Error;
 
     /// Verifies that the output directory is an admitted real directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns the platform error when the directory cannot be admitted.
     fn validate_directory(&self, path: &Path) -> Result<(), Self::Error>;
 
     /// Verifies that `path` still resolves to the exact already-open lock file.
+    ///
+    /// # Errors
+    ///
+    /// Returns the platform error when the locator cannot be proven to name
+    /// the expected open file.
     fn verify_locator(&self, expected: &File, path: &Path) -> Result<(), Self::Error>;
 
     /// Makes a newly created lock-directory entry durable where supported.
+    ///
+    /// # Errors
+    ///
+    /// Returns the platform error when directory synchronization fails.
     fn sync_directory(&self, path: &Path) -> Result<(), Self::Error>;
 }
 
@@ -84,6 +97,11 @@ where
     P: SourceImportOutputLockPlatform,
 {
     /// Acquires and verifies the exact logical output lock.
+    ///
+    /// # Errors
+    ///
+    /// Returns a lock error for an invalid name, deadline, invalid lock file,
+    /// competing owner, native locking failure, or platform/durability failure.
     pub fn acquire(
         directory: &Path,
         artifact_name: &str,
@@ -154,6 +172,11 @@ where
     }
 
     /// Revalidates directory admission, exact locator binding and zero length.
+    ///
+    /// # Errors
+    ///
+    /// Returns a lock error when the deadline, directory, locator, lock-file
+    /// identity, or zero-length invariant no longer holds.
     pub fn verify(
         &self,
         deadline: Instant,

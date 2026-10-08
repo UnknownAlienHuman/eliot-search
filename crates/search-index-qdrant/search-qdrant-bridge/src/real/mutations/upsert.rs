@@ -2,12 +2,12 @@ use std::collections::BTreeSet;
 
 use super::super::{PointStruct, UpsertPoints};
 
-use super::check_acknowledgement;
 use super::super::{
-    BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext,
-    PointRecord, QdrantPointId, RealDataPlane, collection_name, encode_payload,
-    encode_vectors, map_mutation_error, strong_ordering, update_completed, validate_point,
+    BridgeError, BridgeMutation, CollectionRoute, MutationReceipt, OpContext, PointRecord,
+    QdrantPointId, RealDataPlane, collection_name, encode_payload, encode_vectors,
+    map_mutation_error, strong_ordering, update_completed, validate_point,
 };
+use super::check_acknowledgement;
 
 impl RealDataPlane {
     /// Upserts only explicit point IDs with `wait=true`, strong ordering and
@@ -54,6 +54,7 @@ impl RealDataPlane {
         }
         // Validation/encoding may take time; cancellation still means no write here.
         context.check()?;
+        self.authorize_dispatch()?;
         let acked = tokio::time::timeout(
             context.deadline(),
             self.client.upsert_points(UpsertPoints {
@@ -68,12 +69,16 @@ impl RealDataPlane {
         .map_err(|_| BridgeError::MutationOutcomeUnknown)?
         .map_err(map_mutation_error)?;
         check_acknowledgement(
-            acked.result.as_ref().is_some_and(|result| update_completed(result.status)),
+            acked
+                .result
+                .as_ref()
+                .is_some_and(|result| update_completed(result.status)),
             context,
         )?;
         let mut affected: Vec<QdrantPointId> = points.iter().map(|point| point.point_id).collect();
         affected.sort();
-        self.verify_upsert_readback(&name, &points, &schema, context).await?;
+        self.verify_upsert_readback(&name, &points, &schema, context)
+            .await?;
         self.record_mutation(route.clone(), mutation, affected)
     }
 }

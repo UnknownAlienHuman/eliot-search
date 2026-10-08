@@ -6,7 +6,7 @@ fn retained(bytes: &[u8]) -> RetainedRevision {
     RetainedRevision::new(
         OpaqueId::new("source:test").expect("source"),
         NonZeroRevision::new(1).expect("revision"),
-        Some(Blake3Digest32::from_bytes([1; 32])),
+        Some(Blake3Digest32::from_bytes(*blake3::hash(bytes).as_bytes())),
         u64::try_from(bytes.len()).expect("length"),
         bytes.to_vec(),
         Some(ReceiptRef::new("receipt:revision").expect("receipt")),
@@ -16,8 +16,7 @@ fn retained(bytes: &[u8]) -> RetainedRevision {
 #[test]
 fn exact_utf8_bytes_are_preserved() {
     let bytes = "alpha\r\nbeta\nγ".as_bytes();
-    let result = materialize(retained(bytes), DEFAULT_MATERIALIZATION_LIMITS)
-        .expect("materialize");
+    let result = materialize(retained(bytes), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
     assert_eq!(result.bytes(), bytes);
     assert_eq!(result.receipt.input_bytes, result.receipt.output_bytes);
 }
@@ -44,8 +43,8 @@ fn line_endings_and_offsets_are_exact() {
 
 #[test]
 fn final_terminator_does_not_create_phantom_line() {
-    let result = materialize(retained(b"a\n"), DEFAULT_MATERIALIZATION_LIMITS)
-        .expect("materialize");
+    let result =
+        materialize(retained(b"a\n"), DEFAULT_MATERIALIZATION_LIMITS).expect("materialize");
     assert_eq!(result.lines.len(), 1);
     assert_eq!(result.lines[0].ending, LineEnding::Lf);
     assert_eq!(result.receipt.line_endings.unterminated, 0);
@@ -74,6 +73,16 @@ fn byte_count_mismatch_is_rejected() {
     assert_eq!(
         materialize(input, DEFAULT_MATERIALIZATION_LIMITS),
         Err(MaterializationError::InputLengthMismatch)
+    );
+}
+
+#[test]
+fn content_digest_mismatch_is_rejected() {
+    let mut input = retained(b"exact bytes");
+    input.content_digest = Some(Blake3Digest32::from_bytes([0xA5; 32]));
+    assert_eq!(
+        materialize(input, DEFAULT_MATERIALIZATION_LIMITS),
+        Err(MaterializationError::RevisionDigestMismatch)
     );
 }
 
@@ -130,10 +139,7 @@ fn byte_preparation_keeps_finite_limits_and_redacted_debug() {
         materialize_utf8(b"abc".to_vec(), limits),
         Err(MaterializationError::InputTooLarge)
     );
-    let text = materialize_utf8(
-        b"private-sentinel".to_vec(),
-        DEFAULT_MATERIALIZATION_LIMITS,
-    )
-    .unwrap();
+    let text =
+        materialize_utf8(b"private-sentinel".to_vec(), DEFAULT_MATERIALIZATION_LIMITS).unwrap();
     assert!(!format!("{text:?}").contains("private-sentinel"));
 }

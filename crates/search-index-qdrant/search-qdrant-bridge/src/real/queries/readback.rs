@@ -19,6 +19,7 @@ impl RealDataPlane {
             .schemas
             .get(&name)
             .ok_or(BridgeError::CollectionNotFound)?;
+        self.authorize_dispatch()?;
         let readback = tokio::time::timeout(
             context.deadline(),
             self.client.get_points(GetPoints {

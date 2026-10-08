@@ -10,6 +10,8 @@ optional document provider.
 ## Global rules
 
 - every materialization binds exact source revision, residency, byte digest/length and profile revision;
+- source and canonical-output content digests are direct BLAKE3-256 over exact bytes; identity, profile,
+  coordinate and loss commitments use the v2 length-delimited BLAKE3 envelope;
 - baseline text/code materialization works with optional workers absent;
 - source bytes are acquired only through an injected exact revision-read port;
 - every transformation declares encoding/newline/normalization behavior and coordinate/loss semantics;
@@ -33,6 +35,10 @@ basis are rejected.
 
 Domain-separated canonical digest over every load-bearing behavior and bound. Any encoding,
 normalization, coordinate, loss, assurance or limit change creates a different profile.
+The v2 BLAKE3 envelope is domain length, domain, chunk count, then length and bytes for each chunk,
+with every integer encoded as unsigned 64-bit little-endian. It is not compatible with historical v1 IDs.
+The historical `ELIOT-MAT-V1` bytes remain immutable and are not decoded as v2. Existing v1 materializations
+must be rebuilt from their exact retained source revision; the package never rewrites them in place.
 
 ### `classify_profile_change(old, new) -> MaterializerProfileChange`
 
@@ -53,8 +59,13 @@ receipt owned by the overlay/revision pipeline. A path/current file cannot subst
 
 Reopens exactly the retained revision, verifies source/revision/residency/byte digest/length and returns a
 bounded process-memory byte guard. Mismatch, unavailable residency or retention loss is explicit.
+The implementation recomputes direct BLAKE3-256 over the returned exact bytes and compares it with both
+the port attestation and the validated request digest.
 
 The package does not enumerate roots or read a pathname.
+
+The receipt-bound UTF-8 `materialize` entry point also recomputes BLAKE3-256 over its supplied exact bytes
+and rejects a mismatching digest before returning a revision-bound result.
 
 ## Baseline decoding and normalization
 

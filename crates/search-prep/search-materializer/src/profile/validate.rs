@@ -17,7 +17,7 @@ use search_contracts::Blake3Digest32;
 #[must_use]
 pub fn baseline_profile_descriptor(name: &str, revision: u64) -> MaterializerProfileDescriptor {
     let golden = Blake3Digest32::from_bytes(digest32(
-        b"eliot-search/materializer/golden/v1",
+        b"eliot-search/materializer/golden/v2",
         &[name.as_bytes(), &revision.to_le_bytes()],
     ));
     MaterializerProfileDescriptor {

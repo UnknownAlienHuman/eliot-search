@@ -6,7 +6,7 @@ use crate::{ControlCallError, ControlError, ControlKey, ControlSnapshotPublisher
     ControlValue, PersistentControlJournal};
 use super::super::operation::{Budget, Check, Point};
 use super::super::{
-    OPERATIONS, RECORDS, ReadableTable, ReadableTableMetadata, decode_value,
+    OPERATIONS, RECORDS, ReadableTableMetadata, decode_value,
     map_storage_error, map_table_error,
 };
 

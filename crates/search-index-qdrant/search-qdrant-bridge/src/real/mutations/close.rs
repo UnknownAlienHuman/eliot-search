@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use super::super::{PointsIdsList, PointsSelector, SetPayloadPoints, points_selector};
 
-use super::check_acknowledgement;
 use super::super::{
-    BridgeError, BridgeMutation, CollectionRoute, EligibilityFilter, MutationReceipt,
-    OpContext, QdrantPointId, RealDataPlane, collection_name, int_value,
-    map_mutation_error, strong_ordering, update_completed, validate_exact_ids, vendor_point_id,
+    BridgeError, BridgeMutation, CollectionRoute, EligibilityFilter, MutationReceipt, OpContext,
+    QdrantPointId, RealDataPlane, collection_name, int_value, map_mutation_error, strong_ordering,
+    update_completed, validate_exact_ids, vendor_point_id,
 };
+use super::check_acknowledgement;
 
 impl RealDataPlane {
     /// Sets the exact exclusive upper epoch on explicit point IDs via
@@ -41,7 +41,11 @@ impl RealDataPlane {
             .fetch_points(&name, &ids, &schema, context)
             .await
             .map_err(|error| match error {
-                BridgeError::TransportFailed | BridgeError::CollectionNotFound => error,
+                BridgeError::TransportFailed
+                | BridgeError::CollectionNotFound
+                | BridgeError::AuthenticationInvalid
+                | BridgeError::AuthenticationLeaseExpired
+                | BridgeError::SupervisorReceiptMismatch => error,
                 _ => BridgeError::ExactReadbackMismatch,
             })?;
         for id in &ids {
@@ -57,6 +61,7 @@ impl RealDataPlane {
         );
         // A cancellation during preflight readback must not dispatch a mutation.
         context.check()?;
+        self.authorize_dispatch()?;
         let acked = tokio::time::timeout(
             context.deadline(),
             self.client.set_payload(SetPayloadPoints {
@@ -78,7 +83,10 @@ impl RealDataPlane {
         .map_err(|_| BridgeError::MutationOutcomeUnknown)?
         .map_err(map_mutation_error)?;
         check_acknowledgement(
-            acked.result.as_ref().is_some_and(|result| update_completed(result.status)),
+            acked
+                .result
+                .as_ref()
+                .is_some_and(|result| update_completed(result.status)),
             context,
         )?;
         let after = self

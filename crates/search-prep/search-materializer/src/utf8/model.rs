@@ -42,7 +42,7 @@ pub struct RetainedRevision {
     pub source_id: OpaqueId,
     /// Monotone retained revision.
     pub revision: NonZeroRevision,
-    /// Exact content digest, verified by the caller's readback adapter.
+    /// Claimed exact BLAKE3-256 digest; checked against `bytes` by `materialize`.
     pub content_digest: Option<Blake3Digest32>,
     /// Caller-recorded exact byte count.
     pub byte_count: u64,

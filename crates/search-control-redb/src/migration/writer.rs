@@ -337,6 +337,10 @@ impl SourceMappingImport {
         seal.map_err(|_| ControlError::CommitOutcomeUnknown)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep the validated batch and its immediate durable commit within one redb transaction boundary."
+    )]
     fn flush(&mut self, deadline: Instant) -> Result<(), ControlError> {
         check(deadline)?;
         if self.blocked {

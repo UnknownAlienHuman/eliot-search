@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::super::GetPoints;
 
 use super::super::{
-    BridgeError, CollectionSchema, OpContext, PointRecord, QdrantPointId,
-    RealDataPlane, bridge_point_id, decode_point, map_read_error, vendor_point_id,
+    BridgeError, CollectionSchema, OpContext, PointRecord, QdrantPointId, RealDataPlane,
+    bridge_point_id, decode_point, map_read_error, vendor_point_id,
 };
 
 /// One bounded, unique response set. Missing points remain explicit to the
@@ -33,6 +33,8 @@ impl RealDataPlane {
         context: &OpContext,
     ) -> Result<(), BridgeError> {
         let ids: Vec<_> = expected.iter().map(|point| point.point_id).collect();
+        self.authorize_dispatch()
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)?;
         let readback = tokio::time::timeout(
             context.deadline(),
             self.client.get_points(GetPoints {
@@ -50,17 +52,28 @@ impl RealDataPlane {
             return Err(BridgeError::ExactReadbackMismatch);
         }
         // Index references, not decoded vector copies. Each returned ID is parsed once.
-        let points = index_points(&ids, readback.result.iter().map(|retrieved| {
-            let id = bridge_point_id(
-                retrieved.id.as_ref().ok_or(BridgeError::MalformedResponse)?,
-            )?;
-            Ok((id, retrieved))
-        }))
+        let points = index_points(
+            &ids,
+            readback.result.iter().map(|retrieved| {
+                let id = bridge_point_id(
+                    retrieved
+                        .id
+                        .as_ref()
+                        .ok_or(BridgeError::MalformedResponse)?,
+                )?;
+                Ok((id, retrieved))
+            }),
+        )
         .map_err(|_| BridgeError::ExactReadbackMismatch)?;
         for point in expected {
-            let found = points.get(&point.point_id).ok_or(BridgeError::ExactReadbackMismatch)?;
+            let found = points
+                .get(&point.point_id)
+                .ok_or(BridgeError::ExactReadbackMismatch)?;
             let decoded = decode_point(
-                found.id.as_ref().ok_or(BridgeError::ExactReadbackMismatch)?,
+                found
+                    .id
+                    .as_ref()
+                    .ok_or(BridgeError::ExactReadbackMismatch)?,
                 &found.payload,
                 found.vectors.as_ref(),
                 schema,
@@ -80,6 +93,7 @@ impl RealDataPlane {
         schema: &CollectionSchema,
         context: &OpContext,
     ) -> Result<BTreeMap<QdrantPointId, PointRecord>, BridgeError> {
+        self.authorize_dispatch()?;
         let readback = tokio::time::timeout(
             context.deadline(),
             self.client.get_points(GetPoints {
@@ -96,15 +110,21 @@ impl RealDataPlane {
         if readback.result.len() > ids.len() {
             return Err(BridgeError::MalformedResponse);
         }
-        index_points(ids, readback.result.iter().map(|retrieved| {
-            let point = decode_point(
-                retrieved.id.as_ref().ok_or(BridgeError::MalformedResponse)?,
-                &retrieved.payload,
-                retrieved.vectors.as_ref(),
-                schema,
-            )?;
-            Ok((point.point_id, point))
-        }))
+        index_points(
+            ids,
+            readback.result.iter().map(|retrieved| {
+                let point = decode_point(
+                    retrieved
+                        .id
+                        .as_ref()
+                        .ok_or(BridgeError::MalformedResponse)?,
+                    &retrieved.payload,
+                    retrieved.vectors.as_ref(),
+                    schema,
+                )?;
+                Ok((point.point_id, point))
+            }),
+        )
     }
 }
 
@@ -117,9 +137,16 @@ mod tests {
 
     #[test]
     fn unordered_response_is_indexed_and_missing_ids_stay_missing() {
-        let ids = [QdrantPointId([1; 16]), QdrantPointId([2; 16]), QdrantPointId([3; 16])];
+        let ids = [
+            QdrantPointId([1; 16]),
+            QdrantPointId([2; 16]),
+            QdrantPointId([3; 16]),
+        ];
         let points = index_points(&ids, [Ok(point(3)), Ok(point(1))]).expect("index");
-        assert_eq!(points.keys().copied().collect::<Vec<_>>(), vec![ids[0], ids[2]]);
+        assert_eq!(
+            points.keys().copied().collect::<Vec<_>>(),
+            vec![ids[0], ids[2]]
+        );
         assert!(!points.contains_key(&ids[1]));
     }
 

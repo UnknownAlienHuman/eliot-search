@@ -40,7 +40,7 @@ pub(super) fn resolve_marker(data_root: &Path) -> MarkerState {
 /// A committed marker freezes the migrated history. Restaging an identical
 /// target/snapshot reproduces evidence; a different history is superseded and
 /// a torn marker quarantines rather than being overwritten.
-pub(super) fn gate_staging_against_marker(
+pub(in crate::direct_store::migration_objects::source_plan) fn gate_staging_against_marker(
     data_root: &Path,
     target: SourceNamespaceId,
     snapshot: [u8; 32],

@@ -102,7 +102,7 @@ fn classify_revision_error(error: &str) -> &'static str {
     }
 }
 
-pub(super) fn verify_plaintext(
+pub(in crate::direct_store) fn verify_plaintext(
     metadata: &RevisionMetadata,
     bytes: &[u8],
 ) -> Result<(), String> {

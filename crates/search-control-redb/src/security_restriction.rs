@@ -60,6 +60,7 @@ impl fmt::Debug for SecurityPolicyState {
 }
 
 /// Immutable original native request reconstructed from its versioned record.
+///
 /// Only a coherent disk readback can prepare a new request; record decoding is
 /// private. Holding this descriptor proves neither commit nor authorization.
 #[derive(Clone, Eq, PartialEq)]

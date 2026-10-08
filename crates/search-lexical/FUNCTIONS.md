@@ -1,93 +1,85 @@
 # Function contract — `search-lexical`
 
-**Status:** substantive deterministic analyzer and sparse document/query encoding source exists. No exact
-lexical profile is yet accepted and installed in the supported live Qdrant product path. Source presence is
-not P06/W3 qualification.
+**Status:** W3/P06 logical contract; no encoder implementation or accepted profile exists yet.
 
-The crate owns pure local lexical preparation. It stores no corpus, implements no inverted index and
-performs no Qdrant I/O. One collection generation selects one exact qualified lexical profile; runtime
-fallback or implicit provider switching is forbidden.
+The crate owns deterministic local sparse-vector encoding only. It stores no corpus and implements no
+inverted index. One collection generation selects one accepted lexical provider path and profile.
 
-## Implemented source surface
+## Profile operations
 
-The active crate exports:
+### `describe_profile() -> LexicalProfileDescriptor`
 
-- bounded lexical `analyze` over exact UTF-8 units;
-- exact original/source byte offsets and position gaps;
-- deterministic term statistics;
-- accepted sparse-profile validation through `validate_sparse_profile`;
-- stable term mapping and collision measurement;
-- document/query weighting;
-- `encode_document` and `encode_query`;
-- sorted unique finite `SparseVector` values;
-- content-free fingerprints and receipts;
-- explicit `None`, Qdrant-delegated or frozen-local IDF modes.
+Returns the complete immutable behavior identity: provider artifact/version/digest, tokenizer,
+Unicode normalization, identifier expansion, term-index mapping, collision strategy, weighting/BM25
+parameters, Qdrant sparse modifier/schema and compatibility-fixture digest.
 
-The implementation still requires one accepted profile, golden fixtures and real daemon/Qdrant
-composition before lexical capability may be advertised.
+### `validate_profile(profile, qualification) -> Result<AcceptedLexicalProfile, LexicalError>`
 
-## Profile contract
+Requires an accepted P06 qualification receipt and golden document/query fixtures. `latest`, implicit
+defaults and partially specified profiles are rejected.
 
-A `SparseProfile` and `SparseQualification` must bind every behavior-affecting field:
+### `profile_digest(profile) -> LexicalProfileId`
 
-- provider/profile identity and revision;
-- analyzer configuration and fingerprint;
-- Unicode/case/token-character policy;
-- identifier expansion and term mapping;
-- collision policy and measured ceiling;
-- document/query TF weighting;
-- local versus Qdrant-delegated IDF;
-- dimensions, finite limits and golden fixture identity.
+Hashes canonical profile bytes under the lexical-profile domain. Any behavior change yields a different
+profile ID and requires a new collection generation.
 
-`validate_sparse_profile` rejects a mismatched qualification. `latest`, implicit defaults, floating
-artifacts and partially specified profiles are inadmissible. Any behavior change requires a new profile
-fingerprint and normally a new collection generation.
+## Encoding operations
 
-## Encoding contract
+### `normalize_input(input, profile, budget) -> Result<NormalizedLexicalInput, LexicalError>`
 
-```text
-encode_document(input, accepted_profile, statistics, lexical_limits, sparse_limits, cancelled)
-    -> Result<SparseEncoding, SparseError>
+Applies NFC and the profile's exact case rules. It never guesses language, applies ASCII folding,
+stopwords or stemming unless the accepted profile explicitly says so.
 
-encode_query(input, accepted_profile, statistics, lexical_limits, sparse_limits, cancelled)
-    -> Result<SparseEncoding, SparseError>
-```
+### `expand_identifier(token, profile) -> BoundedTokenSet`
 
-Successful output contains:
+For the code profile emits the raw identifier plus configured snake, camel/Pascal, qualified-name and
+path components. Expansion is deterministic, duplicate-free and bounded.
 
-- deterministic lexical analysis and mapped features;
-- sorted unique sparse indexes;
-- finite values;
-- profile/analyzer/input/feature/vector fingerprints;
-- bounded token, feature and collision accounting;
-- exact qualification receipt reference;
-- statistics identity when the profile requires it.
+### `tokenize_document(input, profile, budget) -> Result<TokenSequence, LexicalError>`
 
-Cancellation, malformed input, non-finite weights, collision-limit failure or budget exhaustion return no
-partial vector represented as valid.
+### `tokenize_query(input, profile, budget) -> Result<TokenSequence, LexicalError>`
 
-## IDF rule
+Document and query tokenization may differ only where the profile and compatibility fixture explicitly
+define it. Unsupported modality/encoding returns a typed failure.
 
-The accepted profile declares which TF/length factors are local and whether corpus IDF is delegated to
-Qdrant. Applying corpus IDF twice is forbidden. Product retrieval and `idf.corpus` must use the same
-eligibility population.
+### `map_terms(tokens, profile) -> Result<SparseFeatureSet, LexicalError>`
 
-## Agent-retrieval extension
+Maps terms to stable sparse indexes using the accepted vocabulary/hash policy. Collisions follow the
+declared strategy and are measurable; they never establish exact identity or absence.
 
-The concrete code/text projection families, deterministic query expansion and fusion profile required for
-ordinary agent questions are tracked by #221. The public free-text/orientation contract is tracked by
-#213. Neither task may add another search database or accept raw Qdrant plans from clients.
+### `weight_document(features, statistics, profile) -> Result<SparseVector, LexicalError>`
 
-## Required qualification
+### `weight_query(features, profile) -> Result<SparseVector, LexicalError>`
 
-- code and neutral-text golden document/query tokens and vectors;
-- Unicode, snake/camel/Pascal, qualified-name and path cases;
-- no implicit stemming, stop-word removal or semantic synonym expansion;
-- deterministic mapping/order/fingerprints;
-- collision corpus and threshold verdict;
-- no double IDF;
-- package check and strict Clippy at the exact revision;
-- real Qdrant filtered-IDF and end-to-end candidate/readback evidence;
-- profile change forcing a new collection generation.
+The profile declares which TF/length factors are local and which IDF factor is delegated to Qdrant's
+accepted sparse modifier. Applying corpus IDF twice is forbidden.
 
-Until that evidence exists, the crate is `SOURCE`, not `QUALIFIED` or `ENABLED`.
+### `encode_document(input, profile, budget) -> Result<LexicalEncoding, LexicalError>`
+
+### `encode_query(input, profile, budget) -> Result<LexicalEncoding, LexicalError>`
+
+Return sorted, unique sparse indexes, finite numeric values, profile ID, input digest, token/feature
+counts and a bounded non-content receipt. Outputs are deterministic and size-bounded.
+
+### `measure_collision_corpus(corpus, profile, budget) -> Result<CollisionReport, LexicalError>`
+
+Produces measured collision rates and threshold verdicts without exposing corpus content in ordinary
+telemetry.
+
+## Configuration operations
+
+`section_descriptor`, `compiled_defaults`, `validate_section`, `section_digest` and
+`plan_section_change` implement `config/sections/lexical.md`. No lexical profile change is live; it
+requires an accepted profile plus new collection generation.
+
+## Cancellation, retry and failure
+
+Encoding is pure and retry-safe. Budget or cancellation returns no partial vector advertised as valid.
+Failures include profile mismatch/unqualified provider, unsupported input, collision threshold failure,
+non-finite weight and budget exhaustion.
+
+## Required fixtures
+
+Code/neutral golden tokens and vectors, Unicode/identifier/path cases, no implicit stopword/stemmer,
+document/query compatibility, collision corpus, deterministic ordering, no double IDF, and
+provider-path change requiring a new generation.

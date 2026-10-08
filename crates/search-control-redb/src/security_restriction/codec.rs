@@ -4,7 +4,12 @@ use search_contracts::{
     DataRootId, InstallationIncarnationId, MAX_OPAQUE_ID_BYTES, MAX_OPAQUE_REF_BYTES, OwnerEpoch,
 };
 
-use super::*;
+use super::{
+    AccessPolicyRecord, Blake3Digest32, BoundedSet, ControlError, JournalIdentity,
+    MAX_RESTRICTION_DEPENDENTS, MAX_RESTRICTION_RECORD_BYTES, MAX_SET_ITEMS,
+    OpaqueId, OpaqueRef, SecurityPolicyState, SecurityRestrictionMutation,
+    SourceMembershipId, decode_access_policy, encode_access_policy,
+};
 use crate::policy_codec::ACCESS_POLICY_RECORD_LEN;
 
 const MAGIC: &[u8; 8] = b"ELSECR01";
@@ -149,8 +154,8 @@ impl<'a> Decoder<'a> {
         let bytes = self.take(count.checked_mul(16).ok_or(ControlError::StoreCorrupt)?)?;
         let mut result = BoundedSet::empty();
         let mut previous = None;
-        for bytes in bytes.chunks_exact(16) {
-            let member = SourceMembershipId::from_bytes(bytes.try_into().map_err(|_| ControlError::StoreCorrupt)?);
+        for bytes in bytes.as_chunks::<16>().0 {
+            let member = SourceMembershipId::from_bytes(*bytes);
             if previous.is_some_and(|old| old >= member) { return Err(ControlError::StoreCorrupt); }
             previous = Some(member);
             result.insert(member).map_err(|_| ControlError::StoreCorrupt)?;
