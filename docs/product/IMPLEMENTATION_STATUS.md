@@ -141,8 +141,8 @@ materialization/documents      #112/#113/#216/#226/#227
 installed qualification        #240 → #215
 ```
 
-Issue `#48` remains open only until the three exact named types are added to the normative P00 type
-registry.
+Issue `#48` is closed: the normative P00 type registry already contains the exact named forms for
+`UtcTimestamp`, `MetadataKey` and `UnresolvedSource`. The stale reconciliation note was the defect.
 
 ## Agent authority order
 

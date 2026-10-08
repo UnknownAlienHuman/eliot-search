@@ -10,13 +10,9 @@ The early P00/P01/P02/W0/W1/W2 issue wave duplicated package work that is alread
 new exact owner. Issues `#51–#89` were closed with `state_reason=not_planned` and an individual
 successor comment. This means **superseded**, not completed or qualified.
 
-Issue `#48` remains open until the actual normative registry contains named entries for:
-
-```text
-UtcTimestamp
-MetadataKey
-UnresolvedSource
-```
+Issue `#48` is closed as completed. Verification against the active `TYPE_REGISTRY.md` confirmed exact
+named entries for `UtcTimestamp`, `MetadataKey` and `UnresolvedSource`; the stale handoff note, not the
+normative registry, was incorrect.
 
 ## Successor map
 
