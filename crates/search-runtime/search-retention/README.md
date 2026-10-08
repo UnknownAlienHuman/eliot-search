@@ -2,7 +2,7 @@
 
 **C28 — Retention, purge and restore lifecycle.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; retention, purge and sweep lifecycle source exists, while real owner-store integration, backup/restore cutover and installed fault qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #134 → #135 → #136.
 
 Coordinate crash-safe CAS mark-and-sweep, monotonic purge and restore quarantine through vendor-neutral ports.
 

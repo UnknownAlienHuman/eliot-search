@@ -2,7 +2,7 @@
 
 **C24 — Candidate Validator.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; security/membership/overlay and exact revision/anchor validation source exists, while live owner-derived readback composition and installed product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#127.
 
 Validate nominated candidates against live security state and exact source revision/anchor readback through a vendor-neutral port.
 

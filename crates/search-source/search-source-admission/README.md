@@ -2,7 +2,7 @@
 
 **Security support for C03/C06 — Source admission policy.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; deny-by-default policy, decision and receipt source exists, while canonical digest/policy migration and durable source-ingestion composition remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #241 → #110.
 
 Evaluate a versioned deny-by-default source-admission policy without reading source bodies or mutating registry state.
 

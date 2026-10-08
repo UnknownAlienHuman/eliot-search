@@ -2,7 +2,7 @@
 
 **C04 — Source identity and namespace ownership.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; stable identity, path-history, lineage and cutover source exists, while canonical digest ownership, durable ingestion and coherent currentness integration remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #237/#110/#128.
 
 Derive stable source identity, retain path history and enforce single-writer namespace ownership and cutover.
 

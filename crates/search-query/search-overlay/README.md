@@ -2,7 +2,7 @@
 
 **C19 — Saved and unsaved overlays.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; saved/unsaved overlay, shadow, quota and candidate source exists, while supported daemon integration and product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #130/#125.
 
 Represent current saved and authenticated unsaved deltas as bounded direct candidates and shadows.
 

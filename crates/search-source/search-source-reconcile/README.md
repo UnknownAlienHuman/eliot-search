@@ -2,9 +2,9 @@
 
 **C05 — Change reconciliation.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; change-hint, inventory-diff and reconciliation planning source exists, while durable multi-root currentness and product integration remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #239 → #128.
 
-Turn watcher/USN hints and bounded inventories into truthful currentness, shadows and reconciliation work.
+Turn watcher hints and bounded inventories into truthful currentness, shadows and reconciliation work.
 
 ## Owns
 

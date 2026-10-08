@@ -2,7 +2,7 @@
 
 **C14 — Collision-safe point identity.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT / LEGACY_PROFILE`; point-key/digest/collision source exists, but the selected sole canonical identity owner is #207. Do not extend or duplicate the legacy identity formula. See [central package status](../../../docs/product/PACKAGE_STATUS.toml).
 
 Encode canonical point keys, derive namespace-separated IDs and make collisions detectable and non-destructive.
 

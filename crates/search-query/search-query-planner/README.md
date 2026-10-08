@@ -2,7 +2,7 @@
 
 **C22 — Server-owned query planner.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; planning, dependency capture, leg-graph and fingerprint source exists, while canonical scope/recipe/ranking integration and installed product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#213/#221.
 
 Compile a normalized recipe, coherent view, validated grant and budgets into an immutable vendor-neutral `SearchTaskPlan`.
 

@@ -1,6 +1,6 @@
 # eliot-search
 
-**Status:** binary package boundary and agent contract only; runtime behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; canonical client extraction and supported product CLI integration remain incomplete and unqualified. See [central package status](../../docs/product/PACKAGE_STATUS.toml). Current owners: #235 → #116.
 
 Expose standalone commands strictly through the generic provider protocol.
 

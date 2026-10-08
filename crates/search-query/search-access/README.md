@@ -2,7 +2,7 @@
 
 **C18 — Access compiler and live security.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; grant/scope/barrier compilation source exists, while owner-derived live authority, durable scope integration and product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #117/#125/#218.
 
 Validate grants, intersect scope with authoritative state and compile noninterfering pre-candidate access/scoring legs.
 

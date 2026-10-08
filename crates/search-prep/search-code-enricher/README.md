@@ -2,7 +2,7 @@
 
 **C10 — Code structural enrichment.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT / LEGACY_PROFILE`; substantial custom Rust enrichment source exists, but the selected canonical structural path is #223 Tree-sitter → #224 SCIP, with optional #225/#236 profiles. Do not extend a parallel parser authority. See [central package status](../../../docs/product/PACKAGE_STATUS.toml).
 
 Produce provider-qualified Rust definitions, references, tests and documentation facts without claiming compiler truth.
 

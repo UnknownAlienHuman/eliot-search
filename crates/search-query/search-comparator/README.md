@@ -2,7 +2,7 @@
 
 **C25 — Cross-repository comparison.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; lineage-aware comparison, evidence-role and conflict/unknown source exists, while accepted recipe/profile integration and product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #213/#221.
 
 Align validated implementations by lineage, evidence role and behavior observations without declaring a normative winner.
 

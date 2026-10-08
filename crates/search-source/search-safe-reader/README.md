@@ -2,7 +2,7 @@
 
 **C06 — Safe Reader.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; bounded same-handle and no-execute Git acquisition source exists, while live root/security authority and maintained donor integration remain incomplete and unqualified. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #104/#129.
 
 Acquire stable exact bytes from an already admitted source without executing content or escaping the admitted root.
 

@@ -2,7 +2,7 @@
 
 **C17 — Retired-point reclamation executor.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; exact retired-ID, pin-watermark and bounded resume source exists, while canonical publication/lifecycle composition and installed fault qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #126/#134.
 
 Delete only exact committed retired point IDs older than every active route/epoch pin.
 
