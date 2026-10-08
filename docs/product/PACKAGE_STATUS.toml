@@ -1,7 +1,14 @@
 # Machine-readable package status matrix.
 # `source = "present"` records source presence only; it is not integration, qualification, or enablement.
+#
+# `disposition` values:
+# - active: selected implementation/package boundary;
+# - legacy_profile: substantive source exists but a selected replacement owns future semantics;
+# - optional_disabled: optional source/profile exists but is not publicly enabled;
+# - evaluation_only: evaluation/evidence package, never product authority;
+# - tooling_only: developer/qualification tooling, never product startup authority.
 
-schema_version = 1
+schema_version = 2
 snapshot_date = "2026-10-08"
 snapshot_source_sha = "3ccef79a6850a9fd4caa7941c40e4a331cf4e0dc"
 coordinator = "#97"
@@ -14,55 +21,254 @@ integration = "partial_or_unverified"
 check_clippy = "not_asserted_by_this_status_cutover"
 live_native_qualified = false
 public_capability_enabled = false
+disposition = "active"
 
-# One row for every active Cargo workspace member at the audited source revision.
-packages = [
-  { name = "search-contracts", path = "crates/search-contracts", owner = "#237" },
-  { name = "search-domain", path = "crates/search-domain", owner = "#97; consumers #213/#221" },
-  { name = "search-ports", path = "crates/search-ports", owner = "#97; consumers #235/#116" },
-  { name = "search-config", path = "crates/search-config", owner = "#238 → #109" },
-  { name = "search-runtime-owner", path = "crates/search-runtime/search-runtime-owner", owner = "#100/#104/#105" },
-  { name = "search-os-secrets", path = "crates/search-runtime/search-os-secrets", owner = "#115/#120" },
-  { name = "search-control-redb", path = "crates/search-control-redb", owner = "#106 → #108" },
-  { name = "search-source-admission", path = "crates/search-source/search-source-admission", owner = "#241 → #110" },
-  { name = "search-source-registry", path = "crates/search-source/search-source-registry", owner = "#110 → #128 → #218" },
-  { name = "search-source-identity", path = "crates/search-source/search-source-identity", owner = "#237/#110/#128" },
-  { name = "search-source-reconcile", path = "crates/search-source/search-source-reconcile", owner = "#239 → #128" },
-  { name = "search-safe-reader", path = "crates/search-source/search-safe-reader", owner = "#104/#129" },
-  { name = "search-revision-store", path = "crates/search-source/search-revision-store", owner = "#111/#134" },
-  { name = "search-materializer", path = "crates/search-prep/search-materializer", owner = "#112/#216/#226/#227" },
-  { name = "search-unitizer", path = "crates/search-prep/search-unitizer", owner = "#113" },
-  { name = "search-code-enricher", path = "crates/search-prep/search-code-enricher", owner = "#223 → #224; optional #225/#236" },
-  { name = "search-lexical", path = "crates/search-lexical", owner = "#122/#221" },
-  { name = "search-model-provider", path = "crates/search-model-provider", owner = "#216/#221" },
-  { name = "search-projection-planner", path = "crates/search-index-qdrant/search-projection-planner", owner = "#209" },
-  { name = "search-point-identity", path = "crates/search-index-qdrant/search-point-identity", owner = "#207" },
-  { name = "search-qdrant-supervisor", path = "crates/search-index-qdrant/search-qdrant-supervisor", owner = "#120" },
-  { name = "search-qdrant-bridge", path = "crates/search-index-qdrant/search-qdrant-bridge", owner = "#200" },
-  { name = "search-publication", path = "crates/search-index-qdrant/search-publication", owner = "#210" },
-  { name = "search-epoch-pins", path = "crates/search-index-qdrant/search-epoch-pins", owner = "#126/#210" },
-  { name = "search-index-reclaimer", path = "crates/search-index-qdrant/search-index-reclaimer", owner = "#126/#134" },
-  { name = "search-access", path = "crates/search-query/search-access", owner = "#117/#125/#218" },
-  { name = "search-overlay", path = "crates/search-query/search-overlay", owner = "#130/#125" },
-  { name = "search-exact", path = "crates/search-query/search-exact", owner = "#131" },
-  { name = "search-subject-resolver", path = "crates/search-query/search-subject-resolver", owner = "#213/#232" },
-  { name = "search-query-planner", path = "crates/search-query/search-query-planner", owner = "#125/#213/#221" },
-  { name = "search-retrieval-executor", path = "crates/search-query/search-retrieval-executor", owner = "#125/#127/#200" },
-  { name = "search-candidate-validator", path = "crates/search-query/search-candidate-validator", owner = "#125/#127" },
-  { name = "search-comparator", path = "crates/search-query/search-comparator", owner = "#213/#221" },
-  { name = "search-handles", path = "crates/search-query/search-handles", owner = "#118" },
-  { name = "search-result-projector", path = "crates/search-query/search-result-projector", owner = "#125/#133/#213/#221" },
-  { name = "search-continuation", path = "crates/search-query/search-continuation", owner = "#118/#127" },
-  { name = "search-retention", path = "crates/search-runtime/search-retention", owner = "#134 → #135 → #136" },
-  { name = "search-eval", path = "crates/search-eval", owner = "#233 → #234 → #240 → #215" },
-  { name = "search-provider-protocol", path = "crates/search-provider-protocol", owner = "#235 → #116" },
-  { name = "search-eliot-adapter", path = "crates/search-eliot-adapter", owner = "#219" },
-  { name = "search-research-export-adapter", path = "crates/search-research-export-adapter", owner = "#216/#228/#229/#230/#231" },
-  { name = "eliot-searchd", path = "bins/eliot-searchd", owner = "#105/#109/#114/#116/#127" },
-  { name = "eliot-search", path = "bins/eliot-search", owner = "#235 → #116" },
-  { name = "eliot-search-model-worker", path = "bins/eliot-search-model-worker", owner = "#216/#221" },
-  { name = "eliot-search-doc-worker", path = "bins/eliot-search-doc-worker", owner = "#216 → #227" },
-  { name = "search-revision-crypto", path = "crates/search-runtime/search-revision-crypto", owner = "#111/#115" },
-  { name = "search-os-secrets-windows", path = "crates/search-runtime/search-os-secrets-windows", owner = "#115/#120" },
-  { name = "xtask", path = "xtask", owner = "#138/#214/#240" },
-]
+[[package]]
+name = "search-contracts"
+path = "crates/search-contracts"
+owner = "#237"
+
+[[package]]
+name = "search-domain"
+path = "crates/search-domain"
+owner = "#97; consumers #213/#221"
+
+[[package]]
+name = "search-ports"
+path = "crates/search-ports"
+owner = "#97; consumers #235/#116"
+
+[[package]]
+name = "search-config"
+path = "crates/search-config"
+owner = "#238 → #109"
+
+[[package]]
+name = "search-runtime-owner"
+path = "crates/search-runtime/search-runtime-owner"
+owner = "#100/#104/#105"
+
+[[package]]
+name = "search-os-secrets"
+path = "crates/search-runtime/search-os-secrets"
+owner = "#115/#120"
+
+[[package]]
+name = "search-control-redb"
+path = "crates/search-control-redb"
+owner = "#106 → #108"
+
+[[package]]
+name = "search-source-admission"
+path = "crates/search-source/search-source-admission"
+owner = "#241 → #110"
+
+[[package]]
+name = "search-source-registry"
+path = "crates/search-source/search-source-registry"
+owner = "#110 → #128 → #218"
+
+[[package]]
+name = "search-source-identity"
+path = "crates/search-source/search-source-identity"
+owner = "#237/#110/#128"
+
+[[package]]
+name = "search-source-reconcile"
+path = "crates/search-source/search-source-reconcile"
+owner = "#239 → #128"
+
+[[package]]
+name = "search-safe-reader"
+path = "crates/search-source/search-safe-reader"
+owner = "#104/#129"
+
+[[package]]
+name = "search-revision-store"
+path = "crates/search-source/search-revision-store"
+owner = "#111/#134"
+
+[[package]]
+name = "search-materializer"
+path = "crates/search-prep/search-materializer"
+owner = "#112/#216/#226/#227"
+
+[[package]]
+name = "search-unitizer"
+path = "crates/search-prep/search-unitizer"
+owner = "#113"
+
+[[package]]
+name = "search-code-enricher"
+path = "crates/search-prep/search-code-enricher"
+owner = "#223 → #224; optional #225/#236"
+disposition = "legacy_profile"
+
+[[package]]
+name = "search-lexical"
+path = "crates/search-lexical"
+owner = "#122/#221"
+
+[[package]]
+name = "search-model-provider"
+path = "crates/search-model-provider"
+owner = "#216/#221"
+disposition = "optional_disabled"
+
+[[package]]
+name = "search-projection-planner"
+path = "crates/search-index-qdrant/search-projection-planner"
+owner = "#209"
+disposition = "legacy_profile"
+
+[[package]]
+name = "search-point-identity"
+path = "crates/search-index-qdrant/search-point-identity"
+owner = "#207"
+disposition = "legacy_profile"
+
+[[package]]
+name = "search-qdrant-supervisor"
+path = "crates/search-index-qdrant/search-qdrant-supervisor"
+owner = "#120"
+
+[[package]]
+name = "search-qdrant-bridge"
+path = "crates/search-index-qdrant/search-qdrant-bridge"
+owner = "#200"
+
+[[package]]
+name = "search-publication"
+path = "crates/search-index-qdrant/search-publication"
+owner = "#210"
+
+[[package]]
+name = "search-epoch-pins"
+path = "crates/search-index-qdrant/search-epoch-pins"
+owner = "#126/#210"
+
+[[package]]
+name = "search-index-reclaimer"
+path = "crates/search-index-qdrant/search-index-reclaimer"
+owner = "#126/#134"
+
+[[package]]
+name = "search-access"
+path = "crates/search-query/search-access"
+owner = "#117/#125/#218"
+
+[[package]]
+name = "search-overlay"
+path = "crates/search-query/search-overlay"
+owner = "#130/#125"
+
+[[package]]
+name = "search-exact"
+path = "crates/search-query/search-exact"
+owner = "#131"
+
+[[package]]
+name = "search-subject-resolver"
+path = "crates/search-query/search-subject-resolver"
+owner = "#213/#232"
+
+[[package]]
+name = "search-query-planner"
+path = "crates/search-query/search-query-planner"
+owner = "#125/#213/#221"
+
+[[package]]
+name = "search-retrieval-executor"
+path = "crates/search-query/search-retrieval-executor"
+owner = "#125/#127/#200"
+
+[[package]]
+name = "search-candidate-validator"
+path = "crates/search-query/search-candidate-validator"
+owner = "#125/#127"
+
+[[package]]
+name = "search-comparator"
+path = "crates/search-query/search-comparator"
+owner = "#213/#221"
+
+[[package]]
+name = "search-handles"
+path = "crates/search-query/search-handles"
+owner = "#118"
+
+[[package]]
+name = "search-result-projector"
+path = "crates/search-query/search-result-projector"
+owner = "#125/#133/#213/#221"
+
+[[package]]
+name = "search-continuation"
+path = "crates/search-query/search-continuation"
+owner = "#118/#127"
+
+[[package]]
+name = "search-retention"
+path = "crates/search-runtime/search-retention"
+owner = "#134 → #135 → #136"
+
+[[package]]
+name = "search-eval"
+path = "crates/search-eval"
+owner = "#233 → #234 → #240 → #215"
+disposition = "evaluation_only"
+
+[[package]]
+name = "search-provider-protocol"
+path = "crates/search-provider-protocol"
+owner = "#235 → #116"
+
+[[package]]
+name = "search-eliot-adapter"
+path = "crates/search-eliot-adapter"
+owner = "#219"
+disposition = "optional_disabled"
+
+[[package]]
+name = "search-research-export-adapter"
+path = "crates/search-research-export-adapter"
+owner = "#216/#228/#229/#230/#231"
+disposition = "optional_disabled"
+
+[[package]]
+name = "eliot-searchd"
+path = "bins/eliot-searchd"
+owner = "#105/#109/#114/#116/#127"
+
+[[package]]
+name = "eliot-search"
+path = "bins/eliot-search"
+owner = "#235 → #116"
+
+[[package]]
+name = "eliot-search-model-worker"
+path = "bins/eliot-search-model-worker"
+owner = "#216/#221"
+disposition = "optional_disabled"
+
+[[package]]
+name = "eliot-search-doc-worker"
+path = "bins/eliot-search-doc-worker"
+owner = "#216 → #227"
+disposition = "optional_disabled"
+
+[[package]]
+name = "search-revision-crypto"
+path = "crates/search-runtime/search-revision-crypto"
+owner = "#111/#115"
+
+[[package]]
+name = "search-os-secrets-windows"
+path = "crates/search-runtime/search-os-secrets-windows"
+owner = "#115/#120"
+
+[[package]]
+name = "xtask"
+path = "xtask"
+owner = "#138/#214/#240"
+disposition = "tooling_only"
