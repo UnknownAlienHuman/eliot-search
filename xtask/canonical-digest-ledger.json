@@ -4810,7 +4810,7 @@
       "classification": "production-compute",
       "owner_issue": 315,
       "phase": "owner-migration-preserve-bytes",
-      "reason": "Calls the resolved fingerprint helper for each orphan revision and preparation object; that helper reads the complete bounded object and computes real sha256::digest over its full bytes. This is actual computation, not wire decode. #315 owns preserved direct SHA helper migration."
+      "reason": "Calls the resolved fingerprint helper for each orphan revision object; that helper reads the complete bounded object and computes real sha256::digest over its full bytes. This is actual computation, not wire decode. #315 owns preserved direct SHA helper migration."
     },
     {
       "path": "bins/eliot-searchd/src/control_migration_orphans.rs",
