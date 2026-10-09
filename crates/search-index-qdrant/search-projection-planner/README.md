@@ -2,7 +2,7 @@
 
 **C13 — Projection planning.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT / LEGACY_PROFILE`; substantial planning/manifest source exists, but the selected sole canonical S9.5 projection-manifest owner is #209. Do not extend a parallel payload or completeness contract. See [central package status](../../../docs/product/PACKAGE_STATUS.toml).
 
 Plan the exact rebuildable point set and immutable manifests for one projection membership without performing vendor I/O.
 

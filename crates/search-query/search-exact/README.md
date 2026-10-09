@@ -2,7 +2,7 @@
 
 **C20 — Exact verification plane.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; literal, proof and exact-spine source exists, while the complete authoritative denominator/readback product path and installed qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owner: #131.
 
 Compile and execute bounded exact scans against a frozen authoritative denominator through vendor-neutral inventory/readback ports.
 

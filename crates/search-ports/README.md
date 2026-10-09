@@ -2,7 +2,7 @@
 
 **C00 support — vendor-neutral capability and infrastructure ports.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; shared port interfaces and conformance support exist, while downstream product integration and qualification remain owner-specific. See [central package status](../../docs/product/PACKAGE_STATUS.toml). Current consumers: #235/#116 and the #97 graph.
 
 This package owns the shared trait boundary between pure contracts/domain logic, capability
 orchestration and concrete adapters. It depends only on `search-contracts`.

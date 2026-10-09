@@ -2,7 +2,7 @@
 
 **Handle support for C26/C27 — Source/result handle owner.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; handle identity, invalidation and bounded expansion-state source exists, while durable product integration and live authorization qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owner: #118.
 
 Own opaque ephemeral and durable source handles, expansion authorization, TTL/quota state and invalidation.
 

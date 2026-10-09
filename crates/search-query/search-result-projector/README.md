@@ -2,7 +2,7 @@
 
 **C26 — Result Projector.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; bounded candidate/card, coverage and ranking-trace projection source exists, while canonical provider response, handle and recipe integration remain incomplete and unqualified. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#133/#213/#221.
 
 Project validated candidates into bounded evidence-oriented responses and request opaque handles from `search-handles`.
 

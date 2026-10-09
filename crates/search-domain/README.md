@@ -2,7 +2,7 @@
 
 **shared pure kernel — Pure invariant algebra.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; pure assurance, coverage, currentness, eligibility, ordering, outcome, transition and visibility kernels exist. Product-path composition and accepted profiles remain owner-specific and unqualified. See [central package status](../../docs/product/PACKAGE_STATUS.toml). Current consumers: #213/#221 and the #97 graph.
 
 Implement pure state transitions and deterministic decision rules over search-contracts types without owning any external capability.
 

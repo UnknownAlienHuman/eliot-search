@@ -2,7 +2,7 @@
 
 **C30 optional Research profile — Optional Eliot Research export adapter.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT` and optional; export/manifest/readback source exists, while canonical daemon-port integration and research-profile qualification remain incomplete and disabled. See [central package status](../../docs/product/PACKAGE_STATUS.toml). Current owners: #216/#228/#229/#230/#231.
 
 Export qualified durable materializations through the exact eliotr.normalized.v1 wire bundle and validate ownership-cutover receipts.
 

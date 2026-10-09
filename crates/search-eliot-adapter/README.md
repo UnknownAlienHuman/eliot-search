@@ -2,7 +2,7 @@
 
 **C30 optional ELIOT profile — Optional ELIOT adapter.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT` and optional-by-default; adapter mapping source exists, while canonical provider-client integration and profile qualification remain incomplete and disabled. See [central package status](../../docs/product/PACKAGE_STATUS.toml). Current owner: #219.
 
 Map ELIOT external-provider contracts to generic Search contracts as a disabled-by-default leaf package.
 

@@ -2,7 +2,7 @@
 
 **C17 — Epoch and route pins.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; bounded RAII pin, quota, watermark and drain-observation source exists, while canonical publication/reclamation composition and installed qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #126/#210.
 
 Protect active query snapshots and old collection routes in memory without writing ordinary query leases.
 

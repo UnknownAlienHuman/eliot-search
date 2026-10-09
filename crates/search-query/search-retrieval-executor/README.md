@@ -2,7 +2,7 @@
 
 **C23 — Retrieval Executor.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; bounded lane execution, cancellation, typed dispatch and fusion source exists, while accepted ranking profiles and real bridge/provider product composition remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#127/#200.
 
 Execute bounded direct/index/provider legs through vendor-neutral ports and fuse only compatible authorized outputs.
 

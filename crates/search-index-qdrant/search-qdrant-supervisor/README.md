@@ -2,7 +2,7 @@
 
 **Process support for C01/C15 — Qualified local Qdrant supervisor.**
 
-**Status:** package boundary and agent contract only; behavior is intentionally unimplemented.
+**Status:** `SOURCE_PRESENT`; artifact, process-identity, restart/quarantine and secret-bound lifecycle source exists, while final Windows/native runtime qualification and daemon composition remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owner: #120.
 
 Own exact artifact qualification and Windows process lifecycle; expose no search/index data plane.
 
