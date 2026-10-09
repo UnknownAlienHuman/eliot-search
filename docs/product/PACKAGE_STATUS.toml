@@ -11,7 +11,7 @@
 
 schema_version = 3
 snapshot_date = "2026-10-09"
-snapshot_source_sha = "e76ffb6b9f9675ae5b931d1e4223bebd3cbb69e7"
+snapshot_source_sha = "7878f79f56e78d2cefc1b6af215f822467d2a60f"
 coordinator = "#97"
 documentation_owner = "#97"
 
@@ -183,12 +183,12 @@ execution_chain = ["#213", "#232", "#281"]
 [[package]]
 name = "search-query-planner"
 path = "crates/search-query/search-query-planner"
-execution_chain = ["#277", "#278", "#279", "#281", "#264"]
+execution_chain = ["#277", "#290", "#278", "#279", "#281", "#264"]
 
 [[package]]
 name = "search-retrieval-executor"
 path = "crates/search-query/search-retrieval-executor"
-execution_chain = ["#278", "#279", "#264"]
+execution_chain = ["#290", "#278", "#291", "#279", "#264"]
 
 [[package]]
 name = "search-candidate-validator"
@@ -249,7 +249,7 @@ disposition = "optional_disabled"
 [[package]]
 name = "eliot-searchd"
 path = "bins/eliot-searchd"
-execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#274", "#275", "#276", "#279", "#280", "#281", "#264"]
+execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#274", "#275", "#276", "#290", "#278", "#291", "#279", "#280", "#281", "#264"]
 product_path = "partial"
 
 [[package]]
