@@ -10,5 +10,9 @@ readme = "README.md"
 [lib]
 path = "src/lib.rs"
 
+[dependencies]
+blake3.workspace = true
+sha2.workspace = true
+
 [lints]
 workspace = true

@@ -7,6 +7,7 @@ pub mod accepted_evidence;
 pub mod agent_drafts;
 pub mod architecture_coverage;
 pub mod architecture_coverage_contracts;
+pub mod canonical_digest_guard;
 pub mod compute_accepted_evidence;
 pub mod context_artifact;
 pub mod context_artifact_builder;

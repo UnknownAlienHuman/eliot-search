@@ -2,7 +2,7 @@
 
 **C00 — Versioned contracts and canonical identity foundation.**
 
-**Status:** P00 contract kernel and closed canonical codec are implemented. The #237 real-digest/bounded-sink foundation remains implementation work; package acceptance, integration and W0/G0 qualification are separate decisions.
+**Status:** The P00 contract kernel, closed canonical codec and #237 shared real-digest/bounded-sink foundation are implemented. Indexed schema work continues under #258; integration and W0/G0 qualification remain separate gates.
 
 This crate defines the bounded, vendor-neutral wire and domain vocabulary shared by every ELIOT Search package. It is also the sole production owner of the closed `CanonicalValue` vocabulary and canonical JSON/CBOR byte encoding.
 
@@ -25,11 +25,33 @@ The current encoder orders map keys by encoded-key length and then bytewise valu
 
 Existing accepted bytes and golden fixtures are compatibility data. Changing ordering requires an explicit new canonical profile and migration; it is not a transparent implementation cleanup.
 
+## Shared digest compute boundary
+
+`CanonicalDigestDomain` validates a bounded, versioned owner schema name:
+`eliot/cbor/<schema>/vN` for the length-first CBOR profile or
+`eliot/raw/<schema>/vN` for exact raw bytes. The two representations cannot be
+interchanged. Parsing a name does not authorize its data or mint a receipt.
+
+`blake3_canonical` and `sha256_canonical` stream the sole encoder into private
+real algorithm implementations. `blake3_raw` and `sha256_raw` hash exact bytes
+under a raw domain. All use `domain || NUL || payload`. `DigestInputLimit` is a
+nonzero complete-preimage ceiling of at most 8 MiB; failures return no digest.
+Donor algorithm types never appear in the public contract.
+
+Stored/wire decoding does not prove that hashing occurred. Legacy raw-byte
+constructors remain decode-only compatibility until each semantic owner's
+profile/rebuild migration. The typed `xtask validate canonical-digest-guard`
+ledger records retained sites and their current migration issues.
+
+`HandleTokenDigest` retains explicit stored/wire restoration and full-width byte
+access, while ordinary `Debug` and `Display` formatting is redacted. Formatting
+is not a storage encoder; persisted consumers use the explicit byte boundary.
+
 ## Ownership boundary
 
 The crate owns contract shapes, validation, canonicalization and the shared algorithm-qualified digest construction boundary accepted by #237. It performs no filesystem, network, process, secret-store, redb, Qdrant or provider I/O.
 
-Historically the crate had no external dependencies. The reviewed #237 exception permits exact private `blake3` and RustCrypto `sha2` algorithm dependencies only. Donor types, dynamic donor values and donor defaults do not cross the package boundary. Ciborium is not the production codec.
+Historically the crate had no external dependencies. The reviewed #237 exception permits exact private `blake3` and `RustCrypto` `sha2` algorithm dependencies only. Donor types, dynamic donor values and donor defaults do not cross the package boundary. Ciborium is not the production codec.
 
 See:
 
