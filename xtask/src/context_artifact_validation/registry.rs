@@ -6,22 +6,15 @@ use toml::Value;
 use crate::context_artifact::{ARTIFACT_FORMAT, ARTIFACT_ROOT, AUTHORITY_FIELDS};
 
 use super::spec::{
-    EXECUTION_FALSE_KEYS, EXECUTION_TRUE_KEYS, EXPECTED_PATHS,
-    IMPLEMENTATION_MODULES,
+    EXECUTION_FALSE_KEYS, EXECUTION_TRUE_KEYS, EXPECTED_PATHS, IMPLEMENTATION_MODULES,
 };
-use super::{Validation, boolean, integer, string, string_array};
+use super::{Validation, integer, string, string_array};
 
-pub(super) fn validate_registry(
-    root: &Path,
-    registry: &Value,
-    validation: &mut Validation,
-) {
+pub(super) fn validate_registry(root: &Path, registry: &Value, validation: &mut Validation) {
     validation.require(
         integer(registry, "schema_version") == Some(1)
-            && string(registry, "component")
-                == Some("context_artifact_builder_v1")
-            && string(registry, "status")
-                == Some("EXECUTABLE_CANDIDATE_BUILDER_ONLY"),
+            && string(registry, "component") == Some("context_artifact_builder_v1")
+            && string(registry, "status") == Some("EXECUTABLE_CANDIDATE_BUILDER_ONLY"),
         "registry-identity",
         "builder registry identity is exact",
     );
@@ -86,10 +79,7 @@ fn validate_authority(registry: &Value, validation: &mut Validation) {
     );
     validation.require(
         table.is_some_and(|value| {
-            !value.is_empty()
-                && value
-                    .values()
-                    .all(|entry| entry.as_bool() == Some(false))
+            !value.is_empty() && value.values().all(|entry| entry.as_bool() == Some(false))
         }),
         "registry-authority-false",
         "all authority flags are false",
@@ -137,10 +127,7 @@ fn validate_execution(registry: &Value, validation: &mut Validation) {
     }
 }
 
-fn validate_current_disposition(
-    registry: &Value,
-    validation: &mut Validation,
-) {
+fn validate_current_disposition(registry: &Value, validation: &mut Validation) {
     let table = registry
         .get("current_disposition")
         .and_then(Value::as_table);
@@ -156,9 +143,7 @@ fn validate_current_disposition(
                 "accepted_package_handoffs",
             ]
             .iter()
-            .all(|key| {
-                value.get(*key).and_then(Value::as_integer) == Some(0)
-            })
+            .all(|key| value.get(*key).and_then(Value::as_integer) == Some(0))
             && value.get("accepted_g0").and_then(Value::as_bool) == Some(false)
             && value.get("accepted_w0").and_then(Value::as_bool) == Some(false)
             && value.get("active_phase").and_then(Value::as_str) == Some("P00")

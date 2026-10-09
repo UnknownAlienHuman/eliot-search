@@ -14,10 +14,8 @@ use serde_json::json;
 use toml::Value;
 
 pub use w3::{
-    W3MilestonePacketReport,
-    exit_code as w3_milestone_exit_code,
-    render_report_json as render_w3_milestone_report_json,
-    validate_w3_milestone_packets,
+    W3MilestonePacketReport, exit_code as w3_milestone_exit_code,
+    render_report_json as render_w3_milestone_report_json, validate_w3_milestone_packets,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,6 +64,12 @@ pub const fn exit_code(report: &MilestonePacketReport) -> i32 {
 }
 
 #[must_use]
+/// Render one bounded milestone-packet report as pretty JSON.
+///
+/// # Panics
+///
+/// Never. The report carries only strings, counters and lists, so the JSON
+/// serialization cannot fail.
 pub fn render_report_json(report: &MilestonePacketReport) -> String {
     let value = if report.complete {
         json!({
@@ -85,10 +89,9 @@ pub fn render_report_json(report: &MilestonePacketReport) -> String {
 }
 
 pub(crate) fn load_doc(root: &Path, relative: &str) -> Result<Value, String> {
-    let bytes = std::fs::read(root.join(relative))
-        .map_err(|error| format!("{relative}: {error}"))?;
-    let text = String::from_utf8(bytes)
-        .map_err(|error| format!("{relative}: {error}"))?;
+    let bytes =
+        std::fs::read(root.join(relative)).map_err(|error| format!("{relative}: {error}"))?;
+    let text = String::from_utf8(bytes).map_err(|error| format!("{relative}: {error}"))?;
     toml::from_str(&text).map_err(|error| format!("{relative}: {error}"))
 }
 
@@ -141,6 +144,5 @@ pub(crate) fn expected_strings(values: &[&str]) -> Vec<String> {
 }
 
 pub(crate) fn read_text(root: &Path, relative: &str) -> Result<String, String> {
-    std::fs::read_to_string(root.join(relative))
-        .map_err(|error| format!("{relative}: {error}"))
+    std::fs::read_to_string(root.join(relative)).map_err(|error| format!("{relative}: {error}"))
 }

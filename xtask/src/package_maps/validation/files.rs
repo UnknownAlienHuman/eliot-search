@@ -6,12 +6,8 @@ use std::path::Path;
 
 use toml::Value;
 
-use super::super::load::{
-    Inputs, boolean, integer, load_toml, read_text, string, strings, table,
-};
-use super::super::{
-    DOC_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH, MAP_ROOT, package_paths,
-};
+use super::super::load::{Inputs, boolean, integer, load_toml, read_text, string, strings, table};
+use super::super::{DOC_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH, MAP_ROOT, package_paths};
 
 pub(super) fn validate(
     root: &Path,
@@ -79,7 +75,9 @@ fn validate_index_and_files(root: &Path, inputs: &Inputs, errors: &mut Vec<Strin
             .symmetric_difference(&expected_packages)
             .cloned()
             .collect();
-        errors.push(format!("package-map index package closure mismatch: {difference:?}"));
+        errors.push(format!(
+            "package-map index package closure mismatch: {difference:?}"
+        ));
     }
     let index_counts = [
         ("package_count", inputs.package_rows.len()),
@@ -137,16 +135,15 @@ fn validate_index_and_files(root: &Path, inputs: &Inputs, errors: &mut Vec<Strin
                             if string(&document, "package") != Some(package) {
                                 errors.push(format!("{package}: {kind} map package mismatch"));
                             }
-                            if kind == "overview" {
-                                if string(&document, "operations_map")
+                            if kind == "overview"
+                                && (string(&document, "operations_map")
                                     != Some(paths.operations.as_str())
                                     || string(&document, "documents_map")
                                         != Some(paths.documents.as_str())
                                     || string(&document, "relations_map")
-                                        != Some(paths.relations.as_str())
-                                {
-                                    errors.push(format!("{package}: overview links mismatch"));
-                                }
+                                        != Some(paths.relations.as_str()))
+                            {
+                                errors.push(format!("{package}: overview links mismatch"));
                             }
                         }
                         Err(error) => errors.push(format!("{relative}: {error}")),
@@ -231,7 +228,9 @@ fn validate_workspace(
         .collect();
     let missing: Vec<String> = registered_paths.difference(&members).cloned().collect();
     if !missing.is_empty() {
-        errors.push(format!("registered packages missing from workspace: {missing:?}"));
+        errors.push(format!(
+            "registered packages missing from workspace: {missing:?}"
+        ));
     }
     let extras: Vec<String> = members.difference(&registered_paths).cloned().collect();
     if !extras.is_empty() {
@@ -261,7 +260,9 @@ fn validate_workspace(
             .symmetric_difference(&library_packages)
             .cloned()
             .collect();
-        errors.push(format!("workspace dependency/package library mismatch: {difference:?}"));
+        errors.push(format!(
+            "workspace dependency/package library mismatch: {difference:?}"
+        ));
     }
 }
 

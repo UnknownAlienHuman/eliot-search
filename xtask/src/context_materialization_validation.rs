@@ -13,13 +13,10 @@ use serde_json::json;
 use toml::Value;
 
 use repository::{
-    read_toml, validate_implementation_sentinels, validate_retired_python,
-    validate_workflow,
+    read_toml, validate_implementation_sentinels, validate_retired_python, validate_workflow,
 };
 use rules::{validate_cases, validate_contracts, validate_registry};
-use spec::{
-    CASES, DIGEST, INSTANCE, REGISTRY, RENDERER, REQUIRED, SCHEMA,
-};
+use spec::{CASES, DIGEST, INSTANCE, REGISTRY, RENDERER, REQUIRED, SCHEMA};
 
 /// Structural validation result compatible with the retired Python command.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -81,17 +78,15 @@ pub fn validate_context_materialization_plan(
 
 /// Exit code compatible with the retired Python validator.
 #[must_use]
-pub const fn exit_code(
-    report: &ContextMaterializationValidationReport,
-) -> i32 {
+pub const fn exit_code(report: &ContextMaterializationValidationReport) -> i32 {
     if report.passed() { 0 } else { 1 }
 }
 
 /// Render the stable JSON report.
 #[must_use]
-pub fn render_report_json(
-    report: &ContextMaterializationValidationReport,
-) -> String {
+/// # Panics
+/// Panics if serialization of the internal JSON report value fails.
+pub fn render_report_json(report: &ContextMaterializationValidationReport) -> String {
     serde_json::to_string_pretty(&json!({
         "status": if report.passed() { "PASS" } else { "FAIL" },
         "required_files": report.required_files,

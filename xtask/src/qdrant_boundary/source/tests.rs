@@ -1,54 +1,51 @@
-use super::{
-    contains_vendor_sdk_reference, public_vendor_surface_lines,
-    rust_string_constant,
-};
+use super::{contains_vendor_sdk_reference, public_vendor_surface_lines, rust_string_constant};
 
 #[test]
 fn catches_imported_alias_in_multiline_public_function() {
-    let source = r#"
+    let source = r"
 use qdrant_client::qdrant::PointId;
 pub fn leaked(
     point: PointId,
 ) {}
-"#;
+";
     assert_eq!(public_vendor_surface_lines(source), vec![3]);
 }
 
 #[test]
 fn catches_public_trait_and_enum_members() {
-    let trait_source = r#"
+    let trait_source = r"
 use qdrant_client::Qdrant;
 pub trait Port {
     fn client(&self) -> Qdrant;
 }
-"#;
-    let enum_source = r#"
+";
+    let enum_source = r"
 use qdrant_client::qdrant::PointId;
 pub enum ResultId {
     Vendor(PointId),
 }
-"#;
+";
     assert_eq!(public_vendor_surface_lines(trait_source), vec![3]);
     assert_eq!(public_vendor_surface_lines(enum_source), vec![3]);
 }
 
 #[test]
 fn follows_private_type_aliases_into_public_signatures() {
-    let source = r#"
+    let source = r"
 use qdrant_client::Qdrant;
 type Client = Qdrant;
 pub fn client() -> Client;
-"#;
+";
     assert_eq!(public_vendor_surface_lines(source), vec![4]);
 }
 
 #[test]
 fn ignores_private_surfaces_comments_and_literals() {
-    let private_source = r#"
+    let private_source = r"
 use qdrant_client::Qdrant;
 fn client() -> Qdrant { todo!() }
 pub(crate) fn crate_client() -> Qdrant { todo!() }
-"#;
+";
     let inert_source = r##"
 // qdrant_client::Qdrant
 const NOTE: &str = "qdrant_client::Qdrant";
@@ -138,24 +135,24 @@ fn version_extraction_rejects_missing_or_duplicate_active_declarations() {
 
 #[test]
 fn catches_vendor_types_in_exported_macros() {
-    let direct = r#"
+    let direct = r"
 #[macro_export]
 macro_rules! leaked {
     () => { qdrant_client::qdrant::PointId };
 }
-"#;
-    let imported = r#"
+";
+    let imported = r"
 use qdrant_client::qdrant::PointId;
 #[macro_export(local_inner_macros)] macro_rules! leaked {
     [] => [PointId];
 }
-"#;
-    let declarative = r#"
+";
+    let declarative = r"
 use qdrant_client::qdrant::PointId;
 pub macro leaked() {
     PointId
 }
-"#;
+";
     assert_eq!(public_vendor_surface_lines(direct), vec![2]);
     assert_eq!(public_vendor_surface_lines(imported), vec![3]);
     assert_eq!(public_vendor_surface_lines(declarative), vec![3]);
@@ -163,23 +160,23 @@ pub macro leaked() {
 
 #[test]
 fn private_macros_do_not_become_public_surfaces() {
-    let source = r#"
+    let source = r"
 use qdrant_client::qdrant::PointId;
 macro_rules! private_adapter {
     () => { PointId };
 }
-"#;
+";
     assert!(public_vendor_surface_lines(source).is_empty());
 }
 
 #[test]
 fn catches_visibility_and_qualifiers_split_across_lines() {
-    let source = r#"
+    let source = r"
 use qdrant_client::qdrant::PointId;
 pub
 async
 unsafe
 fn leaked() -> PointId { unreachable!() }
-"#;
+";
     assert_eq!(public_vendor_surface_lines(source), vec![3]);
 }

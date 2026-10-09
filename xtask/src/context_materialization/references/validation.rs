@@ -2,11 +2,9 @@
 
 use serde_json::Value;
 
-use super::model::{ArtifactRef, OptionalSignature, SignatureValue};
 use super::super::error::MaterializationPlanError;
-use super::super::scalars::{
-    require_actor, require_opaque, require_sha, require_u64,
-};
+use super::super::scalars::{require_actor, require_opaque, require_sha, require_u64};
+use super::model::{ArtifactRef, OptionalSignature, SignatureValue};
 
 /// Validates exact artifact-reference fields, grammars and byte identity.
 ///
@@ -42,16 +40,12 @@ pub fn validate_artifact_ref(
             &map["store_profile_ref"],
             "artifact_ref.store_profile_ref",
         )?,
-        artifact_id: require_opaque(
-            &map["artifact_id"],
-            "artifact_ref.artifact_id",
-        )?,
+        artifact_id: require_opaque(&map["artifact_id"], "artifact_ref.artifact_id")?,
         bytes: require_u64(&map["bytes"], "artifact_ref.bytes")?,
         sha256: require_sha(&map["sha256"], "artifact_ref.sha256")?,
     };
     if result.bytes != u64::try_from(bundle_bytes.len()).unwrap_or(u64::MAX)
-        || result.sha256
-            != crate::ticket_planner::exact_sha256_hex(bundle_bytes)
+        || result.sha256 != crate::ticket_planner::exact_sha256_hex(bundle_bytes)
     {
         return Err(MaterializationPlanError::new(
             "MATERIALIZATION_ARTIFACT_READBACK_MISMATCH",
@@ -74,18 +68,12 @@ pub fn validate_optional_signature(
     label: &str,
 ) -> Result<OptionalSignature, MaterializationPlanError> {
     let invalid = |message: String| {
-        MaterializationPlanError::new(
-            "MATERIALIZATION_SIGNATURE_REF_INVALID",
-            message,
-        )
+        MaterializationPlanError::new("MATERIALIZATION_SIGNATURE_REF_INVALID", message)
     };
     let Value::Object(map) = value else {
         return Err(invalid(format!("{label} OptionalV1 is invalid")));
     };
-    if map.len() != 2
-        || !map.contains_key("state")
-        || !map.contains_key("value")
-    {
+    if map.len() != 2 || !map.contains_key("state") || !map.contains_key("value") {
         return Err(invalid(format!("{label} OptionalV1 is invalid")));
     }
     let Some(Value::String(state)) = map.get("state") else {
@@ -93,9 +81,7 @@ pub fn validate_optional_signature(
     };
     if state == "ABSENT" {
         if map["value"] != Value::String(String::new()) {
-            return Err(invalid(format!(
-                "{label} ABSENT requires empty string"
-            )));
+            return Err(invalid(format!("{label} ABSENT requires empty string")));
         }
         return Ok(OptionalSignature {
             state: state.clone(),
@@ -127,9 +113,7 @@ pub fn validate_optional_signature(
         ));
     }
     let Value::Object(approval) = &wrapped["approval_artifact_ref"] else {
-        return Err(invalid(format!(
-            "{label}.approval_artifact_ref is invalid"
-        )));
+        return Err(invalid(format!("{label}.approval_artifact_ref is invalid")));
     };
     if approval.len() != 4
         || !approval.contains_key("store_profile_ref")
@@ -137,9 +121,7 @@ pub fn validate_optional_signature(
         || !approval.contains_key("bytes")
         || !approval.contains_key("sha256")
     {
-        return Err(invalid(format!(
-            "{label}.approval_artifact_ref is invalid"
-        )));
+        return Err(invalid(format!("{label}.approval_artifact_ref is invalid")));
     }
     Ok(OptionalSignature {
         state: state.clone(),
@@ -151,9 +133,7 @@ pub fn validate_optional_signature(
             approval_artifact_ref: ArtifactRef {
                 store_profile_ref: require_opaque(
                     &approval["store_profile_ref"],
-                    &format!(
-                        "{label}.approval_artifact_ref.store_profile_ref"
-                    ),
+                    &format!("{label}.approval_artifact_ref.store_profile_ref"),
                 )?,
                 artifact_id: require_opaque(
                     &approval["artifact_id"],

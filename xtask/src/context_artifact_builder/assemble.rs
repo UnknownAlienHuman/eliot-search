@@ -2,13 +2,13 @@
 
 use std::path::Path;
 
-use serde_json::{Map as JsonMap, Value as JsonValue, json};
+use serde_json::{Value as JsonValue, json};
 use toml::Value as TomlValue;
 
 use crate::context_artifact::{
-    ARTIFACT_FORMAT, RECORD_KIND, SCHEMA_VERSION, STATUS,
-    UNRESOLVED_MANIFEST_FIELDS, assert_candidate_digest, authority_map,
-    candidate_id, candidate_metadata_digest, parse_bundle, render_bundle,
+    ARTIFACT_FORMAT, RECORD_KIND, SCHEMA_VERSION, STATUS, UNRESOLVED_MANIFEST_FIELDS,
+    assert_candidate_digest, authority_map, candidate_id, candidate_metadata_digest, parse_bundle,
+    render_bundle,
 };
 use crate::context_artifact_io::validate_output_root;
 use crate::ticket_planner::{canonical_json_bytes, exact_sha256_hex};
@@ -27,6 +27,10 @@ const MAX_PREFLIGHT_CHECKS: usize = 512;
 ///
 /// Returns one closed builder failure for repository, draft, preflight,
 /// extraction, bundle or output-root validation errors.
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub fn build_candidate(
     root: &Path,
     package: &str,
@@ -34,7 +38,7 @@ pub fn build_candidate(
     accepted_handoffs: &[String],
     output_root: &str,
 ) -> Result<CandidateBuild, ContextArtifactBuildError> {
-    let output = validate_output_root(root, output_root).map_err(map_output)?;
+    let output = validate_output_root(root, output_root).map_err(|error| map_output(&error))?;
     let preflight = preflight::run(root, package, base_commit, accepted_handoffs)?;
     if preflight.checks.len() > MAX_PREFLIGHT_CHECKS {
         return Err(ContextArtifactBuildError::with_checks(
@@ -65,9 +69,10 @@ pub fn build_candidate(
         "accepted_handoff_count": extracted.handoffs.len(),
         "required_unavailable_checks": preflight.pair.unavailable_checks,
     });
-    let bundle_bytes = render_bundle(&preamble, &extracted.blocks).map_err(map_primitive)?;
+    let bundle_bytes =
+        render_bundle(&preamble, &extracted.blocks).map_err(|error| map_primitive(&error))?;
     let (roundtrip_preamble, roundtrip_blocks) =
-        parse_bundle(&bundle_bytes).map_err(map_primitive)?;
+        parse_bundle(&bundle_bytes).map_err(|error| map_primitive(&error))?;
     if roundtrip_preamble != preamble || roundtrip_blocks != extracted.blocks {
         return Err(ContextArtifactBuildError::new(
             "BUNDLE_FORMAT_INVALID",
@@ -76,14 +81,8 @@ pub fn build_candidate(
     }
 
     let identifier = candidate_id(&bundle_bytes);
-    let bundle_relative = format!(
-        "{}/{package}/{identifier}.context",
-        output.relative()
-    );
-    let candidate_relative = format!(
-        "{}/{package}/{identifier}.json",
-        output.relative()
-    );
+    let bundle_relative = format!("{}/{package}/{identifier}.context", output.relative());
+    let candidate_relative = format!("{}/{package}/{identifier}.json", output.relative());
     let artifact_sha256 = exact_sha256_hex(&bundle_bytes);
     let preflight_checks: Vec<JsonValue> = preflight
         .checks
@@ -195,10 +194,7 @@ pub fn build_candidate(
     ))
 }
 
-fn toml_text<'a>(
-    value: &'a TomlValue,
-    key: &str,
-) -> Result<&'a str, ContextArtifactBuildError> {
+fn toml_text<'a>(value: &'a TomlValue, key: &str) -> Result<&'a str, ContextArtifactBuildError> {
     value.get(key).and_then(TomlValue::as_str).ok_or_else(|| {
         ContextArtifactBuildError::new(
             "DRAFT_PAIR_MISMATCH",
@@ -207,26 +203,26 @@ fn toml_text<'a>(
     })
 }
 
-fn toml_integer(
-    value: &TomlValue,
-    key: &str,
-) -> Result<i64, ContextArtifactBuildError> {
-    value.get(key).and_then(TomlValue::as_integer).ok_or_else(|| {
-        ContextArtifactBuildError::new(
-            "DRAFT_PAIR_MISMATCH",
-            format!("ticket field is not integer: {key}"),
-        )
-    })
+fn toml_integer(value: &TomlValue, key: &str) -> Result<i64, ContextArtifactBuildError> {
+    value
+        .get(key)
+        .and_then(TomlValue::as_integer)
+        .ok_or_else(|| {
+            ContextArtifactBuildError::new(
+                "DRAFT_PAIR_MISMATCH",
+                format!("ticket field is not integer: {key}"),
+            )
+        })
 }
 
 fn map_output(
-    error: crate::context_artifact_io::CandidateOutputError,
+    error: &crate::context_artifact_io::CandidateOutputError,
 ) -> ContextArtifactBuildError {
     ContextArtifactBuildError::new(error.reason(), error.message())
 }
 
 fn map_primitive(
-    error: crate::context_artifact::ContextArtifactError,
+    error: &crate::context_artifact::ContextArtifactError,
 ) -> ContextArtifactBuildError {
     ContextArtifactBuildError::new(error.reason(), error.message())
 }

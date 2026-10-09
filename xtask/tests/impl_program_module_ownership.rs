@@ -8,9 +8,15 @@ const MODULE_ROOT: &str = "xtask/src/impl_program";
 const MAX_FACADE_LINES: usize = 100;
 const SPLIT_REVIEW_LINES: usize = 8_500;
 const MODULES: [(&str, &[&str]); 4] = [
-    ("model", &["pub struct ProgramReport", "pub const EXPECTED_STAGE_IDS"]),
+    (
+        "model",
+        &["pub struct ProgramReport", "pub const EXPECTED_STAGE_IDS"],
+    ),
     ("parse", &["fn load_doc", "fn rows", "fn index_all"]),
-    ("report", &["pub const fn exit_code", "pub fn render_report_json"]),
+    (
+        "report",
+        &["pub const fn exit_code", "pub fn render_report_json"],
+    ),
     ("rules", &["pub fn validate_implementation_program"]),
 ];
 const RULE_MODULES: [(&str, &[&str]); 3] = [
@@ -42,7 +48,10 @@ fn validator_is_a_bounded_facade_over_responsibility_modules() {
             facade.contains(&format!("mod {module};")),
             "validator facade lacks module declaration: {module}"
         );
-        assert_module(root.join(MODULE_ROOT).join(format!("{module}.rs")), owned_tokens);
+        assert_module(
+            root.join(MODULE_ROOT).join(format!("{module}.rs")),
+            owned_tokens,
+        );
     }
 
     let rules_path = root.join(MODULE_ROOT).join("rules.rs");
@@ -72,6 +81,10 @@ fn validator_is_a_bounded_facade_over_responsibility_modules() {
     }
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Preserve the existing owned callback and assembly interfaces in the #317 source-gate repair."
+)]
 fn assert_module(path: PathBuf, owned_tokens: &[&str]) {
     let source = read(&path);
     let lines = source.lines().count();

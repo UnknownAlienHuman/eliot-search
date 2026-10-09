@@ -4,21 +4,20 @@ use toml::Value;
 
 use crate::git_tree::GitTree;
 use crate::ticket_planner::{
-    CONTEXT_ALLOWED, CONTEXT_CANONICALIZATION_FIELDS, CONTEXT_CONTENT_FIELDS,
-    REPOSITORY_NAME, TICKET_ALLOWED, TICKET_CONTEXT_FIELDS,
-    TICKET_DELIVERABLES_FIELDS, TICKET_DEPENDENCIES_FIELDS,
-    TICKET_LIMITS_FIELDS, TICKET_REPOSITORY_FENCE_FIELDS,
-    TICKET_UNRESOLVED_IDENTITY_FIELDS, contract_pack_sources,
-    exact_sha256_hex, expected_handoff_slots, expected_required_handoffs,
+    CONTEXT_ALLOWED, CONTEXT_CANONICALIZATION_FIELDS, CONTEXT_CONTENT_FIELDS, REPOSITORY_NAME,
+    TICKET_ALLOWED, TICKET_CONTEXT_FIELDS, TICKET_DELIVERABLES_FIELDS, TICKET_DEPENDENCIES_FIELDS,
+    TICKET_LIMITS_FIELDS, TICKET_REPOSITORY_FENCE_FIELDS, TICKET_UNRESOLVED_IDENTITY_FIELDS,
+    contract_pack_sources, exact_sha256_hex, expected_handoff_slots, expected_required_handoffs,
     line_limits_ok, safe_path, select_ceiling, unknown_fields,
 };
 
 use super::model::{Checks, DraftPair, RegistrySnapshot};
-use super::util::{
-    boolean, count_string, integer, string_array, strings_unique, table_keys,
-    text, unique_row,
-};
+use super::util::{boolean, integer, string_array, strings_unique, table_keys, text, unique_row};
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub(super) fn load_draft_pair(
     tree: &GitTree,
     package: &str,
@@ -93,28 +92,28 @@ pub(super) fn load_draft_pair(
         return None;
     }
 
-    let (ticket_raw, ticket_entry) = match tree.read_bytes(&ticket_path) {
+    let (ticket_bytes, ticket_entry) = match tree.read_bytes(&ticket_path) {
         Ok(value) => value,
         Err(error) => {
             checks.fail("draft-files", "DRAFT_PAIR_MISMATCH", error.message());
             return None;
         }
     };
-    let (context_raw, context_entry) = match tree.read_bytes(&context_path) {
+    let (context_bytes, context_entry) = match tree.read_bytes(&context_path) {
         Ok(value) => value,
         Err(error) => {
             checks.fail("draft-files", "DRAFT_PAIR_MISMATCH", error.message());
             return None;
         }
     };
-    let ticket = match parse_toml(&ticket_raw) {
+    let ticket = match parse_toml(&ticket_bytes) {
         Ok(value) => value,
         Err(detail) => {
             checks.fail("draft-files", "DRAFT_PAIR_MISMATCH", detail);
             return None;
         }
     };
-    let context = match parse_toml(&context_raw) {
+    let context = match parse_toml(&context_bytes) {
         Ok(value) => value,
         Err(detail) => {
             checks.fail("draft-files", "DRAFT_PAIR_MISMATCH", detail);
@@ -237,7 +236,7 @@ pub(super) fn load_draft_pair(
     validate_fence(&ticket, registries.package_row.as_ref(), checks);
     validate_dependencies(&ticket, package, checks);
 
-    let Some(content) = context.get("content").and_then(Value::as_table) else {
+    let Some(selection) = context.get("content").and_then(Value::as_table) else {
         checks.fail(
             "context-arrays",
             "DRAFT_PAIR_MISMATCH",
@@ -246,13 +245,14 @@ pub(super) fn load_draft_pair(
         return None;
     };
     let arrays = (
-        string_array(content.get("source_files")),
-        string_array(content.get("registry_fragments")),
-        string_array(content.get("accepted_handoff_slots")),
-        string_array(content.get("forbidden_paths")),
-        string_array(content.get("required_unavailable_checks")),
+        string_array(selection.get("source_files")),
+        string_array(selection.get("registry_fragments")),
+        string_array(selection.get("accepted_handoff_slots")),
+        string_array(selection.get("forbidden_paths")),
+        string_array(selection.get("required_unavailable_checks")),
     );
-    let (Some(sources), Some(selectors), Some(slots), Some(forbidden), Some(unavailable)) = arrays else {
+    let (Some(sources), Some(selectors), Some(slots), Some(forbidden), Some(unavailable)) = arrays
+    else {
         checks.fail(
             "context-arrays",
             "DRAFT_PAIR_MISMATCH",
@@ -290,31 +290,25 @@ pub(super) fn load_draft_pair(
         ticket_path,
         context_path,
         ticket,
-        context,
         sources,
         selectors,
         handoff_slots: slots,
         unavailable_checks: unavailable,
         source_ceiling_class: ceiling_class,
         ticket_blob: tree.blob_identity(&ticket_entry),
-        ticket_sha256: exact_sha256_hex(&ticket_raw),
+        ticket_sha256: exact_sha256_hex(&ticket_bytes),
         context_blob: tree.blob_identity(&context_entry),
-        context_sha256: exact_sha256_hex(&context_raw),
+        context_sha256: exact_sha256_hex(&context_bytes),
     })
 }
 
 fn parse_toml(raw: &[u8]) -> Result<Value, String> {
-    let text = std::str::from_utf8(raw)
-        .map_err(|error| format!("draft is not strict UTF-8: {error}"))?;
+    let text =
+        std::str::from_utf8(raw).map_err(|error| format!("draft is not strict UTF-8: {error}"))?;
     toml::from_str(text).map_err(|error| format!("invalid draft TOML: {error}"))
 }
 
-fn validate_keys(
-    checks: &mut Checks,
-    id: &str,
-    value: &Value,
-    allowed: &[&str],
-) {
+fn validate_keys(checks: &mut Checks, id: &str, value: &Value, allowed: &[&str]) {
     let keys = table_keys(value);
     let unknown = unknown_fields(&keys, allowed);
     if unknown.is_empty() {
@@ -368,9 +362,9 @@ fn validate_unresolved(ticket: &Value, context: &Value, checks: &mut Checks) {
         ("integration_signature_ref", ""),
     ];
     let unresolved_ok = unresolved.is_some_and(|table| {
-        expected.iter().all(|(key, value)| {
-            table.get(*key).and_then(Value::as_str) == Some(*value)
-        })
+        expected
+            .iter()
+            .all(|(key, value)| table.get(*key).and_then(Value::as_str) == Some(*value))
     }) && text(context, "base_commit") == Some("UNSELECTED")
         && text(context, "materialized_context_manifest_ref") == Some("UNAVAILABLE")
         && text(context, "materialized_context_record_sha256") == Some("UNAVAILABLE")
@@ -390,11 +384,7 @@ fn validate_unresolved(ticket: &Value, context: &Value, checks: &mut Checks) {
     }
 }
 
-fn validate_fence(
-    ticket: &Value,
-    package_row: Option<&Value>,
-    checks: &mut Checks,
-) {
+fn validate_fence(ticket: &Value, package_row: Option<&Value>, checks: &mut Checks) {
     let fence = ticket.get("repository_fence").and_then(Value::as_table);
     let context = ticket.get("context").and_then(Value::as_table);
     let limits = ticket.get("limits").and_then(Value::as_table);
@@ -419,28 +409,26 @@ fn validate_fence(
     let expected_scope = package_path.map(|path| format!("{path}/**"));
     let fence_ok = fence.is_some_and(|table| {
         table.get("repository").and_then(Value::as_str) == Some(REPOSITORY_NAME)
-            && table.get("write_scope").and_then(Value::as_str)
-                == expected_scope.as_deref()
-            && table.get("feature_profile").and_then(Value::as_str)
-                == Some("P00_FOUNDATION")
+            && table.get("write_scope").and_then(Value::as_str) == expected_scope.as_deref()
+            && table.get("feature_profile").and_then(Value::as_str) == Some("P00_FOUNDATION")
             && table.get("package_registry_path").and_then(Value::as_str)
                 == Some("swarm/crates.toml")
             && table.get("function_registry_path").and_then(Value::as_str)
                 == Some("swarm/function-packets.toml")
-            && table.get("stage_registry_path").and_then(Value::as_str)
-                == Some("swarm/stages.toml")
+            && table.get("stage_registry_path").and_then(Value::as_str) == Some("swarm/stages.toml")
             && table.get("launch_state_path").and_then(Value::as_str)
                 == Some("swarm/launch-state.toml")
             && table.get("registry_digests").and_then(Value::as_str)
                 == Some("UNRESOLVED_AT_ISSUANCE")
     }) && context.is_some_and(|table| {
-        table.get("writer_visible_artifact_count").and_then(Value::as_integer)
+        table
+            .get("writer_visible_artifact_count")
+            .and_then(Value::as_integer)
             == Some(1)
-            && table.get("architecture_access").and_then(Value::as_str)
-                == Some("exception-only")
-    }) && limits.is_some_and(|table| {
-        table.get("one_active_writer").and_then(Value::as_bool) == Some(true)
-    }) && coherent_limits;
+            && table.get("architecture_access").and_then(Value::as_str) == Some("exception-only")
+    }) && limits
+        .is_some_and(|table| table.get("one_active_writer").and_then(Value::as_bool) == Some(true))
+        && coherent_limits;
     if fence_ok {
         checks.pass(
             "draft-repository-fence",
@@ -485,9 +473,7 @@ fn validate_dependencies(ticket: &Value, package: &str, checks: &mut Checks) {
                 .and_then(Value::as_str)
                 == Some("UNSELECTED")
             && dependencies
-                .and_then(|table| {
-                    table.get("required_contract_api_schema_digest")
-                })
+                .and_then(|table| table.get("required_contract_api_schema_digest"))
                 .and_then(Value::as_str)
                 == Some("UNAVAILABLE");
     }
@@ -519,10 +505,8 @@ fn validate_context_counts(
 ) {
     let ordinary = integer(manifest, "ordinary_static_source_file_ceiling");
     let exact = integer(manifest, "p00_exact_contract_pack_source_file_ceiling");
-    let exceptions = string_array(
-        manifest.get("p00_exact_contract_pack_exception_packages"),
-    )
-    .unwrap_or_default();
+    let exceptions = string_array(manifest.get("p00_exact_contract_pack_exception_packages"))
+        .unwrap_or_default();
     let exception_refs: Vec<&str> = exceptions.iter().map(String::as_str).collect();
     let (ceiling, class_ok) = match (ordinary, exact) {
         (Some(ordinary), Some(exact)) => {
@@ -531,20 +515,14 @@ fn validate_context_counts(
         _ => (0, false),
     };
     let counts_ok = usize::try_from(ceiling).is_ok_and(|value| sources.len() <= value)
-        && integer(context, "source_file_count")
-            == i64::try_from(sources.len()).ok()
-        && integer(context, "registry_fragment_count")
-            == i64::try_from(selectors.len()).ok()
-        && integer(manifest, "max_registry_fragments_per_context")
-            .is_some_and(|value| {
-                usize::try_from(value).is_ok_and(|value| selectors.len() <= value)
-            })
-        && integer(context, "accepted_handoff_slot_count")
-            == i64::try_from(slots.len()).ok()
+        && integer(context, "source_file_count") == i64::try_from(sources.len()).ok()
+        && integer(context, "registry_fragment_count") == i64::try_from(selectors.len()).ok()
+        && integer(manifest, "max_registry_fragments_per_context").is_some_and(|value| {
+            usize::try_from(value).is_ok_and(|value| selectors.len() <= value)
+        })
+        && integer(context, "accepted_handoff_slot_count") == i64::try_from(slots.len()).ok()
         && integer(manifest, "max_accepted_handoff_slots_per_context")
-            .is_some_and(|value| {
-                usize::try_from(value).is_ok_and(|value| slots.len() <= value)
-            })
+            .is_some_and(|value| usize::try_from(value).is_ok_and(|value| slots.len() <= value))
         && integer(context, "writer_visible_artifact_count") == Some(1)
         && strings_unique(sources)
         && strings_unique(selectors)
@@ -575,14 +553,13 @@ fn validate_canonicalization(
     let ok = canonical.is_some_and(|table| {
         table.get("encoding").and_then(Value::as_str) == Some("UTF-8")
             && table.get("line_endings").and_then(Value::as_str) == Some("LF")
-            && table.get("preserve_declared_order").and_then(Value::as_bool)
+            && table
+                .get("preserve_declared_order")
+                .and_then(Value::as_bool)
                 == Some(true)
-            && table.get("record_source_sha256").and_then(Value::as_bool)
-                == Some(true)
-            && table.get("record_fragment_sha256").and_then(Value::as_bool)
-                == Some(true)
-    }) && text(context, "materialization_mode")
-        == Some("canonical_concatenated_bundle")
+            && table.get("record_source_sha256").and_then(Value::as_bool) == Some(true)
+            && table.get("record_fragment_sha256").and_then(Value::as_bool) == Some(true)
+    }) && text(context, "materialization_mode") == Some("canonical_concatenated_bundle")
         && !unavailable.is_empty()
         && forbidden.iter().any(|path| path == "docs/architecture/**");
     if ok {
@@ -599,16 +576,15 @@ fn validate_canonicalization(
     }
 }
 
-fn validate_exact_pack(
-    tree: &GitTree,
-    package: &str,
-    sources: &[String],
-    checks: &mut Checks,
-) {
+fn validate_exact_pack(tree: &GitTree, package: &str, sources: &[String], checks: &mut Checks) {
     let required = match tree.load_toml("docs/contracts/p00/manifest.toml") {
         Ok((manifest, _)) => string_array(manifest.get("required_files")),
         Err(error) => {
-            checks.fail("context-exact-pack", "DRAFT_MANIFEST_MISMATCH", error.message());
+            checks.fail(
+                "context-exact-pack",
+                "DRAFT_MANIFEST_MISMATCH",
+                error.message(),
+            );
             return;
         }
     };

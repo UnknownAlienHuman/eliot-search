@@ -1,10 +1,12 @@
 //! Per-package documentation-node renderer.
 
-use super::super::{array, finish, quote};
-use super::super::super::model::PackageModel;
 use super::super::super::super::load::{integer, string, strings};
+use super::super::super::model::PackageModel;
+use super::super::{array, finish, quote};
 
-pub(super) fn render_documents(package: &PackageModel) -> String {
+pub(in crate::package_maps::generator::render) fn render_documents(
+    package: &PackageModel,
+) -> String {
     let mut lines = vec![
         "schema_version = 1".to_owned(),
         "project = \"eliot-search\"".to_owned(),
@@ -29,10 +31,7 @@ pub(super) fn render_documents(package: &PackageModel) -> String {
             format!("path = {}", quote(string(row, "path").unwrap_or(""))),
             format!("line = {}", integer(row, "line").unwrap_or(0)),
             format!("level = {}", integer(row, "level").unwrap_or(0)),
-            format!(
-                "heading = {}",
-                quote(string(row, "heading").unwrap_or(""))
-            ),
+            format!("heading = {}", quote(string(row, "heading").unwrap_or(""))),
             format!("kind = {}", quote(string(row, "kind").unwrap_or(""))),
             format!("modules = {}", array(&modules)),
             format!(
@@ -46,5 +45,5 @@ pub(super) fn render_documents(package: &PackageModel) -> String {
             String::new(),
         ]);
     }
-    finish(lines)
+    finish(&lines)
 }

@@ -4,11 +4,7 @@ use serde_json::Value;
 
 /// The single row of an array-of-tables matching `key == expected`.
 #[must_use]
-pub fn one_table<'a>(
-    rows: &'a Value,
-    key: &str,
-    expected: &str,
-) -> Option<&'a Value> {
+pub fn one_table<'a>(rows: &'a Value, key: &str, expected: &str) -> Option<&'a Value> {
     let rows = rows.as_array()?;
     let mut hits = rows
         .iter()
@@ -35,9 +31,7 @@ fn selector_name_valid(value: &str) -> bool {
         return false;
     }
     characters.all(|character| {
-        character.is_ascii_lowercase()
-            || character.is_ascii_digit()
-            || character == '-'
+        character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
     })
 }
 
@@ -226,7 +220,7 @@ fn resolve_launchish(
         let table = document.get("conditional_activation");
         if table
             .and_then(|value| value.get(package))
-            .is_some_and(Value::is_table)
+            .is_some_and(Value::is_object)
         {
             return Some((Ok, "one conditional activation table"));
         }

@@ -80,11 +80,7 @@ impl CandidateOutputRoot {
     ///
     /// Unsafe package/file components fail with
     /// `OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT`.
-    pub fn file(
-        &self,
-        package: &str,
-        file_name: &str,
-    ) -> Result<PathBuf, CandidateOutputError> {
+    pub fn file(&self, package: &str, file_name: &str) -> Result<PathBuf, CandidateOutputError> {
         if !simple_component(package) || !simple_component(file_name) {
             return Err(CandidateOutputError::new(
                 "OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT",
@@ -132,6 +128,10 @@ pub fn validate_output_root(
 /// Symlink/non-regular targets fail with `OUTPUT_PATH_SYMLINK`; a different
 /// existing file fails with `CANDIDATE_OUTPUT_CONFLICT`; all other I/O or
 /// readback failures return `CANDIDATE_OUTPUT_WRITE_FAILED`.
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub fn write_exact_idempotent(
     root: &Path,
     target: &Path,
@@ -167,10 +167,7 @@ pub fn write_exact_idempotent(
             if metadata.file_type().is_symlink() || !metadata.is_file() {
                 return Err(CandidateOutputError::new(
                     "OUTPUT_PATH_SYMLINK",
-                    format!(
-                        "output target is not a regular file: {}",
-                        target.display()
-                    ),
+                    format!("output target is not a regular file: {}", target.display()),
                 ));
             }
             let existing = fs::read(&target).map_err(|error| {
@@ -280,10 +277,7 @@ pub fn write_exact_idempotent(
     Ok(())
 }
 
-fn reject_existing_non_directories(
-    root: &Path,
-    target: &Path,
-) -> Result<(), CandidateOutputError> {
+fn reject_existing_non_directories(root: &Path, target: &Path) -> Result<(), CandidateOutputError> {
     let relative = target.strip_prefix(root).map_err(|_| {
         CandidateOutputError::new(
             "OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT",
@@ -326,10 +320,7 @@ fn reject_existing_non_directories(
     Ok(())
 }
 
-fn ensure_parent_without_symlink(
-    root: &Path,
-    parent: &Path,
-) -> Result<(), CandidateOutputError> {
+fn ensure_parent_without_symlink(root: &Path, parent: &Path) -> Result<(), CandidateOutputError> {
     let relative = parent.strip_prefix(root).map_err(|_| {
         CandidateOutputError::new(
             "OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT",
@@ -386,9 +377,9 @@ fn simple_component(value: &str) -> bool {
     !value.is_empty()
         && value != "."
         && value != ".."
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
-        })
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 #[cfg(unix)]
@@ -422,8 +413,7 @@ mod tests {
         let target = root.join("artifacts/context-artifact-candidates/p/demo.json");
         write_exact_idempotent(&root, &target, b"one\n").expect("first write");
         write_exact_idempotent(&root, &target, b"one\n").expect("identical replay");
-        let error = write_exact_idempotent(&root, &target, b"two\n")
-            .expect_err("conflict");
+        let error = write_exact_idempotent(&root, &target, b"two\n").expect_err("conflict");
         assert_eq!(error.reason(), "CANDIDATE_OUTPUT_CONFLICT");
         let _ = fs::remove_dir_all(root);
     }

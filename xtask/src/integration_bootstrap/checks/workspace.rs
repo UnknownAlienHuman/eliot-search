@@ -5,21 +5,19 @@ use toml::Value;
 
 use super::super::{Finding, load_toml};
 
-pub(super) fn validate_workspace(root: &Path, findings: &mut Vec<Finding>) {
+pub(in crate::integration_bootstrap) fn validate_workspace(
+    root: &Path,
+    findings: &mut Vec<Finding>,
+) {
     let path = root.join("Cargo.toml");
     let document = match load_toml(&path) {
         Ok(document) => document,
         Err(detail) => {
-            findings.push(Finding::new(
-                "WORKSPACE_MANIFEST_INVALID",
-                &path,
-                detail,
-            ));
+            findings.push(Finding::new("WORKSPACE_MANIFEST_INVALID", &path, detail));
             return;
         }
     };
-    let Some(workspace) = document.get("workspace").and_then(Value::as_table)
-    else {
+    let Some(workspace) = document.get("workspace").and_then(Value::as_table) else {
         findings.push(Finding::new(
             "WORKSPACE_MANIFEST_INVALID",
             &path,
@@ -36,12 +34,8 @@ pub(super) fn validate_workspace(root: &Path, findings: &mut Vec<Finding>) {
     }
 
     let members = workspace.get("members").and_then(Value::as_array);
-    let member_names: Option<Vec<&str>> = members.map(|entries| {
-        entries
-            .iter()
-            .filter_map(Value::as_str)
-            .collect::<Vec<_>>()
-    });
+    let member_names: Option<Vec<&str>> =
+        members.map(|entries| entries.iter().filter_map(Value::as_str).collect::<Vec<_>>());
     let exact_members = members.is_some_and(|entries| {
         let names = member_names.as_deref().unwrap_or_default();
         names.len() == entries.len()

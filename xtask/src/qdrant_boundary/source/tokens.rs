@@ -12,20 +12,22 @@ pub(super) fn code_tokens(code: &str) -> impl Iterator<Item = &str> {
     code_token_spans(code).map(|token| token.text)
 }
 
-pub(super) fn code_token_spans(
-    source: &str,
-) -> impl Iterator<Item = CodeToken<'_>> {
+pub(super) fn code_token_spans(source: &str) -> impl Iterator<Item = CodeToken<'_>> {
     let mut code = source;
     let mut line = 1_usize;
     std::iter::from_fn(move || {
         let trimmed = code.trim_start();
         let whitespace = code.len() - trimmed.len();
-        line += code[..whitespace].bytes().filter(|byte| *byte == b'\n').count();
+        line += code[..whitespace]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count();
         code = trimmed;
         let start = source.len() - code.len();
-        let raw_prefix = if code.strip_prefix("r#").is_some_and(|raw| {
-            raw.chars().next().is_some_and(is_identifier_character)
-        }) {
+        let raw_prefix = if code
+            .strip_prefix("r#")
+            .is_some_and(|raw| raw.chars().next().is_some_and(is_identifier_character))
+        {
             2
         } else {
             0
@@ -49,7 +51,7 @@ pub(super) fn code_token_spans(
     })
 }
 
-fn is_identifier_character(character: char) -> bool {
+const fn is_identifier_character(character: char) -> bool {
     character.is_ascii_alphanumeric()
         || character == '_'
         || (!character.is_ascii() && !character.is_whitespace())

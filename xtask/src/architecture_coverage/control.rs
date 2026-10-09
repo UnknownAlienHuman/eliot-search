@@ -3,10 +3,10 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use toml::Value;
-
 use super::{
-    load::{Inputs, boolean, integer, read_text, require, string, string_list, validate_module_ref},
+    load::{
+        Inputs, boolean, integer, read_text, require, string, string_list, validate_module_ref,
+    },
     markdown::delivery_ids,
     schemas::SchemaSummary,
     topology::{TopologySummary, rows_or_empty},
@@ -34,8 +34,7 @@ fn validate_delivery(
 ) -> usize {
     let source = delivery_ids(&inputs.architecture);
     let rows = rows_or_empty(&inputs.delivery_doc, "slice", "id", errors);
-    let expected: BTreeSet<String> =
-        (0..19).map(|index| format!("P{index:02}")).collect();
+    let expected: BTreeSet<String> = (0..19).map(|index| format!("P{index:02}")).collect();
     require(
         errors,
         source == expected,
@@ -117,7 +116,10 @@ fn validate_manifest(
         ("recipe_count", schemas.recipe_count),
         ("delivery_slice_count", delivery_count),
         ("module_packet_count", topology.module_rows.len()),
-        ("package_assignment_task_count", topology.assignment_paths.len()),
+        (
+            "package_assignment_task_count",
+            topology.assignment_paths.len(),
+        ),
     ] {
         require(
             errors,
@@ -189,16 +191,14 @@ fn validate_launch(inputs: &Inputs, errors: &mut Vec<String>) {
 }
 
 fn validate_qualification(root: &Path, errors: &mut Vec<String>) {
-    let document = match super::load::load_toml(
-        root,
-        "qualification/architecture-coverage/cases-v1.toml",
-    ) {
-        Ok(document) => document,
-        Err(error) => {
-            errors.push(error);
-            return;
-        }
-    };
+    let document =
+        match super::load::load_toml(root, "qualification/architecture-coverage/cases-v1.toml") {
+            Ok(document) => document,
+            Err(error) => {
+                errors.push(error);
+                return;
+            }
+        };
     let rows = rows_or_empty(&document, "case", "id", errors);
     require(
         errors,
@@ -221,12 +221,9 @@ fn validate_qualification(root: &Path, errors: &mut Vec<String>) {
 
 fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
     let relative = ".github/workflows/architecture-coverage.yml";
-    let text = match read_text(root, relative) {
-        Ok(text) => text,
-        Err(_) => {
-            errors.push("architecture coverage workflow missing".to_owned());
-            return;
-        }
+    let Ok(text) = read_text(root, relative) else {
+        errors.push("architecture coverage workflow missing".to_owned());
+        return;
     };
     for token in [
         "workflow_dispatch:",

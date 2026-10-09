@@ -40,7 +40,7 @@ const USAGE: &str = "usage:\n\
   xtask validate p00-foundation-acceptance [--json]\n\
   xtask validate qdrant-boundary [--json]\n";
 
-pub(super) fn run(args: &[String]) -> ExitCode {
+pub fn run(args: &[String]) -> ExitCode {
     let Some((command, rest)) = args.split_first() else {
         return usage_error();
     };
@@ -162,7 +162,7 @@ fn run_generate(args: &[String]) -> ExitCode {
     usage_error()
 }
 
-pub(super) fn usage_error() -> ExitCode {
+pub fn usage_error() -> ExitCode {
     eprint!("{USAGE}");
     ExitCode::from(2)
 }

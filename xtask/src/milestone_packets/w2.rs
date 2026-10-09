@@ -6,21 +6,18 @@ use std::path::Path;
 use toml::Value;
 
 use super::{
-    MilestonePacketReport, boolean, expected_strings, indexed_rows, integer,
-    load_doc, read_text, string, string_list,
+    MilestonePacketReport, boolean, expected_strings, indexed_rows, integer, load_doc, read_text,
+    string, string_list,
 };
 use spec::PACKAGES;
 
 #[must_use]
-pub(super) fn validate_w2_milestone_packets(
-    root: &Path,
-) -> MilestonePacketReport {
+pub(super) fn validate_w2_milestone_packets(root: &Path) -> MilestonePacketReport {
     match validate(root) {
         Ok(report) => report,
         Err(error) => MilestonePacketReport::early(error),
     }
 }
-
 fn validate(root: &Path) -> Result<MilestonePacketReport, String> {
     let document = load_doc(root, "swarm/w2-milestone-packets.toml")?;
     let packet_rows = indexed_rows(&document, "package", "name")?;
@@ -31,8 +28,7 @@ fn validate(root: &Path) -> Result<MilestonePacketReport, String> {
     )?;
     let launch = load_doc(root, "swarm/launch-state.toml")?;
     let cases = load_doc(root, "qualification/w2-milestones/cases-v1.toml")?;
-    let daemon_context =
-        load_doc(root, "swarm/context-drafts/w2/eliot-searchd.toml")?;
+    let daemon_context = load_doc(root, "swarm/context-drafts/w2/eliot-searchd.toml")?;
     let mut errors = Vec::new();
 
     let expected_names: BTreeSet<String> =
@@ -49,14 +45,10 @@ fn validate(root: &Path) -> Result<MilestonePacketReport, String> {
     if string(&document, "status") != Some("BLOCKED_ON_G0_AND_W1") {
         errors.push("W2 milestone registry is not blocked".to_owned());
     }
-    if string_list(&document, "requires_accepted_gates")
-        != Some(expected_strings(&["G0"]))
-    {
+    if string_list(&document, "requires_accepted_gates") != Some(expected_strings(&["G0"])) {
         errors.push("W2 milestone gate prerequisite mismatch".to_owned());
     }
-    if string_list(&document, "requires_accepted_receipts")
-        != Some(expected_strings(&["W1"]))
-    {
+    if string_list(&document, "requires_accepted_receipts") != Some(expected_strings(&["W1"])) {
         errors.push("W2 milestone receipt prerequisite mismatch".to_owned());
     }
     if integer(&document, "package_count") != Some(8)
@@ -70,26 +62,18 @@ fn validate(root: &Path) -> Result<MilestonePacketReport, String> {
     if boolean(&document, "sequential_milestones_per_package") != Some(true) {
         errors.push("sequential milestone invariant disabled".to_owned());
     }
-    if boolean(&document, "parallel_milestones_within_package")
-        != Some(false)
-    {
+    if boolean(&document, "parallel_milestones_within_package") != Some(false) {
         errors.push("parallel milestones inside package must remain false".to_owned());
     }
-    if boolean(
-        &document,
-        "implementation_authorized_by_this_registry",
-    ) != Some(false)
-    {
+    if boolean(&document, "implementation_authorized_by_this_registry") != Some(false) {
         errors.push("W2 milestone registry authorizes implementation".to_owned());
     }
 
-    if string(&launch, "active_stage") != Some("P00")
-        || integer(&launch, "active_wave") != Some(0)
+    if string(&launch, "active_stage") != Some("P00") || integer(&launch, "active_wave") != Some(0)
     {
         errors.push("launch authority moved from P00/W0".to_owned());
     }
-    if string_list(&launch, "authorized_packages")
-        != Some(expected_strings(&["search-contracts"]))
+    if string_list(&launch, "authorized_packages") != Some(expected_strings(&["search-contracts"]))
     {
         errors.push("current authorized package set changed".to_owned());
     }
@@ -110,22 +94,18 @@ fn validate(root: &Path) -> Result<MilestonePacketReport, String> {
     }
 
     let case_rows = cases.get("case").and_then(Value::as_array);
-    if integer(&cases, "case_count") != Some(18)
-        || case_rows.is_none_or(|items| items.len() != 18)
+    if integer(&cases, "case_count") != Some(18) || case_rows.is_none_or(|items| items.len() != 18)
     {
         errors.push("qualification case inventory mismatch".to_owned());
     } else if case_rows.is_some_and(|items| {
         items.iter().any(|case| {
             case.as_table().is_none_or(|table| {
                 table.get("mandatory").and_then(Value::as_bool) != Some(true)
-                    || table.get("result").and_then(Value::as_str)
-                        != Some("UNAVAILABLE")
+                    || table.get("result").and_then(Value::as_str) != Some("UNAVAILABLE")
             })
         })
     }) {
-        errors.push(
-            "qualification cases are not mandatory UNAVAILABLE".to_owned(),
-        );
+        errors.push("qualification cases are not mandatory UNAVAILABLE".to_owned());
     }
 
     validate_workflow(root, &mut errors);
@@ -133,10 +113,7 @@ fn validate(root: &Path) -> Result<MilestonePacketReport, String> {
     Ok(MilestonePacketReport {
         complete: true,
         packages: packet_rows.len(),
-        milestones: PACKAGES
-            .iter()
-            .map(|spec| spec.milestones.len())
-            .sum(),
+        milestones: PACKAGES.iter().map(|spec| spec.milestones.len()).sum(),
         cases: case_rows.map_or(0, Vec::len),
         launch_stage: string(&launch, "active_stage").map(str::to_owned),
         launch_wave: integer(&launch, "active_wave"),
@@ -162,25 +139,16 @@ fn validate_package(
     {
         errors.push(format!("{}: path/write scope mismatch", spec.name));
     }
-    if string_list(row, "required_handoff_packages")
-        != Some(expected_strings(spec.deps))
-    {
+    if string_list(row, "required_handoff_packages") != Some(expected_strings(spec.deps)) {
         errors.push(format!(
             "{}: milestone dependency handoffs mismatch",
             spec.name
         ));
     }
-    if string_list(agent, "required_handoff_packages")
-        != Some(expected_strings(spec.deps))
-    {
-        errors.push(format!(
-            "{}: agent dependency handoffs mismatch",
-            spec.name
-        ));
+    if string_list(agent, "required_handoff_packages") != Some(expected_strings(spec.deps)) {
+        errors.push(format!("{}: agent dependency handoffs mismatch", spec.name));
     }
-    if string_list(row, "milestone_ids")
-        != Some(expected_strings(spec.milestones))
-    {
+    if string_list(row, "milestone_ids") != Some(expected_strings(spec.milestones)) {
         errors.push(format!("{}: milestone IDs/order mismatch", spec.name));
     }
     if boolean(row, "one_active_milestone") != Some(true)
@@ -222,11 +190,7 @@ fn validate_package(
     }
 }
 
-fn validate_daemon_reentry(
-    root: &Path,
-    daemon_context: &Value,
-    errors: &mut Vec<String>,
-) {
+fn validate_daemon_reentry(root: &Path, daemon_context: &Value, errors: &mut Vec<String>) {
     let daemon_sources = daemon_context
         .get("content")
         .and_then(Value::as_table)
@@ -262,27 +226,24 @@ fn validate_daemon_reentry(
                 "D23",
             ] {
                 if !text.contains(token) {
-                    errors.push(format!(
-                        "daemon packet missing re-entry token: {token}"
-                    ));
+                    errors.push(format!("daemon packet missing re-entry token: {token}"));
                 }
             }
         }
-        Err(_) => errors.push(
-            "daemon packet missing re-entry token: unreadable packet".to_owned(),
-        ),
+        Err(_) => errors.push("daemon packet missing re-entry token: unreadable packet".to_owned()),
     }
 }
 
 fn zero_state_matches(document: &Value) -> bool {
-    let Some(state) = document.get("current_state").and_then(Value::as_table)
-    else {
+    let Some(state) = document.get("current_state").and_then(Value::as_table) else {
         return false;
     };
     state.len() == 7
         && state.get("accepted_G0").and_then(Value::as_bool) == Some(false)
         && state.get("accepted_W1").and_then(Value::as_bool) == Some(false)
-        && state.get("materialized_contexts").and_then(Value::as_integer)
+        && state
+            .get("materialized_contexts")
+            .and_then(Value::as_integer)
             == Some(0)
         && state.get("issued_tickets").and_then(Value::as_integer) == Some(0)
         && state.get("active_leases").and_then(Value::as_integer) == Some(0)
@@ -290,14 +251,11 @@ fn zero_state_matches(document: &Value) -> bool {
             .get("accepted_package_handoffs")
             .and_then(Value::as_integer)
             == Some(0)
-        && state.get("W2_G1_receipt").and_then(Value::as_str)
-            == Some("ABSENT")
+        && state.get("W2_G1_receipt").and_then(Value::as_str) == Some("ABSENT")
 }
 
 fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
-    let Ok(workflow) =
-        read_text(root, ".github/workflows/w2-milestone-packets.yml")
-    else {
+    let Ok(workflow) = read_text(root, ".github/workflows/w2-milestone-packets.yml") else {
         errors.push("missing W2 milestone workflow".to_owned());
         return;
     };
@@ -317,10 +275,7 @@ fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
         "\n  workflow_run:",
     ] {
         if workflow.contains(trigger) {
-            errors.push(format!(
-                "automatic workflow trigger: {}",
-                trigger.trim()
-            ));
+            errors.push(format!("automatic workflow trigger: {}", trigger.trim()));
         }
     }
 }

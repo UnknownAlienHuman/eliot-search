@@ -2,11 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use toml::Value;
-
-use super::load::{
-    CoverageInputs, boolean, integer, ref_package, string, strings,
-};
+use super::load::{CoverageInputs, boolean, integer, ref_package, string, strings};
 
 const IMPLEMENTATION_KINDS: [&str; 12] = [
     "implementation_contract_root",
@@ -33,15 +29,10 @@ pub(super) struct ContentCounts {
     pub(super) public_entries: BTreeMap<String, String>,
 }
 
-pub(super) fn validate(
-    inputs: &CoverageInputs,
-    errors: &mut Vec<String>,
-) -> ContentCounts {
+pub(super) fn validate(inputs: &CoverageInputs, errors: &mut Vec<String>) -> ContentCounts {
     let (public_entries, weak_modules) = validate_modules(inputs, errors);
-    let (public_facades, semantic_low) =
-        validate_operations(inputs, &public_entries, errors);
-    let (documentation_files, principles, governance) =
-        validate_documentation(inputs, errors);
+    let (public_facades, semantic_low) = validate_operations(inputs, &public_entries, errors);
+    let (documentation_files, principles, governance) = validate_documentation(inputs, errors);
 
     ContentCounts {
         documentation_files,
@@ -80,8 +71,7 @@ fn validate_modules(
         if matches!(
             role,
             "public_entry" | "structural_boundary" | "structural_support"
-        ) && string(row, "structural_rationale")
-            .is_none_or(|value| value.trim().is_empty())
+        ) && string(row, "structural_rationale").is_none_or(|value| value.trim().is_empty())
         {
             errors.push(format!("{id}: structural module rationale missing"));
         }
@@ -130,8 +120,7 @@ fn validate_operations(
         errors.push("operation registry count mismatch".to_owned());
     }
 
-    let valid_modules: BTreeSet<&str> =
-        inputs.module_rows.keys().map(String::as_str).collect();
+    let valid_modules: BTreeSet<&str> = inputs.module_rows.keys().map(String::as_str).collect();
     let mut public_facades = 0_usize;
     let mut semantic_low = 0_usize;
     for (id, row) in &inputs.operation_rows {
@@ -144,23 +133,17 @@ fn validate_operations(
         if !id.starts_with(&format!("{package}::")) {
             errors.push(format!("{id}: package identity mismatch"));
         }
-        if string(row, "public_entry_module")
-            != public_entries.get(package).map(String::as_str)
-        {
+        if string(row, "public_entry_module") != public_entries.get(package).map(String::as_str) {
             errors.push(format!("{id}: public entry module mismatch"));
         }
-        if strings(row, "sources").is_empty()
-            || strings(row, "source_contexts").is_empty()
-        {
+        if strings(row, "sources").is_empty() || strings(row, "source_contexts").is_empty() {
             errors.push(format!("{id}: operation source binding missing"));
         }
         match string(row, "route_kind") {
             Some("public_facade") => {
                 public_facades = public_facades.saturating_add(1);
                 if public_entries.get(package).map(String::as_str) != Some(module) {
-                    errors.push(format!(
-                        "{id}: facade route does not use public entry"
-                    ));
+                    errors.push(format!("{id}: facade route does not use public entry"));
                 }
             }
             Some("semantic_low") => {
@@ -194,8 +177,7 @@ fn validate_documentation(
         errors.push("documentation registry node count mismatch".to_owned());
     }
 
-    let valid_modules: BTreeSet<&str> =
-        inputs.module_rows.keys().map(String::as_str).collect();
+    let valid_modules: BTreeSet<&str> = inputs.module_rows.keys().map(String::as_str).collect();
     let mut source_files = BTreeSet::new();
     let mut principles = 0_usize;
     let mut governance = 0_usize;
@@ -225,34 +207,25 @@ fn validate_documentation(
             let mut routed_packages = BTreeSet::new();
             for module in &modules {
                 if !valid_modules.contains(module.as_str()) {
-                    errors.push(format!(
-                        "{id}: invalid documentation module {module}"
-                    ));
+                    errors.push(format!("{id}: invalid documentation module {module}"));
                 }
                 routed_packages.insert(ref_package(module).to_owned());
             }
-            let declared_packages: BTreeSet<String> =
-                packages.into_iter().collect();
+            let declared_packages: BTreeSet<String> = packages.into_iter().collect();
             if routed_packages != declared_packages {
-                errors.push(format!(
-                    "{id}: documentation package/module mismatch"
-                ));
+                errors.push(format!("{id}: documentation package/module mismatch"));
             }
         } else {
             governance = governance.saturating_add(1);
             if !matches!(kind, "governance" | "navigation") {
-                errors.push(format!(
-                    "{id}: unknown nonimplementation node kind {kind}"
-                ));
+                errors.push(format!("{id}: unknown nonimplementation node kind {kind}"));
             }
             if !modules.is_empty() || !packages.is_empty() {
                 errors.push(format!(
                     "{id}: governance/navigation node claims product module"
                 ));
             }
-            if string(row, "rationale")
-                .is_none_or(|value| value.trim().is_empty())
-            {
+            if string(row, "rationale").is_none_or(|value| value.trim().is_empty()) {
                 errors.push(format!("{id}: non-crate rationale missing"));
             }
         }

@@ -5,9 +5,7 @@ use std::path::Path;
 
 use toml::Value;
 
-use super::source::{
-    compare_identity_sets, indexed_or_empty, load_toml, string_array,
-};
+use super::source::{compare_identity_sets, indexed_or_empty, load_toml, string_array};
 
 pub(super) fn validate_dependencies(
     package_document: &Value,
@@ -24,8 +22,8 @@ pub(super) fn validate_dependencies(
     let actual = indexed_or_empty(dependency_document, "edge", "id", errors);
     compare_identity_sets(
         "package dependency",
-        expected,
-        actual.keys().cloned().collect(),
+        &expected,
+        &actual.keys().cloned().collect(),
         errors,
     );
 }
@@ -74,8 +72,8 @@ pub(super) fn validate_modules(
     let actual = indexed_or_empty(module_document, "module", "id", errors);
     compare_identity_sets(
         "logical module",
-        expected,
-        actual.keys().cloned().collect(),
+        &expected,
+        &actual.keys().cloned().collect(),
         errors,
     );
 }

@@ -6,8 +6,7 @@ use std::path::Path;
 use toml::Value;
 
 use super::source::{
-    compare_identity_sets, indexed, indexed_or_empty, load_toml,
-    read_bounded_utf8, string_array,
+    compare_identity_sets, indexed, indexed_or_empty, load_toml, read_bounded_utf8, string_array,
 };
 
 const RESERVED: [&str; 6] = ["if", "for", "while", "match", "loop", "return"];
@@ -64,10 +63,10 @@ pub(super) fn validate(
                         .cloned(),
                 );
             }
-        } else if let Some(function) = functions.get(package) {
-            if let Some(source) = function.get("functions").and_then(Value::as_str) {
-                sources.push(source.to_owned());
-            }
+        } else if let Some(function) = functions.get(package)
+            && let Some(source) = function.get("functions").and_then(Value::as_str)
+        {
+            sources.push(source.to_owned());
         }
         let Some(package_path) = row.get("path").and_then(Value::as_str) else {
             errors.push(format!("{package}: package path missing"));
@@ -102,16 +101,15 @@ pub(super) fn validate(
     let actual = indexed_or_empty(operation_document, "operation", "id", errors);
     compare_identity_sets(
         "source-derived operation",
-        expected.keys().cloned().collect(),
-        actual.keys().cloned().collect(),
+        &expected.keys().cloned().collect(),
+        &actual.keys().cloned().collect(),
         errors,
     );
     for (identity, expected_sources) in expected {
         let Some(row) = actual.get(&identity) else {
             continue;
         };
-        let actual_sources: BTreeSet<String> =
-            string_array(row, "sources").into_iter().collect();
+        let actual_sources: BTreeSet<String> = string_array(row, "sources").into_iter().collect();
         if actual_sources != expected_sources {
             errors.push(format!(
                 "{identity}: reviewed operation source set differs from source derivation"
@@ -144,7 +142,7 @@ fn is_supplement_name(name: &str) -> bool {
         return false;
     };
     let bytes = stem.as_bytes();
-    if !matches!(bytes.first().copied(), Some(b'W') | Some(b'P')) {
+    if !matches!(bytes.first().copied(), Some(b'W' | b'P')) {
         return false;
     }
     let Some(underscore) = bytes.iter().position(|byte| *byte == b'_') else {
@@ -200,10 +198,7 @@ fn heading_operation(line: &str) -> Option<&str> {
 fn inline_code_segments(text: &str) -> Vec<&str> {
     let mut segments = Vec::new();
     let mut rest = text;
-    loop {
-        let Some(start) = rest.find('`') else {
-            break;
-        };
+    while let Some(start) = rest.find('`') {
         let after = &rest[start + 1..];
         let Some(end) = after.find('`') else {
             break;
@@ -217,10 +212,7 @@ fn inline_code_segments(text: &str) -> Vec<&str> {
 fn fenced_blocks(text: &str) -> Vec<&str> {
     let mut blocks = Vec::new();
     let mut rest = text;
-    loop {
-        let Some(start) = rest.find("```") else {
-            break;
-        };
+    while let Some(start) = rest.find("```") {
         let after_marker = &rest[start + 3..];
         let Some(line_end) = after_marker.find('\n') else {
             break;
@@ -278,11 +270,7 @@ fn identifier_prefix(text: &str) -> Option<(&str, &str)> {
     }
     let end = bytes
         .iter()
-        .position(|byte| {
-            !(byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || *byte == b'_')
-        })
+        .position(|byte| !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_'))
         .unwrap_or(bytes.len());
     Some((&text[..end], &text[end..]))
 }
@@ -293,18 +281,16 @@ mod tests {
 
     #[test]
     fn exact_operation_grammar_matches_legacy_extractor() {
-        let names = operation_names(
-            concat!(
-                "## `heading_call`\n",
-                "## `not_a_heading` extra\n",
-                "Use `inline_call(value)` here.\n",
-                "```rust\n",
-                "pub(crate) async fn scoped_call(value: u64) {}\n",
-                "pub(super) fn other_call() {}\n",
-                "if(value)\n",
-                "```\n",
-            ),
-        );
+        let names = operation_names(concat!(
+            "## `heading_call`\n",
+            "## `not_a_heading` extra\n",
+            "Use `inline_call(value)` here.\n",
+            "```rust\n",
+            "pub(crate) async fn scoped_call(value: u64) {}\n",
+            "pub(super) fn other_call() {}\n",
+            "if(value)\n",
+            "```\n",
+        ));
         assert!(names.contains("heading_call"));
         assert!(names.contains("inline_call"));
         assert!(names.contains("scoped_call"));
@@ -323,9 +309,7 @@ mod tests {
             "crates/example/nested/W7_HARDENING.md",
             "crates/example"
         ));
-        assert!(is_contract_source(
-            "docs/contracts/p00/CANONICAL_TYPES.md"
-        ));
+        assert!(is_contract_source("docs/contracts/p00/CANONICAL_TYPES.md"));
         assert!(!is_contract_source(
             "docs/contracts/p00/nested/CANONICAL_TYPES.md"
         ));

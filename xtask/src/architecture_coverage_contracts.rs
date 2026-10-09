@@ -81,9 +81,10 @@ pub const fn exit_code(report: &ArchitectureCoverageContractsReport) -> i32 {
 
 /// Renders the report as deterministic pretty JSON.
 #[must_use]
-pub fn render_report_json(
-    report: &ArchitectureCoverageContractsReport,
-) -> String {
+///
+/// # Panics
+/// Panics if JSON serialization unexpectedly fails for this closed value shape.
+pub fn render_report_json(report: &ArchitectureCoverageContractsReport) -> String {
     let value = if report.complete {
         json!({
             "status": if report.passed() { "PASS" } else { "FAIL" },
@@ -106,11 +107,7 @@ pub fn render_report_json(
 
 fn validate(root: &Path) -> Result<ArchitectureCoverageContractsReport, String> {
     let manifest = load(root, "swarm/coverage/manifest.toml")?;
-    let packages = indexed_rows(
-        &load(root, "swarm/crates.toml")?,
-        "package",
-        "name",
-    )?;
+    let packages = indexed_rows(&load(root, "swarm/crates.toml")?, "package", "name")?;
     let functions_doc = load(root, "swarm/function-packets.toml")?;
     let foundations = indexed_rows(&functions_doc, "foundation", "package")?;
     let functions = indexed_rows(&functions_doc, "package", "name")?;
@@ -122,10 +119,7 @@ fn validate(root: &Path) -> Result<ArchitectureCoverageContractsReport, String> 
         "slice",
         "id",
     )?;
-    let cases_doc = load(
-        root,
-        "qualification/architecture-coverage/cases-v1.toml",
-    )?;
+    let cases_doc = load(root, "qualification/architecture-coverage/cases-v1.toml")?;
     let launch = load(root, "swarm/launch-state.toml")?;
 
     let mut errors = Vec::new();
@@ -143,13 +137,8 @@ fn validate(root: &Path) -> Result<ArchitectureCoverageContractsReport, String> 
         &operations_doc,
         &mut errors,
     );
-    let (assignment_count, delivery_count) = tasks::validate(
-        root,
-        &packages,
-        &tasks_doc,
-        &delivery,
-        &mut errors,
-    );
+    let (assignment_count, delivery_count) =
+        tasks::validate(root, &packages, &tasks_doc, &delivery, &mut errors);
     let qualification_count = qualification::validate(
         &manifest,
         &modules_doc,
@@ -175,10 +164,9 @@ fn validate(root: &Path) -> Result<ArchitectureCoverageContractsReport, String> 
 }
 
 pub(super) fn load(root: &Path, relative: &str) -> Result<Value, String> {
-    let bytes = std::fs::read(root.join(relative))
-        .map_err(|error| format!("{relative}: {error}"))?;
-    let text = String::from_utf8(bytes)
-        .map_err(|error| format!("{relative}: {error}"))?;
+    let bytes =
+        std::fs::read(root.join(relative)).map_err(|error| format!("{relative}: {error}"))?;
+    let text = String::from_utf8(bytes).map_err(|error| format!("{relative}: {error}"))?;
     toml::from_str(&text).map_err(|error| format!("{relative}: {error}"))
 }
 
@@ -205,11 +193,7 @@ pub(super) fn indexed_rows(
     Ok(result)
 }
 
-pub(super) fn require(
-    errors: &mut Vec<String>,
-    condition: bool,
-    message: impl Into<String>,
-) {
+pub(super) fn require(errors: &mut Vec<String>, condition: bool, message: impl Into<String>) {
     if !condition {
         errors.push(message.into());
     }
@@ -240,10 +224,6 @@ pub(super) fn string_list(value: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-pub(super) fn child<'a>(
-    value: &'a Value,
-    table: &str,
-    key: &str,
-) -> Option<&'a Value> {
+pub(super) fn child<'a>(value: &'a Value, table: &str, key: &str) -> Option<&'a Value> {
     value.get(table)?.as_table()?.get(key)
 }

@@ -2,12 +2,10 @@
 
 use serde_json::Value;
 
-use crate::context_materialization::{
-    ArtifactRef, OptionalSignature,
-};
+use crate::context_materialization::{ArtifactRef, OptionalSignature};
 
 /// Fully assembled non-authoritative materialization plan.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MaterializationBuild {
     plan: Value,
     plan_bytes: Vec<u8>,
@@ -17,7 +15,7 @@ pub struct MaterializationBuild {
 }
 
 impl MaterializationBuild {
-    pub(super) fn new(
+    pub(super) const fn new(
         plan: Value,
         plan_bytes: Vec<u8>,
         payload_bytes: Option<Vec<u8>>,
@@ -35,7 +33,7 @@ impl MaterializationBuild {
 
     /// Canonical plan value.
     #[must_use]
-    pub fn plan(&self) -> &Value {
+    pub const fn plan(&self) -> &Value {
         &self.plan
     }
 
@@ -93,6 +91,5 @@ pub(super) struct CandidateInput {
     pub(super) bundle_path: String,
     pub(super) candidate: Value,
     pub(super) bundle: Vec<u8>,
-    pub(super) preamble: Value,
     pub(super) blocks: Vec<crate::context_artifact::BundleBlock>,
 }

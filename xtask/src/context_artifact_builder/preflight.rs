@@ -3,19 +3,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use serde_json::{Value as JsonValue, json};
+use serde_json::json;
 use toml::Value;
 
 use crate::context_artifact::{ARTIFACT_FORMAT, ARTIFACT_ROOT, RECORD_KIND};
 use crate::git_tree::{GitTree, GitTreeError};
 use crate::ticket_planner::{
-    exact_sha256_hex, opaque_id_valid, package_name_valid, safe_path,
-    sha256_hex_valid, under,
+    exact_sha256_hex, opaque_id_valid, package_name_valid, safe_path, sha256_hex_valid, under,
 };
 
 use super::model::{
-    AcceptedHandoff, CandidateCheck, ContextArtifactBuildError, DraftPair,
-    Preflight,
+    AcceptedHandoff, CandidateCheck, ContextArtifactBuildError, DraftPair, Preflight,
 };
 
 const CONTROL_ROOTS: [&str; 8] = [
@@ -42,7 +40,7 @@ pub(super) fn run(
             "package does not use the closed package-name grammar",
         ));
     }
-    let tree = GitTree::open(root, base_commit).map_err(map_git_without_checks)?;
+    let tree = GitTree::open(root, base_commit).map_err(|error| map_git_without_checks(&error))?;
     let mut checks = Vec::new();
 
     validate_builder_contract(&tree, &mut checks)?;
@@ -103,13 +101,7 @@ pub(super) fn run(
         &format!("package launch class is {classification}"),
     );
 
-    let pair = load_draft_pair(
-        &tree,
-        package,
-        package_path,
-        classification,
-        &checks,
-    )?;
+    let pair = load_draft_pair(&tree, package, package_path, classification, &checks)?;
     pass(
         &mut checks,
         "draft-pair",
@@ -118,12 +110,7 @@ pub(super) fn run(
 
     validate_control_roots(&tree, package, &mut checks)?;
     validate_workflows(&tree, &mut checks)?;
-    let handoffs = validate_handoffs(
-        &tree,
-        &pair,
-        accepted_handoff_paths,
-        &mut checks,
-    )?;
+    let handoffs = validate_handoffs(&tree, &pair, accepted_handoff_paths, &mut checks)?;
 
     Ok(Preflight {
         tree,
@@ -162,12 +149,10 @@ fn validate_builder_contract(
         && text(&schema, "record_kind") == Some(RECORD_KIND)
         && text(&schema, "artifact_format") == Some(ARTIFACT_FORMAT)
         && integer(&digest, "schema_version") == Some(1)
-        && text(&digest, "profile")
-            == Some("context_artifact_candidate_digest_v1")
+        && text(&digest, "profile") == Some("context_artifact_candidate_digest_v1")
         && boolean(&digest, "self_referential_digest_allowed") == Some(false)
         && authority.is_some_and(|table| {
-            !table.is_empty()
-                && table.values().all(|value| value.as_bool() == Some(false))
+            !table.is_empty() && table.values().all(|value| value.as_bool() == Some(false))
         });
     require(
         coherent,
@@ -178,6 +163,10 @@ fn validate_builder_contract(
     )
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 fn load_draft_pair(
     tree: &GitTree,
     package: &str,
@@ -214,20 +203,22 @@ fn load_draft_pair(
         "DRAFT_PAIR_MISSING",
         checks,
     )?;
-    let ticket_path = text(&ticket_row, "path").ok_or_else(|| {
-        failure(checks, "DRAFT_PAIR_MISSING", "ticket draft path is missing")
-    })?;
+    let ticket_path = text(&ticket_row, "path")
+        .ok_or_else(|| failure(checks, "DRAFT_PAIR_MISSING", "ticket draft path is missing"))?;
     let context_path = text(&context_row, "path").ok_or_else(|| {
-        failure(checks, "DRAFT_PAIR_MISSING", "context draft path is missing")
+        failure(
+            checks,
+            "DRAFT_PAIR_MISSING",
+            "context draft path is missing",
+        )
     })?;
-    let source_ceiling_class = text(&context_row, "source_ceiling_class")
-        .ok_or_else(|| {
-            failure(
-                checks,
-                "DRAFT_MANIFEST_MISMATCH",
-                "source ceiling class is missing",
-            )
-        })?;
+    let source_ceiling_class = text(&context_row, "source_ceiling_class").ok_or_else(|| {
+        failure(
+            checks,
+            "DRAFT_MANIFEST_MISMATCH",
+            "source ceiling class is missing",
+        )
+    })?;
     if !safe_path(ticket_path) || !safe_path(context_path) {
         return Err(failure(
             checks,
@@ -235,12 +226,14 @@ fn load_draft_pair(
             "draft path is not repository-relative safe",
         ));
     }
-    let (ticket_raw, _) = tree.read_bytes(ticket_path).map_err(|error| map_git(error, checks))?;
-    let (context_raw, context_entry) = tree
+    let (ticket_blob, _) = tree
+        .read_bytes(ticket_path)
+        .map_err(|error| map_git(&error, checks))?;
+    let (context_blob_bytes, context_entry) = tree
         .read_bytes(context_path)
-        .map_err(|error| map_git(error, checks))?;
-    let ticket = parse_toml_bytes(&ticket_raw, "DRAFT_PAIR_MISMATCH", checks)?;
-    let context = parse_toml_bytes(&context_raw, "DRAFT_PAIR_MISMATCH", checks)?;
+        .map_err(|error| map_git(&error, checks))?;
+    let ticket = parse_toml_bytes(&ticket_blob, "DRAFT_PAIR_MISMATCH", checks)?;
+    let context = parse_toml_bytes(&context_blob_bytes, "DRAFT_PAIR_MISMATCH", checks)?;
 
     let ticket_context = ticket.get("context").and_then(Value::as_table);
     let identity_ok = integer(&ticket, "schema_version") == Some(2)
@@ -288,8 +281,7 @@ fn load_draft_pair(
             && table.get("reviewer").and_then(Value::as_str) == Some("UNASSIGNED")
             && table.get("issued_at").and_then(Value::as_str) == Some("")
             && table.get("base_commit").and_then(Value::as_str) == Some("UNSELECTED")
-            && table.get("branch_or_worktree").and_then(Value::as_str)
-                == Some("UNSELECTED")
+            && table.get("branch_or_worktree").and_then(Value::as_str) == Some("UNSELECTED")
     }) && text(&context, "base_commit") == Some("UNSELECTED")
         && text(&context, "materialized_context_manifest_ref") == Some("UNAVAILABLE")
         && text(&context, "materialized_context_artifact_ref") == Some("UNAVAILABLE");
@@ -303,12 +295,9 @@ fn load_draft_pair(
     let repository_fence = ticket.get("repository_fence").and_then(Value::as_table);
     let expected_scope = format!("{package_path}/**");
     let fence_ok = repository_fence.is_some_and(|table| {
-        table.get("repository").and_then(Value::as_str)
-            == Some("UnknownAlienHuman/eliot-search")
-            && table.get("write_scope").and_then(Value::as_str)
-                == Some(expected_scope.as_str())
-            && table.get("feature_profile").and_then(Value::as_str)
-                == Some("P00_FOUNDATION")
+        table.get("repository").and_then(Value::as_str) == Some("UnknownAlienHuman/eliot-search")
+            && table.get("write_scope").and_then(Value::as_str) == Some(expected_scope.as_str())
+            && table.get("feature_profile").and_then(Value::as_str) == Some("P00_FOUNDATION")
     }) && text(&ticket, "launch_class") == Some(classification);
     if !fence_ok {
         return Err(failure(
@@ -318,43 +307,55 @@ fn load_draft_pair(
         ));
     }
 
-    let content = context.get("content").and_then(Value::as_table).ok_or_else(|| {
-        failure(checks, "DRAFT_PAIR_MISMATCH", "missing [content] table")
-    })?;
-    let sources = string_array(content.get("source_files"), "source_files", checks)?;
+    // Named distinctly from the parsed `context` draft to satisfy
+    // clippy::similar_names while keeping the exact TOML access path.
+    let context_content = context
+        .get("content")
+        .and_then(Value::as_table)
+        .ok_or_else(|| failure(checks, "DRAFT_PAIR_MISMATCH", "missing [content] table"))?;
+    let sources = string_array(context_content.get("source_files"), "source_files", checks)?;
     let selectors = string_array(
-        content.get("registry_fragments"),
+        context_content.get("registry_fragments"),
         "registry_fragments",
         checks,
     )?;
     let handoff_slots = string_array(
-        content.get("accepted_handoff_slots"),
+        context_content.get("accepted_handoff_slots"),
         "accepted_handoff_slots",
         checks,
     )?;
     let unavailable_checks = string_array(
-        content.get("required_unavailable_checks"),
+        context_content.get("required_unavailable_checks"),
         "required_unavailable_checks",
         checks,
     )?;
     let forbidden = string_array(
-        content.get("forbidden_paths"),
+        context_content.get("forbidden_paths"),
         "forbidden_paths",
         checks,
     )?;
     let ceiling = if source_ceiling_class == "P00_EXACT_CONTRACT_PACK" {
-        integer(&context_manifest, "p00_exact_contract_pack_source_file_ceiling")
+        integer(
+            &context_manifest,
+            "p00_exact_contract_pack_source_file_ceiling",
+        )
     } else {
         integer(&context_manifest, "ordinary_static_source_file_ceiling")
     };
     let fragment_ceiling = integer(&context_manifest, "max_registry_fragments_per_context");
     let handoff_ceiling = integer(&context_manifest, "max_accepted_handoff_slots_per_context");
-    let counts_ok = ceiling.is_some_and(|value| usize::try_from(value).is_ok_and(|value| sources.len() <= value))
-        && fragment_ceiling.is_some_and(|value| usize::try_from(value).is_ok_and(|value| selectors.len() <= value))
-        && handoff_ceiling.is_some_and(|value| usize::try_from(value).is_ok_and(|value| handoff_slots.len() <= value))
+    let counts_ok = ceiling
+        .is_some_and(|value| usize::try_from(value).is_ok_and(|value| sources.len() <= value))
+        && fragment_ceiling.is_some_and(|value| {
+            usize::try_from(value).is_ok_and(|value| selectors.len() <= value)
+        })
+        && handoff_ceiling.is_some_and(|value| {
+            usize::try_from(value).is_ok_and(|value| handoff_slots.len() <= value)
+        })
         && integer(&context, "source_file_count") == i64::try_from(sources.len()).ok()
         && integer(&context, "registry_fragment_count") == i64::try_from(selectors.len()).ok()
-        && integer(&context, "accepted_handoff_slot_count") == i64::try_from(handoff_slots.len()).ok()
+        && integer(&context, "accepted_handoff_slot_count")
+            == i64::try_from(handoff_slots.len()).ok()
         && unique(&sources)
         && unique(&selectors)
         && unique(&handoff_slots)
@@ -386,14 +387,20 @@ fn load_draft_pair(
                 == Some("--- repository-path: <path> ---")
             && table.get("registry_header_format").and_then(Value::as_str)
                 == Some("--- registry-selector: <path>::<selector> ---")
-            && table.get("preserve_declared_order").and_then(Value::as_bool) == Some(true)
+            && table
+                .get("preserve_declared_order")
+                .and_then(Value::as_bool)
+                == Some(true)
             && table.get("record_source_sha256").and_then(Value::as_bool) == Some(true)
             && table.get("record_fragment_sha256").and_then(Value::as_bool) == Some(true)
-    }) && text(&context, "materialization_mode") == Some("canonical_concatenated_bundle")
+    }) && text(&context, "materialization_mode")
+        == Some("canonical_concatenated_bundle")
         && !unavailable_checks.is_empty()
         && forbidden.iter().any(|item| item == "docs/architecture/**")
         && sources.iter().all(|path| safe_path(path))
-        && selectors.iter().all(|selector| selector_path_safe(selector));
+        && selectors
+            .iter()
+            .all(|selector| selector_path_safe(selector));
     if !canonical_ok {
         return Err(failure(
             checks,
@@ -403,17 +410,15 @@ fn load_draft_pair(
     }
 
     Ok(DraftPair {
-        ticket_path: ticket_path.to_owned(),
         context_path: context_path.to_owned(),
         ticket,
-        context,
         sources,
         selectors,
         handoff_slots,
         unavailable_checks,
         source_ceiling_class: source_ceiling_class.to_owned(),
         context_blob: tree.blob_identity(&context_entry),
-        context_sha256: exact_sha256_hex(&context_raw),
+        context_sha256: exact_sha256_hex(&context_blob_bytes),
     })
 }
 
@@ -423,7 +428,9 @@ fn validate_control_roots(
     checks: &mut Vec<CandidateCheck>,
 ) -> Result<(), ContextArtifactBuildError> {
     for root in CONTROL_ROOTS {
-        let files = tree.list_files(root).map_err(|error| map_git(error, checks))?;
+        let files = tree
+            .list_files(root)
+            .map_err(|error| map_git(&error, checks))?;
         let has_metadata = files.iter().any(|path| {
             path == &format!("{root}/README.md") || path == &format!("{root}/.gitkeep")
         });
@@ -449,12 +456,17 @@ fn validate_control_roots(
     }
     for root in &CONTROL_ROOTS[..6] {
         let prefix = format!("{root}/{package}");
-        let files = tree.list_files(&prefix).map_err(|error| map_git(error, checks))?;
+        let files = tree
+            .list_files(&prefix)
+            .map_err(|error| map_git(&error, checks))?;
         if !files.is_empty() {
             return Err(failure(
                 checks,
                 "CURRENT_PACKAGE_CONTROL_RECORD_EXISTS",
-                &format!("current-package control record already exists: {}", files[0]),
+                &format!(
+                    "current-package control record already exists: {}",
+                    files[0]
+                ),
             ));
         }
     }
@@ -463,17 +475,17 @@ fn validate_control_roots(
         "current-package-records",
         "no current-package control record exists",
     );
-    let wave_records: Vec<String> = tree
+    // Checked directly on the filtered iterator so no intermediate Vec is
+    // materialized; the emptiness predicate is unchanged.
+    let wave_receipts_present = tree
         .list_files("swarm/wave-receipts")
-        .map_err(|error| map_git(error, checks))?
+        .map_err(|error| map_git(&error, checks))?
         .into_iter()
-        .filter(|path| {
-            path != "swarm/wave-receipts/README.md"
-                && path != "swarm/wave-receipts/.gitkeep"
-        })
-        .collect();
+        .any(|path| {
+            path != "swarm/wave-receipts/README.md" && path != "swarm/wave-receipts/.gitkeep"
+        });
     require(
-        wave_records.is_empty(),
+        !wave_receipts_present,
         checks,
         "w0-receipt",
         "W0_ALREADY_ACCEPTED",
@@ -487,9 +499,16 @@ fn validate_workflows(
 ) -> Result<(), ContextArtifactBuildError> {
     let workflows = tree
         .list_files(".github/workflows")
-        .map_err(|error| map_git(error, checks))?
+        .map_err(|error| map_git(&error, checks))?
         .into_iter()
-        .filter(|path| path.ends_with(".yml") || path.ends_with(".yaml"))
+        .filter(|path| {
+            let path = Path::new(path);
+            path.extension()
+                .is_some_and(|extension| extension == "yml" || extension == "yaml")
+                || path
+                    .file_name()
+                    .is_some_and(|name| name == ".yml" || name == ".yaml")
+        })
         .collect::<Vec<_>>();
     if workflows.is_empty() {
         return Err(failure(
@@ -499,7 +518,9 @@ fn validate_workflows(
         ));
     }
     for path in &workflows {
-        let (text, _) = tree.read_text(path).map_err(|error| map_git(error, checks))?;
+        let (text, _) = tree
+            .read_text(path)
+            .map_err(|error| map_git(&error, checks))?;
         let valid = text.lines().any(|line| line == "  workflow_dispatch:")
             && text.lines().any(|line| line == "  contents: read")
             && text.contains("persist-credentials: false")
@@ -525,11 +546,18 @@ fn validate_workflows(
     pass(
         checks,
         "workflow-policy",
-        &format!("{} workflows are manual/read-only/credential-free", workflows.len()),
+        &format!(
+            "{} workflows are manual/read-only/credential-free",
+            workflows.len()
+        ),
     );
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered handoff checks in #317; controller removal is owned by #214."
+)]
 fn validate_handoffs(
     tree: &GitTree,
     pair: &DraftPair,
@@ -562,29 +590,77 @@ fn validate_handoffs(
                 &format!("unsafe handoff path: {path}"),
             ));
         }
-        let (raw, entry) = tree.read_bytes(path).map_err(|error| map_git(error, checks))?;
+        let (raw, entry) = tree
+            .read_bytes(path)
+            .map_err(|error| map_git(&error, checks))?;
         let record = parse_toml_bytes(&raw, "HANDOFF_RECORD_INVALID", checks)?;
-        let identity = record.get("identity").and_then(Value::as_table).ok_or_else(|| {
-            failure(checks, "HANDOFF_RECORD_INVALID", "handoff identity is missing")
-        })?;
-        let accepted = record.get("accepted_code").and_then(Value::as_table).ok_or_else(|| {
-            failure(checks, "HANDOFF_RECORD_INVALID", "handoff accepted_code is missing")
-        })?;
-        let public = record.get("public_surface").and_then(Value::as_table).ok_or_else(|| {
-            failure(checks, "HANDOFF_RECORD_INVALID", "handoff public_surface is missing")
-        })?;
-        let signature = record.get("signature").and_then(Value::as_table).ok_or_else(|| {
-            failure(checks, "HANDOFF_RECORD_INVALID", "handoff signature is missing")
-        })?;
-        let package = identity.get("package").and_then(Value::as_str).unwrap_or_default();
-        let handoff_id = identity.get("handoff_id").and_then(Value::as_str).unwrap_or_default();
-        let final_commit = accepted.get("final_commit").and_then(Value::as_str).unwrap_or_default();
-        let api = public.get("api_schema_digest").and_then(Value::as_str).unwrap_or_default();
-        let reasons = public.get("error_reason_digest").and_then(Value::as_str).unwrap_or_default();
-        let record_digest = signature.get("record_sha256").and_then(Value::as_str).unwrap_or_default();
+        let identity = record
+            .get("identity")
+            .and_then(Value::as_table)
+            .ok_or_else(|| {
+                failure(
+                    checks,
+                    "HANDOFF_RECORD_INVALID",
+                    "handoff identity is missing",
+                )
+            })?;
+        let accepted = record
+            .get("accepted_code")
+            .and_then(Value::as_table)
+            .ok_or_else(|| {
+                failure(
+                    checks,
+                    "HANDOFF_RECORD_INVALID",
+                    "handoff accepted_code is missing",
+                )
+            })?;
+        let public = record
+            .get("public_surface")
+            .and_then(Value::as_table)
+            .ok_or_else(|| {
+                failure(
+                    checks,
+                    "HANDOFF_RECORD_INVALID",
+                    "handoff public_surface is missing",
+                )
+            })?;
+        let signature = record
+            .get("signature")
+            .and_then(Value::as_table)
+            .ok_or_else(|| {
+                failure(
+                    checks,
+                    "HANDOFF_RECORD_INVALID",
+                    "handoff signature is missing",
+                )
+            })?;
+        let package = identity
+            .get("package")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let handoff_id = identity
+            .get("handoff_id")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let final_commit = accepted
+            .get("final_commit")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let api = public
+            .get("api_schema_digest")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let reasons = public
+            .get("error_reason_digest")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let record_digest = signature
+            .get("record_sha256")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         let valid = package_name_valid(package)
             && opaque_id_valid(handoff_id)
-            && path == format!("swarm/handoffs/{package}/{handoff_id}.toml")
+            && *path == format!("swarm/handoffs/{package}/{handoff_id}.toml")
             && integer(&record, "schema_version") == Some(1)
             && text(&record, "record_kind") == Some("package_handoff_v1")
             && text(&record, "status") == Some("ACCEPTED")
@@ -615,7 +691,13 @@ fn validate_handoffs(
             "api_schema_digest": api,
             "error_reason_digest": reasons,
         });
-        supplied.insert(package.to_owned(), AcceptedHandoff { summary, bytes: raw });
+        supplied.insert(
+            package.to_owned(),
+            AcceptedHandoff {
+                summary,
+                bytes: raw,
+            },
+        );
         pass(
             checks,
             &format!("handoff-input-{index:02}"),
@@ -644,7 +726,7 @@ fn superseded_handoffs(
     let mut result = BTreeSet::new();
     for path in tree
         .list_files("swarm/supersessions")
-        .map_err(|error| map_git(error, checks))?
+        .map_err(|error| map_git(&error, checks))?
     {
         if path.ends_with("/README.md") || path.ends_with("/.gitkeep") {
             continue;
@@ -676,7 +758,7 @@ fn signed_payload_digest(raw: &[u8]) -> Option<String> {
     if positions.len() != 1 || positions[0] == 0 {
         return None;
     }
-    Some(exact_sha256_hex(&raw[..positions[0] + 1]))
+    Some(exact_sha256_hex(&raw[..=positions[0]]))
 }
 
 fn launch_class<'a>(launch: &'a Value, package: &str) -> Option<&'a str> {
@@ -691,7 +773,11 @@ fn launch_class<'a>(launch: &'a Value, package: &str) -> Option<&'a str> {
 
 fn contains_once(value: Option<&Value>, expected: &str) -> bool {
     value.and_then(Value::as_array).is_some_and(|items| {
-        items.iter().filter(|item| item.as_str() == Some(expected)).count() == 1
+        items
+            .iter()
+            .filter(|item| item.as_str() == Some(expected))
+            .count()
+            == 1
     })
 }
 
@@ -731,7 +817,7 @@ fn load_toml(
 ) -> Result<Value, ContextArtifactBuildError> {
     tree.load_toml(path)
         .map(|(value, _)| value)
-        .map_err(|error| map_git(error, checks))
+        .map_err(|error| map_git(&error, checks))
 }
 
 fn parse_toml_bytes(
@@ -825,18 +911,14 @@ fn require(
     }
 }
 
-fn failure(
-    checks: &[CandidateCheck],
-    reason: &str,
-    message: &str,
-) -> ContextArtifactBuildError {
+fn failure(checks: &[CandidateCheck], reason: &str, message: &str) -> ContextArtifactBuildError {
     ContextArtifactBuildError::with_checks(reason, message, checks.to_vec())
 }
 
-fn map_git_without_checks(error: GitTreeError) -> ContextArtifactBuildError {
+fn map_git_without_checks(error: &GitTreeError) -> ContextArtifactBuildError {
     ContextArtifactBuildError::new(error.reason(), error.message())
 }
 
-fn map_git(error: GitTreeError, checks: &[CandidateCheck]) -> ContextArtifactBuildError {
+fn map_git(error: &GitTreeError, checks: &[CandidateCheck]) -> ContextArtifactBuildError {
     failure(checks, error.reason(), error.message())
 }

@@ -4,9 +4,9 @@ use std::path::Path;
 use toml::Value;
 
 use super::{
-    AgentDraftReport, boolean, child_bool, child_string, child_string_list,
-    expected_strings, indexed_rows, integer, load_doc, read_text,
-    require_regular_file, string, string_list, symmetric_difference,
+    AgentDraftReport, boolean, child_bool, child_string, child_string_list, expected_strings,
+    indexed_rows, integer, load_doc, read_text, require_regular_file, string, string_list,
+    symmetric_difference,
 };
 
 struct PackageSpec {
@@ -34,7 +34,12 @@ const PACKAGES: [PackageSpec; 7] = [
         path: "crates/search-runtime/search-runtime-owner",
         phase: "P01",
         soft: 4_500,
-        deps: &["search-contracts", "search-domain", "search-ports", "search-config"],
+        deps: &[
+            "search-contracts",
+            "search-domain",
+            "search-ports",
+            "search-config",
+        ],
         config: &["config/sections/instance.md"],
         group: "B",
     },
@@ -43,7 +48,12 @@ const PACKAGES: [PackageSpec; 7] = [
         path: "crates/search-runtime/search-os-secrets",
         phase: "P01",
         soft: 3_500,
-        deps: &["search-contracts", "search-domain", "search-ports", "search-config"],
+        deps: &[
+            "search-contracts",
+            "search-domain",
+            "search-ports",
+            "search-config",
+        ],
         config: &["config/sections/secrets.md"],
         group: "B",
     },
@@ -52,7 +62,12 @@ const PACKAGES: [PackageSpec; 7] = [
         path: "crates/search-control-redb",
         phase: "P02",
         soft: 7_500,
-        deps: &["search-contracts", "search-domain", "search-ports", "search-config"],
+        deps: &[
+            "search-contracts",
+            "search-domain",
+            "search-ports",
+            "search-config",
+        ],
         config: &["config/sections/control.md"],
         group: "B",
     },
@@ -61,7 +76,12 @@ const PACKAGES: [PackageSpec; 7] = [
         path: "crates/search-provider-protocol",
         phase: "P02",
         soft: 7_500,
-        deps: &["search-contracts", "search-domain", "search-ports", "search-config"],
+        deps: &[
+            "search-contracts",
+            "search-domain",
+            "search-ports",
+            "search-config",
+        ],
         config: &["config/sections/protocol.md"],
         group: "B",
     },
@@ -88,7 +108,12 @@ const PACKAGES: [PackageSpec; 7] = [
         path: "bins/eliot-search",
         phase: "P02",
         soft: 4_500,
-        deps: &["search-contracts", "search-ports", "search-config", "search-provider-protocol"],
+        deps: &[
+            "search-contracts",
+            "search-ports",
+            "search-config",
+            "search-provider-protocol",
+        ],
         config: &[],
         group: "C",
     },
@@ -100,7 +125,6 @@ pub(super) fn validate_w1_agent_drafts(root: &Path) -> AgentDraftReport {
         Err(error) => AgentDraftReport::early(error),
     }
 }
-
 fn validate(root: &Path) -> Result<AgentDraftReport, String> {
     let packet_doc = load_doc(root, "swarm/w1-agent-packets.toml")?;
     let ticket_manifest = load_doc(root, "swarm/ticket-drafts/w1/manifest.toml")?;
@@ -138,10 +162,8 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
     if string(&packet_doc, "status") != Some("BLOCKED_ON_G0_AND_W0") {
         errors.push("W1 packet registry is not blocked".to_owned());
     }
-    if string_list(&packet_doc, "requires_accepted_gates")
-        != Some(expected_strings(&["G0"]))
-        || string_list(&packet_doc, "requires_accepted_receipts")
-            != Some(expected_strings(&["W0"]))
+    if string_list(&packet_doc, "requires_accepted_gates") != Some(expected_strings(&["G0"]))
+        || string_list(&packet_doc, "requires_accepted_receipts") != Some(expected_strings(&["W0"]))
     {
         errors.push("W1 prerequisites mismatch".to_owned());
     }
@@ -169,13 +191,11 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
         errors.push("central W1 prerequisites mismatch".to_owned());
     }
 
-    if string(&launch, "active_stage") != Some("P00")
-        || integer(&launch, "active_wave") != Some(0)
+    if string(&launch, "active_stage") != Some("P00") || integer(&launch, "active_wave") != Some(0)
     {
         errors.push("launch authority moved from P00/W0".to_owned());
     }
-    if string_list(&launch, "authorized_packages")
-        != Some(expected_strings(&["search-contracts"]))
+    if string_list(&launch, "authorized_packages") != Some(expected_strings(&["search-contracts"]))
     {
         errors.push("authorized package set changed".to_owned());
     }
@@ -187,14 +207,8 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
         let crate_row = crates.get(spec.name).unwrap_or(&empty_crate);
         let empty_function = Value::Table(toml::map::Map::new());
         let function = functions.get(spec.name).unwrap_or(&empty_function);
-        let ticket = load_doc(
-            root,
-            &format!("swarm/ticket-drafts/w1/{}.toml", spec.name),
-        )?;
-        let context = load_doc(
-            root,
-            &format!("swarm/context-drafts/w1/{}.toml", spec.name),
-        )?;
+        let ticket = load_doc(root, &format!("swarm/ticket-drafts/w1/{}.toml", spec.name))?;
+        let context = load_doc(root, &format!("swarm/context-drafts/w1/{}.toml", spec.name))?;
 
         require_regular_file(root, spec.name, string(packet, "assignment"), &mut errors);
         require_regular_file(root, spec.name, string(packet, "functions"), &mut errors);
@@ -219,10 +233,11 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
         {
             errors.push(format!("{}: phase/group mismatch", spec.name));
         }
-        if string_list(packet, "required_handoff_packages")
-            != Some(expected_strings(spec.deps))
-        {
-            errors.push(format!("{}: packet dependency handoffs mismatch", spec.name));
+        if string_list(packet, "required_handoff_packages") != Some(expected_strings(spec.deps)) {
+            errors.push(format!(
+                "{}: packet dependency handoffs mismatch",
+                spec.name
+            ));
         }
         if string_list(packet, "config_packets") != Some(expected_strings(spec.config)) {
             errors.push(format!("{}: config packet mismatch", spec.name));
@@ -232,13 +247,14 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
         {
             errors.push(format!("{}: line budget mismatch", spec.name));
         }
-        if string(crate_row, "path") != Some(spec.path)
-            || integer(crate_row, "wave") != Some(1)
-        {
+        if string(crate_row, "path") != Some(spec.path) || integer(crate_row, "wave") != Some(1) {
             errors.push(format!("{}: crate registry mismatch", spec.name));
         }
         if string(function, "write_scope") != Some(&format!("{}/**", spec.path)) {
-            errors.push(format!("{}: function registry write scope mismatch", spec.name));
+            errors.push(format!(
+                "{}: function registry write scope mismatch",
+                spec.name
+            ));
         }
 
         if string(&ticket, "status") != Some("DRAFT_ONLY_NOT_ISSUED")
@@ -265,16 +281,25 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
         if child_string_list(&ticket, "dependencies", "required_handoff_packages")
             != Some(expected_strings(spec.deps))
         {
-            errors.push(format!("{}: ticket dependency handoffs mismatch", spec.name));
+            errors.push(format!(
+                "{}: ticket dependency handoffs mismatch",
+                spec.name
+            ));
         }
         if child_string(&ticket, "unresolved_identity", "base_commit") != Some("UNSELECTED")
             || child_string(&ticket, "unresolved_identity", "writer") != Some("UNASSIGNED")
             || child_string(&ticket, "unresolved_identity", "reviewer") != Some("UNASSIGNED")
         {
-            errors.push(format!("{}: ticket identity prematurely resolved", spec.name));
+            errors.push(format!(
+                "{}: ticket identity prematurely resolved",
+                spec.name
+            ));
         }
         if child_string(&ticket, "stage_prerequisites", "status") != Some("UNAVAILABLE") {
-            errors.push(format!("{}: stage prerequisites prematurely accepted", spec.name));
+            errors.push(format!(
+                "{}: stage prerequisites prematurely accepted",
+                spec.name
+            ));
         }
 
         if string(&context, "status") != Some("UNMATERIALIZED_DRAFT")
@@ -283,7 +308,10 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
             errors.push(format!("{}: context draft became claimable", spec.name));
         }
         if boolean(&context, "authorizes_implementation") != Some(false) {
-            errors.push(format!("{}: context draft authorizes implementation", spec.name));
+            errors.push(format!(
+                "{}: context draft authorizes implementation",
+                spec.name
+            ));
         }
         if string(&context, "stage") != Some("W1")
             || integer(&context, "wave") != Some(1)
@@ -295,21 +323,19 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
         let sources = child_string_list(&context, "content", "source_files").unwrap_or_default();
         let selectors =
             child_string_list(&context, "content", "registry_fragments").unwrap_or_default();
-        let slots = child_string_list(&context, "content", "accepted_handoff_slots")
-            .unwrap_or_default();
+        let slots =
+            child_string_list(&context, "content", "accepted_handoff_slots").unwrap_or_default();
         if integer(&context, "source_file_count") != i64::try_from(sources.len()).ok()
             || sources.len() > 16
         {
             errors.push(format!("{}: source count/ceiling mismatch", spec.name));
         }
-        if integer(&context, "registry_fragment_count")
-            != i64::try_from(selectors.len()).ok()
+        if integer(&context, "registry_fragment_count") != i64::try_from(selectors.len()).ok()
             || selectors.len() > 4
         {
             errors.push(format!("{}: selector count/ceiling mismatch", spec.name));
         }
-        if integer(&context, "accepted_handoff_slot_count")
-            != i64::try_from(slots.len()).ok()
+        if integer(&context, "accepted_handoff_slot_count") != i64::try_from(slots.len()).ok()
             || slots.len() != spec.deps.len()
         {
             errors.push(format!("{}: handoff slot count mismatch", spec.name));
@@ -352,15 +378,17 @@ fn validate(root: &Path) -> Result<AgentDraftReport, String> {
         errors.push("W1 context manifest counts invalid".to_owned());
     }
     let case_rows = cases.get("case").and_then(Value::as_array);
-    if integer(&cases, "case_count") != Some(20)
-        || case_rows.is_none_or(|rows| rows.len() != 20)
-    {
+    if integer(&cases, "case_count") != Some(20) || case_rows.is_none_or(|rows| rows.len() != 20) {
         errors.push("qualification case inventory mismatch".to_owned());
     }
 
     match read_text(root, ".github/workflows/w1-agent-drafts.yml") {
         Ok(workflow) => {
-            for token in ["workflow_dispatch:", "contents: read", "persist-credentials: false"] {
+            for token in [
+                "workflow_dispatch:",
+                "contents: read",
+                "persist-credentials: false",
+            ] {
                 if !workflow.contains(token) {
                     errors.push(format!("workflow missing {token}"));
                 }

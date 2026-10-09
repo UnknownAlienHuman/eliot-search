@@ -6,8 +6,8 @@ use toml::Value as TomlValue;
 use crate::accepted_evidence::accepted_evidence_digest_toml;
 use crate::context_artifact::BundleBlock;
 use crate::context_materialization::{
-    ArtifactRef, INSTANCE_STATUS, MaterializationPlanError, OptionalSignature,
-    SignatureValue, operation_id,
+    ArtifactRef, INSTANCE_STATUS, MaterializationPlanError, OptionalSignature, SignatureValue,
+    operation_id,
 };
 use crate::ticket_planner::exact_sha256_hex;
 
@@ -33,12 +33,7 @@ pub(super) fn project(
     let accepted_handoffs = accepted_handoffs(input)?;
     let operation_input = operation_input(input, selection)?;
     let operation = operation_id(&operation_input);
-    let payload = render_payload(
-        &input.candidate,
-        selection,
-        &accepted_handoffs,
-        &operation,
-    )?;
+    let payload = render_payload(&input.candidate, selection, &accepted_handoffs, &operation)?;
     let signed_payload_sha256 = exact_sha256_hex(&payload);
     let both_present = selection.materializer_signature.state == "PRESENT"
         && selection.reviewer_signature.state == "PRESENT";
@@ -101,9 +96,7 @@ fn operation_input(
     }))
 }
 
-fn accepted_handoffs(
-    input: &CandidateInput,
-) -> Result<Vec<Value>, MaterializationPlanError> {
+fn accepted_handoffs(input: &CandidateInput) -> Result<Vec<Value>, MaterializationPlanError> {
     let base_commit = candidate_text(&input.candidate, "/repository/base_commit")?;
     let mut projections = Vec::new();
     for block in input
@@ -125,14 +118,11 @@ fn accepted_handoff_projection(
     block: &BundleBlock,
     base_commit: &str,
 ) -> Result<Value, MaterializationPlanError> {
-    let text = std::str::from_utf8(&block.content).map_err(|_| {
-        handoff_invalid("accepted handoff is not strict UTF-8")
-    })?;
-    let record: TomlValue = toml::from_str(text).map_err(|error| {
-        handoff_invalid(&format!("accepted handoff parse failed: {error}"))
-    })?;
-    if record.get("record_kind").and_then(TomlValue::as_str)
-        != Some("package_handoff_v1")
+    let text = std::str::from_utf8(&block.content)
+        .map_err(|_| handoff_invalid("accepted handoff is not strict UTF-8"))?;
+    let record: TomlValue = toml::from_str(text)
+        .map_err(|error| handoff_invalid(&format!("accepted handoff parse failed: {error}")))?;
+    if record.get("record_kind").and_then(TomlValue::as_str) != Some("package_handoff_v1")
         || record.get("status").and_then(TomlValue::as_str) != Some("ACCEPTED")
     {
         return Err(handoff_invalid("accepted handoff kind or status mismatch"));
@@ -141,9 +131,10 @@ fn accepted_handoff_projection(
     let accepted = table(&record, "accepted_code")?;
     let public = table(&record, "public_surface")?;
     let compatibility = table(&record, "compatibility")?;
-    let metadata = block.metadata.as_object().ok_or_else(|| {
-        handoff_mismatch("handoff block metadata is not an object")
-    })?;
+    let metadata = block
+        .metadata
+        .as_object()
+        .ok_or_else(|| handoff_mismatch("handoff block metadata is not an object"))?;
     let package = toml_text(identity, "package")?;
     let final_commit = toml_text(accepted, "final_commit")?;
     let api_schema_digest = toml_text(public, "api_schema_digest")?;
@@ -169,14 +160,15 @@ fn accepted_handoff_projection(
         || (configuration_state == "PRESEL"
             && !crate::context_materialization::sha256_hex_valid(configuration_value))
     {
-        return Err(handoff_invalid("configuration digest state/value is invalid"));
+        return Err(handoff_invalid(
+            "configuration digest state/value is invalid",
+        ));
     }
     let evidence = record
         .get("evidence")
         .ok_or_else(|| handoff_invalid("accepted handoff evidence array is missing"))?;
-    let evidence_digest = accepted_evidence_digest_toml(evidence).map_err(|error| {
-        handoff_invalid(&format!("accepted evidence digest failed: {error}"))
-    })?;
+    let evidence_digest = accepted_evidence_digest_toml(evidence)
+        .map_err(|error| handoff_invalid(&format!("accepted evidence digest failed: {error}")))?;
     let compatibility_class = toml_text(compatibility, "class")?;
     if !matches!(
         compatibility_class,
@@ -245,7 +237,10 @@ fn render_payload(
         ),
         String::new(),
         "[draft]".to_owned(),
-        format!("path = {}", quote(candidate_text(candidate, "/draft/path")?)),
+        format!(
+            "path = {}",
+            quote(candidate_text(candidate, "/draft/path")?)
+        ),
         format!(
             "git_blob_id = {}",
             quote(candidate_text(candidate, "/draft/git_blob_id")?)
@@ -294,12 +289,16 @@ fn render_manifest(
     selection: &Selection,
     payload_digest: &str,
 ) -> Result<Vec<u8>, MaterializationPlanError> {
-    let materializer = selection.materializer_signature.value.as_ref().ok_or_else(|| {
-        render_invalid("materializer signature is absent in complete proposal")
-    })?;
-    let reviewer = selection.reviewer_signature.value.as_ref().ok_or_else(|| {
-        render_invalid("reviewer signature is absent in complete proposal")
-    })?;
+    let materializer = selection
+        .materializer_signature
+        .value
+        .as_ref()
+        .ok_or_else(|| render_invalid("materializer signature is absent in complete proposal"))?;
+    let reviewer = selection
+        .reviewer_signature
+        .value
+        .as_ref()
+        .ok_or_else(|| render_invalid("reviewer signature is absent in complete proposal"))?;
     let mut output = payload.to_vec();
     let lines = [
         "[signature]".to_owned(),
@@ -387,17 +386,14 @@ fn push_fragment(
     Ok(())
 }
 
-fn push_handoff(
-    lines: &mut Vec<String>,
-    handoff: &Value,
-) -> Result<(), MaterializationPlanError> {
-    let object = object(handoff, "accepted handoff")?;
+fn push_handoff(lines: &mut Vec<String>, handoff: &Value) -> Result<(), MaterializationPlanError> {
+    let fields = object(handoff, "accepted handoff")?;
     lines.push(format!(
         "package = {}",
-        quote(string_value(object, "package")?)
+        quote(string_value(fields, "package")?)
     ));
     let reference = object(
-        object
+        fields
             .get("handoff_ref")
             .ok_or_else(|| render_invalid("handoff_ref missing"))?,
         "handoff_ref",
@@ -405,14 +401,14 @@ fn push_handoff(
     lines.push(format!("handoff_ref = {}", record_ref_inline(reference)?));
     lines.push(format!(
         "accepted_commit = {}",
-        quote(string_value(object, "accepted_commit")?)
+        quote(string_value(fields, "accepted_commit")?)
     ));
     lines.push(format!(
         "api_schema_digest = {}",
-        quote(string_value(object, "api_schema_digest")?)
+        quote(string_value(fields, "api_schema_digest")?)
     ));
     let configuration = object(
-        object
+        fields
             .get("configuration_digest")
             .ok_or_else(|| render_invalid("configuration_digest missing"))?,
         "configuration_digest",
@@ -424,11 +420,11 @@ fn push_handoff(
     ));
     lines.push(format!(
         "evidence_digest = {}",
-        quote(string_value(object, "evidence_digest")?)
+        quote(string_value(fields, "evidence_digest")?)
     ));
     lines.push(format!(
         "compatibility = {}",
-        quote(string_value(object, "compatibility")?)
+        quote(string_value(fields, "compatibility")?)
     ));
     Ok(())
 }
@@ -438,13 +434,13 @@ fn validate_signature_digest(
     digest: &str,
     label: &str,
 ) -> Result<(), MaterializationPlanError> {
-    if let Some(value) = &signature.value {
-        if value.signed_payload_sha256 != digest {
-            return Err(MaterializationPlanError::new(
-                "MATERIALIZATION_SIGNATURE_PAYLOAD_MISMATCH",
-                format!("{label} signed payload digest differs"),
-            ));
-        }
+    if let Some(value) = &signature.value
+        && value.signed_payload_sha256 != digest
+    {
+        return Err(MaterializationPlanError::new(
+            "MATERIALIZATION_SIGNATURE_PAYLOAD_MISMATCH",
+            format!("{label} signed payload digest differs"),
+        ));
     }
     Ok(())
 }
@@ -510,8 +506,7 @@ fn record_ref_inline(
 }
 
 fn quote(value: &str) -> String {
-    serde_json::to_string(value)
-        .expect("serializing a TOML-compatible string cannot fail")
+    serde_json::to_string(value).expect("serializing a TOML-compatible string cannot fail")
 }
 
 fn table<'a>(

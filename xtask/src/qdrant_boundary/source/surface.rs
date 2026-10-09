@@ -31,15 +31,16 @@ pub(super) fn find_public_surfaces_matching(
     while let Some(token) = tokens.next() {
         if token.text == "#" && tokens.peek().is_some_and(|next| next.text == "[") {
             let _ = tokens.next();
-            if tokens.peek().is_some_and(|next| next.text == "macro_export") {
+            if tokens
+                .peek()
+                .is_some_and(|next| next.text == "macro_export")
+            {
                 macro_export_line = Some(token.line);
             }
             skip_group(&mut tokens, code.len());
             continue;
         }
-        if token.text == "macro_rules"
-            && tokens.peek().is_some_and(|next| next.text == "!")
-        {
+        if token.text == "macro_rules" && tokens.peek().is_some_and(|next| next.text == "!") {
             let end = macro_body_end(&mut tokens, code.len());
             if let Some(line) = macro_export_line.take()
                 && matches(&code[token.start..end])
@@ -50,9 +51,7 @@ pub(super) fn find_public_surfaces_matching(
             continue;
         }
         macro_export_line = None;
-        if token.text != "pub"
-            || restricted_visibility(&code[token.end..])
-        {
+        if token.text != "pub" || restricted_visibility(&code[token.end..]) {
             continue;
         }
         let end = public_surface_end(&mut tokens, code.len());
@@ -68,14 +67,12 @@ pub(super) fn find_public_surfaces_matching(
 
 fn restricted_visibility(code: &str) -> bool {
     let mut tokens = code_token_spans(code);
-    if !tokens.next().is_some_and(|token| token.text == "(") {
+    if tokens.next().is_none_or(|token| token.text != "(") {
         return false;
     }
     match tokens.next().map(|token| token.text) {
         Some("in") => true,
-        Some("crate" | "self" | "super") => {
-            tokens.next().is_some_and(|token| token.text == ")")
-        }
+        Some("crate" | "self" | "super") => tokens.next().is_some_and(|token| token.text == ")"),
         _ => false,
     }
 }
@@ -91,15 +88,14 @@ enum SurfaceKind {
     Field,
 }
 
-fn surface_kind<'a>(
-    tokens: &mut Peekable<impl Iterator<Item = CodeToken<'a>>>,
-) -> SurfaceKind {
+fn surface_kind<'a>(tokens: &mut Peekable<impl Iterator<Item = CodeToken<'a>>>) -> SurfaceKind {
     while let Some(token) = tokens.next() {
         match token.text {
             "async" | "unsafe" | "extern" | "auto" | "default" | "safe" => {}
-            "const" if tokens.peek().is_some_and(|next| {
-                matches!(next.text, "fn" | "unsafe")
-            }) => {}
+            "const"
+                if tokens
+                    .peek()
+                    .is_some_and(|next| matches!(next.text, "fn" | "unsafe")) => {}
             "fn" => {
                 return if tokens.peek().is_some_and(|next| next.text == "(") {
                     SurfaceKind::Field
@@ -124,9 +120,10 @@ fn public_surface_end<'a>(
 ) -> usize {
     // Classify without losing the first field token: tuple fields can start
     // with a delimiter, as in `pub (u8, Vendor)`, not only a field name.
-    let kind = if tokens.peek().is_some_and(|token| {
-        matches!(token.text, "(" | "[" | "<" | "&" | "*")
-    }) {
+    let kind = if tokens
+        .peek()
+        .is_some_and(|token| matches!(token.text, "(" | "[" | "<" | "&" | "*"))
+    {
         SurfaceKind::Field
     } else {
         surface_kind(tokens)
@@ -141,7 +138,11 @@ fn public_surface_end<'a>(
                 "," | ")" | "}" if kind == SurfaceKind::Field => return token.start,
                 "=" if kind == SurfaceKind::Constant => return token.start,
                 "{" if kind == SurfaceKind::Block => return skip_group(tokens, eof),
-                "{" if matches!(kind, SurfaceKind::Function | SurfaceKind::Struct | SurfaceKind::Module) => {
+                "{" if matches!(
+                    kind,
+                    SurfaceKind::Function | SurfaceKind::Struct | SurfaceKind::Module
+                ) =>
+                {
                     return token.start;
                 }
                 _ => {}
@@ -190,10 +191,7 @@ impl SurfaceDepth {
     }
 }
 
-fn macro_body_end<'a>(
-    tokens: &mut impl Iterator<Item = CodeToken<'a>>,
-    eof: usize,
-) -> usize {
+fn macro_body_end<'a>(tokens: &mut impl Iterator<Item = CodeToken<'a>>, eof: usize) -> usize {
     while let Some(token) = tokens.next() {
         if matches!(token.text, "{" | "(" | "[") {
             return skip_group(tokens, eof);
@@ -205,10 +203,7 @@ fn macro_body_end<'a>(
 // The opening delimiter has already been consumed. Counter-only traversal is
 // iterative and bounded by the existing file-byte budget; no recursive descent,
 // token buffer or additional source copy is created, even for deeply nested input.
-fn skip_group<'a>(
-    tokens: &mut impl Iterator<Item = CodeToken<'a>>,
-    eof: usize,
-) -> usize {
+fn skip_group<'a>(tokens: &mut impl Iterator<Item = CodeToken<'a>>, eof: usize) -> usize {
     let mut depth = 1_usize;
     for token in tokens {
         match token.text {

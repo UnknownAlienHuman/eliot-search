@@ -2,10 +2,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{array, finish, quote};
-use super::super::model::{PackageMapModel, PackageModel};
-use super::super::super::{DOC_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH, bool_text};
 use super::super::super::load::{integer, string, strings};
+use super::super::super::{DOC_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH, bool_text};
+use super::super::model::{PackageMapModel, PackageModel};
+use super::{array, finish, quote};
 
 pub(super) fn render_integration(model: &PackageMapModel) -> String {
     let mut lines = vec![
@@ -23,10 +23,7 @@ pub(super) fn render_integration(model: &PackageMapModel) -> String {
             format!("id = {}", quote(string(row, "id").unwrap_or(""))),
             format!("path = {}", quote(string(row, "path").unwrap_or(""))),
             format!("line = {}", integer(row, "line").unwrap_or(0)),
-            format!(
-                "heading = {}",
-                quote(string(row, "heading").unwrap_or(""))
-            ),
+            format!("heading = {}", quote(string(row, "heading").unwrap_or(""))),
             format!("kind = {}", quote(string(row, "kind").unwrap_or(""))),
             format!(
                 "route_kind = {}",
@@ -39,7 +36,7 @@ pub(super) fn render_integration(model: &PackageMapModel) -> String {
             String::new(),
         ]);
     }
-    finish(lines)
+    finish(&lines)
 }
 
 pub(super) fn render_document_index(model: &PackageMapModel) -> String {
@@ -79,7 +76,7 @@ pub(super) fn render_document_index(model: &PackageMapModel) -> String {
             String::new(),
         ]);
     }
-    finish(lines)
+    finish(&lines)
 }
 
 pub(super) fn render_package_index(
@@ -107,7 +104,7 @@ pub(super) fn render_package_index(
     for package in &model.packages {
         render_package_index_row(package, outputs, &mut lines);
     }
-    finish(lines)
+    finish(&lines)
 }
 
 fn render_package_index_row(
@@ -135,9 +132,8 @@ fn render_package_index_row(
         ("relations", package.paths.relations.as_str()),
     ] {
         lines.push(format!("{key}_map = {}", quote(path)));
-        let digest = crate::coverage_graph::digest_text(
-            outputs.get(path).map_or("", String::as_str),
-        );
+        let digest =
+            crate::coverage_graph::digest_text(outputs.get(path).map_or("", String::as_str));
         lines.push(format!("{key}_sha256 = {}", quote(&digest)));
     }
     let counts = package.counts;
@@ -198,5 +194,5 @@ pub(super) fn render_human_index(model: &PackageMapModel) -> String {
         "- `swarm/coverage/dependency-edges.toml` — typed package/module dependency edges.".to_owned(),
         "- `swarm/coverage/module-coverage.toml` — reverse relation counts and structural roles.".to_owned(),
     ]);
-    finish(lines)
+    finish(&lines)
 }

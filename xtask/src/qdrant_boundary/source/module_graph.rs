@@ -45,11 +45,7 @@ fn collect_module_edges(
     for source in sources {
         let relative = source.relative().to_owned();
         for declared in include_paths(source.source())? {
-            let target = resolve_target(
-                source.relative(),
-                &declared,
-                source_paths,
-            )?;
+            let target = resolve_target(source.relative(), &declared, source_paths)?;
             edges
                 .includes
                 .entry(relative.clone())
@@ -57,11 +53,7 @@ fn collect_module_edges(
                 .insert(target);
         }
         for path_module in path_modules(source.source())? {
-            let target = resolve_target(
-                source.relative(),
-                &path_module.target,
-                source_paths,
-            )?;
+            let target = resolve_target(source.relative(), &path_module.target, source_paths)?;
             edges
                 .paths
                 .entry(relative.clone())
@@ -186,9 +178,7 @@ fn record_identity(inserted: bool, count: &mut usize) -> Option<()> {
     Some(())
 }
 
-fn include_graph_is_acyclic(
-    graph: &BTreeMap<String, BTreeSet<String>>,
-) -> bool {
+fn include_graph_is_acyclic(graph: &BTreeMap<String, BTreeSet<String>>) -> bool {
     let mut indegree = BTreeMap::<String, usize>::new();
     for (source, targets) in graph {
         indegree.entry(source.clone()).or_default();
@@ -307,9 +297,7 @@ fn path_modules(source: &str) -> Option<Vec<PathModule>> {
     let mut cursor = 0_usize;
     while let Some(offset) = code[cursor..].find("#[") {
         let start = cursor + offset;
-        let Some(close_offset) = code[start..].find(']') else {
-            return None;
-        };
+        let close_offset = code[start..].find(']')?;
         let close = start + close_offset + 1;
         cursor = close;
         let compact = code[start..close]
@@ -325,9 +313,7 @@ fn path_modules(source: &str) -> Option<Vec<PathModule>> {
         if bytes.get(attribute_end) != Some(&b']') {
             return None;
         }
-        let Some(semicolon_offset) = code[close..].find(';') else {
-            return None;
-        };
+        let semicolon_offset = code[close..].find(';')?;
         let statement_end = close + semicolon_offset + 1;
         let statement = &code[close..statement_end];
         if statement.contains('{') {
@@ -342,19 +328,14 @@ fn path_modules(source: &str) -> Option<Vec<PathModule>> {
     Some(modules)
 }
 
-fn direct_string_literal(
-    text: &str,
-    start: usize,
-) -> Option<(String, usize)> {
+fn direct_string_literal(text: &str, start: usize) -> Option<(String, usize)> {
     let bytes = text.as_bytes();
     let index = skip_trivia(bytes, start)?;
     if let Some((content_start, hashes)) = raw_string_start(bytes, index) {
         let mut end = content_start;
         while end < bytes.len() {
             if bytes[end] == b'"'
-                && (0..hashes).all(|offset| {
-                    bytes.get(end + 1 + offset) == Some(&b'#')
-                })
+                && (0..hashes).all(|offset| bytes.get(end + 1 + offset) == Some(&b'#'))
             {
                 let value = String::from_utf8(bytes[content_start..end].to_vec()).ok()?;
                 return Some((value, end + 1 + hashes));
@@ -450,7 +431,7 @@ fn identifier_boundaries(text: &str, start: usize, length: usize) -> bool {
         && after.is_none_or(|byte| !identifier_byte(byte))
 }
 
-fn identifier_byte(byte: u8) -> bool {
+const fn identifier_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
@@ -574,10 +555,7 @@ const NOTE: &str = "#[path = \"hidden.rs\"] mod private;";
 
     #[test]
     fn recursive_path_override_fails_closed() {
-        let sources = [source(
-            "lib.rs",
-            "#[path = \"lib.rs\"]\nmod recursive;\n",
-        )];
+        let sources = [source("lib.rs", "#[path = \"lib.rs\"]\nmod recursive;\n")];
         assert!(semantic_modules(&sources, BRIDGE).is_none());
     }
 }

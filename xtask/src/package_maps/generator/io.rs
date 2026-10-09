@@ -4,28 +4,26 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use super::model::GenerationStats;
 use super::super::{DOC_INDEX_PATH, INTEGRATION_PATH, MAP_ROOT};
+use super::model::GenerationStats;
 
-pub(super) fn patch_manifest_text(
-    text: &str,
-    stats: &GenerationStats,
-) -> Result<String, String> {
+pub(super) fn patch_manifest_text(text: &str, stats: &GenerationStats) -> Result<String, String> {
     let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
-    if !lines.iter().any(|line| line.starts_with("package_map_index = ")) {
+    if !lines
+        .iter()
+        .any(|line| line.starts_with("package_map_index = "))
+    {
         let marker = lines
             .iter()
             .position(|line| {
                 line == "module_coverage_registry = \"swarm/coverage/module-coverage.toml\""
             })
-            .ok_or_else(|| {
-                "manifest module coverage marker missing or duplicated".to_owned()
-            })?;
+            .ok_or_else(|| "manifest module coverage marker missing or duplicated".to_owned())?;
+        let insert_at = marker + 1;
         let _ = lines.splice(
-            marker + 1..marker + 1,
+            insert_at..insert_at,
             [
-                "package_map_index = \"swarm/coverage/package-map-index.toml\""
-                    .to_owned(),
+                "package_map_index = \"swarm/coverage/package-map-index.toml\"".to_owned(),
                 format!("documentation_file_index = \"{DOC_INDEX_PATH}\""),
                 format!("integration_documentation_map = \"{INTEGRATION_PATH}\""),
             ],
@@ -74,8 +72,7 @@ pub(super) fn check_outputs(
     for (relative, expected) in outputs {
         match fs::read_to_string(root.join(relative)) {
             Ok(actual) if actual == *expected => {}
-            Ok(_) => stale.push(relative.clone()),
-            Err(_) => stale.push(relative.clone()),
+            Ok(_) | Err(_) => stale.push(relative.clone()),
         }
     }
     let expected_package_files: BTreeSet<String> = outputs
@@ -105,8 +102,7 @@ pub(super) fn write_outputs(
 ) -> Result<(), String> {
     let package_root = root.join(MAP_ROOT);
     for relative in package_files(root) {
-        fs::remove_file(root.join(&relative))
-            .map_err(|error| format!("{relative}: {error}"))?;
+        fs::remove_file(root.join(&relative)).map_err(|error| format!("{relative}: {error}"))?;
     }
     if package_root.exists() {
         remove_empty_directories(&package_root)?;
@@ -116,13 +112,14 @@ pub(super) fn write_outputs(
         let parent = path
             .parent()
             .ok_or_else(|| format!("{relative}: output parent missing"))?;
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("{}: {error}", parent.display()))?;
-        fs::write(&path, content.as_bytes())
-            .map_err(|error| format!("{relative}: {error}"))?;
+        fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
+        fs::write(&path, content.as_bytes()).map_err(|error| format!("{relative}: {error}"))?;
     }
-    fs::write(root.join("swarm/coverage/manifest.toml"), manifest.as_bytes())
-        .map_err(|error| format!("swarm/coverage/manifest.toml: {error}"))
+    fs::write(
+        root.join("swarm/coverage/manifest.toml"),
+        manifest.as_bytes(),
+    )
+    .map_err(|error| format!("swarm/coverage/manifest.toml: {error}"))
 }
 
 fn package_files(root: &Path) -> BTreeSet<String> {
@@ -161,8 +158,7 @@ fn remove_empty_directories(directory: &Path) -> Result<(), String> {
             .next()
             .is_none()
         {
-            fs::remove_dir(&path)
-                .map_err(|error| format!("{}: {error}", path.display()))?;
+            fs::remove_dir(&path).map_err(|error| format!("{}: {error}", path.display()))?;
         }
     }
     Ok(())

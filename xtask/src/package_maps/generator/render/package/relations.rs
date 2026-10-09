@@ -1,20 +1,23 @@
 //! Per-package relation renderer.
 
-use super::super::{array, finish, quote};
-use super::super::super::model::PackageModel;
 use super::super::super::super::bool_text;
 use super::super::super::super::load::{boolean, integer, string, strings};
+use super::super::super::model::PackageModel;
+use super::super::{array, finish, quote};
 
-pub(super) fn render_relations(package: &PackageModel) -> String {
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
+pub(in crate::package_maps::generator::render) fn render_relations(
+    package: &PackageModel,
+) -> String {
     let mut lines = vec![
         "schema_version = 1".to_owned(),
         "project = \"eliot-search\"".to_owned(),
         "status = \"PACKAGE_RELATION_MAP_NOT_IMPLEMENTED\"".to_owned(),
         format!("package = {}", quote(&package.name)),
-        format!(
-            "outbound_dependency_count = {}",
-            package.outbound.len()
-        ),
+        format!("outbound_dependency_count = {}", package.outbound.len()),
         format!("inbound_dependency_count = {}", package.inbound.len()),
         format!(
             "architecture_relation_count = {}",
@@ -82,10 +85,7 @@ pub(super) fn render_relations(package: &PackageModel) -> String {
                 ),
                 format!(
                     "exact_accepted_handoff_required = {}",
-                    bool_text(
-                        boolean(row, "exact_accepted_handoff_required")
-                            .unwrap_or(false)
-                    )
+                    bool_text(boolean(row, "exact_accepted_handoff_required").unwrap_or(false))
                 ),
                 String::new(),
             ]);
@@ -106,10 +106,7 @@ pub(super) fn render_relations(package: &PackageModel) -> String {
             format!("kind = {}", quote(&relation.kind)),
             format!("id = {}", quote(&relation.id)),
             format!("modules = {}", array(&modules)),
-            format!(
-                "required_outputs = {}",
-                array(&relation.required_outputs)
-            ),
+            format!("required_outputs = {}", array(&relation.required_outputs)),
             format!("exit_evidence = {}", array(&relation.exit_evidence)),
             String::new(),
         ]);
@@ -175,5 +172,5 @@ pub(super) fn render_relations(package: &PackageModel) -> String {
             String::new(),
         ]);
     }
-    finish(lines)
+    finish(&lines)
 }

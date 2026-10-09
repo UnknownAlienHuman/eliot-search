@@ -38,9 +38,7 @@ pub(super) fn collect_statements(code: &str) -> Result<Vec<Statement<'_>>, usize
             }
             continue;
         }
-        if token.text == "macro_rules"
-            && tokens.peek().is_some_and(|next| next.text == "!")
-        {
+        if token.text == "macro_rules" && tokens.peek().is_some_and(|next| next.text == "!") {
             // Definitions are not expanded into module-local aliases. Exported
             // macro token trees are independently checked by the surface owner.
             while let Some(next) = tokens.next() {
@@ -65,9 +63,7 @@ pub(super) fn collect_statements(code: &str) -> Result<Vec<Statement<'_>>, usize
         }
         let kind = match token.text {
             // `impl Trait + use<T>` is a capture bound, not a use declaration.
-            "use" if !tokens.peek().is_some_and(|next| next.text == "<") => {
-                StatementKind::Use
-            }
+            "use" if tokens.peek().is_none_or(|next| next.text != "<") => StatementKind::Use,
             "type" => StatementKind::TypeAlias,
             "extern" if tokens.peek().is_some_and(|next| next.text == "crate") => {
                 token = tokens.next().expect("peeked crate token");
@@ -128,9 +124,7 @@ fn skip_group<'a>(tokens: &mut impl Iterator<Item = CodeToken<'a>>) {
 pub(super) fn identifier_name(token: &str) -> Option<&str> {
     let name = token.strip_prefix("r#").unwrap_or(token);
     let first = name.chars().next()?;
-    (first.is_ascii_alphabetic()
-        || first == '_'
-        || (!first.is_ascii() && !first.is_whitespace()))
+    (first.is_ascii_alphabetic() || first == '_' || (!first.is_ascii() && !first.is_whitespace()))
         .then_some(name)
 }
 

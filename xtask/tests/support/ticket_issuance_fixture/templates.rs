@@ -117,17 +117,12 @@ issuance_requirements = ["materialize_context"]
         };
         let mut selectors = vec![
             format!("swarm/crates.toml::package[name={package}]"),
-            format!(
-                "swarm/function-packets.toml::foundation[package={package}]"
-            ),
+            format!("swarm/function-packets.toml::foundation[package={package}]"),
             "swarm/stages.toml::stage[id=W0]".to_owned(),
             if conditional {
-                format!(
-                    "swarm/launch-state.toml::conditional_packages[{package}]"
-                )
+                format!("swarm/launch-state.toml::conditional_packages[{package}]")
             } else {
-                "swarm/launch-state.toml::authorized_packages[search-contracts]"
-                    .to_owned()
+                "swarm/launch-state.toml::authorized_packages[search-contracts]".to_owned()
             },
         ];
         if conditional {
@@ -185,7 +180,7 @@ required_unavailable_checks = ["real_toolchain"]
 "#,
             source_count = sources.len(),
             selector_count = selectors.len(),
-            slot_count = if conditional { 1 } else { 0 },
+            slot_count = i32::from(conditional),
         )
     }
 }

@@ -2,16 +2,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-const RESERVED_SIGNATURE_WORDS: [&str; 6] =
-    ["if", "for", "while", "match", "loop", "return"];
+const RESERVED_SIGNATURE_WORDS: [&str; 6] = ["if", "for", "while", "match", "loop", "return"];
 
 pub(super) fn fenced_blocks(text: &str, language: Option<&str>) -> Vec<String> {
     let mut blocks = Vec::new();
     let mut rest = text;
-    loop {
-        let Some(marker) = rest.find("```") else {
-            break;
-        };
+    while let Some(marker) = rest.find("```") {
         let after_marker = &rest[marker + 3..];
         let Some(line_end) = after_marker.find('\n') else {
             break;
@@ -104,10 +100,7 @@ pub(super) fn invariant_ids(text: &str) -> BTreeSet<String> {
         let Some((id, _)) = trimmed.split_once(':') else {
             continue;
         };
-        if id.len() == 6
-            && id.starts_with("INV-")
-            && all_ascii_digits(&id[4..])
-        {
+        if id.len() == 6 && id.starts_with("INV-") && all_ascii_digits(&id[4..]) {
             result.insert(id.to_owned());
         }
     }
@@ -154,7 +147,10 @@ pub(super) fn port_methods(text: &str) -> BTreeMap<String, Vec<String>> {
             continue;
         };
         if valid_operation_name(name) {
-            result.entry(port.clone()).or_default().push(name.to_owned());
+            result
+                .entry(port.clone())
+                .or_default()
+                .push(name.to_owned());
         }
     }
     result
@@ -190,9 +186,7 @@ pub(super) fn top_level_yaml_labels(text: &str) -> BTreeSet<String> {
     labels
 }
 
-pub(super) fn exact_type_registry_symbols(
-    type_registry: &str,
-) -> Result<BTreeSet<String>, String> {
+pub(super) fn exact_type_registry_symbols(type_registry: &str) -> Result<BTreeSet<String>, String> {
     let mut symbols = BTreeSet::new();
 
     let bounds = section_between(
@@ -230,10 +224,7 @@ pub(super) fn exact_type_registry_symbols(
     )?;
     let identity_blocks = fenced_blocks(identity, Some("text"));
     if identity_blocks.len() < 3 {
-        return Err(
-            "TYPE_REGISTRY identity section must contain three text registries"
-                .to_owned(),
-        );
+        return Err("TYPE_REGISTRY identity section must contain three text registries".to_owned());
     }
     for block in identity_blocks.iter().take(3) {
         for line in block.lines().map(str::trim).filter(|line| !line.is_empty()) {
@@ -326,11 +317,7 @@ pub(super) fn normalize_type_name(name: &str) -> &str {
     name.split_once('<').map_or(name, |(base, _)| base)
 }
 
-fn section_between<'a>(
-    text: &'a str,
-    start: &str,
-    end: &str,
-) -> Result<&'a str, String> {
+fn section_between<'a>(text: &'a str, start: &str, end: &str) -> Result<&'a str, String> {
     let start_index = text
         .find(start)
         .ok_or_else(|| format!("missing section heading: {start}"))?
@@ -363,14 +350,16 @@ fn port_heading(line: &str) -> Option<&str> {
     let rest = line.strip_prefix("### `")?;
     let (name, suffix) = rest.split_once('`')?;
     if !name.ends_with("Port")
-        || !name.bytes().next().is_some_and(|byte| byte.is_ascii_alphabetic())
+        || !name
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_alphabetic())
         || !name.bytes().all(|byte| byte.is_ascii_alphanumeric())
     {
         return None;
     }
     let suffix = suffix.trim();
-    (suffix.is_empty() || suffix.starts_with('—') || suffix.starts_with('-'))
-        .then_some(name)
+    (suffix.is_empty() || suffix.starts_with('—') || suffix.starts_with('-')).then_some(name)
 }
 
 fn heading_operation(line: &str) -> Option<&str> {
@@ -391,10 +380,7 @@ fn heading_operation(line: &str) -> Option<&str> {
 fn inline_code_segments(text: &str) -> Vec<&str> {
     let mut segments = Vec::new();
     let mut rest = text;
-    loop {
-        let Some(start) = rest.find('`') else {
-            break;
-        };
+    while let Some(start) = rest.find('`') {
         let after = &rest[start + 1..];
         let Some(end) = after.find('`') else {
             break;
@@ -437,29 +423,23 @@ fn identifier_prefix(text: &str) -> Option<(&str, &str)> {
     }
     let end = bytes
         .iter()
-        .position(|byte| {
-            !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_')
-        })
+        .position(|byte| !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_'))
         .unwrap_or(bytes.len());
     Some((&text[..end], &text[end..]))
 }
 
 fn valid_operation_name(value: &str) -> bool {
-    value
-        .as_bytes()
-        .first()
-        .is_some_and(u8::is_ascii_lowercase)
+    value.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
         && value
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
 fn valid_type_name(value: &str) -> bool {
-    value
-        .as_bytes()
-        .first()
-        .is_some_and(u8::is_ascii_uppercase)
-        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    value.as_bytes().first().is_some_and(u8::is_ascii_uppercase)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 fn all_ascii_digits(value: &str) -> bool {

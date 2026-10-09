@@ -1,14 +1,14 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-pub(crate) use crate::fixture::FixtureRepository;
-pub(crate) use serde_json::Value;
-pub(crate) use xtask::ticket_issuance_builder::{
+pub use crate::fixture::FixtureRepository;
+pub use serde_json::Value;
+pub use xtask::ticket_issuance_builder::{
     TicketIssuanceBuild, TicketIssuanceBuildOptions, build_plan, write_plan,
 };
-pub(crate) use xtask::ticket_planner::{
-    DECISION_CONFLICT, DECISION_INVALID, DECISION_MISSING,
-    DECISION_PREREQUISITE, DECISION_READY, plan_digest,
+pub use xtask::ticket_planner::{
+    DECISION_CONFLICT, DECISION_INVALID, DECISION_MISSING, DECISION_PREREQUISITE, DECISION_READY,
+    plan_digest,
 };
 
 fn repository_root() -> PathBuf {
@@ -18,21 +18,18 @@ fn repository_root() -> PathBuf {
         .to_owned()
 }
 
-pub(crate) fn build(
+pub fn build(
     fixture: &FixtureRepository,
     options: &TicketIssuanceBuildOptions,
 ) -> TicketIssuanceBuild {
     build_plan(fixture.root(), options).expect("build advisory plan")
 }
 
-pub(crate) fn options(package: &str) -> TicketIssuanceBuildOptions {
+pub fn options(package: &str) -> TicketIssuanceBuildOptions {
     TicketIssuanceBuildOptions::new(package)
 }
 
-pub(crate) fn complete_options(
-    fixture: &FixtureRepository,
-    package: &str,
-) -> TicketIssuanceBuildOptions {
+pub fn complete_options(fixture: &FixtureRepository, package: &str) -> TicketIssuanceBuildOptions {
     let mut result = options(package);
     result.base_commit = Some(fixture.tagged_head());
     result.writer = Some("actor:service:writer-01".to_owned());
@@ -40,7 +37,7 @@ pub(crate) fn complete_options(
     result
 }
 
-pub(crate) fn decision(build: &TicketIssuanceBuild) -> &str {
+pub fn decision(build: &TicketIssuanceBuild) -> &str {
     build
         .plan()
         .get("decision")
@@ -48,7 +45,7 @@ pub(crate) fn decision(build: &TicketIssuanceBuild) -> &str {
         .expect("plan decision")
 }
 
-pub(crate) fn reasons(build: &TicketIssuanceBuild) -> BTreeSet<String> {
+pub fn reasons(build: &TicketIssuanceBuild) -> BTreeSet<String> {
     build
         .plan()
         .get("reason_codes")
@@ -59,7 +56,7 @@ pub(crate) fn reasons(build: &TicketIssuanceBuild) -> BTreeSet<String> {
         .collect()
 }
 
-pub(crate) fn assert_reason(build: &TicketIssuanceBuild, reason: &str) {
+pub fn assert_reason(build: &TicketIssuanceBuild, reason: &str) {
     assert!(
         reasons(build).contains(reason),
         "expected {reason}; got {:?}",
@@ -67,7 +64,7 @@ pub(crate) fn assert_reason(build: &TicketIssuanceBuild, reason: &str) {
     );
 }
 
-pub(crate) fn assert_non_authoritative(build: &TicketIssuanceBuild) {
+pub fn assert_non_authoritative(build: &TicketIssuanceBuild) {
     assert!(
         build
             .plan()
@@ -83,20 +80,18 @@ pub(crate) fn assert_non_authoritative(build: &TicketIssuanceBuild) {
         "publishes_package_handoff",
         "advances_launch_state",
     ] {
-        assert_eq!(build.plan().get(field).and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            build.plan().get(field).and_then(Value::as_bool),
+            Some(false)
+        );
     }
-    let mut payload = build
-        .plan()
-        .as_object()
-        .expect("plan object")
-        .clone();
+    let mut payload = build.plan().as_object().expect("plan object").clone();
     let digest = payload
         .remove("plan_sha256")
         .and_then(|value| value.as_str().map(str::to_owned))
         .expect("plan digest");
     assert_eq!(digest, plan_digest(&Value::Object(payload)));
 }
-
 
 #[test]
 fn case_inventory_is_exact_and_rust_owned() {
@@ -126,4 +121,3 @@ fn case_inventory_is_exact_and_rust_owned() {
         );
     }
 }
-

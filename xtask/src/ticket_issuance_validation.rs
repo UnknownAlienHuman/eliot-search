@@ -54,19 +54,14 @@ pub(super) struct Validation {
 }
 
 impl Validation {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             checks: Vec::new(),
             errors: Vec::new(),
         }
     }
 
-    pub(super) fn require(
-        &mut self,
-        condition: bool,
-        check_id: &str,
-        detail: &str,
-    ) {
+    pub(super) fn require(&mut self, condition: bool, check_id: &str, detail: &str) {
         let status = if condition { "PASS" } else { "FAIL" };
         self.checks.push(TicketIssuanceValidationCheck {
             id: check_id.to_owned(),
@@ -88,9 +83,7 @@ impl Validation {
 
 /// Validate the checked-in planner closure without executing Python.
 #[must_use]
-pub fn validate_ticket_issuance_plan(
-    root: &Path,
-) -> TicketIssuanceValidationReport {
+pub fn validate_ticket_issuance_plan(root: &Path) -> TicketIssuanceValidationReport {
     let mut validation = Validation::new();
     let registry = load_toml(root, REGISTRY_PATH, &mut validation);
     let schema = load_toml(root, SCHEMA_PATH, &mut validation);
@@ -111,6 +104,9 @@ pub const fn exit_code(report: &TicketIssuanceValidationReport) -> i32 {
 
 /// Render the compact stable JSON report.
 #[must_use]
+///
+/// # Panics
+/// Panics if JSON serialization unexpectedly fails for this closed value shape.
 pub fn render_report_json(report: &TicketIssuanceValidationReport) -> String {
     let checks: Vec<_> = report
         .checks
@@ -142,10 +138,7 @@ pub fn render_report_json(report: &TicketIssuanceValidationReport) -> String {
 #[must_use]
 pub fn render_report_text(report: &TicketIssuanceValidationReport) -> String {
     if report.passed() {
-        return format!(
-            "PASS: {} planner-v2 structural checks",
-            report.checks.len()
-        );
+        return format!("PASS: {} planner-v2 structural checks", report.checks.len());
     }
     let mut output = format!("FAIL: {} error(s)", report.errors.len());
     for error in &report.errors {
@@ -209,9 +202,5 @@ pub(super) fn integer(value: &Value, key: &str) -> Option<i64> {
 }
 
 pub(super) fn string_array(value: Option<&Value>) -> Option<Vec<&str>> {
-    value?
-        .as_array()?
-        .iter()
-        .map(Value::as_str)
-        .collect()
+    value?.as_array()?.iter().map(Value::as_str).collect()
 }

@@ -3,8 +3,8 @@ use std::path::Path;
 use toml::Value;
 
 use super::super::{
-    boolean, child_string, child_string_list, expected_strings, integer,
-    require_regular_file, string, string_list,
+    boolean, child_string, child_string_list, expected_strings, integer, require_regular_file,
+    string, string_list,
 };
 use super::spec::PackageSpec;
 
@@ -34,12 +34,7 @@ pub(super) fn validate_package(
     validate_context(root, spec, context, errors);
 }
 
-fn validate_files(
-    root: &Path,
-    spec: &PackageSpec,
-    packet: &Value,
-    errors: &mut Vec<String>,
-) {
+fn validate_files(root: &Path, spec: &PackageSpec, packet: &Value, errors: &mut Vec<String>) {
     require_regular_file(root, spec.name, string(packet, "assignment"), errors);
     require_regular_file(root, spec.name, string(packet, "functions"), errors);
     for relative in [
@@ -73,8 +68,7 @@ fn validate_packet(
     {
         errors.push(format!("{}: phase/group mismatch", spec.name));
     }
-    if string_list(packet, "required_handoff_packages")
-        != Some(expected_strings(spec.deps))
+    if string_list(packet, "required_handoff_packages") != Some(expected_strings(spec.deps))
         || string_list(packet, "config_packets") != Some(expected_strings(spec.config))
     {
         errors.push(format!("{}: dependency/config packet mismatch", spec.name));
@@ -85,7 +79,10 @@ fn validate_packet(
         || boolean(packet, "one_active_writer") != Some(true)
         || boolean(packet, "claimable") != Some(false)
     {
-        errors.push(format!("{}: line budget or claimability mismatch", spec.name));
+        errors.push(format!(
+            "{}: line budget or claimability mismatch",
+            spec.name
+        ));
     }
 }
 
@@ -103,7 +100,10 @@ fn validate_registries(
         errors.push(format!("{}: crate registry mismatch", spec.name));
     }
     if string(function, "write_scope") != Some(write_scope) {
-        errors.push(format!("{}: function registry write scope mismatch", spec.name));
+        errors.push(format!(
+            "{}: function registry write scope mismatch",
+            spec.name
+        ));
     }
 }
 
@@ -136,35 +136,37 @@ fn validate_ticket(
         || child_string(ticket, "unresolved_identity", "writer") != Some("UNASSIGNED")
         || child_string(ticket, "unresolved_identity", "reviewer") != Some("UNASSIGNED")
     {
-        errors.push(format!("{}: ticket identity prematurely resolved", spec.name));
+        errors.push(format!(
+            "{}: ticket identity prematurely resolved",
+            spec.name
+        ));
     }
     if child_string(ticket, "stage_prerequisites", "status") != Some("UNAVAILABLE") {
-        errors.push(format!("{}: stage prerequisites prematurely accepted", spec.name));
+        errors.push(format!(
+            "{}: stage prerequisites prematurely accepted",
+            spec.name
+        ));
     }
     validate_qualification(spec, ticket, errors);
 }
 
-fn validate_qualification(
-    spec: &PackageSpec,
-    ticket: &Value,
-    errors: &mut Vec<String>,
-) {
+fn validate_qualification(spec: &PackageSpec, ticket: &Value, errors: &mut Vec<String>) {
     for key in [
         "artifact_status",
         "collection_schema",
         "mandatory_probe_evidence",
         "independent_reviewer_receipt",
     ] {
-        if let Some(value) = child_string(ticket, "qualification", key) {
-            if !matches!(
+        if let Some(value) = child_string(ticket, "qualification", key)
+            && !matches!(
                 value,
                 "UNQUALIFIED" | "NOT_ACCEPTED" | "UNAVAILABLE" | "ABSENT"
-            ) {
-                errors.push(format!(
-                    "{}: qualification field {key} is successful",
-                    spec.name
-                ));
-            }
+            )
+        {
+            errors.push(format!(
+                "{}: qualification field {key} is successful",
+                spec.name
+            ));
         }
     }
     for key in [
@@ -184,12 +186,7 @@ fn validate_qualification(
     }
 }
 
-fn validate_context(
-    root: &Path,
-    spec: &PackageSpec,
-    context: &Value,
-    errors: &mut Vec<String>,
-) {
+fn validate_context(root: &Path, spec: &PackageSpec, context: &Value, errors: &mut Vec<String>) {
     if string(context, "status") != Some("UNMATERIALIZED_DRAFT")
         || boolean(context, "claimable") != Some(false)
         || boolean(context, "authorizes_implementation") != Some(false)
@@ -204,10 +201,8 @@ fn validate_context(
     }
 
     let sources = child_string_list(context, "content", "source_files").unwrap_or_default();
-    let selectors =
-        child_string_list(context, "content", "registry_fragments").unwrap_or_default();
-    let slots = child_string_list(context, "content", "accepted_handoff_slots")
-        .unwrap_or_default();
+    let selectors = child_string_list(context, "content", "registry_fragments").unwrap_or_default();
+    let slots = child_string_list(context, "content", "accepted_handoff_slots").unwrap_or_default();
     if integer(context, "source_file_count") != i64::try_from(sources.len()).ok()
         || sources.len() > 16
     {
@@ -254,8 +249,7 @@ fn validate_context(
         }
         if matches!(
             source.as_str(),
-            "docs/handoff/W1_IMPLEMENTATION_PACKET.md"
-                | "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
+            "docs/handoff/W1_IMPLEMENTATION_PACKET.md" | "docs/handoff/W2_IMPLEMENTATION_PACKET.md"
         ) {
             errors.push(format!("{}: prior stage packet replayed", spec.name));
         }

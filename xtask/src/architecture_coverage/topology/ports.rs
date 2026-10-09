@@ -1,16 +1,16 @@
 //! Shared-port method ownership and configuration-section ownership.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use toml::Value;
 
-use super::rows_or_empty;
 use super::super::load::{
-    Inputs, ModuleMap, read_text, require, string, string_list,
-    validate_module_ref, validate_owner_pair,
+    Inputs, ModuleMap, read_text, require, string, string_list, validate_module_ref,
+    validate_owner_pair,
 };
 use super::super::markdown::port_methods;
+use super::rows_or_empty;
 
 pub(super) fn validate(
     root: &Path,
@@ -35,7 +35,7 @@ fn validate_ports(
         Ok(text) => port_methods(&text),
         Err(error) => {
             errors.push(error);
-            Default::default()
+            BTreeMap::default()
         }
     };
     let rows = rows_or_empty(&inputs.port_doc, "port", "name", errors);
@@ -46,20 +46,25 @@ fn validate_ports(
     );
     require(
         errors,
-        rows.keys().cloned().collect::<BTreeSet<_>>()
-            == source.keys().cloned().collect(),
+        rows.keys().cloned().collect::<BTreeSet<_>>() == source.keys().cloned().collect(),
         "port registry set mismatch",
     );
     require(
         errors,
-        inputs.port_doc.get("schema_version").and_then(Value::as_integer)
+        inputs
+            .port_doc
+            .get("schema_version")
+            .and_then(Value::as_integer)
             == Some(2),
         "port registry must be schema v2",
     );
     let source_method_count: usize = source.values().map(Vec::len).sum();
     require(
         errors,
-        inputs.port_doc.get("method_count").and_then(Value::as_integer)
+        inputs
+            .port_doc
+            .get("method_count")
+            .and_then(Value::as_integer)
             == i64::try_from(source_method_count).ok(),
         "port method total mismatch",
     );
@@ -74,9 +79,10 @@ fn validate_ports(
         );
         require(
             errors,
-            method_modules.as_ref().zip(methods.as_ref()).is_some_and(
-                |(module_list, method_list)| module_list.len() == method_list.len(),
-            ),
+            method_modules
+                .as_ref()
+                .zip(methods.as_ref())
+                .is_some_and(|(module_list, method_list)| module_list.len() == method_list.len()),
             format!("{port}: one method module per method required"),
         );
         let package = string(row, "implementation_package");
@@ -140,7 +146,10 @@ fn validate_config(
         require(
             errors,
             owner.is_some_and(|value| packages.contains(value)),
-            format!("config {name}: unknown owner {}", owner.unwrap_or("<missing>")),
+            format!(
+                "config {name}: unknown owner {}",
+                owner.unwrap_or("<missing>")
+            ),
         );
         require(
             errors,

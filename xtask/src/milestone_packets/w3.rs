@@ -46,9 +46,7 @@ impl W3MilestonePacketReport {
 }
 
 #[must_use]
-pub fn validate_w3_milestone_packets(
-    root: &Path,
-) -> W3MilestonePacketReport {
+pub fn validate_w3_milestone_packets(root: &Path) -> W3MilestonePacketReport {
     match validate(root) {
         Ok(report) => report,
         Err(error) => W3MilestonePacketReport::early(error),
@@ -60,6 +58,12 @@ pub const fn exit_code(report: &W3MilestonePacketReport) -> i32 {
     if report.passed() { 0 } else { 1 }
 }
 
+/// Render one bounded W3 milestone-packet report as pretty JSON.
+///
+/// # Panics
+///
+/// Never. The report carries only strings, counters and lists, so the JSON
+/// serialization cannot fail.
 #[must_use]
 pub fn render_report_json(report: &W3MilestonePacketReport) -> String {
     let value = if report.complete {
@@ -89,8 +93,7 @@ fn validate(root: &Path) -> Result<W3MilestonePacketReport, String> {
     )?;
     let launch = load_doc(root, "swarm/launch-state.toml")?;
     let artifact = load_doc(root, "qualification/qdrant/artifact.toml")?;
-    let collection =
-        load_doc(root, "qualification/qdrant/collection-schema.toml")?;
+    let collection = load_doc(root, "qualification/qdrant/collection-schema.toml")?;
     let probes = load_doc(root, "qualification/qdrant/probes.toml")?;
     let cases = load_doc(root, "qualification/w3-milestones/cases-v1.toml")?;
     let packet_rows = indexed_rows(&document, "package", "name")?;

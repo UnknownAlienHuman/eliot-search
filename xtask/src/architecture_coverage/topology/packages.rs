@@ -5,19 +5,16 @@ use std::path::Path;
 
 use toml::Value;
 
-use super::rows_or_empty;
 use super::super::load::{
-    Inputs, ModuleMap, RowMap, boolean, integer, load_toml, require, string,
-    string_list,
+    Inputs, ModuleMap, RowMap, boolean, integer, load_toml, require, string, string_list,
 };
 use super::super::markdown::operation_names;
+use super::rows_or_empty;
 
 const FOUNDATION: [&str; 3] = ["search-contracts", "search-domain", "search-ports"];
 
 pub(super) struct PackageClosure {
-    pub(super) package_rows: RowMap,
     pub(super) packages: BTreeSet<String>,
-    pub(super) foundation_rows: RowMap,
     pub(super) function_rows: RowMap,
     pub(super) assignment_paths: BTreeSet<String>,
     pub(super) modules: ModuleMap,
@@ -26,17 +23,12 @@ pub(super) struct PackageClosure {
     pub(super) operation_count: usize,
 }
 
-pub(super) fn validate(
-    root: &Path,
-    inputs: &Inputs,
-    errors: &mut Vec<String>,
-) -> PackageClosure {
+pub(super) fn validate(root: &Path, inputs: &Inputs, errors: &mut Vec<String>) -> PackageClosure {
     let package_rows = rows_or_empty(&inputs.package_doc, "package", "name", errors);
     let packages: BTreeSet<String> = package_rows.keys().cloned().collect();
     require(
         errors,
-        integer(&inputs.package_doc, "package_count") == Some(45)
-            && packages.len() == 45,
+        integer(&inputs.package_doc, "package_count") == Some(45) && packages.len() == 45,
         "package registry must contain 45 packages",
     );
     require(
@@ -47,8 +39,7 @@ pub(super) fn validate(
 
     let foundation_rows = rows_or_empty(&inputs.function_doc, "foundation", "package", errors);
     let function_rows = rows_or_empty(&inputs.function_doc, "package", "name", errors);
-    let foundation: BTreeSet<String> =
-        FOUNDATION.iter().map(|value| (*value).to_owned()).collect();
+    let foundation: BTreeSet<String> = FOUNDATION.iter().map(|value| (*value).to_owned()).collect();
     require(
         errors,
         foundation_rows.keys().cloned().collect::<BTreeSet<_>>() == foundation,
@@ -76,17 +67,10 @@ pub(super) fn validate(
         &packages,
         errors,
     );
-    let operation_count = validate_functions(
-        root,
-        &package_rows,
-        &function_rows,
-        errors,
-    );
+    let operation_count = validate_functions(root, &package_rows, &function_rows, errors);
 
     PackageClosure {
-        package_rows,
         packages,
-        foundation_rows,
         function_rows,
         assignment_paths,
         modules,
@@ -152,6 +136,10 @@ fn validate_assignments(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 fn validate_modules(
     root: &Path,
     inputs: &Inputs,
@@ -192,8 +180,7 @@ fn validate_modules(
         let entries = rows_or_empty(&document, "package", "name", errors);
         require(
             errors,
-            integer(&document, "package_count")
-                == i64::try_from(entries.len()).ok(),
+            integer(&document, "package_count") == i64::try_from(entries.len()).ok(),
             format!("{path}: package count mismatch"),
         );
         let mut packet_module_total = 0_usize;
@@ -203,9 +190,7 @@ fn validate_modules(
                 continue;
             }
             let names = string_list(&entry, "modules").unwrap_or_else(|| {
-                errors.push(format!(
-                    "{package}: modules must be a string array"
-                ));
+                errors.push(format!("{package}: modules must be a string array"));
                 Vec::new()
             });
             let unique: BTreeSet<String> = names.iter().cloned().collect();
@@ -216,8 +201,7 @@ fn validate_modules(
             );
             require(
                 errors,
-                integer(&entry, "module_count")
-                    == i64::try_from(names.len()).ok(),
+                integer(&entry, "module_count") == i64::try_from(names.len()).ok(),
                 format!("{package}: module count mismatch"),
             );
             require(
@@ -245,8 +229,7 @@ fn validate_modules(
         }
         require(
             errors,
-            integer(&document, "module_count")
-                == i64::try_from(packet_module_total).ok(),
+            integer(&document, "module_count") == i64::try_from(packet_module_total).ok(),
             format!("{path}: declared module count mismatch"),
         );
         require(
@@ -288,15 +271,10 @@ fn validate_modules(
     );
     require(
         errors,
-        integer(&inputs.module_doc, "module_count") == Some(479)
-            && module_total == 479,
+        integer(&inputs.module_doc, "module_count") == Some(479) && module_total == 479,
         "module total must be 479",
     );
-    require(
-        errors,
-        maximum == 15,
-        "module ceiling must remain 15",
-    );
+    require(errors, maximum == 15, "module ceiling must remain 15");
     require(
         errors,
         boolean(
@@ -375,9 +353,7 @@ fn validate_functions(
             .and_then(|package_row| string(package_row, "path"));
         require(
             errors,
-            package_path.is_some_and(|owner| {
-                relative.starts_with(&format!("{owner}/"))
-            }),
+            package_path.is_some_and(|owner| relative.starts_with(&format!("{owner}/"))),
             format!("{package}: function source is not package-local"),
         );
         require(
@@ -425,11 +401,7 @@ fn validate_functions(
     operation_count
 }
 
-fn top_level_markdown_files(
-    root: &Path,
-    directory: &str,
-    ignored_name: &str,
-) -> BTreeSet<String> {
+fn top_level_markdown_files(root: &Path, directory: &str, ignored_name: &str) -> BTreeSet<String> {
     let mut result = BTreeSet::new();
     let Ok(entries) = std::fs::read_dir(root.join(directory)) else {
         return result;
@@ -449,11 +421,7 @@ fn top_level_markdown_files(
     result
 }
 
-fn recursive_named_files(
-    root: &Path,
-    roots: &[&str],
-    name: &str,
-) -> BTreeSet<String> {
+fn recursive_named_files(root: &Path, roots: &[&str], name: &str) -> BTreeSet<String> {
     let mut result = BTreeSet::new();
     let mut pending: VecDeque<std::path::PathBuf> = roots
         .iter()
@@ -479,10 +447,7 @@ fn recursive_named_files(
 }
 
 fn valid_module_name(value: &str) -> bool {
-    value
-        .as_bytes()
-        .first()
-        .is_some_and(u8::is_ascii_lowercase)
+    value.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
         && value
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')

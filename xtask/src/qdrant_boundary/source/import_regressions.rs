@@ -25,7 +25,11 @@ fn local_renamed_imports_do_not_depend_on_layout() {
         "use{qdrant_client::Qdrant as Client};",
     ] {
         let text = format!("{import}\npub fn leaked() -> Client;");
-        assert_eq!(public_vendor_surface_lines(&text), vec![import.lines().count() + 1], "{text}");
+        assert_eq!(
+            public_vendor_surface_lines(&text),
+            vec![import.lines().count() + 1],
+            "{text}"
+        );
     }
 }
 
@@ -37,7 +41,10 @@ fn renamed_extern_crates_are_token_delimited() {
         "#[allow(unused)] extern crate r#qdrant_client as sdk;",
     ] {
         let text = format!("{import}\nuse sdk::Qdrant as Client;\npub fn leaked() -> Client;");
-        assert_eq!(public_vendor_surface_lines(&text), vec![import.lines().count() + 2]);
+        assert_eq!(
+            public_vendor_surface_lines(&text),
+            vec![import.lines().count() + 2]
+        );
     }
 }
 
@@ -94,8 +101,12 @@ fn type_aliases_include_generic_defaults_and_array_semicolons() {
         "type Alias<T = Client> = Vec<T>;",
         "type Alias<T: Bound<Client>> = Vec<T>;",
     ] {
-        let text = format!("use qdrant_client::Qdrant as Client;\n{alias}\npub fn leaked() -> Alias;");
-        assert_eq!(public_vendor_surface_lines(&text), vec![alias.lines().count() + 2]);
+        let text =
+            format!("use qdrant_client::Qdrant as Client;\n{alias}\npub fn leaked() -> Alias;");
+        assert_eq!(
+            public_vendor_surface_lines(&text),
+            vec![alias.lines().count() + 2]
+        );
     }
 }
 
@@ -117,18 +128,19 @@ fn underscore_imports_do_not_create_a_referenceable_name() {
 
 #[test]
 fn raw_keywords_literals_and_private_macro_bodies_are_not_declarations() {
-    let text = r##"
+    let text = r#"
 const NOTE: &str = "use qdrant_client::Qdrant as Client;";
 fn private() { let r#use = 0; let r#type = 1; }
 macro_rules! private { () => { use qdrant_client::Qdrant as Client; }; }
 pub fn safe() -> Client;
-"##;
+"#;
     assert!(public_vendor_surface_lines(text).is_empty());
 }
 
 #[test]
 fn shared_collector_preserves_declaration_lines_and_visibility() {
-    let code = "#[allow(unused)] pub\nuse crate::a::A; type B = [u8; 4];\npub (crate)\nuse crate::b::B;";
+    let code =
+        "#[allow(unused)] pub\nuse crate::a::A; type B = [u8; 4];\npub (crate)\nuse crate::b::B;";
     let statements = collect_statements(code).expect("declarations");
     assert_eq!(statements.len(), 3);
     assert_eq!((statements[0].line, statements[0].public), (1, true));
@@ -167,21 +179,36 @@ fn incomplete_and_malformed_imports_fail_closed() {
 #[test]
 fn cross_file_reexports_resolve_layout_independent_aliases() {
     let sources = [
-        source("private.rs", "use\tqdrant_client as sdk;\npub(crate) type\nClient = sdk::Qdrant;"),
-        source("facade.rs", "#[allow(unused)] pub\nuse crate::private::Client as PublicClient;"),
+        source(
+            "private.rs",
+            "use\tqdrant_client as sdk;\npub(crate) type\nClient = sdk::Qdrant;",
+        ),
+        source(
+            "facade.rs",
+            "#[allow(unused)] pub\nuse crate::private::Client as PublicClient;",
+        ),
         source("lib.rs", "pub use crate::facade::PublicClient;"),
     ];
     assert_eq!(
         find_cross_file_vendor_surfaces(&sources, BRIDGE, VENDOR),
-        vec![(format!("{BRIDGE}/src/facade.rs"), 1), (format!("{BRIDGE}/src/lib.rs"), 1)],
+        vec![
+            (format!("{BRIDGE}/src/facade.rs"), 1),
+            (format!("{BRIDGE}/src/lib.rs"), 1)
+        ],
     );
 }
 
 #[test]
 fn cross_file_private_import_and_split_alias_reach_a_public_signature() {
     let sources = [
-        source("private.rs", "pub(crate) type Client = qdrant_client::Qdrant;"),
-        source("api.rs", "use\tcrate::private::Client as C;\ntype\nAlias = C;\npub fn leaked() -> Alias;"),
+        source(
+            "private.rs",
+            "pub(crate) type Client = qdrant_client::Qdrant;",
+        ),
+        source(
+            "api.rs",
+            "use\tcrate::private::Client as C;\ntype\nAlias = C;\npub fn leaked() -> Alias;",
+        ),
     ];
     assert_eq!(
         find_cross_file_vendor_surfaces(&sources, BRIDGE, VENDOR),
@@ -193,7 +220,10 @@ fn cross_file_private_import_and_split_alias_reach_a_public_signature() {
 fn public_globs_propagate_split_public_visibility_only() {
     for (visibility, expected) in [("pub\n", true), ("pub (crate)\n", false)] {
         let sources = [
-            source("private.rs", &format!("{visibility}type Client = qdrant_client::Qdrant;")),
+            source(
+                "private.rs",
+                &format!("{visibility}type Client = qdrant_client::Qdrant;"),
+            ),
             source("lib.rs", "pub\tuse crate::private::*;"),
         ];
         let findings = find_cross_file_vendor_surfaces(&sources, BRIDGE, VENDOR);
@@ -203,7 +233,10 @@ fn public_globs_propagate_split_public_visibility_only() {
 
 #[test]
 fn vendor_globs_still_fail_with_token_separated_imports() {
-    let sources = [source("lib.rs", "#[allow(unused)] use\tqdrant_client::{qdrant::*};")];
+    let sources = [source(
+        "lib.rs",
+        "#[allow(unused)] use\tqdrant_client::{qdrant::*};",
+    )];
     assert_eq!(
         find_cross_file_vendor_surfaces(&sources, BRIDGE, VENDOR),
         vec![(format!("{BRIDGE}/src/lib.rs"), 1)],
@@ -212,7 +245,8 @@ fn vendor_globs_still_fail_with_token_separated_imports() {
 
 #[test]
 fn nested_groups_self_aliases_and_raw_bindings_are_parsed_exactly() {
-    let statements = collect_use_statements("use qdrant_client::{self as sdk, qdrant::{PointId as r#type}};");
+    let statements =
+        collect_use_statements("use qdrant_client::{self as sdk, qdrant::{PointId as r#type}};");
     let leaves = statements[0].leaves.as_ref().expect("bounded tree");
     assert_eq!(leaves.len(), 2);
     assert_eq!(leaves[0].path, vec!["qdrant_client"]);
@@ -223,7 +257,9 @@ fn nested_groups_self_aliases_and_raw_bindings_are_parsed_exactly() {
 
 #[test]
 fn capture_bounds_do_not_turn_into_malformed_use_imports() {
-    let statements = collect_use_statements("pub fn value<T>() -> impl Trait + use<T> {}\nuse crate::owned::Value;");
+    let statements = collect_use_statements(
+        "pub fn value<T>() -> impl Trait + use<T> {}\nuse crate::owned::Value;",
+    );
     assert_eq!(statements.len(), 1);
     assert_eq!(statements[0].line, 2);
     assert!(statements[0].leaves.is_some());
@@ -239,7 +275,10 @@ fn untainted_alias_cycles_terminate_without_inventing_vendor_names() {
 #[test]
 fn declaration_and_path_budgets_fail_instead_of_dropping_suffixes() {
     let mut code = "type A = u8;\n".repeat(65_536);
-    assert_eq!(collect_statements(&code).expect("exact limit").len(), 65_536);
+    assert_eq!(
+        collect_statements(&code).expect("exact limit").len(),
+        65_536
+    );
     code.push_str("use qdrant_client::Qdrant;");
     assert_eq!(collect_statements(&code).expect_err("over limit"), 65_537);
     assert!(collect_use_statements(&code)[0].leaves.is_none());
@@ -252,7 +291,8 @@ fn declaration_and_path_budgets_fail_instead_of_dropping_suffixes() {
 fn long_reverse_alias_chain_and_a_reachable_cycle_terminate() {
     let mut code = String::new();
     for index in (1..=2_048).rev() {
-        code.push_str(&format!("type A{index} = A{};\n", index - 1));
+        use std::fmt::Write as _;
+        writeln!(code, "type A{index} = A{};", index - 1).expect("string formatting");
     }
     code.push_str("type A0 = qdrant_client::Qdrant;\nuse self::A2048 as Last;\n");
     let identifiers = vendor_identifiers(&code, VENDOR);

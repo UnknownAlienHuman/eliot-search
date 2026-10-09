@@ -41,11 +41,7 @@ pub struct Finding {
 }
 
 impl Finding {
-    pub(crate) fn new(
-        code: impl Into<String>,
-        path: &Path,
-        detail: impl Into<String>,
-    ) -> Self {
+    pub(crate) fn new(code: impl Into<String>, path: &Path, detail: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             path: normalize_path(path),
@@ -92,6 +88,12 @@ pub const fn exit_code(report: &IntegrationBootstrapReport) -> i32 {
 }
 
 /// Render the compact machine-readable v1 report.
+///
+/// # Panics
+///
+/// Serializing a `serde_json::Value` built only from strings, booleans and a
+/// bounded findings array cannot fail; the `expect` names the report invariant
+/// rather than handling an unreachable error path.
 #[must_use]
 pub fn render_report_json(report: &IntegrationBootstrapReport) -> String {
     let findings: Vec<JsonValue> = report
@@ -120,8 +122,7 @@ pub fn render_report_json(report: &IntegrationBootstrapReport) -> String {
         },
         "findings": findings,
     });
-    serde_json::to_string(&payload)
-        .expect("serializing a bounded bootstrap report cannot fail")
+    serde_json::to_string(&payload).expect("serializing a bounded bootstrap report cannot fail")
 }
 
 /// Render the human-readable report used by the compatibility wrapper.
@@ -144,10 +145,10 @@ pub fn render_report_text(report: &IntegrationBootstrapReport) -> String {
 }
 
 pub(crate) fn load_toml(path: &Path) -> Result<Value, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|error| format!("cannot load TOML: {error}"))?;
-    let value: Value = toml::from_str(&text)
-        .map_err(|error| format!("cannot load TOML: {error}"))?;
+    let text =
+        std::fs::read_to_string(path).map_err(|error| format!("cannot load TOML: {error}"))?;
+    let value: Value =
+        toml::from_str(&text).map_err(|error| format!("cannot load TOML: {error}"))?;
     if value.as_table().is_none() {
         return Err("TOML root must be a table".to_owned());
     }

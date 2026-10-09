@@ -51,7 +51,9 @@ fn current_search_contracts_candidate_builds_from_head_without_writing() {
         Some("ARTIFACT_CANDIDATE_NOT_STORED_NOT_SIGNED")
     );
     assert_eq!(
-        candidate.pointer("/repository/base_commit").and_then(Value::as_str),
+        candidate
+            .pointer("/repository/base_commit")
+            .and_then(Value::as_str),
         Some(tagged.as_str())
     );
     assert_eq!(
@@ -62,7 +64,9 @@ fn current_search_contracts_candidate_builds_from_head_without_writing() {
     );
     assert_eq!(candidate["reason_codes"].as_array().map(Vec::len), Some(0));
     assert_eq!(
-        candidate["control_record_mutations"].as_array().map(Vec::len),
+        candidate["control_record_mutations"]
+            .as_array()
+            .map(Vec::len),
         Some(0)
     );
     assert_eq!(
@@ -81,13 +85,19 @@ fn current_search_contracts_candidate_builds_from_head_without_writing() {
         candidate["registry_fragments"].as_array().map(Vec::len),
         Some(5)
     );
-    assert!(build.bundle_relative_path().starts_with(
-        "artifacts/context-artifact-candidates/rust-test/search-contracts/"
-    ));
-    assert!(build.candidate_relative_path().ends_with(".json"));
+    assert!(
+        build
+            .bundle_relative_path()
+            .starts_with("artifacts/context-artifact-candidates/rust-test/search-contracts/")
+    );
+    assert!(
+        std::path::Path::new(build.candidate_relative_path())
+            .extension()
+            .is_some_and(|ext| ext == "json")
+    );
 
-    let (preamble, blocks) = parse_bundle(build.bundle_bytes())
-        .expect("assembled bundle has a strict inverse");
+    let (preamble, blocks) =
+        parse_bundle(build.bundle_bytes()).expect("assembled bundle has a strict inverse");
     assert_eq!(preamble["source_count"].as_u64(), Some(20));
     assert_eq!(preamble["registry_fragment_count"].as_u64(), Some(5));
     assert_eq!(blocks.len(), 25);

@@ -3,11 +3,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use toml::Value;
 
 use super::super::{
-    boolean, child, child_bool, child_string, child_string_list,
-    expected_strings, integer, string, string_list,
+    boolean, child, child_bool, child_string, child_string_list, expected_strings, integer, string,
+    string_list,
 };
 use super::spec::{CENTRAL_PACKAGES, PACKAGES};
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub(super) fn validate_global(
     packet_doc: &Value,
     stages: &BTreeMap<String, Value>,
@@ -32,13 +36,10 @@ fn validate_stage(
     launch: &Value,
     errors: &mut Vec<String>,
 ) {
-    if string(packet_doc, "status")
-        != Some("BLOCKED_ON_G1_W2_G1_AND_QDRANT_QUALIFICATION")
-    {
+    if string(packet_doc, "status") != Some("BLOCKED_ON_G1_W2_G1_AND_QDRANT_QUALIFICATION") {
         errors.push("W3 packet registry is not fail-closed".to_owned());
     }
-    if string_list(packet_doc, "requires_accepted_gates")
-        != Some(expected_strings(&["G1"]))
+    if string_list(packet_doc, "requires_accepted_gates") != Some(expected_strings(&["G1"]))
         || string_list(packet_doc, "requires_accepted_receipts")
             != Some(expected_strings(&["W2_G1"]))
     {
@@ -61,8 +62,7 @@ fn validate_stage(
         errors.push("central W3 stage mismatch".to_owned());
     }
     if string_list(stage, "requires_accepted_gates") != Some(expected_strings(&["G1"]))
-        || string_list(stage, "requires_accepted_receipts")
-            != Some(expected_strings(&["W2_G1"]))
+        || string_list(stage, "requires_accepted_receipts") != Some(expected_strings(&["W2_G1"]))
     {
         errors.push("central W3 prerequisites mismatch".to_owned());
     }
@@ -103,16 +103,10 @@ fn validate_execution(packet_doc: &Value, errors: &mut Vec<String>) {
     {
         errors.push("group C/D mismatch".to_owned());
     }
-    if child_string_list(
-        packet_doc,
-        "execution",
-        "projection_planner_requires",
-    ) != Some(expected_strings(&["search-point-identity"]))
-        || child_string_list(
-            packet_doc,
-            "execution",
-            "index_reclaimer_requires",
-        ) != Some(expected_strings(&["search-epoch-pins"]))
+    if child_string_list(packet_doc, "execution", "projection_planner_requires")
+        != Some(expected_strings(&["search-point-identity"]))
+        || child_string_list(packet_doc, "execution", "index_reclaimer_requires")
+            != Some(expected_strings(&["search-epoch-pins"]))
     {
         errors.push("group B predecessor mismatch".to_owned());
     }
@@ -126,10 +120,7 @@ fn validate_execution(packet_doc: &Value, errors: &mut Vec<String>) {
     }
 }
 
-fn validate_daemon_override(
-    readsets: &BTreeMap<String, Value>,
-    errors: &mut Vec<String>,
-) {
+fn validate_daemon_override(readsets: &BTreeMap<String, Value>, errors: &mut Vec<String>) {
     let empty = Value::Table(toml::map::Map::new());
     let override_row = readsets.get("W3.eliot-searchd").unwrap_or(&empty);
     if boolean(override_row, "replace_previous_stage_context") != Some(true)
@@ -203,9 +194,9 @@ fn validate_collection(collection: &Value, errors: &mut Vec<String>) {
         .cloned()
         .unwrap_or_default();
     if vectors.is_empty()
-        || vectors.iter().any(|row| {
-            row.get("profile_status").and_then(Value::as_str) != Some("UNQUALIFIED")
-        })
+        || vectors
+            .iter()
+            .any(|row| row.get("profile_status").and_then(Value::as_str) != Some("UNQUALIFIED"))
     {
         errors.push("collection sparse profile state is not UNQUALIFIED".to_owned());
     }

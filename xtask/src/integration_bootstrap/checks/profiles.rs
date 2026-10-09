@@ -4,7 +4,7 @@ use toml::Value;
 
 use super::super::{EXPECTED_PROFILES, Finding, load_toml};
 
-pub(super) fn validate_build_profiles(
+pub(in crate::integration_bootstrap) fn validate_build_profiles(
     root: &Path,
     findings: &mut Vec<Finding>,
 ) {
@@ -29,9 +29,7 @@ pub(super) fn validate_build_profiles(
             "bootstrap status must retain the non-acceptance sentinel",
         ));
     }
-    if document.get("default_profile").and_then(Value::as_str)
-        != Some("P00_FOUNDATION")
-    {
+    if document.get("default_profile").and_then(Value::as_str) != Some("P00_FOUNDATION") {
         findings.push(Finding::new(
             "DEFAULT_PROFILE_INVALID",
             &path,

@@ -133,6 +133,9 @@ pub const fn exit_code(report: &CoverageGraphReport) -> i32 {
 
 /// Renders the stable machine-readable report.
 #[must_use]
+///
+/// # Panics
+/// Panics if JSON serialization unexpectedly fails for this closed value shape.
 pub fn render_report_json(report: &CoverageGraphReport) -> String {
     let value = if report.complete {
         json!({

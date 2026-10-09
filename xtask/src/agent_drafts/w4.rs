@@ -9,9 +9,7 @@ use std::path::Path;
 use serde_json::json;
 use toml::Value;
 
-use super::{
-    indexed_rows, integer, load_doc, string, symmetric_difference,
-};
+use super::{indexed_rows, integer, load_doc, string, symmetric_difference};
 use global::validate_global;
 use manifests::validate_manifests;
 use package::validate_package;
@@ -64,6 +62,12 @@ pub const fn exit_code(report: &W4AgentDraftReport) -> i32 {
     if report.passed() { 0 } else { 1 }
 }
 
+/// Render one bounded W4 agent-draft report as pretty JSON.
+///
+/// # Panics
+///
+/// Never. The report carries only strings, counters and lists, so the JSON
+/// serialization cannot fail.
 #[must_use]
 pub fn render_report_json(report: &W4AgentDraftReport) -> String {
     let value = if report.complete {
@@ -84,28 +88,17 @@ pub fn render_report_json(report: &W4AgentDraftReport) -> String {
     serde_json::to_string_pretty(&value)
         .expect("serializing a bounded W4 agent-draft report cannot fail")
 }
-
 fn validate(root: &Path) -> Result<W4AgentDraftReport, String> {
     let packet_doc = load_doc(root, "swarm/w4-agent-packets.toml")?;
-    let ticket_manifest =
-        load_doc(root, "swarm/ticket-drafts/w4/manifest.toml")?;
-    let context_manifest =
-        load_doc(root, "swarm/context-drafts/w4/manifest.toml")?;
-    let crates = indexed_rows(
-        &load_doc(root, "swarm/crates.toml")?,
-        "package",
-        "name",
-    )?;
+    let ticket_manifest = load_doc(root, "swarm/ticket-drafts/w4/manifest.toml")?;
+    let context_manifest = load_doc(root, "swarm/context-drafts/w4/manifest.toml")?;
+    let crates = indexed_rows(&load_doc(root, "swarm/crates.toml")?, "package", "name")?;
     let functions = indexed_rows(
         &load_doc(root, "swarm/function-packets.toml")?,
         "package",
         "name",
     )?;
-    let stages = indexed_rows(
-        &load_doc(root, "swarm/stages.toml")?,
-        "stage",
-        "id",
-    )?;
+    let stages = indexed_rows(&load_doc(root, "swarm/stages.toml")?, "stage", "id")?;
     let readsets = indexed_rows(
         &load_doc(root, "swarm/stage-readsets.toml")?,
         "override",
@@ -114,12 +107,10 @@ fn validate(root: &Path) -> Result<W4AgentDraftReport, String> {
     let launch = load_doc(root, "swarm/launch-state.toml")?;
     let baseline = load_doc(root, "qualification/query/baseline.toml")?;
     let probes = load_doc(root, "qualification/query/probes.toml")?;
-    let cases =
-        load_doc(root, "qualification/w4-agent-drafts/cases-v1.toml")?;
+    let cases = load_doc(root, "qualification/w4-agent-drafts/cases-v1.toml")?;
     let packet_rows = indexed_rows(&packet_doc, "package", "name")?;
     let ticket_rows = indexed_rows(&ticket_manifest, "draft", "package")?;
-    let context_rows =
-        indexed_rows(&context_manifest, "draft", "package")?;
+    let context_rows = indexed_rows(&context_manifest, "draft", "package")?;
 
     let expected_names: BTreeSet<String> =
         PACKAGES.iter().map(|spec| spec.name.to_owned()).collect();
@@ -149,29 +140,17 @@ fn validate(root: &Path) -> Result<W4AgentDraftReport, String> {
     );
 
     for spec in &PACKAGES {
-        let ticket = match load_doc(
-            root,
-            &format!("swarm/ticket-drafts/w4/{}.toml", spec.name),
-        ) {
+        let ticket = match load_doc(root, &format!("swarm/ticket-drafts/w4/{}.toml", spec.name)) {
             Ok(document) => document,
             Err(error) => {
-                errors.push(format!(
-                    "{}: unable to load ticket: {error}",
-                    spec.name
-                ));
+                errors.push(format!("{}: unable to load ticket: {error}", spec.name));
                 continue;
             }
         };
-        let context = match load_doc(
-            root,
-            &format!("swarm/context-drafts/w4/{}.toml", spec.name),
-        ) {
+        let context = match load_doc(root, &format!("swarm/context-drafts/w4/{}.toml", spec.name)) {
             Ok(document) => document,
             Err(error) => {
-                errors.push(format!(
-                    "{}: unable to load context: {error}",
-                    spec.name
-                ));
+                errors.push(format!("{}: unable to load context: {error}", spec.name));
                 continue;
             }
         };

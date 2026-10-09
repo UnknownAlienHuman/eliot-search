@@ -16,12 +16,11 @@ pub(super) fn validate(root: &Path, inputs: &Inputs, errors: &mut Vec<String>) {
     }
 }
 
-fn validate_package(
-    root: &Path,
-    inputs: &Inputs,
-    package: &str,
-    errors: &mut Vec<String>,
-) {
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
+fn validate_package(root: &Path, inputs: &Inputs, package: &str, errors: &mut Vec<String>) {
     let path = package_paths(package).relations;
     let document = match load_toml(root, &path) {
         Ok(document) => document,
@@ -75,10 +74,7 @@ fn validate_package(
                 errors.push(format!("{package}:{key}: dependency {field} mismatch"));
             }
         }
-        for field in [
-            "requires_stage_reentry",
-            "exact_accepted_handoff_required",
-        ] {
+        for field in ["requires_stage_reentry", "exact_accepted_handoff_required"] {
             if boolean(actual, field) != boolean(expected, field) {
                 errors.push(format!("{package}:{key}: dependency {field} mismatch"));
             }
@@ -89,13 +85,7 @@ fn validate_package(
     let actual_architecture = keyed_rows(
         &document,
         "architecture",
-        |row| {
-            Some(format!(
-                "{}|{}",
-                string(row, "kind")?,
-                string(row, "id")?
-            ))
-        },
+        |row| Some(format!("{}|{}", string(row, "kind")?, string(row, "id")?)),
         errors,
     );
     compare_keys(
@@ -151,13 +141,7 @@ fn validate_package(
     let actual_recipes = keyed_rows(
         &document,
         "recipe",
-        |row| {
-            Some(format!(
-                "{}|{}",
-                string(row, "id")?,
-                string(row, "module")?
-            ))
-        },
+        |row| Some(format!("{}|{}", string(row, "id")?, string(row, "module")?)),
         errors,
     );
     compare_keys(
@@ -284,20 +268,14 @@ fn expected_dependencies(inputs: &Inputs, package: &str) -> BTreeMap<String, Val
         if string(row, "consumer") == Some(package) {
             let mut mapped = row.clone();
             if let Some(table) = mapped.as_table_mut() {
-                table.insert(
-                    "direction".to_owned(),
-                    Value::String("outbound".to_owned()),
-                );
+                table.insert("direction".to_owned(), Value::String("outbound".to_owned()));
             }
             result.insert(format!("outbound|{id}"), mapped);
         }
         if string(row, "producer") == Some(package) {
             let mut mapped = row.clone();
             if let Some(table) = mapped.as_table_mut() {
-                table.insert(
-                    "direction".to_owned(),
-                    Value::String("inbound".to_owned()),
-                );
+                table.insert("direction".to_owned(), Value::String("inbound".to_owned()));
             }
             result.insert(format!("inbound|{id}"), mapped);
         }
@@ -350,19 +328,11 @@ fn expected_recipes(inputs: &Inputs, package: &str) -> BTreeMap<String, Value> {
                 ("module", Value::String(module.to_owned())),
                 (
                     "request_schema",
-                    Value::String(
-                        string(row, "request_schema")
-                            .unwrap_or("None")
-                            .to_owned(),
-                    ),
+                    Value::String(string(row, "request_schema").unwrap_or("None").to_owned()),
                 ),
                 (
                     "result_schema",
-                    Value::String(
-                        string(row, "result_schema")
-                            .unwrap_or("None")
-                            .to_owned(),
-                    ),
+                    Value::String(string(row, "result_schema").unwrap_or("None").to_owned()),
                 ),
             ]);
             result.insert(format!("{id}|{module}"), value);
@@ -382,10 +352,8 @@ fn expected_schemas(inputs: &Inputs, package: &str) -> BTreeMap<String, Value> {
         if owners.is_empty() {
             continue;
         }
-        let mut owner_roles: Vec<String> =
-            owners.iter().map(|owner| owner.kind.clone()).collect();
-        let mut modules: Vec<String> =
-            owners.iter().map(|owner| owner.module.clone()).collect();
+        let mut owner_roles: Vec<String> = owners.iter().map(|owner| owner.kind.clone()).collect();
+        let mut modules: Vec<String> = owners.iter().map(|owner| owner.module.clone()).collect();
         owner_roles.sort();
         modules.sort();
         modules.dedup();
@@ -446,10 +414,7 @@ fn compare_keys(
     let actual: BTreeSet<String> = actual.keys().cloned().collect();
     let expected: BTreeSet<String> = expected.keys().cloned().collect();
     if actual != expected {
-        let difference: Vec<String> = actual
-            .symmetric_difference(&expected)
-            .cloned()
-            .collect();
+        let difference: Vec<String> = actual.symmetric_difference(&expected).cloned().collect();
         errors.push(format!(
             "{package}: {label} relation closure mismatch: {difference:?}"
         ));

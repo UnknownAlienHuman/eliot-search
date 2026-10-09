@@ -80,6 +80,9 @@ fn append_json_string(output: &mut Vec<u8>, value: &str) {
 
 /// Deterministic JSON string quoting with raw non-ASCII UTF-8.
 #[must_use]
+///
+/// # Panics
+/// Panics if JSON serialization unexpectedly fails for this closed value shape.
 pub fn quote_json(value: &str) -> String {
     let mut output = Vec::with_capacity(value.len() + 2);
     append_json_string(&mut output, value);

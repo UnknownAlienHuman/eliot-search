@@ -28,8 +28,8 @@ pub(super) struct CoverageSnapshot {
 impl CoverageSnapshot {
     pub(super) fn load(root: &Path) -> Result<Self, String> {
         let manifest_text = read_text(root, MANIFEST_PATH)?;
-        let manifest: Value = toml::from_str(&manifest_text)
-            .map_err(|error| format!("{MANIFEST_PATH}: {error}"))?;
+        let manifest: Value =
+            toml::from_str(&manifest_text).map_err(|error| format!("{MANIFEST_PATH}: {error}"))?;
         let package_document = load_toml(
             root,
             manifest_path(&manifest, "package_registry", "swarm/crates.toml"),
@@ -85,10 +85,7 @@ impl CoverageSnapshot {
             if let Some(path) = string(row, "path") {
                 documentation_files.insert(path.to_owned());
             }
-            if matches!(
-                string(row, "kind"),
-                Some("governance") | Some("navigation")
-            ) {
+            if matches!(string(row, "kind"), Some("governance" | "navigation")) {
                 governance_nodes = governance_nodes.saturating_add(1);
             }
         }
@@ -138,8 +135,7 @@ fn load_toml(root: &Path, relative: &str) -> Result<Value, String> {
 }
 
 fn read_text(root: &Path, relative: &str) -> Result<String, String> {
-    fs::read_to_string(root.join(relative))
-        .map_err(|error| format!("{relative}: {error}"))
+    fs::read_to_string(root.join(relative)).map_err(|error| format!("{relative}: {error}"))
 }
 
 fn manifest_path<'a>(manifest: &'a Value, key: &str, fallback: &'a str) -> &'a str {
