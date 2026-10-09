@@ -1,6 +1,6 @@
 # Agent launch gate — 2026-10-09
 
-**Base accepted for launch:** `f1757d5b528d63abde28eff443f1070ff88fff4d`  
+**Base accepted for launch:** `2ae7ecbdf7dced3cc951e5e162dbba10def03dbc`  
 **Coordinator:** #97  
 **Product/release ready:** no  
 **Controlled implementation wave ready:** yes
@@ -31,33 +31,52 @@ Stop after common canonical/digest APIs and the typed current-tree guard/allowli
 
 Owns only the Unicode full-case-fold donor/data/profile decision and golden fixtures. It edits no Rust manifest, source, root dependency pin or lockfile.
 
-## Wave 2A — indexed foundations after #237
+## Wave 2A — shared foundations after #237
 
-Launch these three managers from the exact accepted post-#237 main:
-
-```text
-#256 search-point-identity: exact S11 port from donor #207
-#257 search-unitizer: authoritative typed UnitSet / manifest v3
-#258 search-contracts: shared S9.5/S10.3/epoch contract
-```
-
-They own disjoint package surfaces. #256 and #257 consume #237 APIs; they do not modify `search-contracts`. #258 owns the additional indexed-search contract module.
-
-## Wave 2B — donor code reduction after #237
-
-Queue separately:
+Launch from the exact accepted post-#237 main:
 
 ```text
-#235 canonical provider client
-#238 standard TOML/config cutover
-#241 bounded GlobSet admission policy
-#246 single-literal matcher cutover
-#250 cargo_metadata tooling cutover
-#252 code_identifiers@1
-#226 Markdown/JATS profiles
+indexed foundations:
+  #256 search-point-identity — exact S11 port
+  #257 search-unitizer — authoritative typed UnitSet / manifest v3
+  #258 search-contracts — shared S9.5/S10.3/epoch contract
+
+root/control foundation:
+  #266 one typed data-root admission/open owner
+
+code-reduction foundations:
+  #235 canonical provider client
+  #238 standard TOML/config cutover
+  #241 bounded GlobSet admission policy
+  #246 single-literal matcher cutover
+  #250 cargo_metadata tooling cutover
+  #252 code_identifiers@1
+  #226 Markdown/JATS profiles
 ```
 
-Many of these update root dependency pins/Cargo.lock. Package code may be developed in separate worktrees, but **one dependency/lock integration manager at a time** merges root pin/lock changes. Every branch rebases on latest accepted main before final gates.
+These own disjoint package surfaces, but several change root dependency pins or `Cargo.lock`. **One dependency/lock integration manager at a time** merges root pin/lock changes. Every branch rebases on latest accepted main before final gates.
+
+## Root/source/control serialization
+
+```text
+#237 → #266
+#266 + #241 → #267
+
+#237 + #266
+→ #268 complete legacy inventory/staged redb mapping
+→ #269 atomic cutover to one redb authority
+
+#237 + #241 + #267 + #269
+→ #270 pre-admission, one source identity index and bounded staging
+
+#239 + #267 + #269 + #270
+→ #271 coherent immutable SourceView
+
+#269 + #271
+→ #272 immutable corpus/portfolio revisions and exact scope compiler
+```
+
+Do not start a blocked child on temporary path/root/security/control helpers.
 
 ## Indexed-spine serialization
 
@@ -75,7 +94,7 @@ join:
   #261 + #262 → #263
 
 product qualification:
-  all above + root/source/access/handle/supervisor owners
+  #272 + all indexed/root/source/access/handle/supervisor owners
   → #264
 ```
 
@@ -92,24 +111,32 @@ product qualification:
 
 ## Closed source-donor branches
 
-These branches are read-only source/fixture archives and are not merge bases:
+Read-only source/fixture archives, never merge bases:
 
 ```text
-#207 head f0ac8a1 → #256
-#209 head e5c14cd → #257/#258/#259
-#210 head a697e17 → #260/#261
-#200 head 615d64f → #258/#262/#263/#264
+#207 f0ac8a1 → #256
+#209 e5c14cd → #257/#258/#259
+#210 a697e17 → #260/#261
+#200 615d64f → #258/#262/#263/#264
 ```
 
-Do not rebase/cherry-pick them wholesale. Their manual codec/crypto/schema and old stacked bases conflict with current ownership.
-
-## Superseded packet branches
+## Superseded packet/tracking branches
 
 ```text
+#100 → #267/#215
+#104 → #267
+#105 → #266
+#106 → #268/#269/#261
+#107 → #268
+#108 → #269
+#110 → #241/#267/#269/#270/#271
+#128 → #239/#267/#269/#270/#271/#272
 #122 → #252–#254
 #131 → #246–#249
 #138 → #250–#251
 ```
+
+Do not rebase/cherry-pick these branches or treat their open/closed PR state as implementation evidence.
 
 ## Agent completion report
 
@@ -137,12 +164,13 @@ Stop and report instead of improvising if the change would introduce:
 - donor public types across ELIOT domain/protocol boundaries;
 - runtime download/network fallback;
 - caller-issued digest/receipt/complete/fresh authority;
+- path/parent/PID/quiet-watcher state used as root/source/currentness authority;
 - hidden normalization, transcoding, skip or fallback semantics;
 - allocation or collection before the accepted ceiling;
 - blind replay after a possible external effect;
 - a compatibility implementation left product-reachable after cutover;
 - an uncoordinated root dependency/Cargo.lock edit;
-- a closed donor branch used as the working base.
+- a closed donor/packet branch used as the working base.
 
 ## Evidence boundary
 
