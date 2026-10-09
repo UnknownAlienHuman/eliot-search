@@ -4807,10 +4807,10 @@
       "count": 2,
       "test": false,
       "source_sha256": "a95ac22fbde5bd68344c306be273f97509e39cb7ca1ddf77c6fea21af240895f",
-      "classification": "wire-store-decode",
-      "owner_issue": 321,
-      "phase": "accepted",
-      "reason": "Two additional observation sites in the orphan inspection already recorded; restoration and enumeration."
+      "classification": "production-compute",
+      "owner_issue": 315,
+      "phase": "owner-migration-preserve-bytes",
+      "reason": "Calls the resolved fingerprint helper for each orphan revision and preparation object; that helper reads the complete bounded object and computes real sha256::digest over its full bytes. This is actual computation, not wire decode. #315 owns preserved direct SHA helper migration."
     },
     {
       "path": "bins/eliot-searchd/src/control_migration_orphans.rs",
