@@ -239,7 +239,45 @@ MetadataCommand::cargo_command()
 
 The crate depends on `serde_json` with its `unbounded_depth` feature available; `parse()` still uses normal `serde_json::from_str`. ELIOT caps bytes first and never treats parser failure as an empty workspace.
 
-No Cargo graph, target, feature or package identity is inferred from raw TOML/lockfile scanning after cutover.
+No Cargo graph, target, feature or package identity is inferred from raw TOML/lockfile scanning after cutover. Narrow literal workspace-pin/bridge-inheritance checks remain because metadata does not expose unused workspace pins or inheritance syntax; unused vendor patch/replace declarations are rejected explicitly.
+
+### #250 archive and closure review (2026-10-09)
+
+Archives were downloaded from crates.io, SHA-256 recomputed and compared with
+the primary release records before the manifest/lock change:
+
+| Donor | Archive checksum | Immutable source | License | MSRV |
+|---|---|---|---|---|
+| cargo_metadata 0.23.1 | `ef987d17b0a113becdd19d3d0022d04d7ef41f9efe4f3fb63ac44ba61df3ade9` | `c08e66cdf534313085ef810ce6f2e0df8a83fc50` | MIT (bundled LICENSE-MIT and immutable upstream) | 1.86 |
+| camino 1.2.6 | `bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591` | `86ed28351d83fa7ef8287bcd5af36b8a4f073c0c` | MIT OR Apache-2.0 (bundled licenses) | 1.61 |
+| cargo-platform 0.3.3 | `dd0061da739915fae12ea00e16397555ed4371a6bb285431aab930f61b0aa4ba` | `f2d3ce0bd7f24a49f8f72d9000448f8838c4e850` | MIT OR Apache-2.0 (bundled licenses) | 1.91 |
+
+`cargo_metadata` defaults are empty; builder/unstable stay disabled. Normal
+closure selects camino `serde1`, semver `serde`, serde derive, serde_json
+`unbounded_depth` and thiserror. The reused lock already contains serde/core
+1.0.229, serde_json 1.0.151, semver 1.0.28 and thiserror/impl 2.0.20 (including
+syn 3 in the latter's proc-macro closure). Reused manifests' MSRVs are below
+1.98. Camino's inspected build script probes `rustc --version` and emits cfg;
+it performs no download. Cargo-platform has no build script. Development and
+optional builder/proptest dependencies are not admitted as runtime mechanisms.
+
+A bounded named-crate RustSec screen used recursive tree
+`7eebec69c352c7191b1f13eb95dd510eeca5d1de` (2279 entries, untruncated) and found
+no advisory paths for these selected donors or the inspected common closure.
+This is not a full workspace security qualification. Post-lock full metadata
+readback confirmed the three new versions/sources/checksums above, with empty
+cargo_metadata/cargo-platform features and camino `serde1`. The 17-package
+normal/build closure (excluding the inactive `cfg(any())` leg) reuses itoa
+1.0.18, memchr 2.8.3, zmij 1.0.23, proc-macro2 1.0.107, quote 1.0.47,
+syn 3.0.5 and unicode-ident 1.0.24 in addition to the named serde/error closure;
+all reported MSRVs are below 1.98. The same RustSec snapshot contains no
+advisory paths for those 17 names. This screen does not evaluate unrelated
+workspace packages or provide a general security verdict.
+
+The MIT license was checked at [the immutable source](https://github.com/oli-obk/cargo_metadata/blob/c08e66cdf534313085ef810ce6f2e0df8a83fc50/LICENSE-MIT).
+Its Git blob is `31aa79387f27e730e33d871925e152e35e428031`; the bundled license
+matches after CRLF normalization. The upstream Cargo.toml matches bundled
+Cargo.toml.orig at blob `7f77850de76d361d1d416ec77bdcc7424677abde`.
 
 # 6. Code identifiers — `#252`
 

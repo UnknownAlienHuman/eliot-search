@@ -16,6 +16,7 @@ name = "xtask"
 path = "src/lib.rs"
 
 [dependencies]
+cargo_metadata.workspace = true
 sha2.workspace = true
 toml = "0.8"
 serde_json = "1"

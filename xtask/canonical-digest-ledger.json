@@ -76,6 +76,11 @@
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/249",
       "reviewed_at": "2026-10-09"
     },
+    "250": {
+      "state": "OPEN",
+      "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/250",
+      "reviewed_at": "2026-10-09"
+    },
     "252": {
       "state": "OPEN",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/252",
@@ -92,7 +97,7 @@
       "reviewed_at": "2026-10-09"
     },
     "258": {
-      "state": "OPEN",
+      "state": "CLOSED",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/258",
       "reviewed_at": "2026-10-09"
     },
@@ -225,6 +230,11 @@
       "state": "OPEN",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/321",
       "reviewed_at": "2026-10-09"
+    },
+    "325": {
+      "state": "OPEN",
+      "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/325",
+      "reviewed_at": "2026-10-09"
     }
   },
   "sites": [
@@ -234,7 +244,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "2faedfe490dfcf9e45071dde2e7b95fcdb9a9abc4231be45741e9de634a02b37",
+      "source_sha256": "d09cb6849f0f9e02ab88d7a7fc2f8177b8674bc6e4489120d7be8007987083af",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -246,7 +256,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "2faedfe490dfcf9e45071dde2e7b95fcdb9a9abc4231be45741e9de634a02b37",
+      "source_sha256": "d09cb6849f0f9e02ab88d7a7fc2f8177b8674bc6e4489120d7be8007987083af",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -17708,9 +17718,9 @@
       "test": false,
       "source_sha256": "4d9bdbb26eb56317c6a28b02ada67575513950e8d08036c6540482a15741f886",
       "classification": "wire-store-decode",
-      "owner_issue": 258,
+      "owner_issue": 325,
       "phase": "owner-migration-new-profile",
-      "reason": "p00 restores the existing checked-in table_digest constant. This is a frozen legacy constant, not proof of runtime BLAKE3; shared profile revisions belong to #258."
+      "reason": "p00 restores the existing frozen legacy table_digest constant, not runtime BLAKE3 proof. Indexed contract #258 is complete; separate legacy bounds provenance/new-profile migration remains explicitly pending under #325 without changing v1 bytes."
     },
     {
       "path": "crates/search-contracts/src/bounds.rs",
@@ -53034,7 +53044,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "97126d4ab3a486ec442839e928d0cdc1ee095cf43af461b2e7969ff039ad663b",
+      "source_sha256": "263c241e234b178beb58b1a2b793c11b511f6db017a5b906f6f1dea14dcf37f1",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -53046,7 +53056,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "97126d4ab3a486ec442839e928d0cdc1ee095cf43af461b2e7969ff039ad663b",
+      "source_sha256": "263c241e234b178beb58b1a2b793c11b511f6db017a5b906f6f1dea14dcf37f1",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -53058,7 +53068,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "97126d4ab3a486ec442839e928d0cdc1ee095cf43af461b2e7969ff039ad663b",
+      "source_sha256": "263c241e234b178beb58b1a2b793c11b511f6db017a5b906f6f1dea14dcf37f1",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -53070,7 +53080,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "97126d4ab3a486ec442839e928d0cdc1ee095cf43af461b2e7969ff039ad663b",
+      "source_sha256": "263c241e234b178beb58b1a2b793c11b511f6db017a5b906f6f1dea14dcf37f1",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -53819,6 +53829,18 @@
       "owner_issue": 237,
       "phase": "accepted",
       "reason": "Guard inspects Rust syntax names/tokens or emits inventory JSON; no product digest or duplicate canonical writer is created here."
+    },
+    {
+      "path": "xtask/src/cargo_metadata_adapter.rs",
+      "symbol": "read_capped",
+      "signal": "unresolved-prefix-review",
+      "count": 1,
+      "test": false,
+      "source_sha256": "4aad203c846f09d2e86e3969db1b90877020be18f1cba3acd16f4b46cc86da8b",
+      "classification": "non-digest-surface",
+      "owner_issue": 250,
+      "phase": "accepted",
+      "reason": "The exact prefix is a bounded pipe read chunk, appended only after output-byte admission; no cryptographic digest is sliced or shortened."
     },
     {
       "path": "xtask/src/command.rs",
@@ -55007,6 +55029,42 @@
       "owner_issue": 214,
       "phase": "owner-migration-preserve-bytes",
       "reason": "Symbol participates in a typed schema/canonical byte encoding; it is not an algorithm-compute site."
+    },
+    {
+      "path": "xtask/src/package_status.rs",
+      "symbol": "date",
+      "signal": "digest-prefix-review",
+      "count": 2,
+      "test": false,
+      "source_sha256": "eeef993a640858ad5f84eda1dfdd205606a6687b602f02e826433b533776dca6",
+      "classification": "non-digest-surface",
+      "owner_issue": 250,
+      "phase": "accepted",
+      "reason": "The exact slices extract year and month from a previously length/ASCII-validated documentation date; no digest input or crypto computation occurs."
+    },
+    {
+      "path": "xtask/src/package_status.rs",
+      "symbol": "impl[Diagnostics]::push",
+      "signal": "unresolved-prefix-review",
+      "count": 1,
+      "test": false,
+      "source_sha256": "eeef993a640858ad5f84eda1dfdd205606a6687b602f02e826433b533776dca6",
+      "classification": "non-digest-surface",
+      "owner_issue": 250,
+      "phase": "accepted",
+      "reason": "The exact prefix bounds a diagnostic string at a checked UTF-8 boundary; truncation never changes a digest or authorizes a successful validation."
+    },
+    {
+      "path": "xtask/src/package_status.rs",
+      "symbol": "read_capped",
+      "signal": "unresolved-prefix-review",
+      "count": 1,
+      "test": false,
+      "source_sha256": "eeef993a640858ad5f84eda1dfdd205606a6687b602f02e826433b533776dca6",
+      "classification": "non-digest-surface",
+      "owner_issue": 250,
+      "phase": "accepted",
+      "reason": "The exact prefix is a bounded status/README input chunk, checked before buffer growth; no cryptographic digest is sliced or shortened."
     },
     {
       "path": "xtask/src/qdrant_boundary/source/cross_file/qualified_path.rs",

@@ -86,8 +86,16 @@ pub(super) fn validate_package_map_closure() -> ExitCode {
 
 pub(super) fn validate_qdrant_boundary() -> ExitCode {
     let report = validate_qdrant(Path::new("."));
-    println!("{}", render_qdrant_json(&report));
-    code(qdrant_exit_code(&report))
+    match render_qdrant_json(&report) {
+        Ok(json) => {
+            println!("{json}");
+            code(qdrant_exit_code(&report))
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn code(value: i32) -> ExitCode {

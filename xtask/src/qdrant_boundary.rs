@@ -6,25 +6,23 @@
 
 mod filesystem;
 mod manifests;
+mod metadata_graph;
 mod source;
 
+use std::io::Write;
 use std::path::Path;
 
 use serde_json::json;
 use toml::Value;
 
 use filesystem::{ScanBudget, collect_files, read_text, read_toml, relative_path};
-use manifests::{
-    collect_vendor_dependency_declarations, lockfile_package_version, validate_bridge_dependency,
-    validate_workspace_dependency, value_at,
-};
+use manifests::{validate_bridge_inheritance_syntax, validate_workspace_pin_syntax, value_at};
 use source::{
     BridgeSource, contains_vendor_sdk_reference, find_cross_file_vendor_surfaces,
     public_vendor_surface_lines, rust_string_constant,
 };
 
 const ROOT_MANIFEST: &str = "Cargo.toml";
-const LOCKFILE: &str = "Cargo.lock";
 const BRIDGE_ROOT: &str = "crates/search-index-qdrant/search-qdrant-bridge";
 const BRIDGE_MANIFEST: &str = "crates/search-index-qdrant/search-qdrant-bridge/Cargo.toml";
 const QUALIFIED_SOURCE: &str = "crates/search-index-qdrant/search-qdrant-bridge/src/qualified.rs";
@@ -34,12 +32,19 @@ const VENDOR_MODULE: &str = "qdrant_client";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QdrantBoundaryReport {
+    pub scope: BoundaryScope,
     pub errors: Vec<String>,
     pub manifests_scanned: usize,
     pub rust_files_scanned: usize,
     pub sdk_source_files: Vec<String>,
     pub workspace_client_version: Option<String>,
     pub qualified_server_version: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BoundaryScope {
+    StaticPolicy,
+    CargoAndStaticPolicy,
 }
 
 impl QdrantBoundaryReport {
@@ -54,32 +59,108 @@ pub const fn exit_code(report: &QdrantBoundaryReport) -> i32 {
     if report.passed() { 0 } else { 1 }
 }
 
+/// Serialize a typed report with a preallocation guard and a hard output cap.
 ///
-/// # Panics
-///
-/// Serializing this bounded report shape cannot fail; the `expect` records
-/// that invariant instead of handling an unreachable error path.
+/// # Errors
+/// Returns a terminal error for oversized or unserializable output.
+pub fn render_report_json(report: &QdrantBoundaryReport) -> Result<String, String> {
+    const MAX_REPORT_BYTES: usize = 1024 * 1024;
+    let text_bytes = report
+        .errors
+        .iter()
+        .chain(&report.sdk_source_files)
+        .chain(report.workspace_client_version.iter())
+        .chain(report.qualified_server_version.iter())
+        .try_fold(0_usize, |total, text| total.checked_add(text.len()))
+        .ok_or("Qdrant report size overflow")?;
+    // Six bytes per UTF-8 input byte covers JSON escaping before Value clones.
+    if text_bytes > (MAX_REPORT_BYTES - 8192) / 6
+        || report.errors.len() + report.sdk_source_files.len() > 1024
+    {
+        return Err("Qdrant report exceeds bounded output allowance".into());
+    }
+    let mut sink = ReportSink {
+        bytes: Vec::new(),
+        limit: MAX_REPORT_BYTES,
+    };
+    serde_json::to_writer_pretty(
+        &mut sink,
+        &json!({
+            "scope": match report.scope { BoundaryScope::StaticPolicy => "static-policy", BoundaryScope::CargoAndStaticPolicy => "cargo-and-static-policy" },
+            "status": if report.passed() { "PASS" } else { "FAIL" },
+            "manifests_scanned": report.manifests_scanned,
+            "rust_files_scanned": report.rust_files_scanned,
+            "sdk_source_files": report.sdk_source_files,
+            "workspace_client_version": report.workspace_client_version,
+            "qualified_server_version": report.qualified_server_version,
+            "errors": report.errors,
+        }),
+    )
+    .map_err(|error| format!("Qdrant report serialization failed: {error}"))?;
+    String::from_utf8(sink.bytes).map_err(|error| format!("Qdrant report UTF-8 failed: {error}"))
+}
+
+struct ReportSink {
+    bytes: Vec<u8>,
+    limit: usize,
+}
+
+impl Write for ReportSink {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self
+            .bytes
+            .len()
+            .checked_add(bytes.len())
+            .is_none_or(|length| length > self.limit)
+        {
+            return Err(std::io::Error::other("Qdrant report byte limit exceeded"));
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Validate Cargo's locked/offline graph, status inventory and static boundary.
 #[must_use]
-pub fn render_report_json(report: &QdrantBoundaryReport) -> String {
-    serde_json::to_string_pretty(&json!({
-        "status": if report.passed() { "PASS" } else { "FAIL" },
-        "manifests_scanned": report.manifests_scanned,
-        "rust_files_scanned": report.rust_files_scanned,
-        "sdk_source_files": report.sdk_source_files,
-        "workspace_client_version": report.workspace_client_version,
-        "qualified_server_version": report.qualified_server_version,
-        "errors": report.errors,
-    }))
-    .expect("serializing a bounded Qdrant boundary report cannot fail")
+pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
+    let mut report = validate_qdrant_static_boundary(root);
+    report.scope = BoundaryScope::CargoAndStaticPolicy;
+    match crate::cargo_metadata_adapter::load_inventory(root, false) {
+        Ok(inventory) => {
+            if let Some(version) = &report.workspace_client_version {
+                report
+                    .errors
+                    .extend(metadata_graph::validate_graph(&inventory, version));
+            }
+        }
+        Err(error) => report.errors.push(error),
+    }
+    match crate::cargo_metadata_adapter::load_inventory(root, true) {
+        Ok(inventory) => report
+            .errors
+            .extend(crate::package_status::validate_package_status(
+                root, &inventory,
+            )),
+        Err(error) => report.errors.push(error),
+    }
+    report.errors.sort();
+    report.errors.dedup();
+    report
 }
 
 #[must_use]
 #[expect(
     clippy::too_many_lines,
-    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+    reason = "Static source/artifact checks retain their existing ordering; Rust source replacement is separately owned by #251."
 )]
-pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
+/// Narrow static source/artifact and literal pin/inheritance checks only.
+/// This function does not establish Cargo graph or package-status validity.
+pub fn validate_qdrant_static_boundary(root: &Path) -> QdrantBoundaryReport {
     let mut report = QdrantBoundaryReport {
+        scope: BoundaryScope::StaticPolicy,
         errors: Vec::new(),
         manifests_scanned: 0,
         rust_files_scanned: 0,
@@ -93,42 +174,24 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
     collect_files(root, root, 0, &mut budget, &mut files, &mut report.errors);
     files.sort();
 
-    let mut root_manifest: Option<Value> = None;
-    let mut bridge_manifest: Option<Value> = None;
+    let root_manifest = read_toml(
+        &root.join(ROOT_MANIFEST),
+        ROOT_MANIFEST,
+        &mut budget,
+        &mut report.errors,
+    );
+    let bridge_manifest = read_toml(
+        &root.join(BRIDGE_MANIFEST),
+        BRIDGE_MANIFEST,
+        &mut budget,
+        &mut report.errors,
+    );
+    report.manifests_scanned =
+        usize::from(root_manifest.is_some()) + usize::from(bridge_manifest.is_some());
     let mut bridge_sources = Vec::new();
 
     for path in &files {
         let relative = relative_path(root, path);
-        if path
-            .file_name()
-            .is_some_and(|name| name == std::ffi::OsStr::new("Cargo.toml"))
-        {
-            report.manifests_scanned += 1;
-            let Some(document) = read_toml(path, &relative, &mut budget, &mut report.errors) else {
-                continue;
-            };
-
-            let mut declarations = Vec::new();
-            collect_vendor_dependency_declarations(&document, &mut Vec::new(), &mut declarations);
-            for location in declarations {
-                let allowed = (relative == ROOT_MANIFEST
-                    && location == "workspace.dependencies.qdrant-client")
-                    || (relative == BRIDGE_MANIFEST && location == "dependencies.qdrant-client");
-                if !allowed {
-                    report.errors.push(format!(
-                        "{relative}: vendor dependency declared at {location}; \
-                         only the workspace pin and bridge dependency are allowed"
-                    ));
-                }
-            }
-
-            if relative == ROOT_MANIFEST {
-                root_manifest = Some(document);
-            } else if relative == BRIDGE_MANIFEST {
-                bridge_manifest = Some(document);
-            }
-        }
-
         if path
             .extension()
             .is_some_and(|extension| extension == std::ffi::OsStr::new("rs"))
@@ -170,26 +233,18 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
 
     let workspace_version = root_manifest
         .as_ref()
-        .and_then(|document| validate_workspace_dependency(document, &mut report.errors));
+        .and_then(|document| validate_workspace_pin_syntax(document, &mut report.errors));
     report
         .workspace_client_version
         .clone_from(&workspace_version);
 
     if let Some(document) = bridge_manifest.as_ref() {
-        validate_bridge_dependency(document, &mut report.errors);
+        validate_bridge_inheritance_syntax(document, &mut report.errors);
     } else {
         report
             .errors
             .push(format!("{BRIDGE_MANIFEST}: manifest not found"));
     }
-
-    let lock_version = read_toml(
-        &root.join(LOCKFILE),
-        LOCKFILE,
-        &mut budget,
-        &mut report.errors,
-    )
-    .and_then(|document| lockfile_package_version(&document, VENDOR_CRATE));
 
     let qualified_text = read_text(
         &root.join(QUALIFIED_SOURCE),
@@ -223,13 +278,6 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
         ));
     }
 
-    compare_versions(
-        "workspace dependency",
-        workspace_version.as_deref(),
-        LOCKFILE,
-        lock_version.as_deref(),
-        &mut report.errors,
-    );
     compare_versions(
         "workspace dependency",
         workspace_version.as_deref(),
@@ -283,5 +331,51 @@ fn compare_versions(
             "Qdrant version comparison unavailable: \
              {right_label} has no version"
         )),
+    }
+}
+
+#[cfg(test)]
+mod report_fixtures {
+    use super::*;
+
+    fn report() -> QdrantBoundaryReport {
+        QdrantBoundaryReport {
+            scope: BoundaryScope::StaticPolicy,
+            errors: Vec::new(),
+            manifests_scanned: 0,
+            rust_files_scanned: 0,
+            sdk_source_files: Vec::new(),
+            workspace_client_version: None,
+            qualified_server_version: None,
+        }
+    }
+
+    #[test]
+    fn report_scope_and_failure_remain_explicit() {
+        let mut report = report();
+        let json: serde_json::Value =
+            serde_json::from_str(&render_report_json(&report).expect("bounded report"))
+                .expect("JSON");
+        assert_eq!(json["scope"], "static-policy");
+        report.scope = BoundaryScope::CargoAndStaticPolicy;
+        report.errors.push("Cargo metadata failed".into());
+        let json: serde_json::Value =
+            serde_json::from_str(&render_report_json(&report).expect("bounded failure"))
+                .expect("JSON");
+        assert_eq!(json["scope"], "cargo-and-static-policy");
+        assert_eq!(json["status"], "FAIL");
+    }
+
+    #[test]
+    fn report_overflow_is_terminal_before_value_clones() {
+        let mut report = report();
+        report.errors.push("x".repeat(1024 * 1024));
+        assert!(render_report_json(&report).is_err());
+        let mut sink = ReportSink {
+            bytes: Vec::new(),
+            limit: 2,
+        };
+        assert!(sink.write_all(b"abc").is_err());
+        assert!(sink.bytes.is_empty());
     }
 }

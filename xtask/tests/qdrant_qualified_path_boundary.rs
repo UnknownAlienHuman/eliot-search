@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use xtask::qdrant_boundary::validate_qdrant_boundary;
+use xtask::qdrant_boundary::validate_qdrant_static_boundary;
 
 const BRIDGE: &str =
     "crates/search-index-qdrant/search-qdrant-bridge";
@@ -83,7 +83,7 @@ impl Drop for Fixture {
 }
 
 fn assert_cross_file_failure(fixture: &Fixture, relative: &str, line: usize) {
-    let report = validate_qdrant_boundary(&fixture.root);
+    let report = validate_qdrant_static_boundary(&fixture.root);
     let location = format!("{relative}:{line}:");
     assert!(
         report.errors.iter().any(|error| {
@@ -186,6 +186,6 @@ fn unrelated_qualified_type_and_private_use_remain_allowed() {
         ),
     );
 
-    let report = validate_qdrant_boundary(&fixture.root);
+    let report = validate_qdrant_static_boundary(&fixture.root);
     assert!(report.passed(), "{:?}", report.errors);
 }
