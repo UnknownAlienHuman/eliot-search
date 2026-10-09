@@ -92,6 +92,32 @@ A maintainer request, issue or PR plus one non-overlapping branch/worktree is su
 work. Do not build a ticket issuer, lease service, PKI, role database or other controller inside Search.
 Residual controller tooling is removal work under #214, not a product feature to complete.
 
+## Current one-manager integration exceptions
+
+The accepted Wave packets may incorporate a **narrow issue-specific addendum** to the nearest package
+instructions when one manager must move existing code between packages or integrate an exact root
+dependency/`Cargo.lock` change. This does not lower the package boundary generally.
+
+Current accepted addenda:
+
+- `docs/audit/WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md` for `#237/#253`;
+- `docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md` for the post-`#237` serialized Wave 2;
+- `docs/audit/WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md` for exact issue/path exceptions.
+
+Rules:
+
+1. one manager and one writer worktree only;
+2. an exception applies only to the exact issue row and latest accepted base published by `#97`;
+3. subagents are read/research/review only and never edit repository state;
+4. the manager remains the sole root dependency and `Cargo.lock` integrator;
+5. all unlisted package prohibitions remain in force;
+6. an exception cannot introduce a second authority, temporary public facade or product-reachable
+   compatibility implementation;
+7. if required work falls outside the row, stop and amend the owner issue/packet before editing.
+
+This mechanism exists to make a package extraction or exact dependency cutover possible without telling
+agents to violate the nearest package instructions or granting broad cross-package permission.
+
 ## Required working method
 
 1. Read Architecture Part I, these root instructions, the nearest package instructions and named issue/PR
@@ -100,7 +126,7 @@ Residual controller tooling is removal work under #214, not a product feature to
 3. Fix product code first. Do not replace missing implementation with planning documents, registries,
    schemas or evidence prose.
 4. Keep changes within the actual owning package. Cross-package composition belongs in the daemon or a
-   separately reviewed integration branch.
+   separately reviewed integration branch, except for an exact current addendum above.
 5. Use the existing Qdrant capabilities through `search-qdrant-bridge`; do not build a parallel inverted
    index, vector store, filter engine or query database.
 6. Run the smallest meaningful compilation gate after each implementation slice:
