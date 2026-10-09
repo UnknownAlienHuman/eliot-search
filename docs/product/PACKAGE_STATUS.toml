@@ -11,7 +11,7 @@
 
 schema_version = 3
 snapshot_date = "2026-10-09"
-snapshot_source_sha = "7a4471d6505e21f818beca934259b4222710d1dd"
+snapshot_source_sha = "e76ffb6b9f9675ae5b931d1e4223bebd3cbb69e7"
 coordinator = "#97"
 documentation_owner = "#97"
 
@@ -163,7 +163,7 @@ execution_chain = ["#126", "#134"]
 [[package]]
 name = "search-access"
 path = "crates/search-query/search-access"
-execution_chain = ["#272", "#274", "#279", "#264"]
+execution_chain = ["#287", "#288", "#274", "#279", "#264"]
 
 [[package]]
 name = "search-overlay"
@@ -230,7 +230,7 @@ disposition = "evaluation_only"
 [[package]]
 name = "search-provider-protocol"
 path = "crates/search-provider-protocol"
-execution_chain = ["#235", "#116", "#277", "#280", "#281"]
+execution_chain = ["#235", "#287", "#116", "#277", "#280", "#281"]
 
 [[package]]
 name = "search-eliot-adapter"
