@@ -1,13 +1,13 @@
 # Agent launch gate — 2026-10-09
 
-**Base accepted for launch:** `19481855e44c1e98788e16918471127b5457d237`  
+**Base accepted for launch:** `f1757d5b528d63abde28eff443f1070ff88fff4d`  
 **Coordinator:** #97  
 **Product/release ready:** no  
 **Controlled implementation wave ready:** yes
 
-## Decision
+## Wave 1 — launch now
 
-Do not launch a broad swarm. Launch exactly two non-overlapping managers first:
+Do not launch a broad swarm. Launch exactly two non-overlapping managers:
 
 ```text
 coding manager A: #237
@@ -16,7 +16,7 @@ research/docs manager B: #253
 
 ### Coding manager A — #237
 
-Exclusive ownership for the first wave:
+Exclusive ownership:
 
 ```text
 crates/search-contracts/**
@@ -25,24 +25,27 @@ root crypto dependency pins
 Cargo.lock integration
 ```
 
-Allowed result:
-
-```text
-freeze existing canonical vectors
-→ real bounded BLAKE3/SHA-256 helpers
-→ honest decode-vs-compute API
-→ full-width operation digest
-→ typed current-tree guard and allowlist
-→ stop before owner-package migrations
-```
-
-The latest #237 comment corrects stale paths in the older issue body. Branch from the exact base above; never use an old planning/selected branch.
+Stop after common canonical/digest APIs and the typed current-tree guard/allowlist. Do not migrate owner packages in this branch.
 
 ### Research manager B — #253
 
-Owns only the Unicode full-case-fold donor/data/profile decision and golden fixtures. It edits no Rust manifest, source, root dependency pin or lockfile and may run concurrently with #237.
+Owns only the Unicode full-case-fold donor/data/profile decision and golden fixtures. It edits no Rust manifest, source, root dependency pin or lockfile.
 
-## Wave 2 — blocked until #237 merges
+## Wave 2A — indexed foundations after #237
+
+Launch these three managers from the exact accepted post-#237 main:
+
+```text
+#256 search-point-identity: exact S11 port from donor #207
+#257 search-unitizer: authoritative typed UnitSet / manifest v3
+#258 search-contracts: shared S9.5/S10.3/epoch contract
+```
+
+They own disjoint package surfaces. #256 and #257 consume #237 APIs; they do not modify `search-contracts`. #258 owns the additional indexed-search contract module.
+
+## Wave 2B — donor code reduction after #237
+
+Queue separately:
 
 ```text
 #235 canonical provider client
@@ -54,23 +57,53 @@ Owns only the Unicode full-case-fold donor/data/profile decision and golden fixt
 #226 Markdown/JATS profiles
 ```
 
-These tasks may need the shared canonical APIs, root dependency pins or `Cargo.lock`; do not start them on temporary local helpers.
+Many of these update root dependency pins/Cargo.lock. Package code may be developed in separate worktrees, but **one dependency/lock integration manager at a time** merges root pin/lock changes. Every branch rebases on latest accepted main before final gates.
 
-## Serialized successors
+## Indexed-spine serialization
 
 ```text
-#246 → #247 → #248 → #249 (blocked integration)
+#256 + #257 + #258
+→ #259 projection planner
+
+publication lane:
+  #259 → #260 → #261
+
+bridge lane:
+  #256 + #258 → #262
+
+join:
+  #261 + #262 → #263
+
+product qualification:
+  all above + root/source/access/handle/supervisor owners
+  → #264
+```
+
+## Other serialized successors
+
+```text
+#246 → #247 → #248 → #249
 #250 → #251
 #252 + #253 → #254
 #235 → #116 → #130/#219
 #223 → #224 → #225 → #236
 #228 → #229 → #230 → #231
-#207 → #209 → #210 → #200
 ```
 
-## Superseded packet branches
+## Closed source-donor branches
 
-The following one-file September PRs are closed and are not implementation bases:
+These branches are read-only source/fixture archives and are not merge bases:
+
+```text
+#207 head f0ac8a1 → #256
+#209 head e5c14cd → #257/#258/#259
+#210 head a697e17 → #260/#261
+#200 head 615d64f → #258/#262/#263/#264
+```
+
+Do not rebase/cherry-pick them wholesale. Their manual codec/crypto/schema and old stacked bases conflict with current ownership.
+
+## Superseded packet branches
 
 ```text
 #122 → #252–#254
@@ -107,7 +140,9 @@ Stop and report instead of improvising if the change would introduce:
 - hidden normalization, transcoding, skip or fallback semantics;
 - allocation or collection before the accepted ceiling;
 - blind replay after a possible external effect;
-- a compatibility implementation left product-reachable after cutover.
+- a compatibility implementation left product-reachable after cutover;
+- an uncoordinated root dependency/Cargo.lock edit;
+- a closed donor branch used as the working base.
 
 ## Evidence boundary
 
