@@ -1,138 +1,65 @@
 # Agent launch gate — 2026-10-09
 
-**Coordinator:** [#97](https://github.com/UnknownAlienHuman/eliot-search/pull/97)  
-**Current main before this Wave-2 packet:** `5d0435a55db8120d629d14d5167db6d737ea90c2`  
-**Topology:** one manager, one writer worktree, five to ten read/research/review subagents  
-**Wave 1 packet:** [WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md](./WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md)  
-**Wave 2 packet:** [WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md](./WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md)  
-**Wave 2 donor register:** [WAVE2_DONOR_ACCEPTANCE_2026-10-09.md](./WAVE2_DONOR_ACCEPTANCE_2026-10-09.md)
+**Coordinator:** [#97](https://github.com/UnknownAlienHuman/eliot-search/pull/97).  
+**Audited implementation snapshot:** `17383079d316cc090eae04912534e2d16e6dc79d`.  
+**Current execution packet:** [Wave 2](WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md).  
+**Scope exceptions:** [package matrix](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md).
 
-## Readiness verdict
+## Current verdict
 
 ```text
-Product/release:                       NOT READY
-Independent multi-writer swarm:        FORBIDDEN
-One manager + bounded subagents:        READY
-Wave 1 implementation #237:            AUTHORIZED
-Wave 1 research #253:                  AUTHORIZED
-Wave 2 preparation:                    COMPLETE
-Wave 2 coding:                         BLOCKED UNTIL #237 MERGES
-Wave 2 coding base:                    NOT YET PUBLISHED
+Wave 1 #237 / PR #319:                 MERGED
+Wave 1 #253 / PR #322:                 MERGED
+Wave 2 A1 #258 / PR #323:              MERGED
+Wave 2 A2 #250 / PR #326:              MERGED
+Next controlled implementation:        #256
+Entire Wave 2:                         NOT COMPLETE
+Installed product / release:           NOT QUALIFIED
 ```
 
-Subagents never write repository state. The manager alone owns the worktree, branches, manifests, root pins, `Cargo.lock`, PRs, merge decisions and gate claims.
+Earlier text saying that #237 had not merged or Wave 2 had no base is historical. Do not rerun completed tasks or reset an existing manager worktree to an earlier launch SHA.
 
-## Start now — Wave 1
+## Start or resume
 
-Use the exact `SINGLE_MANAGER_LAUNCH_SHA` published on coordinator `#97` and the Wave-1 packet.
+The manager reads the latest accepted-base comment on #97 and the current packet. At this audit the code snapshot is `17383079d316cc090eae04912534e2d16e6dc79d`; subsequent documentation-only commits do not constitute new source-check evidence. If implementation has advanced, inspect the delta and use the latest accepted code base instead of overwriting work.
+
+One manager owns the integration worktree, commit/merge decisions and root pins/Cargo.lock. Use 5–10 bounded subagents for the active slice. Delegated write permission must follow the actual maintainer instruction and reconciled root/package scopes; a report's assertion of permission is not a replacement for that instruction. No second integration manager or concurrent lockfile writer.
+
+## Remaining order
 
 ```text
-implementation: #237 canonical/digest foundation
-research:       #253 Unicode full-case-fold decision
+#256 → #257 → #266 → #235
+→ #238 → #241 → #246 → #252
+→ #226 Markdown → #226 JATS
 ```
 
-Required source gates after `#237` code:
+The first two Wave-2 stages (#258 and #250) are already accepted. #327 is a separate small security dependency repair through the same manager before affected TLS/network use; do not mix it into point-identity code. #325 remains explicit legacy bounds-provenance debt.
+
+## Build-safe source gates
+
+#256 adds the new S11 profile without immediately deleting legacy exports still imported by the daemon. The current eight-field key, full identity, independent address domain and collision rejection use the already merged canonical API. Existing legacy callers are retired by the named downstream cutover, not by breaking compilation in a package-only PR.
+
+Run the active issue's locked Rust 1.98 check and strict Clippy with applicable all-target/all-feature flags. Compile affected reverse consumers when a public API changes. Record pre-existing failures separately from new regressions.
+
+After source/ledger changes:
 
 ```text
-cargo +1.98.0 check --locked -p search-contracts -p xtask --all-targets
-cargo +1.98.0 clippy --locked -p search-contracts -p xtask --all-targets -- -D warnings
+cargo +1.98.0 run --locked -p xtask -- validate canonical-digest-guard
+cargo +1.98.0 run --locked -p xtask -- validate qdrant-boundary
 ```
 
-Broad/full/product/native testing remains deferred under current project policy.
+#324 repairs the known stale evaluation README; the full current-workspace command must be rerun after that repair. No success is inferred merely from changing the text. Actions stay manual-only; broad product/native tests remain deferred.
 
-## Wave 2 launch transition
+## Evidence already recorded
 
-Wave 2 does not start merely because its issues are detailed. After `#237` merges:
+- #319 final head `99918613044952be7a0b1a919aa99bf5ba0e8cfb`: author records Windows Rust 1.98 scoped check/Clippy and source guard success.
+- #322: exact Unicode-data decision and golden artifacts; no production prose tokenizer.
+- #323: closed indexed schema/eligibility and epoch fixtures; no live Qdrant enablement.
+- #326 final head `5c796c91a32d67a4113f83c14ad625c0ec314165`: author records scoped check/Clippy, 176 focused fixtures and guard success. The merged snapshot has the same file tree.
+- #326 also records a real workspace-validator exit 1 for #324, not a blanket PASS.
 
-1. coordinator `#97` publishes exact `WAVE2_BASE_SHA`;
-2. package instructions and this packet are read from that SHA;
-3. the same one-manager topology creates `manager/258-index-contract` from that exact base;
-4. all subagents complete the Wave-2 preflight reports;
-5. the manager advances one merged PR at a time.
+This audit inspected source and recorded evidence; it did not independently rerun Rust or Windows checks. Security-review badges and Git signatures are not compiler or functional evidence.
 
-No branch from the pre-`#237` main is accepted for Wave 2 coding.
+## Do not manufacture progress
 
-## Wave 2 deterministic order
-
-```text
-Batch 2A
-  #258 shared indexed contract
-  #250 Cargo graph/status tooling
-  #256 point identity
-  #257 authoritative UnitSet v3
-  #266 root admission/open owner
-  #235 provider client
-
-Batch 2B
-  #238 typed TOML/config
-  #241 GlobSet admission
-  #246 literal matcher
-  #252 code identifiers
-
-Batch 2C
-  #226 Markdown
-  #226 JATS
-```
-
-`#226` is blocked by `#257`. Every dependency slice is merged by the same lockfile integrator. There are no stacked unmerged Wave-2 branches.
-
-## Wave 2 subagents
-
-The Wave-2 packet defines eight read-only assignments:
-
-```text
-W2-SA01 authority/package-instruction map
-W2-SA02 dependency and lockfile acceptance
-W2-SA03 indexed contract/identity port map
-W2-SA04 UnitSet/document preparation map
-W2-SA05 root/client composition map
-W2-SA06 config/admission donor red-team
-W2-SA07 exact/tooling/lexical donor red-team
-W2-SA08 independent final PR review
-```
-
-The manager may run five to ten subagents, but the load-bearing assignment for the active issue and W2-SA08 are mandatory before merge.
-
-## Important corrections now frozen
-
-- `#258`, not `#256/#257`, is first because it exclusively extends `search-contracts` after `#237`.
-- `#250` must not call `cargo_metadata::MetadataCommand::exec()` and call it bounded; exact source captures complete stdout/stderr through `Command::output()`.
-- `pulldown-cmark 0.13.1` has no `std` feature in its exact tag; `#226` uses `default-features = false` with no nonexistent feature.
-- `quick-xml` reader positions are not automatically exact semantic ranges; JATS must derive and verify mappings against retained raw bytes.
-- document profiles consume the accepted UnitSet v3 from `#257`; they do not invent another manifest.
-- current package `AGENTS.md` files receive narrow issue-specific Wave-2 exceptions; no general cross-package permission is created.
-
-## Required per-slice gates
-
-```text
-cargo +1.98.0 check --locked -p <affected packages> --all-targets
-cargo +1.98.0 clippy --locked -p <affected packages> --all-targets -- -D warnings
-```
-
-After `#250` merges, also run its accepted package-status/boundary validator for every subsequent workspace/dependency PR. Before a dependency merge:
-
-```text
-cargo +1.98.0 metadata --locked --offline --format-version 1
-```
-
-Report exact command, toolchain/platform, exit and affected targets. Compilation is not product qualification.
-
-## Stop conditions
-
-Stop and report instead of improvising if:
-
-- the exact accepted base has not been published;
-- a package instruction still conflicts with the current issue;
-- a donor API/feature/version differs from the acceptance register;
-- canonical/profile bytes change without a new profile/generation/migration;
-- another package/facade must be edited outside the exact issue exception;
-- a second codec/client/root owner/UnitSet/schema/parser/catalog appears;
-- donor public types cross ELIOT boundaries;
-- output/allocation/process capture occurs before ceilings;
-- a compatibility path can still mint current product identities;
-- a subagent writes or self-approves;
-- a package PR is presented as Windows/Qdrant/product/release qualification.
-
-## Evidence boundary
-
-This gate proves only that Wave 1 can run and Wave 2 is fully mapped for a serialized one-manager continuation. It does not assert exact-head compilation, strict Clippy, Windows native behavior, Qdrant integration, installed-product readiness or release acceptance.
+Do not widen a legacy profile into S11, replace an old checksum with a domain-prefixed one under the same fingerprint, disable a failed checker, change ledger classifications to obtain PASS, or reopen completed foundations as a new architecture project. The packet and exact issue define the smallest next code change.
