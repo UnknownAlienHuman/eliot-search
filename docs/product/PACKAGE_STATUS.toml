@@ -11,7 +11,7 @@
 
 schema_version = 3
 snapshot_date = "2026-10-09"
-snapshot_source_sha = "fb97705c74a5ab3dd6efb1ff0f2da5e1c0c4afdf"
+snapshot_source_sha = "e10f4946db8802a2e5306774dfd045330e607718"
 coordinator = "#97"
 documentation_owner = "#97"
 
@@ -55,14 +55,14 @@ consumers = ["#244", "#245"]
 [[package]]
 name = "search-os-secrets"
 path = "crates/search-runtime/search-os-secrets"
-execution_chain = ["#115", "#120"]
-consumers = ["#245"]
+execution_chain = ["#307"]
+consumers = ["#308", "#309", "#310", "#244", "#245"]
 
 [[package]]
 name = "search-control-redb"
 path = "crates/search-control-redb"
 execution_chain = ["#266", "#268", "#269", "#261", "#272"]
-consumers = ["#301", "#302", "#304", "#305"]
+consumers = ["#301", "#302", "#304", "#305", "#307"]
 
 [[package]]
 name = "search-source-admission"
@@ -93,7 +93,7 @@ execution_chain = ["#267", "#129"]
 name = "search-revision-store"
 path = "crates/search-source/search-revision-store"
 execution_chain = ["#111", "#270", "#301", "#302"]
-consumers = ["#243", "#244", "#245"]
+consumers = ["#243", "#244", "#245", "#309"]
 
 [[package]]
 name = "search-materializer"
@@ -105,7 +105,7 @@ consumers = ["#302", "#243", "#244", "#245"]
 name = "search-unitizer"
 path = "crates/search-prep/search-unitizer"
 execution_chain = ["#257", "#226"]
-consumers = ["#302", "#243", "#244", "#245"]
+consumers = ["#302", "#243", "#244", "#245", "#309"]
 
 [[package]]
 name = "search-code-enricher"
@@ -144,12 +144,13 @@ disposition = "legacy_profile"
 [[package]]
 name = "search-qdrant-supervisor"
 path = "crates/search-index-qdrant/search-qdrant-supervisor"
-execution_chain = ["#120", "#264"]
+execution_chain = ["#120", "#310", "#264"]
 
 [[package]]
 name = "search-qdrant-bridge"
 path = "crates/search-index-qdrant/search-qdrant-bridge"
 execution_chain = ["#262", "#263", "#303", "#305", "#264"]
+consumers = ["#310"]
 
 [[package]]
 name = "search-publication"
@@ -235,7 +236,7 @@ consumers = ["#301", "#302", "#304", "#305"]
 name = "search-retention"
 path = "crates/search-runtime/search-retention"
 execution_chain = ["#301", "#302", "#304", "#305"]
-consumers = ["#243", "#244", "#245", "#264"]
+consumers = ["#243", "#244", "#245", "#264", "#307", "#310"]
 
 [[package]]
 name = "search-eval"
@@ -249,7 +250,7 @@ consumers = ["#302"]
 name = "search-provider-protocol"
 path = "crates/search-provider-protocol"
 execution_chain = ["#235", "#287", "#116", "#277", "#280", "#281"]
-consumers = ["#305"]
+consumers = ["#305", "#310"]
 
 [[package]]
 name = "search-eliot-adapter"
@@ -269,7 +270,7 @@ consumers = ["#301", "#302", "#243"]
 [[package]]
 name = "eliot-searchd"
 path = "bins/eliot-searchd"
-execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#274", "#275", "#276", "#290", "#278", "#291", "#293", "#294", "#279", "#280", "#213", "#277", "#296", "#232", "#297", "#298", "#281", "#300", "#301", "#302", "#303", "#304", "#305", "#243", "#244", "#245", "#264"]
+execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#307", "#308", "#310", "#274", "#275", "#276", "#290", "#278", "#291", "#293", "#294", "#279", "#280", "#213", "#277", "#296", "#232", "#297", "#298", "#281", "#300", "#301", "#302", "#303", "#304", "#305", "#243", "#244", "#245", "#264"]
 product_path = "partial"
 
 [[package]]
@@ -277,6 +278,7 @@ name = "eliot-search"
 path = "bins/eliot-search"
 execution_chain = ["#235", "#116"]
 product_path = "partial"
+consumers = ["#310"]
 
 [[package]]
 name = "eliot-search-model-worker"
@@ -295,14 +297,14 @@ disposition = "optional_disabled"
 [[package]]
 name = "search-revision-crypto"
 path = "crates/search-runtime/search-revision-crypto"
-execution_chain = ["#111", "#115"]
-consumers = ["#245"]
+execution_chain = ["#309"]
+consumers = ["#244", "#245"]
 
 [[package]]
 name = "search-os-secrets-windows"
 path = "crates/search-runtime/search-os-secrets-windows"
-execution_chain = ["#115", "#120"]
-consumers = ["#245"]
+execution_chain = ["#308"]
+consumers = ["#309", "#310", "#244", "#245"]
 
 [[package]]
 name = "xtask"
