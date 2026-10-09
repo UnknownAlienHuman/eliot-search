@@ -1,10 +1,12 @@
 //! Per-package operation renderer.
 
-use super::super::{array, finish, quote};
-use super::super::super::model::PackageModel;
 use super::super::super::super::load::{integer, string, strings};
+use super::super::super::model::PackageModel;
+use super::super::{array, finish, quote};
 
-pub(super) fn render_operations(package: &PackageModel) -> String {
+pub(in crate::package_maps::generator::render) fn render_operations(
+    package: &PackageModel,
+) -> String {
     let mut lines = vec![
         "schema_version = 1".to_owned(),
         "project = \"eliot-search\"".to_owned(),
@@ -20,10 +22,7 @@ pub(super) fn render_operations(package: &PackageModel) -> String {
         lines.extend([
             "[[operation]]".to_owned(),
             format!("id = {}", quote(string(row, "id").unwrap_or(""))),
-            format!(
-                "name = {}",
-                quote(string(row, "operation").unwrap_or(""))
-            ),
+            format!("name = {}", quote(string(row, "operation").unwrap_or(""))),
             format!("module = {}", quote(string(row, "module").unwrap_or(""))),
             format!(
                 "public_entry_module = {}",
@@ -42,5 +41,5 @@ pub(super) fn render_operations(package: &PackageModel) -> String {
             String::new(),
         ]);
     }
-    finish(lines)
+    finish(&lines)
 }

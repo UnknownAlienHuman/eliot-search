@@ -101,8 +101,7 @@ pub fn validate_architecture_coverage(root: &Path) -> ArchitectureCoverageReport
     let mut errors = Vec::new();
     let topology = topology::validate(root, &inputs, &mut errors);
     let schemas = schemas::validate(root, &inputs, &topology, &mut errors);
-    let delivery_slices =
-        control::validate(root, &inputs, &topology, &schemas, &mut errors);
+    let delivery_slices = control::validate(root, &inputs, &topology, &schemas, &mut errors);
 
     ArchitectureCoverageReport {
         complete: true,
@@ -135,6 +134,9 @@ pub const fn exit_code(report: &ArchitectureCoverageReport) -> i32 {
 
 /// Renders the stable machine-readable report.
 #[must_use]
+///
+/// # Panics
+/// Panics if JSON serialization unexpectedly fails for this closed value shape.
 pub fn render_report_json(report: &ArchitectureCoverageReport) -> String {
     let value = if report.complete {
         json!({

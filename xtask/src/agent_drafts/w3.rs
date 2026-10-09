@@ -9,9 +9,7 @@ use std::path::Path;
 use serde_json::json;
 use toml::Value;
 
-use super::{
-    indexed_rows, integer, load_doc, string, symmetric_difference,
-};
+use super::{indexed_rows, integer, load_doc, string, symmetric_difference};
 use global::validate_global;
 use manifests::validate_manifests;
 use package::validate_package;
@@ -64,6 +62,12 @@ pub const fn exit_code(report: &W3AgentDraftReport) -> i32 {
     if report.passed() { 0 } else { 1 }
 }
 
+/// Render one bounded W3 agent-draft report as pretty JSON.
+///
+/// # Panics
+///
+/// Never. The report carries only strings, counters and lists, so the JSON
+/// serialization cannot fail.
 #[must_use]
 pub fn render_report_json(report: &W3AgentDraftReport) -> String {
     let value = if report.complete {
@@ -84,7 +88,6 @@ pub fn render_report_json(report: &W3AgentDraftReport) -> String {
     serde_json::to_string_pretty(&value)
         .expect("serializing a bounded W3 agent-draft report cannot fail")
 }
-
 fn validate(root: &Path) -> Result<W3AgentDraftReport, String> {
     let packet_doc = load_doc(root, "swarm/w3-agent-packets.toml")?;
     let ticket_manifest = load_doc(root, "swarm/ticket-drafts/w3/manifest.toml")?;
@@ -139,20 +142,14 @@ fn validate(root: &Path) -> Result<W3AgentDraftReport, String> {
     );
 
     for spec in &PACKAGES {
-        let ticket = match load_doc(
-            root,
-            &format!("swarm/ticket-drafts/w3/{}.toml", spec.name),
-        ) {
+        let ticket = match load_doc(root, &format!("swarm/ticket-drafts/w3/{}.toml", spec.name)) {
             Ok(document) => document,
             Err(error) => {
                 errors.push(format!("{}: unable to load ticket: {error}", spec.name));
                 continue;
             }
         };
-        let context = match load_doc(
-            root,
-            &format!("swarm/context-drafts/w3/{}.toml", spec.name),
-        ) {
+        let context = match load_doc(root, &format!("swarm/context-drafts/w3/{}.toml", spec.name)) {
             Ok(document) => document,
             Err(error) => {
                 errors.push(format!("{}: unable to load context: {error}", spec.name));

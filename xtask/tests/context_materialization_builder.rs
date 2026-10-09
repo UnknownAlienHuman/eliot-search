@@ -1,16 +1,15 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use xtask::context_artifact::{
-    ARTIFACT_FORMAT, BundleBlock, authority_map as candidate_authority,
-    candidate_id, candidate_metadata_digest, expected_header, render_bundle,
+    ARTIFACT_FORMAT, BundleBlock, authority_map as candidate_authority, candidate_id,
+    candidate_metadata_digest, expected_header, render_bundle,
 };
 use xtask::context_materialization::{
-    DECISION_COMMIT, DECISION_MISSING, DECISION_PARTIAL_SIGNATURE,
-    DECISION_SIGNATURES,
+    DECISION_COMMIT, DECISION_MISSING, DECISION_PARTIAL_SIGNATURE, DECISION_SIGNATURES,
 };
 use xtask::context_materialization_builder::{build_plan, write_plan};
 use xtask::ticket_planner::{canonical_json_bytes, exact_sha256_hex};
@@ -37,7 +36,9 @@ impl Scratch {
     }
 
     fn write(&self, relative: &str, bytes: &[u8]) {
-        let path = self.root.join(relative.replace('/', std::path::MAIN_SEPARATOR_STR));
+        let path = self
+            .root
+            .join(relative.replace('/', std::path::MAIN_SEPARATOR_STR));
         fs::create_dir_all(path.parent().expect("scratch file has parent"))
             .expect("create scratch parent");
         fs::write(path, bytes).expect("write scratch file");
@@ -59,6 +60,10 @@ struct Fixture {
 }
 
 impl Fixture {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+    )]
     fn new() -> Self {
         let scratch = Scratch::new();
         let source = json!({
@@ -95,8 +100,7 @@ impl Fixture {
             },
             BundleBlock {
                 kind: "registry_fragment".to_owned(),
-                header: expected_header("registry_fragment", &fragment)
-                    .expect("fragment header"),
+                header: expected_header("registry_fragment", &fragment).expect("fragment header"),
                 metadata: fragment.clone(),
                 content: fragment_content,
             },
@@ -121,12 +125,10 @@ impl Fixture {
         });
         let bundle = render_bundle(&preamble, &blocks).expect("fixture bundle");
         let identifier = candidate_id(&bundle);
-        let bundle_path = format!(
-            "artifacts/context-artifact-candidates/search-contracts/{identifier}.context"
-        );
-        let candidate_path = format!(
-            "artifacts/context-artifact-candidates/search-contracts/{identifier}.json"
-        );
+        let bundle_path =
+            format!("artifacts/context-artifact-candidates/search-contracts/{identifier}.context");
+        let candidate_path =
+            format!("artifacts/context-artifact-candidates/search-contracts/{identifier}.json");
         let mut candidate = json!({
             "schema_version": 1,
             "record_kind": "context_artifact_candidate_v1",
@@ -195,7 +197,8 @@ impl Fixture {
             scratch,
             candidate_path,
             bundle_path,
-            selection_path: "artifacts/context-materialization-inputs/search-contracts.json".to_owned(),
+            selection_path: "artifacts/context-materialization-inputs/search-contracts.json"
+                .to_owned(),
             bundle,
         }
     }
@@ -230,7 +233,10 @@ impl Fixture {
             .write(&self.selection_path, &canonical_json_bytes(value));
     }
 
-    fn build(&self, selection: Option<&str>) -> xtask::context_materialization_builder::MaterializationBuild {
+    fn build(
+        &self,
+        selection: Option<&str>,
+    ) -> xtask::context_materialization_builder::MaterializationBuild {
         build_plan(
             &self.scratch.root,
             &self.candidate_path,
@@ -263,10 +269,7 @@ fn signature(actor: &str, suffix: char, digest: &str) -> Value {
 fn decisions_and_operation_identity_follow_the_two_phase_contract() {
     let fixture = Fixture::new();
     let missing = fixture.build(None);
-    assert_eq!(
-        missing.plan()["decision"].as_str(),
-        Some(DECISION_MISSING)
-    );
+    assert_eq!(missing.plan()["decision"].as_str(), Some(DECISION_MISSING));
     assert!(missing.payload_bytes().is_none());
 
     let mut selection = fixture.selection();
@@ -276,8 +279,7 @@ fn decisions_and_operation_identity_follow_the_two_phase_contract() {
         unsigned.plan()["decision"].as_str(),
         Some(DECISION_SIGNATURES)
     );
-    let payload_digest = unsigned.plan()["prospective_manifest"]
-        ["signed_payload_sha256"]
+    let payload_digest = unsigned.plan()["prospective_manifest"]["signed_payload_sha256"]
         .as_str()
         .expect("payload digest")
         .to_owned();
@@ -291,11 +293,8 @@ fn decisions_and_operation_identity_follow_the_two_phase_contract() {
     );
     assert!(unsigned.manifest_bytes().is_none());
 
-    selection["materializer_signature_ref"] = signature(
-        "actor:integration:materializer-001",
-        'c',
-        &payload_digest,
-    );
+    selection["materializer_signature_ref"] =
+        signature("actor:integration:materializer-001", 'c', &payload_digest);
     fixture.write_selection(&selection);
     let partial = fixture.build(Some(&fixture.selection_path));
     assert_eq!(
@@ -304,11 +303,8 @@ fn decisions_and_operation_identity_follow_the_two_phase_contract() {
     );
     assert!(partial.manifest_bytes().is_none());
 
-    selection["reviewer_signature_ref"] = signature(
-        "actor:reviewer:context-001",
-        'd',
-        &payload_digest,
-    );
+    selection["reviewer_signature_ref"] =
+        signature("actor:reviewer:context-001", 'd', &payload_digest);
     fixture.write_selection(&selection);
     let complete = fixture.build(Some(&fixture.selection_path));
     assert_eq!(complete.plan()["decision"].as_str(), Some(DECISION_COMMIT));
@@ -317,11 +313,13 @@ fn decisions_and_operation_identity_follow_the_two_phase_contract() {
         Some(operation_id.as_str())
     );
     let manifest = complete.manifest_bytes().expect("complete manifest");
-    let parsed: toml::Value = toml::from_str(
-        std::str::from_utf8(manifest).expect("manifest UTF-8"),
-    )
-    .expect("manifest TOML");
-    assert_eq!(parsed.get("status").and_then(toml::Value::as_str), Some("MATERIALIZED"));
+    let parsed: toml::Value =
+        toml::from_str(std::str::from_utf8(manifest).expect("manifest UTF-8"))
+            .expect("manifest TOML");
+    assert_eq!(
+        parsed.get("status").and_then(toml::Value::as_str),
+        Some("MATERIALIZED")
+    );
     assert_eq!(
         parsed
             .get("signature")

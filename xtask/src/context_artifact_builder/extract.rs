@@ -28,9 +28,8 @@ pub(super) fn extract(
     let (sources, source_blocks) = source_records(preflight)?;
     let (fragments, fragment_blocks) = fragment_records(preflight, package)?;
     let (handoffs, handoff_blocks) = handoff_records(preflight)?;
-    let mut blocks = Vec::with_capacity(
-        source_blocks.len() + fragment_blocks.len() + handoff_blocks.len(),
-    );
+    let mut blocks =
+        Vec::with_capacity(source_blocks.len() + fragment_blocks.len() + handoff_blocks.len());
     blocks.extend(source_blocks);
     blocks.extend(fragment_blocks);
     blocks.extend(handoff_blocks);
@@ -51,8 +50,8 @@ fn source_records(
         let (raw, entry) = preflight
             .tree
             .read_bytes(path)
-            .map_err(map_git)?;
-        let normalized = normalize_utf8_lf(&raw).map_err(map_primitive)?;
+            .map_err(|error| map_git(&error))?;
+        let normalized = normalize_utf8_lf(&raw).map_err(|error| map_primitive(&error))?;
         let record = json!({
             "order": order,
             "repository_path": path,
@@ -63,7 +62,7 @@ fn source_records(
             "materialized_sha256": exact_sha256_hex(&normalized),
             "materialized_bytes": normalized.len(),
         });
-        let header = expected_header("source", &record).map_err(map_primitive)?;
+        let header = expected_header("source", &record).map_err(|error| map_primitive(&error))?;
         blocks.push(BundleBlock {
             kind: "source".to_owned(),
             header,
@@ -88,10 +87,16 @@ fn fragment_records(
                 format!("invalid selector: {selector}"),
             )
         })?;
-        let (document, entry) = preflight.tree.load_toml(path).map_err(map_git)?;
-        let (source_raw, _) = preflight.tree.read_bytes(path).map_err(map_git)?;
+        let (document, entry) = preflight
+            .tree
+            .load_toml(path)
+            .map_err(|error| map_git(&error))?;
+        let (source_raw, _) = preflight
+            .tree
+            .read_bytes(path)
+            .map_err(|error| map_git(&error))?;
         let value = resolve_selector(&document, path, expression, package)?;
-        require_json_value(&value).map_err(map_primitive)?;
+        require_json_value(&value).map_err(|error| map_primitive(&error))?;
         let fragment = canonical_json_bytes(&json!({
             "registry_path": path,
             "selector": expression,
@@ -107,8 +112,8 @@ fn fragment_records(
             "fragment_sha256": exact_sha256_hex(&fragment),
             "fragment_bytes": fragment.len(),
         });
-        let header = expected_header("registry_fragment", &record)
-            .map_err(map_primitive)?;
+        let header =
+            expected_header("registry_fragment", &record).map_err(|error| map_primitive(&error))?;
         blocks.push(BundleBlock {
             kind: "registry_fragment".to_owned(),
             header,
@@ -127,10 +132,7 @@ fn handoff_records(
     let mut blocks = Vec::with_capacity(preflight.handoffs.len());
     for (order, handoff) in preflight.handoffs.iter().enumerate() {
         let text = std::str::from_utf8(&handoff.bytes).map_err(|_| {
-            ContextArtifactBuildError::new(
-                "HANDOFF_RECORD_INVALID",
-                "handoff is not UTF-8",
-            )
+            ContextArtifactBuildError::new("HANDOFF_RECORD_INVALID", "handoff is not UTF-8")
         })?;
         if text.contains('\r') || !handoff.bytes.ends_with(b"\n") {
             return Err(ContextArtifactBuildError::new(
@@ -138,21 +140,15 @@ fn handoff_records(
                 "handoff is not exact UTF-8/LF with terminal LF",
             ));
         }
-        let mut record = handoff
-            .summary
-            .as_object()
-            .cloned()
-            .ok_or_else(|| {
-                ContextArtifactBuildError::new(
-                    "HANDOFF_RECORD_INVALID",
-                    "handoff summary is not an object",
-                )
-            })?;
+        let mut record = handoff.summary.as_object().cloned().ok_or_else(|| {
+            ContextArtifactBuildError::new(
+                "HANDOFF_RECORD_INVALID",
+                "handoff summary is not an object",
+            )
+        })?;
         record.insert(
             "order".to_owned(),
-            JsonValue::Number(JsonNumber::from(
-                u64::try_from(order).unwrap_or(u64::MAX),
-            )),
+            JsonValue::Number(JsonNumber::from(u64::try_from(order).unwrap_or(u64::MAX))),
         );
         record.insert(
             "materialization".to_owned(),
@@ -169,8 +165,8 @@ fn handoff_records(
             )),
         );
         let record = JsonValue::Object(record);
-        let header = expected_header("accepted_handoff", &record)
-            .map_err(map_primitive)?;
+        let header =
+            expected_header("accepted_handoff", &record).map_err(|error| map_primitive(&error))?;
         blocks.push(BundleBlock {
             kind: "accepted_handoff".to_owned(),
             header,
@@ -188,25 +184,23 @@ fn resolve_selector(
     expression: &str,
     package: &str,
 ) -> Result<JsonValue, ContextArtifactBuildError> {
-    if let Some(name) = bracket_value(expression, "package[name=") {
-        if name == package
-            && matches!(path, "swarm/crates.toml" | "swarm/modules/w0.toml")
-        {
-            return unique_toml_row(document, "package", "name", package)
-                .and_then(toml_to_json);
-        }
+    if let Some(name) = bracket_value(expression, "package[name=")
+        && name == package
+        && matches!(path, "swarm/crates.toml" | "swarm/modules/w0.toml")
+    {
+        return unique_toml_row(document, "package", "name", package).and_then(toml_to_json);
     }
-    if let Some(name) = bracket_value(expression, "foundation[package=") {
-        if name == package && path == "swarm/function-packets.toml" {
-            return unique_toml_row(document, "foundation", "package", package)
-                .and_then(toml_to_json);
-        }
+    if let Some(name) = bracket_value(expression, "foundation[package=")
+        && name == package
+        && path == "swarm/function-packets.toml"
+    {
+        return unique_toml_row(document, "foundation", "package", package).and_then(toml_to_json);
     }
-    if let Some(stage) = bracket_value(expression, "stage[id=") {
-        if stage == "W0" && path == "swarm/stages.toml" {
-            return unique_toml_row(document, "stage", "id", "W0")
-                .and_then(toml_to_json);
-        }
+    if let Some(stage) = bracket_value(expression, "stage[id=")
+        && stage == "W0"
+        && path == "swarm/stages.toml"
+    {
+        return unique_toml_row(document, "stage", "id", "W0").and_then(toml_to_json);
     }
     for membership in ["authorized_packages", "conditional_packages"] {
         let prefix = format!("{membership}[");
@@ -233,14 +227,12 @@ fn resolve_selector(
     }
     if expression == format!("conditional_activation.{package}")
         && path == "swarm/launch-state.toml"
-    {
-        if let Some(value) = document
+        && let Some(value) = document
             .get("conditional_activation")
             .and_then(TomlValue::as_table)
             .and_then(|table| table.get(package))
-        {
-            return toml_to_json(value.clone());
-        }
+    {
+        return toml_to_json(value.clone());
     }
     Err(ContextArtifactBuildError::new(
         "CONTEXT_SELECTOR_NOT_UNIQUE",
@@ -295,21 +287,19 @@ fn toml_to_json(value: TomlValue) -> Result<JsonValue, ContextArtifactBuildError
             }
             Ok(JsonValue::Object(map))
         }
-        TomlValue::Float(_) | TomlValue::Datetime(_) => {
-            Err(ContextArtifactBuildError::new(
-                "REGISTRY_FRAGMENT_NONCANONICAL",
-                "selector contains a forbidden float or datetime value",
-            ))
-        }
+        TomlValue::Float(_) | TomlValue::Datetime(_) => Err(ContextArtifactBuildError::new(
+            "REGISTRY_FRAGMENT_NONCANONICAL",
+            "selector contains a forbidden float or datetime value",
+        )),
     }
 }
 
-fn map_git(error: crate::git_tree::GitTreeError) -> ContextArtifactBuildError {
+fn map_git(error: &crate::git_tree::GitTreeError) -> ContextArtifactBuildError {
     ContextArtifactBuildError::new(error.reason(), error.message())
 }
 
 fn map_primitive(
-    error: crate::context_artifact::ContextArtifactError,
+    error: &crate::context_artifact::ContextArtifactError,
 ) -> ContextArtifactBuildError {
     ContextArtifactBuildError::new(error.reason(), error.message())
 }

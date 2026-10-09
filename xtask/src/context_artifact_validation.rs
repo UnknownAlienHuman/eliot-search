@@ -55,19 +55,14 @@ pub(super) struct Validation {
 }
 
 impl Validation {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             checks: Vec::new(),
             errors: Vec::new(),
         }
     }
 
-    pub(super) fn require(
-        &mut self,
-        condition: bool,
-        check_id: &str,
-        detail: &str,
-    ) {
+    pub(super) fn require(&mut self, condition: bool, check_id: &str, detail: &str) {
         let status = if condition { "PASS" } else { "FAIL" };
         self.checks.push(ContextArtifactValidationCheck {
             id: check_id.to_owned(),
@@ -89,9 +84,7 @@ impl Validation {
 
 /// Validate the checked-in Rust builder closure without executing it.
 #[must_use]
-pub fn validate_context_artifact_candidate(
-    root: &Path,
-) -> ContextArtifactValidationReport {
+pub fn validate_context_artifact_candidate(root: &Path) -> ContextArtifactValidationReport {
     let mut validation = Validation::new();
     let registry = load_toml(root, REGISTRY_PATH, &mut validation);
     let schema = load_toml(root, SCHEMA_PATH, &mut validation);
@@ -112,6 +105,9 @@ pub const fn exit_code(report: &ContextArtifactValidationReport) -> i32 {
 
 /// Render compact stable JSON.
 #[must_use]
+///
+/// # Panics
+/// Panics if JSON serialization unexpectedly fails for this closed value shape.
 pub fn render_report_json(report: &ContextArtifactValidationReport) -> String {
     let checks: Vec<_> = report
         .checks
@@ -175,19 +171,11 @@ fn load_toml(root: &Path, relative: &str, validation: &mut Validation) -> Value 
     };
     match toml::from_str::<Value>(&text) {
         Ok(value) if value.is_table() => {
-            validation.require(
-                true,
-                &format!("file:{relative}"),
-                "TOML root is a table",
-            );
+            validation.require(true, &format!("file:{relative}"), "TOML root is a table");
             value
         }
         Ok(_) => {
-            validation.require(
-                false,
-                &format!("file:{relative}"),
-                "TOML root is a table",
-            );
+            validation.require(false, &format!("file:{relative}"), "TOML root is a table");
             empty_table()
         }
         Err(error) => {
@@ -218,9 +206,5 @@ pub(super) fn integer(value: &Value, key: &str) -> Option<i64> {
 }
 
 pub(super) fn string_array(value: Option<&Value>) -> Option<Vec<&str>> {
-    value?
-        .as_array()?
-        .iter()
-        .map(Value::as_str)
-        .collect()
+    value?.as_array()?.iter().map(Value::as_str).collect()
 }

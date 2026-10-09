@@ -1,11 +1,17 @@
 //! Per-package overview renderer.
 
-use super::super::{array, finish, quote};
-use super::super::super::model::PackageModel;
-use super::super::super::super::load::{boolean, integer, string, strings};
 use super::super::super::super::bool_text;
+use super::super::super::super::load::{boolean, integer, string, strings};
+use super::super::super::model::PackageModel;
+use super::super::{array, finish, quote};
 
-pub(super) fn render_overview(package: &PackageModel) -> String {
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
+pub(in crate::package_maps::generator::render) fn render_overview(
+    package: &PackageModel,
+) -> String {
     let row = &package.row;
     let counts = package.counts;
     let mut lines = vec![
@@ -15,10 +21,16 @@ pub(super) fn render_overview(package: &PackageModel) -> String {
         format!("package = {}", quote(&package.name)),
         format!("path = {}", quote(string(row, "path").unwrap_or("None"))),
         format!("kind = {}", quote(string(row, "kind").unwrap_or("None"))),
-        format!("family = {}", quote(string(row, "family").unwrap_or("None"))),
+        format!(
+            "family = {}",
+            quote(string(row, "family").unwrap_or("None"))
+        ),
         format!("cell = {}", quote(string(row, "cell").unwrap_or("None"))),
         format!("earliest_wave = {}", integer(row, "wave").unwrap_or(0)),
-        format!("optional = {}", bool_text(boolean(row, "optional").unwrap_or(false))),
+        format!(
+            "optional = {}",
+            bool_text(boolean(row, "optional").unwrap_or(false))
+        ),
         format!(
             "soft_src_line_target = {}",
             integer(row, "soft_src_line_target").unwrap_or(0)
@@ -35,7 +47,10 @@ pub(super) fn render_overview(package: &PackageModel) -> String {
             "qualification = {}",
             quote(string(row, "qualification").unwrap_or("NONE"))
         ),
-        format!("config_sections = {}", array(&strings(row, "config_sections"))),
+        format!(
+            "config_sections = {}",
+            array(&strings(row, "config_sections"))
+        ),
         format!("declared_dependencies = {}", array(&strings(row, "deps"))),
         format!("module_count = {}", counts.modules),
         format!("operation_count = {}", counts.operations),
@@ -107,5 +122,5 @@ pub(super) fn render_overview(package: &PackageModel) -> String {
             String::new(),
         ]);
     }
-    finish(lines)
+    finish(&lines)
 }

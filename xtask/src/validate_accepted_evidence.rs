@@ -27,7 +27,7 @@ pub const REQUIRED: [&str; 7] = [
 /// Validation outcome mirroring the retired Python result dict.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationReport {
-    /// ```"PASS"`` or ```"FAIL"``.
+    /// `"PASS"` or `"FAIL"`.
     pub status: &'static str,
     /// Number of required files checked.
     pub required_files: usize,

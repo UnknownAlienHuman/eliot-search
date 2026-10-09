@@ -22,7 +22,11 @@ pub(super) fn git_files(root: &Path) -> Result<Vec<String>, String> {
         ));
     }
     let mut files = Vec::new();
-    for record in output.stdout.split(|byte| *byte == 0).filter(|row| !row.is_empty()) {
+    for record in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|row| !row.is_empty())
+    {
         files.push(
             std::str::from_utf8(record)
                 .map_err(|_| "git ls-files returned a non-UTF-8 path".to_owned())?
@@ -35,8 +39,7 @@ pub(super) fn git_files(root: &Path) -> Result<Vec<String>, String> {
 
 pub(super) fn read_bounded_utf8(root: &Path, relative: &str) -> Result<String, String> {
     let path = root.join(relative);
-    let metadata = std::fs::metadata(&path)
-        .map_err(|error| format!("{relative}: {error}"))?;
+    let metadata = std::fs::metadata(&path).map_err(|error| format!("{relative}: {error}"))?;
     if !metadata.is_file() || metadata.len() > MAX_SOURCE_BYTES {
         return Err(format!("{relative}: source is not a bounded regular file"));
     }
@@ -102,15 +105,15 @@ pub(super) fn string_array(value: &Value, key: &str) -> Vec<String> {
 
 pub(super) fn compare_identity_sets(
     label: &str,
-    expected: BTreeSet<String>,
-    actual: BTreeSet<String>,
+    expected: &BTreeSet<String>,
+    actual: &BTreeSet<String>,
     errors: &mut Vec<String>,
 ) {
     if expected == actual {
         return;
     }
     let difference: Vec<String> = expected
-        .symmetric_difference(&actual)
+        .symmetric_difference(actual)
         .take(24)
         .cloned()
         .collect();

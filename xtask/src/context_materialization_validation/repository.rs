@@ -6,11 +6,7 @@ use toml::Value;
 
 use super::spec::{RETIRED_PYTHON, WORKFLOW};
 
-pub(super) fn read_toml(
-    root: &Path,
-    relative: &str,
-    errors: &mut Vec<String>,
-) -> Value {
+pub(super) fn read_toml(root: &Path, relative: &str, errors: &mut Vec<String>) -> Value {
     let text = match std::fs::read_to_string(root.join(relative)) {
         Ok(text) => text,
         Err(error) => {
@@ -28,12 +24,9 @@ pub(super) fn read_toml(
 }
 
 pub(super) fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
-    let text = match std::fs::read_to_string(root.join(WORKFLOW)) {
-        Ok(text) => text,
-        Err(_) => {
-            errors.push("missing manual workflow".to_owned());
-            return;
-        }
+    let Ok(text) = std::fs::read_to_string(root.join(WORKFLOW)) else {
+        errors.push("missing manual workflow".to_owned());
+        return;
     };
     for token in [
         "workflow_dispatch:",
@@ -61,22 +54,16 @@ pub(super) fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
     }
 }
 
-pub(super) fn validate_implementation_sentinels(
-    root: &Path,
-    errors: &mut Vec<String>,
-) {
-    let assemble = std::fs::read_to_string(
-        root.join("xtask/src/context_materialization_builder/assemble.rs"),
-    )
-    .unwrap_or_default();
-    let manifest = std::fs::read_to_string(
-        root.join("xtask/src/context_materialization_builder/manifest.rs"),
-    )
-    .unwrap_or_default();
-    let write = std::fs::read_to_string(
-        root.join("xtask/src/context_materialization_builder/write.rs"),
-    )
-    .unwrap_or_default();
+pub(super) fn validate_implementation_sentinels(root: &Path, errors: &mut Vec<String>) {
+    let assemble =
+        std::fs::read_to_string(root.join("xtask/src/context_materialization_builder/assemble.rs"))
+            .unwrap_or_default();
+    let manifest =
+        std::fs::read_to_string(root.join("xtask/src/context_materialization_builder/manifest.rs"))
+            .unwrap_or_default();
+    let write =
+        std::fs::read_to_string(root.join("xtask/src/context_materialization_builder/write.rs"))
+            .unwrap_or_default();
     for (source, token, failure) in [
         (
             assemble.as_str(),
@@ -110,10 +97,7 @@ pub(super) fn validate_implementation_sentinels(
     }
 }
 
-pub(super) fn validate_retired_python(
-    root: &Path,
-    errors: &mut Vec<String>,
-) {
+pub(super) fn validate_retired_python(root: &Path, errors: &mut Vec<String>) {
     for relative in RETIRED_PYTHON {
         if root.join(relative).exists() {
             errors.push(format!("retired Python planner returned: {relative}"));

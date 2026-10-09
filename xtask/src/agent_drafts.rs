@@ -17,12 +17,12 @@ use serde_json::json;
 use toml::Value;
 
 pub use w3::{
-    W3AgentDraftReport, exit_code as w3_exit_code,
-    render_report_json as render_w3_report_json, validate_w3_agent_drafts,
+    W3AgentDraftReport, exit_code as w3_exit_code, render_report_json as render_w3_report_json,
+    validate_w3_agent_drafts,
 };
 pub use w4::{
-    W4AgentDraftReport, exit_code as w4_exit_code,
-    render_report_json as render_w4_report_json, validate_w4_agent_drafts,
+    W4AgentDraftReport, exit_code as w4_exit_code, render_report_json as render_w4_report_json,
+    validate_w4_agent_drafts,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -73,6 +73,12 @@ pub const fn exit_code(report: &AgentDraftReport) -> i32 {
 }
 
 #[must_use]
+/// Render one bounded agent-draft report as pretty JSON.
+///
+/// # Panics
+///
+/// Never. The report carries only strings, counters and lists, so the JSON
+/// serialization cannot fail.
 pub fn render_report_json(report: &AgentDraftReport) -> String {
     let value = if report.complete {
         json!({
@@ -96,10 +102,9 @@ pub fn render_report_json(report: &AgentDraftReport) -> String {
 }
 
 pub(crate) fn load_doc(root: &Path, relative: &str) -> Result<Value, String> {
-    let bytes = std::fs::read(root.join(relative))
-        .map_err(|error| format!("{relative}: {error}"))?;
-    let text = String::from_utf8(bytes)
-        .map_err(|error| format!("{relative}: {error}"))?;
+    let bytes =
+        std::fs::read(root.join(relative)).map_err(|error| format!("{relative}: {error}"))?;
+    let text = String::from_utf8(bytes).map_err(|error| format!("{relative}: {error}"))?;
     toml::from_str(&text).map_err(|error| format!("{relative}: {error}"))
 }
 
@@ -147,35 +152,19 @@ pub(crate) fn string_list(value: &Value, key: &str) -> Option<Vec<String>> {
         .collect()
 }
 
-pub(crate) fn child<'a>(
-    value: &'a Value,
-    table: &str,
-    key: &str,
-) -> Option<&'a Value> {
+pub(crate) fn child<'a>(value: &'a Value, table: &str, key: &str) -> Option<&'a Value> {
     value.get(table)?.as_table()?.get(key)
 }
 
-pub(crate) fn child_string<'a>(
-    value: &'a Value,
-    table: &str,
-    key: &str,
-) -> Option<&'a str> {
+pub(crate) fn child_string<'a>(value: &'a Value, table: &str, key: &str) -> Option<&'a str> {
     child(value, table, key).and_then(Value::as_str)
 }
 
-pub(crate) fn child_bool(
-    value: &Value,
-    table: &str,
-    key: &str,
-) -> Option<bool> {
+pub(crate) fn child_bool(value: &Value, table: &str, key: &str) -> Option<bool> {
     child(value, table, key).and_then(Value::as_bool)
 }
 
-pub(crate) fn child_string_list(
-    value: &Value,
-    table: &str,
-    key: &str,
-) -> Option<Vec<String>> {
+pub(crate) fn child_string_list(value: &Value, table: &str, key: &str) -> Option<Vec<String>> {
     child(value, table, key)?
         .as_array()?
         .iter()
@@ -191,10 +180,7 @@ pub(crate) fn symmetric_difference(
     actual: &BTreeSet<String>,
     expected: &BTreeSet<String>,
 ) -> Vec<String> {
-    actual
-        .symmetric_difference(expected)
-        .cloned()
-        .collect()
+    actual.symmetric_difference(expected).cloned().collect()
 }
 
 pub(crate) fn require_regular_file(
@@ -212,6 +198,5 @@ pub(crate) fn require_regular_file(
 }
 
 pub(crate) fn read_text(root: &Path, relative: &str) -> Result<String, String> {
-    std::fs::read_to_string(root.join(relative))
-        .map_err(|error| format!("{relative}: {error}"))
+    std::fs::read_to_string(root.join(relative)).map_err(|error| format!("{relative}: {error}"))
 }

@@ -3,37 +3,34 @@ use std::sync::Arc;
 
 use super::lexer::code_only;
 use super::module_graph::semantic_modules;
-use super::surface::{
-    find_public_surfaces_matching, find_public_vendor_surfaces,
-};
+use super::surface::{find_public_surfaces_matching, find_public_vendor_surfaces};
 
 mod qualified_path;
 
-use qualified_path::contains_tainted_qualified_path;
 use super::use_tree::{
-    DirectTaint, UseLeaf, collect_use_statements, direct_tainted_bindings,
-    expand_local_aliases,
+    DirectTaint, UseLeaf, collect_use_statements, direct_tainted_bindings, expand_local_aliases,
 };
+use qualified_path::contains_tainted_qualified_path;
 
 /// One bridge source retained from the bounded repository walk.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct BridgeSource {
+pub(in crate::qdrant_boundary) struct BridgeSource {
     relative: String,
     source: String,
 }
 
 impl BridgeSource {
-    pub(super) fn new(relative: String, source: String) -> Self {
+    pub(in crate::qdrant_boundary) const fn new(relative: String, source: String) -> Self {
         Self { relative, source }
     }
 
     #[must_use]
-    pub(super) fn relative(&self) -> &str {
+    pub(in crate::qdrant_boundary) fn relative(&self) -> &str {
         &self.relative
     }
 
     #[must_use]
-    pub(super) fn source(&self) -> &str {
+    pub(in crate::qdrant_boundary) fn source(&self) -> &str {
         &self.source
     }
 }
@@ -68,7 +65,7 @@ type TaintedItems = BTreeMap<Vec<String>, BTreeMap<String, TaintInfo>>;
 /// Literal `include!`, direct `#[path]` module overrides, glob imports and
 /// fully qualified public paths are resolved inside the bounded bridge source
 /// inventory.
-pub(super) fn find_cross_file_vendor_surfaces(
+pub(in crate::qdrant_boundary) fn find_cross_file_vendor_surfaces(
     sources: &[BridgeSource],
     bridge_root: &str,
     vendor_module: &str,
@@ -77,24 +74,13 @@ pub(super) fn find_cross_file_vendor_surfaces(
         return fail_closed_source_findings(sources);
     };
     let mut findings = BTreeSet::new();
-    let mut tainted_items =
-        seed_tainted_items(&units, vendor_module, &mut findings);
-    propagate_public_reexports(
-        &units,
-        &mut tainted_items,
-        &mut findings,
-    );
-    collect_public_surface_findings(
-        &units,
-        &tainted_items,
-        &mut findings,
-    );
+    let mut tainted_items = seed_tainted_items(&units, vendor_module, &mut findings);
+    propagate_public_reexports(&units, &mut tainted_items, &mut findings);
+    collect_public_surface_findings(&units, &tainted_items, &mut findings);
     findings.into_iter().collect()
 }
 
-fn fail_closed_source_findings(
-    sources: &[BridgeSource],
-) -> Vec<(String, usize)> {
+fn fail_closed_source_findings(sources: &[BridgeSource]) -> Vec<(String, usize)> {
     let mut findings = sources
         .iter()
         .map(|source| (source.relative().to_owned(), 1))
@@ -104,10 +90,7 @@ fn fail_closed_source_findings(
     findings
 }
 
-fn source_units(
-    sources: &[BridgeSource],
-    bridge_root: &str,
-) -> Option<Vec<SourceUnit>> {
+fn source_units(sources: &[BridgeSource], bridge_root: &str) -> Option<Vec<SourceUnit>> {
     let semantic = semantic_modules(sources, bridge_root)?;
     let mut units = Vec::new();
     for source in sources {
@@ -137,9 +120,7 @@ fn seed_tainted_items(
     for unit in units {
         let direct = direct_by_source
             .entry(Arc::clone(&unit.relative))
-            .or_insert_with(|| {
-                direct_tainted_bindings(&unit.code, vendor_module)
-            });
+            .or_insert_with(|| direct_tainted_bindings(&unit.code, vendor_module));
         for line in &direct.wildcard_lines {
             findings.insert((unit.relative.to_string(), *line));
         }
@@ -219,13 +200,7 @@ fn propagate_public_glob(
     findings.insert((unit.relative.to_string(), line));
     let mut changed = false;
     for name in names {
-        changed |= insert_taint(
-            tainted_items,
-            &unit.module,
-            name,
-            &unit.relative,
-            true,
-        );
+        changed |= insert_taint(tainted_items, &unit.module, name, &unit.relative, true);
     }
     changed
 }
@@ -267,28 +242,19 @@ fn collect_public_surface_findings(
             Some(unit.relative.as_ref()),
             false,
         );
-        add_imported_taint(
-            unit,
-            tainted_items,
-            &mut visible_tainted_names,
-            findings,
-        );
+        add_imported_taint(unit, tainted_items, &mut visible_tainted_names, findings);
         for line in expand_local_aliases(&unit.code, &mut visible_tainted_names) {
             findings.insert((unit.relative.to_string(), line));
         }
         if !visible_tainted_names.is_empty() {
-            for line in
-                find_public_vendor_surfaces(&unit.code, &visible_tainted_names)
-            {
+            for line in find_public_vendor_surfaces(&unit.code, &visible_tainted_names) {
                 findings.insert((unit.relative.to_string(), line));
             }
         }
         for line in find_public_surfaces_matching(&unit.code, |surface| {
-            contains_tainted_qualified_path(
-                surface,
-                &unit.module,
-                |module, name| is_tainted(tainted_items, module, name),
-            )
+            contains_tainted_qualified_path(surface, &unit.module, |module, name| {
+                is_tainted(tainted_items, module, name)
+            })
         }) {
             findings.insert((unit.relative.to_string(), line));
         }
@@ -308,9 +274,7 @@ fn add_imported_taint(
         };
         for leaf in leaves {
             if leaf.glob {
-                let Some(source_module) =
-                    resolve_module(&unit.module, &leaf.path)
-                else {
+                let Some(source_module) = resolve_module(&unit.module, &leaf.path) else {
                     continue;
                 };
                 if source_module != unit.module {
@@ -328,14 +292,10 @@ fn add_imported_taint(
                 continue;
             };
             if resolved.module != unit.module
-                && is_tainted(
-                    tainted_items,
-                    &resolved.module,
-                    &resolved.name,
-                )
+                && is_tainted(tainted_items, &resolved.module, &resolved.name)
             {
                 visible.insert(resolved.name);
-                visible.insert(leaf.binding);
+                visible.insert(leaf.binding.clone());
             }
         }
     }
@@ -417,9 +377,8 @@ fn tainted_names(
                 &info.all
             };
             !origins.is_empty()
-                && exclude_origin.is_none_or(|excluded| {
-                    origins.iter().any(|origin| origin.as_ref() != excluded)
-                })
+                && exclude_origin
+                    .is_none_or(|excluded| origins.iter().any(|origin| origin.as_ref() != excluded))
         })
         .map(|(name, _)| name.clone())
         .collect()

@@ -7,12 +7,12 @@ use toml::Value;
 
 use super::{
     load::{
-        Inputs, integer, load_toml, read_text, require, string,
-        string_list, validate_module_ref, validate_owner_pair,
+        Inputs, integer, load_toml, read_text, require, string, string_list, validate_module_ref,
+        validate_owner_pair,
     },
     markdown::{
-        exact_type_registry_symbols, normalize_type_name, recipe_ids,
-        reason_codes, top_level_yaml_labels,
+        exact_type_registry_symbols, normalize_type_name, reason_codes, recipe_ids,
+        top_level_yaml_labels,
     },
     topology::{TopologySummary, rows_or_empty},
 };
@@ -48,6 +48,10 @@ pub(super) struct SchemaSummary {
     pub(super) reason_count: usize,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub(super) fn validate(
     root: &Path,
     inputs: &Inputs,
@@ -218,8 +222,7 @@ pub(super) fn validate(
 
     require(
         errors,
-        schema_total == 217
-            && integer(&inputs.schema_doc, "schema_or_registry_count") == Some(217),
+        schema_total == 217 && integer(&inputs.schema_doc, "schema_or_registry_count") == Some(217),
         "schema/type total must be 217",
     );
     require(
@@ -260,8 +263,10 @@ pub(super) fn validate(
             type_registry_symbols.len()
         ),
     );
-    let completion_symbols: BTreeSet<String> =
-        COMPLETIONS.iter().map(|value| (*value).to_owned()).collect();
+    let completion_symbols: BTreeSet<String> = COMPLETIONS
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect();
     let expected_primitives: BTreeSet<String> = type_registry_symbols
         .union(&completion_symbols)
         .cloned()
@@ -279,13 +284,7 @@ pub(super) fn validate(
     );
 
     validate_completion_contract(root, &inputs.p00_manifest, errors);
-    let recipe_count = validate_recipes(
-        root,
-        inputs,
-        topology,
-        &schema_names,
-        errors,
-    );
+    let recipe_count = validate_recipes(root, inputs, topology, &schema_names, errors);
     let reason_count = validate_reasons(root, &inputs.reason_doc, errors);
 
     SchemaSummary {
@@ -298,13 +297,9 @@ pub(super) fn validate(
     }
 }
 
-fn validate_completion_contract(
-    root: &Path,
-    p00_manifest: &Value,
-    errors: &mut Vec<String>,
-) {
-    let completion_text = read_text(root, "docs/contracts/p00/TYPE_COMPLETIONS.md")
-        .unwrap_or_else(|error| {
+fn validate_completion_contract(root: &Path, p00_manifest: &Value, errors: &mut Vec<String>) {
+    let completion_text =
+        read_text(root, "docs/contracts/p00/TYPE_COMPLETIONS.md").unwrap_or_else(|error| {
             errors.push(error);
             String::new()
         });
@@ -318,7 +313,9 @@ fn validate_completion_contract(
     let required_files = string_list(p00_manifest, "required_files");
     require(
         errors,
-        required_files.as_ref().is_some_and(|files| files.len() == 13),
+        required_files
+            .as_ref()
+            .is_some_and(|files| files.len() == 13),
         "P00 required_files must contain 13 entries",
     );
     require(
@@ -353,14 +350,15 @@ fn validate_recipes(
             Err(error) => errors.push(error),
         }
     }
-    let recipes_text = read_text(root, "docs/contracts/p00/RECIPES.md")
-        .unwrap_or_else(|error| {
-            errors.push(error);
-            String::new()
-        });
+    let recipes_text = read_text(root, "docs/contracts/p00/RECIPES.md").unwrap_or_else(|error| {
+        errors.push(error);
+        String::new()
+    });
     let source_recipes = recipe_ids(&recipes_text);
-    let expected: BTreeSet<String> =
-        EXPECTED_RECIPES.iter().map(|value| (*value).to_owned()).collect();
+    let expected: BTreeSet<String> = EXPECTED_RECIPES
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect();
     require(
         errors,
         source_recipes == expected,
@@ -407,7 +405,9 @@ fn validate_recipes(
         );
         require(
             errors,
-            refs.as_ref().zip(owners.as_ref()).is_some_and(|(refs, owners)| refs.len() == owners.len()),
+            refs.as_ref()
+                .zip(owners.as_ref())
+                .is_some_and(|(refs, owners)| refs.len() == owners.len()),
             format!("{recipe}: one execution module per owner required"),
         );
         let mut referenced_packages = BTreeSet::new();
@@ -434,17 +434,14 @@ fn validate_recipes(
     rows.len()
 }
 
-fn validate_reasons(
-    root: &Path,
-    reason_doc: &Value,
-    errors: &mut Vec<String>,
-) -> usize {
-    let source = read_text(root, "docs/contracts/p00/REASON_CODES.md")
-        .map(|text| reason_codes(&text))
-        .unwrap_or_else(|error| {
+fn validate_reasons(root: &Path, reason_doc: &Value, errors: &mut Vec<String>) -> usize {
+    let source = read_text(root, "docs/contracts/p00/REASON_CODES.md").map_or_else(
+        |error| {
             errors.push(error);
             BTreeSet::new()
-        });
+        },
+        |text| reason_codes(&text),
+    );
     let mut registered = BTreeSet::new();
     for (key, expected_count) in [
         ("search_reason_codes", 31_usize),
@@ -469,7 +466,9 @@ fn validate_reasons(
         );
         require(
             errors,
-            values.as_ref().is_some_and(|items| items.len() == expected_count),
+            values
+                .as_ref()
+                .is_some_and(|items| items.len() == expected_count),
             format!("reason registry {key} count mismatch"),
         );
         registered.extend(values.unwrap_or_default());

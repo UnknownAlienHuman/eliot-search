@@ -5,8 +5,8 @@ mod package;
 
 use std::collections::BTreeMap;
 
-use super::model::PackageMapModel;
 use super::super::{DOC_INDEX_PATH, HUMAN_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH};
+use super::model::PackageMapModel;
 
 pub(super) fn render_outputs(model: &PackageMapModel) -> BTreeMap<String, String> {
     let mut outputs = BTreeMap::new();
@@ -54,7 +54,7 @@ pub(super) fn array(values: &[String]) -> String {
     crate::coverage_graph::arr(&refs)
 }
 
-pub(super) fn finish(lines: Vec<String>) -> String {
+pub(super) fn finish(lines: &[String]) -> String {
     let mut output = lines.join("\n");
     while output.ends_with('\n') {
         let _ = output.pop();

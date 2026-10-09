@@ -7,8 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const FORBIDDEN_EXTENSIONS: &[&str] =
-    &["py", "pyw", "js", "mjs", "cjs", "ts", "tsx"];
+const FORBIDDEN_EXTENSIONS: &[&str] = &["py", "pyw", "js", "mjs", "cjs", "ts", "tsx"];
 const FORBIDDEN_MANIFESTS: &[&str] = &[
     "package.json",
     "package-lock.json",
@@ -158,14 +157,12 @@ fn forbidden_runtime_invocation(line: &str) -> Option<&'static str> {
                 | "pwsh"
                 | "powershell"
                 | "powershell.exe"
-        ) {
-            if let Some(runtime) = tokens
-                .iter()
-                .skip(1)
-                .find_map(|token| forbidden_command(token))
-            {
-                return Some(runtime);
-            }
+        ) && let Some(runtime) = tokens
+            .iter()
+            .skip(1)
+            .find_map(|token| forbidden_command(token))
+        {
+            return Some(runtime);
         }
     }
     None

@@ -4,7 +4,10 @@ use toml::Value;
 
 use super::super::{Finding, load_toml, string_array};
 
-pub(super) fn validate_toolchain(root: &Path, findings: &mut Vec<Finding>) {
+pub(in crate::integration_bootstrap) fn validate_toolchain(
+    root: &Path,
+    findings: &mut Vec<Finding>,
+) {
     let path = root.join("rust-toolchain.toml");
     let document = match load_toml(&path) {
         Ok(document) => document,
@@ -18,10 +21,8 @@ pub(super) fn validate_toolchain(root: &Path, findings: &mut Vec<Finding>) {
         .and_then(Value::as_table)
         .is_some_and(|toolchain| {
             toolchain.len() == 4
-                && toolchain.get("channel").and_then(Value::as_str)
-                    == Some("1.98.0")
-                && toolchain.get("profile").and_then(Value::as_str)
-                    == Some("minimal")
+                && toolchain.get("channel").and_then(Value::as_str) == Some("1.98.0")
+                && toolchain.get("profile").and_then(Value::as_str) == Some("minimal")
                 && string_array(toolchain.get("components"))
                     == Some(vec!["clippy".to_owned(), "rustfmt".to_owned()])
                 && string_array(toolchain.get("targets"))
@@ -36,7 +37,10 @@ pub(super) fn validate_toolchain(root: &Path, findings: &mut Vec<Finding>) {
     }
 }
 
-pub(super) fn validate_cargo_config(root: &Path, findings: &mut Vec<Finding>) {
+pub(in crate::integration_bootstrap) fn validate_cargo_config(
+    root: &Path,
+    findings: &mut Vec<Finding>,
+) {
     let path = root.join(".cargo/config.toml");
     let document = match load_toml(&path) {
         Ok(document) => document,
@@ -72,7 +76,7 @@ pub(super) fn validate_cargo_config(root: &Path, findings: &mut Vec<Finding>) {
     }
 }
 
-pub(super) fn validate_lock(
+pub(in crate::integration_bootstrap) fn validate_lock(
     root: &Path,
     allow_missing: bool,
     findings: &mut Vec<Finding>,
@@ -110,7 +114,10 @@ pub(super) fn validate_lock(
     }
 }
 
-pub(super) fn validate_workflow(root: &Path, findings: &mut Vec<Finding>) {
+pub(in crate::integration_bootstrap) fn validate_workflow(
+    root: &Path,
+    findings: &mut Vec<Finding>,
+) {
     let path = root.join(".github/workflows/integration-bootstrap.yml");
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -145,9 +152,7 @@ pub(super) fn validate_workflow(root: &Path, findings: &mut Vec<Finding>) {
             ));
         }
     }
-    if !text.contains("contents: read")
-        || !text.contains("persist-credentials: false")
-    {
+    if !text.contains("contents: read") || !text.contains("persist-credentials: false") {
         findings.push(Finding::new(
             "BOOTSTRAP_WORKFLOW_WRITE_CAPABLE",
             &path,

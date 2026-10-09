@@ -101,9 +101,7 @@ pub fn generate_package_maps(
         errors.push(format!("package dependency cycle: {:?}", model.stats.cycle));
     }
     let stale_files = match mode {
-        PackageMapGenerationMode::Check => {
-            check_outputs(root, &outputs, &patched_manifest)
-        }
+        PackageMapGenerationMode::Check => check_outputs(root, &outputs, &patched_manifest),
         PackageMapGenerationMode::Write => {
             if let Err(error) = write_outputs(root, &outputs, &patched_manifest) {
                 errors.push(error);
@@ -134,6 +132,11 @@ pub const fn generation_exit_code(report: &PackageMapGenerationReport) -> i32 {
 }
 
 /// Stable machine-readable generation/check report.
+///
+/// # Panics
+///
+/// Serializing this bounded report shape cannot fail; the `expect` records
+/// that invariant instead of handling an unreachable error path.
 #[must_use]
 pub fn render_generation_report_json(report: &PackageMapGenerationReport) -> String {
     let mode = match report.mode {

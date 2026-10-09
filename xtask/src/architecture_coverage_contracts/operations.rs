@@ -26,14 +26,12 @@ pub(super) fn validate(
     );
     require(
         errors,
-        string(operations, "function_registry")
-            == Some("swarm/function-packets.toml"),
+        string(operations, "function_registry") == Some("swarm/function-packets.toml"),
         "operation registry function source mismatch",
     );
     require(
         errors,
-        string(operations, "module_registry")
-            == Some("swarm/module-packets.toml"),
+        string(operations, "module_registry") == Some("swarm/module-packets.toml"),
         "operation registry module source mismatch",
     );
     require(
@@ -58,8 +56,7 @@ pub(super) fn validate(
     );
     require(
         errors,
-        boolean(operations, "implementation_authorized_by_this_registry")
-            == Some(false),
+        boolean(operations, "implementation_authorized_by_this_registry") == Some(false),
         "operation registry authorizes implementation",
     );
 
@@ -152,15 +149,13 @@ fn validate_extraction(operations: &Value, errors: &mut Vec<String>) {
 fn validate_ownership(operations: &Value, errors: &mut Vec<String>) {
     require(
         errors,
-        child(operations, "ownership", "operation_owner_source")
-            .and_then(Value::as_str)
+        child(operations, "ownership", "operation_owner_source").and_then(Value::as_str)
             == Some("function_registry_package"),
         "operation owner source changed",
     );
     require(
         errors,
-        child(operations, "ownership", "public_entry_module_source")
-            .and_then(Value::as_str)
+        child(operations, "ownership", "public_entry_module_source").and_then(Value::as_str)
             == Some("module_registry_package"),
         "public entry source changed",
     );
@@ -171,8 +166,7 @@ fn validate_ownership(operations: &Value, errors: &mut Vec<String>) {
     ] {
         require(
             errors,
-            child(operations, "ownership", key).and_then(Value::as_bool)
-                == Some(true),
+            child(operations, "ownership", key).and_then(Value::as_bool) == Some(true),
             format!("operation ownership invariant disabled: {key}"),
         );
     }
@@ -199,15 +193,13 @@ fn validate_invariants(operations: &Value, errors: &mut Vec<String>) {
     ] {
         require(
             errors,
-            child(operations, "invariants", key).and_then(Value::as_bool)
-                == Some(true),
+            child(operations, "invariants", key).and_then(Value::as_bool) == Some(true),
             format!("operation merge guard disabled: {key}"),
         );
     }
     require(
         errors,
-        child(operations, "invariants", "placeholder_success_allowed")
-            .and_then(Value::as_bool)
+        child(operations, "invariants", "placeholder_success_allowed").and_then(Value::as_bool)
             == Some(false),
         "placeholder success allowed",
     );
@@ -227,11 +219,7 @@ fn validate_foundations(
     );
 
     for (package, source, entry) in [
-        (
-            "search-contracts",
-            "docs/contracts/p00/README.md",
-            "lib",
-        ),
+        ("search-contracts", "docs/contracts/p00/README.md", "lib"),
         (
             "search-domain",
             "docs/contracts/p00/SUPPORT_SCHEMAS.md",
@@ -305,9 +293,8 @@ fn validate_function_sources(
             .and_then(Value::as_str);
         require(
             errors,
-            path.zip(package_path).is_some_and(|(relative, owner)| {
-                relative.starts_with(&format!("{owner}/"))
-            }),
+            path.zip(package_path)
+                .is_some_and(|(relative, owner)| relative.starts_with(&format!("{owner}/"))),
             format!("{package}: function source outside package"),
         );
         let Some(relative) = path else {
@@ -384,10 +371,7 @@ fn heading_operation(line: &str) -> Option<&str> {
 fn inline_code_segments(text: &str) -> Vec<&str> {
     let mut segments = Vec::new();
     let mut rest = text;
-    loop {
-        let Some(start) = rest.find('`') else {
-            break;
-        };
+    while let Some(start) = rest.find('`') {
         let after = &rest[start + 1..];
         let Some(end) = after.find('`') else {
             break;
@@ -401,10 +385,7 @@ fn inline_code_segments(text: &str) -> Vec<&str> {
 fn fenced_blocks(text: &str) -> Vec<&str> {
     let mut blocks = Vec::new();
     let mut rest = text;
-    loop {
-        let Some(start) = rest.find("```") else {
-            break;
-        };
+    while let Some(start) = rest.find("```") {
         let after_marker = &rest[start + 3..];
         let Some(line_end) = after_marker.find('\n') else {
             break;
@@ -451,11 +432,7 @@ fn identifier_prefix(text: &str) -> Option<(&str, &str)> {
     }
     let end = bytes
         .iter()
-        .position(|byte| {
-            !(byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || *byte == b'_')
-        })
+        .position(|byte| !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_'))
         .unwrap_or(bytes.len());
     Some((&text[..end], &text[end..]))
 }

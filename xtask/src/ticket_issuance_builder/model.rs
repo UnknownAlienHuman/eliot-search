@@ -55,6 +55,12 @@ pub struct PlannerCheck {
 
 impl PlannerCheck {
     /// Converts the check to the canonical plan JSON shape.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the `json!` literal above stops producing an object.
+    /// The macro builds a fixed three-key map, so the panic is
+    /// unreachable in practice and is left as an explicit expectation.
     #[must_use]
     pub fn as_json(&self) -> Value {
         let mut value = json!({
@@ -80,10 +86,7 @@ pub struct TicketIssuanceBuildError {
 }
 
 impl TicketIssuanceBuildError {
-    pub(super) fn new(
-        reason: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
+    pub(super) fn new(reason: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             reason: reason.into(),
             message: message.into(),
@@ -112,7 +115,7 @@ impl std::fmt::Display for TicketIssuanceBuildError {
 impl std::error::Error for TicketIssuanceBuildError {}
 
 /// Fully assembled non-authoritative plan and optional local output target.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TicketIssuanceBuild {
     root: PathBuf,
     plan: Value,
@@ -121,7 +124,7 @@ pub struct TicketIssuanceBuild {
 }
 
 impl TicketIssuanceBuild {
-    pub(super) fn new(
+    pub(super) const fn new(
         root: PathBuf,
         plan: Value,
         plan_bytes: Vec<u8>,
@@ -143,7 +146,7 @@ impl TicketIssuanceBuild {
 
     /// Advisory plan JSON value.
     #[must_use]
-    pub fn plan(&self) -> &Value {
+    pub const fn plan(&self) -> &Value {
         &self.plan
     }
 
@@ -166,7 +169,7 @@ pub(super) struct Checks {
 }
 
 impl Checks {
-    pub(super) fn new() -> Self {
+    pub(super) const fn new() -> Self {
         Self {
             items: Vec::new(),
             reasons: Vec::new(),
@@ -182,12 +185,7 @@ impl Checks {
         });
     }
 
-    pub(super) fn fail(
-        &mut self,
-        id: impl Into<String>,
-        reason: &str,
-        detail: impl Into<String>,
-    ) {
+    pub(super) fn fail(&mut self, id: impl Into<String>, reason: &str, detail: impl Into<String>) {
         assert!(
             CLOSED_REASON_CODES.contains(&reason),
             "unregistered ticket-planner reason: {reason}"
@@ -217,7 +215,6 @@ pub(super) struct DraftPair {
     pub(super) ticket_path: String,
     pub(super) context_path: String,
     pub(super) ticket: TomlValue,
-    pub(super) context: TomlValue,
     pub(super) sources: Vec<String>,
     pub(super) selectors: Vec<String>,
     pub(super) handoff_slots: Vec<String>,

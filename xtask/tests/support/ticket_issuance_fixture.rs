@@ -1,6 +1,10 @@
+#[path = "ticket_issuance_fixture/git.rs"]
 mod git;
+#[path = "ticket_issuance_fixture/handoff.rs"]
 mod handoff;
+#[path = "ticket_issuance_fixture/repository.rs"]
 mod repository;
+#[path = "ticket_issuance_fixture/templates.rs"]
 mod templates;
 
 use std::fs;
@@ -76,7 +80,8 @@ impl FixtureRepository {
             .append(true)
             .open(path)
             .expect("open fixture append target");
-        file.write_all(text.as_bytes()).expect("append fixture text");
+        file.write_all(text.as_bytes())
+            .expect("append fixture text");
     }
 }
 

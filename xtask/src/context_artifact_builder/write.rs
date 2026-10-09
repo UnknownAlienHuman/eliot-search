@@ -33,9 +33,9 @@ pub fn write_candidate(
             .replace('/', std::path::MAIN_SEPARATOR_STR),
     );
     write_exact_idempotent(&root, &bundle, build.bundle_bytes())
-        .map_err(map_output)?;
+        .map_err(|error| map_output(&error))?;
     write_exact_idempotent(&root, &candidate, build.candidate_bytes())
-        .map_err(map_output)?;
+        .map_err(|error| map_output(&error))?;
     let bundle_readback = std::fs::read(&bundle).map_err(|error| {
         ContextArtifactBuildError::new(
             "CANDIDATE_OUTPUT_WRITE_FAILED",
@@ -48,9 +48,7 @@ pub fn write_candidate(
             format!("unable to read candidate output: {error}"),
         )
     })?;
-    if bundle_readback != build.bundle_bytes()
-        || candidate_readback != build.candidate_bytes()
-    {
+    if bundle_readback != build.bundle_bytes() || candidate_readback != build.candidate_bytes() {
         return Err(ContextArtifactBuildError::new(
             "CANDIDATE_OUTPUT_WRITE_FAILED",
             "candidate local readback failed",
@@ -60,7 +58,7 @@ pub fn write_candidate(
 }
 
 fn map_output(
-    error: crate::context_artifact_io::CandidateOutputError,
+    error: &crate::context_artifact_io::CandidateOutputError,
 ) -> ContextArtifactBuildError {
     ContextArtifactBuildError::new(error.reason(), error.message())
 }

@@ -1,12 +1,9 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use xtask::ticket_issuance_builder::{
-    TicketIssuanceBuildOptions, build_plan, write_plan,
-};
+use xtask::ticket_issuance_builder::{TicketIssuanceBuildOptions, build_plan, write_plan};
 use xtask::ticket_issuance_validation::{
-    exit_code, render_report_json, render_report_text,
-    validate_ticket_issuance_plan,
+    exit_code, render_report_json, render_report_text, validate_ticket_issuance_plan,
 };
 use xtask::ticket_planner::{DECISION_INVALID, DECISION_READY};
 
@@ -40,6 +37,10 @@ pub(super) fn validate(args: &[String]) -> ExitCode {
     ExitCode::from(u8::try_from(exit_code(&report)).unwrap_or(1))
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub(super) fn build(args: &[String]) -> ExitCode {
     let mut root = PathBuf::from(".");
     let mut package: Option<String> = None;
@@ -132,8 +133,7 @@ pub(super) fn build(args: &[String]) -> ExitCode {
     if !writes_file {
         print!(
             "{}",
-            std::str::from_utf8(build.plan_bytes())
-                .expect("canonical plan JSON is UTF-8")
+            std::str::from_utf8(build.plan_bytes()).expect("canonical plan JSON is UTF-8")
         );
     }
     let decision = build

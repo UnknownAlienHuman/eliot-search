@@ -7,8 +7,8 @@ use toml::Value;
 
 use crate::git_tree::{GitTree, GitTreeEntry};
 use crate::ticket_planner::{
-    exact_sha256_hex, opaque_id_valid, package_name_valid, safe_path,
-    sha256_hex_valid, signed_payload_digest, under,
+    exact_sha256_hex, opaque_id_valid, package_name_valid, safe_path, sha256_hex_valid,
+    signed_payload_digest, under,
 };
 
 use super::model::{Checks, DraftPair};
@@ -21,6 +21,10 @@ struct SuppliedHandoff {
     entry: GitTreeEntry,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub(super) fn validate_handoffs(
     tree: &GitTree,
     pair: &DraftPair,
@@ -30,7 +34,11 @@ pub(super) fn validate_handoffs(
     let mut expected_from_slots: Vec<String> = pair
         .handoff_slots
         .iter()
-        .map(|slot| slot.split_once("::").map_or(slot.as_str(), |value| value.0).to_owned())
+        .map(|slot| {
+            slot.split_once("::")
+                .map_or(slot.as_str(), |value| value.0)
+                .to_owned()
+        })
         .collect();
     expected_from_slots.sort();
     let mut expected_from_ticket = pair
@@ -69,11 +77,7 @@ pub(super) fn validate_handoffs(
         let (raw, entry) = match tree.read_bytes(path) {
             Ok(value) => value,
             Err(error) => {
-                checks.fail(
-                    check_id,
-                    "HANDOFF_RECORD_INVALID",
-                    error.message(),
-                );
+                checks.fail(check_id, "HANDOFF_RECORD_INVALID", error.message());
                 invalid_or_duplicate = true;
                 continue;
             }
@@ -110,9 +114,11 @@ pub(super) fn validate_handoffs(
             .and_then(Value::as_str);
         let valid = package.is_some_and(package_name_valid)
             && handoff_id.is_some_and(opaque_id_valid)
-            && package.zip(handoff_id).is_some_and(|(package, handoff_id)| {
-                path == &format!("swarm/handoffs/{package}/{handoff_id}.toml")
-            })
+            && package
+                .zip(handoff_id)
+                .is_some_and(|(package, handoff_id)| {
+                    path == &format!("swarm/handoffs/{package}/{handoff_id}.toml")
+                })
             && record.get("schema_version").and_then(Value::as_integer) == Some(1)
             && text(&record, "record_kind") == Some("package_handoff_v1")
             && text(&record, "status") == Some("ACCEPTED")
@@ -158,8 +164,7 @@ pub(super) fn validate_handoffs(
 
     let actual: Vec<String> = supplied.keys().cloned().collect();
     if actual != expected_from_slots || invalid_or_duplicate {
-        let expected_set: BTreeSet<&str> =
-            expected_from_slots.iter().map(String::as_str).collect();
+        let expected_set: BTreeSet<&str> = expected_from_slots.iter().map(String::as_str).collect();
         let actual_set: BTreeSet<&str> = actual.iter().map(String::as_str).collect();
         if !expected_set.is_subset(&actual_set) {
             checks.fail(

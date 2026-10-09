@@ -4,16 +4,22 @@ use serde_json::{Value as JsonValue, json};
 use toml::Value;
 
 use crate::ticket_planner::{
-    DECISION_INVALID, INVALID_REASONS, RECORD_KIND, REPOSITORY_NAME,
-    SCHEMA_VERSION, STATUS, plan_digest,
+    DECISION_INVALID, INVALID_REASONS, RECORD_KIND, REPOSITORY_NAME, SCHEMA_VERSION, STATUS,
+    plan_digest,
 };
 
-use super::super::model::{
-    Checks, DraftPair, RegistrySnapshot, TicketIssuanceBuildOptions,
-};
+use super::super::model::{Checks, DraftPair, RegistrySnapshot, TicketIssuanceBuildOptions};
 use super::super::util::{count_string, integer, text, toml_to_json};
 
 #[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Preserve the existing owned callback and assembly interfaces in the #317 source-gate repair."
+)]
 pub(super) fn assemble_plan(
     options: &TicketIssuanceBuildOptions,
     tree: &crate::git_tree::GitTree,
@@ -168,10 +174,7 @@ pub(super) fn assemble_plan(
     plan
 }
 
-pub(super) fn launch_class(
-    launch: &Value,
-    package: &str,
-) -> &'static str {
+pub(super) fn launch_class(launch: &Value, package: &str) -> &'static str {
     if count_string(launch.get("authorized_packages"), package) == 1 {
         "AUTHORIZED"
     } else if count_string(launch.get("conditional_packages"), package) == 1 {

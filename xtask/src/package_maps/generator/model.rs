@@ -81,6 +81,10 @@ pub(super) struct PackageMapModel {
 }
 
 impl PackageMapModel {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+    )]
     pub(super) fn derive(inputs: &Inputs) -> Self {
         let mut packages = Vec::new();
         for (name, row) in &inputs.package_rows {
@@ -100,7 +104,9 @@ impl PackageMapModel {
                 .document_values
                 .iter()
                 .filter(|document| {
-                    strings(document, "packages").iter().any(|package| package == name)
+                    strings(document, "packages")
+                        .iter()
+                        .any(|package| package == name)
                 })
                 .cloned()
                 .collect();
@@ -121,7 +127,10 @@ impl PackageMapModel {
                 .architecture
                 .iter()
                 .filter(|relation| {
-                    relation.modules.iter().any(|module| module.starts_with(&prefix))
+                    relation
+                        .modules
+                        .iter()
+                        .any(|module| module.starts_with(&prefix))
                 })
                 .cloned()
                 .collect();
@@ -148,9 +157,7 @@ impl PackageMapModel {
                 documents: documents.len(),
                 principles: documents
                     .iter()
-                    .filter(|document| {
-                        string(document, "kind") == Some("principle_or_invariant")
-                    })
+                    .filter(|document| string(document, "kind") == Some("principle_or_invariant"))
                     .count(),
                 outbound_dependencies: outbound.len(),
                 inbound_dependencies: inbound.len(),
@@ -234,9 +241,7 @@ fn derive_recipes(inputs: &Inputs, package: &str) -> Vec<RecipeModel> {
                 request_schema: string(recipe, "request_schema")
                     .unwrap_or("None")
                     .to_owned(),
-                result_schema: string(recipe, "result_schema")
-                    .unwrap_or("None")
-                    .to_owned(),
+                result_schema: string(recipe, "result_schema").unwrap_or("None").to_owned(),
             });
         }
     }
@@ -254,10 +259,8 @@ fn derive_schemas(relations: &[SchemaRelation], package: &str) -> Vec<SchemaMode
         if owners.is_empty() {
             continue;
         }
-        let mut owner_roles: Vec<String> =
-            owners.iter().map(|owner| owner.kind.clone()).collect();
-        let mut modules: Vec<String> =
-            owners.iter().map(|owner| owner.module.clone()).collect();
+        let mut owner_roles: Vec<String> = owners.iter().map(|owner| owner.kind.clone()).collect();
+        let mut modules: Vec<String> = owners.iter().map(|owner| owner.module.clone()).collect();
         owner_roles.sort();
         modules.sort();
         modules.dedup();

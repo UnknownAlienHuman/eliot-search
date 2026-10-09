@@ -7,13 +7,12 @@ use toml::Value;
 
 use crate::git_tree::{GitTree, GitTreeError};
 use crate::ticket_planner::{
-    CURRENT_PACKAGE_RECORD_ROOTS, PLAN_ARTIFACT_ROOT, RECORD_KIND,
-    ROOT_METADATA_NAMES, actor_identity_valid, advisory_output_path_valid,
+    CURRENT_PACKAGE_RECORD_ROOTS, PLAN_ARTIFACT_ROOT, RECORD_KIND, ROOT_METADATA_NAMES,
+    actor_identity_valid, advisory_output_path_valid,
 };
 
 use super::model::{
-    Checks, PlannerView, RegistrySnapshot, TicketIssuanceBuildError,
-    TicketIssuanceBuildOptions,
+    Checks, PlannerView, RegistrySnapshot, TicketIssuanceBuildError, TicketIssuanceBuildOptions,
 };
 use super::util::{boolean, count_string, file_name, integer, text, unique_row};
 
@@ -66,10 +65,7 @@ pub(super) fn open_view(
     })
 }
 
-fn validate_selection(
-    options: &TicketIssuanceBuildOptions,
-    checks: &mut Checks,
-) -> &'static str {
+fn validate_selection(options: &TicketIssuanceBuildOptions, checks: &mut Checks) -> &'static str {
     let count = [
         options.base_commit.as_ref(),
         options.writer.as_ref(),
@@ -128,7 +124,11 @@ fn open_head(root: &Path) -> Result<GitTree, TicketIssuanceBuildError> {
     })?;
     let object_format = git_text(&canonical, &["rev-parse", "--show-object-format"])?;
     let oid = git_text(&canonical, &["rev-parse", "HEAD"])?;
-    let tagged = format!("{}:{}", object_format.trim(), oid.trim().to_ascii_lowercase());
+    let tagged = format!(
+        "{}:{}",
+        object_format.trim(),
+        oid.trim().to_ascii_lowercase()
+    );
     GitTree::open(&canonical, &tagged).map_err(map_git)
 }
 
@@ -203,10 +203,7 @@ pub(super) fn validate_registries(
         );
     }
     if function_row.is_some() {
-        checks.pass(
-            "function-registry",
-            "unique P00 foundation function entry",
-        );
+        checks.pass("function-registry", "unique P00 foundation function entry");
     } else {
         checks.fail(
             "function-registry",
@@ -214,9 +211,9 @@ pub(super) fn validate_registries(
             "P00 foundation function entry is missing or duplicate",
         );
     }
-    let stage_ok = stage_row.as_ref().is_some_and(|row| {
-        count_string(row.get("packages"), package) == 1
-    });
+    let stage_ok = stage_row
+        .as_ref()
+        .is_some_and(|row| count_string(row.get("packages"), package) == 1);
     if stage_ok {
         checks.pass("stage-registry", "package belongs exactly once to W0");
     } else {
@@ -227,9 +224,7 @@ pub(super) fn validate_registries(
         );
     }
 
-    if let (Some(package_row), Some(function_row)) =
-        (package_row.as_ref(), function_row.as_ref())
-    {
+    if let (Some(package_row), Some(function_row)) = (package_row.as_ref(), function_row.as_ref()) {
         let path = text(package_row, "path");
         let scope = path.map(|value| format!("{value}/**")).unwrap_or_default();
         let coherent = path.is_some_and(crate::ticket_planner::safe_path)
@@ -239,7 +234,10 @@ pub(super) fn validate_registries(
             && function_row.get("assignment") == package_row.get("assignment")
             && text(function_row, "write_scope") == Some(scope.as_str());
         if coherent {
-            checks.pass("package-scope", format!("package-only write scope: {scope}"));
+            checks.pass(
+                "package-scope",
+                format!("package-only write scope: {scope}"),
+            );
         } else {
             checks.fail(
                 "package-scope",
@@ -270,11 +268,7 @@ pub(super) fn validate_registries(
     }
 }
 
-pub(super) fn validate_control_schema(
-    tree: &GitTree,
-    launch: &Value,
-    checks: &mut Checks,
-) {
+pub(super) fn validate_control_schema(tree: &GitTree, launch: &Value, checks: &mut Checks) {
     let required = [
         ("swarm/orchestration.toml", 5_i64),
         ("swarm/control-plane-schema.toml", 3),
@@ -318,8 +312,7 @@ pub(super) fn validate_control_schema(
             "consumer_requires_exact_commit_and_api_digest",
         ) == Some(true)
         && integer(launch, "orchestration_registry_schema_version") == Some(5)
-        && text(launch, "orchestration_registry_path")
-            == Some("swarm/orchestration.toml");
+        && text(launch, "orchestration_registry_path") == Some("swarm/orchestration.toml");
     if coherent {
         checks.pass(
             "control-schema",
@@ -432,7 +425,14 @@ pub(super) fn validate_workflows(
         .list_files(".github/workflows")
         .map_err(map_git)?
         .into_iter()
-        .filter(|path| path.ends_with(".yml") || path.ends_with(".yaml"))
+        .filter(|path| {
+            let path = std::path::Path::new(path);
+            path.extension()
+                .is_some_and(|ext| ext == "yml" || ext == "yaml")
+                || path
+                    .file_name()
+                    .is_some_and(|name| name == ".yml" || name == ".yaml")
+        })
         .collect();
     let mut violations = Vec::new();
     for path in &files {
@@ -512,11 +512,7 @@ fn workflow_is_manual_read_only(text: &str) -> bool {
         && text.contains("persist-credentials: false")
 }
 
-pub(super) fn validate_output(
-    root: &Path,
-    output: &str,
-    checks: &mut Checks,
-) -> Option<PathBuf> {
+pub(super) fn validate_output(root: &Path, output: &str, checks: &mut Checks) -> Option<PathBuf> {
     if output == "-" {
         checks.pass("output-path", "stdout selected");
         return None;
@@ -536,13 +532,18 @@ pub(super) fn validate_output(
         if path == root {
             break;
         }
-        if path.symlink_metadata().is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        if path
+            .symlink_metadata()
+            .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        {
             checks.fail(
                 "output-path",
                 "OUTPUT_PATH_SYMLINK",
                 format!(
                     "output parent is a symlink: {}",
-                    path.file_name().and_then(|name| name.to_str()).unwrap_or("?")
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("?")
                 ),
             );
             return None;
@@ -571,6 +572,10 @@ fn empty_table() -> Value {
     Value::Table(toml::map::Map::new())
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Preserve the existing owned callback and assembly interfaces in the #317 source-gate repair."
+)]
 pub(super) fn map_git(error: GitTreeError) -> TicketIssuanceBuildError {
     TicketIssuanceBuildError::new(error.reason(), error.message())
 }

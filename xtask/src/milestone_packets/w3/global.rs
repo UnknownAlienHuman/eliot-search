@@ -2,9 +2,7 @@ use std::path::Path;
 
 use toml::Value;
 
-use super::super::{
-    boolean, expected_strings, integer, read_text, string, string_list,
-};
+use super::super::{boolean, expected_strings, integer, read_text, string, string_list};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn validate_global(
@@ -25,40 +23,27 @@ pub(super) fn validate_global(
     validate_workflow(root, errors);
 }
 
-fn validate_registry(
-    document: &Value,
-    launch: &Value,
-    errors: &mut Vec<String>,
-) {
+fn validate_registry(document: &Value, launch: &Value, errors: &mut Vec<String>) {
     if integer(document, "package_count") != Some(9)
         || integer(document, "milestone_count") != Some(36)
     {
         errors.push("package/milestone count mismatch".to_owned());
     }
-    if string(document, "status")
-        != Some("BLOCKED_ON_G1_W2_G1_AND_QDRANT_QUALIFICATION")
-    {
+    if string(document, "status") != Some("BLOCKED_ON_G1_W2_G1_AND_QDRANT_QUALIFICATION") {
         errors.push("registry is not qualification-blocked".to_owned());
     }
-    if string_list(document, "requires_accepted_gates")
-        != Some(expected_strings(&["G1"]))
-        || string_list(document, "requires_accepted_receipts")
-            != Some(expected_strings(&["W2_G1"]))
+    if string_list(document, "requires_accepted_gates") != Some(expected_strings(&["G1"]))
+        || string_list(document, "requires_accepted_receipts") != Some(expected_strings(&["W2_G1"]))
     {
         errors.push("stage prerequisite mismatch".to_owned());
     }
     if boolean(document, "one_writer_one_package") != Some(true)
-        || boolean(document, "sequential_milestones_per_package")
-            != Some(true)
+        || boolean(document, "sequential_milestones_per_package") != Some(true)
     {
         errors.push("ownership/order invariant disabled".to_owned());
     }
-    if boolean(document, "parallel_milestones_within_package")
-        != Some(false)
-        || boolean(
-            document,
-            "implementation_authorized_by_this_registry",
-        ) != Some(false)
+    if boolean(document, "parallel_milestones_within_package") != Some(false)
+        || boolean(document, "implementation_authorized_by_this_registry") != Some(false)
         || boolean(document, "indexed_mode_enabled") != Some(false)
     {
         errors.push("authority/indexed-mode ceiling failed".to_owned());
@@ -85,8 +70,7 @@ fn validate_qdrant_state(
         errors.push("Qdrant artifact/client selected or qualified".to_owned());
     }
     if nested_bool(artifact, "server", "automatic_download") != Some(false)
-        || nested_bool(artifact, "server", "automatic_upgrade")
-            != Some(false)
+        || nested_bool(artifact, "server", "automatic_upgrade") != Some(false)
     {
         errors.push("automatic Qdrant acquisition enabled".to_owned());
     }
@@ -100,8 +84,7 @@ fn validate_qdrant_state(
         || sparse_value.is_some_and(|value| !value.is_array())
         || sparse_vectors.iter().any(|row| {
             row.as_table().is_none_or(|table| {
-                table.get("profile_status").and_then(Value::as_str)
-                    != Some("UNQUALIFIED")
+                table.get("profile_status").and_then(Value::as_str) != Some("UNQUALIFIED")
             })
         })
     {
@@ -117,10 +100,8 @@ fn validate_qdrant_state(
         || probe_value.is_some_and(|value| !value.is_array())
         || probe_rows.iter().any(|row| {
             row.as_table().is_none_or(|table| {
-                table.get("mandatory").and_then(Value::as_bool)
-                    != Some(true)
-                    || table.get("result").and_then(Value::as_str)
-                        != Some("UNAVAILABLE")
+                table.get("mandatory").and_then(Value::as_bool) != Some(true)
+                    || table.get("result").and_then(Value::as_str) != Some("UNAVAILABLE")
             })
         })
     {
@@ -159,19 +140,17 @@ fn validate_transition(document: &Value, errors: &mut Vec<String>) {
             .and_then(|table| table.get(*key))
             .and_then(Value::as_bool)
             != Some(false)
-    })
-    {
+    }) {
         errors.push("transition creates authority".to_owned());
     }
 }
 
 fn validate_current_state(document: &Value, errors: &mut Vec<String>) {
-    let valid = match document.get("current_state") {
-        None => true,
-        Some(value) => value
+    let valid = document.get("current_state").is_none_or(|value| {
+        value
             .as_table()
-            .is_some_and(|state| state.values().all(allowed_zero_state_value)),
-    };
+            .is_some_and(|state| state.values().all(allowed_zero_state_value))
+    });
     if !valid {
         errors.push("current state contains success/authority".to_owned());
     }
@@ -190,10 +169,8 @@ fn validate_cases(cases: &Value, errors: &mut Vec<String>) {
         || case_rows.is_some_and(|rows| {
             rows.iter().any(|row| {
                 row.as_table().is_none_or(|table| {
-                    table.get("mandatory").and_then(Value::as_bool)
-                        != Some(true)
-                        || table.get("result").and_then(Value::as_str)
-                            != Some("UNAVAILABLE")
+                    table.get("mandatory").and_then(Value::as_bool) != Some(true)
+                        || table.get("result").and_then(Value::as_str) != Some("UNAVAILABLE")
                 })
             })
         })
@@ -203,9 +180,7 @@ fn validate_cases(cases: &Value, errors: &mut Vec<String>) {
 }
 
 fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
-    let Ok(workflow) =
-        read_text(root, ".github/workflows/w3-milestone-packets.yml")
-    else {
+    let Ok(workflow) = read_text(root, ".github/workflows/w3-milestone-packets.yml") else {
         errors.push("workflow missing".to_owned());
         return;
     };

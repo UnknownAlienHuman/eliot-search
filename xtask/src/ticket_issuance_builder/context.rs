@@ -4,8 +4,8 @@ use serde_json::{Value as JsonValue, json};
 
 use crate::git_tree::GitTree;
 use crate::ticket_planner::{
-    CONTEXT_TOTAL_BYTE_CEILING, SelectorDocs, SelectorStatus,
-    context_source_forbidden, exact_sha256_hex, resolve_selector,
+    CONTEXT_TOTAL_BYTE_CEILING, SelectorDocs, SelectorStatus, context_source_forbidden,
+    exact_sha256_hex, resolve_selector,
 };
 
 use super::model::{Checks, DraftPair};
@@ -50,13 +50,8 @@ pub(super) fn validate_context(
             );
             continue;
         }
-        total_bytes = total_bytes
-            .checked_add(u64::try_from(raw.len()).unwrap_or(u64::MAX))
-            .unwrap_or(u64::MAX);
-        checks.pass(
-            check_id,
-            format!("exact regular UTF-8 Git blob: {path}"),
-        );
+        total_bytes = total_bytes.saturating_add(u64::try_from(raw.len()).unwrap_or(u64::MAX));
+        checks.pass(check_id, format!("exact regular UTF-8 Git blob: {path}"));
         result.push(json!({
             "order": index,
             "path": path,

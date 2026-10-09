@@ -14,14 +14,12 @@ use std::path::Path;
 use serde_json::json;
 
 pub use generator::{
-    PackageMapGenerationMode, PackageMapGenerationReport,
-    generate_package_maps, generation_exit_code,
-    render_generation_report_json,
+    PackageMapGenerationMode, PackageMapGenerationReport, generate_package_maps,
+    generation_exit_code, render_generation_report_json,
 };
 pub use helpers::{
-    DOC_INDEX_PATH, HUMAN_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH, MAP_ROOT,
-    PackagePaths, bool_text, dependency_cycle, package_paths,
-    stale_package_files, string_list,
+    DOC_INDEX_PATH, HUMAN_INDEX_PATH, INDEX_PATH, INTEGRATION_PATH, MAP_ROOT, PackagePaths,
+    bool_text, dependency_cycle, package_paths, stale_package_files, string_list,
 };
 
 /// Stable report for the package-map closure validator.
@@ -94,6 +92,11 @@ pub const fn exit_code(report: &PackageMapsReport) -> i32 {
 }
 
 /// Renders the stable machine-readable report.
+///
+/// # Panics
+///
+/// Serializing this bounded report shape cannot fail; the `expect` records
+/// that invariant instead of handling an unreachable error path.
 #[must_use]
 pub fn render_report_json(report: &PackageMapsReport) -> String {
     let value = if report.complete {

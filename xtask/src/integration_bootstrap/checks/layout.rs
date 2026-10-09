@@ -4,7 +4,7 @@ use toml::Value;
 
 use super::super::{EXPECTED_LAYOUT_DIRECTORIES, Finding, load_toml};
 
-pub(super) fn validate_data_layout(
+pub(in crate::integration_bootstrap) fn validate_data_layout(
     root: &Path,
     findings: &mut Vec<Finding>,
 ) {
@@ -41,8 +41,7 @@ pub(super) fn validate_data_layout(
         .is_some_and(|directories| {
             directories.len() == EXPECTED_LAYOUT_DIRECTORIES.len()
                 && EXPECTED_LAYOUT_DIRECTORIES.iter().all(|(name, value)| {
-                    directories.get(*name).and_then(Value::as_str)
-                        == Some(*value)
+                    directories.get(*name).and_then(Value::as_str) == Some(*value)
                 })
         });
     if !exact_directories {
@@ -53,10 +52,8 @@ pub(super) fn validate_data_layout(
         ));
     }
 
-    if nested_string(&document, "control", "redb_role")
-        != Some("CONTROL_JOURNAL_ONLY")
-        || nested_bool(&document, "control", "searchable_corpus_forbidden")
-            != Some(true)
+    if nested_string(&document, "control", "redb_role") != Some("CONTROL_JOURNAL_ONLY")
+        || nested_bool(&document, "control", "searchable_corpus_forbidden") != Some(true)
     {
         findings.push(Finding::new(
             "REDB_ROLE_INVALID",
@@ -97,11 +94,7 @@ pub(super) fn validate_data_layout(
     }
 }
 
-fn nested_string<'a>(
-    document: &'a Value,
-    table: &str,
-    key: &str,
-) -> Option<&'a str> {
+fn nested_string<'a>(document: &'a Value, table: &str, key: &str) -> Option<&'a str> {
     document
         .get(table)
         .and_then(Value::as_table)

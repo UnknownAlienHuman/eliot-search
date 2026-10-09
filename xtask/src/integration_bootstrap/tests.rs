@@ -1,11 +1,9 @@
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{
-    EXPECTED_LAYOUT_DIRECTORIES, EXPECTED_PROFILES,
-    validate_integration_bootstrap,
-};
+use super::{EXPECTED_LAYOUT_DIRECTORIES, EXPECTED_PROFILES, validate_integration_bootstrap};
 
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 
@@ -23,25 +21,21 @@ impl Fixture {
         if root.exists() {
             std::fs::remove_dir_all(&root).expect("remove stale fixture");
         }
-        std::fs::create_dir_all(root.join(".cargo"))
-            .expect("create Cargo fixture directory");
+        std::fs::create_dir_all(root.join(".cargo")).expect("create Cargo fixture directory");
         std::fs::create_dir_all(root.join(".github/workflows"))
             .expect("create workflow fixture directory");
-        std::fs::create_dir_all(root.join("config"))
-            .expect("create config fixture directory");
+        std::fs::create_dir_all(root.join("config")).expect("create config fixture directory");
         let fixture = Self { root };
         fixture.write_valid_files();
         fixture
     }
 
     fn write(&self, relative: &str, content: &str) {
-        std::fs::write(self.root.join(relative), content)
-            .expect("write fixture file");
+        std::fs::write(self.root.join(relative), content).expect("write fixture file");
     }
 
     fn read(&self, relative: &str) -> String {
-        std::fs::read_to_string(self.root.join(relative))
-            .expect("read fixture file")
+        std::fs::read_to_string(self.root.join(relative)).expect("read fixture file")
     }
 
     fn write_valid_files(&self) {
@@ -69,10 +63,12 @@ impl Fixture {
             "status = \"FROZEN_BOOTSTRAP_NOT_PRODUCT_ACCEPTED\"\ndefault_profile = \"P00_FOUNDATION\"\nautomatic_profile_upgrade = false\n",
         );
         for profile in EXPECTED_PROFILES {
-            profiles.push_str(&format!(
+            write!(
+                profiles,
                 "[[profile]]\nid = \"{profile}\"\ndefault = {}\n",
                 profile == "P00_FOUNDATION"
-            ));
+            )
+            .expect("string formatting");
         }
         self.write("config/build-profiles-v1.toml", &profiles);
 
@@ -123,10 +119,7 @@ fn missing_lock_fails_verification() {
 #[test]
 fn toolchain_drift_fails() {
     let fixture = Fixture::new();
-    fixture.write(
-        "rust-toolchain.toml",
-        "[toolchain]\nchannel = \"stable\"\n",
-    );
+    fixture.write("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n");
     assert!(codes(&fixture.root, true).contains("TOOLCHAIN_NOT_EXACT"));
 }
 
@@ -138,10 +131,7 @@ fn automatic_workflow_trigger_fails() {
         fixture.read(".github/workflows/integration-bootstrap.yml")
     );
     fixture.write(".github/workflows/integration-bootstrap.yml", &workflow);
-    assert!(
-        codes(&fixture.root, true)
-            .contains("BOOTSTRAP_WORKFLOW_AUTOMATIC_TRIGGER")
-    );
+    assert!(codes(&fixture.root, true).contains("BOOTSTRAP_WORKFLOW_AUTOMATIC_TRIGGER"));
 }
 
 #[test]
@@ -157,15 +147,10 @@ fn redb_search_role_fails() {
 #[test]
 fn optional_profile_cannot_be_default() {
     let fixture = Fixture::new();
-    let profiles = fixture
-        .read("config/build-profiles-v1.toml")
-        .replace(
-            "id = \"OPTIONAL_DEPTH\"\ndefault = false",
-            "id = \"OPTIONAL_DEPTH\"\ndefault = true",
-        );
-    fixture.write("config/build-profiles-v1.toml", &profiles);
-    assert!(
-        codes(&fixture.root, true)
-            .contains("BUILD_PROFILE_DEFAULT_NOT_UNIQUE")
+    let profiles = fixture.read("config/build-profiles-v1.toml").replace(
+        "id = \"OPTIONAL_DEPTH\"\ndefault = false",
+        "id = \"OPTIONAL_DEPTH\"\ndefault = true",
     );
+    fixture.write("config/build-profiles-v1.toml", &profiles);
+    assert!(codes(&fixture.root, true).contains("BUILD_PROFILE_DEFAULT_NOT_UNIQUE"));
 }

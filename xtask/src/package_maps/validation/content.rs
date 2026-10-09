@@ -5,9 +5,7 @@ use std::path::Path;
 
 use toml::Value;
 
-use super::super::load::{
-    Inputs, RowMap, indexed_rows, integer, load_toml, string, strings,
-};
+use super::super::load::{Inputs, RowMap, indexed_rows, integer, load_toml, string, strings};
 use super::super::package_paths;
 
 pub(super) fn validate(root: &Path, inputs: &Inputs, errors: &mut Vec<String>) {
@@ -17,12 +15,11 @@ pub(super) fn validate(root: &Path, inputs: &Inputs, errors: &mut Vec<String>) {
     validate_integration(inputs, errors);
 }
 
-fn validate_package(
-    root: &Path,
-    inputs: &Inputs,
-    package: &str,
-    errors: &mut Vec<String>,
-) {
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
+fn validate_package(root: &Path, inputs: &Inputs, package: &str, errors: &mut Vec<String>) {
     let paths = package_paths(package);
     let overview = load_map(root, &paths.overview, errors);
     let operations = load_map(root, &paths.operations, errors);
@@ -33,12 +30,7 @@ fn validate_package(
         .module_rows
         .iter()
         .filter(|(_, row)| string(row, "package") == Some(package))
-        .map(|(id, row)| {
-            (
-                string(row, "module").unwrap_or(id).to_owned(),
-                row.clone(),
-            )
-        })
+        .map(|(id, row)| (string(row, "module").unwrap_or(id).to_owned(), row.clone()))
         .collect();
     compare_keys(
         package,
@@ -120,7 +112,10 @@ fn validate_package(
         if integer(actual, "score") != integer(expected, "score") {
             errors.push(format!("{id}: operation score mismatch"));
         }
-        if matches!(string(actual, "route_kind"), Some("public_facade" | "semantic_low")) {
+        if matches!(
+            string(actual, "route_kind"),
+            Some("public_facade" | "semantic_low")
+        ) {
             errors.push(format!("{id}: unreviewed operation route"));
         }
         let module = string(actual, "module").unwrap_or_default();
@@ -136,7 +131,11 @@ fn validate_package(
     let expected_documents: RowMap = inputs
         .document_rows
         .iter()
-        .filter(|(_, row)| strings(row, "packages").iter().any(|value| value == package))
+        .filter(|(_, row)| {
+            strings(row, "packages")
+                .iter()
+                .any(|value| value == package)
+        })
         .map(|(id, row)| (id.clone(), row.clone()))
         .collect();
     compare_keys(
@@ -205,13 +204,10 @@ fn validate_package(
             errors.push(format!("{package}: overview {key} mismatch"));
         }
     }
-    if integer(&operations, "operation_count")
-        != i64::try_from(expected_operations.len()).ok()
-    {
+    if integer(&operations, "operation_count") != i64::try_from(expected_operations.len()).ok() {
         errors.push(format!("{package}: operations count mismatch"));
     }
-    if integer(&documents, "node_count")
-        != i64::try_from(expected_documents.len()).ok()
+    if integer(&documents, "node_count") != i64::try_from(expected_documents.len()).ok()
         || integer(&documents, "principle_count") != i64::try_from(principles).ok()
     {
         errors.push(format!("{package}: documents count mismatch"));
@@ -227,18 +223,19 @@ fn validate_integration(inputs: &Inputs, errors: &mut Vec<String>) {
         .collect();
     let actual: BTreeSet<String> = inputs.integration_rows.keys().cloned().collect();
     if actual != expected {
-        let difference: Vec<String> = actual
-            .symmetric_difference(&expected)
-            .cloned()
-            .collect();
-        errors.push(format!("integration documentation map closure mismatch: {difference:?}"));
+        let difference: Vec<String> = actual.symmetric_difference(&expected).cloned().collect();
+        errors.push(format!(
+            "integration documentation map closure mismatch: {difference:?}"
+        ));
     }
     for id in &actual {
         let Some(canonical) = inputs.document_rows.get(id) else {
             continue;
         };
         if !matches!(string(canonical, "kind"), Some("governance" | "navigation")) {
-            errors.push(format!("{id}: product-bearing node misclassified as integration"));
+            errors.push(format!(
+                "{id}: product-bearing node misclassified as integration"
+            ));
         }
         if let Some(mapped) = inputs.integration_rows.get(id) {
             for key in ["path", "heading", "kind", "route_kind", "rationale"] {
@@ -288,11 +285,10 @@ fn compare_keys(
     let actual: BTreeSet<String> = actual.keys().cloned().collect();
     let expected: BTreeSet<String> = expected.keys().cloned().collect();
     if actual != expected {
-        let difference: Vec<String> = actual
-            .symmetric_difference(&expected)
-            .cloned()
-            .collect();
-        errors.push(format!("{package}: {label} closure mismatch: {difference:?}"));
+        let difference: Vec<String> = actual.symmetric_difference(&expected).cloned().collect();
+        errors.push(format!(
+            "{package}: {label} closure mismatch: {difference:?}"
+        ));
     }
 }
 

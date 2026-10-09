@@ -157,7 +157,7 @@ impl Inputs {
 
 fn required_rows(document: &Value, key: &str) -> Result<Vec<Value>, String> {
     array(document, key)
-        .map(|rows| rows.to_vec())
+        .map(<[toml::Value]>::to_vec)
         .ok_or_else(|| format!("{key} must be an array of tables"))
 }
 
@@ -165,10 +165,7 @@ fn manifest_path<'a>(manifest: &'a Value, key: &str, fallback: &'a str) -> &'a s
     string(manifest, key).unwrap_or(fallback)
 }
 
-fn load_architecture(
-    root: &Path,
-    manifest: &Value,
-) -> Result<Vec<ArchitectureRelation>, String> {
+fn load_architecture(root: &Path, manifest: &Value) -> Result<Vec<ArchitectureRelation>, String> {
     let specs = [
         (
             "architecture_section",
@@ -198,11 +195,10 @@ fn load_architecture(
     let mut result = Vec::new();
     for (kind, manifest_key, fallback, table) in specs {
         let document = load_toml(root, manifest_path(manifest, manifest_key, fallback))?;
-        let rows = array(&document, table)
-            .ok_or_else(|| format!("{table} must be an array of tables"))?;
+        let rows =
+            array(&document, table).ok_or_else(|| format!("{table} must be an array of tables"))?;
         for row in rows {
-            let id = string(row, "id")
-                .ok_or_else(|| format!("{table}: missing id"))?;
+            let id = string(row, "id").ok_or_else(|| format!("{table}: missing id"))?;
             result.push(ArchitectureRelation {
                 kind: kind.to_owned(),
                 id: id.to_owned(),
@@ -224,11 +220,10 @@ fn load_schemas(root: &Path, manifest: &Value) -> Result<Vec<SchemaRelation>, St
         .ok_or_else(|| "schema registry packet must be an array".to_owned())?;
     let mut result = Vec::new();
     for packet in packets {
-        let path = string(packet, "path")
-            .ok_or_else(|| "schema packet path missing".to_owned())?;
+        let path = string(packet, "path").ok_or_else(|| "schema packet path missing".to_owned())?;
         let document = load_toml(root, path)?;
-        let groups = array(&document, "group")
-            .ok_or_else(|| format!("{path}: group must be an array"))?;
+        let groups =
+            array(&document, "group").ok_or_else(|| format!("{path}: group must be an array"))?;
         for group in groups {
             let group_id = string(group, "id").unwrap_or("UNNAMED").to_owned();
             let mut owners = Vec::new();
@@ -266,17 +261,11 @@ pub(super) fn load_toml(root: &Path, relative: &str) -> Result<Value, String> {
     toml::from_str(&text).map_err(|error| format!("{relative}: {error}"))
 }
 
-pub(super) fn indexed_rows(
-    document: &Value,
-    key: &str,
-    identity: &str,
-) -> Result<RowMap, String> {
-    let rows = array(document, key)
-        .ok_or_else(|| format!("{key} must be an array of tables"))?;
+pub(super) fn indexed_rows(document: &Value, key: &str, identity: &str) -> Result<RowMap, String> {
+    let rows = array(document, key).ok_or_else(|| format!("{key} must be an array of tables"))?;
     let mut result = BTreeMap::new();
     for row in rows {
-        let name = string(row, identity)
-            .ok_or_else(|| format!("{key}: missing {identity}"))?;
+        let name = string(row, identity).ok_or_else(|| format!("{key}: missing {identity}"))?;
         if result.insert(name.to_owned(), row.clone()).is_some() {
             return Err(format!("{key}: duplicate {identity} {name}"));
         }
@@ -288,7 +277,10 @@ pub(super) fn array<'a>(document: &'a Value, key: &str) -> Option<&'a [Value]> {
     document.get(key)?.as_array().map(Vec::as_slice)
 }
 
-pub(super) fn table<'a>(document: &'a Value, key: &str) -> Option<&'a toml::map::Map<String, Value>> {
+pub(super) fn table<'a>(
+    document: &'a Value,
+    key: &str,
+) -> Option<&'a toml::map::Map<String, Value>> {
     document.get(key)?.as_table()
 }
 

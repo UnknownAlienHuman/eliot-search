@@ -74,16 +74,13 @@ pub(super) fn build(args: &[String]) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    if write {
-        if let Err(error) = write_plan(&root, &build) {
-            eprintln!("{}: {}", error.reason(), error.message());
-            return ExitCode::from(2);
-        }
+    if write && let Err(error) = write_plan(&root, &build) {
+        eprintln!("{}: {}", error.reason(), error.message());
+        return ExitCode::from(2);
     }
     print!(
         "{}",
-        std::str::from_utf8(build.plan_bytes())
-            .expect("canonical plan JSON is UTF-8")
+        std::str::from_utf8(build.plan_bytes()).expect("canonical plan JSON is UTF-8")
     );
     if require_ready
         && build

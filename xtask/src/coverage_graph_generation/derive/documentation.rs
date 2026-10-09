@@ -5,9 +5,7 @@ use std::path::Path;
 
 use toml::Value;
 
-use super::source::{
-    compare_identity_sets, indexed_or_empty, read_bounded_utf8,
-};
+use super::source::{compare_identity_sets, indexed_or_empty, read_bounded_utf8};
 
 const GENERATED_MARKDOWN: [&str; 2] = [
     "docs/handoff/COVERAGE_GRAPH_V2.md",
@@ -23,7 +21,9 @@ pub(super) fn validate(
     let selected: Vec<&String> = files
         .iter()
         .filter(|path| {
-            path.ends_with(".md")
+            let native_path = Path::new(path);
+            (native_path.extension().is_some_and(|ext| ext == "md")
+                || native_path.file_name().is_some_and(|name| name == ".md"))
                 && !path.starts_with("artifacts/")
                 && !path.starts_with("docs/generated/")
                 && !GENERATED_MARKDOWN.contains(&path.as_str())
@@ -61,7 +61,7 @@ pub(super) fn validate(
             expected.insert(
                 id,
                 (
-                    path.to_string(),
+                    path.clone(),
                     i64::try_from(heading.line).unwrap_or(i64::MAX),
                     i64::from(heading.level),
                     heading.title,
@@ -73,8 +73,8 @@ pub(super) fn validate(
     let actual = indexed_or_empty(documentation_document, "node", "id", errors);
     compare_identity_sets(
         "documentation heading",
-        expected.keys().cloned().collect(),
-        actual.keys().cloned().collect(),
+        &expected.keys().cloned().collect(),
+        &actual.keys().cloned().collect(),
         errors,
     );
     for (identity, (path, line, level, heading)) in expected {

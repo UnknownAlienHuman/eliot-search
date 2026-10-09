@@ -125,10 +125,11 @@ pub fn generate_coverage_graph(
         .collect();
     collect_architecture_validation(root, &mut warnings, &mut errors);
 
-    if matches!(mode, CoverageGraphGenerationMode::Write) && errors.is_empty() {
-        if let Err(error) = io::write_all(root, &expected) {
-            errors.push(error);
-        }
+    if matches!(mode, CoverageGraphGenerationMode::Write)
+        && errors.is_empty()
+        && let Err(error) = io::write_all(root, &expected)
+    {
+        errors.push(error);
     }
 
     if errors.is_empty() {
@@ -146,10 +147,7 @@ pub fn generate_coverage_graph(
                 .map(|error| format!("coverage-graph: {error}")),
         );
         if !report.complete {
-            errors.push(
-                "coverage-graph validator did not load all mandatory inputs"
-                    .to_owned(),
-            );
+            errors.push("coverage-graph validator did not load all mandatory inputs".to_owned());
         }
     }
 
@@ -178,8 +176,7 @@ fn collect_architecture_validation(
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
 ) {
-    let architecture =
-        crate::architecture_coverage::validate_architecture_coverage(root);
+    let architecture = crate::architecture_coverage::validate_architecture_coverage(root);
     warnings.extend(
         architecture
             .warnings
@@ -205,27 +202,28 @@ fn collect_architecture_validation(
             .map(|error| format!("architecture-contracts: {error}")),
     );
     if !contracts.complete {
-        errors.push(
-            "architecture contract validator did not load all inputs".to_owned(),
-        );
+        errors.push("architecture contract validator did not load all inputs".to_owned());
     }
 }
 
 /// Stable process exit code.
 #[must_use]
-pub const fn generation_exit_code(
-    report: &CoverageGraphGenerationReport,
-) -> i32 {
+pub const fn generation_exit_code(report: &CoverageGraphGenerationReport) -> i32 {
     if report.passed() { 0 } else { 1 }
 }
 
 /// Renders a deterministic machine-readable generation report.
 #[must_use]
-pub fn render_generation_report_json(
-    report: &CoverageGraphGenerationReport,
-) -> String {
+///
+/// # Panics
+/// Panics if JSON serialization unexpectedly fails for this closed value shape.
+pub fn render_generation_report_json(report: &CoverageGraphGenerationReport) -> String {
     let status = if report.passed() {
-        if report.mode == "WRITE" { "GENERATED" } else { "PASS" }
+        if report.mode == "WRITE" {
+            "GENERATED"
+        } else {
+            "PASS"
+        }
     } else {
         "FAIL"
     };

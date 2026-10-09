@@ -13,26 +13,21 @@ use std::path::Path;
 use serde_json::json;
 use toml::Value;
 
-use filesystem::{
-    ScanBudget, collect_files, read_text, read_toml, relative_path,
-};
+use filesystem::{ScanBudget, collect_files, read_text, read_toml, relative_path};
 use manifests::{
-    collect_vendor_dependency_declarations, lockfile_package_version,
-    validate_bridge_dependency, validate_workspace_dependency, value_at,
+    collect_vendor_dependency_declarations, lockfile_package_version, validate_bridge_dependency,
+    validate_workspace_dependency, value_at,
 };
 use source::{
-    BridgeSource, contains_vendor_sdk_reference,
-    find_cross_file_vendor_surfaces, public_vendor_surface_lines,
-    rust_string_constant,
+    BridgeSource, contains_vendor_sdk_reference, find_cross_file_vendor_surfaces,
+    public_vendor_surface_lines, rust_string_constant,
 };
 
 const ROOT_MANIFEST: &str = "Cargo.toml";
 const LOCKFILE: &str = "Cargo.lock";
 const BRIDGE_ROOT: &str = "crates/search-index-qdrant/search-qdrant-bridge";
-const BRIDGE_MANIFEST: &str =
-    "crates/search-index-qdrant/search-qdrant-bridge/Cargo.toml";
-const QUALIFIED_SOURCE: &str =
-    "crates/search-index-qdrant/search-qdrant-bridge/src/qualified.rs";
+const BRIDGE_MANIFEST: &str = "crates/search-index-qdrant/search-qdrant-bridge/Cargo.toml";
+const QUALIFIED_SOURCE: &str = "crates/search-index-qdrant/search-qdrant-bridge/src/qualified.rs";
 const ARTIFACT_MANIFEST: &str = "qualification/qdrant/artifact.toml";
 const VENDOR_CRATE: &str = "qdrant-client";
 const VENDOR_MODULE: &str = "qdrant_client";
@@ -59,6 +54,11 @@ pub const fn exit_code(report: &QdrantBoundaryReport) -> i32 {
     if report.passed() { 0 } else { 1 }
 }
 
+///
+/// # Panics
+///
+/// Serializing this bounded report shape cannot fail; the `expect` records
+/// that invariant instead of handling an unreachable error path.
 #[must_use]
 pub fn render_report_json(report: &QdrantBoundaryReport) -> String {
     serde_json::to_string_pretty(&json!({
@@ -74,6 +74,10 @@ pub fn render_report_json(report: &QdrantBoundaryReport) -> String {
 }
 
 #[must_use]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Preserve the existing ordered validator or fixture in #317; structural tooling replacement and controller removal have separate owners."
+)]
 pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
     let mut report = QdrantBoundaryReport {
         errors: Vec::new(),
@@ -86,14 +90,7 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
 
     let mut budget = ScanBudget::default();
     let mut files = Vec::new();
-    collect_files(
-        root,
-        root,
-        0,
-        &mut budget,
-        &mut files,
-        &mut report.errors,
-    );
+    collect_files(root, root, 0, &mut budget, &mut files, &mut report.errors);
     files.sort();
 
     let mut root_manifest: Option<Value> = None;
@@ -107,23 +104,16 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
             .is_some_and(|name| name == std::ffi::OsStr::new("Cargo.toml"))
         {
             report.manifests_scanned += 1;
-            let Some(document) =
-                read_toml(path, &relative, &mut budget, &mut report.errors)
-            else {
+            let Some(document) = read_toml(path, &relative, &mut budget, &mut report.errors) else {
                 continue;
             };
 
             let mut declarations = Vec::new();
-            collect_vendor_dependency_declarations(
-                &document,
-                &mut Vec::new(),
-                &mut declarations,
-            );
+            collect_vendor_dependency_declarations(&document, &mut Vec::new(), &mut declarations);
             for location in declarations {
                 let allowed = (relative == ROOT_MANIFEST
                     && location == "workspace.dependencies.qdrant-client")
-                    || (relative == BRIDGE_MANIFEST
-                        && location == "dependencies.qdrant-client");
+                    || (relative == BRIDGE_MANIFEST && location == "dependencies.qdrant-client");
                 if !allowed {
                     report.errors.push(format!(
                         "{relative}: vendor dependency declared at {location}; \
@@ -144,9 +134,7 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
             .is_some_and(|extension| extension == std::ffi::OsStr::new("rs"))
         {
             report.rust_files_scanned += 1;
-            let Some(text) =
-                read_text(path, &relative, &mut budget, &mut report.errors)
-            else {
+            let Some(text) = read_text(path, &relative, &mut budget, &mut report.errors) else {
                 continue;
             };
             if contains_vendor_sdk_reference(&text) {
@@ -169,11 +157,9 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
         }
     }
 
-    for (relative, line) in find_cross_file_vendor_surfaces(
-        &bridge_sources,
-        BRIDGE_ROOT,
-        VENDOR_MODULE,
-    ) {
+    for (relative, line) in
+        find_cross_file_vendor_surfaces(&bridge_sources, BRIDGE_ROOT, VENDOR_MODULE)
+    {
         report.errors.push(format!(
             "{relative}:{line}: vendor SDK type reaches a public surface through a cross-file alias"
         ));
@@ -182,10 +168,12 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
     report.sdk_source_files.sort();
     report.sdk_source_files.dedup();
 
-    let workspace_version = root_manifest.as_ref().and_then(|document| {
-        validate_workspace_dependency(document, &mut report.errors)
-    });
-    report.workspace_client_version.clone_from(&workspace_version);
+    let workspace_version = root_manifest
+        .as_ref()
+        .and_then(|document| validate_workspace_dependency(document, &mut report.errors));
+    report
+        .workspace_client_version
+        .clone_from(&workspace_version);
 
     if let Some(document) = bridge_manifest.as_ref() {
         validate_bridge_dependency(document, &mut report.errors);
@@ -225,12 +213,9 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
         &mut budget,
         &mut report.errors,
     );
-    let artifact_client_crate =
-        artifact_string(&artifact, &["client", "crate_name"]);
-    let artifact_client_version =
-        artifact_string(&artifact, &["client", "version"]);
-    let artifact_server_version =
-        artifact_string(&artifact, &["server", "version"]);
+    let artifact_client_crate = artifact_string(artifact.as_ref(), &["client", "crate_name"]);
+    let artifact_client_version = artifact_string(artifact.as_ref(), &["client", "version"]);
+    let artifact_server_version = artifact_string(artifact.as_ref(), &["server", "version"]);
 
     if artifact_client_crate.as_deref() != Some(VENDOR_CRATE) {
         report.errors.push(format!(
@@ -270,12 +255,8 @@ pub fn validate_qdrant_boundary(root: &Path) -> QdrantBoundaryReport {
     report
 }
 
-fn artifact_string(
-    artifact: &Option<Value>,
-    path: &[&str],
-) -> Option<String> {
+fn artifact_string(artifact: Option<&Value>, path: &[&str]) -> Option<String> {
     artifact
-        .as_ref()
         .and_then(|document| value_at(document, path))
         .and_then(Value::as_str)
         .map(str::to_owned)

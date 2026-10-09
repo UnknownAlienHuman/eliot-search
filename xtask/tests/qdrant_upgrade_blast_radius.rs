@@ -8,8 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const BRIDGE_PREFIX: &str =
-    "crates/search-index-qdrant/search-qdrant-bridge/";
+const BRIDGE_PREFIX: &str = "crates/search-index-qdrant/search-qdrant-bridge/";
 const QUALIFIED_SERVER_VERSION: &str = "1.19.0";
 const QUALIFIED_SERVER_BUILD: &str = "74f3e85b";
 
@@ -35,8 +34,8 @@ fn qualified_release_literals_do_not_escape_adapter_production_code() {
         {
             continue;
         }
-        let source = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        let source =
+            fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         for (line_number, line) in production_lines(&source) {
             if line.contains(&format!("\"{QUALIFIED_SERVER_VERSION}\""))
                 || line.contains(&format!("\"{QUALIFIED_SERVER_BUILD}\""))
@@ -71,7 +70,7 @@ fn production_lines(source: &str) -> Vec<(usize, &str)> {
             continue;
         }
         if pending_test_item {
-            if trimmed.is_empty() || trimmed.starts_with("#") {
+            if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
             let depth = brace_delta(trimmed);
@@ -92,13 +91,12 @@ fn production_lines(source: &str) -> Vec<(usize, &str)> {
 fn brace_delta(line: &str) -> isize {
     let opens = line.bytes().filter(|byte| *byte == b'{').count();
     let closes = line.bytes().filter(|byte| *byte == b'}').count();
-    isize::try_from(opens).unwrap_or(isize::MAX)
-        - isize::try_from(closes).unwrap_or(isize::MAX)
+    isize::try_from(opens).unwrap_or(isize::MAX) - isize::try_from(closes).unwrap_or(isize::MAX)
 }
 
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
-    for entry in fs::read_dir(directory)
-        .unwrap_or_else(|error| panic!("{}: {error}", directory.display()))
+    for entry in
+        fs::read_dir(directory).unwrap_or_else(|error| panic!("{}: {error}", directory.display()))
     {
         let entry = entry.expect("source directory entry must be readable");
         let path = entry.path();

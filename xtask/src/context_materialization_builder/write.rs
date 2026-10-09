@@ -31,24 +31,22 @@ pub fn write_plan(
     );
     let mut outputs = Vec::new();
     let plan = directory.join("plan.json");
-    write_exact_idempotent(&root, &plan, build.plan_bytes()).map_err(map_output)?;
+    write_exact_idempotent(&root, &plan, build.plan_bytes()).map_err(|error| map_output(&error))?;
     outputs.push(plan);
     if let Some(payload) = build.payload_bytes() {
         let path = directory.join("context-manifest.payload.toml");
-        write_exact_idempotent(&root, &path, payload).map_err(map_output)?;
+        write_exact_idempotent(&root, &path, payload).map_err(|error| map_output(&error))?;
         outputs.push(path);
     }
     if let Some(manifest) = build.manifest_bytes() {
         let path = directory.join("context-manifest.prospective.toml");
-        write_exact_idempotent(&root, &path, manifest).map_err(map_output)?;
+        write_exact_idempotent(&root, &path, manifest).map_err(|error| map_output(&error))?;
         outputs.push(path);
     }
     for path in &outputs {
         let expected = if path.file_name().and_then(|value| value.to_str()) == Some("plan.json") {
             build.plan_bytes()
-        } else if path
-            .file_name()
-            .and_then(|value| value.to_str())
+        } else if path.file_name().and_then(|value| value.to_str())
             == Some("context-manifest.payload.toml")
         {
             build.payload_bytes().unwrap_or_default()
@@ -72,7 +70,7 @@ pub fn write_plan(
 }
 
 fn map_output(
-    error: crate::context_artifact_io::CandidateOutputError,
+    error: &crate::context_artifact_io::CandidateOutputError,
 ) -> MaterializationPlanError {
     let reason = match error.reason() {
         "OUTPUT_PATH_OUTSIDE_ARTIFACT_ROOT" => "MATERIALIZATION_OUTPUT_PATH_INVALID",

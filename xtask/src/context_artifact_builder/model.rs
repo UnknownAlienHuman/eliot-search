@@ -100,10 +100,8 @@ impl std::error::Error for ContextArtifactBuildError {}
 /// Exact ticket/context draft pair loaded from one immutable Git tree.
 #[derive(Clone, Debug)]
 pub(super) struct DraftPair {
-    pub(super) ticket_path: String,
     pub(super) context_path: String,
     pub(super) ticket: TomlValue,
-    pub(super) context: TomlValue,
     pub(super) sources: Vec<String>,
     pub(super) selectors: Vec<String>,
     pub(super) handoff_slots: Vec<String>,
@@ -131,7 +129,7 @@ pub(super) struct Preflight {
 }
 
 /// Fully assembled ordinary candidate files before or after local publication.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CandidateBuild {
     candidate: Value,
     candidate_bytes: Vec<u8>,
@@ -141,7 +139,7 @@ pub struct CandidateBuild {
 }
 
 impl CandidateBuild {
-    pub(super) fn new(
+    pub(super) const fn new(
         candidate: Value,
         candidate_bytes: Vec<u8>,
         bundle_bytes: Vec<u8>,
@@ -159,7 +157,7 @@ impl CandidateBuild {
 
     /// Candidate metadata value.
     #[must_use]
-    pub fn candidate(&self) -> &Value {
+    pub const fn candidate(&self) -> &Value {
         &self.candidate
     }
 

@@ -218,7 +218,7 @@ source_ceiling_class = "ORDINARY"
         }
         self.write_text(
             ".github/workflows/manual.yml",
-            r#"name: Manual
+            r"name: Manual
 on:
   workflow_dispatch:
 permissions:
@@ -230,7 +230,7 @@ jobs:
       - uses: actions/checkout@0000000000000000000000000000000000000000
         with:
           persist-credentials: false
-"#,
+",
         );
     }
 }

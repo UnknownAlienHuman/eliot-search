@@ -57,14 +57,12 @@ pub(super) fn validate(
                 }
                 require(
                     errors,
-                    table.get("mandatory").and_then(Value::as_bool)
-                        == Some(true),
+                    table.get("mandatory").and_then(Value::as_bool) == Some(true),
                     "coverage case must be mandatory",
                 );
                 require(
                     errors,
-                    table.get("result").and_then(Value::as_str)
-                        == Some("UNAVAILABLE"),
+                    table.get("result").and_then(Value::as_str) == Some("UNAVAILABLE"),
                     "coverage case must remain UNAVAILABLE",
                 );
             } else {
@@ -82,8 +80,7 @@ pub(super) fn validate(
 
     require(
         errors,
-        string(manifest, "operation_registry")
-            == Some("swarm/coverage/operations.toml"),
+        string(manifest, "operation_registry") == Some("swarm/coverage/operations.toml"),
         "coverage manifest operation registry link mismatch",
     );
     require(
@@ -93,15 +90,13 @@ pub(super) fn validate(
     );
     require(
         errors,
-        integer(manifest, "package_assignment_task_count")
-            == i64::try_from(assignment_count).ok()
+        integer(manifest, "package_assignment_task_count") == i64::try_from(assignment_count).ok()
             && assignment_count == 45,
         "coverage manifest assignment count mismatch",
     );
     require(
         errors,
-        integer(manifest, "delivery_slice_count")
-            == i64::try_from(delivery_count).ok()
+        integer(manifest, "delivery_slice_count") == i64::try_from(delivery_count).ok()
             && delivery_count == 19,
         "coverage manifest delivery task count mismatch",
     );
@@ -113,14 +108,12 @@ pub(super) fn validate(
     );
     require(
         errors,
-        string(launch, "active_stage") == Some("P00")
-            && integer(launch, "active_wave") == Some(0),
+        string(launch, "active_stage") == Some("P00") && integer(launch, "active_wave") == Some(0),
         "launch authority moved from P00/W0",
     );
     require(
         errors,
-        string_list(launch, "authorized_packages")
-            == ["search-contracts".to_owned()],
+        string_list(launch, "authorized_packages") == ["search-contracts".to_owned()],
         "authorized package set changed",
     );
     case_count

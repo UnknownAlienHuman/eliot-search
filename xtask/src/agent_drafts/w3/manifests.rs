@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use toml::Value;
 
@@ -65,8 +65,7 @@ fn validate_cases(cases: &Value, errors: &mut Vec<String>) {
             rows.iter().any(|row| {
                 row.as_table().is_none_or(|table| {
                     table.get("mandatory").and_then(Value::as_bool) != Some(true)
-                        || table.get("result").and_then(Value::as_str)
-                            != Some("UNAVAILABLE")
+                        || table.get("result").and_then(Value::as_str) != Some("UNAVAILABLE")
                 })
             })
         })
@@ -80,7 +79,11 @@ fn validate_workflow(root: &Path, errors: &mut Vec<String>) {
         errors.push("missing manual workflow".to_owned());
         return;
     };
-    for token in ["workflow_dispatch:", "contents: read", "persist-credentials: false"] {
+    for token in [
+        "workflow_dispatch:",
+        "contents: read",
+        "persist-credentials: false",
+    ] {
         if !workflow.contains(token) {
             errors.push(format!("workflow missing {token}"));
         }
@@ -127,7 +130,7 @@ fn collect_files(root: &Path, directory: &Path, files: &mut Vec<String>) {
     }
 }
 
-fn ignored(path: &PathBuf) -> bool {
+fn ignored(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| matches!(name, "README.md" | ".gitkeep" | ".gitignore"))

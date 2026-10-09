@@ -2,9 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::statements::{
-    Statement, StatementKind, collect_statements, identifier_name,
-};
+use super::statements::{Statement, StatementKind, collect_statements, identifier_name};
 use super::tokens::code_tokens;
 
 mod bindings;
@@ -53,7 +51,8 @@ pub(super) fn direct_tainted_bindings(code: &str, vendor_module: &str) -> Direct
             continue;
         }
         if let Some((name, binding)) = extern_binding(declaration)
-            && name == vendor_module && binding != "_"
+            && name == vendor_module
+            && binding != "_"
         {
             identifiers.insert(binding.to_owned());
             merge_binding(&mut direct.bindings, binding.to_owned(), declaration.public);
@@ -78,7 +77,8 @@ fn extern_binding<'a>(declaration: &Statement<'a>) -> Option<(&'a str, &'a str)>
 }
 
 fn merge_binding(bindings: &mut BTreeMap<String, bool>, name: String, exportable: bool) {
-    bindings.entry(name)
+    bindings
+        .entry(name)
         .and_modify(|current| *current |= exportable)
         .or_insert(exportable);
 }
@@ -90,8 +90,12 @@ pub(super) fn collect_use_statements(code: &str) -> Vec<UseStatement> {
     }
 }
 
-fn invalid_statement(line: usize) -> UseStatement {
-    UseStatement { line, public: false, leaves: None }
+const fn invalid_statement(line: usize) -> UseStatement {
+    UseStatement {
+        line,
+        public: false,
+        leaves: None,
+    }
 }
 
 fn use_declarations(declarations: &[Statement<'_>]) -> Vec<UseStatement> {
