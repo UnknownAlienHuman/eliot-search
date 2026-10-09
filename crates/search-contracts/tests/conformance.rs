@@ -290,13 +290,16 @@ fn epoch_and_revision_sentinels_fail_closed() {
     assert!(OwnerEpoch::new(0).is_err());
     assert_eq!(OwnerEpoch::new(1).expect("owner epoch").get(), 1);
     assert!(Epoch::new(-1).is_err());
+    assert!(Epoch::new(MAX_QDRANT_EPOCH + 1).is_err());
     assert!(Epoch::new(i64::MAX).is_err());
-    assert_eq!(Epoch::new(0).expect("epoch zero").get(), 0);
-    assert!(
-        Epoch::new(i64::MAX - 1)
+    assert_eq!(Epoch::new(0).expect("epoch zero").get(), MIN_QDRANT_EPOCH);
+    assert_eq!(
+        Epoch::new(MAX_QDRANT_EPOCH)
             .expect("last epoch")
             .checked_next()
-            .is_err()
+            .expect_err("no epoch above the maximum")
+            .kind(),
+        ContractErrorKind::EpochExhausted
     );
     assert!(NonZeroRevision::new(0).is_err());
     assert!(

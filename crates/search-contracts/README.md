@@ -2,7 +2,7 @@
 
 **C00 — Versioned contracts and canonical identity foundation.**
 
-**Status:** The P00 contract kernel, closed canonical codec and #237 shared real-digest/bounded-sink foundation are implemented. Indexed schema work continues under #258; integration and W0/G0 qualification remain separate gates.
+**Status:** The P00 contract kernel, closed canonical codec, #237 shared real-digest/bounded-sink foundation and [indexed contract v1](INDEXED_CONTRACT.md) under #258 are implemented. Indexed consumer integration and W0/G0 qualification remain separate gates.
 
 This crate defines the bounded, vendor-neutral wire and domain vocabulary shared by every ELIOT Search package. It is also the sole production owner of the closed `CanonicalValue` vocabulary and canonical JSON/CBOR byte encoding.
 

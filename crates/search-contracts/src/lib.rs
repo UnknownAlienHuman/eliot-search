@@ -45,6 +45,7 @@ pub mod canonical;
 pub mod digest;
 pub mod error;
 pub mod ids;
+pub mod indexed;
 pub mod lifecycle;
 pub mod protocol;
 pub mod query;

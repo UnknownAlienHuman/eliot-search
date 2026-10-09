@@ -204,13 +204,32 @@ impl OwnerEpoch {
     }
 }
 
-/// Non-negative epoch representable by signed 64-bit persistence layers.
+/// Minimum collection epoch.
+///
+/// `0` is the empty initial generation and never a published point.
+pub const MIN_QDRANT_EPOCH: i64 = 0;
+
+/// Maximum collection epoch.
+///
+/// The largest bound of the contiguous integer domain that is exactly
+/// representable by the provider range boundary. Larger even values are
+/// intentionally rejected, and validation uses integers only.
+///
+/// The value stays readable and can still be the last published epoch, but
+/// it can never reserve another one.
+pub const MAX_QDRANT_EPOCH: i64 = 9_007_199_254_740_992;
+
+/// Collection epoch closed to the Qdrant-compatible logical domain.
+///
+/// The signed 64-bit representation is retained for the persistence
+/// layers; the closed bound is a storage bound, not an authority claim. A
+/// bare epoch is never compared across collection generations.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Epoch(i64);
 
 impl Epoch {
     pub fn new(value: i64) -> Result<Self, ContractError> {
-        if !(0..i64::MAX).contains(&value) {
+        if !(MIN_QDRANT_EPOCH..=MAX_QDRANT_EPOCH).contains(&value) {
             return Err(ContractError::new(
                 ContractErrorKind::EpochOutOfRange,
                 "epoch",
@@ -224,17 +243,16 @@ impl Epoch {
         self.0
     }
 
+    /// Advances by one, refusing at the closed domain maximum.
+    ///
+    /// The next publication past [`MAX_QDRANT_EPOCH`] belongs to a new
+    /// collection generation, not to a wider epoch.
     pub fn checked_next(self) -> Result<Self, ContractError> {
         let next = self
             .0
             .checked_add(1)
+            .filter(|candidate| *candidate <= MAX_QDRANT_EPOCH)
             .ok_or_else(|| ContractError::new(ContractErrorKind::EpochExhausted, "epoch"))?;
-        if next == i64::MAX {
-            return Err(ContractError::new(
-                ContractErrorKind::EpochExhausted,
-                "epoch",
-            ));
-        }
         Ok(Self(next))
     }
 }

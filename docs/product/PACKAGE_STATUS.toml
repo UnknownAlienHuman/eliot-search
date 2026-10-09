@@ -27,10 +27,12 @@ disposition = "active"
 [[package]]
 name = "search-contracts"
 path = "crates/search-contracts"
-execution_chain = ["#258"]
+execution_chain = ["#97"]
+consumers = ["#259", "#260", "#262", "#263"]
 check_clippy_evidence = "exact_pass"
-# #237 source gates passed at 0622b8094f89aae776a051a6aba79bb38e7d771d;
-# exact publication SHA and guard outcome are recorded in PR #319.
+# #237 shared foundation and #258 indexed contract source gates passed.
+# Exact publication SHAs, focused fixtures and source-only guard outcomes
+# are recorded in their delivery PRs; indexed consumers remain separate owners.
 
 [[package]]
 name = "search-domain"
