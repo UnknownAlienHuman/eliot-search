@@ -41,17 +41,60 @@ normative registry, was incorrect.
 
 Other early issues already closed before this reconciliation are not reopened.
 
-## Documentation contradiction
+## Documentation contradiction resolved by this branch
 
-At the audited source revision, 26 active README files still contain the obsolete sentence
+At the audited `main` revision, 26 active README files still contained the obsolete sentence
 `behavior is intentionally unimplemented`, including domain, ports, query, source, lifecycle,
 Qdrant and edge packages with substantive source.
 
-#222 must replace active stale wording with evidence-bounded status and point every workspace member
-to `docs/product/PACKAGE_STATUS.toml`. Historical scaffold documents may retain old wording only when
-clearly archived and non-authoritative.
+This branch replaces all 26 active false scaffold claims with evidence-bounded status, preserves
+`Owns` / `Must not own` boundaries, names the selected current owner or successor, and links every
+workspace member to `docs/product/PACKAGE_STATUS.toml`. Selected obsolete point-identity,
+projection-planner and custom code-enricher paths are marked `legacy_profile`; optional workers and
+adapters remain disabled rather than being advertised as available.
+
+Historical scaffold documents may retain old wording only when clearly archived and non-authoritative.
+
+## Central status matrix
+
+`docs/product/PACKAGE_STATUS.toml` is the machine-readable inventory for the 48 active Cargo workspace
+members. Schema v3 uses closed status values and structured references:
+
+```text
+execution_chain      ordered current implementation references
+consumers            downstream users, not alternate owners
+optional_followups   disabled/optional profiles, not baseline prerequisites
+product_path         not_asserted | absent | partial | integrated | legacy_only
+check_clippy_evidence
+                     not_asserted | not_run | historical_pass | historical_fail |
+                     exact_pass | exact_fail
+disposition          active | legacy_profile | optional_disabled |
+                     evaluation_only | tooling_only
+```
+
+The defaults record `contract_defined=true` and `source_present=true` only. They deliberately do not
+assert product integration, exact-head check/Clippy evidence, native qualification or public enablement.
+A later tooling guard under #138 must compare the matrix one-to-one with `cargo metadata --locked
+--offline --no-deps` and reject stale README/status drift.
+
+## Agent authority after cutover
+
+```text
+root/package AGENTS.md
+→ #97 coordinator
+→ exact current owner issue/PR
+→ docs/product/PACKAGE_STATUS.toml
+→ current source
+→ package README responsibility notes
+→ historical handoff/issues only for archaeology
+```
+
+A stale issue or historical README never authorizes a second package, parser, catalog, client,
+protocol, watcher, restore journal, search index or release workflow.
 
 ## Evidence boundary
 
-This reconciliation changes task authority and documentation planning only. It does not assert a
-fresh Cargo, Clippy, test, Windows, Qdrant, fault, scale or installed-product PASS.
+This reconciliation changes task authority and documentation status only. It does not assert a fresh
+Cargo, Clippy, test, Windows, Qdrant, fault, scale or installed-product PASS. `SOURCE_PRESENT` remains
+separate from `PRODUCT_PATH_INTEGRATED`, `LIVE_NATIVE_QUALIFIED` and
+`PUBLIC_CAPABILITY_ENABLED`.
