@@ -11,7 +11,7 @@
 
 schema_version = 3
 snapshot_date = "2026-10-09"
-snapshot_source_sha = "2ae7ecbdf7dced3cc951e5e162dbba10def03dbc"
+snapshot_source_sha = "7a4471d6505e21f818beca934259b4222710d1dd"
 coordinator = "#97"
 documentation_owner = "#97"
 
@@ -153,7 +153,7 @@ execution_chain = ["#260", "#261", "#264"]
 [[package]]
 name = "search-epoch-pins"
 path = "crates/search-index-qdrant/search-epoch-pins"
-execution_chain = ["#126", "#261", "#264"]
+execution_chain = ["#126", "#261", "#285", "#276", "#264"]
 
 [[package]]
 name = "search-index-reclaimer"
@@ -163,12 +163,12 @@ execution_chain = ["#126", "#134"]
 [[package]]
 name = "search-access"
 path = "crates/search-query/search-access"
-execution_chain = ["#117", "#272", "#125", "#264"]
+execution_chain = ["#272", "#274", "#279", "#264"]
 
 [[package]]
 name = "search-overlay"
 path = "crates/search-query/search-overlay"
-execution_chain = ["#130", "#125"]
+execution_chain = ["#130", "#274", "#279"]
 
 [[package]]
 name = "search-exact"
@@ -178,42 +178,42 @@ execution_chain = ["#246", "#247", "#248", "#249"]
 [[package]]
 name = "search-subject-resolver"
 path = "crates/search-query/search-subject-resolver"
-execution_chain = ["#213", "#232"]
+execution_chain = ["#213", "#232", "#281"]
 
 [[package]]
 name = "search-query-planner"
 path = "crates/search-query/search-query-planner"
-execution_chain = ["#125", "#213", "#221", "#264"]
+execution_chain = ["#277", "#278", "#279", "#281", "#264"]
 
 [[package]]
 name = "search-retrieval-executor"
 path = "crates/search-query/search-retrieval-executor"
-execution_chain = ["#125", "#127", "#263", "#264"]
+execution_chain = ["#278", "#279", "#264"]
 
 [[package]]
 name = "search-candidate-validator"
 path = "crates/search-query/search-candidate-validator"
-execution_chain = ["#125", "#127", "#264"]
+execution_chain = ["#279", "#264"]
 
 [[package]]
 name = "search-comparator"
 path = "crates/search-query/search-comparator"
-execution_chain = ["#213", "#221"]
+execution_chain = ["#278", "#279", "#281"]
 
 [[package]]
 name = "search-handles"
 path = "crates/search-query/search-handles"
-execution_chain = ["#118", "#264"]
+execution_chain = ["#282", "#283", "#274", "#275", "#264"]
 
 [[package]]
 name = "search-result-projector"
 path = "crates/search-query/search-result-projector"
-execution_chain = ["#125", "#133", "#213", "#221", "#264"]
+execution_chain = ["#279", "#280", "#281", "#264"]
 
 [[package]]
 name = "search-continuation"
 path = "crates/search-query/search-continuation"
-execution_chain = ["#118", "#127", "#264"]
+execution_chain = ["#284", "#285", "#274", "#276", "#264"]
 
 [[package]]
 name = "search-retention"
@@ -230,7 +230,7 @@ disposition = "evaluation_only"
 [[package]]
 name = "search-provider-protocol"
 path = "crates/search-provider-protocol"
-execution_chain = ["#235", "#116"]
+execution_chain = ["#235", "#116", "#277", "#280", "#281"]
 
 [[package]]
 name = "search-eliot-adapter"
@@ -249,7 +249,7 @@ disposition = "optional_disabled"
 [[package]]
 name = "eliot-searchd"
 path = "bins/eliot-searchd"
-execution_chain = ["#266", "#269", "#270", "#271", "#109", "#116", "#127", "#264"]
+execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#274", "#275", "#276", "#279", "#280", "#281", "#264"]
 product_path = "partial"
 
 [[package]]
