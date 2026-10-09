@@ -10,10 +10,10 @@
 # `consumers` and `optional_followups` are not alternate owners.
 
 schema_version = 3
-snapshot_date = "2026-10-08"
-snapshot_source_sha = "3ccef79a6850a9fd4caa7941c40e4a331cf4e0dc"
+snapshot_date = "2026-10-09"
+snapshot_source_sha = "19481855e44c1e98788e16918471127b5457d237"
 coordinator = "#97"
-documentation_owner = "#222"
+documentation_owner = "#97"
 
 [defaults]
 contract_defined = true
@@ -112,7 +112,7 @@ disposition = "legacy_profile"
 [[package]]
 name = "search-lexical"
 path = "crates/search-lexical"
-execution_chain = ["#122", "#221"]
+execution_chain = ["#252", "#253", "#254", "#221"]
 
 [[package]]
 name = "search-model-provider"
@@ -173,7 +173,7 @@ execution_chain = ["#130", "#125"]
 [[package]]
 name = "search-exact"
 path = "crates/search-query/search-exact"
-execution_chain = ["#131"]
+execution_chain = ["#246", "#247", "#248", "#249"]
 
 [[package]]
 name = "search-subject-resolver"
@@ -285,6 +285,6 @@ execution_chain = ["#115", "#120"]
 [[package]]
 name = "xtask"
 path = "xtask"
-execution_chain = ["#138", "#214", "#240"]
+execution_chain = ["#250", "#251", "#214", "#240"]
 product_path = "absent"
 disposition = "tooling_only"
