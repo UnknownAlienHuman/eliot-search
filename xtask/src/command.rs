@@ -38,7 +38,8 @@ const USAGE: &str = "usage:\n\
   xtask validate ticket-issuance-plan [--root <path>] [--json]\n\
   xtask validate implementation-program [--json]\n\
   xtask validate p00-foundation-acceptance [--json]\n\
-  xtask validate qdrant-boundary [--json]\n";
+  xtask validate qdrant-boundary [--json]\n\
+  xtask validate canonical-digest-guard\n";
 
 pub fn run(args: &[String]) -> ExitCode {
     let Some((command, rest)) = args.split_first() else {
@@ -60,6 +61,24 @@ pub fn run(args: &[String]) -> ExitCode {
 }
 
 fn run_validate(args: &[String]) -> ExitCode {
+    if args == ["canonical-digest-guard", "--inventory"] {
+        return match xtask::canonical_digest_guard::inventory(std::path::Path::new(".")) {
+            Ok(value) => { println!("{value}"); ExitCode::SUCCESS }
+            Err(error) => { eprintln!("{error}"); ExitCode::FAILURE }
+        };
+    }
+    if args == ["canonical-digest-guard"] {
+        return match xtask::canonical_digest_guard::validate(std::path::Path::new(".")) {
+            Ok(()) => {
+                println!("canonical-digest-guard: PASS (source classification only)");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("canonical-digest-guard: FAIL\n{error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if args == ["accepted-evidence-digest"] {
         return evidence::validate_digest();
     }

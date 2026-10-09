@@ -306,6 +306,31 @@ revision_newtype!(
     PolicyRevision,
 );
 
+/// Shared 32-byte digest wrapper definitions.
+///
+/// The macro gives every digest-shaped type identical storage, decode,
+/// access and formatting code, but the types are not one semantic class:
+///
+/// - `Blake3Digest32` and `Sha256Digest32` are algorithm-qualified. The
+///   named algorithm is load-bearing, so real compute reaches them only
+///   through the crate-private `from_computed_bytes` added after this
+///   invocation, and stored values enter through the named
+///   `from_stored_bytes` decode path.
+/// - `SourceOwnerGeneration`, `ObjectResidencyKeyDigest`,
+///   `PlanFingerprint`, `QuerySnapshotFingerprint`, `ArtifactDigest` and
+///   `HandleTokenDigest` are digest-shaped semantic identities. Each owning
+///   package defines their algorithm, domain and profile, and the bytes may
+///   come from a legacy mixer, a generation counter or an owner-specific
+///   canonical preimage. Their `from_bytes` and `parse_hex` entry points are
+///   decode-only compatibility and prove nothing about the producing
+///   algorithm; they are never relabelled as real algorithm output.
+///
+/// `HandleTokenDigest` is deliberately outside this macro. Its bytes are
+/// secret-derived: it keeps the same 32-byte storage, the same decode paths
+/// and the same ordering as the types above, but `Debug` and `Display` emit
+/// constant redacted strings instead of hexadecimal. A formatting call
+/// therefore cannot disclose a handle token. Callers that legitimately need
+/// the exact bytes use `as_bytes`, which is unchanged.
 macro_rules! digest_newtype {
     ($($name:ident),+ $(,)?) => {
         $(
@@ -313,6 +338,20 @@ macro_rules! digest_newtype {
             pub struct $name([u8; 32]);
 
             impl $name {
+                /// Named stored/wire decode path for existing bytes.
+                ///
+                /// Honest about what it proves: it reloads bytes a producer
+                /// persisted. It runs no algorithm and certifies none.
+                ///
+                /// This path is used by codecs and other readers of
+                /// already-durable values. Real algorithm compute does not
+                /// use it.
+                #[must_use]
+                pub const fn from_stored_bytes(bytes: [u8; 32]) -> Self {
+                    Self(bytes)
+                }
+
+                /// Decode-only compatibility; does not execute or verify an algorithm.
                 #[must_use]
                 pub const fn from_bytes(bytes: [u8; 32]) -> Self {
                     Self(bytes)
@@ -353,8 +392,77 @@ digest_newtype!(
     PlanFingerprint,
     QuerySnapshotFingerprint,
     ArtifactDigest,
-    HandleTokenDigest,
 );
+
+impl Blake3Digest32 {
+    pub(crate) const fn from_computed_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl Sha256Digest32 {
+    pub(crate) const fn from_computed_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+}
+
+/// Secret-derived digest of an opaque handle token.
+///
+/// This type intentionally departs from `digest_newtype`. It is the only
+/// digest-shaped contract value whose bytes are secret-derived, so it keeps
+/// 32-byte storage and the full decode surface but emits constant redacted
+/// strings from `Debug` and `Display`. Exact bytes remain readable through
+/// `as_bytes` for constant-time comparison and durable restore.
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct HandleTokenDigest([u8; 32]);
+
+impl HandleTokenDigest {
+    /// Named stored/wire decode path for existing bytes.
+    ///
+    /// It reloads bytes a producer persisted. It runs no algorithm and
+    /// certifies none.
+    #[must_use]
+    pub const fn from_stored_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// Decode-only compatibility; does not execute or verify an algorithm.
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
+    pub fn parse_hex(value: &str) -> Result<Self, ContractError> {
+        hex_decode(value, "HandleTokenDigest").map(Self)
+    }
+}
+
+/// Constant redaction. No secret byte, length or prefix can reach a log or
+/// diagnostic through this implementation.
+impl fmt::Debug for HandleTokenDigest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("HandleTokenDigest(<redacted>)")
+    }
+}
+
+impl fmt::Display for HandleTokenDigest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("<redacted>")
+    }
+}
+
+impl FromStr for HandleTokenDigest {
+    type Err = ContractError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse_hex(value)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DigestAlgorithm {
@@ -369,8 +477,44 @@ crate::impl_wire_enum!(DigestAlgorithm {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct VersionedContentDigest {
-    pub algorithm: DigestAlgorithm,
-    pub bytes: [u8; 32],
+    algorithm: DigestAlgorithm,
+    bytes: [u8; 32],
+}
+
+impl VersionedContentDigest {
+    /// Restore an externally tagged stored value; no algorithm verification occurs.
+    #[must_use]
+    pub const fn from_stored_bytes(algorithm: DigestAlgorithm, bytes: [u8; 32]) -> Self {
+        Self { algorithm, bytes }
+    }
+
+    /// Preserve a typed algorithm tag. A decoded input remains decode-only.
+    #[must_use]
+    pub const fn from_blake3(digest: Blake3Digest32) -> Self {
+        Self {
+            algorithm: DigestAlgorithm::Blake3_256,
+            bytes: *digest.as_bytes(),
+        }
+    }
+
+    /// Preserve a typed algorithm tag. A decoded input remains decode-only.
+    #[must_use]
+    pub const fn from_sha256(digest: Sha256Digest32) -> Self {
+        Self {
+            algorithm: DigestAlgorithm::Sha256,
+            bytes: *digest.as_bytes(),
+        }
+    }
+
+    #[must_use]
+    pub const fn algorithm(&self) -> DigestAlgorithm {
+        self.algorithm
+    }
+
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.bytes
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

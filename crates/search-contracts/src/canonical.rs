@@ -256,7 +256,10 @@ impl CanonicalValue {
 pub fn to_canonical_json(value: &CanonicalValue) -> Result<CanonicalBytes, ContractError> {
     value.validate()?;
     let mut output = Vec::new();
-    encode_json(value, &mut output);
+    let mut sink = CheckedSink::new(MAX_CANONICAL_BYTES, |bytes| {
+        append_bounded_vec(&mut output, bytes, MAX_CANONICAL_BYTES)
+    })?;
+    encode_json(value, &mut sink)?;
     CanonicalBytes::from_validated(output)
 }
 
@@ -284,12 +287,14 @@ pub fn parse_canonical_json(bytes: &[u8]) -> Result<CanonicalValue, ContractErro
     Ok(value)
 }
 
-/// Encode RFC 8949 deterministic CBOR: definite lengths, shortest integers,
+/// Encode RFC 8949 section 4.2.3 length-first deterministic CBOR:
+/// definite lengths, shortest integers,
 /// and map keys ordered by encoded-key length then lexicographically.
 pub fn to_canonical_cbor(value: &CanonicalValue) -> Result<CanonicalBytes, ContractError> {
-    value.validate()?;
     let mut output = Vec::new();
-    encode_cbor(value, &mut output)?;
+    stream_canonical_cbor(value, MAX_CANONICAL_BYTES, |bytes| {
+        append_bounded_vec(&mut output, bytes, MAX_CANONICAL_BYTES)
+    })?;
     CanonicalBytes::from_validated(output)
 }
 
@@ -317,8 +322,10 @@ pub fn parse_canonical_cbor(bytes: &[u8]) -> Result<CanonicalValue, ContractErro
     Ok(value)
 }
 
-/// Construct a bounded domain-separated hash preimage. Cryptographic hashing
-/// remains an explicit caller operation; the exact bytes are deterministic.
+/// Legacy bounded preimage compatibility for existing owner domains.
+///
+/// New computation uses the validated representation-bound digest APIs. This
+/// helper preserves the historical ASCII-domain bytes and returns no authority.
 pub fn domain_separated_preimage(
     domain: &'static str,
     value: &CanonicalValue,
@@ -329,20 +336,94 @@ pub fn domain_separated_preimage(
             "domain_separator",
         ));
     }
-    let payload = to_canonical_cbor(value)?;
-    let total = domain.len().saturating_add(1).saturating_add(payload.len());
-    if total > MAX_CANONICAL_BYTES {
-        return Err(ContractError::oversize(
-            "domain_separated_preimage",
-            MAX_CANONICAL_BYTES,
-            total,
-        ));
-    }
-    let mut bytes = Vec::with_capacity(total);
-    bytes.extend_from_slice(domain.as_bytes());
-    bytes.push(0);
-    bytes.extend_from_slice(payload.as_slice());
+    value.validate()?;
+    let mut bytes = Vec::new();
+    let mut sink = CheckedSink::new(MAX_CANONICAL_BYTES, |part| {
+        append_bounded_vec(&mut bytes, part, MAX_CANONICAL_BYTES)
+    })?;
+    sink.write(domain.as_bytes())?;
+    sink.write(&[0])?;
+    encode_cbor(value, &mut sink)?;
     CanonicalBytes::from_validated(bytes)
+}
+
+/// The vector API and digest API use this same encoder and byte ceiling.
+pub(crate) fn stream_canonical_cbor<F>(
+    value: &CanonicalValue,
+    max_bytes: usize,
+    write: F,
+) -> Result<(), ContractError>
+where
+    F: FnMut(&[u8]) -> Result<(), ContractError>,
+{
+    value.validate()?;
+    let mut sink = CheckedSink::new(max_bytes, write)?;
+    encode_cbor(value, &mut sink)
+}
+
+struct CheckedSink<F> {
+    write: F,
+    length: usize,
+    ceiling: usize,
+}
+
+impl<F: FnMut(&[u8]) -> Result<(), ContractError>> CheckedSink<F> {
+    fn new(ceiling: usize, write: F) -> Result<Self, ContractError> {
+        if ceiling > MAX_CANONICAL_BYTES {
+            return Err(ContractError::oversize(
+                "canonical_sink_limit",
+                MAX_CANONICAL_BYTES,
+                ceiling,
+            ));
+        }
+        Ok(Self {
+            write,
+            length: 0,
+            ceiling,
+        })
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> Result<(), ContractError> {
+        let next = self
+            .length
+            .checked_add(bytes.len())
+            .ok_or_else(|| ContractError::oversize("canonical_sink", self.ceiling, usize::MAX))?;
+        if next > self.ceiling {
+            return Err(ContractError::oversize(
+                "canonical_sink",
+                self.ceiling,
+                next,
+            ));
+        }
+        (self.write)(bytes)?;
+        self.length = next;
+        Ok(())
+    }
+}
+
+fn append_bounded_vec(
+    output: &mut Vec<u8>,
+    bytes: &[u8],
+    ceiling: usize,
+) -> Result<(), ContractError> {
+    let next = output
+        .len()
+        .checked_add(bytes.len())
+        .ok_or_else(|| ContractError::oversize("canonical_vector", ceiling, usize::MAX))?;
+    if next > ceiling {
+        return Err(ContractError::oversize("canonical_vector", ceiling, next));
+    }
+    if next > output.capacity() {
+        // Explicitly cap amortized growth rather than letting Vec double past the ceiling.
+        let capacity = next
+            .max(output.capacity().saturating_mul(2).max(1024))
+            .min(ceiling);
+        output
+            .try_reserve_exact(capacity - output.len())
+            .map_err(|_| ContractError::malformed("canonical_allocation"))?;
+    }
+    output.extend_from_slice(bytes);
+    Ok(())
 }
 
 fn validate_value(value: &CanonicalValue, depth: usize) -> Result<(), ContractError> {
@@ -391,111 +472,145 @@ fn validate_value(value: &CanonicalValue, depth: usize) -> Result<(), ContractEr
     }
 }
 
-fn encode_json(value: &CanonicalValue, output: &mut Vec<u8>) {
+fn encode_json<F: FnMut(&[u8]) -> Result<(), ContractError>>(
+    value: &CanonicalValue,
+    output: &mut CheckedSink<F>,
+) -> Result<(), ContractError> {
     match value {
-        CanonicalValue::Null => output.extend_from_slice(b"null"),
-        CanonicalValue::Bool(true) => output.extend_from_slice(b"true"),
-        CanonicalValue::Bool(false) => output.extend_from_slice(b"false"),
-        CanonicalValue::I64(value) => output.extend_from_slice(value.to_string().as_bytes()),
-        CanonicalValue::U64(value) => output.extend_from_slice(value.to_string().as_bytes()),
-        CanonicalValue::Text(value) => encode_json_string(value.as_str(), output),
+        CanonicalValue::Null => output.write(b"null")?,
+        CanonicalValue::Bool(true) => output.write(b"true")?,
+        CanonicalValue::Bool(false) => output.write(b"false")?,
+        CanonicalValue::I64(value) => output.write(value.to_string().as_bytes())?,
+        CanonicalValue::U64(value) => output.write(value.to_string().as_bytes())?,
+        CanonicalValue::Text(value) => encode_json_string(value.as_str(), output)?,
         CanonicalValue::Bytes(value) => {
-            output.extend_from_slice(b"{\"$bytes\":");
-            encode_json_string(&base64url_encode(value.as_slice()), output);
-            output.push(b'}');
+            output.write(b"{\"$bytes\":\"")?;
+            encode_base64url(value.as_slice(), output)?;
+            output.write(b"\"}")?;
         }
         CanonicalValue::Array(values) => {
-            output.push(b'[');
+            output.write(b"[")?;
             for (index, item) in values.iter().enumerate() {
                 if index != 0 {
-                    output.push(b',');
+                    output.write(b",")?;
                 }
-                encode_json(item, output);
+                encode_json(item, output)?;
             }
-            output.push(b']');
+            output.write(b"]")?;
         }
         CanonicalValue::Object(values) => {
-            output.push(b'{');
+            output.write(b"{")?;
             for (index, (key, item)) in values.iter().enumerate() {
                 if index != 0 {
-                    output.push(b',');
+                    output.write(b",")?;
                 }
-                encode_json_string(key.as_str(), output);
-                output.push(b':');
-                encode_json(item, output);
+                encode_json_string(key.as_str(), output)?;
+                output.write(b":")?;
+                encode_json(item, output)?;
             }
-            output.push(b'}');
+            output.write(b"}")?;
         }
     }
+    Ok(())
 }
 
-fn encode_json_string(value: &str, output: &mut Vec<u8>) {
-    output.push(b'"');
+fn encode_json_string<F: FnMut(&[u8]) -> Result<(), ContractError>>(
+    value: &str,
+    output: &mut CheckedSink<F>,
+) -> Result<(), ContractError> {
+    output.write(b"\"")?;
     for character in value.chars() {
         match character {
-            '"' => output.extend_from_slice(br#"\""#),
-            '\\' => output.extend_from_slice(br"\\"),
-            '\u{08}' => output.extend_from_slice(br"\b"),
-            '\u{0c}' => output.extend_from_slice(br"\f"),
-            '\n' => output.extend_from_slice(br"\n"),
-            '\r' => output.extend_from_slice(br"\r"),
-            '\t' => output.extend_from_slice(br"\t"),
+            '"' => output.write(br#"\""#)?,
+            '\\' => output.write(br"\\")?,
+            '\u{08}' => output.write(br"\b")?,
+            '\u{0c}' => output.write(br"\f")?,
+            '\n' => output.write(br"\n")?,
+            '\r' => output.write(br"\r")?,
+            '\t' => output.write(br"\t")?,
             control if control <= '\u{1f}' => {
-                let code = u32::from(control);
-                output.extend_from_slice(format!("\\u{code:04x}").as_bytes());
+                const HEX: &[u8; 16] = b"0123456789abcdef";
+                let code = u32::from(control) as usize;
+                output.write(&[b'\\', b'u', b'0', b'0', HEX[code >> 4], HEX[code & 15]])?;
             }
             other => {
                 let mut buffer = [0_u8; 4];
-                output.extend_from_slice(other.encode_utf8(&mut buffer).as_bytes());
+                output.write(other.encode_utf8(&mut buffer).as_bytes())?;
             }
         }
     }
-    output.push(b'"');
+    output.write(b"\"")
 }
 
-fn encode_cbor(value: &CanonicalValue, output: &mut Vec<u8>) -> Result<(), ContractError> {
+fn encode_base64url<F: FnMut(&[u8]) -> Result<(), ContractError>>(
+    input: &[u8],
+    output: &mut CheckedSink<F>,
+) -> Result<(), ContractError> {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    for chunk in input.chunks(3) {
+        let first = chunk[0];
+        let second = chunk.get(1).copied().unwrap_or(0);
+        let third = chunk.get(2).copied().unwrap_or(0);
+        let encoded = [
+            TABLE[usize::from(first >> 2)],
+            TABLE[usize::from(((first & 3) << 4) | (second >> 4))],
+            TABLE[usize::from(((second & 15) << 2) | (third >> 6))],
+            TABLE[usize::from(third & 63)],
+        ];
+        output.write(&encoded[..=chunk.len()])?;
+    }
+    Ok(())
+}
+
+fn encode_cbor<F: FnMut(&[u8]) -> Result<(), ContractError>>(
+    value: &CanonicalValue,
+    output: &mut CheckedSink<F>,
+) -> Result<(), ContractError> {
     match value {
-        CanonicalValue::Null => output.push(0xf6),
-        CanonicalValue::Bool(false) => output.push(0xf4),
-        CanonicalValue::Bool(true) => output.push(0xf5),
-        CanonicalValue::U64(value) => encode_cbor_head(0, *value, output),
+        CanonicalValue::Null => output.write(&[0xf6])?,
+        CanonicalValue::Bool(false) => output.write(&[0xf4])?,
+        CanonicalValue::Bool(true) => output.write(&[0xf5])?,
+        CanonicalValue::U64(value) => encode_cbor_head(0, *value, output)?,
         CanonicalValue::I64(value) => {
             let encoded = u64::try_from(-1_i128 - i128::from(*value)).map_err(|_| {
                 ContractError::new(ContractErrorKind::NonCanonical, "canonical_cbor_i64")
             })?;
-            encode_cbor_head(1, encoded, output);
+            encode_cbor_head(1, encoded, output)?;
         }
         CanonicalValue::Text(value) => {
-            encode_cbor_head(3, usize_to_u64(value.len()), output);
-            output.extend_from_slice(value.as_bytes());
+            encode_cbor_head(3, usize_to_u64(value.len()), output)?;
+            output.write(value.as_bytes())?;
         }
         CanonicalValue::Bytes(value) => {
-            encode_cbor_head(2, usize_to_u64(value.len()), output);
-            output.extend_from_slice(value.as_slice());
+            encode_cbor_head(2, usize_to_u64(value.len()), output)?;
+            output.write(value.as_slice())?;
         }
         CanonicalValue::Array(values) => {
-            encode_cbor_head(4, usize_to_u64(values.len()), output);
+            encode_cbor_head(4, usize_to_u64(values.len()), output)?;
             for item in values {
                 encode_cbor(item, output)?;
             }
         }
         CanonicalValue::Object(values) => {
-            encode_cbor_head(5, usize_to_u64(values.len()), output);
-            let mut entries = Vec::with_capacity(values.len());
+            encode_cbor_head(5, usize_to_u64(values.len()), output)?;
+            let mut entries = Vec::new();
+            entries
+                .try_reserve_exact(values.len())
+                .map_err(|_| ContractError::malformed("canonical_map_allocation"))?;
             for (key, item) in values {
-                let mut encoded_key = Vec::new();
-                encode_cbor_head(3, usize_to_u64(key.len()), &mut encoded_key);
-                encoded_key.extend_from_slice(key.as_bytes());
-                entries.push((encoded_key, item));
+                entries.push((key, item));
             }
+            // All keys are text. UTF-8 length then byte order is equivalent to
+            // encoded-key length then byte order, including header boundaries.
             entries.sort_by(|left, right| {
                 left.0
                     .len()
                     .cmp(&right.0.len())
-                    .then_with(|| left.0.cmp(&right.0))
+                    .then_with(|| left.0.as_bytes().cmp(right.0.as_bytes()))
             });
             for (key, item) in entries {
-                output.extend_from_slice(&key);
+                encode_cbor_head(3, usize_to_u64(key.len()), output)?;
+                output.write(key.as_bytes())?;
                 encode_cbor(item, output)?;
             }
         }
@@ -503,26 +618,31 @@ fn encode_cbor(value: &CanonicalValue, output: &mut Vec<u8>) -> Result<(), Contr
     Ok(())
 }
 
-fn encode_cbor_head(major: u8, value: u64, output: &mut Vec<u8>) {
+fn encode_cbor_head<F: FnMut(&[u8]) -> Result<(), ContractError>>(
+    major: u8,
+    value: u64,
+    output: &mut CheckedSink<F>,
+) -> Result<(), ContractError> {
     let prefix = major << 5;
     match value {
-        0..=23 => output.push(prefix | u8::try_from(value).expect("range checked")),
+        0..=23 => output.write(&[prefix | u8::try_from(value).expect("range checked")])?,
         24..=0xff => {
-            output.extend_from_slice(&[prefix | 0x18, u8::try_from(value).expect("range checked")]);
+            output.write(&[prefix | 0x18, u8::try_from(value).expect("range checked")])?;
         }
         0x100..=0xffff => {
-            output.push(prefix | 0x19);
-            output.extend_from_slice(&u16::try_from(value).expect("range checked").to_be_bytes());
+            output.write(&[prefix | 0x19])?;
+            output.write(&u16::try_from(value).expect("range checked").to_be_bytes())?;
         }
         0x1_0000..=0xffff_ffff => {
-            output.push(prefix | 0x1a);
-            output.extend_from_slice(&u32::try_from(value).expect("range checked").to_be_bytes());
+            output.write(&[prefix | 0x1a])?;
+            output.write(&u32::try_from(value).expect("range checked").to_be_bytes())?;
         }
         _ => {
-            output.push(prefix | 0x1b);
-            output.extend_from_slice(&value.to_be_bytes());
+            output.write(&[prefix | 0x1b])?;
+            output.write(&value.to_be_bytes())?;
         }
     }
+    Ok(())
 }
 
 struct JsonParser<'a> {
@@ -1196,4 +1316,51 @@ impl DeadlineMillis {
 
 fn usize_to_u64(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod sink_tests {
+    use super::*;
+
+    #[test]
+    fn ceiling_is_checked_before_callback_or_vector_growth() {
+        let mut called = false;
+        let mut sink = CheckedSink::new(2, |_| {
+            called = true;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            sink.write(b"abc").unwrap_err().kind(),
+            ContractErrorKind::OversizePayload
+        );
+        assert_eq!(sink.length, 0);
+        assert!(!called);
+        let mut output = Vec::new();
+        assert!(append_bounded_vec(&mut output, b"abc", 2).is_err());
+        assert_eq!(output.capacity(), 0);
+    }
+
+    #[test]
+    fn streaming_propagates_callback_failure() {
+        let failure = ContractError::malformed("recording_sink");
+        assert_eq!(
+            stream_canonical_cbor(&CanonicalValue::Null, 1, |_| Err(failure.clone())),
+            Err(failure)
+        );
+    }
+
+    #[test]
+    fn streaming_and_vector_use_identical_bytes_at_exact_limit() {
+        let value = CanonicalValue::U64(u64::MAX);
+        let vector = to_canonical_cbor(&value).unwrap();
+        let mut stream = Vec::new();
+        stream_canonical_cbor(&value, vector.len(), |part| {
+            stream.extend_from_slice(part);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(stream, vector.as_slice());
+        assert!(stream_canonical_cbor(&value, vector.len() - 1, |_| Ok(())).is_err());
+    }
 }
