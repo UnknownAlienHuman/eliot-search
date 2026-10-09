@@ -15,10 +15,10 @@ fn residency_closure_round_trips_all_six_typed_domains() {
         encryption_key_domain_id: baseline_residency().encryption_key,
         retention_domain_id: baseline_residency().retention,
         erasure_domain_id: baseline_residency().erasure,
-        versioned_content_digest: VersionedContentDigest {
-            algorithm: DigestAlgorithm::Blake3_256,
-            bytes: [0x07; 32],
-        },
+        versioned_content_digest: VersionedContentDigest::from_stored_bytes(
+            DigestAlgorithm::Blake3_256,
+            [0x07; 32],
+        ),
     };
     assert_eq!(
         ResidencyClosure::from_search_object_key(&canonical),

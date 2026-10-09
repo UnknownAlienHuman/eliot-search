@@ -122,9 +122,17 @@ full workspace supply-chain audit.
 The retained daemon SHA implementation is owned by
 [#315](https://github.com/UnknownAlienHuman/eliot-search/issues/315); materializer
 framed digests are owned by [#316](https://github.com/UnknownAlienHuman/eliot-search/issues/316).
+Source-admission copied SHA/preimage migration is owned by
+[#320](https://github.com/UnknownAlienHuman/eliot-search/issues/320), and retained
+daemon BLAKE3/CNG/preimages and development fingerprints by
+[#321](https://github.com/UnknownAlienHuman/eliot-search/issues/321).
 These migrations are intentionally outside #237. Legacy profile bytes cannot be
 relabeled as new domain/schema identities.
 
-Source gates and independent review are pending until the final candidate is
-complete. No historical source-gate result is inherited by this branch. The
-final PR records exact revision, platform, toolchain, commands and outcomes.
+The final PR records the exact checked revision, platform, toolchain, scoped
+commands and independent-review outcomes. Historical source gates are not
+inherited by this branch; full product/native/Qdrant qualification is separate.
+The narrow revision-store residency fixture uses the explicit stored-byte
+constructor after digest fields became private. Its consumer check passes;
+strict consumer Clippy has nine existing diagnostics tracked under #270, and
+is not included in the passing contracts/guard claim.
