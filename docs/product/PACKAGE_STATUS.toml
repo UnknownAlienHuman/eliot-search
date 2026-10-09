@@ -11,7 +11,7 @@
 
 schema_version = 3
 snapshot_date = "2026-10-09"
-snapshot_source_sha = "a9acbe77ad39588bda42865033c4f8557b4dbebd"
+snapshot_source_sha = "fb97705c74a5ab3dd6efb1ff0f2da5e1c0c4afdf"
 coordinator = "#97"
 documentation_owner = "#97"
 
@@ -50,16 +50,19 @@ execution_chain = ["#238", "#109"]
 name = "search-runtime-owner"
 path = "crates/search-runtime/search-runtime-owner"
 execution_chain = ["#266", "#267"]
+consumers = ["#244", "#245"]
 
 [[package]]
 name = "search-os-secrets"
 path = "crates/search-runtime/search-os-secrets"
 execution_chain = ["#115", "#120"]
+consumers = ["#245"]
 
 [[package]]
 name = "search-control-redb"
 path = "crates/search-control-redb"
 execution_chain = ["#266", "#268", "#269", "#261", "#272"]
+consumers = ["#301", "#302", "#304", "#305"]
 
 [[package]]
 name = "search-source-admission"
@@ -89,17 +92,20 @@ execution_chain = ["#267", "#129"]
 [[package]]
 name = "search-revision-store"
 path = "crates/search-source/search-revision-store"
-execution_chain = ["#111", "#270", "#134"]
+execution_chain = ["#111", "#270", "#301", "#302"]
+consumers = ["#243", "#244", "#245"]
 
 [[package]]
 name = "search-materializer"
 path = "crates/search-prep/search-materializer"
 execution_chain = ["#112", "#226", "#227", "#216"]
+consumers = ["#302", "#243", "#244", "#245"]
 
 [[package]]
 name = "search-unitizer"
 path = "crates/search-prep/search-unitizer"
 execution_chain = ["#257", "#226"]
+consumers = ["#302", "#243", "#244", "#245"]
 
 [[package]]
 name = "search-code-enricher"
@@ -143,32 +149,37 @@ execution_chain = ["#120", "#264"]
 [[package]]
 name = "search-qdrant-bridge"
 path = "crates/search-index-qdrant/search-qdrant-bridge"
-execution_chain = ["#262", "#263", "#264"]
+execution_chain = ["#262", "#263", "#303", "#305", "#264"]
 
 [[package]]
 name = "search-publication"
 path = "crates/search-index-qdrant/search-publication"
 execution_chain = ["#260", "#261", "#264"]
+consumers = ["#300", "#303", "#302", "#243", "#244", "#245"]
 
 [[package]]
 name = "search-epoch-pins"
 path = "crates/search-index-qdrant/search-epoch-pins"
-execution_chain = ["#126", "#261", "#285", "#276", "#264"]
+execution_chain = ["#300"]
+consumers = ["#285", "#276", "#303", "#264"]
 
 [[package]]
 name = "search-index-reclaimer"
 path = "crates/search-index-qdrant/search-index-reclaimer"
-execution_chain = ["#126", "#134"]
+execution_chain = ["#303"]
+consumers = ["#264"]
 
 [[package]]
 name = "search-access"
 path = "crates/search-query/search-access"
 execution_chain = ["#287", "#288", "#274", "#279", "#264"]
+consumers = ["#304", "#305"]
 
 [[package]]
 name = "search-overlay"
 path = "crates/search-query/search-overlay"
 execution_chain = ["#130", "#274", "#279"]
+consumers = ["#304", "#305"]
 
 [[package]]
 name = "search-exact"
@@ -184,11 +195,13 @@ execution_chain = ["#213", "#277", "#296", "#232", "#281"]
 name = "search-query-planner"
 path = "crates/search-query/search-query-planner"
 execution_chain = ["#277", "#290", "#278", "#279", "#281", "#264"]
+consumers = ["#304", "#305"]
 
 [[package]]
 name = "search-retrieval-executor"
 path = "crates/search-query/search-retrieval-executor"
 execution_chain = ["#290", "#278", "#291", "#279", "#264"]
+consumers = ["#304", "#305"]
 
 [[package]]
 name = "search-candidate-validator"
@@ -204,21 +217,25 @@ execution_chain = ["#297", "#298", "#281", "#264"]
 name = "search-handles"
 path = "crates/search-query/search-handles"
 execution_chain = ["#282", "#283", "#274", "#275", "#264"]
+consumers = ["#301", "#302", "#304", "#305"]
 
 [[package]]
 name = "search-result-projector"
 path = "crates/search-query/search-result-projector"
 execution_chain = ["#294", "#279", "#280", "#281", "#264"]
+consumers = ["#304", "#305"]
 
 [[package]]
 name = "search-continuation"
 path = "crates/search-query/search-continuation"
-execution_chain = ["#284", "#285", "#274", "#276", "#264"]
+execution_chain = ["#284", "#300", "#285", "#274", "#276", "#264"]
+consumers = ["#301", "#302", "#304", "#305"]
 
 [[package]]
 name = "search-retention"
 path = "crates/search-runtime/search-retention"
-execution_chain = ["#134", "#135", "#136"]
+execution_chain = ["#301", "#302", "#304", "#305"]
+consumers = ["#243", "#244", "#245", "#264"]
 
 [[package]]
 name = "search-eval"
@@ -226,11 +243,13 @@ path = "crates/search-eval"
 execution_chain = ["#233", "#234", "#240", "#215"]
 product_path = "absent"
 disposition = "evaluation_only"
+consumers = ["#302"]
 
 [[package]]
 name = "search-provider-protocol"
 path = "crates/search-provider-protocol"
 execution_chain = ["#235", "#287", "#116", "#277", "#280", "#281"]
+consumers = ["#305"]
 
 [[package]]
 name = "search-eliot-adapter"
@@ -245,11 +264,12 @@ path = "crates/search-research-export-adapter"
 execution_chain = ["#216", "#228", "#229", "#230", "#231"]
 product_path = "absent"
 disposition = "optional_disabled"
+consumers = ["#301", "#302", "#243"]
 
 [[package]]
 name = "eliot-searchd"
 path = "bins/eliot-searchd"
-execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#274", "#275", "#276", "#290", "#278", "#291", "#293", "#294", "#279", "#280", "#213", "#277", "#296", "#232", "#297", "#298", "#281", "#264"]
+execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#274", "#275", "#276", "#290", "#278", "#291", "#293", "#294", "#279", "#280", "#213", "#277", "#296", "#232", "#297", "#298", "#281", "#300", "#301", "#302", "#303", "#304", "#305", "#243", "#244", "#245", "#264"]
 product_path = "partial"
 
 [[package]]
@@ -276,11 +296,13 @@ disposition = "optional_disabled"
 name = "search-revision-crypto"
 path = "crates/search-runtime/search-revision-crypto"
 execution_chain = ["#111", "#115"]
+consumers = ["#245"]
 
 [[package]]
 name = "search-os-secrets-windows"
 path = "crates/search-runtime/search-os-secrets-windows"
 execution_chain = ["#115", "#120"]
+consumers = ["#245"]
 
 [[package]]
 name = "xtask"
