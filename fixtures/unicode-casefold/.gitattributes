@@ -1,0 +1,4 @@
+CaseFolding-18.0.0.txt -text
+LICENSE-UNICODE -text
+casefold_goldens.tsv -text
+generate-goldens.ps1 text eol=lf
