@@ -111,6 +111,9 @@ qdrant-client = { version = "=1.19.0", default-features = false }
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 sha2 = { version = "=0.10.9", default-features = false }
 
+# #250: official read-only Cargo facts, private to the bounded xtask adapter.
+cargo_metadata = { version = "=0.23.1", default-features = false }
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 unused_must_use = "deny"
