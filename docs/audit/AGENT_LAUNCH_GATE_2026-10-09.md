@@ -1,151 +1,138 @@
 # Agent launch gate — 2026-10-09
 
 **Coordinator:** [#97](https://github.com/UnknownAlienHuman/eliot-search/pull/97)  
-**Reviewed main before the current packet:** `e358d3c06d211b269efd501cd8d4002a260ba0a5`  
-**Exact launch SHA authority:** latest `SINGLE_MANAGER_LAUNCH_SHA` comment on #97 after the packet PR is merged  
+**Current main before this Wave-2 packet:** `5d0435a55db8120d629d14d5167db6d737ea90c2`  
 **Topology:** one manager, one writer worktree, five to ten read/research/review subagents  
-**Selected packet:** [Wave 1 single-manager execution packet](./WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md)  
-**Donor register:** [Donor verification register](./DONOR_VERIFICATION_REGISTER_2026-10-09.md)
+**Wave 1 packet:** [WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md](./WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md)  
+**Wave 2 packet:** [WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md](./WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md)  
+**Wave 2 donor register:** [WAVE2_DONOR_ACCEPTANCE_2026-10-09.md](./WAVE2_DONOR_ACCEPTANCE_2026-10-09.md)
 
 ## Readiness verdict
 
 ```text
-Product/release execution:       NOT READY
-Independent multi-writer swarm:  FORBIDDEN
-One manager + 5–10 subagents:    READY AFTER PACKET MERGE/SHA PUBLICATION
-Wave-1 code owner:               #237
-Wave-1 parallel research:        #253
-Wave-2 coding:                   BLOCKED BY #237 MERGE
+Product/release:                       NOT READY
+Independent multi-writer swarm:        FORBIDDEN
+One manager + bounded subagents:        READY
+Wave 1 implementation #237:            AUTHORIZED
+Wave 1 research #253:                  AUTHORIZED
+Wave 2 preparation:                    COMPLETE
+Wave 2 coding:                         BLOCKED UNTIL #237 MERGES
+Wave 2 coding base:                    NOT YET PUBLISHED
 ```
 
-Subagents do not write repository state. The single manager is the only actor allowed to edit the shared worktree, modify manifests or `Cargo.lock`, push branches, open implementation PRs, merge, or claim a gate result.
+Subagents never write repository state. The manager alone owns the worktree, branches, manifests, root pins, `Cargo.lock`, PRs, merge decisions and gate claims.
 
-## Required entrypoint
+## Start now — Wave 1
 
-Every participant starts with the exact reading order, subagent assignments, output schemas, source links, stop conditions and manager phases in the [single-manager packet](./WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md). The packet supersedes the former two-manager Wave-1 wording and the launch/topology sections of older audits or tracking PRs.
-
-The manager must also read:
-
-- [root `AGENTS.md`](../../AGENTS.md);
-- [architecture entrypoint](../architecture/README.md);
-- [normative Architecture Part I](../architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md);
-- [ADR-0005](../adr/0005-standalone-search-product-and-controller-boundary.md);
-- [ADR-0006](../adr/0006-agent-analysis-framework-product-scope.md);
-- [package status matrix](../product/PACKAGE_STATUS.toml);
-- [issue #237](https://github.com/UnknownAlienHuman/eliot-search/issues/237) including all audit-amendment comments;
-- [issue #253](https://github.com/UnknownAlienHuman/eliot-search/issues/253).
-
-## Wave-1 work
-
-### Manager-owned implementation: #237
-
-The manager owns one worktree and the canonical/digest foundation:
+Use the exact `SINGLE_MANAGER_LAUNCH_SHA` published on coordinator `#97` and the Wave-1 packet.
 
 ```text
-crates/search-contracts/**
-narrow canonical-digest guard modules and command glue in xtask
-root exact crypto dependency pins where required
-Cargo.lock integration
-focused #237 documentation and fixtures
+implementation: #237 canonical/digest foundation
+research:       #253 Unicode full-case-fold decision
 ```
 
-The branch stops after:
-
-1. preservation and exact naming of the existing canonical byte profile;
-2. a checked bounded canonical sink shared by vector and streaming/hash paths;
-3. real BLAKE3/SHA-256 helpers with validated domain/profile/limits;
-4. an honest decode/restore-versus-compute boundary;
-5. digest-type taxonomy corrections accepted by #237;
-6. one typed current-tree guard and shrinking allowlist;
-7. current executable migration owners for every retained exception.
-
-It does not migrate query, source, Qdrant, retention, evaluation, daemon or worker semantics.
-
-### Manager-owned research: #253
-
-The same manager coordinates the Unicode full-case-fold decision through a research subagent and publishes a separate documentation/research PR or artifact. It edits no `search-lexical` Rust source, manifest or `Cargo.lock`.
-
-The output must freeze exact Unicode data/version, default/Turkic behavior, normalization order, emitted multi-scalar folds, source-range mapping, generator/dependency plan and byte-for-byte goldens so #254 makes no new donor/profile choice.
-
-## Subagent topology
-
-The selected packet defines eight narrow assignments:
-
-```text
-SA-01 authority/current-document map
-SA-02 current-tree digest/codec inventory
-SA-03 canonical codec and RFC 8949 profile review
-SA-04 crypto donor/supply-chain review
-SA-05 repository guard and allowlist design
-SA-06 Unicode full-fold decision
-SA-07 Wave-2 donor portfolio red-team
-SA-08 independent final source/overengineering review
-```
-
-The manager may run any five to ten of these, but SA-01 through SA-06 and SA-08 are mandatory for #237/#253 acceptance. SA-07 may be deferred only if it reports no finding required for Wave 1.
-
-## Donor boundary
-
-Immediate #237 donors are selected exactly in the [donor register](./DONOR_VERIFICATION_REGISTER_2026-10-09.md):
-
-```text
-existing search-contracts codec: retain
-blake3 1.8.2: exact narrow algorithm dependency
-sha2 0.10.9: exact narrow algorithm dependency
-ciborium 0.2.2: production codec rejected; test oracle only
-```
-
-The manager must independently recheck load-bearing source, checksum, license, MSRV, transitive features and advisories before manifest/lockfile changes. Future Wave-2 donors are selected directionally but remain `SELECTED_REVERIFY`; a detailed issue or newer version number is not sufficient qualification.
-
-## Canonical profile safety
-
-The current encoder orders CBOR map keys by encoded-key length and then lexicographically. This is the RFC 8949 length-first deterministic profile (§4.2.3), not Core Deterministic ordering (§4.2.1). Existing bytes and golden vectors must remain unchanged inside #237. Any ordering change requires a new canonical profile, migration and owner review.
-
-## Wave-2 serialization
-
-After #237 merges, coordinator #97 publishes:
-
-1. exact post-merge `main` SHA;
-2. one named `Cargo.lock` integrator;
-3. a non-overlapping first batch and merge order.
-
-Potential first foundations remain:
-
-```text
-#235 #238 #241 #246 #250 #252 #226
-#256 #257 #258 #266
-```
-
-They must not start automatically. Shared `search-contracts`, root pins, `Cargo.lock`, root/control/source ownership and destructive lifecycle paths remain serialized.
-
-## Required source gates
-
-After code, not before:
+Required source gates after `#237` code:
 
 ```text
 cargo +1.98.0 check --locked -p search-contracts -p xtask --all-targets
 cargo +1.98.0 clippy --locked -p search-contracts -p xtask --all-targets -- -D warnings
 ```
 
-Per project direction, write and compile focused golden/guard fixtures now but defer the broad/full test and installed qualification matrices. Any tiny causal test run for debugging must be reported separately and cannot become a product qualification claim.
+Broad/full/product/native testing remains deferred under current project policy.
+
+## Wave 2 launch transition
+
+Wave 2 does not start merely because its issues are detailed. After `#237` merges:
+
+1. coordinator `#97` publishes exact `WAVE2_BASE_SHA`;
+2. package instructions and this packet are read from that SHA;
+3. the same one-manager topology creates `manager/258-index-contract` from that exact base;
+4. all subagents complete the Wave-2 preflight reports;
+5. the manager advances one merged PR at a time.
+
+No branch from the pre-`#237` main is accepted for Wave 2 coding.
+
+## Wave 2 deterministic order
+
+```text
+Batch 2A
+  #258 shared indexed contract
+  #250 Cargo graph/status tooling
+  #256 point identity
+  #257 authoritative UnitSet v3
+  #266 root admission/open owner
+  #235 provider client
+
+Batch 2B
+  #238 typed TOML/config
+  #241 GlobSet admission
+  #246 literal matcher
+  #252 code identifiers
+
+Batch 2C
+  #226 Markdown
+  #226 JATS
+```
+
+`#226` is blocked by `#257`. Every dependency slice is merged by the same lockfile integrator. There are no stacked unmerged Wave-2 branches.
+
+## Wave 2 subagents
+
+The Wave-2 packet defines eight read-only assignments:
+
+```text
+W2-SA01 authority/package-instruction map
+W2-SA02 dependency and lockfile acceptance
+W2-SA03 indexed contract/identity port map
+W2-SA04 UnitSet/document preparation map
+W2-SA05 root/client composition map
+W2-SA06 config/admission donor red-team
+W2-SA07 exact/tooling/lexical donor red-team
+W2-SA08 independent final PR review
+```
+
+The manager may run five to ten subagents, but the load-bearing assignment for the active issue and W2-SA08 are mandatory before merge.
+
+## Important corrections now frozen
+
+- `#258`, not `#256/#257`, is first because it exclusively extends `search-contracts` after `#237`.
+- `#250` must not call `cargo_metadata::MetadataCommand::exec()` and call it bounded; exact source captures complete stdout/stderr through `Command::output()`.
+- `pulldown-cmark 0.13.1` has no `std` feature in its exact tag; `#226` uses `default-features = false` with no nonexistent feature.
+- `quick-xml` reader positions are not automatically exact semantic ranges; JATS must derive and verify mappings against retained raw bytes.
+- document profiles consume the accepted UnitSet v3 from `#257`; they do not invent another manifest.
+- current package `AGENTS.md` files receive narrow issue-specific Wave-2 exceptions; no general cross-package permission is created.
+
+## Required per-slice gates
+
+```text
+cargo +1.98.0 check --locked -p <affected packages> --all-targets
+cargo +1.98.0 clippy --locked -p <affected packages> --all-targets -- -D warnings
+```
+
+After `#250` merges, also run its accepted package-status/boundary validator for every subsequent workspace/dependency PR. Before a dependency merge:
+
+```text
+cargo +1.98.0 metadata --locked --offline --format-version 1
+```
+
+Report exact command, toolchain/platform, exit and affected targets. Compilation is not product qualification.
 
 ## Stop conditions
 
-Stop and report instead of improvising if the work would:
+Stop and report instead of improvising if:
 
-- change existing canonical bytes without a new profile/migration;
-- introduce a second canonical codec/value tree, digest catalog, registry or journal;
-- expose donor public types across ELIOT boundaries;
-- accept caller-issued digest/receipt/complete/fresh authority;
-- add runtime download/network fallback;
-- use raw grep as the sole guard or blanket-ignore tests/archive;
-- leave an occurrence unclassified or without one current executable owner;
-- modify an owner package outside #237;
-- start a blocked Wave-2 child merely because its issue is detailed;
-- use a historical packet/donor branch as a working base;
-- let a subagent write repository state or self-approve its output;
-- claim Cargo, native Windows, Qdrant, installed-product or release qualification without exact evidence.
+- the exact accepted base has not been published;
+- a package instruction still conflicts with the current issue;
+- a donor API/feature/version differs from the acceptance register;
+- canonical/profile bytes change without a new profile/generation/migration;
+- another package/facade must be edited outside the exact issue exception;
+- a second codec/client/root owner/UnitSet/schema/parser/catalog appears;
+- donor public types cross ELIOT boundaries;
+- output/allocation/process capture occurs before ceilings;
+- a compatibility path can still mint current product identities;
+- a subagent writes or self-approves;
+- a package PR is presented as Windows/Qdrant/product/release qualification.
 
 ## Evidence boundary
 
-This gate makes the project operationally ready for one manager and a bounded subagent team. It does not assert that the product is complete, every future donor is qualified, or exact-head source currently passes the required commands. The manager must produce the first exact locked check and strict-Clippy evidence for the implementation result.
+This gate proves only that Wave 1 can run and Wave 2 is fully mapped for a serialized one-manager continuation. It does not assert exact-head compilation, strict Clippy, Windows native behavior, Qdrant integration, installed-product readiness or release acceptance.
