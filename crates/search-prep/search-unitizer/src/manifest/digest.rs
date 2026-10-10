@@ -1,4 +1,4 @@
-//! Deterministic domain-separated identity digest used by manifest v2.
+//! Shared v3 digest helpers and the frozen legacy DIRECT profile envelope.
 
 /// Computes BLAKE3 over an explicitly framed domain and ordered byte chunks.
 ///
@@ -28,6 +28,69 @@ pub(super) fn digest32(domain: &[u8], chunks: &[&[u8]]) -> [u8; 32] {
         hasher.update(chunk);
     }
     *hasher.finalize().as_bytes()
+}
+
+// v3 uses only the shared canonical and algorithm owner below.
+use crate::UnitizationError;
+use search_contracts::{
+    Blake3Digest32, BoundedBytes, BoundedList, BoundedMap, CanonicalKey, CanonicalText,
+    CanonicalValue,
+};
+
+pub(super) fn object(
+    fields: Vec<(&'static str, CanonicalValue)>,
+) -> Result<CanonicalValue, UnitizationError> {
+    let fields = fields
+        .into_iter()
+        .map(|(key, value)| CanonicalKey::new_non_empty(key).map(|key| (key, value)))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| UnitizationError::UnitManifestIncomplete)?;
+    BoundedMap::from_entries(fields)
+        .map(CanonicalValue::Object)
+        .map_err(|_| UnitizationError::InputTooLarge)
+}
+
+pub(super) fn text(value: &str) -> Result<CanonicalValue, UnitizationError> {
+    CanonicalText::new(value)
+        .map(CanonicalValue::Text)
+        .map_err(|_| UnitizationError::InputTooLarge)
+}
+
+pub(super) fn bytes(value: &[u8]) -> Result<CanonicalValue, UnitizationError> {
+    BoundedBytes::new(value.to_vec())
+        .map(CanonicalValue::Bytes)
+        .map_err(|_| UnitizationError::InputTooLarge)
+}
+
+pub(super) fn array(value: Vec<CanonicalValue>) -> Result<CanonicalValue, UnitizationError> {
+    BoundedList::new(value)
+        .map(CanonicalValue::Array)
+        .map_err(|_| UnitizationError::InputTooLarge)
+}
+
+pub(super) fn hash_cbor(
+    domain: &str,
+    value: &CanonicalValue,
+    limit: usize,
+) -> Result<Blake3Digest32, UnitizationError> {
+    let domain = search_contracts::CanonicalDigestDomain::parse(domain)
+        .map_err(|_| UnitizationError::UnitManifestIncomplete)?;
+    let limit = search_contracts::DigestInputLimit::new(limit)
+        .map_err(|_| UnitizationError::InvalidLimits)?;
+    search_contracts::blake3_canonical(&domain, value, limit)
+        .map_err(|_| UnitizationError::InputTooLarge)
+}
+
+pub(super) fn hash_raw(
+    domain: &str,
+    value: &[u8],
+    limit: usize,
+) -> Result<Blake3Digest32, UnitizationError> {
+    let domain = search_contracts::CanonicalDigestDomain::parse(domain)
+        .map_err(|_| UnitizationError::UnitManifestIncomplete)?;
+    let limit = search_contracts::DigestInputLimit::new(limit)
+        .map_err(|_| UnitizationError::InvalidLimits)?;
+    search_contracts::blake3_raw(&domain, value, limit).map_err(|_| UnitizationError::InputTooLarge)
 }
 
 #[cfg(test)]

@@ -33,6 +33,12 @@ pub enum UnitizationError {
     UnitCoverageMismatch,
     /// Byte or index conversion overflowed.
     OffsetOverflow,
+    /// Live cancellation prevents a complete unit set.
+    Cancelled,
+    /// The monotonic operation deadline has elapsed.
+    DeadlineExceeded,
+    /// Accounted work exceeds the finite call budget.
+    WorkBudgetExceeded,
     /// Required content-free materialization receipt is absent.
     MissingMaterializationReceipt,
     /// Unitizer profile descriptor is malformed or unsupported.
@@ -41,12 +47,14 @@ pub enum UnitizationError {
     UnitizerProfileMismatch,
     /// Unit manifest binding is incomplete for the claimed provenance.
     UnitManifestIncomplete,
-    /// Legacy unit-manifest v1 uses an unqualified digest and must be rebuilt.
+    /// Legacy unit-manifest v1/v2 must be rebuilt, never relabelled as v3.
     UnitManifestLegacyUnsupported,
     /// A recomputed unit or manifest digest differs from the stored manifest.
     UnitManifestDigestMismatch,
     /// A stored manifest is internally inconsistent across rebuilds.
     UnitizationNondeterministic,
+    /// Distinct full occurrence commitments derived the same truncated `UnitId`.
+    IdentityCollision,
 }
 
 impl UnitizationError {
@@ -68,6 +76,9 @@ impl UnitizationError {
             Self::UnitTooLarge => "UNITIZATION_UNIT_TOO_LARGE",
             Self::UnitCoverageMismatch => "UNITIZATION_UNIT_COVERAGE_MISMATCH",
             Self::OffsetOverflow => "UNITIZATION_OFFSET_OVERFLOW",
+            Self::Cancelled => "UNITIZATION_CANCELLED",
+            Self::DeadlineExceeded => "UNITIZATION_DEADLINE_EXCEEDED",
+            Self::WorkBudgetExceeded => "UNITIZATION_WORK_BUDGET_EXCEEDED",
             Self::MissingMaterializationReceipt => "UNITIZATION_MISSING_MATERIALIZATION_RECEIPT",
             Self::UnitizerProfileInvalid => "UNITIZER_PROFILE_INVALID",
             Self::UnitizerProfileMismatch => "UNITIZER_PROFILE_MISMATCH",
@@ -75,6 +86,7 @@ impl UnitizationError {
             Self::UnitManifestLegacyUnsupported => "UNIT_MANIFEST_LEGACY_UNSUPPORTED",
             Self::UnitManifestDigestMismatch => "UNIT_MANIFEST_DIGEST_MISMATCH",
             Self::UnitizationNondeterministic => "UNITIZATION_NONDETERMINISTIC",
+            Self::IdentityCollision => "UNIT_ID_CONFLICT",
         }
     }
 }

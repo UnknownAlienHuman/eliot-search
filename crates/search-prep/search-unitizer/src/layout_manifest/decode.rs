@@ -47,7 +47,7 @@ impl UnitizationLimits {
                 content_end: read(bytes, &mut cursor)?,
             });
         }
-        super::super::validate_text(text, &lines, self)?;
+        super::super::validate_text(text, &lines, self, &mut |_| Ok(()))?;
         let mut units = Vec::with_capacity(unit_count);
         let mut expected_start = 0;
         for _ in 0..unit_count {
@@ -61,8 +61,7 @@ impl UnitizationLimits {
             };
             if unit.source_start != expected_start
                 || expected_start >= text.len()
-                || unit.source_end
-                    != super::super::choose_end(text, &lines, expected_start, self)?
+                || unit.source_end != super::super::choose_end(text, &lines, expected_start, self)?
                 || unit.source_end <= expected_start
                 || unit.source_end - expected_start > self.max_unit_bytes
                 || !text.is_char_boundary(unit.source_start)

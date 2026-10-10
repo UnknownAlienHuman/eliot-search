@@ -32,6 +32,16 @@ Turn a materialization into deterministic unit occurrences and an immutable unit
 `search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
 APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
 
+### #257 materialization ingress exception
+
+The [accepted #257 integration decision](https://github.com/UnknownAlienHuman/eliot-search/issues/257#issuecomment-6093710492)
+allows an internal `search-materializer` dependency and the single `prepare_unit_set_input` adapter to
+consume its immutable product, validated request and profile. This adapter calls the existing owning
+materialization verifier; it must not duplicate coordinate/loss-map validation. Peer types may appear
+only at this named ingress. UnitSet results use contract types and package-owned opaque types.
+No materializer, daemon, planner or storage implementation changes are authorized by this exception.
+The unchanged legacy DIRECT profile/layout APIs remain until #331 and never create or verify a v3 set.
+
 ## Required logical surface
 
 These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API

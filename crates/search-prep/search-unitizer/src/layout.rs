@@ -33,17 +33,39 @@ pub fn unitize_text(
     lines: &[SourceLineSpan],
     limits: UnitizationLimits,
 ) -> Result<Vec<UnitSpan>, UnitizationError> {
+    unitize_text_checked(text, lines, limits, |_| Ok(()))
+}
+
+/// The same layout algorithm with live checkpoints before scan/output work.
+/// The callback receives the number of spans about to be allocated.
+pub fn unitize_text_checked(
+    text: &str,
+    lines: &[SourceLineSpan],
+    limits: UnitizationLimits,
+    mut checkpoint: impl FnMut(usize) -> Result<(), UnitizationError>,
+) -> Result<Vec<UnitSpan>, UnitizationError> {
+    checkpoint(0)?;
     let limits = limits.validate()?;
-    validate_text(text, lines, limits)?;
+    validate_text(text, lines, limits, &mut checkpoint)?;
     let mut units = Vec::new();
     let mut start = 0;
     while start < text.len() {
+        checkpoint(
+            units
+                .len()
+                .checked_add(1)
+                .ok_or(UnitizationError::OffsetOverflow)?,
+        )?;
         if units.len() >= limits.max_units {
             return Err(UnitizationError::TooManyUnits);
         }
         let end = choose_end(text, lines, start, limits)?;
-        if end <= start { return Err(UnitizationError::NoProgress); }
-        if end - start > limits.max_unit_bytes { return Err(UnitizationError::UnitTooLarge); }
+        if end <= start {
+            return Err(UnitizationError::NoProgress);
+        }
+        if end - start > limits.max_unit_bytes {
+            return Err(UnitizationError::UnitTooLarge);
+        }
         let start64 = u64::try_from(start).map_err(|_| UnitizationError::OffsetOverflow)?;
         let end64 = u64::try_from(end).map_err(|_| UnitizationError::OffsetOverflow)?;
         let first_line = lines.partition_point(|line| line.source_end <= start64);
@@ -55,7 +77,9 @@ pub fn unitize_text(
             source_start: start,
             source_end: end,
             logical_line_start: lines[first_line].line_index,
-            logical_line_end: lines[last_line].line_index.checked_add(1)
+            logical_line_end: lines[last_line]
+                .line_index
+                .checked_add(1)
                 .ok_or(UnitizationError::OffsetOverflow)?,
             starts_at_line_boundary: lines[first_line].source_start == start64,
             ends_at_line_boundary: lines[last_line].source_end == end64,
@@ -64,7 +88,10 @@ pub fn unitize_text(
     }
     // Each iteration begins exactly at the previous end and advances. Together
     // with this final equality this establishes no gaps, overlaps or lost bytes.
-    if start != text.len() { return Err(UnitizationError::UnitCoverageMismatch); }
+    if start != text.len() {
+        return Err(UnitizationError::UnitCoverageMismatch);
+    }
+    checkpoint(units.len())?;
     Ok(units)
 }
 
@@ -72,24 +99,38 @@ fn validate_text(
     text: &str,
     lines: &[SourceLineSpan],
     limits: UnitizationLimits,
+    checkpoint: &mut impl FnMut(usize) -> Result<(), UnitizationError>,
 ) -> Result<(), UnitizationError> {
-    if text.len() > limits.max_input_bytes { return Err(UnitizationError::InputTooLarge); }
+    if text.len() > limits.max_input_bytes {
+        return Err(UnitizationError::InputTooLarge);
+    }
     if lines.len() > limits.max_lines || (lines.is_empty() != text.is_empty()) {
         return Err(UnitizationError::InvalidLineInventory);
     }
     let bytes = text.as_bytes();
     let mut cursor = 0;
     for (index, line) in lines.iter().enumerate() {
+        checkpoint(0)?;
         if line.line_index != u64::try_from(index).map_err(|_| UnitizationError::OffsetOverflow)? {
             return Err(UnitizationError::LineIndexMismatch);
         }
-        let start = usize::try_from(line.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
+        let start =
+            usize::try_from(line.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
         let end = usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let content_end = usize::try_from(line.content_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        if start != cursor || start >= end || content_end < start || content_end > end || end > bytes.len() {
+        let content_end =
+            usize::try_from(line.content_end).map_err(|_| UnitizationError::OffsetOverflow)?;
+        if start != cursor
+            || start >= end
+            || content_end < start
+            || content_end > end
+            || end > bytes.len()
+        {
             return Err(UnitizationError::InvalidLineSpan);
         }
-        if !text.is_char_boundary(start) || !text.is_char_boundary(content_end) || !text.is_char_boundary(end) {
+        if !text.is_char_boundary(start)
+            || !text.is_char_boundary(content_end)
+            || !text.is_char_boundary(end)
+        {
             return Err(UnitizationError::InvalidUtf8Boundary);
         }
         match bytes.get(content_end..end) {
@@ -98,15 +139,26 @@ fn validate_text(
         }
         cursor = end;
     }
-    if cursor != bytes.len() { return Err(UnitizationError::LineCoverageMismatch); }
+    if cursor != bytes.len() {
+        return Err(UnitizationError::LineCoverageMismatch);
+    }
     for (index, line) in lines.iter().enumerate() {
+        checkpoint(0)?;
         // Conversions and ranges were checked in the first pass.
-        let start = usize::try_from(line.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
+        let start =
+            usize::try_from(line.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
         let end = usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let content_end = usize::try_from(line.content_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        if bytes[start..content_end].iter().any(|byte| matches!(byte, b'\r' | b'\n'))
-            || (content_end == end && index + 1 != lines.len())
-            || (bytes.get(content_end..end) == Some(b"\r".as_slice()) && bytes.get(end) == Some(&b'\n'))
+        let content_end =
+            usize::try_from(line.content_end).map_err(|_| UnitizationError::OffsetOverflow)?;
+        for chunk in bytes[start..content_end].chunks(256) {
+            checkpoint(0)?;
+            if chunk.iter().any(|byte| matches!(byte, b'\r' | b'\n')) {
+                return Err(UnitizationError::InvalidLineEnding);
+            }
+        }
+        if (content_end == end && index + 1 != lines.len())
+            || (bytes.get(content_end..end) == Some(b"\r".as_slice())
+                && bytes.get(end) == Some(&b'\n'))
         {
             return Err(UnitizationError::InvalidLineEnding);
         }
@@ -120,10 +172,14 @@ fn choose_end(
     start: usize,
     limits: UnitizationLimits,
 ) -> Result<usize, UnitizationError> {
-    let preferred = start.checked_add(limits.preferred_unit_bytes)
-        .ok_or(UnitizationError::OffsetOverflow)?.min(text.len());
-    let hard = start.checked_add(limits.max_unit_bytes)
-        .ok_or(UnitizationError::OffsetOverflow)?.min(text.len());
+    let preferred = start
+        .checked_add(limits.preferred_unit_bytes)
+        .ok_or(UnitizationError::OffsetOverflow)?
+        .min(text.len());
+    let hard = start
+        .checked_add(limits.max_unit_bytes)
+        .ok_or(UnitizationError::OffsetOverflow)?
+        .min(text.len());
     if hard == text.len() && text.len() - start <= limits.preferred_unit_bytes {
         return Ok(text.len());
     }
@@ -136,15 +192,25 @@ fn choose_end(
     {
         return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
     }
-    if let Some(line) = lines.get(after) && line.source_end <= hard64 {
+    if let Some(line) = lines.get(after)
+        && line.source_end <= hard64
+    {
         return usize::try_from(line.source_end).map_err(|_| UnitizationError::OffsetOverflow);
     }
     let mut end = preferred;
-    while end > start && !text.is_char_boundary(end) { end -= 1; }
-    if end <= start {
-        end = start.checked_add(1).ok_or(UnitizationError::OffsetOverflow)?;
-        while end <= hard && !text.is_char_boundary(end) { end += 1; }
+    while end > start && !text.is_char_boundary(end) {
+        end -= 1;
     }
-    if end <= start || end > hard { return Err(UnitizationError::NoProgress); }
+    if end <= start {
+        end = start
+            .checked_add(1)
+            .ok_or(UnitizationError::OffsetOverflow)?;
+        while end <= hard && !text.is_char_boundary(end) {
+            end += 1;
+        }
+    }
+    if end <= start || end > hard {
+        return Err(UnitizationError::NoProgress);
+    }
     Ok(end)
 }

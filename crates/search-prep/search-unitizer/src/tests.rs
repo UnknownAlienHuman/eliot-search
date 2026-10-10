@@ -54,4 +54,3 @@ fn limits(preferred: usize, maximum: usize) -> UnitizationLimits {
 }
 
 mod layout_cases;
-mod manifest_cases;

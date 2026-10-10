@@ -1521,6 +1521,7 @@ dependencies = [
  "blake3",
  "search-contracts",
  "search-domain",
+ "search-materializer",
  "search-ports",
 ]
 

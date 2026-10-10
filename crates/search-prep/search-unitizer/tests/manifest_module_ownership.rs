@@ -18,7 +18,17 @@ fn manifest_facade_stays_thin_and_responsibilities_stay_split() {
         "manifest facade grew to {} bytes",
         facade.len()
     );
-    for module in ["build", "codec", "digest", "model", "profile", "spec", "verify"] {
+    for module in [
+        "build",
+        "codec",
+        "digest",
+        "input",
+        "model",
+        "profile",
+        "spec",
+        "v3_profile",
+        "verify",
+    ] {
         assert!(facade.contains(&format!("mod {module};")));
     }
     assert!(!facade.contains("mod kernel;"));
@@ -28,11 +38,16 @@ fn manifest_facade_stays_thin_and_responsibilities_stay_split() {
         ("src/manifest/profile.rs", "pub struct UnitizerProfileId"),
         ("src/manifest/model.rs", "pub struct UnitManifest"),
         ("src/manifest/build.rs", "pub fn build_unit_manifest"),
+        ("src/manifest/codec.rs", "pub fn canonicalize_unit_manifest"),
         (
-            "src/manifest/codec.rs",
-            "pub fn canonicalize_unit_manifest",
+            "src/manifest/codec/decode.rs",
+            "pub fn decode_unit_manifest",
         ),
-        ("src/manifest/codec.rs", "pub fn decode_unit_manifest"),
+        ("src/manifest/input.rs", "pub fn prepare_unit_set_input"),
+        (
+            "src/manifest/v3_profile.rs",
+            "pub fn validate_v3_unitizer_profile",
+        ),
         ("src/manifest/verify.rs", "pub fn verify_unit_manifest"),
         ("src/manifest/verify.rs", "pub fn diff_unit_manifests"),
     ];
@@ -47,11 +62,14 @@ fn manifest_facade_stays_thin_and_responsibilities_stay_split() {
     for relative in [
         "src/manifest/build.rs",
         "src/manifest/codec.rs",
+        "src/manifest/codec/decode.rs",
         "src/manifest/digest.rs",
+        "src/manifest/input.rs",
         "src/manifest/model.rs",
         "src/manifest/profile.rs",
         "src/manifest/spec.rs",
         "src/manifest/verify.rs",
+        "src/manifest/v3_profile.rs",
     ] {
         let source = read(&root, relative);
         assert!(
@@ -79,8 +97,9 @@ fn manifest_facade_stays_thin_and_responsibilities_stay_split() {
     assert!(!profile.contains("MAGIC"));
 
     let codec = read(&root, "src/manifest/codec.rs");
-    assert!(codec.contains("MAGIC"));
-    assert!(codec.contains("encode_body"));
+    assert!(codec.contains("body_value"));
+    assert!(codec.contains("to_canonical_cbor"));
+    assert!(!codec.contains("struct Writer"));
     assert!(!codec.contains("classify_unitizer_profile_change"));
 
     let verify = read(&root, "src/manifest/verify.rs");
@@ -102,6 +121,11 @@ fn crate_root_keeps_the_existing_manifest_surface() {
         "UnitizerProfileChange",
         "UnitizerProfileDescriptor",
         "UnitizerProfileId",
+        "VerifiedUnitSet",
+        "V3SourceBinding",
+        "V3UnitizerProfileDescriptor",
+        "ValidatedV3UnitizerProfile",
+        "prepare_unit_set_input",
         "ValidatedUnitizerProfile",
         "build_unit_manifest",
         "canonicalize_unit_manifest",
@@ -113,6 +137,9 @@ fn crate_root_keeps_the_existing_manifest_surface() {
         "validate_unitizer_profile",
         "verify_unit_manifest",
     ] {
-        assert!(lib.contains(public), "crate root no longer exports {public}");
+        assert!(
+            lib.contains(public),
+            "crate root no longer exports {public}"
+        );
     }
 }

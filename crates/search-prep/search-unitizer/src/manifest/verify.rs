@@ -1,119 +1,60 @@
-//! Exact manifest verification and identity-only diff.
-
-use crate::{UnitizationError, UnitizationInput};
+//! Rebuild verification over the exact materialization, never digest equality alone.
+use super::build::{assemble_manifest, verified};
+use super::input::{UnitSetInput, UnitizationBudget};
+use super::model::{UnitManifest, UnitManifestDiff, VerifiedUnitSet};
+use super::v3_profile::ValidatedV3UnitizerProfile;
+use crate::UnitizationError;
 use search_contracts::Blake3Digest32;
+use std::collections::BTreeMap;
 
-use super::build::assemble_manifest;
-use super::model::{
-    MaterializerProvenance, UnitDescriptor, UnitManifest, UnitManifestDiff,
-    UnitManifestVerificationReceipt,
-};
-use super::profile::{ValidatedUnitizerProfile, unitizer_profile_digest};
-use super::spec::UNIT_MANIFEST_DIGEST_ALGORITHM;
-
-/// Domain-separated digest over the canonical manifest bytes.
+/// The computed commitment of an immutable proposed v3 manifest.
 #[must_use]
 pub const fn manifest_digest(manifest: &UnitManifest) -> Blake3Digest32 {
     manifest.manifest_digest
 }
 
-/// Recomputes unit IDs, ordering, spans, binding and the manifest digest and
-/// proves complete profile-defined accounting. It does not assert filesystem
-/// currentness or indexed publication.
+/// Recompute every binding, occurrence, anchor, commitment and complete accounting.
+/// A decoded manifest becomes a `VerifiedUnitSet` only after this exact-source rebuild.
 pub fn verify_unit_manifest(
     manifest: &UnitManifest,
-    input: &UnitizationInput,
-    provenance: &MaterializerProvenance,
-    profile: &ValidatedUnitizerProfile,
-) -> Result<UnitManifestVerificationReceipt, UnitizationError> {
-    if unitizer_profile_digest(profile) != profile.id() {
-        return Err(UnitizationError::UnitizerProfileMismatch);
-    }
-    if manifest.unitizer_profile_id != profile.id()
-        || manifest.unitizer_profile_revision != profile.revision()
-        || manifest.unitizer_limits != profile.limits()
-    {
-        return Err(UnitizationError::UnitizerProfileMismatch);
-    }
-    if manifest.digest_algorithm != UNIT_MANIFEST_DIGEST_ALGORITHM {
+    input: &UnitSetInput<'_>,
+    profile: &ValidatedV3UnitizerProfile,
+    budget: &UnitizationBudget<'_>,
+) -> Result<VerifiedUnitSet, UnitizationError> {
+    let expected = assemble_manifest(input, profile, budget)?;
+    if *manifest != expected {
         return Err(UnitizationError::UnitManifestDigestMismatch);
     }
-    if manifest.source_id != input.source_id
-        || manifest.revision != input.revision
-        || manifest.content_digest != input.content_digest
-    {
-        return Err(UnitizationError::UnitManifestIncomplete);
-    }
-    if manifest.representation_id != provenance.representation_id
-        || manifest.materializer_profile_digest != provenance.materializer_profile_digest
-        || manifest.canonical_digest != provenance.canonical_digest
-        || manifest.coordinate_digest != provenance.coordinate_digest
-        || manifest.loss_digest != provenance.loss_digest
-    {
-        return Err(UnitizationError::UnitManifestIncomplete);
-    }
-    let expected = assemble_manifest(input, provenance, profile, manifest.digest_algorithm)?;
-    if expected.units != manifest.units
-        || expected.input_bytes != manifest.input_bytes
-        || expected.emitted_bytes != manifest.emitted_bytes
-        || expected.line_count != manifest.line_count
-    {
-        return Err(UnitizationError::UnitManifestDigestMismatch);
-    }
-    if expected.manifest_digest != manifest.manifest_digest {
-        return Err(UnitizationError::UnitManifestDigestMismatch);
-    }
-    Ok(UnitManifestVerificationReceipt {
-        source_id: manifest.source_id.clone(),
-        revision: manifest.revision,
-        representation_id: manifest.representation_id,
-        unitizer_profile_id: manifest.unitizer_profile_id,
-        materializer_profile_digest: manifest.materializer_profile_digest,
-        unit_count: u64::try_from(manifest.units.len())
-            .map_err(|_| UnitizationError::OffsetOverflow)?,
-        manifest_digest: manifest.manifest_digest,
-    })
+    Ok(verified(expected))
 }
 
-/// Returns the exact identity difference between two manifests.
-///
-/// Reports created, retained and retired unit identities with changed
-/// identity reasons carried by the two manifest digests. Retained requires
-/// exact unit-identity digest equality; heuristic span or name similarity
-/// can never retain a unit.
+/// Compare verified sets. Retention requires identical full occurrence descriptors.
 pub fn diff_unit_manifests(
-    old: &UnitManifest,
-    new: &UnitManifest,
+    old: &VerifiedUnitSet,
+    new: &VerifiedUnitSet,
 ) -> Result<UnitManifestDiff, UnitizationError> {
-    if old.digest_algorithm != new.digest_algorithm {
-        return Err(UnitizationError::UnitManifestDigestMismatch);
-    }
-    let mut old_sorted: Vec<Blake3Digest32> =
-        old.units.iter().map(UnitDescriptor::unit_digest).collect();
-    old_sorted.sort();
-    let mut new_sorted: Vec<Blake3Digest32> =
-        new.units.iter().map(UnitDescriptor::unit_digest).collect();
-    new_sorted.sort();
-    let mut retained = Vec::new();
+    let old_units: BTreeMap<_, _> = old.units().iter().map(|u| (u.unit_id(), u)).collect();
+    let new_units: BTreeMap<_, _> = new.units().iter().map(|u| (u.unit_id(), u)).collect();
     let mut created = Vec::new();
-    for digest in new.units.iter().map(UnitDescriptor::unit_digest) {
-        if old_sorted.binary_search(&digest).is_ok() {
-            retained.push(digest);
-        } else {
-            created.push(digest);
+    let mut retained = Vec::new();
+    let mut retired = Vec::new();
+    for unit in new.units() {
+        match old_units.get(&unit.unit_id()) {
+            Some(old) if **old == *unit => retained.push(unit.unit_id()),
+            Some(_) => return Err(UnitizationError::UnitizationNondeterministic),
+            None => created.push(unit.unit_id()),
         }
     }
-    let mut retired = Vec::new();
-    for digest in old.units.iter().map(UnitDescriptor::unit_digest) {
-        if new_sorted.binary_search(&digest).is_err() {
-            retired.push(digest);
+    for unit in old.units() {
+        if !new_units.contains_key(&unit.unit_id()) {
+            retired.push(unit.unit_id());
         }
     }
     Ok(UnitManifestDiff {
-        old_digest: old.manifest_digest,
-        new_digest: new.manifest_digest,
-        retained,
+        old_digest: old.manifest_digest(),
+        new_digest: new.manifest_digest(),
         created,
+        retained,
         retired,
     })
 }
