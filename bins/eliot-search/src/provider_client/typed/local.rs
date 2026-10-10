@@ -32,13 +32,14 @@ where
     C: CancellationProbe,
     S: LocalByteStream + 'static,
 {
-    let (endpoint_name, binding, key, context) = resolved.into_parts();
+    let (endpoint_name, binding, key, context, deadline) = resolved.into_parts();
     TypedProviderSession::connect_local(
         endpoint_name,
         &binding,
         key,
         limits,
         &context,
+        deadline,
         connect,
     )
 }

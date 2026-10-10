@@ -15,6 +15,9 @@ pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(25);
 const POLL_BYTES: usize = 64 * 1024;
 const READ_BYTES: usize = 16 * 1024;
 
+#[cfg(test)]
+mod tests;
+
 /// One already-connected local byte stream owned by the typed client.
 ///
 /// The framing, pairing and request state machines depend only on finite
@@ -72,6 +75,16 @@ impl<'a> SetupBudget<'a> {
             return Err(TypedClientError::Cancelled);
         }
         remaining(self.deadline)
+    }
+
+    /// Adopt the original process-local setup deadline without renewing it.
+    pub(super) fn from_deadline(
+        deadline: Instant,
+        cancelled: &'a dyn Fn() -> bool,
+    ) -> Result<Self, TypedClientError> {
+        let value = Self { deadline, cancelled };
+        value.remaining()?;
+        Ok(value)
     }
 }
 
