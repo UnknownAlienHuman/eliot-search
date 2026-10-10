@@ -164,6 +164,16 @@ pub struct InspectedDataRoot {
 }
 
 impl InspectedDataRoot {
+    /// Retains only the already-admitted invocation, never another owner.
+    pub(crate) fn operation_request(&self) -> Result<&DataRootRequest, String> {
+        let request = self
+            .request
+            .as_ref()
+            .ok_or_else(|| "DATA_ROOT_REQUEST_INVALID".to_owned())?;
+        request.preflight()?;
+        Ok(request)
+    }
+
     /// Verify the existing barrier/owner and retained native layout before a
     /// child read. This never advances an epoch or resolves a secret.
     pub(crate) fn verify_existing(&self) -> Result<(), String> {
@@ -207,6 +217,17 @@ impl InspectedDataRoot {
 }
 
 impl DataRootGuard {
+    /// Child opening belongs to startup or a one-shot invocation. Idle service
+    /// commands obtain their context from `DataRootCommand` instead.
+    pub(crate) fn operation_request(&self) -> Result<&DataRootRequest, String> {
+        let request = self
+            .request
+            .as_ref()
+            .ok_or_else(|| "DATA_ROOT_REQUEST_INVALID".to_owned())?;
+        request.preflight()?;
+        Ok(request)
+    }
+
     /// Executes an existing read under both native exclusions without creating
     /// locks, credentials, catalogs or owner records, or performing recovery.
     #[cfg(test)]
@@ -390,6 +411,7 @@ impl DataRootGuard {
                 .map_err(|error| error.code().to_owned())?;
             crate::plaintext_direct_store::DirectStore::validate_existing_admission(
                 &canonical_root,
+                request,
             )
             .map_err(|_| "DIRECT_EXISTING_CATALOG_INVALID".to_owned())?;
             Some(pins)
@@ -632,7 +654,16 @@ impl DataRootCommand<'_> {
 
     pub(crate) fn verify(&self) -> Result<(), String> {
         self.request.preflight()?;
-        self.owner.verify_existing()
+        self.owner.verify_existing()?;
+        self.request.preflight()
+    }
+
+    /// A retained invocation cannot rebind a child belonging to another owner.
+    pub(crate) fn verify_owner(&self, owner: &DataRootGuard) -> Result<(), String> {
+        if !std::ptr::eq(self.owner, owner) {
+            return Err(OwnerError::OwnerGuardMismatch.code().to_owned());
+        }
+        self.verify()
     }
 
     pub(crate) fn arm_mutation_marker(&self) -> Result<(), String> {

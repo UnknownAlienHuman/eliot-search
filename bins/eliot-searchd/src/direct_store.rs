@@ -11,28 +11,27 @@ use std::path::Path;
 use crate::development::MAX_SCAN_INPUT_BYTES;
 use crate::sha256;
 
+#[path = "direct_store_catalog.rs"]
+mod catalog;
+#[path = "direct_store_ingest.rs"]
+mod ingest;
 #[path = "direct_store/model.rs"]
 mod model;
 #[path = "direct_store/store.rs"]
 mod store;
-#[path = "direct_store_ingest.rs"]
-mod ingest;
-#[path = "direct_store_catalog.rs"]
-mod catalog;
 
-use catalog::load_registry;
 pub use catalog::{RevisionMetadata, verify_revision_identity};
+use catalog::{load_registry, load_registry_with_check};
 use model::{
-    CONTROL_DIRECTORY, DirectDigest, FileSnapshot, MAX_DIRECTORY_FILES,
-    MAX_LOG_BYTES, MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, RecordDraft,
-    RegistryState, SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord, SourceState,
-    ZERO_DIGEST,
+    CONTROL_DIRECTORY, DirectDigest, FileSnapshot, MAX_DIRECTORY_FILES, MAX_LOG_BYTES,
+    MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, RecordDraft, RegistryState,
+    SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord, SourceState, ZERO_DIGEST,
 };
 pub use model::{
-    DirectStore, IndexedSource, RevisionSlice, SourceSummary, StoreGap,
-    StoreSearchResult, StoreVerification, StoredMatch,
+    DirectStore, IndexedSource, RevisionSlice, SourceSummary, StoreGap, StoreSearchResult,
+    StoreVerification, StoredMatch,
 };
 use store::{
-    collect_regular_files, ensure_directory, ensure_regular_file, is_reparse,
-    path_identity_bytes, read_file_snapshot,
+    collect_regular_files, ensure_directory, ensure_regular_file, is_reparse, path_identity_bytes,
+    read_file_snapshot,
 };

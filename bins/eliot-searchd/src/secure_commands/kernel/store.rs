@@ -31,7 +31,9 @@ pub(super) fn with_store_request<T>(
     DataRootGuard::with_inspection_request(root, request, |cap: &InspectedDataRoot| {
         request.preflight()?;
         let store = DirectStore::open_existing_read_only(cap)?;
-        let storage = StorageSecurityStatus::inspect(cap.canonical_root())?;
+        let storage = StorageSecurityStatus::inspect_with_check(cap.canonical_root(), &|| {
+            request.preflight()
+        })?;
         request.preflight()?;
         let value = operation(cap.canonical_root(), &store, &storage)?;
         request.preflight()?;

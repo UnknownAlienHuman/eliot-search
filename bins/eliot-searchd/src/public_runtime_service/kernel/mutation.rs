@@ -6,8 +6,8 @@ use std::path::Path;
 use crate::continuation::ContinuationCatalog;
 use crate::development::DataRootGuard;
 use crate::direct_store::{DirectStore, PreparationCursor};
-use crate::directory_manifest::{sync_directory, verify_directory_manifests};
-use crate::maintenance_guard::guarded_collect_orphan_revisions;
+use crate::directory_manifest::{sync_directory, verify_directory_manifests_with_check};
+use crate::maintenance_guard::guarded_collect_orphan_revisions_with_check;
 use crate::result_handles::ResultHandleCatalog;
 use crate::service_output::{emit_indexed_source, json_string, write_line};
 use crate::storage_security::StorageSecurityStatus;
@@ -50,7 +50,7 @@ pub(super) fn cmd_index_directory(
         invalidate_search_state(continuations, handles);
     let indexed = store.index_directory(directory)?;
     let changed = indexed.iter().filter(|source| source.changed).count();
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     for source in &indexed {
         emit_indexed_source(writer, source, 0, 0, storage)?;
     }
@@ -86,7 +86,7 @@ pub(super) fn cmd_prepare_root(
 ) -> Result<(), String> {
     let invalidated = invalidate_search_state(continuations, handles);
     let batch = store.prepare_root(cursor)?;
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     crate::preparation_composition::emit_batch(writer, &batch, invalidated)
 }
 
@@ -101,7 +101,7 @@ pub(super) fn cmd_prepare_revision(
 ) -> Result<(), String> {
     let invalidated = invalidate_search_state(continuations, handles);
     let gap = store.prepare_revision(revision_id)?;
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     crate::preparation_composition::emit_prepared(writer, revision_id, invalidated, gap)
 }
 
@@ -117,7 +117,7 @@ pub(super) fn cmd_index_file(
     let (invalidated_continuations, invalidated_handles) =
         invalidate_search_state(continuations, handles);
     let indexed = store.index_file(path)?;
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     emit_indexed_source(
         writer,
         &indexed,
@@ -146,8 +146,11 @@ pub(super) fn cmd_sync_directory<W: Write>(
         invalidate_search_state(continuations, handles);
     let result = sync_directory(store, canonical_root, &directory)?;
     store.verify()?;
-    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
-    refresh_storage(storage, canonical_root)?;
+    let manifests =
+        verify_directory_manifests_with_check(canonical_root, &store.namespace_id(), &|| {
+            store.check_operation()
+        })?;
+    refresh_storage(storage, canonical_root, store)?;
     write_line(
         writer,
         &format!(
@@ -192,8 +195,10 @@ pub(super) fn cmd_gc(
     storage: &mut StorageSecurityStatus,
     apply: bool,
 ) -> Result<(), String> {
-    let result = guarded_collect_orphan_revisions(canonical_root, apply)?;
-    refresh_storage(storage, canonical_root)?;
+    let result = guarded_collect_orphan_revisions_with_check(canonical_root, apply, &|| {
+        store.check_operation()
+    })?;
+    refresh_storage(storage, canonical_root, store)?;
     write_line(
         writer,
         &format!(
@@ -237,7 +242,7 @@ pub(super) fn cmd_retire<W: Write>(
     let source = state.store.retire_source(source_id)?;
     let (invalidated_continuations, invalidated_handles) =
         invalidate_search_state(state.continuations, state.handles);
-    refresh_storage(state.storage, state.canonical_root)?;
+    refresh_storage(state.storage, state.canonical_root, state.store)?;
     write_line(
         state.writer,
         &format!(

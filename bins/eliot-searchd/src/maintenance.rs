@@ -6,7 +6,9 @@
 //! reference set. Both operations require the data-root owner lock.
 
 use std::collections::BTreeSet;
-use std::fs::{self, File, Metadata, OpenOptions};
+#[cfg(test)]
+use std::fs::OpenOptions;
+use std::fs::{self, File, Metadata};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -23,6 +25,7 @@ const MAX_REVISION_OBJECTS: usize = 2_000_000;
 
 /// Result of explicit torn-tail repair.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct LogRepairResult {
     pub(crate) repaired: bool,
     pub(crate) removed_bytes: usize,
@@ -57,7 +60,8 @@ struct LogInventory {
     last_digest: String,
 }
 
-/// Removes only an uncommitted unterminated final event.
+/// Removes only an uncommitted unterminated final event in historical fixtures.
+#[cfg(test)]
 pub fn repair_control_log(root: &Path) -> Result<LogRepairResult, String> {
     let control = root.join(CONTROL_DIRECTORY);
     ensure_directory(&control)?;
@@ -102,8 +106,7 @@ pub fn repair_control_log(root: &Path) -> Result<LogRepairResult, String> {
         .open(&log_path)
         .map_err(|error| format!("DIRECT_REPAIR_OPEN_ERROR:{error}"))?;
     file.set_len(
-        u64::try_from(prefix_len)
-            .map_err(|_| "DIRECT_REPAIR_OFFSET_OVERFLOW".to_owned())?,
+        u64::try_from(prefix_len).map_err(|_| "DIRECT_REPAIR_OFFSET_OVERFLOW".to_owned())?,
     )
     .and_then(|()| file.sync_all())
     .map_err(|error| format!("DIRECT_REPAIR_TRUNCATE_ERROR:{error}"))?;
@@ -129,11 +132,26 @@ pub fn repair_control_log(root: &Path) -> Result<LogRepairResult, String> {
     })
 }
 
-/// Finds and optionally deletes only generated unreferenced revision objects.
+/// Context-free historical fixture wrapper; unavailable to production callers.
+#[cfg(test)]
 pub fn collect_orphan_revisions(
     root: &Path,
     apply: bool,
 ) -> Result<GarbageCollectionResult, String> {
+    collect_orphan_revisions_with_check(root, apply, &|| Ok(()))
+}
+
+/// Finds and optionally deletes generated unreferenced objects with checkpoints.
+///
+/// The caller supplies its original admitted operation check. Any refusal is
+/// returned unchanged, including after possible deletion; this helper performs
+/// no rollback or recovery-marker cleanup.
+pub fn collect_orphan_revisions_with_check(
+    root: &Path,
+    apply: bool,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<GarbageCollectionResult, String> {
+    check()?;
     let control = root.join(CONTROL_DIRECTORY);
     let revisions = root.join(REVISION_DIRECTORY);
     ensure_directory(&control)?;
@@ -141,18 +159,22 @@ pub fn collect_orphan_revisions(
     let log_path = control.join(SOURCE_LOG_FILE);
     ensure_regular_file(&log_path)?;
     let mut log_bytes = Vec::new();
+    check()?;
     File::open(&log_path)
         .and_then(|file| {
             file.take(u64::try_from(MAX_LOG_BYTES + 1).unwrap_or(u64::MAX))
                 .read_to_end(&mut log_bytes)
         })
         .map_err(|error| format!("DIRECT_GC_LOG_READ_ERROR:{error}"))?;
+    check()?;
     if log_bytes.len() > MAX_LOG_BYTES {
         return Err("DIRECT_GC_LOG_TOO_LARGE".to_owned());
     }
-    let inventory = verify_complete_log(&log_bytes)?;
+    let inventory = verify_complete_log_with_check(&log_bytes, check)?;
+    check()?;
 
-    let tally = collect_candidates(&revisions, &inventory)?;
+    let tally = collect_candidates(&revisions, &inventory, check)?;
+    check()?;
     let objects = tally.objects;
 
     let orphan_objects = objects.iter().filter(|object| !object.referenced).count();
@@ -160,42 +182,54 @@ pub fn collect_orphan_revisions(
         .iter()
         .filter(|object| !object.referenced)
         .try_fold(0_u64, |total, object| {
+            check()?;
             total
                 .checked_add(object.byte_length)
                 .ok_or_else(|| "DIRECT_GC_BYTES_OVERFLOW".to_owned())
         })?;
     let mut deleted_objects = 0_usize;
     let mut deleted_bytes = 0_u64;
+    check()?;
     if apply {
         for object in objects.iter().filter(|object| !object.referenced) {
+            check()?;
             fs::remove_file(&object.path)
                 .map_err(|error| format!("DIRECT_GC_DELETE_ERROR:{error}"))?;
+            check()?;
             deleted_objects = deleted_objects.saturating_add(1);
             deleted_bytes = deleted_bytes
                 .checked_add(object.byte_length)
                 .ok_or_else(|| "DIRECT_GC_BYTES_OVERFLOW".to_owned())?;
         }
-        for entry in fs::read_dir(&revisions)
-            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
+        for entry in
+            fs::read_dir(&revisions).map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
         {
+            check()?;
             let path = entry
                 .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
                 .path();
+            check()?;
             if path.is_dir()
                 && fs::read_dir(&path)
                     .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
                     .next()
                     .is_none()
             {
+                check()?;
                 let _ = fs::remove_dir(&path);
+                check()?;
             }
+            check()?;
         }
+        check()?;
         #[cfg(unix)]
         sync_directory(&revisions)?;
         #[cfg(not(unix))]
         sync_directory(&revisions);
+        check()?;
     }
 
+    check()?;
     Ok(GarbageCollectionResult {
         referenced_revisions: inventory.referenced_revisions.len(),
         scanned_objects: objects.len(),
@@ -229,17 +263,17 @@ struct ObjectInventory {
 fn collect_candidates(
     revisions: &Path,
     inventory: &LogInventory,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<ObjectInventory, String> {
+    check()?;
     let mut tally = ObjectInventory::default();
-    let mut shard_entries = fs::read_dir(revisions)
-        .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?;
-    shard_entries.sort_by_key(fs::DirEntry::file_name);
+    let shard_entries = sorted_entries(revisions, check)?;
     for shard_entry in shard_entries {
+        check()?;
         let shard_path = shard_entry.path();
         let shard_metadata = fs::symlink_metadata(&shard_path)
             .map_err(|error| format!("DIRECT_GC_METADATA_ERROR:{error}"))?;
+        check()?;
         let shard_name = shard_entry.file_name();
         let shard_name = shard_name.to_string_lossy();
         if shard_metadata.file_type().is_symlink()
@@ -250,22 +284,18 @@ fn collect_candidates(
             tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
             continue;
         }
-        let mut entries = fs::read_dir(&shard_path)
-            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?;
-        entries.sort_by_key(std::fs::DirEntry::file_name);
+        check()?;
+        let entries = sorted_entries(&shard_path, check)?;
         for entry in entries {
+            check()?;
             if tally.objects.len() >= MAX_REVISION_OBJECTS {
                 return Err("DIRECT_GC_OBJECT_LIMIT_EXCEEDED".to_owned());
             }
             let path = entry.path();
             let metadata = fs::symlink_metadata(&path)
                 .map_err(|error| format!("DIRECT_GC_METADATA_ERROR:{error}"))?;
-            if metadata.file_type().is_symlink()
-                || is_reparse(&metadata)
-                || !metadata.is_file()
-            {
+            check()?;
+            if metadata.file_type().is_symlink() || is_reparse(&metadata) || !metadata.is_file() {
                 tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
                 continue;
             }
@@ -276,23 +306,20 @@ fn collect_candidates(
                     format,
                 } => {
                     if !revision_id.starts_with(shard_name.as_ref()) {
-                        tally.unexpected_objects =
-                            tally.unexpected_objects.saturating_add(1);
+                        tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
                         continue;
                     }
                     let referenced = inventory.referenced_revisions.contains(&revision_id);
                     match format {
                         RevisionObjectFormat::Plaintext => {
-                            tally.plaintext_objects =
-                                tally.plaintext_objects.saturating_add(1);
+                            tally.plaintext_objects = tally.plaintext_objects.saturating_add(1);
                             if referenced {
                                 tally.referenced_plaintext_objects =
                                     tally.referenced_plaintext_objects.saturating_add(1);
                             }
                         }
                         RevisionObjectFormat::Protected => {
-                            tally.protected_objects =
-                                tally.protected_objects.saturating_add(1);
+                            tally.protected_objects = tally.protected_objects.saturating_add(1);
                             if referenced {
                                 tally.referenced_protected_objects =
                                     tally.referenced_protected_objects.saturating_add(1);
@@ -317,9 +344,32 @@ fn collect_candidates(
                     tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
                 }
             }
+            check()?;
         }
+        check()?;
     }
+    check()?;
     Ok(tally)
+}
+
+fn sorted_entries(
+    directory: &Path,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<Vec<fs::DirEntry>, String> {
+    check()?;
+    let mut entries = fs::read_dir(directory)
+        .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
+        .map(|entry| {
+            check()?;
+            let entry = entry.map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?;
+            check()?;
+            Ok(entry)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    check()?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    check()?;
+    Ok(entries)
 }
 
 #[derive(Clone, Debug)]
@@ -376,12 +426,21 @@ fn classify_generated_object(name: &str) -> GeneratedObject {
     GeneratedObject::Unexpected
 }
 
+#[cfg(test)]
 fn verify_complete_log(bytes: &[u8]) -> Result<LogInventory, String> {
+    verify_complete_log_with_check(bytes, &|| Ok(()))
+}
+
+fn verify_complete_log_with_check(
+    bytes: &[u8],
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<LogInventory, String> {
+    check()?;
     if !bytes.ends_with(b"\n") {
         return Err("DIRECT_CONTROL_LOG_UNTERMINATED".to_owned());
     }
-    let text = core::str::from_utf8(bytes)
-        .map_err(|_| "DIRECT_CONTROL_LOG_NOT_UTF8".to_owned())?;
+    let text = core::str::from_utf8(bytes).map_err(|_| "DIRECT_CONTROL_LOG_NOT_UTF8".to_owned())?;
+    check()?;
     let mut lines = text.split_terminator('\n');
     let header = lines
         .next()
@@ -397,6 +456,7 @@ fn verify_complete_log(bytes: &[u8]) -> Result<LogInventory, String> {
     let mut last_digest = ZERO_DIGEST.to_owned();
     let mut events = 0_usize;
     for raw_line in lines {
+        check()?;
         let line = raw_line.trim_end_matches('\r');
         if line.is_empty() || line.len() > MAX_LOG_LINE_BYTES {
             return Err("DIRECT_CONTROL_LOG_EVENT_INVALID".to_owned());
@@ -416,9 +476,7 @@ fn verify_complete_log(bytes: &[u8]) -> Result<LogInventory, String> {
         {
             return Err("DIRECT_CONTROL_LOG_CHAIN_INVALID".to_owned());
         }
-        if !matches!(fields[4], "A" | "R")
-            || !matches!(fields[11], "native" | "path-bound")
-        {
+        if !matches!(fields[4], "A" | "R") || !matches!(fields[11], "native" | "path-bound") {
             return Err("DIRECT_CONTROL_LOG_ENUM_INVALID".to_owned());
         }
         fields[8]
@@ -443,7 +501,9 @@ fn verify_complete_log(bytes: &[u8]) -> Result<LogInventory, String> {
         if events > MAX_REVISION_OBJECTS {
             return Err("DIRECT_CONTROL_LOG_EVENT_LIMIT_EXCEEDED".to_owned());
         }
+        check()?;
     }
+    check()?;
     Ok(LogInventory {
         referenced_revisions,
         events,

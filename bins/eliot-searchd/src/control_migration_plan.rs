@@ -99,6 +99,7 @@ impl DirectStore {
         crate::plaintext_direct_store::DirectStore::with_existing_mapping_source(
             cap.canonical_root(),
             deadline,
+            cap.operation_request()?,
             |source| {
                 Self::stage_mapping_artifact(
                     source,

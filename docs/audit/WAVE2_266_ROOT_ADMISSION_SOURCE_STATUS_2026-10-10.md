@@ -55,6 +55,21 @@ failed output signals cancellation. GC acknowledgment now stays inside its guard
 mutation closure, so output failure cannot clear quarantine or release the owner.
 Native source-root arguments are intercepted before the legacy UTF-8 app parser.
 
+DIRECT children now retain that same original request in the plaintext store;
+secure-store methods delegate to it. Typed inspection, initialization/recovery and
+mutation opens bind the request before catalog replay. Service dispatch rebinds a
+command only after verifying pointer equality of the same borrowed live owner;
+it checks the new request, allowing the service to idle beyond a previous deadline.
+
+Cooperative checkpoints cover source traversal/ingest/publication, preparation,
+secure catalog/read/search, manifest discovery/load/publication, storage inventory
+and GC preview/deletion. Exact object readback receives the original absolute
+deadline. Search failure branches recheck the request before creating source gaps,
+and verification/search results recheck it after final construction. Cancellation
+or expiry therefore returns an operation refusal instead of a complete negative.
+Manifest cancellation, write and rename failures retain the attempted temporary
+object. No cancellation cleanup erases partial effects or quarantine.
+
 ## Evidence scope
 
 Rust 1.98.0, locked/offline, Windows native fixture profile; no dependency/lockfile
@@ -78,13 +93,22 @@ The dedicated command-context target compiles the actual private implementation 
 qualified entropy owner; its strict `--no-deps` Clippy gate is a separate bounded gate,
 not a claim that daemon/dependency-wide strict Clippy passed.
 
+The dedicated child target compiles the actual maintenance, manifest codec/readback,
+operation and entropy modules. Its focused cases exercise cancellation before work,
+between actual orphan deletions and after manifest temporary creation, plus an actual
+rename failure retaining attempted bytes. It does not qualify native admission or
+durable recovery. The deletion case proves remaining-object preservation; quarantine
+retention is checked by the separate product process target, not by a hand-made marker.
+Public module declarations in this test binary preserve the original module visibility
+without changing product visibility or suppressing fixture Clippy findings.
+
 ## Still open in #266 and downstream owners
 
-- General command admission/emission contexts are implemented in the current DIRECT
-  routes. Child-internal cancellation and blocking-I/O interruption remain incomplete:
-  synchronous source/catalog/preparation/maintenance bodies do not all receive the
-  context. An observed expired/cancelled command cannot emit success or clear its
-  mutation fence, but this does not prove bounded completion of every child.
+- Original command checkpoints now reach the named DIRECT children above. Some
+  administrative migration replay/object children still use legacy replay adapters
+  or deadline-only checks and remain incomplete. A checkpoint does not interrupt
+  a synchronous OS/vendor/codec call already in progress; bounded/preemptible I/O
+  and full child cancellation qualification are not claimed.
 - Arbitrary legacy quarantine has no retained operation identity. Named recovery
   currently covers complete initialization only; abandoned ordinary ACTIVE/DRAINING
   and unknown migration/publication outcomes are not automatically recovered.

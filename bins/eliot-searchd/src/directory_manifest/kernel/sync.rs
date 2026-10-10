@@ -5,10 +5,8 @@ use std::fs;
 use std::path::Path;
 
 use super::codec::{build_manifest, manifest_path, validate_entry};
-use super::load::{load_latest_manifest, load_manifest_file};
-use super::model::{
-    DirectoryEntry, DirectorySyncResult,
-};
+use super::load::{load_latest_manifest, load_manifest_file_with_check};
+use super::model::{DirectoryEntry, DirectorySyncResult};
 use super::paths::{ensure_directory, manifest_root, path_identity_bytes};
 use super::persist::persist_manifest;
 use super::spec::MAX_MANIFEST_ENTRIES;
@@ -22,15 +20,14 @@ pub fn sync_directory(
     data_root: &Path,
     directory: &Path,
 ) -> Result<DirectorySyncResult, String> {
-    let canonical_root = fs::canonicalize(data_root)
-        .map_err(|error| format!("DIRECT_SYNC_ROOT_ERROR:{error}"))?;
+    store.check_operation()?;
+    let canonical_root =
+        fs::canonicalize(data_root).map_err(|error| format!("DIRECT_SYNC_ROOT_ERROR:{error}"))?;
     let canonical_directory = fs::canonicalize(directory)
         .map_err(|error| format!("DIRECT_SYNC_DIRECTORY_ERROR:{error}"))?;
     ensure_directory(&canonical_root)?;
     ensure_directory(&canonical_directory)?;
-    if canonical_directory == canonical_root
-        || canonical_directory.starts_with(&canonical_root)
-    {
+    if canonical_directory == canonical_root || canonical_directory.starts_with(&canonical_root) {
         return Err("DIRECT_SYNC_DIRECTORY_INSIDE_DATA_ROOT".to_owned());
     }
 
@@ -40,11 +37,9 @@ pub fn sync_directory(
         &[&path_identity_bytes(&canonical_directory)],
     ));
     let manifest_root = manifest_root(&canonical_root)?;
-    let previous = load_latest_manifest(
-        &manifest_root,
-        &namespace_id,
-        &directory_digest,
-    )?;
+    let previous = load_latest_manifest(&manifest_root, &namespace_id, &directory_digest, &|| {
+        store.check_operation()
+    })?;
 
     let indexed = store.index_directory(&canonical_directory)?;
     let next_entries = entries_from_indexed(&indexed)?;
@@ -59,6 +54,7 @@ pub fn sync_directory(
     let mut moved_or_rebound_sources = 0_usize;
     if let Some(previous) = &previous {
         for (source_id, old_entry) in &previous.entries {
+            store.check_operation()?;
             if next_entries.contains_key(source_id) {
                 continue;
             }
@@ -70,8 +66,7 @@ pub fn sync_directory(
                 continue;
             }
             if current.path_digest != old_entry.path_digest {
-                moved_or_rebound_sources =
-                    moved_or_rebound_sources.saturating_add(1);
+                moved_or_rebound_sources = moved_or_rebound_sources.saturating_add(1);
                 continue;
             }
             store.retire_source(source_id)?;
@@ -91,27 +86,27 @@ pub fn sync_directory(
         generation,
         next_entries,
     )?;
-    persist_manifest(&manifest_root, &manifest)?;
-    let readback = load_manifest_file(&manifest_path(&manifest_root, &manifest))?;
+    store.check_operation()?;
+    persist_manifest(&manifest_root, &manifest, &|| store.check_operation())?;
+    let readback =
+        load_manifest_file_with_check(&manifest_path(&manifest_root, &manifest), &|| {
+            store.check_operation()
+        })?;
     if readback != manifest {
         return Err("DIRECT_SYNC_MANIFEST_READBACK_MISMATCH".to_owned());
     }
 
+    store.check_operation()?;
     Ok(DirectorySyncResult {
         namespace_id,
         directory_digest,
-        previous_generation: previous
-            .as_ref()
-            .map(|manifest| manifest.generation),
+        previous_generation: previous.as_ref().map(|manifest| manifest.generation),
         generation,
         previous_sources: previous
             .as_ref()
             .map_or(0, |manifest| manifest.entries.len()),
         indexed_sources: indexed.len(),
-        changed_sources: indexed
-            .iter()
-            .filter(|source| source.changed)
-            .count(),
+        changed_sources: indexed.iter().filter(|source| source.changed).count(),
         missing_sources,
         retired_sources,
         moved_or_rebound_sources,

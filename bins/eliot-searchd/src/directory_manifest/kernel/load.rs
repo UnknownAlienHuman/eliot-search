@@ -5,49 +5,39 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use super::codec::{
-    build_manifest, validate_digest, validate_entry, validate_filename,
-};
-use super::model::{
-    DirectoryEntry, DirectoryManifest, DirectoryManifestVerification,
-};
-use super::paths::{
-    ensure_regular_file, existing_manifest_root, is_reparse, manifest_files,
-};
+use super::codec::{build_manifest, validate_digest, validate_entry, validate_filename};
+use super::model::{DirectoryEntry, DirectoryManifest, DirectoryManifestVerification};
+use super::paths::{ensure_regular_file, existing_manifest_root, is_reparse, manifest_files};
 use super::spec::{
-    MANIFEST_HEADER, MAX_MANIFEST_BYTES, MAX_MANIFEST_ENTRIES,
-    MAX_MANIFEST_LINE_BYTES,
+    MANIFEST_HEADER, MAX_MANIFEST_BYTES, MAX_MANIFEST_ENTRIES, MAX_MANIFEST_LINE_BYTES,
 };
 
 pub(super) fn load_latest_manifest(
     root: &Path,
     namespace_id: &str,
     directory_digest: &str,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<Option<DirectoryManifest>, String> {
+    check()?;
     validate_digest(namespace_id, "DIRECT_MANIFEST_NAMESPACE_INVALID")?;
-    validate_digest(
-        directory_digest,
-        "DIRECT_MANIFEST_DIRECTORY_INVALID",
-    )?;
+    validate_digest(directory_digest, "DIRECT_MANIFEST_DIRECTORY_INVALID")?;
     let mut latest: Option<DirectoryManifest> = None;
     let mut seen_generation = BTreeMap::<u64, String>::new();
-    for path in manifest_files(root)? {
+    for path in manifest_files(root, check)? {
+        check()?;
         let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
             return Err("DIRECT_MANIFEST_FILENAME_INVALID".to_owned());
         };
         if !file_name.starts_with(directory_digest) {
             continue;
         }
-        let manifest = load_manifest_file(&path)?;
-        if manifest.namespace_id != namespace_id
-            || manifest.directory_digest != directory_digest
-        {
+        let manifest = load_manifest_file_with_check(&path, check)?;
+        if manifest.namespace_id != namespace_id || manifest.directory_digest != directory_digest {
             return Err("DIRECT_MANIFEST_BINDING_MISMATCH".to_owned());
         }
-        if let Some(existing) = seen_generation.insert(
-            manifest.generation,
-            manifest.manifest_digest.clone(),
-        ) && existing != manifest.manifest_digest
+        if let Some(existing) =
+            seen_generation.insert(manifest.generation, manifest.manifest_digest.clone())
+            && existing != manifest.manifest_digest
         {
             return Err("DIRECT_MANIFEST_GENERATION_AMBIGUOUS".to_owned());
         }
@@ -62,23 +52,27 @@ pub(super) fn load_latest_manifest(
             _ => latest = Some(manifest),
         }
     }
+    check()?;
     Ok(latest)
 }
 
-pub(super) fn load_manifest_file(
+pub(super) fn load_manifest_file_with_check(
     path: &Path,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<DirectoryManifest, String> {
-    load_manifest_input(path, MAX_MANIFEST_BYTES).map(|(manifest, _)| manifest)
+    load_manifest_input_with_check(path, MAX_MANIFEST_BYTES, check).map(|(manifest, _)| manifest)
 }
 
 /// Shared parser and exact-file observation used by verification and migration.
-pub(super) fn load_manifest_input(
+pub(super) fn load_manifest_input_with_check(
     path: &Path,
     max_bytes: usize,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<(DirectoryManifest, String), String> {
+    check()?;
     ensure_regular_file(path)?;
-    let mut file = File::open(path)
-        .map_err(|_| "DIRECT_MANIFEST_READ_ERROR".to_owned())?;
+    let mut file = File::open(path).map_err(|_| "DIRECT_MANIFEST_READ_ERROR".to_owned())?;
+    check()?;
     let before = file
         .metadata()
         .map_err(|_| "DIRECT_MANIFEST_METADATA_ERROR".to_owned())?;
@@ -94,6 +88,7 @@ pub(super) fn load_manifest_input(
         .take(max_bytes as u64 + 1)
         .read_to_string(&mut text)
         .map_err(|_| "DIRECT_MANIFEST_READ_ERROR".to_owned())?;
+    check()?;
     let after = file
         .metadata()
         .map_err(|_| "DIRECT_MANIFEST_METADATA_ERROR".to_owned())?;
@@ -122,20 +117,15 @@ pub(super) fn load_manifest_input(
         .map_err(|_| "DIRECT_MANIFEST_GENERATION_INVALID".to_owned())?;
     let expected_digest = header_fields[4].to_owned();
     validate_digest(&namespace_id, "DIRECT_MANIFEST_NAMESPACE_INVALID")?;
-    validate_digest(
-        &directory_digest,
-        "DIRECT_MANIFEST_DIRECTORY_INVALID",
-    )?;
-    validate_digest(
-        &expected_digest,
-        "DIRECT_MANIFEST_DIGEST_INVALID",
-    )?;
+    validate_digest(&directory_digest, "DIRECT_MANIFEST_DIRECTORY_INVALID")?;
+    validate_digest(&expected_digest, "DIRECT_MANIFEST_DIGEST_INVALID")?;
     if generation == 0 {
         return Err("DIRECT_MANIFEST_GENERATION_INVALID".to_owned());
     }
 
     let mut entries = BTreeMap::new();
     for line in lines {
+        check()?;
         if line.is_empty() || line.len() > MAX_MANIFEST_LINE_BYTES {
             return Err("DIRECT_MANIFEST_LINE_INVALID".to_owned());
         }
@@ -156,30 +146,32 @@ pub(super) fn load_manifest_input(
             return Err("DIRECT_MANIFEST_ENTRY_LIMIT_EXCEEDED".to_owned());
         }
     }
-    let manifest = build_manifest(
-        namespace_id,
-        directory_digest,
-        generation,
-        entries,
-    )?;
+    let manifest = build_manifest(namespace_id, directory_digest, generation, entries)?;
     if manifest.manifest_digest != expected_digest {
         return Err("DIRECT_MANIFEST_DIGEST_MISMATCH".to_owned());
     }
     validate_filename(path, &manifest)?;
+    check()?;
     Ok((manifest, text))
 }
 
 /// Verifies every immutable directory manifest and selects one unambiguous
 /// highest generation per directory.
-pub fn verify_directory_manifests(
+/// Verifies existing immutable manifests under the original operation checkpoint.
+///
+/// # Errors
+/// Refuses cancellation, invalid bindings, changed files and bounded-input failures.
+pub fn verify_directory_manifests_with_check(
     data_root: &Path,
     namespace_id: &str,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<DirectoryManifestVerification, String> {
+    check()?;
     validate_digest(namespace_id, "DIRECT_MANIFEST_NAMESPACE_INVALID")?;
     let canonical_root = std::fs::canonicalize(data_root)
         .map_err(|error| format!("DIRECT_MANIFEST_ROOT_ERROR:{error}"))?;
     let files = existing_manifest_root(&canonical_root)?
-        .map(|root| manifest_files(&root))
+        .map(|root| manifest_files(&root, check))
         .transpose()?
         .unwrap_or_default();
     let mut current = BTreeMap::<String, DirectoryManifest>::new();
@@ -187,13 +179,13 @@ pub fn verify_directory_manifests(
     let mut highest_generation = 0_u64;
 
     for path in &files {
-        let manifest = load_manifest_file(path)?;
+        check()?;
+        let manifest = load_manifest_file_with_check(path, check)?;
         if manifest.namespace_id != namespace_id {
             return Err("DIRECT_MANIFEST_NAMESPACE_MISMATCH".to_owned());
         }
         let key = (manifest.directory_digest.clone(), manifest.generation);
-        if let Some(existing) =
-            generations.insert(key, manifest.manifest_digest.clone())
+        if let Some(existing) = generations.insert(key, manifest.manifest_digest.clone())
             && existing != manifest.manifest_digest
         {
             return Err("DIRECT_MANIFEST_GENERATION_AMBIGUOUS".to_owned());
@@ -213,6 +205,7 @@ pub fn verify_directory_manifests(
         }
     }
 
+    check()?;
     Ok(DirectoryManifestVerification {
         manifest_files: files.len(),
         directories: current.len(),
@@ -222,4 +215,16 @@ pub fn verify_directory_manifests(
             .sum(),
         highest_generation,
     })
+}
+
+#[cfg(test)]
+/// Historical fixture adapter over the same manifest verifier.
+///
+/// # Errors
+/// Returns the existing verifier's binding, file and bounded-input failures.
+pub fn verify_directory_manifests(
+    data_root: &Path,
+    namespace_id: &str,
+) -> Result<DirectoryManifestVerification, String> {
+    verify_directory_manifests_with_check(data_root, namespace_id, &|| Ok(()))
 }

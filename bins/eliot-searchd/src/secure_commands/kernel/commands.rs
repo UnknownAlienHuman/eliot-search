@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::io;
 use std::path::Path;
 
-use crate::maintenance_guard::guarded_collect_orphan_revisions;
+use crate::maintenance_guard::guarded_collect_orphan_revisions_with_check;
 use crate::owner_composition::DataRootRequest;
 use crate::service_output::{emit_indexed_source, json_string, write_line};
 use crate::sha256;
@@ -20,7 +20,7 @@ pub(super) fn cmd_index_directory(
         let indexed = store.index_directory(Path::new(&arguments[2]))?;
         let changed = indexed.iter().filter(|source| source.changed).count();
         store.verify()?;
-        let storage = StorageSecurityStatus::inspect(root)?;
+        let storage = StorageSecurityStatus::inspect_with_check(root, &|| request.preflight())?;
         request.preflight()?;
         let mut stdout = io::stdout().lock();
         let mut output = request.output(&mut stdout);
@@ -58,7 +58,7 @@ pub(super) fn cmd_retire_source(
     with_store_mut_request(Path::new(&arguments[1]), request, |root, store| {
         let source = store.retire_source(source_id)?;
         store.verify()?;
-        let storage = StorageSecurityStatus::inspect(root)?;
+        let storage = StorageSecurityStatus::inspect_with_check(root, &|| request.preflight())?;
         request.preflight()?;
         write_stdout(
             request,
@@ -137,15 +137,17 @@ pub(super) fn cmd_gc_root(arguments: &[OsString], request: &DataRootRequest) -> 
     if apply {
         with_store_mut_request(Path::new(&arguments[1]), request, |root, store| {
             store.verify()?;
-            let result = guarded_collect_orphan_revisions(root, true)?;
+            let result =
+                guarded_collect_orphan_revisions_with_check(root, true, &|| request.preflight())?;
             store.verify()?;
-            let storage = StorageSecurityStatus::inspect(root)?;
+            let storage = StorageSecurityStatus::inspect_with_check(root, &|| request.preflight())?;
             emit_gc(request, &store.namespace_id(), &result, &storage)
         })
     } else {
         with_store_request(Path::new(&arguments[1]), request, |root, store, storage| {
             store.verify_catalog()?;
-            let result = guarded_collect_orphan_revisions(root, false)?;
+            let result =
+                guarded_collect_orphan_revisions_with_check(root, false, &|| request.preflight())?;
             emit_gc(request, &store.namespace_id(), &result, storage)
         })
     }

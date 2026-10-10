@@ -8,7 +8,7 @@ use crate::catalog_quarantine;
 use crate::continuation::{ContinuationCatalog, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
-use crate::directory_manifest::verify_directory_manifests;
+use crate::directory_manifest::verify_directory_manifests_with_check;
 use crate::result_handles::{MAX_HANDLE_EXPANSION_BYTES, ResultHandleCatalog};
 use crate::service_output::write_line;
 use crate::sha256;
@@ -27,8 +27,13 @@ pub(super) fn run_service(
     catalog_quarantine::check(guard.canonical_root())?;
     let mut store = DirectStore::open_existing_mutating(&guard)?;
     let verification = store.verify()?;
-    let manifests = verify_directory_manifests(guard.canonical_root(), &store.namespace_id())?;
-    let mut storage = StorageSecurityStatus::inspect(guard.canonical_root())?;
+    let manifests = verify_directory_manifests_with_check(
+        guard.canonical_root(),
+        &store.namespace_id(),
+        &|| store.check_operation(),
+    )?;
+    let mut storage =
+        StorageSecurityStatus::inspect_with_check(guard.canonical_root(), &|| startup.preflight())?;
     let mut continuations = ContinuationCatalog::new(&store.namespace_id());
     let mut handles = ResultHandleCatalog::new(&store.namespace_id());
 

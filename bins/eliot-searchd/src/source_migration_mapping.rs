@@ -10,15 +10,15 @@ use std::time::Instant;
 
 use search_contracts::{Sha256Digest32, SourceNamespaceId};
 use search_control_redb::migration::{
-    LegacySourceMappingEvent, LegacySourceMappingState, MappedSourceEvent,
-    SourceImportRow, SourceMappingError, SourceMappingHeader,
-    SourceMappingPlanner, SourceMappingSummary, source_mapping_profile_digest,
+    LegacySourceMappingEvent, LegacySourceMappingState, MappedSourceEvent, SourceImportRow,
+    SourceMappingError, SourceMappingHeader, SourceMappingPlanner, SourceMappingSummary,
+    source_mapping_profile_digest,
 };
 
 use super::{
-    CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
-    SOURCE_LOG_FILE, SourceRecord, SourceState, event_json, read_namespace,
-    replay_registry, sha256, snapshot_digest, validate_legacy_event,
+    CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, SOURCE_LOG_FILE,
+    SourceRecord, SourceState, event_json, read_namespace, replay_registry, sha256,
+    snapshot_digest, validate_legacy_event,
 };
 
 fn mapping_error(error: SourceMappingError) -> String {
@@ -62,10 +62,9 @@ fn encode_mapped(
     record: &SourceRecord,
     previous: Option<&SourceRecord>,
 ) -> String {
-    let predecessor = mapped.previous_revision_id.map_or_else(
-        || "null".to_owned(),
-        |id| format!("\"{id}\""),
-    );
+    let predecessor = mapped
+        .previous_revision_id
+        .map_or_else(|| "null".to_owned(), |id| format!("\"{id}\""));
     format!(
         concat!(
             "{{\"kind\":\"source_event_mapping\",\"source_id\":\"{}\",",
@@ -167,12 +166,7 @@ impl DirectStore {
         emit: impl FnMut(&[u8]) -> Result<(), String>,
         mut mapped: impl FnMut(SourceImportRow) -> Result<(), String>,
     ) -> Result<SourceMappingSummary, String> {
-        self.compile_source_mapping_inner(
-            namespace,
-            deadline,
-            emit,
-            Some(&mut mapped),
-        )
+        self.compile_source_mapping_inner(namespace, deadline, emit, Some(&mut mapped))
     }
 
     fn compile_source_mapping_inner(
@@ -196,27 +190,23 @@ impl DirectStore {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
         emit(encode_header(header).as_bytes())?;
-        let mut planner = SourceMappingPlanner::new(header, MAX_SOURCE_EVENTS)
-            .map_err(mapping_error)?;
-        let state = replay_registry(
-            &control.join(SOURCE_LOG_FILE),
-            |record, previous| {
-                check()?;
-                validate_legacy_event(&header.legacy_namespace, record, previous)?;
-                let mapped = planner
-                    .map(legacy_event(record, previous)?)
-                    .map_err(mapping_error)?;
-                if let Some(imported) = imported.as_mut() {
-                    imported(mapped.import_row())?;
-                }
-                emit(encode_mapped(&mapped, record, previous).as_bytes())
-            },
-        )?;
+        let mut planner =
+            SourceMappingPlanner::new(header, MAX_SOURCE_EVENTS).map_err(mapping_error)?;
+        let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
+            check()?;
+            validate_legacy_event(&header.legacy_namespace, record, previous)?;
+            let mapped = planner
+                .map(legacy_event(record, previous)?)
+                .map_err(mapping_error)?;
+            if let Some(imported) = imported.as_mut() {
+                imported(mapped.import_row())?;
+            }
+            emit(encode_mapped(&mapped, record, previous).as_bytes())
+        })?;
         check()?;
         let summary = planner.finish().map_err(mapping_error)?;
         if state != self.registry
-            || read_namespace(&control.join(NAMESPACE_FILE))?
-                != self.namespace_id
+            || read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
@@ -229,9 +219,11 @@ impl DirectStore {
     pub(crate) fn with_existing_mapping_source<T>(
         root: &Path,
         deadline: Instant,
+        request: &crate::owner_composition::DataRootRequest,
         inspect: impl FnOnce(&Self) -> Result<T, String>,
     ) -> Result<T, String> {
         let check = || {
+            request.preflight()?;
             if Instant::now() >= deadline {
                 Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
             } else {
@@ -242,13 +234,10 @@ impl DirectStore {
         crate::catalog_presence::require_existing(root)?;
         let control = root.join(CONTROL_DIRECTORY);
         let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))?;
-        let registry = replay_registry(
-            &control.join(SOURCE_LOG_FILE),
-            |record, previous| {
-                check()?;
-                validate_legacy_event(&namespace_id, record, previous)
-            },
-        )?;
+        let registry = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
+            check()?;
+            validate_legacy_event(&namespace_id, record, previous)
+        })?;
         check()?;
         if read_namespace(&control.join(NAMESPACE_FILE))? != namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
@@ -257,6 +246,7 @@ impl DirectStore {
             root: root.to_path_buf(),
             namespace_id,
             registry,
+            operation: Some(request.retain()),
         };
         let expected = snapshot_digest(
             &source.namespace_id,

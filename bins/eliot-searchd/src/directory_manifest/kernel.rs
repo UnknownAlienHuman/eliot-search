@@ -17,11 +17,12 @@ mod spec;
 #[path = "kernel/sync.rs"]
 mod sync;
 
+#[cfg(test)]
 pub use load::verify_directory_manifests;
+pub use load::verify_directory_manifests_with_check;
 pub use migration::{migration_manifest, migration_manifest_files};
 pub use model::{
-    DirectoryEntry, DirectoryManifest, DirectoryManifestVerification,
-    DirectorySyncResult,
+    DirectoryEntry, DirectoryManifest, DirectoryManifestVerification, DirectorySyncResult,
 };
 pub use paths::path_identity_bytes;
 pub use sync::sync_directory;

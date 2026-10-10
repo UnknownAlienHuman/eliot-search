@@ -22,7 +22,7 @@ use super::state::{CommandState, invalidate_search_state};
 
 pub(super) fn execute_command(
     command: &str,
-    store: &mut crate::direct_store::DirectStore,
+    store: &mut crate::direct_store::MutatingStore<'_>,
     continuations: &mut crate::continuation::ContinuationCatalog,
     handles: &mut crate::result_handles::ResultHandleCatalog,
     owner: &crate::development::DataRootGuard,
@@ -36,6 +36,7 @@ pub(super) fn execute_command(
     let (writer, attempt, shutdown_request) = operation;
     let command_cap = owner.admit_service_command(command)?;
     command_cap.verify()?;
+    store.bind_service_command(&command_cap)?;
     let mut output = command_cap.request().output(writer);
     let writer = &mut output;
     let canonical_root = owner.canonical_root();
@@ -57,7 +58,7 @@ pub(super) fn execute_command(
             storage,
         )?,
         ("status", [_]) => {
-            refresh_storage(storage, canonical_root)?;
+            refresh_storage(storage, canonical_root, store)?;
             cmd_status(writer, store, storage)?;
         }
         ("version", [_]) => cmd_version(writer)?,
@@ -68,7 +69,7 @@ pub(super) fn execute_command(
             return Ok(ServiceControl::Stop);
         }
         ("verify", [_]) => {
-            refresh_storage(storage, canonical_root)?;
+            refresh_storage(storage, canonical_root, store)?;
             emit_verification(writer, store, canonical_root, storage)?;
         }
         ("verify-directory-manifests", [_]) => {

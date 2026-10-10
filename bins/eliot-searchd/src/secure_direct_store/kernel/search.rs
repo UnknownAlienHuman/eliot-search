@@ -2,17 +2,16 @@
 
 use crate::development::ScanResult;
 use crate::direct_preparation::{
-    CANONICAL_CORPUS_BUDGET, SPINE_GAP_BUDGET_EXHAUSTED,
-    SPINE_GAP_MATCH_LIMIT, SPINE_GAP_VALIDATION_FAILED, scan_prepared,
-    validate_query, validate_source_backed_match,
+    CANONICAL_CORPUS_BUDGET, SPINE_GAP_BUDGET_EXHAUSTED, SPINE_GAP_MATCH_LIMIT,
+    SPINE_GAP_VALIDATION_FAILED, scan_prepared, validate_query, validate_source_backed_match,
 };
 use crate::plaintext_direct_store::{
     RevisionMetadata, SourceSummary, StoreGap, StoreSearchResult, StoredMatch,
 };
 use crate::sha256;
 
-use super::DirectStore;
 use super::super::preparation_store;
+use super::DirectStore;
 
 const MAX_SEARCH_GAPS: usize = 100_000;
 
@@ -25,6 +24,7 @@ impl DirectStore {
         query: &str,
         ascii_insensitive: bool,
     ) -> Result<StoreSearchResult, String> {
+        self.check_operation()?;
         validate_query(query).map_err(str::to_owned)?;
         let namespace = self.inner.namespace_id();
         let active = self
@@ -33,6 +33,8 @@ impl DirectStore {
             .into_iter()
             .filter(|source| source.active)
             .collect::<Vec<_>>();
+        // list_sources reads the registry; recheck before any revision read.
+        self.check_operation()?;
         let mut matches = Vec::new();
         let mut gaps = Vec::new();
         let mut searched_sources = 0_usize;
@@ -41,6 +43,9 @@ impl DirectStore {
         let mut match_limit_reached = false;
 
         for (index, source) in active.iter().enumerate() {
+            // Before the budget decisions, so a dead operation never records
+            // budget gaps belonging to a live run.
+            self.check_operation()?;
             if matches.len() >= CANONICAL_CORPUS_BUDGET.max_matches {
                 complete = false;
                 match_limit_reached = true;
@@ -65,9 +70,7 @@ impl DirectStore {
             }
             if scanned_bytes
                 .checked_add(source.byte_length)
-                .is_none_or(|total| {
-                    total > CANONICAL_CORPUS_BUDGET.max_source_bytes
-                })
+                .is_none_or(|total| total > CANONICAL_CORPUS_BUDGET.max_source_bytes)
             {
                 Self::push_remaining_gaps(
                     &active,
@@ -85,9 +88,13 @@ impl DirectStore {
                 content_digest: source.content_digest.clone(),
                 byte_length: source.byte_length,
             };
+            // Every failure branch rechecks the operation before recording a
+            // source gap, so a dead request propagates instead of being counted
+            // as an ordinary coverage gap.
             let bytes = match self.read_verified_revision(&metadata) {
                 Ok(bytes) => bytes,
                 Err(reason) => {
+                    self.check_operation()?;
                     if gaps.len() >= MAX_SEARCH_GAPS {
                         complete = false;
                         break;
@@ -101,7 +108,10 @@ impl DirectStore {
                     continue;
                 }
             };
+            // Immediately after the synchronous read owner call.
+            self.check_operation()?;
             let Ok(text) = String::from_utf8(bytes) else {
+                self.check_operation()?;
                 if gaps.len() >= MAX_SEARCH_GAPS {
                     complete = false;
                     break;
@@ -117,17 +127,14 @@ impl DirectStore {
             let ScanResult {
                 matches: source_matches,
                 coverage,
-            } = match preparation_store::load(
-                &self.root,
-                &self.protector,
-                &namespace,
-                &metadata,
-            )
-            .and_then(|saved| {
-                scan_prepared(&text, &saved, query, ascii_insensitive)
-            }) {
+            } = match preparation_store::load(&self.root, &self.protector, &namespace, &metadata)
+                .and_then(|saved| scan_prepared(&text, &saved, query, ascii_insensitive))
+            {
                 Ok(result) => result,
                 Err(reason) => {
+                    // Preparation load or scan failed; the exact owner reason
+                    // takes precedence over a stored preparation gap.
+                    self.check_operation()?;
                     complete = false;
                     if gaps.len() >= MAX_SEARCH_GAPS {
                         break;
@@ -152,6 +159,7 @@ impl DirectStore {
                 .is_err()
             });
             if validation_failed {
+                self.check_operation()?;
                 complete = false;
                 if gaps.len() >= CANONICAL_CORPUS_BUDGET.max_gaps {
                     break;
@@ -170,6 +178,9 @@ impl DirectStore {
                 match_limit_reached = coverage.match_limit_reached;
             }
             for item in source_matches {
+                // Before the match budget decision, so a dead operation never
+                // records budget gaps belonging to a live run.
+                self.check_operation()?;
                 if matches.len() >= CANONICAL_CORPUS_BUDGET.max_matches {
                     complete = false;
                     match_limit_reached = true;
@@ -213,7 +224,9 @@ impl DirectStore {
             }
         }
 
-        Ok(StoreSearchResult {
+        // A corpus run that overran its bound must not publish a negative-complete.
+        self.check_operation()?;
+        let result = StoreSearchResult {
             matches,
             gaps,
             registered_sources: self.inner.list_sources().len(),
@@ -221,7 +234,9 @@ impl DirectStore {
             searched_sources,
             complete,
             match_limit_reached,
-        })
+        };
+        self.check_operation()?;
+        Ok(result)
     }
 
     fn push_remaining_gaps(
@@ -233,9 +248,7 @@ impl DirectStore {
     ) {
         *complete = false;
         for source in active.iter().skip(from) {
-            if gaps.len()
-                >= CANONICAL_CORPUS_BUDGET.max_gaps.min(MAX_SEARCH_GAPS)
-            {
+            if gaps.len() >= CANONICAL_CORPUS_BUDGET.max_gaps.min(MAX_SEARCH_GAPS) {
                 return;
             }
             gaps.push(StoreGap {

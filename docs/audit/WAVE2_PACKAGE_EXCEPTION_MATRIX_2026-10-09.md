@@ -26,6 +26,25 @@ Rows name existing packages at their current Cargo paths, not new top-level dire
 
 ## #266 existing-root composition addendum
 
+The [child-context addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6095063694)
+retains the original request in the existing plaintext DIRECT store and passes its
+checkpoints through the existing ingest, preparation, read/search, manifest and GC
+bodies. Exact extensions name
+[`direct_store_ingest/kernel/{entry,batch,plan,policy}.rs`, `preparation_store/kernel/batch.rs`
+and `directory_manifest/kernel/{load,paths,persist,sync,migration}.rs`](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6095091808),
+[`maintenance.rs`, `maintenance_guard.rs` and `control_migration_objects.rs`](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6095118478),
+and the actual
+[`storage_security.rs`, `source_migration_mapping.rs` and `control_migration_plan.rs`
+consumers](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6095208075).
+Narrow service diagnostics/dispatch/mutation/query/reporting/runtime adapters pass
+the existing store checkpoint; no query algorithm changes. `direct_store/{model,store}.rs`,
+`direct_store_catalog.rs`, `secure_direct_store/kernel/{catalog,lifecycle,read,search}.rs`
+and `development/kernel/owner.rs` bind the same request to the same borrowed owner.
+Service commands may replace an expired startup/previous-command context only after
+the exact borrowed owner is verified. No second secure-store request or timer is added.
+Cancellation and uncertain manifest publication preserve pending objects for reconciliation.
+This is cooperative checking around existing calls, not preemptible filesystem/vendor I/O.
+
 The [operation-context addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094825469)
 includes `owner_composition/kernel/operation.rs` and narrow request-aware output/cancellation
 in `public_runtime_service/kernel/session.rs`, with narrow native argument/deadline plumbing

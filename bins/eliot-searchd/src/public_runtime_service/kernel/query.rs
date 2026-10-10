@@ -5,9 +5,7 @@ use std::io::Write;
 use crate::continuation::{ContinuationError, LiveExpansionBarrier};
 use crate::direct_preparation::verify_spine_gate;
 use crate::result_handles::ResultHandleError;
-use crate::service_output::{
-    emit_handle_expansion, emit_search_page, emit_streaming_search,
-};
+use crate::service_output::{emit_handle_expansion, emit_search_page, emit_streaming_search};
 
 use super::codec::{decode_query, parse_page_size, parse_search_mode, parse_u64};
 use super::diagnostics::refresh_storage;
@@ -22,7 +20,7 @@ pub(super) fn cmd_streaming_search<W: Write>(
     let query = decode_query(query_hex)?;
     let result = state.store.search(&query, parse_search_mode(mode)?)?;
     enforce_spine_gate(&result)?;
-    refresh_storage(state.storage, state.canonical_root)?;
+    refresh_storage(state.storage, state.canonical_root, state.store)?;
     emit_streaming_search(
         state.writer,
         &state.store.namespace_id(),
@@ -56,7 +54,7 @@ pub(super) fn cmd_search_page<W: Write>(
     let mut public = handles
         .prepare_mint_page(store, &page.page().matches)
         .map_err(handle_error)?;
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     let deadline = page_deadline(page.expires_at(), public.expires_at());
     page.deliver(|page| {
         public.revalidate().map_err(handle_error)?;
@@ -86,17 +84,12 @@ pub(super) fn cmd_continue<W: Write>(
     } = &mut *state;
     let page_size = parse_page_size(page_size)?;
     let page = continuations
-        .prepare_continue_page(
-            store,
-            token,
-            page_size,
-            LiveExpansionBarrier::clean(),
-        )
+        .prepare_continue_page(store, token, page_size, LiveExpansionBarrier::clean())
         .map_err(continuation_error)?;
     let mut public = handles
         .prepare_mint_page(store, &page.page().matches)
         .map_err(handle_error)?;
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     let deadline = page_deadline(page.expires_at(), public.expires_at());
     page.deliver(|page| {
         public.revalidate().map_err(handle_error)?;
@@ -129,7 +122,7 @@ pub(super) fn cmd_expand_handle<W: Write>(
     let expansion = handles
         .prepare_expand(store, token, start, end)
         .map_err(handle_error)?;
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     expansion.deliver(|expansion, expires_at| {
         with_deadline(
             writer,
@@ -139,9 +132,7 @@ pub(super) fn cmd_expand_handle<W: Write>(
     })
 }
 
-fn enforce_spine_gate(
-    result: &crate::direct_store::StoreSearchResult,
-) -> Result<(), String> {
+fn enforce_spine_gate(result: &crate::direct_store::StoreSearchResult) -> Result<(), String> {
     verify_spine_gate(
         result.active_sources,
         result.searched_sources,

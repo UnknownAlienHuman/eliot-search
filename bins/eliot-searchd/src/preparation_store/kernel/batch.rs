@@ -4,14 +4,11 @@ use std::time::Instant;
 
 use zeroize::Zeroizing;
 
-use super::persist::persist_canonical;
-use super::spec::{
-    BATCH_SLICE, MAX_BATCH_REVISIONS, MAX_BATCH_SOURCE_BYTES,
-};
 use super::super::super::DirectStore;
+use super::persist::persist_canonical;
+use super::spec::{BATCH_SLICE, MAX_BATCH_REVISIONS, MAX_BATCH_SOURCE_BYTES};
 use crate::direct_preparation::{
-    CanonicalPreparationReceipt, canonical_materializer_digest,
-    canonical_unitizer_digest,
+    CanonicalPreparationReceipt, canonical_materializer_digest, canonical_unitizer_digest,
 };
 use crate::sha256;
 
@@ -89,20 +86,26 @@ impl DirectStore {
         &self,
         revision_id: &str,
     ) -> Result<CanonicalPreparationReceipt, String> {
+        self.check_operation()?;
         crate::catalog_presence::require_existing(&self.root)?;
         self.inner.verify_control()?;
+        self.check_operation()?;
         let metadata = self
             .inner
             .retained_revision(revision_id)
             .ok_or_else(|| "DIRECT_REVISION_NOT_FOUND".to_owned())?;
+        self.check_operation()?;
         let bytes = Zeroizing::new(self.read_revision_detailed(&metadata)?);
-        persist_canonical(
+        self.check_operation()?;
+        let receipt = persist_canonical(
             &self.root,
             &self.protector,
             &self.inner.namespace_id(),
             &metadata,
             &bytes,
-        )
+        )?;
+        self.check_operation()?;
+        Ok(receipt)
     }
 
     /// Cheap pre-dispatch validation against the admitted catalog snapshot.
@@ -110,12 +113,14 @@ impl DirectStore {
         &self,
         cursor: Option<&PreparationCursor>,
     ) -> Result<(), String> {
+        self.check_operation()?;
         if let Some(cursor) = cursor
             && (cursor.checkpoint != self.preparation_checkpoint()
                 || self.inner.retained_revision(&cursor.after).is_none())
         {
             return Err("DIRECT_PREPARATION_CURSOR_STALE".to_owned());
         }
+        self.check_operation()?;
         Ok(())
     }
 
@@ -125,8 +130,10 @@ impl DirectStore {
         &self,
         cursor: Option<&PreparationCursor>,
     ) -> Result<PreparationBatch, String> {
+        self.check_operation()?;
         crate::catalog_presence::require_existing(&self.root)?;
         self.inner.verify_control()?;
+        self.check_operation()?;
         self.validate_preparation_cursor(cursor)?;
         let checkpoint = self.preparation_checkpoint();
         let namespace = self.inner.namespace_id();
@@ -146,6 +153,7 @@ impl DirectStore {
         let mut last = None;
 
         while let Some(metadata) = pending.peek() {
+            self.check_operation()?;
             if batch.stored >= MAX_BATCH_REVISIONS
                 || batch
                     .source_bytes
@@ -158,14 +166,12 @@ impl DirectStore {
             let metadata = pending
                 .next()
                 .ok_or_else(|| "DIRECT_PREPARATION_NO_PROGRESS".to_owned())?;
+            self.check_operation()?;
             let bytes = Zeroizing::new(self.read_revision_detailed(&metadata)?);
-            let receipt = persist_canonical(
-                &self.root,
-                &self.protector,
-                &namespace,
-                &metadata,
-                &bytes,
-            )?;
+            self.check_operation()?;
+            let receipt =
+                persist_canonical(&self.root, &self.protector, &namespace, &metadata, &bytes)?;
+            self.check_operation()?;
             batch.source_bytes += metadata.byte_length;
             batch.stored += 1;
             if let Some(reason) = receipt.gap {
@@ -181,13 +187,14 @@ impl DirectStore {
             last = Some(metadata.revision_id);
         }
 
+        self.check_operation()?;
         if pending.peek().is_some() {
-            let last = last
-                .ok_or_else(|| "DIRECT_PREPARATION_NO_PROGRESS".to_owned())?;
-            batch.next_cursor =
-                Some(format!("v1.{}.{last}", sha256::hex(&checkpoint)));
+            let last = last.ok_or_else(|| "DIRECT_PREPARATION_NO_PROGRESS".to_owned())?;
+            batch.next_cursor = Some(format!("v1.{}.{last}", sha256::hex(&checkpoint)));
         }
+        self.check_operation()?;
         self.inner.verify_control()?;
+        self.check_operation()?;
         Ok(batch)
     }
 }

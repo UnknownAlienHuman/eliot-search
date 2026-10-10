@@ -82,16 +82,19 @@ impl ReadOnlyStore<'_> {
     /// Catalog metadata only; no source contents or credential resolution.
     pub(crate) fn verify_catalog(&self) -> Result<plaintext::StoreVerification, String> {
         self.cap.verify_existing()?;
+        self.inner.check_operation()?;
         self.inner.verify_control()?;
         let sources = self.inner.list_sources();
-        Ok(plaintext::StoreVerification {
+        let verification = plaintext::StoreVerification {
             source_events: self.inner.source_event_count(),
             registered_sources: sources.len(),
             active_sources: sources.iter().filter(|source| source.active).count(),
             referenced_revisions: self.inner.retained_revisions().len(),
             verified_revisions: 0,
             total_revision_bytes: 0,
-        })
+        };
+        self.cap.verify_existing()?;
+        Ok(verification)
     }
 
     pub(crate) fn verify(&self) -> Result<plaintext::StoreVerification, String> {
@@ -147,6 +150,18 @@ impl core::ops::DerefMut for MutatingStore<'_> {
     }
 }
 
+impl MutatingStore<'_> {
+    /// Per-command context borrowing the exact same live service owner.
+    pub(crate) fn bind_service_command(
+        &mut self,
+        command: &crate::development::DataRootCommand<'_>,
+    ) -> Result<(), String> {
+        command.verify_owner(self._owner)?;
+        self.store.inner.bind_operation(command.request())?;
+        command.verify_owner(self._owner)
+    }
+}
+
 fn assemble_existing(root: &Path, inner: plaintext::DirectStore) -> Result<DirectStore, String> {
     let namespace = sha256::decode_digest(&inner.namespace_id())
         .ok_or_else(|| "DIRECT_NAMESPACE_INVALID".to_owned())?;
@@ -160,6 +175,21 @@ fn assemble_existing(root: &Path, inner: plaintext::DirectStore) -> Result<Direc
 }
 
 impl DirectStore {
+    pub(crate) fn check_operation(&self) -> Result<(), String> {
+        self.inner.check_operation()
+    }
+
+    pub(crate) fn operation_deadline(&self) -> Result<Option<std::time::Instant>, String> {
+        self.check_operation()?;
+        match self.inner.operation_request() {
+            Ok(request) => Ok(Some(request.deadline())),
+            #[cfg(test)]
+            Err(_) => Ok(None),
+            #[cfg(not(test))]
+            Err(error) => Err(error),
+        }
+    }
+
     /// The only production layout/credential creation arm; no migration occurs.
     pub(crate) fn initialize_legacy_layout(
         cap: &InitializingDataRoot,

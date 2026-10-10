@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::continuation::ContinuationCatalog;
 use crate::development::Health;
 use crate::direct_store::DirectStore;
-use crate::directory_manifest::verify_directory_manifests;
+use crate::directory_manifest::verify_directory_manifests_with_check;
 use crate::result_handles::ResultHandleCatalog;
 use crate::service_output::{emit_provider_status, json_string, write_line};
 use crate::sha256;
@@ -34,7 +34,7 @@ pub(super) fn cmd_list_sources(
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
 ) -> Result<(), String> {
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     emit_source_list(writer, store, storage)
 }
 
@@ -55,8 +55,7 @@ pub(super) fn cmd_status(
     )
 }
 
-fn current_readiness(
-) -> Result<crate::config_composition::ReadinessReport, String> {
+fn current_readiness() -> Result<crate::config_composition::ReadinessReport, String> {
     let cli_args: Vec<String> = env::args().skip(1).collect();
     let (_, cli) = crate::config_composition::parse_cli_config_args(&cli_args)?;
     let effective = crate::config_composition::effective_from_process(&cli)?;
@@ -77,8 +76,10 @@ pub(super) fn cmd_health(
 ) -> Result<(), String> {
     let verification = store.verify()?;
     let manifests =
-        verify_directory_manifests(canonical_root, &store.namespace_id())?;
-    refresh_storage(storage, canonical_root)?;
+        verify_directory_manifests_with_check(canonical_root, &store.namespace_id(), &|| {
+            store.check_operation()
+        })?;
+    refresh_storage(storage, canonical_root, store)?;
     let readiness = current_readiness()?;
     let health = Health::from_readiness(&readiness);
     write_line(
@@ -115,8 +116,10 @@ pub(super) fn cmd_verify_manifests(
     storage: &mut StorageSecurityStatus,
 ) -> Result<(), String> {
     let manifests =
-        verify_directory_manifests(canonical_root, &store.namespace_id())?;
-    refresh_storage(storage, canonical_root)?;
+        verify_directory_manifests_with_check(canonical_root, &store.namespace_id(), &|| {
+            store.check_operation()
+        })?;
+    refresh_storage(storage, canonical_root, store)?;
     write_line(
         writer,
         &format!(
@@ -153,7 +156,7 @@ pub(super) fn cmd_read_revision(
         return Err("SERVICE_REVISION_SLICE_TOO_LARGE".to_owned());
     }
     let slice = store.read_revision_range(revision_id, start, end)?;
-    refresh_storage(storage, canonical_root)?;
+    refresh_storage(storage, canonical_root, store)?;
     write_line(
         writer,
         &format!(
@@ -180,7 +183,9 @@ pub(super) fn cmd_read_revision(
 pub(super) fn refresh_storage(
     storage: &mut StorageSecurityStatus,
     canonical_root: &Path,
+    store: &DirectStore,
 ) -> Result<(), String> {
-    *storage = StorageSecurityStatus::inspect(canonical_root)?;
+    *storage =
+        StorageSecurityStatus::inspect_with_check(canonical_root, &|| store.check_operation())?;
     Ok(())
 }

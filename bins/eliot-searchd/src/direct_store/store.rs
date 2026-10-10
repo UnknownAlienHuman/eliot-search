@@ -13,7 +13,7 @@ use crate::{safe_reader_adapter, sha256};
 
 #[cfg(test)]
 use super::catalog::{RevisionMetadata, verify_revision_identity};
-use super::catalog::{load_registry, read_namespace};
+use super::catalog::{load_registry, load_registry_with_check, read_namespace};
 use super::model::{
     CONTROL_DIRECTORY, DirectDigest, DirectStore, FileSnapshot, IdentityStrength,
     MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_FILES, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS,
@@ -24,26 +24,56 @@ use super::model::{
 use super::model::{IndexedSource, StoreVerification};
 
 impl DirectStore {
+    /// Service rebinding is mediated by the borrowed native owner. Only the
+    /// new invocation is checked here; idle time may expire the previous one.
+    pub(crate) fn bind_operation(
+        &mut self,
+        request: &crate::owner_composition::DataRootRequest,
+    ) -> Result<(), String> {
+        request.preflight()?;
+        self.operation = Some(request.retain());
+        self.check_operation()
+    }
+
+    pub(crate) fn check_operation(&self) -> Result<(), String> {
+        check_request(self.operation.as_ref())
+    }
+
+    pub(crate) fn operation_request(
+        &self,
+    ) -> Result<&crate::owner_composition::DataRootRequest, String> {
+        self.check_operation()?;
+        self.operation
+            .as_ref()
+            .ok_or_else(|| "DATA_ROOT_REQUEST_INVALID".to_owned())
+    }
+
     /// Creates the exact layout named by the retained initialization intent.
     /// Any existing object or uncertain write is refused, with no repair/retry.
     pub(crate) fn initialize_legacy_layout(
         cap: &crate::owner_composition::InitializingDataRoot,
     ) -> Result<Self, String> {
         cap.verify().map_err(|error| error.code().to_owned())?;
+        let request = cap.operation_request()?;
+        let check = || cap.verify().map_err(|error| error.code().to_owned());
         let root = cap.canonical_root();
         let control = root.join(CONTROL_DIRECTORY);
         let revisions = root.join(REVISION_DIRECTORY);
         fs::create_dir(&control).map_err(|_| "DIRECT_INITIALIZATION_OUTCOME_UNKNOWN".to_owned())?;
+        check()?;
         fs::create_dir(&revisions)
             .map_err(|_| "DIRECT_INITIALIZATION_OUTCOME_UNKNOWN".to_owned())?;
+        check()?;
         ensure_directory(&control)
             .map_err(|_| "DIRECT_INITIALIZATION_LAYOUT_INVALID".to_owned())?;
         ensure_directory(&revisions)
             .map_err(|_| "DIRECT_INITIALIZATION_LAYOUT_INVALID".to_owned())?;
         let namespace = format!("{}\n", sha256::hex(&cap.namespace_id()));
         write_initialization_file(&control.join(NAMESPACE_FILE), namespace.as_bytes())?;
+        check()?;
         let log = format!("{SOURCE_LOG_HEADER}\n");
         write_initialization_file(&control.join(SOURCE_LOG_FILE), log.as_bytes())?;
+        check()?;
         #[cfg(unix)]
         sync_directory(&control)?;
         #[cfg(not(unix))]
@@ -64,6 +94,7 @@ impl DirectStore {
             root: root.to_owned(),
             namespace_id,
             registry,
+            operation: Some(request.retain()),
         })
     }
 
@@ -72,8 +103,9 @@ impl DirectStore {
         cap: &crate::owner_composition::InitializationRecovery<'_>,
     ) -> Result<Self, String> {
         cap.verify().map_err(|error| error.code().to_owned())?;
-        let store = Self::open_existing_legacy(cap.canonical_root())
-            .map_err(|_| "DIRECT_INITIALIZATION_READBACK_INVALID".to_owned())?;
+        let store =
+            Self::open_existing_legacy(cap.canonical_root(), Some(cap.operation_request()?))
+                .map_err(|_| "DIRECT_INITIALIZATION_READBACK_INVALID".to_owned())?;
         if store.namespace_id != cap.namespace_id()
             || store.registry.event_count != 0
             || !store.registry.latest.is_empty()
@@ -102,31 +134,39 @@ impl DirectStore {
             root: canonical_root,
             namespace_id,
             registry,
+            operation: None,
         })
     }
 
     /// Opens only existing catalog objects under the inspection capability.
-    pub(crate) fn validate_existing_admission(root: &Path) -> Result<(), String> {
-        Self::open_existing_legacy(root)?
-            .verify_control()
-            .map_err(|_| "DIRECT_EXISTING_CATALOG_INVALID".to_owned())
+    pub(crate) fn validate_existing_admission(
+        root: &Path,
+        request: Option<&crate::owner_composition::DataRootRequest>,
+    ) -> Result<(), String> {
+        let result = Self::open_existing_legacy(root, request)?.verify_control();
+        check_request(request)?;
+        result.map_err(|_| "DIRECT_EXISTING_CATALOG_INVALID".to_owned())
     }
 
     /// Opens only existing catalog objects under the inspection capability.
     pub(crate) fn open_existing_legacy_read_only(
         cap: &crate::development::InspectedDataRoot,
     ) -> Result<Self, String> {
-        Self::open_existing_legacy(cap.canonical_root())
+        Self::open_existing_legacy(cap.canonical_root(), Some(cap.operation_request()?))
     }
 
     /// Opens only existing catalog objects under the single live owner.
     pub(crate) fn open_existing_legacy_mutating(
         owner: &crate::development::DataRootGuard,
     ) -> Result<Self, String> {
-        Self::open_existing_legacy(owner.canonical_root())
+        Self::open_existing_legacy(owner.canonical_root(), Some(owner.operation_request()?))
     }
 
-    fn open_existing_legacy(root: &Path) -> Result<Self, String> {
+    fn open_existing_legacy(
+        root: &Path,
+        request: Option<&crate::owner_composition::DataRootRequest>,
+    ) -> Result<Self, String> {
+        check_request(request)?;
         crate::catalog_presence::require_existing(root)?;
         let canonical_root =
             fs::canonicalize(root).map_err(|_| "DIRECT_EXISTING_CATALOG_INVALID".to_owned())?;
@@ -135,11 +175,14 @@ impl DirectStore {
         ensure_directory(&canonical_root.join(REVISION_DIRECTORY))?;
         let control = canonical_root.join(CONTROL_DIRECTORY);
         let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))?;
-        let registry = load_registry(&control.join(SOURCE_LOG_FILE))?;
+        let registry =
+            load_registry_with_check(&control.join(SOURCE_LOG_FILE), &|| check_request(request))?;
+        check_request(request)?;
         Ok(Self {
             root: canonical_root,
             namespace_id,
             registry,
+            operation: request.map(crate::owner_composition::DataRootRequest::retain),
         })
     }
 
@@ -158,6 +201,7 @@ impl DirectStore {
 
     /// Retires one source from future corpus search without deleting revisions.
     pub(crate) fn retire_source(&mut self, source_id: &str) -> Result<SourceSummary, String> {
+        self.check_operation()?;
         validate_digest_text(source_id, "DIRECT_SOURCE_ID_INVALID")?;
         let existing = self
             .registry
@@ -281,6 +325,7 @@ impl DirectStore {
         &mut self,
         drafts: Vec<RecordDraft>,
     ) -> Result<Vec<SourceRecord>, String> {
+        self.check_operation()?;
         if drafts.is_empty() {
             return Ok(Vec::new());
         }
@@ -304,6 +349,7 @@ impl DirectStore {
         encoded: &str,
         records: Vec<SourceRecord>,
     ) -> Result<Vec<SourceRecord>, String> {
+        self.check_operation()?;
         let log_path = self.root.join(CONTROL_DIRECTORY).join(SOURCE_LOG_FILE);
         ensure_regular_file(&log_path)?;
         let mut file = OpenOptions::new()
@@ -322,17 +368,20 @@ impl DirectStore {
         {
             return Err("DIRECT_CONTROL_LOG_TOO_LARGE".to_owned());
         }
+        self.check_operation()?;
         file.write_all(encoded.as_bytes())
             .and_then(|()| file.sync_all())
             .map_err(|error| format!("DIRECT_CONTROL_LOG_WRITE_ERROR:{error}"))?;
         drop(file);
+        self.check_operation()?;
         #[cfg(unix)]
         sync_directory(&self.root.join(CONTROL_DIRECTORY))?;
         #[cfg(not(unix))]
         sync_directory(&self.root.join(CONTROL_DIRECTORY));
 
-        let reloaded = load_registry(&log_path)?;
+        let reloaded = load_registry_with_check(&log_path, &|| self.check_operation())?;
         for record in &records {
+            self.check_operation()?;
             let observed = reloaded
                 .operations
                 .get(&record.operation_id)
@@ -342,6 +391,7 @@ impl DirectStore {
             }
         }
         self.registry = reloaded;
+        self.check_operation()?;
         Ok(records)
     }
 
@@ -376,6 +426,18 @@ impl DirectStore {
         verify_revision_identity(&RevisionMetadata::from(record))
             .map_err(|_| "DIRECT_REVISION_ID_MISMATCH")?;
         Ok(bytes)
+    }
+}
+
+fn check_request(
+    request: Option<&crate::owner_composition::DataRootRequest>,
+) -> Result<(), String> {
+    match request {
+        Some(request) => request.preflight(),
+        #[cfg(test)]
+        None => Ok(()),
+        #[cfg(not(test))]
+        None => Err("DATA_ROOT_REQUEST_INVALID".to_owned()),
     }
 }
 
@@ -606,7 +668,9 @@ pub(super) fn collect_regular_files(
     data_root: &Path,
     depth: usize,
     output: &mut Vec<PathBuf>,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<(), String> {
+    check()?;
     if depth > MAX_DIRECTORY_DEPTH {
         return Err("DIRECT_DIRECTORY_DEPTH_EXCEEDED".to_owned());
     }
@@ -620,12 +684,16 @@ pub(super) fn collect_regular_files(
     if canonical == data_root {
         return Ok(());
     }
-    let mut entries = fs::read_dir(&canonical)
-        .map_err(|error| format!("DIRECT_DIRECTORY_READ_ERROR:{error}"))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("DIRECT_DIRECTORY_READ_ERROR:{error}"))?;
+    let mut entries = Vec::new();
+    for entry in
+        fs::read_dir(&canonical).map_err(|error| format!("DIRECT_DIRECTORY_READ_ERROR:{error}"))?
+    {
+        check()?;
+        entries.push(entry.map_err(|error| format!("DIRECT_DIRECTORY_READ_ERROR:{error}"))?);
+    }
     entries.sort_by_key(|entry| path_identity_bytes(&entry.path()));
     for entry in entries {
+        check()?;
         let path = entry.path();
         let metadata = fs::symlink_metadata(&path)
             .map_err(|error| format!("DIRECT_DIRECTORY_ENTRY_ERROR:{error}"))?;
@@ -638,7 +706,7 @@ pub(super) fn collect_regular_files(
             if canonical_child == data_root || canonical_child.starts_with(data_root) {
                 continue;
             }
-            collect_regular_files(&canonical_child, data_root, depth + 1, output)?;
+            collect_regular_files(&canonical_child, data_root, depth + 1, output, check)?;
         } else if metadata.is_file() {
             if output.len() >= MAX_DIRECTORY_FILES {
                 return Err("DIRECT_DIRECTORY_FILE_LIMIT_EXCEEDED".to_owned());
@@ -648,6 +716,7 @@ pub(super) fn collect_regular_files(
             return Err("DIRECT_DIRECTORY_SPECIAL_OBJECT_DENIED".to_owned());
         }
     }
+    check()?;
     Ok(())
 }
 

@@ -122,6 +122,11 @@ pub(crate) struct InitializingDataRoot {
 }
 
 impl InitializingDataRoot {
+    pub(crate) fn operation_request(&self) -> Result<&DataRootRequest, String> {
+        self.verify().map_err(code)?;
+        Ok(&self.operation)
+    }
+
     pub(crate) fn canonical_root(&self) -> &Path {
         &self.root
     }
@@ -163,6 +168,10 @@ pub(crate) struct InitializationRecovery<'a> {
 }
 
 impl InitializationRecovery<'_> {
+    pub(crate) fn operation_request(&self) -> Result<&DataRootRequest, String> {
+        self.root.operation_request()
+    }
+
     pub(crate) fn canonical_root(&self) -> &Path {
         self.root.canonical_root()
     }

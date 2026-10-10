@@ -8,10 +8,8 @@ use std::fs::{self, File, Metadata};
 use std::io::Read;
 use std::path::Path;
 
-use crate::maintenance::collect_orphan_revisions;
-use crate::revision_protection::{
-    PROTECTED_OBJECT_EXTENSION, RevisionProtector,
-};
+use crate::maintenance::collect_orphan_revisions_with_check;
+use crate::revision_protection::{PROTECTED_OBJECT_EXTENSION, RevisionProtector};
 use crate::sha256;
 
 const REVISION_DIRECTORY: &str = "revisions";
@@ -36,9 +34,13 @@ pub struct StorageSecurityStatus {
 
 impl StorageSecurityStatus {
     /// Inspects one owner-fenced root without changing its contents.
-    pub(crate) fn inspect(root: &Path) -> Result<Self, String> {
-        let inventory = collect_orphan_revisions(root, false)?;
-        let malformed_protected_objects = inspect_protected_headers(root)?;
+    pub(crate) fn inspect_with_check(
+        root: &Path,
+        check: &dyn Fn() -> Result<(), String>,
+    ) -> Result<Self, String> {
+        check()?;
+        let inventory = collect_orphan_revisions_with_check(root, false, check)?;
+        let malformed_protected_objects = inspect_protected_headers(root, check)?;
         let missing_protected_revisions = inventory
             .referenced_revisions
             .saturating_sub(inventory.referenced_protected_objects);
@@ -49,7 +51,8 @@ impl StorageSecurityStatus {
             && inventory.temporary_objects == 0
             && inventory.unexpected_objects == 0
             && malformed_protected_objects == 0
-            && preparation_is_protected(root)?;
+            && preparation_is_protected(root, check)?;
+        check()?;
         Ok(Self {
             backend: if cfg!(windows) {
                 "windows-dpapi-credential-manager-v1"
@@ -58,8 +61,7 @@ impl StorageSecurityStatus {
             },
             protects_new_objects,
             referenced_revisions: inventory.referenced_revisions,
-            referenced_protected_revisions: inventory
-                .referenced_protected_objects,
+            referenced_protected_revisions: inventory.referenced_protected_objects,
             missing_protected_revisions,
             protected_objects: inventory.protected_objects,
             plaintext_objects: inventory.plaintext_objects,
@@ -68,6 +70,11 @@ impl StorageSecurityStatus {
             malformed_protected_objects,
             encrypted_at_rest,
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inspect(root: &Path) -> Result<Self, String> {
+        Self::inspect_with_check(root, &|| Ok(()))
     }
 
     /// Complete JSON object suitable for embedding in health output.
@@ -101,7 +108,11 @@ impl StorageSecurityStatus {
     }
 }
 
-fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
+fn inspect_protected_headers(
+    root: &Path,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<usize, String> {
+    check()?;
     let revisions = root.join(REVISION_DIRECTORY);
     ensure_directory(&revisions)?;
     let mut malformed = 0_usize;
@@ -109,8 +120,8 @@ fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
     for shard in fs::read_dir(&revisions)
         .map_err(|error| format!("DIRECT_STORAGE_STATUS_READ_ERROR:{error}"))?
     {
-        let shard = shard
-            .map_err(|error| format!("DIRECT_STORAGE_STATUS_READ_ERROR:{error}"))?;
+        check()?;
+        let shard = shard.map_err(|error| format!("DIRECT_STORAGE_STATUS_READ_ERROR:{error}"))?;
         let shard_path = shard.path();
         let metadata = fs::symlink_metadata(&shard_path)
             .map_err(|error| format!("DIRECT_STORAGE_STATUS_METADATA_ERROR:{error}"))?;
@@ -126,8 +137,9 @@ fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
         for entry in fs::read_dir(&shard_path)
             .map_err(|error| format!("DIRECT_STORAGE_STATUS_READ_ERROR:{error}"))?
         {
-            let entry = entry
-                .map_err(|error| format!("DIRECT_STORAGE_STATUS_READ_ERROR:{error}"))?;
+            check()?;
+            let entry =
+                entry.map_err(|error| format!("DIRECT_STORAGE_STATUS_READ_ERROR:{error}"))?;
             observed = observed.saturating_add(1);
             if observed > MAX_REVISION_OBJECTS {
                 return Err("DIRECT_STORAGE_STATUS_OBJECT_LIMIT_EXCEEDED".to_owned());
@@ -146,10 +158,7 @@ fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
             }
             let metadata = fs::symlink_metadata(&path)
                 .map_err(|error| format!("DIRECT_STORAGE_STATUS_METADATA_ERROR:{error}"))?;
-            if metadata.file_type().is_symlink()
-                || is_reparse(&metadata)
-                || !metadata.is_file()
-            {
+            if metadata.file_type().is_symlink() || is_reparse(&metadata) || !metadata.is_file() {
                 malformed = malformed.saturating_add(1);
                 continue;
             }
@@ -157,9 +166,7 @@ fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
             let read = File::open(&path)
                 .and_then(|mut file| file.read(&mut prefix))
                 .map_err(|error| format!("DIRECT_STORAGE_STATUS_READ_ERROR:{error}"))?;
-            if read != PROTECTED_MAGIC_BYTES
-                || !RevisionProtector::is_protected_object(&prefix)
-            {
+            if read != PROTECTED_MAGIC_BYTES || !RevisionProtector::is_protected_object(&prefix) {
                 malformed = malformed.saturating_add(1);
             }
         }
@@ -171,7 +178,11 @@ fn inspect_protected_headers(root: &Path) -> Result<usize, String> {
 /// artifact carried to Windows must not disappear from the encryption claim.
 /// Reference bytes are technical hashes/lengths only; body authenticity is checked
 /// by the owning preparation reader, not inferred from this inventory header.
-fn preparation_is_protected(root: &Path) -> Result<bool, String> {
+fn preparation_is_protected(
+    root: &Path,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<bool, String> {
+    check()?;
     let base = root.join("preparation");
     match fs::symlink_metadata(&base) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
@@ -179,39 +190,64 @@ fn preparation_is_protected(root: &Path) -> Result<bool, String> {
         Ok(_) => ensure_directory(&base)?,
     }
     for entry in fs::read_dir(&base).map_err(preparation_status_error)? {
+        check()?;
         let name = entry.map_err(preparation_status_error)?.file_name();
-        if !matches!(name.to_str(), Some("refs" | "objects")) { return Ok(false); }
+        if !matches!(name.to_str(), Some("refs" | "objects")) {
+            return Ok(false);
+        }
     }
     let mut observed = 0_usize;
-    for (directory, suffix, magic) in [("refs", ".ref", *b"ELSPRF01"), ("objects", ".dpapi", *b"ELSRV2\0\0")] {
+    for (directory, suffix, magic) in [
+        ("refs", ".ref", *b"ELSPRF01"),
+        ("objects", ".dpapi", *b"ELSRV2\0\0"),
+    ] {
+        check()?;
         let directory_path = base.join(directory);
         ensure_directory(&directory_path)?;
         let mut shards = 0;
         for shard in fs::read_dir(&directory_path).map_err(preparation_status_error)? {
+            check()?;
             let shard = shard.map_err(preparation_status_error)?;
             shards += 1;
             let name = shard.file_name();
-            let Some(shard_name) = name.to_str() else { return Ok(false); };
-            if shards > 256 || !valid_shard_name(shard_name) { return Ok(false); }
+            let Some(shard_name) = name.to_str() else {
+                return Ok(false);
+            };
+            if shards > 256 || !valid_shard_name(shard_name) {
+                return Ok(false);
+            }
             ensure_directory(&shard.path())?;
             for entry in fs::read_dir(shard.path()).map_err(preparation_status_error)? {
+                check()?;
                 let entry = entry.map_err(preparation_status_error)?;
                 observed += 1;
                 if observed > MAX_REVISION_OBJECTS {
                     return Err("DIRECT_PREPARATION_STATUS_LIMIT_EXCEEDED".to_owned());
                 }
                 let name = entry.file_name();
-                let Some(id) = name.to_str().and_then(|name| name.strip_suffix(suffix)) else { return Ok(false); };
-                if sha256::decode_digest(id).is_none() || !id.starts_with(shard_name) { return Ok(false); }
-                let metadata = fs::symlink_metadata(entry.path()).map_err(preparation_status_error)?;
-                if !metadata.is_file() || metadata.file_type().is_symlink() || is_reparse(&metadata)
+                let Some(id) = name.to_str().and_then(|name| name.strip_suffix(suffix)) else {
+                    return Ok(false);
+                };
+                if sha256::decode_digest(id).is_none() || !id.starts_with(shard_name) {
+                    return Ok(false);
+                }
+                let metadata =
+                    fs::symlink_metadata(entry.path()).map_err(preparation_status_error)?;
+                if !metadata.is_file()
+                    || metadata.file_type().is_symlink()
+                    || is_reparse(&metadata)
                     || (directory == "refs" && metadata.len() != 81)
                     || metadata.len() > 65 * 1024 * 1024
-                { return Ok(false); }
+                {
+                    return Ok(false);
+                }
                 let mut prefix = [0; 8];
-                File::open(entry.path()).and_then(|mut file| file.read_exact(&mut prefix))
+                File::open(entry.path())
+                    .and_then(|mut file| file.read_exact(&mut prefix))
                     .map_err(preparation_status_error)?;
-                if prefix != magic { return Ok(false); }
+                if prefix != magic {
+                    return Ok(false);
+                }
             }
         }
     }

@@ -4,8 +4,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::super::super::{
-    DirectStore, FileSnapshot, IndexedSource, RecordDraft, SourceState,
-    ZERO_DIGEST,
+    DirectStore, FileSnapshot, IndexedSource, RecordDraft, SourceState, ZERO_DIGEST,
 };
 use crate::sha256;
 use crate::source_composition as canonical;
@@ -24,6 +23,7 @@ impl DirectStore {
         policy: &canonical::AdmissionPolicy,
         view: &canonical::RegistryView,
     ) -> Result<(FileSnapshot, IndexedSource, Option<RecordDraft>), String> {
+        self.check_operation()?;
         if sha256::decode_digest(&snapshot.file_identity_digest).is_none() {
             return Err("DIRECT_FILE_IDENTITY_INVALID".to_owned());
         }

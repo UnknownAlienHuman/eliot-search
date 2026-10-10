@@ -10,10 +10,10 @@ use std::io::{BufRead, BufReader, Read};
 mod migration;
 
 use super::{
-    CONTROL_DIRECTORY, DirectDigest, DirectStore, File, MAX_LOG_BYTES,
-    MAX_LOG_LINE_BYTES, MAX_SCAN_INPUT_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
-    Path, RegistryState, SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord,
-    SourceState, ZERO_DIGEST, ensure_regular_file, is_reparse, sha256,
+    CONTROL_DIRECTORY, DirectDigest, DirectStore, File, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES,
+    MAX_SCAN_INPUT_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, Path, RegistryState, SOURCE_LOG_FILE,
+    SOURCE_LOG_HEADER, SourceRecord, SourceState, ZERO_DIGEST, ensure_regular_file, is_reparse,
+    sha256,
 };
 
 /// Exact immutable object binding. Global event sequence is not a source revision.
@@ -83,13 +83,15 @@ impl DirectStore {
     /// Read-only verification. Missing files are never initialized by this path.
     /// The caller still owns the exclusive data-root guard throughout the call.
     pub(crate) fn verify_control(&self) -> Result<(), String> {
+        self.check_operation()?;
         let control = self.root.join(CONTROL_DIRECTORY);
         if read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id
-            || load_registry(&control.join(SOURCE_LOG_FILE))? != self.registry
+            || load_registry_with_check(&control.join(SOURCE_LOG_FILE), &|| self.check_operation())?
+                != self.registry
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        Ok(())
+        self.check_operation()
     }
 }
 
@@ -126,14 +128,31 @@ pub(super) fn load_registry(path: &Path) -> Result<RegistryState, String> {
     replay_registry(path, |_, _| Ok(()))
 }
 
+pub(super) fn load_registry_with_check(
+    path: &Path,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<RegistryState, String> {
+    replay_registry_with_check(path, |_, _| Ok(()), check)
+}
+
 /// A read-only migration observer shares the full owner replay validator.
 /// Observed entries remain provisional until this function returns successfully.
 fn replay_registry(
     path: &Path,
-    mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
+    observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
 ) -> Result<RegistryState, String> {
+    replay_registry_with_check(path, observe, &|| Ok(()))
+}
+
+fn replay_registry_with_check(
+    path: &Path,
+    mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<RegistryState, String> {
+    check()?;
     ensure_regular_file(path)?;
-    let file = File::open(path).map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
+    let file =
+        File::open(path).map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
     let before = file
         .metadata()
         .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?;
@@ -147,11 +166,13 @@ fn replay_registry(
     let mut consumed = 0_u64;
     let mut line = String::new();
     read_log_line(&mut reader, &mut line, &mut consumed)?;
+    check()?;
     if line.trim_end_matches(['\r', '\n']) != SOURCE_LOG_HEADER {
         return Err("DIRECT_CONTROL_LOG_HEADER_INVALID".to_owned());
     }
     let mut state = RegistryState::default();
     while read_log_line(&mut reader, &mut line, &mut consumed)? != 0 {
+        check()?;
         if state.event_count >= MAX_SOURCE_EVENTS {
             return Err("DIRECT_SOURCE_EVENT_LIMIT_EXCEEDED".to_owned());
         }
@@ -181,6 +202,7 @@ fn replay_registry(
     {
         return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
     }
+    check()?;
     Ok(state)
 }
 
@@ -197,8 +219,7 @@ fn read_log_line(
     let read = Read::take(&mut *reader, line_limit)
         .read_line(line)
         .map_err(|error| format!("DIRECT_CONTROL_LOG_READ_ERROR:{error}"))?;
-    let read_bytes = u64::try_from(read)
-        .map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
+    let read_bytes = u64::try_from(read).map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
     *consumed = consumed
         .checked_add(read_bytes)
         .filter(|total| *total <= MAX_LOG_BYTES)

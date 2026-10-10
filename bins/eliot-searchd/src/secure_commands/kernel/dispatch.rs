@@ -82,7 +82,8 @@ pub(super) fn dispatch(
             with_store_mut_request(Path::new(&arguments[1]), cli_request, |root, store| {
                 let indexed = store.index_file(Path::new(&arguments[2]))?;
                 store.verify()?;
-                let storage = StorageSecurityStatus::inspect(root)?;
+                let storage =
+                    StorageSecurityStatus::inspect_with_check(root, &|| cli_request.preflight())?;
                 cli_request.preflight()?;
                 let mut output = io::stdout().lock();
                 emit_indexed_source(

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use super::codec::encode_manifest;
-use super::load::load_manifest_input;
+use super::load::load_manifest_input_with_check;
 use super::model::DirectoryManifest;
 use super::paths::migration_files;
 use crate::sha256;
@@ -14,14 +14,14 @@ use crate::sha256;
 pub fn migration_manifest(
     path: &Path,
     remaining_bytes: usize,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<(DirectoryManifest, [u8; 32], usize), String> {
-    let (manifest, text) = load_manifest_input(path, remaining_bytes)?;
+    let (manifest, text) = load_manifest_input_with_check(path, remaining_bytes, check)?;
     if encode_manifest(&manifest)? != text {
-        return Err(
-            "DIRECT_MIGRATION_MANIFEST_ENCODING_UNSUPPORTED".to_owned(),
-        );
+        return Err("DIRECT_MIGRATION_MANIFEST_ENCODING_UNSUPPORTED".to_owned());
     }
     let digest = sha256::digest(text.as_bytes());
+    check()?;
     Ok((manifest, digest, text.len()))
 }
 
@@ -30,6 +30,7 @@ pub fn migration_manifest_files(
     data_root: &Path,
     maximum: usize,
     deadline: Instant,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<(bool, Vec<PathBuf>), String> {
-    migration_files(data_root, maximum, deadline)
+    migration_files(data_root, maximum, deadline, check)
 }

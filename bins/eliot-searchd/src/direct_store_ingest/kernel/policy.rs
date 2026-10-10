@@ -16,8 +16,10 @@ impl DirectStore {
         &self,
         policy: &canonical::AdmissionPolicy,
     ) -> Result<canonical::RegistryView, String> {
+        self.check_operation()?;
         let mut prior = Vec::with_capacity(self.registry.latest.len());
         for record in self.registry.latest.values() {
+            self.check_operation()?;
             prior.push(canonical::PriorSourceView {
                 source_id: record.source_id.clone(),
                 file_identity_digest: record.file_identity_digest.clone(),
@@ -27,6 +29,8 @@ impl DirectStore {
                 is_active: record.state == SourceState::Active,
             });
         }
-        canonical::RegistryView::build(prior, policy)
+        let view = canonical::RegistryView::build(prior, policy)?;
+        self.check_operation()?;
+        Ok(view)
     }
 }

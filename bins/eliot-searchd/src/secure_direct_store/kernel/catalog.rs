@@ -4,8 +4,8 @@ use std::path::Path;
 
 use zeroize::Zeroizing;
 
-use super::DirectStore;
 use super::super::preparation_store;
+use super::DirectStore;
 use crate::plaintext_direct_store::{IndexedSource, RevisionMetadata, SourceSummary};
 
 impl DirectStore {
@@ -15,22 +15,20 @@ impl DirectStore {
     }
 
     /// Revision bytes and saved preparation both precede source publication.
-    pub(crate) fn index_file(
-        &mut self,
-        path: &Path,
-    ) -> Result<IndexedSource, String> {
+    pub(crate) fn index_file(&mut self, path: &Path) -> Result<IndexedSource, String> {
+        self.check_operation()?;
         let namespace = self.inner.namespace_id();
         let root = &self.root;
         let protector = &self.protector;
-        self.inner.index_file_with_writer(path, &mut |_, source, bytes| {
-            preparation_store::persist_source(
-                root,
-                protector,
-                &namespace,
-                source,
-                bytes,
-            )
-        })
+        let indexed = self
+            .inner
+            .index_file_with_writer(path, &mut |store, source, bytes| {
+                store.check_operation()?;
+                preparation_store::persist_source(root, protector, &namespace, source, bytes)?;
+                store.check_operation()
+            })?;
+        self.check_operation()?;
+        Ok(indexed)
     }
 
     /// Every batch member crosses the same revision/preparation barrier.
@@ -38,21 +36,19 @@ impl DirectStore {
         &mut self,
         directory: &Path,
     ) -> Result<Vec<IndexedSource>, String> {
+        self.check_operation()?;
         let namespace = self.inner.namespace_id();
         let root = &self.root;
         let protector = &self.protector;
-        self.inner.index_directory_with_writer(
-            directory,
-            &mut |_, source, bytes| {
-                preparation_store::persist_source(
-                    root,
-                    protector,
-                    &namespace,
-                    source,
-                    bytes,
-                )
-            },
-        )
+        let indexed =
+            self.inner
+                .index_directory_with_writer(directory, &mut |store, source, bytes| {
+                    store.check_operation()?;
+                    preparation_store::persist_source(root, protector, &namespace, source, bytes)?;
+                    store.check_operation()
+                })?;
+        self.check_operation()?;
+        Ok(indexed)
     }
 
     /// Prepares a retained revision without rereading a current source path.
@@ -60,28 +56,34 @@ impl DirectStore {
         &self,
         revision_id: &str,
     ) -> Result<Option<&'static str>, String> {
+        self.check_operation()?;
         crate::catalog_presence::require_existing(&self.root)?;
         self.inner.verify_control()?;
+        self.check_operation()?;
         let metadata: RevisionMetadata = self
             .inner
             .retained_revision(revision_id)
             .ok_or_else(|| "DIRECT_REVISION_NOT_FOUND".to_owned())?;
+        self.check_operation()?;
         let bytes = Zeroizing::new(self.read_revision_detailed(&metadata)?);
-        preparation_store::persist(
+        self.check_operation()?;
+        let gap = preparation_store::persist(
             &self.root,
             &self.protector,
             &self.inner.namespace_id(),
             &metadata,
             &bytes,
-        )
+        )?;
+        self.check_operation()?;
+        Ok(gap)
     }
 
     /// Retires one source without deleting retained revision objects.
-    pub(crate) fn retire_source(
-        &mut self,
-        source_id: &str,
-    ) -> Result<SourceSummary, String> {
-        self.inner.retire_source(source_id)
+    pub(crate) fn retire_source(&mut self, source_id: &str) -> Result<SourceSummary, String> {
+        self.check_operation()?;
+        let source = self.inner.retire_source(source_id)?;
+        self.check_operation()?;
+        Ok(source)
     }
 
     /// Returns deterministic source summaries.

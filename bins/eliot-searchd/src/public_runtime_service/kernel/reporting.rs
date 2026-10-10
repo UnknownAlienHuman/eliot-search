@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::direct_store::DirectStore;
-use crate::directory_manifest::verify_directory_manifests;
+use crate::directory_manifest::verify_directory_manifests_with_check;
 use crate::service_output::{json_string, write_line};
 use crate::storage_security::StorageSecurityStatus;
 
@@ -16,7 +16,9 @@ pub(super) fn emit_verification(
 ) -> Result<(), String> {
     let verification = store.verify()?;
     let manifests =
-        verify_directory_manifests(canonical_root, &store.namespace_id())?;
+        verify_directory_manifests_with_check(canonical_root, &store.namespace_id(), &|| {
+            store.check_operation()
+        })?;
     write_line(
         writer,
         &format!(
