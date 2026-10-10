@@ -1,18 +1,15 @@
-//! Canonical configuration fingerprints without external hashing dependencies.
-
-#![allow(
-    clippy::chunks_exact_to_as_chunks,
-    clippy::many_single_char_names,
-    clippy::unreadable_literal
-)]
+//! Legacy v1 configuration preimages hashed by the shared exact-byte SHA owner.
 
 use std::num::NonZeroU64;
 
-use search_contracts::{Blake3Digest32, ProfileId, Sha256Digest32};
+use search_contracts::{
+    Blake3Digest32, DigestInputLimit, MAX_CANONICAL_BYTES, ProfileId, Sha256Digest32,
+    sha256_exact_bytes,
+};
 
 use crate::{ConfigError, ConfigSectionName};
 
-/// SHA-256 fingerprint over the canonical effective-configuration identity.
+/// SHA-256 over the legacy v1 effective-configuration preimage, never a v2 identity.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ConfigFingerprint(Sha256Digest32);
 
@@ -58,7 +55,7 @@ pub struct SectionFingerprintInput<'a> {
 /// # Errors
 ///
 /// Returns [`ConfigError::CanonicalBytesExceeded`] when the canonical preimage
-/// would exceed `max_bytes`.
+/// would exceed the caller's `max_bytes` or the shared hard 8 MiB ceiling.
 pub fn fingerprint<'a>(
     config_schema_version: u32,
     selected_profile: &ProfileId,
@@ -78,13 +75,14 @@ pub fn fingerprint<'a>(
         writer.bytes(section.field_registry_digest.as_bytes())?;
         writer.bytes(section.validated_section_digest.as_bytes())?;
     }
-    Ok(ConfigFingerprint::from_bytes(sha256(writer.as_slice())))
+    Ok(ConfigFingerprint(sha256_digest(writer.as_slice())?))
 }
 
-/// Computes a SHA-256 digest over an arbitrary already-bounded byte slice.
-#[must_use]
-pub(crate) fn sha256_digest(bytes: &[u8]) -> Sha256Digest32 {
-    Sha256Digest32::from_bytes(sha256(bytes))
+/// Exact-byte compatibility only; oversized inputs yield no digest.
+pub(crate) fn sha256_digest(bytes: &[u8]) -> Result<Sha256Digest32, ConfigError> {
+    let limit = DigestInputLimit::new(MAX_CANONICAL_BYTES)
+        .map_err(|_| ConfigError::CanonicalBytesExceeded)?;
+    sha256_exact_bytes(bytes, limit).map_err(|_| ConfigError::CanonicalBytesExceeded)
 }
 
 pub(crate) struct CanonicalWriter {
@@ -99,7 +97,11 @@ impl CanonicalWriter {
         }
         Ok(Self {
             bytes: Vec::new(),
-            max_bytes,
+            max_bytes: if max_bytes > MAX_CANONICAL_BYTES {
+                MAX_CANONICAL_BYTES
+            } else {
+                max_bytes
+            },
         })
     }
 
@@ -139,112 +141,86 @@ impl CanonicalWriter {
     }
 }
 
-const SHA256_INITIAL: [u32; 8] = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-];
-
-const SHA256_K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-];
-
-fn sha256(input: &[u8]) -> [u8; 32] {
-    let bit_len = (input.len() as u64).wrapping_mul(8);
-    let padded_len = input
-        .len()
-        .checked_add(9)
-        .and_then(|value| value.checked_add(63))
-        .map(|value| value / 64 * 64)
-        .expect("slice lengths fit address space");
-    let mut padded = Vec::with_capacity(padded_len);
-    padded.extend_from_slice(input);
-    padded.push(0x80);
-    padded.resize(padded_len - 8, 0);
-    padded.extend_from_slice(&bit_len.to_be_bytes());
-
-    let mut state = SHA256_INITIAL;
-    for chunk in padded.chunks_exact(64) {
-        let mut schedule = [0_u32; 64];
-        for (index, word) in chunk.chunks_exact(4).enumerate() {
-            schedule[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
-        }
-        for index in 16..64 {
-            let left = schedule[index - 15];
-            let right = schedule[index - 2];
-            let sigma0 = left.rotate_right(7) ^ left.rotate_right(18) ^ (left >> 3);
-            let sigma1 = right.rotate_right(17) ^ right.rotate_right(19) ^ (right >> 10);
-            schedule[index] = schedule[index - 16]
-                .wrapping_add(sigma0)
-                .wrapping_add(schedule[index - 7])
-                .wrapping_add(sigma1);
-        }
-
-        let mut a = state[0];
-        let mut b = state[1];
-        let mut c = state[2];
-        let mut d = state[3];
-        let mut e = state[4];
-        let mut f = state[5];
-        let mut g = state[6];
-        let mut h = state[7];
-
-        for index in 0..64 {
-            let upper1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let choose = (e & f) ^ ((!e) & g);
-            let temporary1 = h
-                .wrapping_add(upper1)
-                .wrapping_add(choose)
-                .wrapping_add(SHA256_K[index])
-                .wrapping_add(schedule[index]);
-            let upper0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let majority = (a & b) ^ (a & c) ^ (b & c);
-            let temporary2 = upper0.wrapping_add(majority);
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(temporary1);
-            d = c;
-            c = b;
-            b = a;
-            a = temporary1.wrapping_add(temporary2);
-        }
-
-        state[0] = state[0].wrapping_add(a);
-        state[1] = state[1].wrapping_add(b);
-        state[2] = state[2].wrapping_add(c);
-        state[3] = state[3].wrapping_add(d);
-        state[4] = state[4].wrapping_add(e);
-        state[5] = state[5].wrapping_add(f);
-        state[6] = state[6].wrapping_add(g);
-        state[7] = state[7].wrapping_add(h);
-    }
-
-    let mut output = [0_u8; 32];
-    for (chunk, word) in output.chunks_exact_mut(4).zip(state) {
-        chunk.copy_from_slice(&word.to_be_bytes());
-    }
-    output
-}
-
 #[cfg(test)]
 mod tests {
-    use super::sha256;
+    // #386 compatibility fixtures; AUTHORED_NOT_RUN.
+    use super::{CanonicalWriter, SectionFingerprintInput, fingerprint, sha256_digest};
+    use crate::{ConfigError, ConfigSectionName};
+    use search_contracts::{Blake3Digest32, MAX_CANONICAL_BYTES, ProfileId};
+    use std::num::NonZeroU64;
 
     #[test]
     fn sha256_matches_known_vector() {
         assert_eq!(
-            sha256(b"abc"),
+            *sha256_digest(b"abc").expect("bounded digest").as_bytes(),
             [
                 0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
                 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
                 0xf2, 0x00, 0x15, 0xad,
             ]
         );
+    }
+
+    #[test]
+    fn legacy_empty_preimage_keeps_its_exact_v1_digest_and_byte_limit() {
+        let profile = ProfileId::new("direct").expect("profile");
+        assert_eq!(
+            fingerprint(1, &profile, [], 61)
+                .expect("exact 61-byte v1 preimage")
+                .digest()
+                .to_string(),
+            "1509fa0539c54676a23eeefcba52575c411272408a559077a53ffbf20f102ec6",
+        );
+        assert_eq!(
+            fingerprint(1, &profile, [], 60),
+            Err(ConfigError::CanonicalBytesExceeded)
+        );
+        assert_eq!(
+            fingerprint(1, &profile, [], 0),
+            Err(ConfigError::CanonicalBytesExceeded)
+        );
+    }
+
+    #[test]
+    fn legacy_multi_section_preimage_keeps_its_exact_sorted_v1_digest() {
+        let profile = ProfileId::new("direct").expect("profile");
+        let alpha = ConfigSectionName::new("alpha", 128).expect("section");
+        let zeta = ConfigSectionName::new("zeta", 128).expect("section");
+        let sections = [
+            SectionFingerprintInput {
+                section_name: &zeta,
+                schema_revision: NonZeroU64::new(7).expect("revision"),
+                field_registry_digest: Blake3Digest32::from_bytes([0x33; 32]),
+                validated_section_digest: Blake3Digest32::from_bytes([0x44; 32]),
+            },
+            SectionFingerprintInput {
+                section_name: &alpha,
+                schema_revision: NonZeroU64::new(2).expect("revision"),
+                field_registry_digest: Blake3Digest32::from_bytes([0x11; 32]),
+                validated_section_digest: Blake3Digest32::from_bytes([0x22; 32]),
+            },
+        ];
+        assert_eq!(
+            fingerprint(1, &profile, sections.clone(), 230)
+                .expect("exact v1 preimage")
+                .digest()
+                .to_string(),
+            "07856290f0e0a98e40b92739af37b9a1e7782dc20135190039b286b9f23d94f7",
+        );
+        assert_eq!(
+            fingerprint(1, &profile, sections, 229),
+            Err(ConfigError::CanonicalBytesExceeded)
+        );
+    }
+
+    #[test]
+    fn hard_digest_ceiling_rejects_before_writer_growth() {
+        let mut writer = CanonicalWriter::new(usize::MAX).expect("nonzero policy ceiling");
+        assert_eq!(writer.max_bytes, MAX_CANONICAL_BYTES);
+        assert_eq!(
+            writer.bytes(&vec![0; MAX_CANONICAL_BYTES + 1]),
+            Err(ConfigError::CanonicalBytesExceeded)
+        );
+        assert!(writer.as_slice().is_empty());
     }
 }

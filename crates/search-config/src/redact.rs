@@ -56,7 +56,7 @@ pub enum RedactedValue {
         /// Sum of UTF-8 bytes.
         total_bytes: usize,
     },
-    /// Path location class plus digest; raw path is excluded.
+    /// Path location class plus exact bounded digest; raw path is excluded.
     PathDigest {
         /// Coarse non-content location class.
         class: PathLocationClass,
@@ -155,10 +155,17 @@ fn redact_value(
                 ConfigValue::Text(text) => text.as_str(),
                 _ => "",
             };
-            RedactedValue::PathDigest {
-                class: classify_path(text),
-                digest: sha256_digest(text.as_bytes()),
-            }
+            // Oversized input has no hash identity and cannot reveal a path.
+            sha256_digest(text.as_bytes()).map_or(
+                RedactedValue::Metadata {
+                    kind: ConfigValueKind::Text,
+                    extent: text.len(),
+                },
+                |digest| RedactedValue::PathDigest {
+                    class: classify_path(text),
+                    digest,
+                },
+            )
         }
         RedactionPolicy::MetadataOnly => {
             value
@@ -228,7 +235,9 @@ fn truncate_utf8(value: &str, max_bytes: usize) -> (String, bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{PathLocationClass, classify_path, truncate_utf8};
+    use super::{PathLocationClass, RedactedValue, classify_path, redact_value, truncate_utf8};
+    use crate::{ConfigValue, ConfigValueKind, RedactionPolicy, SecretReference};
+    use search_contracts::MAX_CANONICAL_BYTES;
 
     #[test]
     fn path_classification_never_needs_io() {
@@ -248,5 +257,81 @@ mod tests {
         let (value, truncated) = truncate_utf8("éé", 3);
         assert_eq!(value, "é");
         assert!(truncated);
+    }
+
+    // #386 focused compatibility/disclosure fixtures. AUTHORED_NOT_RUN.
+    #[test]
+    fn path_digest_keeps_exact_standard_sha_without_prefixing() {
+        let value = ConfigValue::Text("abc".to_owned());
+        let RedactedValue::PathDigest { class, digest } =
+            redact_value(&value, RedactionPolicy::PathDigest, 1)
+        else {
+            panic!("bounded path must have a digest")
+        };
+        assert_eq!(class, PathLocationClass::Relative);
+        assert_eq!(
+            digest.to_string(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn oversized_path_yields_only_extent_and_never_an_identity_or_text() {
+        let value = ConfigValue::Text("private-path-marker/".repeat(MAX_CANONICAL_BYTES / 20 + 1));
+        let extent = match &value {
+            ConfigValue::Text(text) => text.len(),
+            _ => unreachable!(),
+        };
+        assert!(extent > MAX_CANONICAL_BYTES);
+        let result = redact_value(&value, RedactionPolicy::PathDigest, usize::MAX);
+        assert_eq!(
+            result,
+            RedactedValue::Metadata {
+                kind: ConfigValueKind::Text,
+                extent
+            }
+        );
+        let debug = format!("{result:?}");
+        assert!(!debug.contains("private-path-marker"));
+        assert!(!debug.contains("PathDigest"));
+    }
+
+    #[test]
+    fn exact_hard_ceiling_path_still_has_a_digest() {
+        let value = ConfigValue::Text("x".repeat(MAX_CANONICAL_BYTES));
+        assert!(matches!(
+            redact_value(&value, RedactionPolicy::PathDigest, 1),
+            RedactedValue::PathDigest { .. }
+        ));
+    }
+
+    #[test]
+    fn secret_policy_precedes_path_digest_and_other_policies_stay_unchanged() {
+        let secret = ConfigValue::SecretReference(
+            SecretReference::new("secret://synthetic-ref", 64).expect("reference"),
+        );
+        assert_eq!(
+            redact_value(&secret, RedactionPolicy::PathDigest, 1),
+            RedactedValue::SecretHidden
+        );
+        let value = ConfigValue::Text("abc".to_owned());
+        assert_eq!(
+            redact_value(&value, RedactionPolicy::Secret, 1),
+            RedactedValue::SecretHidden
+        );
+        assert_eq!(
+            redact_value(&value, RedactionPolicy::Public, 1),
+            RedactedValue::Text {
+                value: "a".to_owned(),
+                truncated: true
+            }
+        );
+        assert_eq!(
+            redact_value(&value, RedactionPolicy::MetadataOnly, 1),
+            RedactedValue::Metadata {
+                kind: ConfigValueKind::Text,
+                extent: 3
+            }
+        );
     }
 }

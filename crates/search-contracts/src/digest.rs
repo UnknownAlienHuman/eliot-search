@@ -1,8 +1,9 @@
 //! Real algorithm execution over the sole canonical encoder or bounded raw bytes.
 //!
-//! The preimage is exactly `domain || 0 || payload`. CBOR and raw-byte domains
+//! Domain-bound preimages are exactly `domain || 0 || payload`. CBOR and raw-byte domains
 //! are disjoint. These primitives do not issue operation receipts or authorize
 //! caller data; each semantic owner must freeze its schema and domain together.
+//! The explicitly named exact-byte SHA compatibility primitive adds no framing.
 
 use crate::canonical::stream_canonical_cbor;
 use crate::{
@@ -116,7 +117,7 @@ fn invalid_domain() -> ContractError {
     ContractError::new(ContractErrorKind::InvalidCharacter, "digest_domain")
 }
 
-/// Finite ceiling for the complete preimage, including the domain and separator.
+/// Finite ceiling for the complete preimage, including any domain and separator.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DigestInputLimit(usize);
 
@@ -211,6 +212,30 @@ pub fn sha256_raw(
     hasher.update(bytes);
     Ok(Sha256Digest32::from_computed_bytes(
         hasher.finalize().into(),
+    ))
+}
+
+/// Standard SHA-256 of the supplied bytes with no added domain or framing.
+///
+/// Compatibility owners must already specify the exact preimage. This checksum
+/// supplies no validation or authority. Prefer the domain-bound helpers for new
+/// semantic identities. The complete input is checked before hashing starts.
+///
+/// # Errors
+/// Returns a content-free size error if the input exceeds the finite ceiling.
+pub fn sha256_exact_bytes(
+    bytes: &[u8],
+    limit: DigestInputLimit,
+) -> Result<Sha256Digest32, ContractError> {
+    if bytes.len() > limit.get() {
+        return Err(ContractError::oversize(
+            "digest_exact_payload",
+            limit.get(),
+            bytes.len(),
+        ));
+    }
+    Ok(Sha256Digest32::from_computed_bytes(
+        Sha256::digest(bytes).into(),
     ))
 }
 
