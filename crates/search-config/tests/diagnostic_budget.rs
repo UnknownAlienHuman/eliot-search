@@ -11,7 +11,7 @@ use search_config::{
 };
 use search_contracts::{Blake3Digest32, ProfileId};
 
-const HEADER_BYTES: usize = 32 + 6 + 8; // digest, "direct", omitted count
+const HEADER_BYTES: usize = 32 + 6 + "eliot/cbor/config-snapshot/v2".len() + 4 + 6 + 8; // digest, algorithm, profile, revision, selected, omitted
 
 fn path(key: &str) -> ConfigKeyPath {
     ConfigKeyPath::new(
@@ -77,8 +77,9 @@ fn fixture(
         ValidatedSection::new(
             project_section(&merged, descriptor).expect("projected section"),
             profile.clone(),
-            Blake3Digest32::from_bytes([9; 32]),
+            limits,
         )
+        .expect("bounded section")
     });
     let snapshot =
         assemble_effective(&registry, validated, profile.clone(), limits).expect("snapshot");

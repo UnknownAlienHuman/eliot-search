@@ -1,17 +1,15 @@
-//! Pure captured-layer parsing, inference and validation fingerprints.
+//! Pure captured-layer parsing and source acquisition identities.
 
 use search_config::{
-    ConfigDocument, ConfigError, ConfigKeyPath, ConfigSource,
-    ConfigSourceKind, ConfigValue, DocumentValue, LayerOperation,
-    parse_document, validate_environment_key,
+    ConfigDocument, ConfigError, ConfigKeyPath, ConfigSource, ConfigSourceKind, DocumentValue,
+    LayerOperation, parse_document, validate_environment_key,
 };
-use search_contracts::Blake3Digest32;
 
 use super::registry::daemon_registry;
 use super::spec::{
-    DAEMON_CONFIG_SCHEMA_VERSION, MAX_CAPTURED_ENTRIES,
-    MAX_CAPTURED_FILE_BYTES, MAX_CAPTURED_VALUE_BYTES, RESET_MARKER,
-    blake3_digest, daemon_limits, key_name, section_name, source_ref,
+    DAEMON_CONFIG_SCHEMA_VERSION, MAX_CAPTURED_ENTRIES, MAX_CAPTURED_FILE_BYTES,
+    MAX_CAPTURED_VALUE_BYTES, RESET_MARKER, blake3_digest, daemon_limits, key_name, section_name,
+    source_ref,
 };
 
 /// Parses one already-captured file byte slice through the pure document
@@ -98,9 +96,7 @@ pub fn capture_environment_document(
 }
 
 /// Builds the captured CLI layer from already-parsed `section.key` pairs.
-pub fn capture_cli_document(
-    pairs: &[(&str, &str)],
-) -> Result<Option<ConfigDocument>, ConfigError> {
+pub fn capture_cli_document(pairs: &[(&str, &str)]) -> Result<Option<ConfigDocument>, ConfigError> {
     if pairs.is_empty() {
         return Ok(None);
     }
@@ -166,57 +162,4 @@ pub fn capture_cli_typed_document(
         entries,
         daemon_limits(),
     )?))
-}
-
-fn encode_config_value(value: &ConfigValue, encoding: &mut Vec<u8>) {
-    match value {
-        ConfigValue::Absent => encoding.extend_from_slice(b"absent\0"),
-        ConfigValue::Boolean(flag) => {
-            encoding.extend_from_slice(b"boolean:");
-            encoding.push(u8::from(*flag));
-            encoding.push(0);
-        }
-        ConfigValue::Integer(number) => {
-            encoding.extend_from_slice(b"integer:");
-            encoding.extend_from_slice(&number.to_be_bytes());
-            encoding.push(0);
-        }
-        ConfigValue::Text(text) => {
-            encoding.extend_from_slice(b"text:");
-            encoding.extend_from_slice(text.as_bytes());
-            encoding.push(0);
-        }
-        ConfigValue::SecretReference(reference) => {
-            encoding.extend_from_slice(b"secret:");
-            encoding.extend_from_slice(reference.as_str().as_bytes());
-            encoding.push(0);
-        }
-        ConfigValue::StringList(items) => {
-            encoding.extend_from_slice(b"list:");
-            for item in items {
-                encoding.extend_from_slice(item.as_bytes());
-                encoding.push(0);
-            }
-            encoding.push(0);
-        }
-    }
-}
-
-/// Capability-structural validation digest over one projected section.
-pub(super) fn validation_digest(
-    input: &search_config::ConfigSectionInput,
-) -> Blake3Digest32 {
-    let mut encoding = Vec::new();
-    encoding.extend_from_slice(b"eliot-searchd/section-validation/v1\0");
-    encoding.extend_from_slice(input.section_name().as_str().as_bytes());
-    encoding.push(0);
-    encoding.extend_from_slice(input.owner().as_str().as_bytes());
-    encoding.push(0);
-    encoding.extend_from_slice(&input.schema_revision().get().to_be_bytes());
-    for (key, field) in input.fields() {
-        encoding.extend_from_slice(key.as_str().as_bytes());
-        encoding.push(0);
-        encode_config_value(&field.value, &mut encoding);
-    }
-    blake3_digest(&encoding)
 }

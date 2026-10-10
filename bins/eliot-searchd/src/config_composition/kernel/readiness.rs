@@ -1,15 +1,13 @@
 //! Truthful dependency/capability readiness and read-only status projection.
 
-use search_config::{
-    ConfigFingerprint, ConfigValue, EffectiveConfigSnapshot, redacted_view,
-};
+use search_config::{ConfigFingerprint, ConfigValue, EffectiveConfigSnapshot, redacted_view};
 
 use super::registry::daemon_registry;
 use super::snapshot::EffectiveDaemonConfig;
 use super::spec::{
-    CONTROL_NOT_READY, DAEMON_CONFIG_SCHEMA_VERSION, DIRECT_NOT_READY,
-    INDEXED_NOT_ACCEPTED, OPTIONAL_GATE_REQUIRED, QUARANTINED_BLOCKER,
-    SEARCH_NOT_ACCEPTED, daemon_limits, key_name, section_name,
+    CONTROL_NOT_READY, DAEMON_CONFIG_SCHEMA_VERSION, DIRECT_NOT_READY, INDEXED_NOT_ACCEPTED,
+    OPTIONAL_GATE_REQUIRED, QUARANTINED_BLOCKER, SEARCH_NOT_ACCEPTED, daemon_limits, key_name,
+    section_name,
 };
 
 /// Verified dependency state observed by the daemon composition root.
@@ -111,11 +109,7 @@ pub struct ReadinessReport {
     pub fingerprint: ConfigFingerprint,
 }
 
-fn boolean_field(
-    snapshot: &EffectiveConfigSnapshot,
-    section: &str,
-    key: &str,
-) -> Option<bool> {
+fn boolean_field(snapshot: &EffectiveConfigSnapshot, section: &str, key: &str) -> Option<bool> {
     let registry = daemon_registry().ok()?;
     let section_name = section_name(section).ok()?;
     let key_name = key_name(key).ok()?;
@@ -137,8 +131,7 @@ pub fn derive_readiness(
     let snapshot = effective.snapshot();
     let control_ready =
         dependencies.stores.control_store_verified && !dependencies.owner.quarantined;
-    let direct_ready =
-        dependencies.stores.direct_store_verified && !dependencies.owner.quarantined;
+    let direct_ready = dependencies.stores.direct_store_verified && !dependencies.owner.quarantined;
     let source_backed = direct_ready && control_ready;
     let optional_semantic =
         boolean_field(snapshot, "optional_profiles", "semantic").unwrap_or(false);
@@ -200,10 +193,15 @@ pub fn derive_readiness(
 
 /// Read-only effective-configuration status without paths or secrets.
 #[must_use]
-pub fn config_status_json(
-    effective: &EffectiveDaemonConfig,
-    report: &ReadinessReport,
-) -> String {
+pub fn config_status_json(effective: &EffectiveDaemonConfig, report: &ReadinessReport) -> String {
+    if report.fingerprint != effective.fingerprint() {
+        return concat!(
+            "{\"event\":\"effective_config_status_error\",",
+            "\"schema\":\"eliot.effective-config-status-v2\",",
+            "\"reason\":\"CONFIG_IDENTITY_MISMATCH\",\"read_only\":true}"
+        )
+        .to_owned();
+    }
     let Ok(view) = redacted_view(
         effective.snapshot(),
         effective.registry(),
@@ -212,7 +210,7 @@ pub fn config_status_json(
     ) else {
         return concat!(
             "{\"event\":\"effective_config_status_error\",",
-            "\"schema\":\"eliot.effective-config-status-v1\",",
+            "\"schema\":\"eliot.effective-config-status-v2\",",
             "\"reason\":\"CONFIG_DIAGNOSTIC_UNAVAILABLE\",\"read_only\":true}"
         )
         .to_owned();
@@ -231,10 +229,13 @@ pub fn config_status_json(
     format!(
         concat!(
             "{{\"event\":\"effective_config_status\",",
-            "\"schema\":\"eliot.effective-config-status-v1\",",
+            "\"schema\":\"eliot.effective-config-status-v2\",",
             "\"config_schema_version\":{},",
             "\"selected_profile\":\"{}\",",
             "\"config_fingerprint\":\"{}\",",
+            "\"fingerprint_algorithm\":\"{}\",",
+            "\"fingerprint_profile\":\"{}\",",
+            "\"fingerprint_revision\":{},",
             "\"configuration_ready\":{},",
             "\"runtime_owner_ready\":{},",
             "\"control_store_ready\":{},",
@@ -251,6 +252,9 @@ pub fn config_status_json(
         DAEMON_CONFIG_SCHEMA_VERSION,
         effective.selected_profile(),
         fingerprint_hex,
+        report.fingerprint.algorithm(),
+        report.fingerprint.canonical_profile(),
+        report.fingerprint.revision(),
         report.composition.configuration_ready,
         report.composition.runtime_owner_ready,
         report.composition.control_store_ready,

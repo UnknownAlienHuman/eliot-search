@@ -269,7 +269,6 @@ fn snapshot(
     cli: Option<ConfigDocument>,
     requested_profile: &str,
     selected_profile: &str,
-    digest_seed: u8,
 ) -> EffectiveConfigSnapshot {
     let merged = merge_layers(
         ConfigLayers {
@@ -286,15 +285,10 @@ fn snapshot(
     let selected_profile = ProfileId::new(selected_profile).expect("selected profile");
     let validated = registry
         .sections()
-        .enumerate()
-        .map(|(index, (_, descriptor))| {
+        .map(|(_, descriptor)| {
             let input = project_section(&merged, descriptor).expect("section projection");
-            let marker = digest_seed.wrapping_add(u8::try_from(index).expect("small fixture"));
-            ValidatedSection::new(
-                input,
-                selected_profile.clone(),
-                Blake3Digest32::from_bytes([marker; 32]),
-            )
+            ValidatedSection::new(input, selected_profile.clone(), limits())
+                .expect("bounded section")
         })
         .collect::<Vec<_>>();
     assemble_effective(registry, validated, selected_profile, limits()).expect("effective snapshot")
@@ -331,8 +325,8 @@ fn same_layers_same_fingerprint() {
             ),
         ],
     );
-    let left = snapshot(&registry, Some(first), None, None, "direct", "direct", 20);
-    let right = snapshot(&registry, Some(second), None, None, "direct", "direct", 20);
+    let left = snapshot(&registry, Some(first), None, None, "direct", "direct");
+    let right = snapshot(&registry, Some(second), None, None, "direct", "direct");
     assert_eq!(left, right);
     assert_eq!(left.fingerprint(), right.fingerprint());
 }
@@ -486,7 +480,7 @@ fn package_section_collision_rejected() {
 #[test]
 fn mixed_reconfiguration_obligations_preserved() {
     let registry = fixture_registry(1);
-    let old = snapshot(&registry, None, None, None, "direct", "direct", 30);
+    let old = snapshot(&registry, None, None, None, "direct", "direct");
     let candidate = snapshot(
         &registry,
         Some(document(
@@ -507,7 +501,6 @@ fn mixed_reconfiguration_obligations_preserved() {
         None,
         "direct",
         "direct",
-        40,
     );
     let delta = diff(&old, &candidate, &registry).expect("delta");
     let plan = plan_reconfiguration(&delta).expect("plan");
@@ -559,7 +552,6 @@ fn redacted_view_never_discloses_secret_or_absolute_path() {
         None,
         "direct",
         "direct",
-        50,
     );
     let view = redacted_view(&candidate, &registry, DisclosureLevel::Ordinary, limits())
         .expect("bounded redacted view");
@@ -666,13 +658,13 @@ fn selected_profile_is_external_authority_not_file_self_authorization() {
     .expect("requested profile may be parsed");
     let validated = registry
         .sections()
-        .enumerate()
-        .map(|(index, (_, descriptor))| {
+        .map(|(_, descriptor)| {
             ValidatedSection::new(
                 project_section(&merged, descriptor).expect("project"),
                 ProfileId::new("semantic_optional").expect("profile"),
-                Blake3Digest32::from_bytes([u8::try_from(index).expect("small"); 32]),
+                limits(),
             )
+            .expect("bounded section")
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -703,13 +695,13 @@ fn stale_descriptor_rejects_complete_candidate() {
     .expect("merge");
     let validated = original
         .sections()
-        .enumerate()
-        .map(|(index, (_, descriptor))| {
+        .map(|(_, descriptor)| {
             ValidatedSection::new(
                 project_section(&merged, descriptor).expect("project"),
                 ProfileId::new("direct").expect("profile"),
-                Blake3Digest32::from_bytes([u8::try_from(index).expect("small"); 32]),
+                limits(),
             )
+            .expect("bounded section")
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -726,8 +718,8 @@ fn stale_descriptor_rejects_complete_candidate() {
 #[test]
 fn profile_change_requires_gate_and_preserves_all_affected_owners() {
     let registry = fixture_registry(1);
-    let old = snapshot(&registry, None, None, None, "direct", "direct", 60);
-    let candidate = snapshot(&registry, None, None, None, "lexical", "lexical", 70);
+    let old = snapshot(&registry, None, None, None, "direct", "direct");
+    let candidate = snapshot(&registry, None, None, None, "lexical", "lexical");
     let delta = diff(&old, &candidate, &registry).expect("delta");
     let plan = plan_reconfiguration(&delta).expect("plan");
     assert!(plan.activation_blocked);
@@ -759,7 +751,7 @@ fn debug_projections_do_not_dump_unvalidated_text() {
 #[test]
 fn noop_delta_has_no_steps_or_receipts() {
     let registry = fixture_registry(1);
-    let snapshot = snapshot(&registry, None, None, None, "direct", "direct", 80);
+    let snapshot = snapshot(&registry, None, None, None, "direct", "direct");
     let delta = diff(&snapshot, &snapshot, &registry).expect("delta");
     assert!(delta.is_empty());
     let plan = plan_reconfiguration(&delta).expect("plan");

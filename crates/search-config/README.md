@@ -1,39 +1,37 @@
 # search-config
 
-**W1 support package — deterministic local configuration layering and reload planning.**
+**Deterministic, I/O-free typed configuration and reload planning.**
 
-**Status:** W1 deterministic mechanics implemented and locally qualified; runtime acquisition and package-specific application remain external.
+This package owns finite typed documents, registry/layer semantics, section equality identities,
+effective snapshot fingerprints, redaction, deltas and plans. Capability packages own section
+meaning and runtime application. Configuration equality never proves validation or applied effects.
 
-This package owns bounded TOML configuration documents, deterministic layer precedence,
-section registration, validation dispatch, redaction, effective-config fingerprints and
-reconfiguration plans. Capability packages own their typed section schemas and runtime state.
+New snapshots compute BLAKE3 over shared deterministic CBOR under
+`eliot/cbor/config-snapshot/v2`. The config owner computes each section digest from exact typed
+fields, requested/selected profiles and supplied source/reset provenance; callers supply no digest.
+Private snapshot compute consumes its existing ordered bounded map, without another sort, full
+preimage or public arbitrary iterator.
 
-The #386 source slice removes copied SHA-256 and uses the shared exact-byte RustCrypto owner.
-Legacy v1 preimages and bounded path digests keep their bytes; hashing and preimage growth have
-a hard 8 MiB ceiling. Oversized diagnostic paths yield size metadata without a digest or text.
-Focused compatibility fixtures are AUTHORED_NOT_RUN. The typed TOML cutover, internal
-section-digest ownership, canonical v2 identity and qualification remain open under #238/#109/#215.
+This is VERSIONED_REBUILD, independently of the current schema-1 TOML parser. SHA-v1 bytes can be
+restored only with `ConfigFingerprint::restore_legacy_v1` for migration/comparison. They cannot
+construct a current effective snapshot. Equality preserves algorithm/profile/revision even if raw
+bytes coincide. The immediate daemon status emits the full tag under its explicit v2 schema and
+rejects report/snapshot identity mismatch. Runtime application/readback remains #333.
 
-File/env/CLI documents now share one private builder and checked aggregate budget. It enforces
-sections, per-section fields, individual identifiers/text/lists and totals before config-owned
-allocation/growth. W1 aggregate ceilings are 1 MiB identifier bytes, 4 MiB decoded value bytes and
-8,192 list items. The existing public constructors/header rules stay intact; their accepted
-in-budget v1 values and persisted digests keep their bytes. Previously unchecked oversized captured
-values or aggregates now reject. Adversarial boundary fixtures are AUTHORED_NOT_RUN; donor
-materialization and the explicit TOML/v2 migration remain #389/#238 work.
+Borrowed identifier, value and list extents plus fixed scalar/digest payload are checked before
+temporary canonical rows. Assembly also charges names/owners before map clones and insertion.
+One shared encoder decides exact domain-inclusive CBOR bytes under the 8 MiB hard ceiling.
+Logical payload budgets are not measured allocator residency or serialized JSON/Debug size.
 
-Captured document Debug now reports fixed primitive metadata: schema, profile presence/byte
-extent, source kind and entry/section counts. It omits unvalidated profile and payload text,
-including when embedded in `ConfigLayers`, while preserving typed accessors and persisted bytes.
-Disclosure fixtures are AUTHORED_NOT_RUN under #238/#215.
+File/env/CLI documents retain the shared builder, descriptor/secret/precedence rules and admission
+ceilings: W1 identifiers 1 MiB, values 4 MiB, total list items 8,192. Captured document Debug emits
+fixed primitive metadata. Redacted views charge complete tagged header and entry payload before
+copies/hashing and omit over-budget entries whole. Bounded redacted path digests retain exact
+standard SHA-256 through the shared owner; no production legacy fingerprint encoder remains.
 
-Redacted views now enforce a 1 MiB W1 logical diagnostic-byte ceiling as well as their entry ceiling.
-They charge the profile/header, names and visible values before cloning or hashing, omit over-budget
-entries whole, and return a content-free error if the header cannot fit or limits are invalid. This
-logical payload accounting does not measure allocator residency or serialized JSON/Debug bytes.
-The daemon status caller handles the fallible view without changing runtime readiness or persisted
-configuration identities. Diagnostic boundary fixtures are AUTHORED_NOT_RUN under #238/#109/#215;
-the maintained parser and explicit tagged v2 fingerprint cutover remain #389/#238 work.
+Identity/compatibility/diagnostic fixtures are AUTHORED_NOT_RUN under #352. The maintained TOML
+parser cutover remains #389/#238; integrated/native/installed/scale/release qualification remains #215.
+No donor, manifest or lockfile changes belong to this identity slice.
 
 ## Owns
 

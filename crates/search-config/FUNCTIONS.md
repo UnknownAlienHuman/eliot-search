@@ -18,13 +18,13 @@ platform facts, accepted capability receipts and time before invoking this crate
 ## Implemented representation notes
 
 - Optional capability fields use an explicit `ConfigValue::Absent`; absence is never inferred from a missing higher-precedence key.
-- `ConfigFingerprint` remains SHA-256 over the exact legacy v1 length-delimited preimage containing schema/profile identities, descriptor revisions/digests and package-validated section digests. Shared `sha256_exact_bytes` executes the accepted SHA-2 donor without adding framing. The preimage has a hard 8 MiB ceiling in addition to the caller ceiling. This is not the forthcoming canonical v2 identity under #238.
+- New effective snapshots compute config-owned BLAKE3/shared deterministic CBOR v2. ConfigFingerprint preserves algorithm/profile/revision in equality and serialization. restore_legacy_v1 is decode-only and cannot create a current snapshot; source must be rebuilt. Input schema1 and fingerprint revision2 are independent (VERSIONED_REBUILD).
 - The parser accepts the finite baseline TOML subset used by the project configuration: top-level `schema_version` and `profile`, flat package tables, booleans, signed integers, strings and arrays of strings. Unsupported TOML constructs fail closed.
 - Ordinary `Debug` representations redact unvalidated text, paths and opaque secret references.
 - `ConfigDocument` Debug emits only schema, profile presence/byte extent, source kind and entry/declared-section counts. It does not traverse captured profile text, names, values, source refs or digests. The same representation applies when `ConfigLayers` embeds the document; its separate externally selected `requested_profile` remains caller-authorized metadata. Debug changes no data/accessor or persisted v1 bytes and constructs no internal diagnostic String.
 - File parsing and `ConfigDocument::from_entries` share one private construction budget. Sections (including empty file tables), entries and fields per section are bounded before map growth or section clones. Parsed strings use the same legacy decoding rules for an allocation-free UTF-8 length pass and the subsequent exact-capacity allocation; list item counts are charged before each item decode/push.
 - `ConfigLimits::W1` adds aggregate ceilings: identifier bytes 1 MiB, decoded value bytes 4 MiB and list items 8,192 per layer. Identifiers count the profile once, declared section names once and both path components for each entry. Value bytes count text/list UTF-8 plus boolean=1 and integer=8; resets contribute zero. Per-identifier/text/list limits also apply to caller-owned captured values before configuration collection growth. These are logical payload/count ceilings, not an allocator-resident-byte measurement.
-- Constructor header rules remain unchanged: positive schema, no Defaults document, profiles only on File. File profile is optional in `from_entries` and mandatory in `parse_document`. Bounds now reject inputs that previously bypassed sections/fields/per-value/aggregate checks. In-budget v1 values and fingerprint bytes remain unchanged; over-limit malformed/duplicate intersections may report capacity first. Fixed content-free errors require no diagnostic path buffer. TOML donor/v2, diagnostic byte ceilings, section-digest authority and ordered fingerprint ownership remain #238/#389 follow-ups.
+- Constructor header rules remain unchanged: positive schema, no Defaults document, profiles only on File. File profile is optional in `from_entries` and mandatory in `parse_document`. Bounds now reject inputs that previously bypassed sections/fields/per-value/aggregate checks. In-budget typed values remain unchanged; current snapshots compute the separately tagged canonical v2 identity; over-limit malformed/duplicate intersections may report capacity first. Fixed content-free errors require no diagnostic path buffer. TOML donor/parser adoption remains #389. Canonical section/snapshot identities and diagnostic admission are implemented source slices; their fixture execution remains deferred.
 
 ## Operations
 
@@ -57,10 +57,29 @@ A capability cannot inspect another package's section through this operation.
 Requires one validated result for every registered effective section. Rejects missing, duplicate,
 stale-descriptor and profile/gate mismatches.
 
-### `fingerprint(snapshot) -> ConfigFingerprint`
+### Private canonical section and snapshot compute
 
-Hashes canonical schema/profile/descriptor revisions and validated section digests. It never hashes
-secret plaintext because plaintext is structurally forbidden.
+ValidatedSection::new(input, selected_profile, limits) computes a fallible section equality digest internally. The public caller-digest parameter, arbitrary fingerprint iterator and package canonical writer are removed. Private snapshot compute hashes the existing finite ordered BTreeMap through shared blake3_canonical_array; plaintext secrets remain structurally forbidden.
+
+Section domain is `eliot/cbor/config-section/v2`. Its ordered root contains one header row
+`[name, owner, descriptor_revision, registry_digest, requested_profile, selected_profile]`,
+then field rows `[key, value_kind, payload, source_kind, source_ref, source_digest, reset_bool]`.
+Value kinds are Absent0/Boolean1/Integer2/Text3/SecretReference4/StringList5; source kinds use
+Defaults0/File1/Environment2/Cli3. Negative integers use I64, nonnegative U64; absent is Null;
+opaque references are text and list order is retained. False reset is explicit.
+
+Snapshot domain/profile is `eliot/cbor/config-snapshot/v2`. Its header is
+`[config_schema_version, selected_profile]`, followed by ordered section rows
+`[name, owner, descriptor_revision, registry_digest, section_v2_digest]`.
+Both root counts include the header: at most4,096 rows, hence4,095 fields/sections.
+
+Borrowed identifiers/profile/source refs, value payload and list counts are checked against
+ConfigLimits before row clones/list growth; assembly also charges before name/owner clones
+and map insertion. Logical construction sums fixed revision8, digest32, kind8, source-kind8,
+reset1 plus borrowed payload under the caller/shared8MiB ceiling. This is not a CBOR estimator
+or heap measurement. The shared encoder alone checks exact domain-inclusive bytes/depth.
+Failures return content-free errors and no partial identity. These are equality identities
+over exact supplied provenance; they do not prove package validation or runtime effects.
 
 ### `diff(old, new) -> Result<ConfigDelta, ConfigError>`
 
@@ -80,7 +99,7 @@ location classes. A path exceeding the shared 8 MiB digest ceiling returns only 
 metadata, with no digest or raw path. Ordinary bounded paths retain their exact standard SHA-256 bytes.
 
 Both entry count and complete logical payload are charged before profile/path/text clones, path hashing
-or map growth. W1 `max_diagnostic_bytes` is 1 MiB. The header charges fingerprint=32 bytes, selected
+or map growth. W1 `max_diagnostic_bytes` is 1 MiB. The header charges fingerprint=32 + algorithm/profile UTF-8 + revision4 bytes, selected
 profile UTF-8 bytes and omitted count=8. Each entry charges section/key UTF-8 bytes plus value tag=1
 and payload: absent/hidden=0, boolean=1, integer=8, visible text bytes plus truncation flag=1, list
 extents=16, path class/digest=33, metadata kind/extent=9. These architecture-independent logical bytes
@@ -88,7 +107,7 @@ exclude serialization framing/escaping and allocator/map overhead; this is not a
 Overflow or insufficient header capacity returns an error without a partial view; invalid limits
 reject. An entry exceeding either ceiling is omitted whole; later smaller entries may still fit in
 canonical order. The daemon status adapter maps a failed view to a fixed content-free read-only error
-record. Configuration/fingerprint bytes and runtime readiness calculations remain unchanged.
+record. Runtime readiness calculations remain unchanged. The immediate status schema is eliot.effective-config-status-v2 and preserves fingerprint algorithm/profile/revision, rejecting a report/snapshot identity mismatch.
 
 ### `validate_environment_key(name, registry) -> Result<ConfigKeyPath, ConfigError>`
 

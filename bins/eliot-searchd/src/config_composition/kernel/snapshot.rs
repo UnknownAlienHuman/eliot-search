@@ -1,17 +1,13 @@
 //! Effective snapshot assembly over pure `search-config` mechanics.
 
 use search_config::{
-    ConfigDocument, ConfigError, ConfigFingerprint, ConfigLayers,
-    ConfigRegistry, EffectiveConfigSnapshot, ValidatedSection,
-    assemble_effective, merge_layers, project_section,
+    ConfigDocument, ConfigError, ConfigFingerprint, ConfigLayers, ConfigRegistry,
+    EffectiveConfigSnapshot, ValidatedSection, assemble_effective, merge_layers, project_section,
 };
 use search_contracts::ProfileId;
 
-use super::capture::validation_digest;
 use super::registry::daemon_registry;
-use super::spec::{
-    DAEMON_DIRECT_PROFILE, daemon_limits, defaults_source, profile_id,
-};
+use super::spec::{DAEMON_DIRECT_PROFILE, daemon_limits, defaults_source, profile_id};
 
 /// Immutable daemon-effective configuration: the authoritative snapshot plus
 /// the closed registry that produced it.
@@ -73,11 +69,13 @@ pub fn build_effective(
     let mut validated = Vec::new();
     for (_, descriptor) in registry.sections() {
         let input = project_section(&merged, descriptor)?;
-        let digest = validation_digest(&input);
-        validated.push(ValidatedSection::new(input, selected.clone(), digest));
+        validated.push(ValidatedSection::new(
+            input,
+            selected.clone(),
+            daemon_limits(),
+        )?);
     }
-    let snapshot =
-        assemble_effective(&registry, validated, selected, daemon_limits())?;
+    let snapshot = assemble_effective(&registry, validated, selected, daemon_limits())?;
     Ok(EffectiveDaemonConfig { snapshot, registry })
 }
 

@@ -119,7 +119,7 @@ mod tests {
     };
 
     fn fingerprint(value: u8) -> ConfigFingerprint {
-        ConfigFingerprint::from_bytes([value; 32])
+        ConfigFingerprint::restore_legacy_v1([value; 32])
     }
 
     #[test]

@@ -2,13 +2,14 @@
 //!
 //! Input acquisition and capability-specific runtime application remain outside
 //! this package. Callers supply already captured file bytes, environment values,
-//! CLI values, accepted profiles, and package-owned validation digests.
+//! CLI values and accepted profiles. This owner computes typed equality digests.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![allow(clippy::module_name_repetitions)]
 
 pub mod action;
+mod canonical_identity;
 pub mod diff;
 pub mod document;
 pub mod environment;
@@ -30,7 +31,7 @@ pub use diff::{ConfigDelta, SectionDelta, diff};
 pub use document::{ConfigDocument, parse_document};
 pub use environment::validate_environment_key;
 pub use error::ConfigError;
-pub use fingerprint::{ConfigFingerprint, SectionFingerprintInput, fingerprint};
+pub use fingerprint::ConfigFingerprint;
 pub use limits::ConfigLimits;
 pub use merge::{ConfigLayers, FieldProvenance, MergedConfig, MergedField, merge_layers};
 pub use names::{ConfigKeyName, ConfigKeyPath, ConfigOwner, ConfigSectionName, ConfigSourceRef};
