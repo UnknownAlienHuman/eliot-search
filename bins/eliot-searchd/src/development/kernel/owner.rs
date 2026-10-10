@@ -1,5 +1,6 @@
 //! Single live data-root owner, OS exclusion and observation-root restoration.
 
+use std::cell::Cell;
 use std::fs::{self, File, Metadata, OpenOptions, TryLockError};
 use std::io;
 #[cfg(test)]
@@ -15,7 +16,7 @@ use search_domain::{
 };
 use search_runtime_owner::{DrainReason, OwnerError, OwnerGuard, classify_owner_mutation_boundary};
 
-use crate::owner_composition::{LiveOwner, ShutdownReceipt};
+use crate::owner_composition::{DataRootRequest, LiveOwner, ShutdownReceipt};
 use crate::sealed_root_lock::SealedRootLease;
 #[cfg(windows)]
 use crate::sealed_root_lock::SealedRootLockError;
@@ -121,6 +122,8 @@ fn record_write_error(_error: &io::Error) -> String {
 /// The guard is non-cloneable; dropping it releases exclusion without
 /// rewriting durable ownership evidence.
 pub struct DataRootGuard {
+    request: Option<DataRootRequest>,
+    service_started: Cell<bool>,
     canonical_root: PathBuf,
     source_roots: SourceRootCatalog,
     owner: LiveOwner,
@@ -153,6 +156,7 @@ impl NativeOwnerOpen {
 /// and exact durable predecessor binding remain held by the inspection call.
 /// It has no constructor, clone, lifecycle or registration-mutation methods.
 pub struct InspectedDataRoot {
+    request: Option<DataRootRequest>,
     canonical_root: PathBuf,
     snapshot: crate::owner_composition::ExistingOwnerSnapshot,
     source_roots: SourceRootCatalog,
@@ -163,6 +167,9 @@ impl InspectedDataRoot {
     /// Verify the existing barrier/owner and retained native layout before a
     /// child read. This never advances an epoch or resolves a secret.
     pub(crate) fn verify_existing(&self) -> Result<(), String> {
+        if let Some(request) = &self.request {
+            request.preflight()?;
+        }
         check_existing_root_barriers(&self.canonical_root)?;
         self.native_objects
             .verify(&self.canonical_root)
@@ -170,7 +177,11 @@ impl InspectedDataRoot {
                 crate::owner_composition::verify_native_installation(&self.canonical_root)
             })
             .and_then(|()| self.snapshot.verify_unchanged(&self.canonical_root))
-            .map_err(|error| error.code().to_owned())
+            .map_err(|error| error.code().to_owned())?;
+        if let Some(request) = &self.request {
+            request.preflight()?;
+        }
+        Ok(())
     }
     /// Existing canonical root under the held native exclusions.
     pub(crate) fn canonical_root(&self) -> &Path {
@@ -198,11 +209,32 @@ impl InspectedDataRoot {
 impl DataRootGuard {
     /// Executes an existing read under both native exclusions without creating
     /// locks, credentials, catalogs or owner records, or performing recovery.
+    #[cfg(test)]
     pub(crate) fn with_inspection<T>(
         path: &Path,
         operation: impl FnOnce(&InspectedDataRoot) -> Result<T, String>,
     ) -> Result<T, String> {
+        Self::inspect_root(path, None, operation)
+    }
+
+    pub(crate) fn with_inspection_request<T>(
+        path: &Path,
+        request: &DataRootRequest,
+        operation: impl FnOnce(&InspectedDataRoot) -> Result<T, String>,
+    ) -> Result<T, String> {
+        request.validate_root(path)?;
+        Self::inspect_root(path, Some(request), operation)
+    }
+
+    fn inspect_root<T>(
+        path: &Path,
+        request: Option<&DataRootRequest>,
+        operation: impl FnOnce(&InspectedDataRoot) -> Result<T, String>,
+    ) -> Result<T, String> {
         Self::with_existing_lock(path, |root| {
+            if let Some(request) = request {
+                request.preflight()?;
+            }
             check_existing_root_barriers(root)?;
             let native_objects = crate::owner_composition::retain_native_installation(root)
                 .map_err(|error| error.code().to_owned())?;
@@ -215,11 +247,13 @@ impl DataRootGuard {
             let source_roots = SourceRootCatalog::load_existing_owned(root)
                 .map_err(|error| error.code().to_owned())?;
             let inspected = InspectedDataRoot {
+                request: request.map(DataRootRequest::retain),
                 canonical_root: root.to_owned(),
                 snapshot,
                 source_roots,
                 native_objects,
             };
+            inspected.verify_existing()?;
             let result = operation(&inspected);
             inspected.verify_existing()?;
             result
@@ -229,16 +263,32 @@ impl DataRootGuard {
     /// Harness-only create-or-open retained for historical isolated fixtures.
     #[cfg(test)]
     pub(crate) fn acquire(path: &Path) -> Result<Self, String> {
-        Self::acquire_root(path, NativeOwnerOpen::LegacyHarness)
+        Self::acquire_root(path, NativeOwnerOpen::LegacyHarness, None)
     }
 
     /// Establishes one mutating owner over a fully existing released root.
     /// Missing locks/installation/catalog require explicit initialization.
+    #[cfg(test)]
     pub(crate) fn open_existing(path: &Path) -> Result<Self, String> {
-        Self::acquire_root(path, NativeOwnerOpen::ExistingMutating)
+        Self::acquire_root(path, NativeOwnerOpen::ExistingMutating, None)
     }
 
-    fn acquire_root(path: &Path, mode: NativeOwnerOpen) -> Result<Self, String> {
+    pub(crate) fn open_existing_request(
+        path: &Path,
+        request: &DataRootRequest,
+    ) -> Result<Self, String> {
+        request.validate_root(path)?;
+        Self::acquire_root(path, NativeOwnerOpen::ExistingMutating, Some(request))
+    }
+
+    fn acquire_root(
+        path: &Path,
+        mode: NativeOwnerOpen,
+        request: Option<&DataRootRequest>,
+    ) -> Result<Self, String> {
+        if let Some(request) = request {
+            request.preflight()?;
+        }
         let metadata = fs::symlink_metadata(path).map_err(|_| "DATA_ROOT_OPEN_ERROR".to_owned())?;
         if metadata.file_type().is_symlink() || is_reparse(&metadata) {
             return Err("DATA_ROOT_LINK_DENIED".to_owned());
@@ -357,6 +407,10 @@ impl DataRootGuard {
         .map_err(|error| error.code().to_owned())?;
         crate::owner_composition::verify_bound_directory(&root_file, &canonical_root)
             .map_err(|error| error.code().to_owned())?;
+        // Do not advance the durable epoch after request cancellation/expiry.
+        if let Some(request) = request {
+            request.preflight()?;
+        }
         let owner = match mode {
             #[cfg(test)]
             NativeOwnerOpen::LegacyHarness => crate::owner_composition::establish(&canonical_root),
@@ -387,7 +441,9 @@ impl DataRootGuard {
                 .map_err(|error| record_write_error(&error))?;
         }
 
-        Ok(Self {
+        let guard = Self {
+            request: request.map(DataRootRequest::retain),
+            service_started: Cell::new(false),
             sealed,
             file,
             canonical_root,
@@ -396,7 +452,16 @@ impl DataRootGuard {
             root_file,
             native_objects,
             clear_marker_on_drop: mode.creates_layout(),
-        })
+        };
+        if let Some(request) = request {
+            // Succession has written durable ACTIVE state. Expiry at this
+            // point retains that state and is never a no-effect refusal.
+            request
+                .preflight()
+                .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown.code().to_owned())?;
+            guard.verify_existing()?;
+        }
+        Ok(guard)
     }
 
     /// Canonical local root protected by this guard.
@@ -407,6 +472,11 @@ impl DataRootGuard {
     /// Revalidates the retained exclusions, physical root and durable owner.
     /// A mutation marker may be armed, so it is deliberately not cleared here.
     pub(crate) fn verify_existing(&self) -> Result<(), String> {
+        if let Some(request) = &self.request
+            && !self.service_started.get()
+        {
+            request.preflight()?;
+        }
         if let Some(pins) = &self.native_objects {
             pins.verify(&self.canonical_root)
                 .map_err(|error| error.code().to_owned())?;
@@ -429,6 +499,11 @@ impl DataRootGuard {
                 .verify_existing(&self.canonical_root)
                 .map_err(|_| "DATA_ROOT_LOCK_IDENTITY_CHANGED".to_owned())?;
         }
+        if let Some(request) = &self.request
+            && !self.service_started.get()
+        {
+            request.preflight()?;
+        }
         Ok(())
     }
 
@@ -436,6 +511,55 @@ impl DataRootGuard {
     pub(crate) fn clear_mutation_marker(&self) -> Result<(), String> {
         self.verify_existing()?;
         crate::catalog_quarantine::clear(&self.canonical_root)
+    }
+
+    /// A service may idle indefinitely; only completed startup detaches its
+    /// finite request. Each command still borrows this same live owner.
+    pub(crate) fn finish_service_startup(&self, request: &DataRootRequest) -> Result<(), String> {
+        self.verify_existing()?;
+        let current = self
+            .request
+            .as_ref()
+            .ok_or_else(|| "DATA_ROOT_REQUEST_INVALID".to_owned())?;
+        if !current.operation().is_same_request(request.operation()) {
+            return Err(OwnerError::OwnerOperationConflict.code().to_owned());
+        }
+        self.service_started.set(true);
+        Ok(())
+    }
+
+    /// Reattach the original shutdown command after all borrowed stores close.
+    /// This changes only request lifetime; it never acquires another owner.
+    pub(crate) fn bind_service_shutdown(
+        &mut self,
+        request: &DataRootRequest,
+    ) -> Result<(), String> {
+        if !self.service_started.get() {
+            return Err("DATA_ROOT_SERVICE_STARTUP_INCOMPLETE".to_owned());
+        }
+        request.validate_root(&self.canonical_root)?;
+        self.verify_existing()?;
+        self.request = Some(request.retain());
+        self.service_started.set(false);
+        Ok(())
+    }
+
+    pub(crate) fn admit_service_command(
+        &self,
+        command: &str,
+    ) -> Result<DataRootCommand<'_>, String> {
+        if !self.service_started.get() {
+            return Err("DATA_ROOT_SERVICE_STARTUP_INCOMPLETE".to_owned());
+        }
+        let request = DataRootRequest::from_service_command(&self.canonical_root, command)?;
+        request.preflight()?;
+        self.verify_existing()?;
+        check_existing_root_barriers(&self.canonical_root)?;
+        request.preflight()?;
+        Ok(DataRootCommand {
+            owner: self,
+            request,
+        })
     }
 
     /// Bound monotone owner epoch of this live incarnation.
@@ -491,6 +615,35 @@ impl DataRootGuard {
 
     pub(crate) const fn source_roots_mut(&mut self) -> &mut SourceRootCatalog {
         &mut self.source_roots
+    }
+}
+
+/// Finite command capability borrowing the existing service owner. There is
+/// no locator-based opener or conversion into another root authority.
+pub struct DataRootCommand<'a> {
+    owner: &'a DataRootGuard,
+    request: DataRootRequest,
+}
+
+impl DataRootCommand<'_> {
+    pub(crate) fn request(&self) -> &DataRootRequest {
+        &self.request
+    }
+
+    pub(crate) fn verify(&self) -> Result<(), String> {
+        self.request.preflight()?;
+        self.owner.verify_existing()
+    }
+
+    pub(crate) fn arm_mutation_marker(&self) -> Result<(), String> {
+        self.verify()?;
+        crate::catalog_quarantine::check(self.owner.canonical_root())?;
+        crate::catalog_quarantine::arm(self.owner.canonical_root())
+    }
+
+    pub(crate) fn clear_mutation_marker(&self) -> Result<(), String> {
+        self.verify()?;
+        self.owner.clear_mutation_marker()
     }
 }
 

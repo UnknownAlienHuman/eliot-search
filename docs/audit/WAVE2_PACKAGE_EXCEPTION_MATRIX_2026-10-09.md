@@ -26,6 +26,13 @@ Rows name existing packages at their current Cargo paths, not new top-level dire
 
 ## #266 existing-root composition addendum
 
+The [operation-context addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094825469)
+includes `owner_composition/kernel/operation.rs` and narrow request-aware output/cancellation
+in `public_runtime_service/kernel/session.rs`, with narrow native argument/deadline plumbing
+in the same directory's `entry.rs` and `mutation.rs`. The context binds exact bounded native CLI
+arguments, one original deadline and cancellation; it is not root authority. Service commands
+borrow the same live owner. No new dependency, task registry or provider protocol is included.
+
 The [lifetime/redaction addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094629373)
 retains the fixed native layout objects through admitted child lifetimes and bounds
 `secure_commands/kernel/output.rs` failures to closed reason tokens. No new identity catalog

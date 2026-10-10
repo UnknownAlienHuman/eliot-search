@@ -23,6 +23,7 @@ pub(super) fn cmd_migration_plan(
     owner: &DataRootGuard,
     attempt: &mut MutationAttempt,
     target_namespace: &str,
+    request: &crate::owner_composition::DataRootRequest,
 ) -> Result<(), String> {
     let target = search_contracts::SourceNamespaceId::parse(target_namespace)
         .map_err(|_| "DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned())?;
@@ -30,7 +31,9 @@ pub(super) fn cmd_migration_plan(
         return Err("DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned());
     }
     attempt.arm();
-    let result = store.stage_source_migration_plan(owner, target)?;
+    request.preflight()?;
+    let result = store.stage_source_migration_plan(owner, target, request.deadline())?;
+    request.preflight()?;
     write_line(writer, &result)
 }
 
@@ -99,12 +102,7 @@ pub(super) fn cmd_prepare_revision(
     let invalidated = invalidate_search_state(continuations, handles);
     let gap = store.prepare_revision(revision_id)?;
     refresh_storage(storage, canonical_root)?;
-    crate::preparation_composition::emit_prepared(
-        writer,
-        revision_id,
-        invalidated,
-        gap,
-    )
+    crate::preparation_composition::emit_prepared(writer, revision_id, invalidated, gap)
 }
 
 pub(super) fn cmd_index_file(
@@ -148,8 +146,7 @@ pub(super) fn cmd_sync_directory<W: Write>(
         invalidate_search_state(continuations, handles);
     let result = sync_directory(store, canonical_root, &directory)?;
     store.verify()?;
-    let manifests =
-        verify_directory_manifests(canonical_root, &store.namespace_id())?;
+    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id())?;
     refresh_storage(storage, canonical_root)?;
     write_line(
         writer,

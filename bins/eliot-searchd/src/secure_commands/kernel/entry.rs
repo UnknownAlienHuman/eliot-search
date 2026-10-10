@@ -1,6 +1,8 @@
 use std::env;
 use std::process::ExitCode;
 
+use crate::owner_composition::DataRootRequest;
+
 use super::dispatch::dispatch;
 use super::output::emit_process_error;
 use super::support::{help, is_persistent_command};
@@ -24,7 +26,10 @@ pub fn maybe_run() -> Option<ExitCode> {
     if !is_persistent_command(command) {
         return None;
     }
-    let result = dispatch(command, &arguments);
+    let result = DataRootRequest::from_cli(&arguments).and_then(|request| {
+        request.preflight()?;
+        dispatch(command, &arguments, &request)
+    });
     Some(match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => emit_process_error(&error),

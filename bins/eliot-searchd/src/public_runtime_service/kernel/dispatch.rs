@@ -27,10 +27,17 @@ pub(super) fn execute_command(
     handles: &mut crate::result_handles::ResultHandleCatalog,
     owner: &crate::development::DataRootGuard,
     storage: &mut crate::storage_security::StorageSecurityStatus,
-    operation: (&mut impl Write, &mut MutationAttempt),
+    operation: (
+        &mut impl Write,
+        &mut MutationAttempt,
+        &mut Option<crate::owner_composition::DataRootRequest>,
+    ),
 ) -> Result<ServiceControl, String> {
-    let (writer, attempt) = operation;
-    owner.verify_existing()?;
+    let (writer, attempt, shutdown_request) = operation;
+    let command_cap = owner.admit_service_command(command)?;
+    command_cap.verify()?;
+    let mut output = command_cap.request().output(writer);
+    let writer = &mut output;
     let canonical_root = owner.canonical_root();
     if let Err(quarantined) = catalog_quarantine::check(canonical_root) {
         let _ = invalidate_search_state(continuations, handles);
@@ -56,6 +63,8 @@ pub(super) fn execute_command(
         ("version", [_]) => cmd_version(writer)?,
         ("shutdown", [_]) => {
             write_line(writer, "{\"event\":\"draining\",\"accepted\":true}")?;
+            command_cap.verify()?;
+            *shutdown_request = Some(command_cap.request().retain());
             return Ok(ServiceControl::Stop);
         }
         ("verify", [_]) => {
@@ -69,9 +78,16 @@ pub(super) fn execute_command(
             cmd_list_sources(writer, store, canonical_root, storage)?;
         }
         ("control-migration-plan", [_, target_namespace]) => {
-            catalog_quarantine::arm(canonical_root)?;
-            cmd_migration_plan(writer, store, owner, attempt, target_namespace)?;
-            owner.clear_mutation_marker()?;
+            command_cap.arm_mutation_marker()?;
+            cmd_migration_plan(
+                writer,
+                store,
+                owner,
+                attempt,
+                target_namespace,
+                command_cap.request(),
+            )?;
+            command_cap.clear_mutation_marker()?;
         }
         ("control-migration-revisions", [_] | [_, _]) => {
             let page = store.inspect_migration_revisions(fields.get(1).copied())?;
@@ -99,9 +115,10 @@ pub(super) fn execute_command(
                 storage,
                 attempt,
             };
-            execute_mutating_command(name, fields.as_slice(), &mut state, owner)?;
+            execute_mutating_command(name, fields.as_slice(), &mut state, &command_cap)?;
         }
     }
+    command_cap.verify()?;
     Ok(ServiceControl::Continue)
 }
 
@@ -109,9 +126,9 @@ fn execute_mutating_command<W: Write>(
     name: &str,
     fields: &[&str],
     state: &mut CommandState<'_, W>,
-    owner: &crate::development::DataRootGuard,
+    command: &crate::development::DataRootCommand<'_>,
 ) -> Result<(), String> {
-    if execute_quarantined_writes(name, fields, state, owner)? {
+    if execute_quarantined_writes(name, fields, state, command)? {
         return Ok(());
     }
     match (name, fields) {
@@ -145,9 +162,9 @@ fn execute_mutating_command<W: Write>(
                 _ => return Err("SERVICE_GC_MODE_INVALID".to_owned()),
             };
             state.store.verify()?;
-            let root = state.canonical_root;
+
             if apply {
-                catalog_quarantine::arm(root)?;
+                command.arm_mutation_marker()?;
                 state.attempt.arm();
             }
             cmd_gc(
@@ -158,7 +175,7 @@ fn execute_mutating_command<W: Write>(
                 apply,
             )?;
             if apply {
-                owner.clear_mutation_marker()?;
+                command.clear_mutation_marker()?;
             }
         }
         _ => return Err("SERVICE_COMMAND_INVALID".to_owned()),
@@ -170,7 +187,7 @@ fn execute_quarantined_writes<W: Write>(
     name: &str,
     fields: &[&str],
     state: &mut CommandState<'_, W>,
-    owner: &crate::development::DataRootGuard,
+    command: &crate::development::DataRootCommand<'_>,
 ) -> Result<bool, String> {
     match (name, fields) {
         ("prepare-root", [_] | [_, _]) => {
@@ -179,8 +196,8 @@ fn execute_quarantined_writes<W: Write>(
                 .map(|value| PreparationCursor::parse(value))
                 .transpose()?;
             state.store.validate_preparation_cursor(cursor.as_ref())?;
-            let root = state.canonical_root;
-            catalog_quarantine::arm(root)?;
+
+            command.arm_mutation_marker()?;
             state.attempt.arm();
             cmd_prepare_root(
                 state.writer,
@@ -191,12 +208,12 @@ fn execute_quarantined_writes<W: Write>(
                 state.storage,
                 cursor.as_ref(),
             )?;
-            owner.clear_mutation_marker()?;
+            command.clear_mutation_marker()?;
         }
         ("prepare-revision", [_, revision_id]) => {
             crate::preparation_composition::validate_revision(revision_id)?;
-            let root = state.canonical_root;
-            catalog_quarantine::arm(root)?;
+
+            command.arm_mutation_marker()?;
             state.attempt.arm();
             cmd_prepare_revision(
                 state.writer,
@@ -207,12 +224,12 @@ fn execute_quarantined_writes<W: Write>(
                 state.storage,
                 revision_id,
             )?;
-            owner.clear_mutation_marker()?;
+            command.clear_mutation_marker()?;
         }
         ("index-file", [_, path_hex]) => {
             let path = decode_path(path_hex)?;
-            let root = state.canonical_root;
-            catalog_quarantine::arm(root)?;
+
+            command.arm_mutation_marker()?;
             state.attempt.arm();
             cmd_index_file(
                 state.writer,
@@ -223,12 +240,12 @@ fn execute_quarantined_writes<W: Write>(
                 state.storage,
                 &path,
             )?;
-            owner.clear_mutation_marker()?;
+            command.clear_mutation_marker()?;
         }
         ("index-directory", [_, path_hex]) => {
             let directory = decode_path(path_hex)?;
-            let root = state.canonical_root;
-            catalog_quarantine::arm(root)?;
+
+            command.arm_mutation_marker()?;
             state.attempt.arm();
             cmd_index_directory(
                 state.writer,
@@ -239,20 +256,18 @@ fn execute_quarantined_writes<W: Write>(
                 state.storage,
                 &directory,
             )?;
-            owner.clear_mutation_marker()?;
+            command.clear_mutation_marker()?;
         }
         ("sync-directory", [_, path_hex]) => {
-            let root = state.canonical_root;
-            catalog_quarantine::arm(root)?;
+            command.arm_mutation_marker()?;
             cmd_sync_directory(state, path_hex)?;
-            owner.clear_mutation_marker()?;
+            command.clear_mutation_marker()?;
         }
         ("retire", [_, source_id]) => {
-            let root = state.canonical_root;
-            catalog_quarantine::arm(root)?;
+            command.arm_mutation_marker()?;
             state.attempt.arm();
             cmd_retire(state, source_id)?;
-            owner.clear_mutation_marker()?;
+            command.clear_mutation_marker()?;
         }
         _ => return Ok(false),
     }

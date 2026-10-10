@@ -7,14 +7,15 @@
 #[path = "owner_composition/kernel.rs"]
 mod kernel;
 
+pub(crate) use kernel::DataRootRequest;
 #[cfg(test)]
 pub use kernel::establish;
 pub(crate) use kernel::establish_existing;
 pub(crate) use kernel::verify_native_installation;
 pub(crate) use kernel::{ExistingOwnerSnapshot, inspect_existing_owner};
 pub(crate) use kernel::{
-    InitializationRecovery, InitializationRequest, InitializingDataRoot, initialize_new,
-    recover_initialization,
+    InitializationRecovery, InitializationRequest, InitializingDataRoot, initialize_new_request,
+    recover_initialization_request,
 };
 pub use kernel::{LiveOwner, ShutdownReceipt};
 pub(crate) use kernel::{NativeLayoutPins, retain_native_installation};

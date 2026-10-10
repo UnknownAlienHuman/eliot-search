@@ -3,7 +3,6 @@
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
 
 use search_contracts::{
     BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalValue, DigestInputLimit,
@@ -19,6 +18,7 @@ use super::lifecycle::LiveOwner;
 use super::observation::{
     mint_installation_ids, mint_owner_token, observe_executable, observe_physical_root,
 };
+use super::operation::DataRootRequest;
 use super::read_existing::{
     open_bound_directory, read_existing_bytes, verify_bound_directory, verify_existing_locator,
 };
@@ -118,7 +118,7 @@ pub(crate) struct InitializingDataRoot {
     primary: File,
     sealed: Option<crate::sealed_root_lock::SealedRootLease>,
     intent_file: File,
-    deadline: Instant,
+    operation: DataRootRequest,
 }
 
 impl InitializingDataRoot {
@@ -130,9 +130,11 @@ impl InitializingDataRoot {
     }
 
     pub(crate) fn verify(&self) -> Result<(), OwnerError> {
-        if Instant::now() >= self.deadline {
-            return Err(OwnerError::OwnerDeadlineInvalid);
-        }
+        // The durable intent already exists. An expired/cancelled invocation
+        // cannot certify a no-effect outcome or discard those retained inputs.
+        self.operation
+            .check()
+            .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
         verify_bound_directory(&self.root_file, &self.root)?;
         verify_existing_locator(&self.primary, &self.root.join(PRIMARY))?;
         verify_existing_locator(&self.intent_file, &self.root.join(INTENT))?;
@@ -147,6 +149,9 @@ impl InitializingDataRoot {
         if actual != self.intent.encode() {
             return Err(OwnerError::OwnerOperationConflict);
         }
+        self.operation
+            .check()
+            .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
         Ok(())
     }
 }
@@ -175,10 +180,12 @@ pub(crate) struct InitializationReceipt {
     pub(crate) replayed: bool,
 }
 
-pub(crate) fn initialize_new(
+pub(crate) fn initialize_new_request(
     root: &Path,
     request: &InitializationRequest,
+    operation: &DataRootRequest,
 ) -> Result<InitializationReceipt, String> {
+    operation.validate_root(root)?;
     let root = canonical_root(root).map_err(code)?;
     if fs::read_dir(&root)
         .map_err(|_| code(OwnerError::DataRootInvalid))?
@@ -188,9 +195,9 @@ pub(crate) fn initialize_new(
         .is_some()
     {
         // An initialized exact request is resolved, never created a second time.
-        return resolve_completed(&root, request);
+        return resolve_completed(&root, request, operation);
     }
-    let cap = acquire_new(&root, request).map_err(code)?;
+    let cap = acquire_new(&root, request, operation).map_err(code)?;
     cap.verify().map_err(code)?;
     let store = crate::direct_store::DirectStore::initialize_legacy_layout(&cap)?;
     store.verify_empty()?;
@@ -221,16 +228,18 @@ pub(crate) fn initialize_new(
 
 /// Resolve only the original complete layout. Missing files or credentials stay
 /// missing; every unknown outcome retains the intent and is never replayed.
-pub(crate) fn recover_initialization(
+pub(crate) fn recover_initialization_request(
     root: &Path,
     request: &InitializationRequest,
+    operation: &DataRootRequest,
 ) -> Result<InitializationReceipt, String> {
+    operation.validate_root(root)?;
     let root = canonical_root(root).map_err(code)?;
     if matches!(fs::symlink_metadata(root.join(INTENT)), Err(error) if error.kind() == io::ErrorKind::NotFound)
     {
-        return resolve_completed(&root, request);
+        return resolve_completed(&root, request, operation);
     }
-    let cap = acquire_recovery(&root, request).map_err(code)?;
+    let cap = acquire_recovery(&root, request, operation).map_err(code)?;
     cap.verify().map_err(code)?;
     let binding = load_existing_installation(&root).map_err(code)?;
     if binding.initialization_id != Some(cap.intent.id)
@@ -335,27 +344,34 @@ fn finish_initialized(
 fn resolve_completed(
     root: &Path,
     request: &InitializationRequest,
+    operation: &DataRootRequest,
 ) -> Result<InitializationReceipt, String> {
-    crate::development::DataRootGuard::with_inspection(root, |cap| {
-        let binding = load_existing_installation(root).map_err(code)?;
-        if binding.initialization_id != Some(request.0) {
-            return Err(code(OwnerError::OwnerOperationConflict));
-        }
-        let store = crate::direct_store::DirectStore::open_existing_read_only(cap)?;
-        store.verify_catalog()?;
-        let namespace = crate::sha256::decode_digest(&store.namespace_id())
-            .ok_or_else(|| code(OwnerError::OwnerRecoveryQuarantined))?;
-        Ok(InitializationReceipt {
-            namespace,
-            replayed: true,
-        })
-    })
+    crate::development::DataRootGuard::with_inspection_request(
+        operation.root_locator(),
+        operation,
+        |cap| {
+            let binding = load_existing_installation(root).map_err(code)?;
+            if binding.initialization_id != Some(request.0) {
+                return Err(code(OwnerError::OwnerOperationConflict));
+            }
+            let store = crate::direct_store::DirectStore::open_existing_read_only(cap)?;
+            store.verify_catalog()?;
+            let namespace = crate::sha256::decode_digest(&store.namespace_id())
+                .ok_or_else(|| code(OwnerError::OwnerRecoveryQuarantined))?;
+            Ok(InitializationReceipt {
+                namespace,
+                replayed: true,
+            })
+        },
+    )
 }
 
 fn acquire_new(
     root: &Path,
     request: &InitializationRequest,
+    operation: &DataRootRequest,
 ) -> Result<InitializingDataRoot, OwnerError> {
+    operation.check()?;
     let root_file = open_bound_directory(root)?;
     if fs::read_dir(root)
         .map_err(|_| OwnerError::DataRootInvalid)?
@@ -388,6 +404,7 @@ fn acquire_new(
         owner_pid: std::process::id(),
     };
     // The exact intent is the first durable effect and arbitrates concurrent init.
+    operation.check()?;
     let mut intent_file = create_new_file(&root.join(INTENT))?;
     intent_file
         .write_all(&intent.encode())
@@ -411,13 +428,23 @@ fn acquire_new(
             return Err(OwnerError::OwnerRecoveryQuarantined);
         }
     }
-    assemble_cap(root, root_file, primary, sealed, intent_file, intent)
+    assemble_cap(
+        root,
+        root_file,
+        primary,
+        sealed,
+        intent_file,
+        intent,
+        operation,
+    )
 }
 
 fn acquire_recovery(
     root: &Path,
     request: &InitializationRequest,
+    operation: &DataRootRequest,
 ) -> Result<InitializingDataRoot, OwnerError> {
+    operation.check()?;
     let root_file = open_bound_directory(root)?;
     let primary = existing_file(&root.join(PRIMARY))?;
     lock_primary(&primary)?;
@@ -443,7 +470,15 @@ fn acquire_recovery(
             return Err(OwnerError::OwnerRecoveryQuarantined);
         }
     }
-    assemble_cap(root, root_file, primary, sealed, intent_file, intent)
+    assemble_cap(
+        root,
+        root_file,
+        primary,
+        sealed,
+        intent_file,
+        intent,
+        operation,
+    )
 }
 
 fn assemble_cap(
@@ -453,10 +488,8 @@ fn assemble_cap(
     sealed: Option<crate::sealed_root_lock::SealedRootLease>,
     intent_file: File,
     intent: InitIntent,
+    operation: &DataRootRequest,
 ) -> Result<InitializingDataRoot, OwnerError> {
-    let deadline = Instant::now()
-        .checked_add(Duration::from_secs(120))
-        .ok_or(OwnerError::OwnerDeadlineInvalid)?;
     let cap = InitializingDataRoot {
         root: root.to_owned(),
         root_file,
@@ -464,7 +497,7 @@ fn assemble_cap(
         sealed,
         intent_file,
         intent,
-        deadline,
+        operation: operation.retain(),
     };
     cap.verify()?;
     Ok(cap)

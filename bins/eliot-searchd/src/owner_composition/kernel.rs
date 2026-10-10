@@ -14,6 +14,8 @@ mod lifecycle;
 mod native_bindings;
 #[path = "kernel/observation.rs"]
 mod observation;
+#[path = "kernel/operation.rs"]
+mod operation;
 #[path = "kernel/read_existing.rs"]
 mod read_existing;
 #[path = "kernel/record.rs"]
@@ -26,13 +28,14 @@ mod spec;
 mod succession;
 
 pub(crate) use initialization::{
-    InitializationRecovery, InitializationRequest, InitializingDataRoot, initialize_new,
-    recover_initialization,
+    InitializationRecovery, InitializationRequest, InitializingDataRoot, initialize_new_request,
+    recover_initialization_request,
 };
 pub(crate) use inspection::{ExistingOwnerSnapshot, inspect_existing_owner};
 pub(crate) use installation::{retain_native_installation, verify_native_installation};
 pub use lifecycle::{LiveOwner, ShutdownReceipt};
 pub(crate) use native_bindings::NativeLayoutPins;
+pub(crate) use operation::DataRootRequest;
 pub(crate) use read_existing::{
     open_bound_directory, verify_bound_directory, verify_existing_locator,
 };

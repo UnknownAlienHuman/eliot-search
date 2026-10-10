@@ -2,41 +2,48 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use crate::direct_store::{ReadOnlyStore, SourceSummary};
+use crate::owner_composition::DataRootRequest;
 use crate::service_output::{json_string, write_line};
 use crate::storage_security::StorageSecurityStatus;
 
 pub(super) fn emit_verification(
     store: &ReadOnlyStore<'_>,
     storage: &StorageSecurityStatus,
+    request: &DataRootRequest,
 ) -> Result<(), String> {
     let verification = store.verify()?;
-    write_stdout(&format!(
-        concat!(
-            "{{\"event\":\"direct_store_verified\",",
-            "\"namespace_id\":{},\"source_events\":{},",
-            "\"registered_sources\":{},\"active_sources\":{},",
-            "\"referenced_revisions\":{},\"verified_revisions\":{},",
-            "\"total_revision_bytes\":{},\"source_backed\":true,",
-            "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
+    write_stdout(
+        request,
+        &format!(
+            concat!(
+                "{{\"event\":\"direct_store_verified\",",
+                "\"namespace_id\":{},\"source_events\":{},",
+                "\"registered_sources\":{},\"active_sources\":{},",
+                "\"referenced_revisions\":{},\"verified_revisions\":{},",
+                "\"total_revision_bytes\":{},\"source_backed\":true,",
+                "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
+            ),
+            json_string(&store.namespace_id()),
+            verification.source_events,
+            verification.registered_sources,
+            verification.active_sources,
+            verification.referenced_revisions,
+            verification.verified_revisions,
+            verification.total_revision_bytes,
+            storage.json(),
+            storage.encrypted_at_rest,
         ),
-        json_string(&store.namespace_id()),
-        verification.source_events,
-        verification.registered_sources,
-        verification.active_sources,
-        verification.referenced_revisions,
-        verification.verified_revisions,
-        verification.total_revision_bytes,
-        storage.json(),
-        storage.encrypted_at_rest,
-    ))
+    )
 }
 
 pub(super) fn emit_sources(
     store: &ReadOnlyStore<'_>,
     storage: &StorageSecurityStatus,
+    request: &DataRootRequest,
 ) -> Result<(), String> {
     let sources = store.list_sources();
-    let mut output = io::stdout().lock();
+    let mut stdout = io::stdout().lock();
+    let mut output = request.output(&mut stdout);
     for source in &sources {
         emit_source(&mut output, source)?;
     }
@@ -79,9 +86,9 @@ fn emit_source(writer: &mut impl Write, source: &SourceSummary) -> Result<(), St
     )
 }
 
-pub(super) fn write_stdout(value: &str) -> Result<(), String> {
+pub(super) fn write_stdout(request: &DataRootRequest, value: &str) -> Result<(), String> {
     let mut output = io::stdout().lock();
-    write_line(&mut output, value)
+    write_line(&mut request.output(&mut output), value)
 }
 
 pub(super) fn emit_process_error(error: &str) -> ExitCode {

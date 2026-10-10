@@ -231,6 +231,31 @@ fn product_reads_and_mutations_on_missing_or_empty_roots_create_nothing() {
 }
 
 #[test]
+fn native_non_unicode_root_arguments_fail_without_parser_panic_or_creation() {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    let scratch = Scratch::new();
+    let root = scratch
+        .0
+        .join(OsString::from_wide(&[0xd800, u16::from(b'x')]));
+    for flag in [
+        "--source-roots",
+        "--health-data-root",
+        "--prepare-root",
+        "--serve-data-root",
+    ] {
+        let output = command(&root, flag, &[]);
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(error.starts_with("{\"error\":"), "{flag}: {error}");
+        assert!(!error.contains("panicked"));
+        assert!(!error.contains("\\uFFFD"));
+        assert_eq!(fs::read_dir(&scratch.0).unwrap().count(), 0);
+    }
+}
+
+#[test]
 fn explicit_initialize_replay_readonly_and_exact_recovery_preserve_objects() {
     let initialized = InitializedScratch::new();
     let root = &initialized.root.0;

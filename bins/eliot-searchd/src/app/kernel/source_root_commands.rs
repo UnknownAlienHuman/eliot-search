@@ -8,16 +8,23 @@
 //! multi-root sync re-proves workspace truth. Missing or replaced roots are
 //! explicit gaps that fail closed instead of reading as empty.
 
+use std::ffi::OsString;
 use std::fmt::Write as _;
+use std::io::{self, Write};
 use std::path::Path;
 
 use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
 use crate::directory_manifest::sync_directory;
+use crate::owner_composition::DataRootRequest;
+use crate::service_output::write_line;
 use crate::source_roots::SourceRootCatalog;
 
-pub fn run(arguments: &[String]) -> Result<(), String> {
-    let command = arguments.first().map(String::as_str).unwrap_or_default();
+pub fn run(arguments: &[OsString]) -> Result<(), String> {
+    let command = arguments
+        .first()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
     let expected = match command {
         "--source-roots" | "--sync-source-roots" => 2,
         "--register-source-root" | "--unregister-source-root" => 3,
@@ -26,12 +33,18 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     if arguments.len() != expected {
         return Err("SOURCE_ROOT_USAGE_ERROR".to_owned());
     }
+    let request = DataRootRequest::from_cli(arguments)?;
+    let mut stdout = io::stdout().lock();
+    let output = &mut request.output(&mut stdout);
     if command == "--source-roots" {
-        return DataRootGuard::with_inspection(Path::new(&arguments[1]), |root| {
-            emit_catalog_state(root.source_roots())
-        });
+        return DataRootGuard::with_inspection_request(
+            Path::new(&arguments[1]),
+            &request,
+            |root| emit_catalog_state(root.source_roots(), output),
+        );
     }
-    let mut owner = DataRootGuard::open_existing(Path::new(&arguments[1]))?;
+    let mut owner = DataRootGuard::open_existing_request(Path::new(&arguments[1]), &request)?;
+    owner.verify_existing()?;
     crate::catalog_quarantine::arm(owner.canonical_root())?;
     match command {
         "--register-source-root" => {
@@ -39,23 +52,29 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
                 .source_roots_mut()
                 .add(Path::new(&arguments[2]))
                 .map_err(|error| error.code().to_owned())?;
-            println!(
-                "{{\"event\":\"source_root_registered\",\"path\":\"{}\",\"persisted\":true,\"access_granted\":false}}",
-                escape_json(&view.path),
-            );
+            write_line(
+                output,
+                &format!(
+                    "{{\"event\":\"source_root_registered\",\"path\":\"{}\",\"persisted\":true,\"access_granted\":false}}",
+                    escape_json(&view.path),
+                ),
+            )?;
         }
         "--unregister-source-root" => {
             let path = owner
                 .source_roots_mut()
                 .remove(Path::new(&arguments[2]))
                 .map_err(|error| error.code().to_owned())?;
-            println!(
-                "{{\"event\":\"source_root_unregistered\",\"path\":\"{}\",\"persisted\":true,\"retained_revisions_revoked\":false}}",
-                escape_json(&path),
-            );
+            write_line(
+                output,
+                &format!(
+                    "{{\"event\":\"source_root_unregistered\",\"path\":\"{}\",\"persisted\":true,\"retained_revisions_revoked\":false}}",
+                    escape_json(&path),
+                ),
+            )?;
         }
         "--sync-source-roots" => {
-            sync_registered(&mut owner)?;
+            sync_registered(&mut owner, output)?;
             owner.clear_mutation_marker()?;
             owner.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
             owner.release_cleanly()?;
@@ -63,29 +82,35 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
         }
         _ => {}
     }
-    emit_catalog_state(owner.source_roots())?;
+    emit_catalog_state(owner.source_roots(), output)?;
     owner.clear_mutation_marker()?;
     owner.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
     owner.release_cleanly()?;
     Ok(())
 }
 
-fn emit_catalog_state(catalog: &SourceRootCatalog) -> Result<(), String> {
+fn emit_catalog_state(catalog: &SourceRootCatalog, output: &mut impl Write) -> Result<(), String> {
     for view in catalog.views().map_err(|error| error.code().to_owned())? {
-        println!(
-            "{{\"event\":\"source_root\",\"position\":{},\"path\":\"{}\",\"state\":\"{}\"}}",
-            view.index,
-            escape_json(&view.path),
-            view.state.code(),
-        );
+        write_line(
+            output,
+            &format!(
+                "{{\"event\":\"source_root\",\"position\":{},\"path\":\"{}\",\"state\":\"{}\"}}",
+                view.index,
+                escape_json(&view.path),
+                view.state.code(),
+            ),
+        )?;
     }
     for gap in catalog.observation_gaps() {
-        println!(
-            "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
-            gap.position,
-            gap.reason.code(),
-            gap.state.code(),
-        );
+        write_line(
+            output,
+            &format!(
+                "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
+                gap.position,
+                gap.reason.code(),
+                gap.state.code(),
+            ),
+        )?;
     }
     let truth = catalog.current_workspace_truth();
     let cursor = catalog.reconciliation_cursor();
@@ -104,28 +129,32 @@ fn emit_catalog_state(catalog: &SourceRootCatalog) -> Result<(), String> {
         truth.workspace_current,
         false,
     );
-    println!(
-        concat!(
-            "{{\"event\":\"source_roots_complete\",\"configured\":{},",
-            "\"available\":{},\"unavailable\":{},\"gaps\":{},",
-            "\"reconciliation_generation\":{},\"watcher_pending\":{},",
-            "\"watcher_overflowed\":{},\"proven_reason\":\"{}\",",
-            "\"current_workspace_proven\":{}}}",
+    write_line(
+        output,
+        &format!(
+            concat!(
+                "{{\"event\":\"source_roots_complete\",\"configured\":{},",
+                "\"available\":{},\"unavailable\":{},\"gaps\":{},",
+                "\"reconciliation_generation\":{},\"watcher_pending\":{},",
+                "\"watcher_overflowed\":{},\"proven_reason\":\"{}\",",
+                "\"current_workspace_proven\":{}}}",
+            ),
+            truth.configured,
+            truth.available,
+            truth.unavailable,
+            truth.gap_count,
+            truth.reconciliation_generation,
+            cursor.pending_hints,
+            cursor.overflowed,
+            reason,
+            proven,
         ),
-        truth.configured,
-        truth.available,
-        truth.unavailable,
-        truth.gap_count,
-        truth.reconciliation_generation,
-        cursor.pending_hints,
-        cursor.overflowed,
-        reason,
-        proven,
-    );
+    )?;
     Ok(())
 }
 
-fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
+fn sync_registered(owner: &mut DataRootGuard, output: &mut impl Write) -> Result<(), String> {
+    owner.verify_existing()?;
     owner.source_roots_mut().refresh();
     let truth = owner.source_roots().current_workspace_truth();
     if truth.configured == 0 {
@@ -136,12 +165,15 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
         // explicit gaps, then refuse to retire retained sources or begin a
         // partially preflighted multi-root sync.
         for gap in owner.source_roots().observation_gaps() {
-            println!(
-                "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
-                gap.position,
-                gap.reason.code(),
-                gap.state.code(),
-            );
+            write_line(
+                output,
+                &format!(
+                    "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
+                    gap.position,
+                    gap.reason.code(),
+                    gap.state.code(),
+                ),
+            )?;
         }
         return Err("SOURCE_ROOTS_UNAVAILABLE".to_owned());
     }
@@ -155,34 +187,41 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
     let mut store = DirectStore::open_existing_mutating(owner)?;
     let mut completed = 0_usize;
     for (index, path) in &paths {
+        owner.verify_existing()?;
         match sync_directory(&mut store, &data_root, path) {
             Ok(result) => {
                 completed += 1;
-                println!(
-                    concat!(
-                        "{{\"event\":\"source_root_synced\",\"position\":{},",
-                        "\"generation\":{},\"indexed_sources\":{},",
-                        "\"changed_sources\":{},\"retired_sources\":{},",
-                        "\"manifest_digest\":\"{}\"}}"
+                write_line(
+                    output,
+                    &format!(
+                        concat!(
+                            "{{\"event\":\"source_root_synced\",\"position\":{},",
+                            "\"generation\":{},\"indexed_sources\":{},",
+                            "\"changed_sources\":{},\"retired_sources\":{},",
+                            "\"manifest_digest\":\"{}\"}}"
+                        ),
+                        index,
+                        result.generation,
+                        result.indexed_sources,
+                        result.changed_sources,
+                        result.retired_sources,
+                        result.manifest_digest,
                     ),
-                    index,
-                    result.generation,
-                    result.indexed_sources,
-                    result.changed_sources,
-                    result.retired_sources,
-                    result.manifest_digest,
-                );
+                )?;
             }
             Err(error) => {
                 // A directory sync may have committed individual revisions even
                 // before its own final manifest. Never report a clean rollback.
                 let reason = error.split(':').next().unwrap_or("SOURCE_ROOT_SYNC_FAILED");
-                println!(
-                    "{{\"event\":\"source_roots_sync_failed\",\"position\":{},\"completed_roots\":{},\"effects_may_have_committed\":true,\"complete\":false,\"reason\":\"{}\"}}",
-                    index,
-                    completed,
-                    escape_json(reason),
-                );
+                write_line(
+                    output,
+                    &format!(
+                        "{{\"event\":\"source_roots_sync_failed\",\"position\":{},\"completed_roots\":{},\"effects_may_have_committed\":true,\"complete\":false,\"reason\":\"{}\"}}",
+                        index,
+                        completed,
+                        escape_json(reason),
+                    ),
+                )?;
                 return Err("SOURCE_ROOT_SYNC_INCOMPLETE".to_owned());
             }
         }
@@ -208,15 +247,18 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
         truth.workspace_current,
         false,
     );
-    println!(
-        concat!(
-            "{{\"event\":\"source_roots_synced\",\"completed_roots\":{},",
-            "\"complete\":true,\"gaps\":{},\"reconciliation_generation\":{},",
-            "\"proven_reason\":\"{}\",\"current_workspace_proven\":{},",
-            "\"qdrant_available\":false}}",
+    write_line(
+        output,
+        &format!(
+            concat!(
+                "{{\"event\":\"source_roots_synced\",\"completed_roots\":{},",
+                "\"complete\":true,\"gaps\":{},\"reconciliation_generation\":{},",
+                "\"proven_reason\":\"{}\",\"current_workspace_proven\":{},",
+                "\"qdrant_available\":false}}",
+            ),
+            completed, truth.gap_count, truth.reconciliation_generation, reason, proven,
         ),
-        completed, truth.gap_count, truth.reconciliation_generation, reason, proven,
-    );
+    )?;
     Ok(())
 }
 
@@ -255,11 +297,11 @@ mod tests {
     #[test]
     fn incomplete_arguments_are_rejected_without_opening_a_root() {
         assert_eq!(
-            run(&["--source-roots".to_owned()]),
+            run(&["--source-roots".into()]),
             Err("SOURCE_ROOT_USAGE_ERROR".to_owned())
         );
         assert_eq!(
-            run(&["--register-source-root".to_owned(), "not-opened".to_owned()]),
+            run(&["--register-source-root".into(), "not-opened".into()]),
             Err("SOURCE_ROOT_USAGE_ERROR".to_owned())
         );
     }

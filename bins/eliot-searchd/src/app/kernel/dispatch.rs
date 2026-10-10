@@ -59,6 +59,23 @@ fn require_argument_count(arguments: &[String], expected: usize) -> Result<(), S
 }
 
 fn run() -> Result<(), String> {
+    let native_raw = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let (native_arguments, _) = crate::config_composition::strip_config_args_os(&native_raw)?;
+    if native_arguments
+        .first()
+        .and_then(|argument| argument.to_str())
+        .is_some_and(|command| {
+            matches!(
+                command,
+                "--source-roots"
+                    | "--register-source-root"
+                    | "--unregister-source-root"
+                    | "--sync-source-roots"
+            )
+        })
+    {
+        return super::source_root_commands::run(&native_arguments);
+    }
     let raw = std::env::args().skip(1).collect::<Vec<_>>();
     let (arguments, _) = crate::config_composition::parse_cli_config_args(&raw)?;
     let Some(argument) = arguments.first().map(String::as_str) else {
@@ -101,10 +118,6 @@ fn run() -> Result<(), String> {
             serve_stdio(shell_health_effective()?)
                 .map_err(|error| format!("STDIO_ERROR:{error}"))?;
         }
-        "--source-roots"
-        | "--register-source-root"
-        | "--unregister-source-root"
-        | "--sync-source-roots" => super::source_root_commands::run(&arguments)?,
         "--scan-stdin" | "--scan-stdin-ascii-insensitive" => {
             require_argument_count(&arguments, 2)?;
             cmd_scan_stdin(&arguments, argument)?;

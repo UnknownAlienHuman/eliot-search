@@ -5,7 +5,6 @@
 use std::fs::{self, File, Metadata, OpenOptions, TryLockError};
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::{Duration, Instant};
 
 use search_contracts::SourceNamespaceId;
 
@@ -27,6 +26,7 @@ pub fn maybe_run() -> Option<ExitCode> {
         return None;
     }
     let result = (|| -> Result<(), String> {
+        let request = crate::owner_composition::DataRootRequest::from_cli(&args)?;
         let [_, root, target, output] = args.as_slice() else {
             return Err("USAGE_ERROR".to_owned());
         };
@@ -35,11 +35,11 @@ pub fn maybe_run() -> Option<ExitCode> {
             .and_then(|value| SourceNamespaceId::parse(value).ok())
             .filter(|value| value.as_bytes() != &[0; 16])
             .ok_or_else(|| "DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned())?;
-        let deadline = Instant::now()
-            .checked_add(Duration::from_secs(120))
-            .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
-        let response =
-            DataRootGuard::with_inspection(Path::new(root), |cap: &InspectedDataRoot| {
+        let deadline = request.deadline();
+        let response = DataRootGuard::with_inspection_request(
+            Path::new(root),
+            &request,
+            |cap: &InspectedDataRoot| {
                 let root = cap.canonical_root();
                 let registration =
                     source_roots::migration_input(root).map_err(|error| error.code().to_owned())?;
@@ -62,9 +62,13 @@ pub fn maybe_run() -> Option<ExitCode> {
                     return Err("DIRECT_MIGRATION_ROOT_STATE_CHANGED".to_owned());
                 }
                 Ok(response)
-            })?;
-        write_line(&mut std::io::stdout().lock(), &response)
-            .map_err(|_| "DIRECT_MIGRATION_PLAN_ACK_OUTCOME_UNKNOWN".to_owned())
+            },
+        )?;
+        write_line(
+            &mut request.output(&mut std::io::stdout().lock()),
+            &response,
+        )
+        .map_err(|_| "DIRECT_MIGRATION_PLAN_ACK_OUTCOME_UNKNOWN".to_owned())
     })();
     Some(match result {
         Ok(()) => ExitCode::SUCCESS,

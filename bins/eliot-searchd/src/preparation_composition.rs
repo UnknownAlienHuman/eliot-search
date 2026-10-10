@@ -199,6 +199,7 @@ pub fn maybe_run() -> Option<ExitCode> {
         return None;
     }
     let result = (|| -> Result<(), String> {
+        let request = crate::owner_composition::DataRootRequest::from_cli(&args)?;
         let (revision, cursor) = match (command, args.as_slice()) {
             ("--prepare-revision", [_, _, value]) => {
                 let value = value
@@ -216,11 +217,13 @@ pub fn maybe_run() -> Option<ExitCode> {
             }
             _ => return Err("USAGE_ERROR".to_owned()),
         };
-        let mut owner = DataRootGuard::open_existing(Path::new(&args[1]))?;
+        let mut owner = DataRootGuard::open_existing_request(Path::new(&args[1]), &request)?;
         crate::catalog_presence::require_existing(owner.canonical_root())?;
         let store = DirectStore::open_existing_mutating(&owner)?;
         crate::catalog_quarantine::arm(owner.canonical_root())?;
-        let mut output = std::io::stdout().lock();
+        owner.verify_existing()?;
+        let mut stdout = std::io::stdout().lock();
+        let mut output = request.output(&mut stdout);
         if let Some(revision) = revision {
             let receipt = store.prepare_revision_canonical(revision)?;
             emit_prepared_canonical(&mut output, revision, (0, 0), &receipt)?;

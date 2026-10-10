@@ -19,8 +19,11 @@ use super::session;
 use super::spec::{MAX_COMMAND_BYTES, PROTOCOL_VERSION};
 use super::state::invalidate_search_state;
 
-pub(super) fn run_service(root: &Path) -> Result<(), String> {
-    let mut guard = DataRootGuard::open_existing(root)?;
+pub(super) fn run_service(
+    root: &Path,
+    startup: &crate::owner_composition::DataRootRequest,
+) -> Result<(), String> {
+    let mut guard = DataRootGuard::open_existing_request(root, startup)?;
     catalog_quarantine::check(guard.canonical_root())?;
     let mut store = DirectStore::open_existing_mutating(&guard)?;
     let verification = store.verify()?;
@@ -34,16 +37,17 @@ pub(super) fn run_service(root: &Path) -> Result<(), String> {
     let output = io::stdout();
     let mut writer = output.lock();
     let (owner_incarnation, owner_root, _) = guard.journal_owner_inputs();
-    let cli_args: Vec<String> = env::args().skip(1).collect();
-    let (_, cli) = crate::config_composition::parse_cli_config_args(&cli_args)?;
+    let cli_args = env::args_os().skip(1).collect::<Vec<_>>();
+    let (_, cli) = crate::config_composition::strip_config_args_os(&cli_args)?;
     let effective = crate::config_composition::effective_from_process(&cli)?;
     let readiness = crate::config_composition::derive_readiness(
         &effective,
         crate::config_composition::direct_dependencies(),
         crate::config_composition::AcceptedReceipts::default(),
     );
+    guard.verify_existing()?;
     write_line(
-        &mut writer,
+        &mut startup.output(&mut writer),
         &format!(
             concat!(
                 "{{\"event\":\"data_root_ready\",",
@@ -82,6 +86,8 @@ pub(super) fn run_service(root: &Path) -> Result<(), String> {
         ),
     )?;
 
+    guard.finish_service_startup(startup)?;
+    let mut shutdown_request = None;
     let result = session::serve(
         &mut reader,
         &mut writer,
@@ -94,7 +100,7 @@ pub(super) fn run_service(root: &Path) -> Result<(), String> {
                 &mut handles,
                 &guard,
                 &mut storage,
-                (output, attempt),
+                (output, attempt, &mut shutdown_request),
             )
         },
     );
@@ -103,15 +109,23 @@ pub(super) fn run_service(root: &Path) -> Result<(), String> {
         invalidate_search_state(&mut continuations, &mut handles);
     }
     result?;
+    let shutdown_request = match shutdown_request {
+        Some(request) => request,
+        None => guard
+            .admit_service_command("eof-shutdown")?
+            .request()
+            .retain(),
+    };
     // Admission has stopped; retire dependent state before publishing RELEASED.
     invalidate_search_state(&mut continuations, &mut handles);
     drop(continuations);
     drop(handles);
     drop(store);
+    guard.bind_service_shutdown(&shutdown_request)?;
     guard.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
     let receipt = guard.release_cleanly()?;
     write_line(
-        &mut writer,
+        &mut shutdown_request.output(&mut writer),
         &format!(
             concat!(
                 "{{\"event\":\"data_root_stopped\",\"clean\":true,",

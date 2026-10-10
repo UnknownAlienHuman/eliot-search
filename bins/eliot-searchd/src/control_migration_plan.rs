@@ -3,7 +3,7 @@
 //! No original file, policy, namespace owner or visible source state is modified.
 
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
@@ -21,8 +21,6 @@ mod content_readback;
 mod cutover;
 #[path = "control_migration_redb.rs"]
 mod redb_import;
-
-const PLAN_DEADLINE: Duration = Duration::from_secs(120);
 
 /// Borrows an already-admitted root; paths cannot construct migration authority.
 pub(super) enum MigrationRoot<'a> {
@@ -57,10 +55,10 @@ impl DirectStore {
         &self,
         owner: &DataRootGuard,
         target: SourceNamespaceId,
+        deadline: Instant,
     ) -> Result<String, String> {
-        let deadline = Instant::now()
-            .checked_add(PLAN_DEADLINE)
-            .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
+        check_deadline(Some(deadline))?;
+        owner.verify_existing()?;
         if owner.canonical_root() != self.root.as_path() {
             return Err("DIRECT_MIGRATION_ROOT_OWNER_MISMATCH".to_owned());
         }

@@ -18,13 +18,12 @@ pub fn maybe_run() -> Option<ExitCode> {
             return Some(ExitCode::from(2));
         }
     };
-    if arguments.first().and_then(|value| value.to_str())
-        != Some("--serve-data-root")
-    {
+    if arguments.first().and_then(|value| value.to_str()) != Some("--serve-data-root") {
         return None;
     }
     let result = match arguments.as_slice() {
-        [_, root] => run_service(Path::new(root)),
+        [_, root] => crate::owner_composition::DataRootRequest::from_cli(&arguments)
+            .and_then(|request| run_service(Path::new(root), &request)),
         _ => Err("USAGE_ERROR".to_owned()),
     };
     Some(match result {

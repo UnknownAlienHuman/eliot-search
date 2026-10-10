@@ -39,6 +39,22 @@ installation/incarnation, native root, executable and epoch-one owner token/PID 
 generation. It finalizes the existing operation. Missing/corrupt partial state remains
 fenced and is never recreated. The path-only legacy repair command now refuses.
 
+The command-context continuation captures exact bounded native CLI arguments before
+admission, with separate CLI/service and Windows/Unix canonical v1 domains. Request
+digests use the existing canonical owner with a 512 KiB encoding ceiling; invocation
+identities use qualified OS entropy. Neither identity grants root authority or supplies
+missing retained recovery inputs. The private context shares one original 120-second
+absolute deadline and cancellation through inspection, mutation and initialization.
+Native and durable revalidation checks the context before and after observations.
+
+Service startup has a finite context. After completed startup the same live owner may
+idle; each command borrows it under its own finite context. Shutdown retains its
+original command context through drain/release and final output. Migration staging
+receives the original deadline. Request-aware output checks before and after I/O;
+failed output signals cancellation. GC acknowledgment now stays inside its guarded
+mutation closure, so output failure cannot clear quarantine or release the owner.
+Native source-root arguments are intercepted before the legacy UTF-8 app parser.
+
 ## Evidence scope
 
 Rust 1.98.0, locked/offline, Windows native fixture profile; no dependency/lockfile
@@ -58,11 +74,17 @@ the existing `search-os-secrets-windows` Clippy findings, without suppressing th
 
 Execution counts and the exact tested/reviewed source SHA belong in the draft PR
 evidence after the final checks; this document does not infer them from source presence.
+The dedicated command-context target compiles the actual private implementation and
+qualified entropy owner; its strict `--no-deps` Clippy gate is a separate bounded gate,
+not a claim that daemon/dependency-wide strict Clippy passed.
 
 ## Still open in #266 and downstream owners
 
-- General command operation/deadline/cancellation bindings are incomplete. The
-  initialization deadline does not qualify every operation or long-running child.
+- General command admission/emission contexts are implemented in the current DIRECT
+  routes. Child-internal cancellation and blocking-I/O interruption remain incomplete:
+  synchronous source/catalog/preparation/maintenance bodies do not all receive the
+  context. An observed expired/cancelled command cannot emit success or clear its
+  mutation fence, but this does not prove bounded completion of every child.
 - Arbitrary legacy quarantine has no retained operation identity. Named recovery
   currently covers complete initialization only; abandoned ordinary ACTIVE/DRAINING
   and unknown migration/publication outcomes are not automatically recovered.
