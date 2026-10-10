@@ -108,21 +108,33 @@ Crossing a trigger means stop feature work, choose tranche 1, merge it, then cre
 
 | Role | Return artifact |
 |---|---|
-| Authority/caller | owner, allowed paths, reverse consumers, duplicate paths |
-| Donor/supply-chain | exact version/checksum/license/MSRV/features/advisories |
-| Compatibility/deletion | byte disposition, rebuild/migration rule, deletion owner |
-| Recovery/security | `B0`, `FOLLOW_UP(owner)` or `NO_BLOCKER` with causal evidence |
-| Bounds/allocation | pre-allocation/effect ceiling gaps and disposition |
-| Focused fixtures | smallest causal cases and expected nonzero count |
-| Diff/API | API delta, scope escape, unused compatibility |
-| Final exact-head | blocking finding or scoped `APPROVE_SOURCE` |
+| Authority/caller | owner, allowed paths, reverse consumers, duplicate paths; each finding classified B0/F1/F2/D/Q |
+| Donor/supply-chain | exact version/checksum/license/MSRV/features/advisories; any gap classified B0/F1/F2/D/Q |
+| Compatibility/deletion | byte disposition, rebuild/migration rule, deletion owner; findings classified B0/F1/F2/D/Q |
+| Recovery/security | each finding classified exactly B0/F1/F2/D/Q, or `NO_FINDING` |
+| Bounds/allocation | each finding classified exactly B0/F1/F2/D/Q, or `NO_FINDING` |
+| Focused fixtures | smallest causal cases; uncovered gaps classified B0/F1/F2/D/Q |
+| Diff/API | API delta and scope escape; each finding classified B0/F1/F2/D/Q |
+| Final exact-head | B0 blockers, nonblocking F1/F2/D/Q, or scoped `APPROVE_SOURCE` |
+
+Classification meanings:
+
+```text
+B0 same-slice compile/safety blocker
+F1 same-owner follow-up
+F2 adjacent-owner follow-up
+D  unchanged baseline debt
+Q  qualification-only requirement
+```
+
+If an assignment finds nothing, return `NO_FINDING`. Never collapse F1/F2 into generic `FOLLOW_UP`; never convert D/Q into B0.
 
 Rules:
 
 - one pre-code pass and one final exact-head pass;
 - no repeated full-repository audit after each commit;
 - no subagent-created scope amendment or merge authority;
-- consolidate duplicate findings;
+- consolidate duplicate findings without changing their five-way disposition;
 - a load-bearing commit expires prior review;
 - the manager independently verifies critical claims.
 
