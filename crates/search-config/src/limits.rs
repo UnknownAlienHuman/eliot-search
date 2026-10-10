@@ -21,6 +21,12 @@ pub struct ConfigLimits {
     pub max_text_bytes: usize,
     /// Maximum string-list entries.
     pub max_list_items: usize,
+    /// Maximum profile, declared-section and retained entry identifier UTF-8 bytes.
+    pub max_decoded_identifier_bytes_total: usize,
+    /// Maximum decoded text/list bytes plus boolean (1) and integer (8) bytes per layer.
+    pub max_decoded_value_bytes_total: usize,
+    /// Maximum string-list entries across the whole layer.
+    pub max_total_list_items: usize,
     /// Maximum canonical fingerprint preimage bytes.
     pub max_canonical_bytes: usize,
     /// Maximum redacted diagnostic entries.
@@ -38,6 +44,9 @@ impl ConfigLimits {
         max_identifier_bytes: 128,
         max_text_bytes: 65_536,
         max_list_items: 4_096,
+        max_decoded_identifier_bytes_total: 1_048_576,
+        max_decoded_value_bytes_total: 4_194_304,
+        max_total_list_items: 8_192,
         max_canonical_bytes: 8_388_608,
         max_diagnostic_entries: 4_096,
     };
@@ -56,6 +65,9 @@ impl ConfigLimits {
             || self.max_identifier_bytes == 0
             || self.max_text_bytes == 0
             || self.max_list_items == 0
+            || self.max_decoded_identifier_bytes_total == 0
+            || self.max_decoded_value_bytes_total == 0
+            || self.max_total_list_items == 0
             || self.max_canonical_bytes == 0
             || self.max_diagnostic_entries == 0
         {

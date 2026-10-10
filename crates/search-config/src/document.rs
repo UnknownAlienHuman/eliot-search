@@ -1,14 +1,19 @@
 //! Bounded parsing and construction of captured configuration documents.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::str;
 
 use search_contracts::ProfileId;
 
 use crate::{
-    ConfigError, ConfigKeyName, ConfigKeyPath, ConfigLimits, ConfigSectionName, ConfigSource,
-    ConfigSourceKind, DocumentValue, LayerOperation,
+    ConfigError, ConfigKeyPath, ConfigLimits, ConfigSectionName, ConfigSource, ConfigSourceKind,
+    DocumentValue, LayerOperation,
 };
+
+#[path = "builder.rs"]
+mod builder;
+
+use builder::{DocumentBuilder, TextPopulation};
 
 /// One finite captured configuration layer.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,7 +22,7 @@ pub struct ConfigDocument {
     requested_profile: Option<ProfileId>,
     source: ConfigSource,
     entries: BTreeMap<ConfigKeyPath, LayerOperation>,
-    declared_sections: BTreeSet<ConfigSectionName>,
+    declared_sections: BTreeMap<ConfigSectionName, usize>,
 }
 
 impl ConfigDocument {
@@ -29,7 +34,9 @@ impl ConfigDocument {
     /// # Errors
     ///
     /// Rejects zero schema versions, default-source documents, duplicate paths,
-    /// excessive entries, and a requested profile outside the file layer.
+    /// excessive entries/sections/fields/decoded data, and a requested profile
+    /// outside the file layer. Caller-owned inputs are admitted before this
+    /// owner clones names or grows its collections.
     pub fn from_entries(
         schema_version: u32,
         requested_profile: Option<ProfileId>,
@@ -48,24 +55,14 @@ impl ConfigDocument {
             return Err(ConfigError::SourceKindMismatch);
         }
 
-        let mut values = BTreeMap::new();
-        let mut declared_sections = BTreeSet::new();
-        for (path, operation) in entries {
-            if values.len() >= limits.max_entries_per_layer {
-                return Err(ConfigError::CapacityExceeded);
-            }
-            declared_sections.insert(path.section().clone());
-            if values.insert(path, operation).is_some() {
-                return Err(ConfigError::DuplicateKey);
-            }
+        let mut builder = DocumentBuilder::new(limits);
+        if let Some(profile) = &requested_profile {
+            builder.charge_text(profile.as_str().len(), TextPopulation::Profile)?;
         }
-        Ok(Self {
-            schema_version,
-            requested_profile,
-            source,
-            entries: values,
-            declared_sections,
-        })
+        for (path, operation) in entries {
+            builder.push_captured(path, operation)?;
+        }
+        Ok(builder.finish(schema_version, requested_profile, source))
     }
 
     /// Configuration schema version declared by the source.
@@ -95,7 +92,7 @@ impl ConfigDocument {
     /// Canonical declared section names, including empty tables.
     #[must_use]
     pub fn declared_sections(&self) -> impl ExactSizeIterator<Item = &ConfigSectionName> {
-        self.declared_sections.iter()
+        self.declared_sections.keys()
     }
 
     /// Number of field operations.
@@ -148,9 +145,7 @@ pub fn parse_document(
     let mut schema_version = None;
     let mut requested_profile = None;
     let mut current_section = None;
-    let mut declared_sections = BTreeSet::new();
-    let mut entries = BTreeMap::new();
-    let mut top_level_keys = BTreeSet::new();
+    let mut builder = DocumentBuilder::new(limits);
 
     for raw_line in text.lines() {
         let line = strip_comment(raw_line)?.trim();
@@ -170,14 +165,9 @@ pub fn parse_document(
             if name.contains('.') || name.contains(' ') || name.contains('\t') {
                 return Err(ConfigError::UnsupportedSyntax);
             }
-            let section = ConfigSectionName::new(name, limits.max_identifier_bytes)?;
-            if !declared_sections.insert(section.clone()) {
-                return Err(ConfigError::DuplicateTable);
-            }
-            current_section = Some(section);
-            if declared_sections.len() > limits.max_sections {
-                return Err(ConfigError::CapacityExceeded);
-            }
+            builder.declare_table(name)?;
+            // The input owns this locator; no current-table name is cloned.
+            current_section = Some(name);
             continue;
         }
 
@@ -185,22 +175,16 @@ pub fn parse_document(
         if raw_key.contains('.') || raw_key.contains(' ') || raw_key.contains('\t') {
             return Err(ConfigError::UnsupportedSyntax);
         }
-        if let Some(section) = &current_section {
-            let key = ConfigKeyName::new(raw_key, limits.max_identifier_bytes)?;
-            let path = ConfigKeyPath::new(section.clone(), key);
-            let operation = LayerOperation::Set(parse_value(raw_value, limits)?);
-            if entries.len() >= limits.max_entries_per_layer {
-                return Err(ConfigError::CapacityExceeded);
-            }
-            if entries.insert(path, operation).is_some() {
-                return Err(ConfigError::DuplicateKey);
-            }
+        if let Some(section) = current_section {
+            let path = builder.parsed_path(section, raw_key)?;
+            let operation = LayerOperation::Set(parse_value(raw_value, &mut builder)?);
+            builder.commit_entry(path, operation)?;
         } else {
-            if !top_level_keys.insert(raw_key.to_owned()) {
-                return Err(ConfigError::DuplicateKey);
-            }
             match raw_key {
                 "schema_version" => {
+                    if schema_version.is_some() {
+                        return Err(ConfigError::DuplicateKey);
+                    }
                     let value = parse_integer(raw_value)?;
                     let value =
                         u32::try_from(value).map_err(|_| ConfigError::UnsupportedSchemaVersion)?;
@@ -210,7 +194,10 @@ pub fn parse_document(
                     schema_version = Some(value);
                 }
                 "profile" => {
-                    let value = parse_string(raw_value, limits.max_text_bytes)?;
+                    if requested_profile.is_some() {
+                        return Err(ConfigError::DuplicateKey);
+                    }
+                    let value = parse_string(raw_value, &mut builder, TextPopulation::Profile)?;
                     requested_profile =
                         Some(ProfileId::new(value).map_err(|_| ConfigError::InvalidIdentifier)?);
                 }
@@ -221,13 +208,7 @@ pub fn parse_document(
 
     let schema_version = schema_version.ok_or(ConfigError::UnsupportedSchemaVersion)?;
     let requested_profile = requested_profile.ok_or(ConfigError::ProfileNotAuthorized)?;
-    Ok(ConfigDocument {
-        schema_version,
-        requested_profile: Some(requested_profile),
-        source,
-        entries,
-        declared_sections,
-    })
+    Ok(builder.finish(schema_version, Some(requested_profile), source))
 }
 
 fn split_assignment(line: &str) -> Result<(&str, &str), ConfigError> {
@@ -305,17 +286,23 @@ fn strip_comment(line: &str) -> Result<&str, ConfigError> {
     }
 }
 
-fn parse_value(value: &str, limits: ConfigLimits) -> Result<DocumentValue, ConfigError> {
+fn parse_value(value: &str, builder: &mut DocumentBuilder) -> Result<DocumentValue, ConfigError> {
     match value {
-        "true" => Ok(DocumentValue::Boolean(true)),
-        "false" => Ok(DocumentValue::Boolean(false)),
+        "true" | "false" => {
+            builder.charge_scalar(1)?;
+            Ok(DocumentValue::Boolean(value == "true"))
+        }
         _ if value.starts_with('"') || value.starts_with('\'') => {
-            parse_string(value, limits.max_text_bytes).map(DocumentValue::Text)
+            parse_string(value, builder, TextPopulation::Value).map(DocumentValue::Text)
         }
         _ if value.starts_with('[') => {
-            parse_string_array(value, limits).map(DocumentValue::StringList)
+            parse_string_array(value, builder).map(DocumentValue::StringList)
         }
-        _ => parse_integer(value).map(DocumentValue::Integer),
+        _ => {
+            let value = parse_integer(value)?;
+            builder.charge_scalar(8)?;
+            Ok(DocumentValue::Integer(value))
+        }
     }
 }
 
@@ -336,13 +323,32 @@ fn parse_integer(value: &str) -> Result<i64, ConfigError> {
     {
         return Err(ConfigError::UnsupportedSyntax);
     }
-    let canonical = value.replace('_', "");
-    canonical
-        .parse::<i64>()
-        .map_err(|_| ConfigError::ValueOutOfBounds)
+    // Preserve the legacy underscore grammar without allocating a normalized copy.
+    // Accumulating negatively admits i64::MIN without an intermediate overflow.
+    let negative = value.starts_with('-');
+    digits
+        .bytes()
+        .filter(|byte| *byte != b'_')
+        .try_fold(0_i64, |total, byte| {
+            let digit = i64::from(byte - b'0');
+            total
+                .checked_mul(10)
+                .and_then(|total| {
+                    if negative {
+                        total.checked_sub(digit)
+                    } else {
+                        total.checked_add(digit)
+                    }
+                })
+                .ok_or(ConfigError::ValueOutOfBounds)
+        })
 }
 
-fn parse_string(value: &str, max_bytes: usize) -> Result<String, ConfigError> {
+fn parse_string(
+    value: &str,
+    builder: &mut DocumentBuilder,
+    population: TextPopulation,
+) -> Result<String, ConfigError> {
     if value.len() < 2 {
         return Err(ConfigError::UnsupportedSyntax);
     }
@@ -351,48 +357,67 @@ fn parse_string(value: &str, max_bytes: usize) -> Result<String, ConfigError> {
         return Err(ConfigError::UnsupportedSyntax);
     }
     let body = &value[1..value.len() - 1];
-    let parsed = if quote == b'\'' {
+    let mut decoded_bytes = 0_usize;
+    visit_string(body, quote, |character| {
+        decoded_bytes = decoded_bytes
+            .checked_add(character.len_utf8())
+            .ok_or(ConfigError::LengthOverflow)?;
+        Ok(())
+    })?;
+    builder.charge_text(decoded_bytes, population)?;
+    let mut output = String::with_capacity(decoded_bytes);
+    visit_string(body, quote, |character| {
+        output.push(character);
+        Ok(())
+    })?;
+    Ok(output)
+}
+
+// The same legacy decoding rules drive counting and writing. Counting allocates
+// nothing, and the exact decoded byte charge precedes all String growth.
+fn visit_string(
+    body: &str,
+    quote: u8,
+    mut emit: impl FnMut(char) -> Result<(), ConfigError>,
+) -> Result<(), ConfigError> {
+    if quote == b'\'' {
         if body.contains('\'') || body.contains('\n') || body.contains('\r') {
             return Err(ConfigError::UnsupportedSyntax);
         }
-        body.to_owned()
-    } else {
-        parse_basic_string(body)?
-    };
-    if parsed.len() > max_bytes {
-        Err(ConfigError::CapacityExceeded)
-    } else {
-        Ok(parsed)
+        for character in body.chars() {
+            emit(character)?;
+        }
+        return Ok(());
     }
-}
-
-fn parse_basic_string(body: &str) -> Result<String, ConfigError> {
-    let mut output = String::with_capacity(body.len());
     let mut characters = body.chars();
     while let Some(character) = characters.next() {
         if character != '\\' {
             if character.is_control() {
                 return Err(ConfigError::UnsupportedSyntax);
             }
-            output.push(character);
+            emit(character)?;
             continue;
         }
         let escaped = characters.next().ok_or(ConfigError::UnsupportedSyntax)?;
-        match escaped {
-            'b' => output.push('\u{0008}'),
-            't' => output.push('\t'),
-            'n' => output.push('\n'),
-            'f' => output.push('\u{000c}'),
-            'r' => output.push('\r'),
-            '"' => output.push('"'),
-            '\\' => output.push('\\'),
+        let decoded = match escaped {
+            'b' => '\u{0008}',
+            't' => '\t',
+            'n' => '\n',
+            'f' => '\u{000c}',
+            'r' => '\r',
+            '"' => '"',
+            '\\' => '\\',
             _ => return Err(ConfigError::UnsupportedSyntax),
-        }
+        };
+        emit(decoded)?;
     }
-    Ok(output)
+    Ok(())
 }
 
-fn parse_string_array(value: &str, limits: ConfigLimits) -> Result<Vec<String>, ConfigError> {
+fn parse_string_array(
+    value: &str,
+    builder: &mut DocumentBuilder,
+) -> Result<Vec<String>, ConfigError> {
     if !value.ends_with(']') {
         return Err(ConfigError::UnsupportedSyntax);
     }
@@ -424,7 +449,7 @@ fn parse_string_array(value: &str, limits: ConfigLimits) -> Result<Vec<String>, 
             None => match character {
                 '"' | '\'' => quote = Some(character),
                 ',' => {
-                    push_array_value(&body[start..index], &mut values, limits)?;
+                    push_array_value(&body[start..index], &mut values, builder)?;
                     start = index + 1;
                 }
                 '[' | ']' | '{' | '}' => return Err(ConfigError::UnsupportedSyntax),
@@ -437,10 +462,7 @@ fn parse_string_array(value: &str, limits: ConfigLimits) -> Result<Vec<String>, 
     }
     let tail = body[start..].trim();
     if !tail.is_empty() {
-        push_array_value(tail, &mut values, limits)?;
-    }
-    if values.len() > limits.max_list_items {
-        return Err(ConfigError::CapacityExceeded);
+        push_array_value(tail, &mut values, builder)?;
     }
     Ok(values)
 }
@@ -448,16 +470,14 @@ fn parse_string_array(value: &str, limits: ConfigLimits) -> Result<Vec<String>, 
 fn push_array_value(
     value: &str,
     values: &mut Vec<String>,
-    limits: ConfigLimits,
+    builder: &mut DocumentBuilder,
 ) -> Result<(), ConfigError> {
-    if values.len() >= limits.max_list_items {
-        return Err(ConfigError::CapacityExceeded);
-    }
+    builder.charge_list_item(values.len())?;
     let value = value.trim();
     if value.is_empty() {
         return Err(ConfigError::UnsupportedSyntax);
     }
-    values.push(parse_string(value, limits.max_text_bytes)?);
+    values.push(parse_string(value, builder, TextPopulation::Value)?);
     Ok(())
 }
 

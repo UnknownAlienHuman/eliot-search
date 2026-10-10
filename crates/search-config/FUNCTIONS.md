@@ -21,6 +21,9 @@ platform facts, accepted capability receipts and time before invoking this crate
 - `ConfigFingerprint` remains SHA-256 over the exact legacy v1 length-delimited preimage containing schema/profile identities, descriptor revisions/digests and package-validated section digests. Shared `sha256_exact_bytes` executes the accepted SHA-2 donor without adding framing. The preimage has a hard 8 MiB ceiling in addition to the caller ceiling. This is not the forthcoming canonical v2 identity under #238.
 - The parser accepts the finite baseline TOML subset used by the project configuration: top-level `schema_version` and `profile`, flat package tables, booleans, signed integers, strings and arrays of strings. Unsupported TOML constructs fail closed.
 - Ordinary `Debug` representations redact unvalidated text, paths and opaque secret references.
+- File parsing and `ConfigDocument::from_entries` share one private construction budget. Sections (including empty file tables), entries and fields per section are bounded before map growth or section clones. Parsed strings use the same legacy decoding rules for an allocation-free UTF-8 length pass and the subsequent exact-capacity allocation; list item counts are charged before each item decode/push.
+- `ConfigLimits::W1` adds aggregate ceilings: identifier bytes 1 MiB, decoded value bytes 4 MiB and list items 8,192 per layer. Identifiers count the profile once, declared section names once and both path components for each entry. Value bytes count text/list UTF-8 plus boolean=1 and integer=8; resets contribute zero. Per-identifier/text/list limits also apply to caller-owned captured values before configuration collection growth. These are logical payload/count ceilings, not an allocator-resident-byte measurement.
+- Constructor header rules remain unchanged: positive schema, no Defaults document, profiles only on File. File profile is optional in `from_entries` and mandatory in `parse_document`. Bounds now reject inputs that previously bypassed sections/fields/per-value/aggregate checks. In-budget v1 values and fingerprint bytes remain unchanged; over-limit malformed/duplicate intersections may report capacity first. Fixed content-free errors require no diagnostic path buffer. TOML donor/v2, diagnostic byte ceilings, section-digest authority and ordered fingerprint ownership remain #238/#389 follow-ups.
 
 ## Operations
 
@@ -28,6 +31,10 @@ platform facts, accepted capability receipts and time before invoking this crate
 
 Validates framing, encoding, schema version, duplicate keys/tables, nesting and allocation limits.
 It performs no path/environment expansion and never reads another source.
+
+### `ConfigDocument::from_entries(schema_version, requested_profile, source, entries, limits)`
+
+Admits caller-owned captured typed entries through the same private budget as file parsing, without cloning text/list values. Checks duplicate paths before insertion; failures return no partial document. Acquisition and source-digest encoding remain caller-owned. Explicit `ConfigLimits` struct literals must supply the three new aggregate fields.
 
 ### `register_sections(descriptors) -> Result<ConfigRegistry, ConfigError>`
 
