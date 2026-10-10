@@ -55,6 +55,14 @@ intent removal retains release-unknown classification through its exact readback
 The existing intent/layout/owner formats and missing-state refusal are unchanged.
 These cooperative boundaries do not make partial initialization recoverable.
 
+The new-layout/installation/epoch-one publication body is now one private
+`publish_new_layout` phase called by normal initialization before the existing
+finalization path. It borrows the same retained capability and original request;
+no durable bytes, ordering, codec, retry or recovery algorithm is duplicated.
+Initialization-owned visibility/const lint repairs retain the same crate-only
+facade and private fields. Scoped diagnostics in this owner are now clean;
+the enclosing daemon/dependency strict gate remains failed.
+
 Service startup has a finite context. After completed startup the same live owner may
 idle; each command borrows it under its own finite context. Shutdown retains its
 original command context through drain/release and final output. Migration staging
@@ -155,7 +163,7 @@ under the existing package contract; no zero-metadata-write claim is made.
 It does not qualify populated imports, mid-staging cancellation or unknown
 publication recovery.
 
-The primary daemon now contains two Windows-only native crash fixtures. The
+The primary daemon contains Windows-only native crash fixtures. The
 ordinary-owner fixture initializes through production code, admits epoch two,
 persists actual `DRAINING` through `begin_drain`, acknowledges it and is killed
 and reaped while retaining its guard. Mutation and inspection then refuse without
@@ -166,6 +174,15 @@ Exact initialization recovery refuses missing evidence; retry, mutation and
 inspection refuse the retained fence. Every attempt preserves bytes and mtimes.
 Neither fixture manufactures durable records/digests or adds a production fault
 switch. These are two named crash points, not all-phase recovery qualification.
+
+The complete-layout initialization fixture calls the real `acquire_new` and
+`publish_new_layout` phases, acknowledges actual ACTIVE epoch-one/generation-one
+publication and is killed/reaped while retaining the capability. A foreign
+operation refuses with no snapshot change. The exact original initialization
+recovers RELEASED epoch-one/generation-three and removes only its intent;
+namespace, catalog and other layout bytes/mtimes are preserved. Clean inspection
+and ordinary epoch-two ownership then succeed. This is real retained-input
+initialization recovery, not general migration/publication recovery.
 
 ## Still open in #266 and downstream owners
 
@@ -183,8 +200,9 @@ switch. These are two named crash points, not all-phase recovery qualification.
   currently covers complete initialization only; abandoned ordinary ACTIVE/DRAINING
   and unknown migration/publication outcomes are not automatically recovered.
 - The named ordinary DRAINING and pre-layout initialization crash/refusal points
-  have native fixture evidence. Partial initialization reconstruction, later
-  initialization crash phases and general named recovery remain unqualified.
+  and complete-layout initialization crash/recovery have native fixture evidence.
+  Partial initialization reconstruction, crashes between individual object/slot
+  publications or during finalization, and general named recovery remain unqualified.
 - Active redb roots refuse with `DATA_ROOT_LAYOUT_UNSUPPORTED`. redb 2.6.3's writable
   opener is not a proven non-writing/non-repairing inspection API: #343 retains this
   donor limitation. No private redb parser or silent dependency upgrade is introduced.

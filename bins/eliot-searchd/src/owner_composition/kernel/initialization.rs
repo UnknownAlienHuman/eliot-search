@@ -32,7 +32,7 @@ const SEALED: &str = ".eliot-search-sealed-owner.lock";
 const MAX_INTENT: usize = 2048;
 
 /// A requested operation name, never root or recovery authority by itself.
-pub(crate) struct InitializationRequest([u8; 16]);
+pub struct InitializationRequest([u8; 16]);
 
 impl InitializationRequest {
     pub(crate) fn parse(value: &str) -> Result<Self, OwnerError> {
@@ -111,7 +111,7 @@ impl InitIntent {
 
 /// Private initialization authority. Only the empty-root proof plus retained
 /// native exclusions and exact intent can construct it; no ordinary open can.
-pub(crate) struct InitializingDataRoot {
+pub struct InitializingDataRoot {
     root: PathBuf,
     intent: InitIntent,
     root_file: File,
@@ -175,7 +175,7 @@ impl InitializingDataRoot {
 
 /// Named initialization recovery exposes existing readback/finalization only.
 /// It cannot be passed to the layout/credential creation child.
-pub(crate) struct InitializationRecovery<'a> {
+pub struct InitializationRecovery<'a> {
     root: &'a InitializingDataRoot,
 }
 
@@ -187,7 +187,7 @@ impl InitializationRecovery<'_> {
     pub(crate) fn canonical_root(&self) -> &Path {
         self.root.canonical_root()
     }
-    pub(crate) fn namespace_id(&self) -> [u8; 32] {
+    pub(crate) const fn namespace_id(&self) -> [u8; 32] {
         self.root.namespace_id()
     }
     pub(crate) fn verify(&self) -> Result<(), OwnerError> {
@@ -196,12 +196,12 @@ impl InitializationRecovery<'_> {
 }
 
 /// Exact completion readback; does not grant ordinary read/write access.
-pub(crate) struct InitializationReceipt {
+pub struct InitializationReceipt {
     pub(crate) namespace: [u8; 32],
     pub(crate) replayed: bool,
 }
 
-pub(crate) fn initialize_new_request(
+pub fn initialize_new_request(
     root: &Path,
     request: &InitializationRequest,
     operation: &DataRootRequest,
@@ -224,8 +224,17 @@ pub(crate) fn initialize_new_request(
     let acquired = acquire_new(&root, request, operation);
     check_pending(operation).map_err(code)?;
     let cap = acquired.map_err(code)?;
+    let record = publish_new_layout(&cap)?;
+    finish_initialized(cap, record, false)
+}
+
+/// Publishes the exact new layout and its epoch-one installation binding.
+/// Finalization remains separate and consumes the same retained capability.
+fn publish_new_layout(cap: &InitializingDataRoot) -> Result<DurableOwnerRecord, String> {
+    let root = cap.canonical_root();
+    let operation = &cap.operation;
     cap.verify().map_err(code)?;
-    let store = crate::direct_store::DirectStore::initialize_legacy_layout(&cap);
+    let store = crate::direct_store::DirectStore::initialize_legacy_layout(cap);
     cap.verify().map_err(code)?;
     let store = store?;
     let verified = store.verify_empty();
@@ -243,7 +252,7 @@ pub(crate) fn initialize_new_request(
         initialization_id: None,
         native_objects_digest: None,
     };
-    let observed = observe_physical_root(&root);
+    let observed = observe_physical_root(root);
     cap.verify().map_err(code)?;
     let observed = observed.map_err(code)?;
     let record = super::succession::plan_successor(&binding, &observed, cap.intent.executable, None);
@@ -253,23 +262,23 @@ pub(crate) fn initialize_new_request(
     record.owner_pid = cap.intent.owner_pid;
     record.refresh_digest();
     cap.verify().map_err(code)?;
-    let first = publish_initial_slot(&root, OWNER_SLOT_A, &record, operation);
+    let first = publish_initial_slot(root, OWNER_SLOT_A, &record, operation);
     cap.verify().map_err(code)?;
     first.map_err(code)?;
-    let second = publish_initial_slot(&root, OWNER_SLOT_B, &record, operation);
+    let second = publish_initial_slot(root, OWNER_SLOT_B, &record, operation);
     cap.verify().map_err(code)?;
     second.map_err(code)?;
     let installed =
-        publish_initialized_installation(&root, &mut installation_file, &mut binding, cap.intent.id);
+        publish_initialized_installation(root, &mut installation_file, &mut binding, cap.intent.id);
     cap.verify().map_err(code)?;
     installed.map_err(code)?;
     drop(installation_file);
-    finish_initialized(cap, record, false)
+    Ok(record)
 }
 
 /// Resolve only the original complete layout. Missing files or credentials stay
 /// missing; every unknown outcome retains the intent and is never replayed.
-pub(crate) fn recover_initialization_request(
+pub fn recover_initialization_request(
     root: &Path,
     request: &InitializationRequest,
     operation: &DataRootRequest,

@@ -69,6 +69,14 @@ uses the same original request through native acquisition/recovery, slot publica
 drain/release and intent-removal result boundaries in that initialization owner.
 It adds no durable fields, retry/recovery algorithm or production fault switch.
 
+The [complete-layout crash continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6096482260)
+separates the existing new-layout/epoch-one publication phase into a private
+production helper in the same initialization owner. Normal initialization calls
+it before the unchanged finalization path, retaining the same capability/request.
+The nested native fixture uses that actual phase before kill/reap and exact
+recovery. Local initialization visibility/const lint repairs preserve the
+existing crate-only facade exports; no new public protocol is introduced.
+
 The [native-fixture harness prerequisite](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6096202633)
 restores explicit paths to existing daemon test modules and their missing test-only
 imports/helper references. Windows test credential-cleanup helpers are visible only
