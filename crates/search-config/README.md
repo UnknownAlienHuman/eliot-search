@@ -11,8 +11,16 @@ reconfiguration plans. Capability packages own their typed section schemas and r
 The #386 source slice removes copied SHA-256 and uses the shared exact-byte RustCrypto owner.
 Legacy v1 preimages and bounded path digests keep their bytes; hashing and preimage growth have
 a hard 8 MiB ceiling. Oversized diagnostic paths yield size metadata without a digest or text.
-Focused compatibility fixtures are AUTHORED_NOT_RUN. The typed TOML/builder cutover, internal
+Focused compatibility fixtures are AUTHORED_NOT_RUN. The typed TOML cutover, internal
 section-digest ownership, canonical v2 identity and qualification remain open under #238/#109/#215.
+
+File/env/CLI documents now share one private builder and checked aggregate budget. It enforces
+sections, per-section fields, individual identifiers/text/lists and totals before config-owned
+allocation/growth. W1 aggregate ceilings are 1 MiB identifier bytes, 4 MiB decoded value bytes and
+8,192 list items. The existing public constructors/header rules stay intact; their accepted
+in-budget v1 values and persisted digests keep their bytes. Previously unchecked oversized captured
+values or aggregates now reject. Adversarial boundary fixtures are AUTHORED_NOT_RUN; donor
+materialization and the explicit TOML/v2 migration remain #389/#238 work.
 
 ## Owns
 

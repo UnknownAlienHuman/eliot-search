@@ -23,6 +23,9 @@ const fn limits() -> ConfigLimits {
         max_identifier_bytes: 128,
         max_text_bytes: 4_096,
         max_list_items: 64,
+        max_decoded_identifier_bytes_total: 64 * 1024,
+        max_decoded_value_bytes_total: 64 * 1024,
+        max_total_list_items: 256,
         max_canonical_bytes: 64 * 1024,
         max_diagnostic_entries: 256,
     }
