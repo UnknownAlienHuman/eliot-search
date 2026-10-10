@@ -30,12 +30,11 @@ use state::State;
 
 /// Local transport or protocol failure; authenticated remote error bodies remain
 /// typed `ProviderEnvelope` values, not a successful command or fabricated code.
-#[derive(Debug)]
 pub enum TypedClientError {
     /// Shared protocol validation failed.
     Protocol(ProtocolError),
-    /// A local transport operation failed.
-    Io(std::io::Error),
+    /// A local transport operation failed; raw OS errors are not retained.
+    Io,
     /// The original setup or pending request budget expired.
     DeadlineExpired,
     /// The process-local cancellation capability interrupted setup.
@@ -79,7 +78,7 @@ impl TypedClientError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Protocol(error) => error.code(),
-            Self::Io(_) => "REMOTE_TYPED_IO_ERROR",
+            Self::Io => "REMOTE_TYPED_IO_ERROR",
             Self::DeadlineExpired => "REMOTE_DEADLINE_EXPIRED",
             Self::Cancelled => "REMOTE_TYPED_CANCELLED",
             Self::PeerClosed => "REMOTE_TYPED_FRAME_TRUNCATED",
@@ -110,7 +109,16 @@ impl From<ProtocolError> for TypedClientError {
 }
 
 impl From<std::io::Error> for TypedClientError {
-    fn from(error: std::io::Error) -> Self { Self::Io(error) }
+    fn from(_error: std::io::Error) -> Self { Self::Io }
+}
+
+impl std::fmt::Debug for TypedClientError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_tuple("TypedClientError")
+            .field(&self.code())
+            .finish()
+    }
 }
 
 impl std::fmt::Display for TypedClientError {
@@ -120,6 +128,24 @@ impl std::fmt::Display for TypedClientError {
 }
 
 impl std::error::Error for TypedClientError {}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use std::error::Error as _;
+
+    use super::TypedClientError;
+
+    #[test]
+    fn arbitrary_os_error_text_cannot_escape_through_public_diagnostics() {
+        let error = TypedClientError::from(std::io::Error::other(
+            "private credential locator and query sentinel",
+        ));
+        assert_eq!(error.code(), "REMOTE_TYPED_IO_ERROR");
+        assert_eq!(error.to_string(), "REMOTE_TYPED_IO_ERROR");
+        assert_eq!(format!("{error:?}"), "TypedClientError(\"REMOTE_TYPED_IO_ERROR\")");
+        assert!(error.source().is_none());
+    }
+}
 
 /// Sole owner of one typed local stream/key and its bounded client lifecycle.
 ///

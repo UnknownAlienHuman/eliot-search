@@ -157,11 +157,6 @@ impl fmt::Debug for NativeClientBinding {
                 "trusted_installation_id",
                 &self.trusted_installation_id.is_some(),
             )
-            .field(
-                "installation_incarnation_id",
-                &self.installation_incarnation_id,
-            )
-            .field("binding_id", &self.binding_id)
             .field("supported_protocol_range", &self.supported_protocol_range)
             .field(
                 "requested_capability_digest",
