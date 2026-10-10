@@ -27,6 +27,9 @@ use crate::provider_client::{NativeClientBinding, TypedClientError};
 
 const NATIVE_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
 
+#[cfg(test)]
+mod tests;
+
 /// Independently trusted coordinates for one standalone local registration.
 ///
 /// Every field comes from the installation/configuration owner. None is read
@@ -84,6 +87,8 @@ pub(crate) struct ResolvedNativeLocal<C: CancellationProbe> {
     binding: NativeClientBinding,
     key: BindingKey,
     context: OperationContext<C>,
+    // Authoritative resolver origin; the relative context is advisory metadata.
+    deadline: Instant,
 }
 
 impl<C: CancellationProbe> ResolvedNativeLocal<C> {
@@ -96,8 +101,9 @@ impl<C: CancellationProbe> ResolvedNativeLocal<C> {
         NativeClientBinding,
         BindingKey,
         OperationContext<C>,
+        Instant,
     ) {
-        (self.endpoint_name, self.binding, self.key, self.context)
+        (self.endpoint_name, self.binding, self.key, self.context, self.deadline)
     }
 }
 
@@ -216,6 +222,7 @@ where
         binding,
         key,
         context,
+        deadline: budget.deadline,
     })
 }
 

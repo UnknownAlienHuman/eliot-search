@@ -7,7 +7,7 @@
 
 use core::fmt;
 use std::net::{SocketAddr, TcpStream};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use search_contracts::{
     BindingId, Blake3Digest32, HelloBody, InstallationId,
@@ -207,12 +207,15 @@ impl TypedProviderSession {
     /// one finite connect timeout from the caller's original setup budget. It is
     /// invoked exactly once and may not scan, rewrite the name, reconnect, choose
     /// TCP or renew the deadline. Endpoint success remains non-authenticating.
+    /// The resolver's absolute deadline controls all remaining setup phases;
+    /// the narrowed context supplies cancellation and advisory budget metadata.
     pub(super) fn connect_local<C, S>(
         endpoint_name: NativeEndpointNameV1,
         binding: &NativeClientBinding,
         key: BindingKey,
         limits: ProtocolLimits,
         context: &OperationContext<C>,
+        absolute_deadline: Instant,
         connect: impl FnOnce(NativeEndpointNameV1, Duration) -> std::io::Result<S>,
     ) -> Result<Self, TypedClientError>
     where
@@ -220,10 +223,7 @@ impl TypedProviderSession {
         S: LocalByteStream + 'static,
     {
         let cancelled = || context.cancellation().is_cancelled();
-        let budget = SetupBudget::new(
-            Duration::from_millis(context.relative_deadline_ms().get()),
-            &cancelled,
-        )?;
+        let budget = SetupBudget::from_deadline(absolute_deadline, &cancelled)?;
         let connect_timeout = budget.remaining()?.min(CONNECT_QUANTUM);
         let stream = connect(endpoint_name, connect_timeout)?;
         budget.remaining()?;
