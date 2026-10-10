@@ -1,65 +1,112 @@
-# Agent launch gate — 2026-10-09
+# Agent launch gate — current execution state
 
-**Coordinator:** [#97](https://github.com/UnknownAlienHuman/eliot-search/pull/97).  
-**Audited implementation snapshot:** `17383079d316cc090eae04912534e2d16e6dc79d`.  
-**Current execution packet:** [Wave 2](WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md).  
-**Scope exceptions:** [package matrix](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md).
+**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
+**Live writer queue:** programme issue #352.
+**Mandatory process:** [EXECUTION_PROTOCOL.md](../product/EXECUTION_PROTOCOL.md).
+**Long-range obligations:** [PROJECT_COMPLETION.md](../product/PROJECT_COMPLETION.md).
+**Current process issues:** #349 and #350.
+
+`PROJECT_COMPLETION.md` is not the live next-task queue. Its dated “next task”, base SHA or local stage wording is subordinate to #352, this gate, current merged artifacts and the exact active issue.
 
 ## Current verdict
 
 ```text
-Wave 1 #237 / PR #319:                 MERGED
-Wave 1 #253 / PR #322:                 MERGED
-Wave 2 A1 #258 / PR #323:              MERGED
-Wave 2 A2 #250 / PR #326:              MERGED
-Next controlled implementation:        #256
-Entire Wave 2:                         NOT COMPLETE
-Installed product / release:           NOT QUALIFIED
+Wave 1 canonical foundation:             MERGED
+Wave 1 Unicode full-fold decision:       MERGED
+Shared indexed contract/tooling:         MERGED
+S11 point identity #256:                 MERGED via #338
+UnitSet v3 #257:                         MERGED via #342
+Rustls repair #327:                      MERGED via #341
+Current writer:                          process PR #351, source-free
+PR #344 disposition:                     CLOSED UNMERGED / FROZEN DONOR 6d698ea
+Next source slice:                       dependency-ready #354 child after #351
+Next independent owner after root API:   #235.core
+Installed product / release:             NOT QUALIFIED
 ```
 
-Earlier text saying that #237 had not merged or Wave 2 had no base is historical. Do not rerun completed tasks or reset an existing manager worktree to an earlier launch SHA.
+Earlier text saying the next task is #256 or #257 is historical. Do not repeat delivered work.
 
-## Start or resume
+## Launch topology
 
-The manager reads the latest accepted-base comment on #97 and the current packet. At this audit the code snapshot is `17383079d316cc090eae04912534e2d16e6dc79d`; subsequent documentation-only commits do not constitute new source-check evidence. If implementation has advanced, inspect the delta and use the latest accepted code base instead of overwriting work.
+One manager owns one writer worktree, commits, merges, root dependency pins and `Cargo.lock`. Five to ten subagents perform bounded read/research/review assignments.
 
-One manager owns the integration worktree, commit/merge decisions and root pins/Cargo.lock. Use 5–10 bounded subagents for the active slice. Delegated write permission must follow the actual maintainer instruction and reconciled root/package scopes; a report's assertion of permission is not a replacement for that instruction. No second integration manager or concurrent lockfile writer.
-
-## Remaining order
+Every source task is a bounded `SLICE`:
 
 ```text
-#256 → #257 → #266 → #235
-→ #238 → #241 → #246 → #252
-→ #226 Markdown → #226 JATS
+Definition of Ready
+→ SCOPE_FROZEN by second source commit
+→ bounded subagent reports
+→ manager implementation
+→ changed owners + immediate reverse-consumer gates
+→ affected static guards + deferred test inventory
+→ formal exact-head review
+→ merge
+→ next branch from new main
 ```
 
-The first two Wave-2 stages (#258 and #250) are already accepted. #327 is a separate small security dependency repair through the same manager before affected TLS/network use; do not mix it into point-identity code. #325 remains explicit legacy bounds-provenance debt.
+No stacked source PRs. Read-only research for the next non-overlapping slice may run during final review.
 
-## Build-safe source gates
+## Current #266 gate
 
-#256 adds the new S11 profile without immediately deleting legacy exports still imported by the daemon. The current eight-field key, full identity, independent address domain and collision rejection use the already merged canonical API. Existing legacy callers are retired by the named downstream cutover, not by breaking compilation in a package-only PR.
+PR #344 has 119 changed files and more than 11,000 additions. It must not continue through more “narrow continuation” amendments.
 
-Run the active issue's locked Rust 1.98 check and strict Clippy with applicable all-target/all-feature flags. Compile affected reverse consumers when a public API changes. Record pre-existing failures separately from new regressions.
+The manager must:
 
-After source/ledger changes:
+1. preserve the closed #344 donor at exact `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce` without new commits;
+2. classify every remaining finding `B0`, `F1`, `F2`, `D` or `Q`;
+3. merge #351, make #354 dependency-ready and choose only its first exact tranche; #355/#356/#358 are PROGRAM parents, not source branch authority;
+4. open/review/merge tranche 1;
+5. publish the new `main` SHA;
+6. create tranche 2 from that new `main`; repeat serially as needed;
+7. keep #343/#345/#346/#347/#348 outside unless an exact B0 dependency is proved;
+8. obtain formal review on each final head;
+9. allow #235.core after the minimum root API/caller cutover merges.
+
+Unsupported recovery/cleanup remains unavailable and fail-closed. It is not fabricated merely to merge.
+
+## Finding triage
 
 ```text
-cargo +1.98.0 run --locked -p xtask -- validate canonical-digest-guard
-cargo +1.98.0 run --locked -p xtask -- validate qdrant-boundary
+B0  required for declared slice compilation or safety
+F1  same-owner follow-up
+F2  adjacent-owner follow-up
+D   unchanged baseline/harness/lint debt
+Q   native/live/scale/release qualification
 ```
 
-#324 repairs the known stale evaluation README; the full current-workspace command must be rerun after that repair. No success is inferred merely from changing the text. Actions stay manual-only; broad product/native tests remain deferred.
+A finding becomes B0 only with exact path/symbol/caller evidence showing why the frozen result cannot remain unavailable, legacy-only or fail-closed.
 
-## Evidence already recorded
+## Build gate
 
-- #319 final head `99918613044952be7a0b1a919aa99bf5ba0e8cfb`: author records Windows Rust 1.98 scoped check/Clippy and source guard success.
-- #322: exact Unicode-data decision and golden artifacts; no production prose tokenizer.
-- #323: closed indexed schema/eligibility and epoch fixtures; no live Qdrant enablement.
-- #326 final head `5c796c91a32d67a4113f83c14ad625c0ec314165`: author records scoped check/Clippy, 176 focused fixtures and guard success. The merged snapshot has the same file tree.
-- #326 also records a real workspace-validator exit 1 for #324, not a blanket PASS.
+For each source tranche:
 
-This audit inspected source and recorded evidence; it did not independently rerun Rust or Windows checks. Security-review badges and Git signatures are not compiler or functional evidence.
+- Rust 1.98 locked check for changed owners;
+- immediate reverse-consumer compilation for public API changes;
+- strict Clippy for that production closure;
+- specify deferred unit/integration/native/crash/fault inventory with its qualification owner;
+- affected source guards.
 
-## Do not manufacture progress
+Use production targets only (`--lib`/`--bins` as applicable). Tests execute during integrated qualification, not as source merge gates. Tiny debugging runs are diagnostic only. Reuse recorded broad baseline debt; compare only relevant failing production diagnostics once. New candidate production diagnostics block.
 
-Do not widen a legacy profile into S11, replace an old checksum with a domain-prefixed one under the same fingerprint, disable a failed checker, change ledger classifications to obtain PASS, or reopen completed foundations as a new architecture project. The packet and exact issue define the smallest next code change.
+Full workspace, installed Windows, live Qdrant, fault, scale, disclosure and release evidence remain #264/#215/#140 or exact named gates.
+
+## PR policy
+
+Open PR means merge candidate. Do not open new programme/tracking/gate PRs. Historical non-mergeable PRs are closed after current owner links are preserved.
+
+The PR body is the current status record. Formal review binds the final SHA, no unresolved B0/P1, and explicit F1/F2/D/Q dispositions. Self-approval is not required; a formal COMMENT submission may record independent reviewer evidence and manager disposition. A badge alone is insufficient. PROCESS/DOCS are source-free. After #351, three bounded source merges precede another process programme PR unless a verified B0 prevents coding.
+
+## Delivered evidence scope
+
+Completed source deliveries remain source-scoped:
+
+- #319 canonical/digest foundation;
+- #322 Unicode decision/goldens;
+- #323 indexed contract;
+- #326 Cargo metadata/status tooling;
+- #338 S11 point identity;
+- #340 Windows metadata prefix fix;
+- #341 Rustls patch;
+- #342 UnitSet v3.
+
+None establishes installed/native/Qdrant/full-product qualification. Continue from current `main`; never reset to a historical SHA embedded in an older packet.

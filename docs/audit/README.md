@@ -1,52 +1,102 @@
 # ELIOT Search: audit and implementation entrypoint
 
-**Audit base:** `1a6d17d073c5f6d1fe50f21082439f1965d24ef8`. **Product/release:** not qualified. **Next current coding task:** #256, unless the manager has since delivered it on a newer accepted base. Do not reset an active worktree to a dated audit SHA.
+**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
+**Live programme queue:** issue #352.
+**Source programme:** #266; PR #344 closed unmerged/frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`.
+**Process correction:** #349 and #350 / PR #351.
+**Product/release:** not qualified.
 
-## Start here — the complete project, not just Wave 2
+Do not reset an active manager worktree to a dated audit SHA. Resolve actual `main`, active PR head and exact owner before writing source.
 
-1. [Whole-project completion map](../product/PROJECT_COMPLETION.md): all stages through source, indexed retrieval, navigation, profiles, lifecycle, installed candidate, independent qualification and publication.
-2. [Completion-audit findings and evidence boundary](PROJECT_COMPLETION_AUDIT_2026-10-09.md).
-3. [Root instructions](../../AGENTS.md), [architecture](../architecture/README.md), accepted ADRs and nearest package instructions.
-4. [Coordinator #97](https://github.com/UnknownAlienHuman/eliot-search/pull/97), assigned current issue and current source.
-5. [Remaining Wave-2 packet](WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md) and [exact integration exceptions](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md) for those specific source slices.
+## Authority by purpose
 
-One manager owns one writer worktree, dependency pins, Cargo.lock and integration. Five to ten subagents inspect/research/review bounded assignments. Completed foundation tasks must not be restarted. Phase names such as `234.build` and `234.review` separate implementation from use; they are not new issues, runtime states or a controller system.
+1. [Root instructions](../../AGENTS.md), [Architecture Part I](../architecture/README.md), accepted ADRs and nearest package instructions define product semantics and ownership.
+2. [Bounded execution protocol](../product/EXECUTION_PROTOCOL.md) defines work-item classes, Definition of Ready, `SCOPE_FROZEN`, finding triage, review budgets, source gates and serial merge discipline.
+3. [Programme issue #352](https://github.com/UnknownAlienHuman/eliot-search/issues/352), [launch gate](AGENT_LAUNCH_GATE_2026-10-09.md), the exact active issue/PR and current source define the **live writer queue**.
+4. [Whole-project completion map](../product/PROJECT_COMPLETION.md) is the long-range obligation/dependency graph. Its dated “next task”, audit SHA or local stage wording is not live scheduling authority.
+5. [Completion audit](PROJECT_COMPLETION_AUDIT_2026-10-09.md) and specialized audits retain unresolved technical evidence.
 
-## Programme stages resolve to these existing executable tasks
+When the long-range map is stale, follow #352, the launch gate, merged artifacts and the exact issue; update the map separately. Never repeat delivered work because an old row still looks active.
 
-| Map/programme stage | Actual code owner | Additional detailed inputs / boundaries |
-|---|---|---|
-| 120.native / PR #120 | [#334](https://github.com/UnknownAlienHuman/eliot-search/issues/334) | #266 root and #308 finite secret leases; #310 later binds consumers. No native-process/consumer integration cycle. |
-| Git / PR #129 | [#335](https://github.com/UnknownAlienHuman/eliot-search/issues/335) | #267/#269 admission/registration, #330/#270 retained-source integration. |
-| Overlay/LSP / PR #130 | [#336](https://github.com/UnknownAlienHuman/eliot-search/issues/336) | Core #274/#272/#246 before optional #332/#235 LSP leaf. |
-| Normative #220 | [#325](https://github.com/UnknownAlienHuman/eliot-search/issues/325) supplies the separate frozen-table provenance decision | Preserve old bytes, no fake digest relabelling or reopening completed #258. |
+## Delivered source checkpoints
 
-These are bindings of existing stages, not extra competing implementations. Always use the actual issue's source scope and complete prerequisites in addition to the high-level DAG. Never branch from a historical programme PR.
+| Task | PR | Actual delivery |
+|---|---:|---|
+| #317 | #318 | Existing xtask source-gate repairs |
+| #237 | #319 | Bounded canonical encoder, real digest APIs and source-classification guard |
+| #253 | #322 | Unicode 18 full-fold decision/goldens; not a tokenizer |
+| #258 | #323 | Shared indexed payload/schema/eligibility/epoch contract |
+| #250 | #326 | Bounded Cargo metadata and package-status/dependency validation |
+| #256 | #338 | Stateless S11 point identity; legacy retirement remains #329 |
+| #339 | #340 | Windows Cargo path-prefix handling in Qdrant tooling |
+| #327 | #341 | Rustls 0.23.45 security repair; live requalification remains later |
+| #257 | #342 | Source-verified UnitSet v3; durable preparation integration remains #331 |
 
-## Delivered implementation and recorded checks
+These are scoped source deliveries, not installed/native/Qdrant/full-product acceptance.
 
-- #317/#318 restored existing xtask gates.
-- #237/#319 delivered canonical/digest foundation.
-- #253/#322 delivered the full-fold decision and goldens, not the production tokenizer.
-- #258/#323 delivered indexed contracts.
-- #250/#326 delivered bounded metadata/status tooling.
-- #324 remains a real validator rerun obligation; docs correction alone is not PASS.
-- #327 remains a dependency/advisory obligation; #329 removes legacy identity APIs after consumer cutover.
+## Current active work
 
-[Canonical implementation](CANONICAL_FOUNDATION_IMPLEMENTATION_2026-10-09.md), [donor closure](CRYPTO_DONOR_ACCEPTANCE_2026-10-09.md), [indexed contract](../../crates/search-contracts/INDEXED_CONTRACT.md), [Cargo metadata cutover](WAVE2_CARGO_METADATA_CUTOVER_2026-10-09.md), [Wave-1/2 recheck](WAVE1_RECHECK_WAVE2_CONTINUATION_2026-10-09.md) and [package status](../product/PACKAGE_STATUS.toml) retain their exact evidence scope. Package execution-chain fields are obligation cross-references, not a replacement for the phase DAG or an assertion that a historical PR is executable.
+PR #344 preserves substantive #266 work as a frozen read-only donor. Merge source-free #351 first, then open only the first dependency-ready #354 child from that new `main` with extraction provenance. #355/#356/#358 are PROGRAM parents and cannot authorize broad source branches.
+
+Separate follow-ups discovered during #266:
+
+```text
+#343 non-mutating redb inspection
+#345 record-artifact unknown-outcome staging retention
+#346 remaining all-target fixture compilation debt
+#347 native original-object unlink/late cleanup
+#348 original request to durable-effect reconciliation
+```
+
+They are not implicit blockers for every root-admission tranche. Each must demonstrate an exact `B0` compile/safety dependency or remain a follow-up with affected behavior unavailable/fail-closed.
+
+After the minimum typed root-admission API and required immediate callers merge, `#235.core` may begin from the resulting `main`. It does not wait for complete #266 programme, harness, cleanup, redb inspection or release qualification.
+
+## One-manager merge train
+
+One manager owns one writer worktree, commits, merges, dependency pins and `Cargo.lock`. Five to ten subagents perform bounded read/research/review assignments. One writer does not mean one giant PR.
+
+```text
+ready slice
+→ SCOPE_FROZEN by second source commit
+→ bounded subagent reports
+→ manager implementation
+→ changed owners + immediate reverse-consumer check/Clippy
+→ affected static guards + deferred integrated test inventory
+→ formal exact-final-SHA review
+→ merge
+→ publish new main SHA
+→ create next writer branch from new main
+```
+
+No stacked source PRs. New findings are classified `B0`, `F1`, `F2`, `D` or `Q`; they do not automatically widen the active branch.
+
+PROCESS/DOCS are source-free. Source merges use minimum production check/strict Clippy/static guards; tests are specified with their owner and deferred to integrated qualification. Reuse existing broad debt rather than rebuilding harnesses per slice. Formal final-SHA review records no unresolved B0/P1 and explicit residual dispositions; self-approval is not required. After #351, three bounded source merges precede another process programme PR unless a verified B0 blocks coding.
+
+## Programme bindings
+
+| Programme | Executable source owner |
+|---|---|
+| Root admission | #266 bounded tranches; residuals #343/#345/#346/#347/#348 |
+| Provider edge | #235.core then #332 native cutover |
+| Configuration | #238 parser then #333 durable apply |
+| Revision storage | #330, after #307–#309 secret/crypto owners |
+| Preparation | #331, consuming delivered #257 |
+| Qdrant process | #334 implementation, #310 role wiring, #119/#264/#215 acceptance |
+| Git | #335 |
+| Overlay/LSP | #336 core then optional leaf |
+| Acceptance/release | #233/#234/#240/#242/#215, then #137/#140 human publication |
+
+Historical programme/tracking/gate PR branches are not implementation bases. They are closed after current owner links are preserved; their discussions remain history.
 
 ## Technical findings and donors
 
-[Master technical audit](ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md) and specialized source audits in this directory retain the F01–F154 obligation set. Older source snapshots, candidate versions and two-manager/parallel-writer launch text are historical. The new completion map routes findings to actual owners; it does not declare unfixed findings resolved.
+[Master technical audit](ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md) and specialized audits retain unresolved findings. Older snapshots and candidate versions are evidence, not execution authority.
 
-[Wave-2 donor register](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md) supplies exact earlier decisions; the whole-project map supplies later primary documentation and boundaries. Recheck exact versions/features/advisories when adopting or changing a dependency, not before every unrelated task. Do not copy a large framework when the useful part is a small library, standard or invariant.
+[Wave-2 donor register](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md) records prior decisions. Recheck exact versions, features and advisories when adopting or changing a dependency. Prefer the smallest mature donor that removes custom low-level code; donor types and authority stay behind ELIOT boundaries.
 
-## Noncircular completion
+## Evidence boundary
 
-Configured is not Operational; Operational is not ReleaseQualified. Product candidate startup must not import or wait for its own future benchmark/attestation. Build the packaging/runner/verifier tools, freeze a candidate and plan, execute installed cases, independently verify raw subjects, then publish the exact tested bytes after human approval. Optional profiles remain individually declared and unfinished when not shipped.
+Compilation is necessary but not qualification. Source delivery, integration, checked source, native qualification, installed qualification and release are distinct states. Preserve failures, partial results, unavailable cases and NOT_RUN outcomes.
 
-## Evidence limit
-
-No documentation or issue rewrite is a Cargo/Clippy/native/Qdrant/installed/scale/release PASS. Author-reported scoped checks remain scoped; failures, partial, unavailable and not-run results stay visible. This audit cutover changes no Rust, manifests, lockfile, workflows or product behavior. It does not claim a new full line-by-line code review or absence of all defects.
-
-Historical `swarm/**`, handoff packets, old branch trees and Architecture Part II are archaeology/obligation records only. They cannot create a second source, client, catalog, journal, index, security or execution authority.
+No documentation, issue rewrite, source guard, signature, review badge or author comment creates a Cargo/Clippy/native/Qdrant/installed/scale/release PASS. Historical `swarm/**`, handoff packets, Architecture Part II and closed packet PRs are archaeology and obligation records only.
