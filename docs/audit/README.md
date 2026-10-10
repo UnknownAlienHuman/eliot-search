@@ -1,44 +1,44 @@
 # ELIOT Search: audit and implementation entrypoint
 
 **Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.  
+**Live programme queue:** issue #352.  
 **Active source programme:** #266, draft PR #344.  
-**Process correction:** #349 and #350.  
+**Process correction:** #349 and #350 / PR #351.  
 **Product/release:** not qualified.
 
-Do not reset an active manager worktree to a dated audit SHA. Before writing source, resolve the actual current `main`, active PR head and exact issue ownership.
+Do not reset an active manager worktree to a dated audit SHA. Resolve actual `main`, active PR head and exact owner before writing source.
 
-## Start here
+## Authority by purpose
 
-1. [Bounded execution protocol](../product/EXECUTION_PROTOCOL.md): mandatory work-item classes, Definition of Ready, `SCOPE_FROZEN`, finding triage, PR review budget, source gates and merge discipline.
-2. [Whole-project completion map](../product/PROJECT_COMPLETION.md): implementation-to-release DAG and source owners.
-3. [Root instructions](../../AGENTS.md), [architecture](../architecture/README.md), accepted ADRs and nearest package instructions.
-4. [Coordinator #97](https://github.com/UnknownAlienHuman/eliot-search/pull/97), exact active implementation issue and current source.
-5. [Wave-2 packet](WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md) and [package exceptions](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md) only for still-applicable package/path details.
-6. [Completion audit](PROJECT_COMPLETION_AUDIT_2026-10-09.md) and specialized source audits for unresolved technical findings.
+1. [Root instructions](../../AGENTS.md), [Architecture Part I](../architecture/README.md), accepted ADRs and nearest package instructions define product semantics and ownership.
+2. [Bounded execution protocol](../product/EXECUTION_PROTOCOL.md) defines work-item classes, Definition of Ready, `SCOPE_FROZEN`, finding triage, review budgets, source gates and serial merge discipline.
+3. [Programme issue #352](https://github.com/UnknownAlienHuman/eliot-search/issues/352), [launch gate](AGENT_LAUNCH_GATE_2026-10-09.md), the exact active issue/PR and current source define the **live writer queue**.
+4. [Whole-project completion map](../product/PROJECT_COMPLETION.md) is the long-range obligation/dependency graph. Its dated “next task”, audit SHA or local stage wording is not live scheduling authority.
+5. [Completion audit](PROJECT_COMPLETION_AUDIT_2026-10-09.md) and specialized audits retain unresolved technical evidence.
 
-The execution protocol controls repository workflow. The completion map controls ordering. Architecture and package owners control product semantics. A programme issue may remain open while a coherent source slice merges.
+When the long-range map is stale, follow #352, the launch gate, merged artifacts and the exact issue; update the map separately. Never repeat delivered work because an old row still looks active.
 
-## Current delivered source
+## Delivered source checkpoints
 
-| Task | PR | Result |
+| Task | PR | Actual delivery |
 |---|---:|---|
 | #317 | #318 | Existing xtask source-gate repairs |
 | #237 | #319 | Bounded canonical encoder, real digest APIs and source-classification guard |
-| #253 | #322 | Unicode 18 full-fold decision/goldens; not a production tokenizer |
+| #253 | #322 | Unicode 18 full-fold decision/goldens; not a tokenizer |
 | #258 | #323 | Shared indexed payload/schema/eligibility/epoch contract |
-| #250 | #326 | Bounded Cargo metadata and package-status validation |
-| #256 | #338 | Stateless S11 point-identity profile; legacy retirement remains #329 |
-| #339 | #340 | Equivalent Windows Cargo path-prefix handling in Qdrant boundary tooling |
-| #327 | #341 | Rustls 0.23.45 security patch; live Qdrant requalification remains later |
+| #250 | #326 | Bounded Cargo metadata and package-status/dependency validation |
+| #256 | #338 | Stateless S11 point identity; legacy retirement remains #329 |
+| #339 | #340 | Windows Cargo path-prefix handling in Qdrant tooling |
+| #327 | #341 | Rustls 0.23.45 security repair; live requalification remains later |
 | #257 | #342 | Source-verified UnitSet v3; durable preparation integration remains #331 |
 
-These are scoped source deliveries. None is whole-product, installed, Qdrant or release acceptance.
+These are scoped source deliveries, not installed/native/Qdrant/full-product acceptance.
 
 ## Current active work
 
-PR #344 attempts #266 typed data-root admission and explicit initialization. It contains substantive code, but at its current published head it has exceeded the bounded-review thresholds and remains draft. Process issue #349 requires freezing or splitting it. The repository-wide rule is #350 and this protocol.
+PR #344 contains substantive #266 typed root-admission work, but exceeded every default review threshold: 119 changed files, more than 11,000 additions and several owner families. Issues #349/#350 require scope freeze or serial splitting.
 
-Current separate follow-ups discovered during #266 include:
+Separate follow-ups discovered during #266:
 
 ```text
 #343 non-mutating redb inspection
@@ -48,52 +48,53 @@ Current separate follow-ups discovered during #266 include:
 #348 original request to durable-effect reconciliation
 ```
 
-They are not implicit blockers for every root-admission source tranche. Each must demonstrate a `B0` dependency or remain a follow-up with the affected behavior fail-closed/unavailable.
+They are not implicit blockers for every root-admission tranche. Each must demonstrate an exact `B0` compile/safety dependency or remain a follow-up with affected behavior unavailable/fail-closed.
 
-After the minimum typed root-admission API and required immediate callers merge, `#235.core` may begin from the resulting `main`. It does not wait for complete #266 programme, harness, cleanup, redb-inspection or final qualification closure.
+After the minimum typed root-admission API and required immediate callers merge, `#235.core` may begin from the resulting `main`. It does not wait for complete #266 programme, harness, cleanup, redb inspection or release qualification.
 
-## One-manager execution
+## One-manager merge train
 
-One manager owns one writer worktree, dependency pins, `Cargo.lock`, commits and merges. Five to ten subagents perform bounded read/research/review assignments. The single-writer model does not justify a large PR.
+One manager owns one writer worktree, commits, merges, dependency pins and `Cargo.lock`. Five to ten subagents perform bounded read/research/review assignments. One writer does not mean one giant PR.
 
 ```text
 ready slice
-→ scope freeze
+→ SCOPE_FROZEN by second source commit
 → bounded subagent reports
 → manager implementation
 → changed owners + immediate reverse-consumer check/Clippy
 → focused causal fixtures
-→ formal review at exact final SHA
+→ formal exact-final-SHA review
 → merge
-→ new main SHA
+→ publish new main SHA
+→ create next writer branch from new main
 ```
 
-New findings are classified `B0`, `F1`, `F2`, `D` or `Q`. They do not automatically widen the active branch.
+No stacked source PRs. New findings are classified `B0`, `F1`, `F2`, `D` or `Q`; they do not automatically widen the active branch.
 
 ## Programme bindings
 
 | Programme | Executable source owner |
 |---|---|
-| Qdrant process / PR #120 | #334 implementation, #310 role wiring, #119/#264 acceptance |
-| Git / PR #129 | #335 |
-| Overlay/LSP / PR #130 | #336 core then optional leaf |
-| Revision / PR #111 | #330, with #307–#309 secret/crypto prerequisites |
-| Preparation / PR #113 | #331, consuming delivered #257 |
-| Config / PR #109 | #238 parser then #333 durable apply |
-| Provider edge / PR #116 | #235.core then #332 native cutover |
-| Acceptance / PR #137 | #233/#234/#240/#215, only after implementation closure |
-| Release / PR #140 | #242 candidate, #215 run, #234/#137 review, human publication |
+| Root admission | #266 bounded tranches; residuals #343/#345/#346/#347/#348 |
+| Provider edge | #235.core then #332 native cutover |
+| Configuration | #238 parser then #333 durable apply |
+| Revision storage | #330, after #307–#309 secret/crypto owners |
+| Preparation | #331, consuming delivered #257 |
+| Qdrant process | #334 implementation, #310 role wiring, #119/#264/#215 acceptance |
+| Git | #335 |
+| Overlay/LSP | #336 core then optional leaf |
+| Acceptance/release | #233/#234/#240/#242/#215, then #137/#140 human publication |
 
-Historical programme/tracking/gate PR branches are not implementation bases. Under the current protocol, non-mergeable PRs should be closed after their obligations are preserved in current issues/docs.
+Historical programme/tracking/gate PR branches are not implementation bases. They are closed after current owner links are preserved; their discussions remain history.
 
 ## Technical findings and donors
 
-[Master technical audit](ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md) and specialized audits retain unresolved source findings. Older snapshots and candidate versions are evidence, not current execution authority.
+[Master technical audit](ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md) and specialized audits retain unresolved findings. Older snapshots and candidate versions are evidence, not execution authority.
 
-[Wave-2 donor register](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md) records prior decisions. Recheck exact versions, features and advisories when actually adopting or changing a dependency. Prefer the smallest mature donor that removes custom low-level code; donor types and authority remain behind ELIOT boundaries.
+[Wave-2 donor register](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md) records prior decisions. Recheck exact versions, features and advisories when adopting or changing a dependency. Prefer the smallest mature donor that removes custom low-level code; donor types and authority stay behind ELIOT boundaries.
 
 ## Evidence boundary
 
 Compilation is necessary but not qualification. Source delivery, integration, checked source, native qualification, installed qualification and release are distinct states. Preserve failures, partial results, unavailable cases and NOT_RUN outcomes.
 
-No documentation, issue rewrite, source guard, signature, review badge or author comment creates a Cargo/Clippy/native/Qdrant/installed/scale/release PASS. Historical `swarm/**`, handoff packets, Architecture Part II and non-mergeable packet PRs are archaeology and obligation records only.
+No documentation, issue rewrite, source guard, signature, review badge or author comment creates a Cargo/Clippy/native/Qdrant/installed/scale/release PASS. Historical `swarm/**`, handoff packets, Architecture Part II and closed packet PRs are archaeology and obligation records only.
