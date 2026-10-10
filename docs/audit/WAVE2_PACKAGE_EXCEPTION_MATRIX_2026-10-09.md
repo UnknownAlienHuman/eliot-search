@@ -1,43 +1,53 @@
 # Wave 2 package-instruction exception matrix — current revision
 
-**Authority:** root `AGENTS.md`, exact source issue, [bounded execution protocol](../product/EXECUTION_PROTOCOL.md), and this matrix.  
+**Authority:** root `AGENTS.md`, exact source issue, [bounded execution protocol](../product/EXECUTION_PROTOCOL.md), programme issue #352 and this matrix.  
 **Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
 
-One manager owns commits, root dependency pins and `Cargo.lock`. An exception permits one frozen source slice; it does not authorize the whole issue/programme in one PR.
+One manager owns commits, root dependency pins and `Cargo.lock`. An exception permits one frozen source slice; it does not authorize an entire issue/programme in one PR.
 
 | Issue / slice | Primary ownership | Exact additional scope | Still forbidden |
 |---|---|---|---|
 | #256 completed | `search-point-identity` | focused profile/docs/fixtures and exact ledger rows | deleting imported legacy exports before #329; daemon/planner rewrite |
 | #257 completed | `search-unitizer` | one named materializer ingress, focused docs/fixtures/ledger | daemon/planner/store integration; provisional second UnitSet |
 | #266.A root admission | `search-runtime-owner`, daemon `owner_composition` | existing-only root open helpers, explicit initialization, narrow immediate command/caller assembly | source/query/Qdrant/provider redesign; control schema; second root catalogue |
-| #266.B focused lifecycle proof | same owners after A | only production seams and fixtures required to prove A's lifecycle invariants | general harness repair; unrelated migration/recovery owners |
-| #266.C catalog evidence | owner-private catalog intent/recovery observation | retained input/release, bounded named inspection/discovery, exact focused callers | effect reconciliation, deletion qualification, redb repair, ordinary recovery authority |
+| #266.B focused lifecycle proof | same owners after A merges | only production seams and fixtures required to prove A's lifecycle invariants | general harness repair; unrelated migration/recovery owners |
+| #266.C catalog evidence | owner-private catalog intent/recovery observation after B merges | retained input/release, bounded named inspection/discovery, exact focused callers | effect reconciliation, deletion qualification, redb repair, ordinary recovery authority |
 | #235.core | new `search-provider-client` | typed CLI client move/deletion, workspace member/lockfile, narrow CLI wiring | daemon internals; TCP/token/line protocol promotion; native cutover |
-| #238 | `search-config` | exact TOML/Serde pins, docs, shared exact-byte SHA exception | runtime apply/readiness/argv; changing old digest semantics silently |
+| #238 | `search-config` | exact TOML/Serde pins, docs, shared exact-byte SHA exception | runtime apply/readiness/argv; silent old-digest change |
 | #241 | `search-source-admission` | exact GlobSet pin/lockfile/docs; shared digest compatibility API | ingestion/safe-reader/root/registry mutation; ignore walker |
 | #246 | `search-exact` | exact matcher pins/lockfile/docs | denominator/access/handles; regex successor work |
 | #252 | `search-lexical` | exact Unicode pins/lockfile/profile docs | prose/full fold; Qdrant migration; old-vector reinterpretation |
-| #226.markdown | materializer + unitizer | Markdown pin/lockfile/profile fixtures after #257/#331 interface | JATS/PDF/rendering; new UnitSet/document catalogue |
-| #226.jats | same owners after Markdown | XML pin/lockfile/JATS fixtures | Markdown rewrite; dynamic XML tree; external entities |
+| #226.markdown | materializer + unitizer | Markdown pin/lockfile/profile fixtures after required preparation interface | JATS/PDF/rendering; new UnitSet/document catalogue |
+| #226.jats | same owners after Markdown merges | XML pin/lockfile/JATS fixtures | Markdown rewrite; dynamic XML tree; external entities |
 | #329 after #259/#262 | point-identity legacy retirement | migrated planner/bridge imports; exact daemon projection caller/fixtures; ledger/docs | new schema/transport/general daemon rewrite; qualification claim |
 
 Rows name ownership envelopes. The exact issue and `SCOPE_FROZEN` block narrow them further. All unlisted nearest-package prohibitions remain effective.
 
-## Current merge order
+## Live queue and long-range graph
+
+Programme issue #352 and the launch gate define the live writer sequence. `PROJECT_COMPLETION.md` is the long-range obligation graph; stale “next task” or base text inside it is not current scheduling authority.
+
+## Current serial merge train
 
 ```text
-#266 bounded tranches
-→ minimum typed root API on main
+#266.A merge
+→ #266.B branch from new main and merge if required
+→ #266.C branch from next main and merge if required
+→ minimum typed root API available
 → #235.core
 → #238 → #241 → #246 → #252
 → #226 Markdown → #226 JATS
 ```
 
-`#235.core` requires the minimum root API it actually consumes. It does not wait for every #266 follow-up, harness, native cleanup, redb inspection or final qualification item.
+Do not open B while A is unmerged, C while B is unmerged, or any other stacked source PR. Read-only research may proceed without a source branch.
 
-## #266 split boundary
+`#235.core` requires only the minimum root API it actually consumes. It does not wait for every #266 follow-up, harness, cleanup, redb inspection or final qualification item.
 
-PR #344 exceeded the default review budget. Process issues #349/#350 require scope freeze or split. The following separate issues remain outside #266 source tranches unless an exact `B0` dependency is proved:
+## #266 follow-up boundary
+
+PR #344 exceeded every default split trigger. Issues #349/#350 require scope freeze or serial extraction.
+
+Separate unless an exact `B0` dependency is proved:
 
 ```text
 #343 redb existing-only non-mutating inspection
@@ -47,11 +57,11 @@ PR #344 exceeded the default review budget. Process issues #349/#350 require sco
 #348 original request to durable-effect reconciliation
 ```
 
-The #266 tranches may keep these operations unavailable/fail-closed. They may not fabricate success, automatically clear evidence or widen ordinary authority.
+The #266 tranches may keep these operations unavailable/fail-closed. They may not fabricate success, clear evidence automatically or widen ordinary authority.
 
 ## Review budget and amendment rule
 
-Default split triggers from the execution protocol:
+Default split triggers:
 
 ```text
 one primary owner
@@ -61,15 +71,17 @@ at most 2,500 changed production lines
 at most one persisted migration or one cross-owner cutover
 ```
 
-When a threshold is crossed, stop feature work and split. A new “narrow continuation” comment does not amend a frozen slice. A reviewed exception must precede additional source changes and must name why the result cannot be split safely.
+Crossing a trigger means stop feature work. Select, open and merge tranche 1. Create tranche 2 only from the newly merged `main`. A new “narrow continuation” comment does not amend a frozen slice.
+
+A reviewed exception must precede additional source changes and state why the result cannot be split safely.
 
 ## Build-safe identity migration
 
-Delivered #256 added S11 without breaking current consumers. Existing legacy APIs remain unchanged and explicitly legacy only until #259/#262 cut consumers over. #329 removes old callers/exports and exact ledger exceptions before #264. No normal new-generation path may fall back to legacy identity.
+Delivered #256 added S11 without breaking current consumers. Existing legacy APIs remain unchanged and explicitly legacy until #259/#262 cut consumers over. #329 removes old callers/exports and exact ledger exceptions before #264. No normal new-generation path may fall back to legacy identity.
 
 ## Exact-byte SHA compatibility
 
-`search_contracts::sha256_raw` computes a domain-separated digest. Old config fingerprints already contain their legacy framing and require exact-byte SHA parity.
+`search_contracts::sha256_raw` is domain-separated. Old config fingerprints already contain legacy framing and require exact-byte SHA parity.
 
 #238 may add one bounded exact-byte SHA-256 primitive inside the existing shared owner:
 
@@ -80,17 +92,17 @@ focused shared vectors/docs
 exact ledger refresh
 ```
 
-Use the existing private RustCrypto implementation, no prefix, finite input ceiling and official vectors. Config v2 uses a new canonical profile; v1 compatibility cannot be relabelled as v2.
+Use the existing private RustCrypto implementation, no prefix, finite input ceiling and official vectors. Config v2 uses a new canonical profile; v1 cannot be relabelled v2.
 
 ## Dependency and ledger discipline
 
-The manager verifies exact source/checksum/license/MSRV/features/advisories only when adopting or changing a dependency. Reuse accepted pins. Resolve root manifest/lock changes once per slice.
+Verify exact source/checksum/license/MSRV/features/advisories only when adopting or changing a dependency. Reuse accepted pins. Resolve root manifest/lock changes once per slice.
 
-Refresh only exact reviewed ledger rows. Issue closure does not prove every prior occurrence migrated. Retained legacy or pending sites keep their real executable owner.
+Refresh only exact reviewed ledger rows. Issue closure does not prove every prior occurrence migrated. Retained legacy or pending sites keep their real owner.
 
 ## Finding routing
 
-After `SCOPE_FROZEN`, classify every discovery:
+After `SCOPE_FROZEN`:
 
 ```text
 B0 same-slice compile/safety blocker
