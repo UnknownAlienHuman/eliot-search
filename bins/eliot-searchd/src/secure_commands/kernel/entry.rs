@@ -7,7 +7,11 @@ use super::support::{help, is_persistent_command};
 
 /// Intercepts every persistent DIRECT one-shot command plus primary help.
 pub fn maybe_run() -> Option<ExitCode> {
-    let arguments = env::args_os().skip(1).collect::<Vec<_>>();
+    let raw = env::args_os().skip(1).collect::<Vec<_>>();
+    let (arguments, _) = match crate::config_composition::strip_config_args_os(&raw) {
+        Ok(split) => split,
+        Err(error) => return Some(emit_process_error(&error)),
+    };
     let command = arguments.first()?.to_str()?;
     if matches!(command, "--help" | "-h") {
         return Some(if arguments.len() == 1 {

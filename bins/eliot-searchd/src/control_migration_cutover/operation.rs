@@ -5,21 +5,18 @@ use std::time::{Duration, Instant};
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
     CONTROL_CUTOVER_STAGED_DATABASE_SCHEMA as STAGED_DATABASE_SCHEMA,
-    ControlCutoverMarker as CutoverMarker,
-    ControlCutoverReplayDecision as ReplayDecision,
-    classify_control_cutover_replay as check_replay,
-    render_control_cutover_committed_receipt,
+    ControlCutoverMarker as CutoverMarker, ControlCutoverReplayDecision as ReplayDecision,
+    classify_control_cutover_replay as check_replay, render_control_cutover_committed_receipt,
     render_control_cutover_rollback_receipt,
 };
 
+use super::super::{DirectStore, MigrationRoot, check_deadline};
 use super::marker_io::{
-    CUTOVER_ALREADY_COMMITTED, CUTOVER_CORRUPT,
-    CUTOVER_READBACK_MISMATCH, MarkerState, PublishOutcome, check_rollback,
-    publish_marker, quarantined, resolve_marker,
+    CUTOVER_ALREADY_COMMITTED, CUTOVER_CORRUPT, CUTOVER_READBACK_MISMATCH, MarkerState,
+    PublishOutcome, check_rollback, publish_marker, quarantined, resolve_marker,
 };
 use super::status::cutover_status_json;
-use super::super::{DirectStore, check_deadline};
-use crate::development::DataRootGuard;
+use crate::development::{DataRootGuard, InspectedDataRoot};
 
 const CUTOVER_DEADLINE: Duration = Duration::from_secs(120);
 const CUTOVER_OWNER_MISMATCH: &str = "DIRECT_MIGRATION_CUTOVER_OWNER_MISMATCH";
@@ -75,7 +72,7 @@ impl DirectStore {
         let control = root.join("control");
         let staged = Self::stage_mapping_artifact_typed(
             &self.inner,
-            &self.root,
+            MigrationRoot::Owned(owner),
             target,
             &control,
             "control/",
@@ -142,16 +139,13 @@ impl DirectStore {
         ))
     }
 
-    /// Performs explicit rollback before cutover.
+    /// Performs explicit rollback before cutover; this is not named recovery.
     ///
     /// The operation succeeds only when no marker exists and binds the live
     /// file snapshot into a no-op receipt. A committed marker is refused and a
     /// torn marker quarantines; neither is deleted here.
     #[allow(dead_code)]
-    pub(crate) fn rollback_control_cutover(
-        &self,
-        owner: &DataRootGuard,
-    ) -> Result<String, String> {
+    pub(crate) fn rollback_control_cutover(&self, owner: &DataRootGuard) -> Result<String, String> {
         let deadline = Instant::now()
             .checked_add(CUTOVER_DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
@@ -166,9 +160,12 @@ impl DirectStore {
         Ok(render_control_cutover_rollback_receipt(&snapshot))
     }
 
-    /// Returns read-only cutover status suitable for high-frequency polling.
+    /// Returns read-only cutover status under existing inspection admission.
+    ///
+    /// Quarantined or abandoned owners must first pass a distinct exact recovery
+    /// admission; this method cannot construct that authority from a store path.
     #[allow(dead_code)]
-    pub(crate) fn inspect_control_cutover_status(&self) -> String {
-        cutover_status_json(&self.root)
+    pub(crate) fn inspect_control_cutover_status(cap: &InspectedDataRoot) -> String {
+        cutover_status_json(cap.canonical_root())
     }
 }

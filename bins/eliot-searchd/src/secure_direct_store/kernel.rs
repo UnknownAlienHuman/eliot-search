@@ -4,6 +4,7 @@
 mod catalog;
 #[path = "kernel/lifecycle.rs"]
 mod lifecycle;
+pub(crate) use lifecycle::{MutatingStore, ReadOnlyStore};
 #[path = "kernel/read.rs"]
 mod read;
 #[path = "kernel/search.rs"]

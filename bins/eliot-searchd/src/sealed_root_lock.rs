@@ -66,6 +66,19 @@ impl SealedRootLease {
         })
     }
 
+    /// Co-holds an already-existing exclusion without creating, writing or
+    /// clearing its marker. The file is retained unchanged on drop/unwind.
+    pub(crate) fn acquire_existing(data_root: &Path) -> Result<Self, SealedRootLockError> {
+        Ok(Self {
+            inner: platform::PlatformLease::acquire_existing(data_root)?,
+        })
+    }
+
+    /// Verifies the currently named object still denotes the held exclusion.
+    pub(crate) fn verify_existing(&self, data_root: &Path) -> Result<(), SealedRootLockError> {
+        self.inner.verify_existing(data_root)
+    }
+
     /// Whether the OS exclusion primitive remains held by this process.
     #[must_use]
     pub const fn is_held(&self) -> bool {
@@ -94,6 +107,14 @@ mod platform {
             Err(SealedRootLockError::UnsupportedPlatform)
         }
 
+        pub(super) fn acquire_existing(_data_root: &Path) -> Result<Self, SealedRootLockError> {
+            Err(SealedRootLockError::UnsupportedPlatform)
+        }
+
+        pub(super) fn verify_existing(&self, _data_root: &Path) -> Result<(), SealedRootLockError> {
+            Err(SealedRootLockError::UnsupportedPlatform)
+        }
+
         pub(super) const fn is_held(&self) -> bool {
             false
         }
@@ -117,6 +138,7 @@ mod platform {
     pub(super) struct PlatformLease {
         file: File,
         held: bool,
+        clear_marker_on_drop: bool,
     }
 
     impl PlatformLease {
@@ -137,9 +159,9 @@ mod platform {
                 && (metadata.file_type().is_symlink()
                     || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
                     || !metadata.is_file())
-                {
-                    return Err(SealedRootLockError::ReparsePointDenied);
-                }
+            {
+                return Err(SealedRootLockError::ReparsePointDenied);
+            }
             let mut file = OpenOptions::new()
                 .create(true)
                 .read(true)
@@ -150,8 +172,7 @@ mod platform {
             let metadata = file
                 .metadata()
                 .map_err(|_| SealedRootLockError::IoFailure)?;
-            if !metadata.is_file()
-                || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+            if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
             {
                 return Err(SealedRootLockError::ReparsePointDenied);
             }
@@ -188,7 +209,86 @@ mod platform {
                 let _ = file.unlock();
                 return Err(SealedRootLockError::IoFailure);
             }
-            Ok(Self { file, held: true })
+            Ok(Self {
+                file,
+                held: true,
+                clear_marker_on_drop: true,
+            })
+        }
+
+        pub(super) fn acquire_existing(data_root: &Path) -> Result<Self, SealedRootLockError> {
+            let invalid = || SealedRootLockError::ReparsePointDenied;
+            let root = fs::symlink_metadata(data_root)
+                .map_err(|_| SealedRootLockError::InvalidDataRoot)?;
+            if !root.is_dir()
+                || root.file_type().is_symlink()
+                || root.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+            {
+                return Err(invalid());
+            }
+            let lock_path = data_root.join(LOCK_FILE);
+            let before =
+                fs::symlink_metadata(&lock_path).map_err(|_| SealedRootLockError::IoFailure)?;
+            if !before.is_file()
+                || before.file_type().is_symlink()
+                || before.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+            {
+                return Err(invalid());
+            }
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+                .open(&lock_path)
+                .map_err(|_| SealedRootLockError::IoFailure)?;
+            let opened = file
+                .metadata()
+                .map_err(|_| SealedRootLockError::IoFailure)?;
+            if !opened.is_file() || opened.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return Err(invalid());
+            }
+            file.try_lock().map_err(|error| match error {
+                TryLockError::WouldBlock => SealedRootLockError::AlreadyOwned,
+                TryLockError::Error(_) => SealedRootLockError::LockFailure,
+            })?;
+            let current = File::open(&lock_path).map_err(|_| SealedRootLockError::IoFailure)?;
+            let original = eliot_searchd::native_file::observe(&file)
+                .map_err(|_| SealedRootLockError::IoFailure)?;
+            let observed = eliot_searchd::native_file::observe(&current)
+                .map_err(|_| SealedRootLockError::IoFailure)?;
+            if original.volume_serial != observed.volume_serial
+                || original.file_index != observed.file_index
+            {
+                return Err(invalid());
+            }
+            Ok(Self {
+                file,
+                held: true,
+                clear_marker_on_drop: false,
+            })
+        }
+
+        pub(super) fn verify_existing(&self, data_root: &Path) -> Result<(), SealedRootLockError> {
+            let path = data_root.join(LOCK_FILE);
+            let metadata =
+                fs::symlink_metadata(&path).map_err(|_| SealedRootLockError::IoFailure)?;
+            if !metadata.is_file()
+                || metadata.file_type().is_symlink()
+                || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+            {
+                return Err(SealedRootLockError::ReparsePointDenied);
+            }
+            let current = File::open(&path).map_err(|_| SealedRootLockError::IoFailure)?;
+            let original = eliot_searchd::native_file::observe(&self.file)
+                .map_err(|_| SealedRootLockError::IoFailure)?;
+            let observed = eliot_searchd::native_file::observe(&current)
+                .map_err(|_| SealedRootLockError::IoFailure)?;
+            if original.volume_serial != observed.volume_serial
+                || original.file_index != observed.file_index
+            {
+                return Err(SealedRootLockError::ReparsePointDenied);
+            }
+            Ok(())
         }
 
         pub(super) const fn is_held(&self) -> bool {
@@ -199,8 +299,10 @@ mod platform {
     impl Drop for PlatformLease {
         fn drop(&mut self) {
             if self.held {
-                let _ = self.file.set_len(0);
-                let _ = self.file.sync_all();
+                if self.clear_marker_on_drop {
+                    let _ = self.file.set_len(0);
+                    let _ = self.file.sync_all();
+                }
                 let _ = self.file.unlock();
                 self.held = false;
             }

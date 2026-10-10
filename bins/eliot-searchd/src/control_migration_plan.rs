@@ -7,25 +7,46 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
-    SourceImportRecordArtifact, SourceImportRecordArtifactError,
-    SourceMigrationPlanLocation, SourceMigrationStagedPlan,
-    inspect_source_import_record_artifact,
+    SourceImportRecordArtifact, SourceImportRecordArtifactError, SourceMigrationPlanLocation,
+    SourceMigrationStagedPlan, inspect_source_import_record_artifact,
 };
 
-use super::super::storage_io::{
-    ensure_child_directory, ensure_directory, sync_directory,
-};
+use super::super::storage_io::{ensure_child_directory, ensure_directory, sync_directory};
 use super::{DirectStore, check_deadline, sha256};
-use crate::development::DataRootGuard;
+use crate::development::{DataRootGuard, InspectedDataRoot};
 
-#[path = "control_migration_redb.rs"]
-mod redb_import;
 #[path = "control_migration_content.rs"]
 mod content_readback;
 #[path = "control_migration_cutover.rs"]
 mod cutover;
+#[path = "control_migration_redb.rs"]
+mod redb_import;
 
 const PLAN_DEADLINE: Duration = Duration::from_secs(120);
+
+/// Borrows an already-admitted root; paths cannot construct migration authority.
+pub(super) enum MigrationRoot<'a> {
+    /// Source-preserving inspection; failures must not arm source quarantine.
+    Inspected(&'a InspectedDataRoot),
+    /// Existing mutation under the single live native owner.
+    Owned(&'a DataRootGuard),
+}
+
+impl MigrationRoot<'_> {
+    fn canonical_root(&self) -> &Path {
+        match self {
+            Self::Inspected(cap) => cap.canonical_root(),
+            Self::Owned(owner) => owner.canonical_root(),
+        }
+    }
+
+    fn gate_staging(&self, target: SourceNamespaceId, snapshot: [u8; 32]) -> Result<(), String> {
+        match self {
+            Self::Inspected(cap) => cutover::inspect_staging_against_marker(cap, target, snapshot),
+            Self::Owned(owner) => cutover::gate_staging_owned(owner, target, snapshot),
+        }
+    }
+}
 
 impl DirectStore {
     /// Store a deterministic, content-free source mapping draft. The explicit UUID
@@ -45,9 +66,7 @@ impl DirectStore {
         }
         crate::catalog_presence::require_existing(&self.root)?;
         let header = self.inner.source_mapping_header(target)?;
-        if self.inner.verify_migration_snapshot(deadline)?
-            != header.catalog_snapshot
-        {
+        if self.inner.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         let control = self.root.join("control");
@@ -60,7 +79,7 @@ impl DirectStore {
         sync_directory(&control);
         Self::stage_mapping_artifact(
             &self.inner,
-            &self.root,
+            MigrationRoot::Owned(owner),
             target,
             &directory,
             "control/migration-plans/",
@@ -68,14 +87,41 @@ impl DirectStore {
         )
     }
 
+    /// Stages into the caller's separate existing output directory.
+    ///
+    /// Source admission stays borrowed for migration-grade replay and readback.
+    /// Target UUID, source snapshot, record/content chains and output-artifact
+    /// verification remain the existing input proof; none is recovery authority.
+    pub(crate) fn stage_mapping_artifact_inspected(
+        cap: &InspectedDataRoot,
+        target: SourceNamespaceId,
+        directory: &Path,
+        deadline: Instant,
+    ) -> Result<String, String> {
+        crate::plaintext_direct_store::DirectStore::with_existing_mapping_source(
+            cap.canonical_root(),
+            deadline,
+            |source| {
+                Self::stage_mapping_artifact(
+                    source,
+                    MigrationRoot::Inspected(cap),
+                    target,
+                    directory,
+                    "",
+                    deadline,
+                )
+            },
+        )
+    }
+
     /// Shared artifact writer for the live owner and offline entrypoint. The caller
-    /// holds `source_root`'s ordinary lock and opened source from that exact root.
+    /// borrows typed source admission and opened source from that exact root.
     /// No source store is initialized. Payload readback resolves existing Windows
     /// credentials only; no credential or source object is created or converted.
     /// A returned locator is relative to the explicitly named location scope.
-    pub(crate) fn stage_mapping_artifact(
+    fn stage_mapping_artifact(
         source: &crate::plaintext_direct_store::DirectStore,
-        source_root: &Path,
+        root: MigrationRoot<'_>,
         target: SourceNamespaceId,
         directory: &Path,
         locator_prefix: &'static str,
@@ -83,7 +129,7 @@ impl DirectStore {
     ) -> Result<String, String> {
         let plan = Self::stage_mapping_artifact_typed(
             source,
-            source_root,
+            root,
             target,
             directory,
             locator_prefix,
@@ -98,33 +144,26 @@ impl DirectStore {
     /// supplies source replay and qualified filesystem observations.
     pub(super) fn stage_mapping_artifact_typed(
         source: &crate::plaintext_direct_store::DirectStore,
-        source_root: &Path,
+        root: MigrationRoot<'_>,
         target: SourceNamespaceId,
         directory: &Path,
         locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<SourceMigrationStagedPlan, String> {
+        let source_root = root.canonical_root();
         let location = match locator_prefix {
             "" => SourceMigrationPlanLocation::ExplicitOutputDirectory,
-            "control/migration-plans/" => {
-                SourceMigrationPlanLocation::DataRootMigrationPlans
-            }
+            "control/migration-plans/" => SourceMigrationPlanLocation::DataRootMigrationPlans,
             "control/" => SourceMigrationPlanLocation::DataRootControl,
             _ => return Err("DIRECT_MIGRATION_OUTPUT_INVALID".to_owned()),
         };
         check_deadline(Some(deadline))?;
         ensure_directory(directory)?;
         let header = source.source_mapping_header(target)?;
-        if source.verify_migration_snapshot(deadline)?
-            != header.catalog_snapshot
-        {
+        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        cutover::gate_staging_against_marker(
-            source_root,
-            target,
-            header.catalog_snapshot,
-        )?;
+        root.gate_staging(target, header.catalog_snapshot)?;
 
         let temporary_name = temporary_staging_name()?;
         let mut artifact = SourceImportRecordArtifact::create(
@@ -135,9 +174,7 @@ impl DirectStore {
         )
         .map_err(plan_artifact_reason)?;
         let summary = source.compile_source_mapping(target, deadline, |row| {
-            artifact
-                .push(row, deadline)
-                .map_err(plan_artifact_reason)
+            artifact.push(row, deadline).map_err(plan_artifact_reason)
         })?;
         let frozen = artifact.freeze(deadline).map_err(plan_artifact_reason)?;
         let digest = *frozen.chain();
@@ -167,14 +204,8 @@ impl DirectStore {
         }
         let reused = published.reused();
 
-        let content = content_readback::stage(
-            source,
-            source_root,
-            target,
-            digest,
-            directory,
-            deadline,
-        )?;
+        let content =
+            content_readback::stage(source, source_root, target, digest, directory, deadline)?;
         let (database_name, database_reused) = redb_import::store(
             source,
             target,
@@ -184,16 +215,10 @@ impl DirectStore {
             &content,
             deadline,
         )?;
-        if source.verify_migration_snapshot(deadline)?
-            != header.catalog_snapshot
-        {
+        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        if verify_record_artifact(
-            &directory.join(&name),
-            bytes,
-            deadline,
-        )? != digest
+        if verify_record_artifact(&directory.join(&name), bytes, deadline)? != digest
             || verify_record_artifact(
                 &directory.join(&content.name),
                 content.encoded_bytes,
@@ -227,10 +252,7 @@ pub(super) fn temporary_staging_name() -> Result<String, String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|_| "DIRECT_MIGRATION_CLOCK_INVALID".to_owned())?
         .as_nanos();
-    Ok(format!(
-        ".source-map.{}.{stamp}.tmp",
-        std::process::id()
-    ))
+    Ok(format!(".source-map.{}.{stamp}.tmp", std::process::id()))
 }
 
 pub(super) fn verify_record_artifact(
@@ -248,9 +270,7 @@ pub(super) fn verify_record_artifact(
     Ok(*observed.chain())
 }
 
-fn plan_artifact_reason(
-    error: SourceImportRecordArtifactError<String>,
-) -> String {
+fn plan_artifact_reason(error: SourceImportRecordArtifactError<String>) -> String {
     match error {
         SourceImportRecordArtifactError::Platform(reason) => reason,
         SourceImportRecordArtifactError::DeadlineExceeded => {
@@ -264,9 +284,7 @@ fn plan_artifact_reason(
         | SourceImportRecordArtifactError::ObjectInvalid => {
             "DIRECT_MIGRATION_PLAN_OBJECT_INVALID".to_owned()
         }
-        SourceImportRecordArtifactError::Closed => {
-            "DIRECT_MIGRATION_PLAN_CLOSED".to_owned()
-        }
+        SourceImportRecordArtifactError::Closed => "DIRECT_MIGRATION_PLAN_CLOSED".to_owned(),
         SourceImportRecordArtifactError::WriteFailed => {
             "DIRECT_MIGRATION_PLAN_WRITE_FAILED".to_owned()
         }
@@ -294,8 +312,6 @@ fn plan_artifact_reason(
         SourceImportRecordArtifactError::CleanupFailed => {
             "DIRECT_MIGRATION_PLAN_CLEANUP_FAILED".to_owned()
         }
-        SourceImportRecordArtifactError::RecordChain(error) => {
-            error.code().to_owned()
-        }
+        SourceImportRecordArtifactError::RecordChain(error) => error.code().to_owned(),
     }
 }

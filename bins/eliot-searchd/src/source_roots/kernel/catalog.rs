@@ -4,20 +4,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use search_source_registry::{
-    CurrentWorkspaceTruth, ObservationGap, ReconciliationCursor,
-    SourceRootCurrentness, SourceRootCurrentnessError, SourceRootState,
-    WatcherHint, WatcherHintKind,
+    CurrentWorkspaceTruth, ObservationGap, ReconciliationCursor, SourceRootCurrentness,
+    SourceRootCurrentnessError, SourceRootState, WatcherHint, WatcherHintKind,
 };
 
 use super::error::SourceRootError;
 use super::model::{SourceRootEntry, SourceRootView};
 use super::path::{
-    canonicalize_configured_set, canonicalize_new_root,
-    ensure_no_overlap, ensure_outside_data_root, path_text, probe_root,
-    reject_symlink, sync_directory,
+    canonicalize_configured_set, canonicalize_new_root, ensure_no_overlap,
+    ensure_outside_data_root, path_text, probe_root, reject_symlink, sync_directory,
 };
 use super::registry::{
-    load_configured_paths, persist_entries, recover_interrupted_update,
+    load_configured_paths, migration_input, persist_entries, recover_interrupted_update,
 };
 use super::spec::MAX_SOURCE_ROOTS;
 
@@ -41,6 +39,29 @@ pub struct SourceRootCatalog {
 }
 
 impl SourceRootCatalog {
+    /// Restores only existing registration, refusing pending temp/backup state.
+    /// No directories, registration files or recovery writes are performed.
+    pub(crate) fn load_existing_owned(data_root: &Path) -> Result<Self, SourceRootError> {
+        reject_symlink(data_root)?;
+        let canonical = fs::canonicalize(data_root).map_err(SourceRootError::RootIo)?;
+        let registered = migration_input(data_root)?;
+        let entries = registered
+            .paths
+            .into_iter()
+            .map(|configured_path| SourceRootEntry { configured_path })
+            .collect::<Vec<_>>();
+        let currentness =
+            SourceRootCurrentness::new(entries.len()).map_err(map_currentness_error)?;
+        let mut catalog = Self {
+            config_path: canonical.join("control").join("source-roots.v1"),
+            entries,
+            excluded_data_root: Some(canonical),
+            currentness,
+        };
+        catalog.refresh();
+        Ok(catalog)
+    }
+
     /// Restores registration while the primary runtime owns the data root.
     pub(crate) fn load_owned(data_root: &Path) -> Result<Self, SourceRootError> {
         reject_symlink(data_root)?;
@@ -95,8 +116,8 @@ impl SourceRootCatalog {
             .into_iter()
             .map(|configured_path| SourceRootEntry { configured_path })
             .collect::<Vec<_>>();
-        let currentness = SourceRootCurrentness::new(entries.len())
-            .map_err(map_currentness_error)?;
+        let currentness =
+            SourceRootCurrentness::new(entries.len()).map_err(map_currentness_error)?;
         let mut catalog = Self {
             config_path,
             entries,
@@ -142,9 +163,7 @@ impl SourceRootCatalog {
         self.entries
             .iter()
             .enumerate()
-            .filter(|(index, _)| {
-                self.currentness.state(*index) == Some(SourceRootState::Available)
-            })
+            .filter(|(index, _)| self.currentness.state(*index) == Some(SourceRootState::Available))
             .map(|(index, entry)| (index, entry.configured_path.as_path()))
             .collect()
     }
@@ -156,10 +175,7 @@ impl SourceRootCatalog {
             .collect()
     }
 
-    pub(crate) fn add(
-        &mut self,
-        requested: &Path,
-    ) -> Result<SourceRootView, SourceRootError> {
+    pub(crate) fn add(&mut self, requested: &Path) -> Result<SourceRootView, SourceRootError> {
         self.ensure_usable()?;
         let canonical = canonicalize_new_root(requested)?;
         if let Some(data_root) = &self.excluded_data_root {
@@ -241,9 +257,7 @@ impl SourceRootCatalog {
             RegistrationMutation::Insert { position, state } => {
                 self.currentness.insert(position, state)
             }
-            RegistrationMutation::Remove { position } => {
-                self.currentness.remove(position)
-            }
+            RegistrationMutation::Remove { position } => self.currentness.remove(position),
         };
         if let Err(error) = result {
             self.currentness.mark_update_outcome_unknown();
@@ -325,14 +339,8 @@ impl SourceRootCatalog {
 
 fn map_currentness_error(error: SourceRootCurrentnessError) -> SourceRootError {
     match error {
-        SourceRootCurrentnessError::RootLimitExceeded => {
-            SourceRootError::RootLimitExceeded
-        }
-        SourceRootCurrentnessError::PositionOutOfRange => {
-            SourceRootError::CatalogCorrupt
-        }
-        SourceRootCurrentnessError::UpdateOutcomeUnknown => {
-            SourceRootError::UpdateOutcomeUnknown
-        }
+        SourceRootCurrentnessError::RootLimitExceeded => SourceRootError::RootLimitExceeded,
+        SourceRootCurrentnessError::PositionOutOfRange => SourceRootError::CatalogCorrupt,
+        SourceRootCurrentnessError::UpdateOutcomeUnknown => SourceRootError::UpdateOutcomeUnknown,
     }
 }

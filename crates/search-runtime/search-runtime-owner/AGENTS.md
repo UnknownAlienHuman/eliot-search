@@ -9,6 +9,11 @@ package slice. Traceability only: S7.1, S27.1, S33, H1, P01.
 
 ## Mission
 
+For #266, the single manager may integrate the pure closed root-admission policy with only the
+daemon adapters named in `docs/audit/WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md`. Filesystem,
+native exclusion, credentials and durable publication remain daemon effects. No second owner or
+path-created authority is permitted.
+
 Guarantee that exactly one process incarnation owns one data root and expose a fenced lifecycle to the daemon.
 
 ## Ownership

@@ -26,10 +26,18 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     if arguments.len() != expected {
         return Err("SOURCE_ROOT_USAGE_ERROR".to_owned());
     }
-    let mut owner = DataRootGuard::acquire(Path::new(&arguments[1]))?;
+    if command == "--source-roots" {
+        return DataRootGuard::with_inspection(Path::new(&arguments[1]), |root| {
+            emit_catalog_state(root.source_roots())
+        });
+    }
+    let mut owner = DataRootGuard::open_existing(Path::new(&arguments[1]))?;
+    crate::catalog_quarantine::arm(owner.canonical_root())?;
     match command {
         "--register-source-root" => {
-            let view = owner.source_roots_mut().add(Path::new(&arguments[2]))
+            let view = owner
+                .source_roots_mut()
+                .add(Path::new(&arguments[2]))
                 .map_err(|error| error.code().to_owned())?;
             println!(
                 "{{\"event\":\"source_root_registered\",\"path\":\"{}\",\"persisted\":true,\"access_granted\":false}}",
@@ -37,30 +45,46 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
             );
         }
         "--unregister-source-root" => {
-            let path = owner.source_roots_mut().remove(Path::new(&arguments[2]))
+            let path = owner
+                .source_roots_mut()
+                .remove(Path::new(&arguments[2]))
                 .map_err(|error| error.code().to_owned())?;
             println!(
                 "{{\"event\":\"source_root_unregistered\",\"path\":\"{}\",\"persisted\":true,\"retained_revisions_revoked\":false}}",
                 escape_json(&path),
             );
         }
-        "--sync-source-roots" => return sync_registered(&mut owner),
+        "--sync-source-roots" => {
+            sync_registered(&mut owner)?;
+            owner.clear_mutation_marker()?;
+            owner.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
+            owner.release_cleanly()?;
+            return Ok(());
+        }
         _ => {}
     }
-    emit_catalog_state(owner.source_roots())
+    emit_catalog_state(owner.source_roots())?;
+    owner.clear_mutation_marker()?;
+    owner.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
+    owner.release_cleanly()?;
+    Ok(())
 }
 
 fn emit_catalog_state(catalog: &SourceRootCatalog) -> Result<(), String> {
     for view in catalog.views().map_err(|error| error.code().to_owned())? {
         println!(
             "{{\"event\":\"source_root\",\"position\":{},\"path\":\"{}\",\"state\":\"{}\"}}",
-            view.index, escape_json(&view.path), view.state.code(),
+            view.index,
+            escape_json(&view.path),
+            view.state.code(),
         );
     }
     for gap in catalog.observation_gaps() {
         println!(
             "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
-            gap.position, gap.reason.code(), gap.state.code(),
+            gap.position,
+            gap.reason.code(),
+            gap.state.code(),
         );
     }
     let truth = catalog.current_workspace_truth();
@@ -114,16 +138,21 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
         for gap in owner.source_roots().observation_gaps() {
             println!(
                 "{{\"event\":\"source_gap\",\"position\":{},\"reason\":\"{}\",\"state\":\"{}\"}}",
-                gap.position, gap.reason.code(), gap.state.code(),
+                gap.position,
+                gap.reason.code(),
+                gap.state.code(),
             );
         }
         return Err("SOURCE_ROOTS_UNAVAILABLE".to_owned());
     }
-    let paths = owner.source_roots().available_paths().into_iter()
+    let paths = owner
+        .source_roots()
+        .available_paths()
+        .into_iter()
         .map(|(index, path)| (index, path.to_path_buf()))
         .collect::<Vec<_>>();
     let data_root = owner.canonical_root().to_path_buf();
-    let mut store = DirectStore::open(&data_root)?;
+    let mut store = DirectStore::open_existing_mutating(owner)?;
     let mut completed = 0_usize;
     for (index, path) in &paths {
         match sync_directory(&mut store, &data_root, path) {
@@ -136,8 +165,12 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
                         "\"changed_sources\":{},\"retired_sources\":{},",
                         "\"manifest_digest\":\"{}\"}}"
                     ),
-                    index, result.generation, result.indexed_sources,
-                    result.changed_sources, result.retired_sources, result.manifest_digest,
+                    index,
+                    result.generation,
+                    result.indexed_sources,
+                    result.changed_sources,
+                    result.retired_sources,
+                    result.manifest_digest,
                 );
             }
             Err(error) => {
@@ -146,7 +179,9 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
                 let reason = error.split(':').next().unwrap_or("SOURCE_ROOT_SYNC_FAILED");
                 println!(
                     "{{\"event\":\"source_roots_sync_failed\",\"position\":{},\"completed_roots\":{},\"effects_may_have_committed\":true,\"complete\":false,\"reason\":\"{}\"}}",
-                    index, completed, escape_json(reason),
+                    index,
+                    completed,
+                    escape_json(reason),
                 );
                 return Err("SOURCE_ROOT_SYNC_INCOMPLETE".to_owned());
             }
@@ -157,6 +192,8 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
     // Index truth stays unavailable in this shell, so the final proven claim
     // remains false while derived. An interrupted sync never reaches here, so
     // its effects stay explicitly incomplete with no current claim.
+    store.verify()?;
+    drop(store);
     owner.source_roots_mut().mark_reconciled_synced();
     let truth = owner.source_roots().current_workspace_truth();
     let proven = crate::provider_composition::evaluate_current_workspace_proven(
@@ -178,11 +215,7 @@ fn sync_registered(owner: &mut DataRootGuard) -> Result<(), String> {
             "\"proven_reason\":\"{}\",\"current_workspace_proven\":{},",
             "\"qdrant_available\":false}}",
         ),
-        completed,
-        truth.gap_count,
-        truth.reconciliation_generation,
-        reason,
-        proven,
+        completed, truth.gap_count, truth.reconciliation_generation, reason, proven,
     );
     Ok(())
 }
@@ -213,12 +246,21 @@ mod tests {
 
     #[test]
     fn json_escaping_preserves_windows_paths_and_unicode() {
-        assert_eq!(escape_json("C:\\Корпус\\\"notes\"\n\0"), "C:\\\\Корпус\\\\\\\"notes\\\"\\n\\u0000");
+        assert_eq!(
+            escape_json("C:\\Корпус\\\"notes\"\n\0"),
+            "C:\\\\Корпус\\\\\\\"notes\\\"\\n\\u0000"
+        );
     }
 
     #[test]
     fn incomplete_arguments_are_rejected_without_opening_a_root() {
-        assert_eq!(run(&["--source-roots".to_owned()]), Err("SOURCE_ROOT_USAGE_ERROR".to_owned()));
-        assert_eq!(run(&["--register-source-root".to_owned(), "not-opened".to_owned()]), Err("SOURCE_ROOT_USAGE_ERROR".to_owned()));
+        assert_eq!(
+            run(&["--source-roots".to_owned()]),
+            Err("SOURCE_ROOT_USAGE_ERROR".to_owned())
+        );
+        assert_eq!(
+            run(&["--register-source-root".to_owned(), "not-opened".to_owned()]),
+            Err("SOURCE_ROOT_USAGE_ERROR".to_owned())
+        );
     }
 }

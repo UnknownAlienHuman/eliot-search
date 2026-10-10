@@ -186,7 +186,14 @@ pub fn emit_batch(
 }
 
 pub fn maybe_run() -> Option<ExitCode> {
-    let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let raw = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let (args, _) = match crate::config_composition::strip_config_args_os(&raw) {
+        Ok(split) => split,
+        Err(error) => {
+            eprintln!("{{\"error\":{}}}", json_string(&error));
+            return Some(ExitCode::from(2));
+        }
+    };
     let command = args.first()?.to_str()?;
     if !matches!(command, "--prepare-revision" | "--prepare-root") {
         return None;
@@ -209,17 +216,24 @@ pub fn maybe_run() -> Option<ExitCode> {
             }
             _ => return Err("USAGE_ERROR".to_owned()),
         };
-        let owner = DataRootGuard::acquire(Path::new(&args[1]))?;
+        let mut owner = DataRootGuard::open_existing(Path::new(&args[1]))?;
         crate::catalog_presence::require_existing(owner.canonical_root())?;
-        let store = DirectStore::open(owner.canonical_root())?;
+        let store = DirectStore::open_existing_mutating(&owner)?;
+        crate::catalog_quarantine::arm(owner.canonical_root())?;
         let mut output = std::io::stdout().lock();
         if let Some(revision) = revision {
             let receipt = store.prepare_revision_canonical(revision)?;
-            emit_prepared_canonical(&mut output, revision, (0, 0), &receipt)
+            emit_prepared_canonical(&mut output, revision, (0, 0), &receipt)?;
         } else {
             let batch = store.prepare_root(cursor.as_ref())?;
-            emit_batch(&mut output, &batch, (0, 0))
+            emit_batch(&mut output, &batch, (0, 0))?;
         }
+        store.verify()?;
+        owner.clear_mutation_marker()?;
+        drop(store);
+        owner.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
+        owner.release_cleanly()?;
+        Ok(())
     })();
     Some(match result {
         Ok(()) => ExitCode::SUCCESS,

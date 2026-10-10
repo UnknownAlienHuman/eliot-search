@@ -14,6 +14,7 @@
     clippy::too_many_lines
 )]
 
+pub mod admission;
 pub mod error;
 pub mod identity;
 pub mod lease;
@@ -21,6 +22,7 @@ pub mod state;
 pub mod supervisor;
 pub mod transition;
 
+pub use admission::{DataRootOpenMode, RootOpenDecision, RootOpenState, classify_root_open};
 pub use error::OwnerError;
 pub use identity::{
     DataRootIdentity, DataRootLocationClass, ExecutableIdentity, OwnerBinding, OwnerIdentity,

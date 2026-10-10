@@ -20,7 +20,9 @@ mod operation;
 #[path = "control_migration_cutover/status.rs"]
 mod status;
 
+#[cfg(test)]
 pub(super) use marker_io::gate_staging_against_marker;
+pub(super) use marker_io::{gate_staging_owned, inspect_staging_against_marker};
 
 #[cfg(test)]
 #[path = "control_migration_cutover/tests.rs"]

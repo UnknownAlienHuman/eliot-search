@@ -13,36 +13,34 @@
 )]
 
 use crate::plaintext_direct_store as plaintext;
-use plaintext::{RevisionMetadata, verify_revision_identity};
 use crate::revision_protection::RevisionProtector;
 use crate::sha256;
+use plaintext::{RevisionMetadata, verify_revision_identity};
 
-#[path = "secure_direct_store_storage_io.rs"]
-mod storage_io;
-#[path = "secure_revision_writer.rs"]
-mod revision_writer;
-#[path = "preparation_store.rs"]
-mod preparation_store;
-#[path = "control_migration_objects.rs"]
-mod migration_objects;
 #[path = "secure_direct_store/kernel.rs"]
 mod kernel;
+#[path = "control_migration_objects.rs"]
+mod migration_objects;
+#[path = "preparation_store.rs"]
+mod preparation_store;
+#[path = "secure_revision_writer.rs"]
+mod revision_writer;
+#[path = "secure_direct_store_storage_io.rs"]
+mod storage_io;
 
 pub use kernel::DirectStore;
-pub use preparation_store::{PreparationBatch, PreparationCursor};
+pub(crate) use kernel::{MutatingStore, ReadOnlyStore};
 pub use plaintext::{
-    IndexedSource, RevisionSlice, SourceSummary, StoreGap, StoreSearchResult,
-    StoreVerification, StoredMatch,
+    IndexedSource, RevisionSlice, SourceSummary, StoreGap, StoreSearchResult, StoreVerification,
+    StoredMatch,
 };
+pub use preparation_store::{PreparationBatch, PreparationCursor};
 
 // Compatibility surface for existing store-owned revision children. Generic
 // preparation-file reads continue to import `storage_io::read_regular_file`
 // directly; legacy revision children receive the package-owned exact reader.
-use kernel::{
-    MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY, verify_plaintext,
-};
+use kernel::{MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY, verify_plaintext};
 use storage_io::{
-    legacy_path, protected_path, read_plaintext_path,
-    read_revision_object as read_regular_file,
+    legacy_path, protected_path, read_plaintext_path, read_revision_object as read_regular_file,
     remove_plaintext_after_readback,
 };

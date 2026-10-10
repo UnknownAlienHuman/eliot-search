@@ -2,12 +2,20 @@
 
 #[path = "kernel/codec.rs"]
 mod codec;
+#[path = "kernel/initialization.rs"]
+mod initialization;
+#[path = "kernel/inspection.rs"]
+mod inspection;
 #[path = "kernel/installation.rs"]
 mod installation;
 #[path = "kernel/lifecycle.rs"]
 mod lifecycle;
+#[path = "kernel/native_bindings.rs"]
+mod native_bindings;
 #[path = "kernel/observation.rs"]
 mod observation;
+#[path = "kernel/read_existing.rs"]
+mod read_existing;
 #[path = "kernel/record.rs"]
 mod record;
 #[path = "kernel/slots.rs"]
@@ -17,8 +25,20 @@ mod spec;
 #[path = "kernel/succession.rs"]
 mod succession;
 
+pub(crate) use initialization::{
+    InitializationRecovery, InitializationRequest, InitializingDataRoot, initialize_new,
+    recover_initialization,
+};
+pub(crate) use inspection::{ExistingOwnerSnapshot, inspect_existing_owner};
+pub(crate) use installation::{retain_native_installation, verify_native_installation};
 pub use lifecycle::{LiveOwner, ShutdownReceipt};
+pub(crate) use native_bindings::NativeLayoutPins;
+pub(crate) use read_existing::{
+    open_bound_directory, verify_bound_directory, verify_existing_locator,
+};
+#[cfg(test)]
 pub use succession::establish;
+pub(crate) use succession::establish_existing;
 
 #[cfg(test)]
 use codec::hex;
@@ -27,9 +47,7 @@ use observation::{observe_executable, observe_physical_root};
 #[cfg(test)]
 use record::DurableOwnerRecord;
 #[cfg(test)]
-use spec::{
-    INSTALLATION_FILE, LifecycleState, MAX_STATE_BYTES, Slot,
-};
+use spec::{INSTALLATION_FILE, LifecycleState, MAX_STATE_BYTES, Slot};
 #[cfg(test)]
 use succession::verify_sealed_head_agrees;
 

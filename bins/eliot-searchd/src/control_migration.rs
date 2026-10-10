@@ -13,9 +13,8 @@ use std::time::{Duration, Instant};
 mod mapping;
 
 use super::{
-    CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, Path,
-    SOURCE_LOG_FILE, SourceRecord, SourceState, ZERO_DIGEST, read_namespace,
-    replay_registry, sha256,
+    CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, SOURCE_LOG_FILE,
+    SourceRecord, SourceState, ZERO_DIGEST, read_namespace, replay_registry, sha256,
 };
 
 const PAGE_EVENTS: usize = 32;
@@ -40,18 +39,24 @@ impl Cursor {
         }
         let snapshot = sha256::decode_digest(fields[1])
             .ok_or_else(|| "DIRECT_MIGRATION_CURSOR_INVALID".to_owned())?;
-        let after = fields[2].parse::<u64>()
+        let after = fields[2]
+            .parse::<u64>()
             .map_err(|_| "DIRECT_MIGRATION_CURSOR_INVALID".to_owned())?;
         let event_digest = sha256::decode_digest(fields[3])
             .ok_or_else(|| "DIRECT_MIGRATION_CURSOR_INVALID".to_owned())?;
-        if after == 0 || after > MAX_SOURCE_EVENTS as u64
+        if after == 0
+            || after > MAX_SOURCE_EVENTS as u64
             || after.to_string() != fields[2]
             || sha256::hex(&snapshot) != fields[1]
             || sha256::hex(&event_digest) != fields[3]
         {
             return Err("DIRECT_MIGRATION_CURSOR_INVALID".to_owned());
         }
-        Ok(Self { snapshot, after, event_digest: fields[3].to_owned() })
+        Ok(Self {
+            snapshot,
+            after,
+            event_digest: fields[3].to_owned(),
+        })
     }
 }
 
@@ -66,9 +71,13 @@ impl DirectStore {
     /// Verify a bounded set of source/revision/path tuples against actual activation
     /// events. Historical paths are not replaced with the current source summary.
     pub(crate) fn verify_migration_bindings(
-        &self, bindings: &[(String, String, String)], deadline: Instant,
+        &self,
+        bindings: &[(String, String, String)],
+        deadline: Instant,
     ) -> Result<[u8; 32], String> {
-        if bindings.len() > PAGE_EVENTS { return Err("DIRECT_MIGRATION_BINDING_LIMIT".to_owned()); }
+        if bindings.len() > PAGE_EVENTS {
+            return Err("DIRECT_MIGRATION_BINDING_LIMIT".to_owned());
+        }
         // Own the pending keys so the replay closure can remove entries borrowed
         // from `record` without invariant lifetime conflicts (E0521).
         let mut missing = bindings.iter().cloned().collect::<BTreeSet<_>>();
@@ -94,14 +103,20 @@ impl DirectStore {
             }
             Ok(())
         })?;
-        if !missing.is_empty() { return Err("DIRECT_MIGRATION_MANIFEST_SOURCE_UNBOUND".to_owned()); }
+        if !missing.is_empty() {
+            return Err("DIRECT_MIGRATION_MANIFEST_SOURCE_UNBOUND".to_owned());
+        }
         if state != self.registry || read_namespace(&control.join(NAMESPACE_FILE))? != namespace {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         if Instant::now() >= deadline {
             return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
         }
-        Ok(snapshot_digest(&namespace, state.last_sequence, &state.last_digest))
+        Ok(snapshot_digest(
+            &namespace,
+            state.last_sequence,
+            &state.last_digest,
+        ))
     }
 
     /// Inspect disk history under the caller's existing exclusive owner guard.
@@ -109,10 +124,11 @@ impl DirectStore {
     /// Returned JSON is one bounded event-first frame for the existing transport.
     /// A malformed suffix or stale cursor produces no acknowledged partial page.
     pub(crate) fn inspect_control_history(
-        root: &Path,
+        owner: &crate::development::DataRootGuard,
         expected_namespace: &str,
         cursor: Option<&str>,
     ) -> Result<String, String> {
+        let root = owner.canonical_root();
         let started = Instant::now();
         let cursor = cursor.map(Cursor::parse).transpose()?;
         let control = root.join(CONTROL_DIRECTORY);
@@ -126,7 +142,10 @@ impl DirectStore {
         let mut ordinals = BTreeMap::<String, u64>::new();
         let mut entries = Vec::with_capacity(PAGE_EVENTS);
         let mut last = after;
-        let mut last_digest = cursor.as_ref().map_or(ZERO_DIGEST, |value| value.event_digest.as_str()).to_owned();
+        let mut last_digest = cursor
+            .as_ref()
+            .map_or(ZERO_DIGEST, |value| value.event_digest.as_str())
+            .to_owned();
         let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
             if started.elapsed() >= REPLAY_DEADLINE {
                 return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
@@ -135,7 +154,8 @@ impl DirectStore {
             // This ordinal counts this source's events, including retirement.
             // It is deliberately NOT a SourceRevision or a content-object ID.
             let ordinal = ordinals.entry(record.source_id.clone()).or_default();
-            *ordinal = ordinal.checked_add(1)
+            *ordinal = ordinal
+                .checked_add(1)
                 .ok_or_else(|| "DIRECT_MIGRATION_ORDINAL_EXHAUSTED".to_owned())?;
             if record.sequence == after {
                 cursor_found = record.record_digest == last_digest;
@@ -157,13 +177,23 @@ impl DirectStore {
         // metadata before/after reading. This digest denotes its logical chain,
         // not a byte-for-byte file hash (LF/CRLF framing is not conflated with it).
         let snapshot = snapshot_digest(&namespace, state.last_sequence, &state.last_digest);
-        if !cursor_found || cursor.as_ref().is_some_and(|value| value.snapshot != snapshot) {
+        if !cursor_found
+            || cursor
+                .as_ref()
+                .is_some_and(|value| value.snapshot != snapshot)
+        {
             return Err("DIRECT_MIGRATION_CURSOR_STALE".to_owned());
         }
         let body = entries.join(",");
-        let page_digest = sha256::digest_parts(b"eliot-search/control-migration-page/v1", &[
-            &snapshot, &after.to_be_bytes(), &last.to_be_bytes(), body.as_bytes(),
-        ]);
+        let page_digest = sha256::digest_parts(
+            b"eliot-search/control-migration-page/v1",
+            &[
+                &snapshot,
+                &after.to_be_bytes(),
+                &last.to_be_bytes(),
+                body.as_bytes(),
+            ],
+        );
         let exhausted = last == state.last_sequence;
         let next_cursor = if exhausted {
             "null".to_owned()
@@ -184,9 +214,19 @@ impl DirectStore {
                 "\"next_cursor\":{},\"exhausted\":{},\"read_only\":true,",
                 "\"revision_payloads_verified\":false}}"
             ),
-            namespace_text, sha256::hex(&snapshot), state.last_digest, state.event_count,
-            state.latest.len(), state.revisions.len(), after, last, entries.len(),
-            body, sha256::hex(&page_digest), next_cursor, exhausted,
+            namespace_text,
+            sha256::hex(&snapshot),
+            state.last_digest,
+            state.event_count,
+            state.latest.len(),
+            state.revisions.len(),
+            after,
+            last,
+            entries.len(),
+            body,
+            sha256::hex(&page_digest),
+            next_cursor,
+            exhausted,
         );
         if output.len() > MAX_PAGE_BYTES {
             return Err("DIRECT_MIGRATION_PAGE_TOO_LARGE".to_owned());
@@ -196,18 +236,22 @@ impl DirectStore {
 }
 
 fn snapshot_digest(namespace: &[u8; 32], sequence: u64, last_digest: &str) -> [u8; 32] {
-    sha256::digest_parts(b"eliot-search/control-migration-snapshot/v1", &[
-        namespace, &sequence.to_be_bytes(), last_digest.as_bytes(),
-    ])
+    sha256::digest_parts(
+        b"eliot-search/control-migration-snapshot/v1",
+        &[namespace, &sequence.to_be_bytes(), last_digest.as_bytes()],
+    )
 }
 
 fn validate_legacy_event(
-    namespace: &[u8; 32], record: &SourceRecord, previous: Option<&SourceRecord>,
+    namespace: &[u8; 32],
+    record: &SourceRecord,
+    previous: Option<&SourceRecord>,
 ) -> Result<(), String> {
     let file_identity = sha256::decode_digest(&record.file_identity_digest)
         .ok_or_else(|| "DIRECT_MIGRATION_SOURCE_BINDING_INVALID".to_owned())?;
     let expected = sha256::hex(&sha256::digest_parts(
-        b"eliot-search/direct-source-id/v1", &[namespace, &file_identity],
+        b"eliot-search/direct-source-id/v1",
+        &[namespace, &file_identity],
     ));
     if record.source_id != expected
         || previous.is_some_and(|value| value.identity_strength != record.identity_strength)
@@ -216,7 +260,10 @@ fn validate_legacy_event(
     }
     // Never silently normalize a hand-edited legacy record whose hash covered
     // a different spelling. The actual legacy writer emits this exact encoding.
-    if sha256::hex(&sha256::digest(record.canonical_without_digest().as_bytes())) != record.record_digest {
+    if sha256::hex(&sha256::digest(
+        record.canonical_without_digest().as_bytes(),
+    )) != record.record_digest
+    {
         return Err("DIRECT_MIGRATION_LEGACY_ENCODING_UNSUPPORTED".to_owned());
     }
     if record.state == SourceState::Retired {
@@ -243,10 +290,19 @@ fn event_json(record: &SourceRecord, previous: Option<&SourceRecord>, ordinal: u
             "\"file_identity_sha256\":\"{}\",\"path_sha256\":\"{}\",",
             "\"identity_strength\":\"{}\",\"event_sha256\":\"{}\"}}"
         ),
-        record.sequence, ordinal, record.previous_digest,
+        record.sequence,
+        ordinal,
+        record.previous_digest,
         previous.map_or(ZERO_DIGEST, |value| value.record_digest.as_str()),
-        record.operation_id, record.state.tag(), record.source_id,
-        record.revision_id, record.content_digest, record.byte_length,
-        record.file_identity_digest, record.path_digest, record.identity_strength.tag(), record.record_digest,
+        record.operation_id,
+        record.state.tag(),
+        record.source_id,
+        record.revision_id,
+        record.content_digest,
+        record.byte_length,
+        record.file_identity_digest,
+        record.path_digest,
+        record.identity_strength.tag(),
+        record.record_digest,
     )
 }

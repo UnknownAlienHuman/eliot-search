@@ -1,9 +1,7 @@
 //! Data-root I/O and orchestration for the development DIRECT corpus.
 
 use std::fs::{self, File, Metadata, OpenOptions};
-#[cfg(test)]
-use std::io::Read;
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,21 +11,81 @@ use crate::development::MAX_SCAN_INPUT_BYTES;
 use crate::safe_reader_adapter::{AdapterError, FullReadError};
 use crate::{safe_reader_adapter, sha256};
 
-use super::catalog::{load_registry, read_namespace};
 #[cfg(test)]
 use super::catalog::{RevisionMetadata, verify_revision_identity};
+use super::catalog::{load_registry, read_namespace};
 use super::model::{
     CONTROL_DIRECTORY, DirectDigest, DirectStore, FileSnapshot, IdentityStrength,
-    MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_FILES, MAX_LOG_BYTES,
-    MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, REVISION_DIRECTORY,
-    RecordDraft, SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord, SourceState,
-    SourceSummary,
+    MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_FILES, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS,
+    NAMESPACE_FILE, REVISION_DIRECTORY, RecordDraft, SOURCE_LOG_FILE, SOURCE_LOG_HEADER,
+    SourceRecord, SourceState, SourceSummary,
 };
 #[cfg(test)]
 use super::model::{IndexedSource, StoreVerification};
 
 impl DirectStore {
+    /// Creates the exact layout named by the retained initialization intent.
+    /// Any existing object or uncertain write is refused, with no repair/retry.
+    pub(crate) fn initialize_legacy_layout(
+        cap: &crate::owner_composition::InitializingDataRoot,
+    ) -> Result<Self, String> {
+        cap.verify().map_err(|error| error.code().to_owned())?;
+        let root = cap.canonical_root();
+        let control = root.join(CONTROL_DIRECTORY);
+        let revisions = root.join(REVISION_DIRECTORY);
+        fs::create_dir(&control).map_err(|_| "DIRECT_INITIALIZATION_OUTCOME_UNKNOWN".to_owned())?;
+        fs::create_dir(&revisions)
+            .map_err(|_| "DIRECT_INITIALIZATION_OUTCOME_UNKNOWN".to_owned())?;
+        ensure_directory(&control)
+            .map_err(|_| "DIRECT_INITIALIZATION_LAYOUT_INVALID".to_owned())?;
+        ensure_directory(&revisions)
+            .map_err(|_| "DIRECT_INITIALIZATION_LAYOUT_INVALID".to_owned())?;
+        let namespace = format!("{}\n", sha256::hex(&cap.namespace_id()));
+        write_initialization_file(&control.join(NAMESPACE_FILE), namespace.as_bytes())?;
+        let log = format!("{SOURCE_LOG_HEADER}\n");
+        write_initialization_file(&control.join(SOURCE_LOG_FILE), log.as_bytes())?;
+        #[cfg(unix)]
+        sync_directory(&control)?;
+        #[cfg(not(unix))]
+        sync_directory(&control);
+        let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))
+            .map_err(|_| "DIRECT_INITIALIZATION_READBACK_INVALID".to_owned())?;
+        let registry = load_registry(&control.join(SOURCE_LOG_FILE))
+            .map_err(|_| "DIRECT_INITIALIZATION_READBACK_INVALID".to_owned())?;
+        if namespace_id != cap.namespace_id()
+            || registry.event_count != 0
+            || !registry.latest.is_empty()
+            || !registry.revisions.is_empty()
+        {
+            return Err("DIRECT_INITIALIZATION_READBACK_INVALID".to_owned());
+        }
+        cap.verify().map_err(|error| error.code().to_owned())?;
+        Ok(Self {
+            root: root.to_owned(),
+            namespace_id,
+            registry,
+        })
+    }
+
+    /// Existing exact init artifacts only; missing state is never recreated.
+    pub(crate) fn open_initialization_recovery(
+        cap: &crate::owner_composition::InitializationRecovery<'_>,
+    ) -> Result<Self, String> {
+        cap.verify().map_err(|error| error.code().to_owned())?;
+        let store = Self::open_existing_legacy(cap.canonical_root())
+            .map_err(|_| "DIRECT_INITIALIZATION_READBACK_INVALID".to_owned())?;
+        if store.namespace_id != cap.namespace_id()
+            || store.registry.event_count != 0
+            || !store.registry.latest.is_empty()
+            || !store.registry.revisions.is_empty()
+        {
+            return Err("DIRECT_INITIALIZATION_LAYOUT_CHANGED".to_owned());
+        }
+        Ok(store)
+    }
+
     /// Opens or initializes the content-minimized control layout.
+    #[cfg(test)]
     pub(crate) fn open(root: &Path) -> Result<Self, String> {
         let canonical_root = fs::canonicalize(root)
             .map_err(|error| format!("DIRECT_ROOT_CANONICALIZE_ERROR:{error}"))?;
@@ -40,6 +98,44 @@ impl DirectStore {
         let log_path = control.join(SOURCE_LOG_FILE);
         initialize_log(&log_path)?;
         let registry = load_registry(&log_path)?;
+        Ok(Self {
+            root: canonical_root,
+            namespace_id,
+            registry,
+        })
+    }
+
+    /// Opens only existing catalog objects under the inspection capability.
+    pub(crate) fn validate_existing_admission(root: &Path) -> Result<(), String> {
+        Self::open_existing_legacy(root)?
+            .verify_control()
+            .map_err(|_| "DIRECT_EXISTING_CATALOG_INVALID".to_owned())
+    }
+
+    /// Opens only existing catalog objects under the inspection capability.
+    pub(crate) fn open_existing_legacy_read_only(
+        cap: &crate::development::InspectedDataRoot,
+    ) -> Result<Self, String> {
+        Self::open_existing_legacy(cap.canonical_root())
+    }
+
+    /// Opens only existing catalog objects under the single live owner.
+    pub(crate) fn open_existing_legacy_mutating(
+        owner: &crate::development::DataRootGuard,
+    ) -> Result<Self, String> {
+        Self::open_existing_legacy(owner.canonical_root())
+    }
+
+    fn open_existing_legacy(root: &Path) -> Result<Self, String> {
+        crate::catalog_presence::require_existing(root)?;
+        let canonical_root =
+            fs::canonicalize(root).map_err(|_| "DIRECT_EXISTING_CATALOG_INVALID".to_owned())?;
+        ensure_directory(&canonical_root)?;
+        ensure_directory(&canonical_root.join(CONTROL_DIRECTORY))?;
+        ensure_directory(&canonical_root.join(REVISION_DIRECTORY))?;
+        let control = canonical_root.join(CONTROL_DIRECTORY);
+        let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))?;
+        let registry = load_registry(&control.join(SOURCE_LOG_FILE))?;
         Ok(Self {
             root: canonical_root,
             namespace_id,
@@ -111,9 +207,7 @@ impl DirectStore {
         let mut verified_revisions = 0_usize;
         let mut total_revision_bytes = 0_u64;
         for record in reloaded.revisions.values() {
-            let bytes = self
-                .read_verified_revision(record)
-                .map_err(str::to_owned)?;
+            let bytes = self.read_verified_revision(record).map_err(str::to_owned)?;
             total_revision_bytes = total_revision_bytes
                 .checked_add(
                     u64::try_from(bytes.len())
@@ -144,14 +238,8 @@ impl DirectStore {
         bytes: &[u8],
     ) -> Result<(), String> {
         validate_digest_text(revision_id, "DIRECT_REVISION_ID_INVALID")?;
-        validate_digest_text(
-            expected_content_digest,
-            "DIRECT_CONTENT_DIGEST_INVALID",
-        )?;
-        let shard = self
-            .root
-            .join(REVISION_DIRECTORY)
-            .join(&revision_id[..2]);
+        validate_digest_text(expected_content_digest, "DIRECT_CONTENT_DIGEST_INVALID")?;
+        let shard = self.root.join(REVISION_DIRECTORY).join(&revision_id[..2]);
         ensure_child_directory(&shard)?;
         let path = shard.join(format!("{revision_id}.bin"));
         if path.exists() {
@@ -226,8 +314,8 @@ impl DirectStore {
             .metadata()
             .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?
             .len();
-        let encoded_bytes = u64::try_from(encoded.len())
-            .map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
+        let encoded_bytes =
+            u64::try_from(encoded.len()).map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
         if current_bytes
             .checked_add(encoded_bytes)
             .is_none_or(|bytes| bytes > MAX_LOG_BYTES)
@@ -272,8 +360,7 @@ impl DirectStore {
         }
         let mut file = File::open(&path).map_err(|_| "DIRECT_REVISION_OPEN_FAILED")?;
         let mut bytes = Vec::with_capacity(
-            usize::try_from(record.byte_length)
-                .map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH")?,
+            usize::try_from(record.byte_length).map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH")?,
         );
         (&mut file)
             .take(u64::try_from(MAX_SCAN_INPUT_BYTES + 1).unwrap_or(u64::MAX))
@@ -305,6 +392,33 @@ fn summary(record: &SourceRecord) -> SourceSummary {
     }
 }
 
+fn write_initialization_file(path: &Path, expected: &[u8]) -> Result<(), String> {
+    let unknown = || "DIRECT_INITIALIZATION_OUTCOME_UNKNOWN".to_owned();
+    let mut options = OpenOptions::new();
+    options.create_new(true).read(true).write(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x0020_0000).share_mode(0x3);
+    }
+    let mut file = options.open(path).map_err(|_| unknown())?;
+    file.write_all(expected)
+        .and_then(|()| file.sync_all())
+        .map_err(|_| unknown())?;
+    file.seek(SeekFrom::Start(0)).map_err(|_| unknown())?;
+    let mut actual = Vec::new();
+    Read::by_ref(&mut file)
+        .take(expected.len() as u64 + 1)
+        .read_to_end(&mut actual)
+        .map_err(|_| unknown())?;
+    crate::owner_composition::verify_existing_locator(&file, path).map_err(|_| unknown())?;
+    if actual != expected {
+        return Err(unknown());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
 fn load_or_create_namespace(root: &Path, control: &Path) -> Result<[u8; 32], String> {
     let path = control.join(NAMESPACE_FILE);
     if path.exists() {
@@ -342,6 +456,7 @@ fn load_or_create_namespace(root: &Path, control: &Path) -> Result<[u8; 32], Str
     Ok(namespace)
 }
 
+#[cfg(test)]
 fn initialize_log(path: &Path) -> Result<(), String> {
     if path.exists() {
         ensure_regular_file(path)?;
@@ -449,9 +564,7 @@ fn map_full_read_error(error: FullReadError, limit_error: &str) -> String {
             | SafeReadError::HandleChangedDuringRead
             | SafeReadError::BackendFailure => "DIRECT_SOURCE_CHANGED_DURING_READ".to_owned(),
             SafeReadError::RootIdentityMismatch => "DIRECT_SOURCE_ESCAPE_DENIED".to_owned(),
-            SafeReadError::UnsupportedFileKind => {
-                "DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned()
-            }
+            SafeReadError::UnsupportedFileKind => "DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned(),
             SafeReadError::ReparseBoundaryDenied => "DIRECT_SOURCE_LINK_DENIED".to_owned(),
             SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch => {
                 "DIRECT_SOURCE_ACCESS_DENIED".to_owned()
@@ -554,8 +667,8 @@ fn verify_revision_path(
     expected_length: usize,
 ) -> Result<(), String> {
     ensure_regular_file(path)?;
-    let metadata = fs::metadata(path)
-        .map_err(|error| format!("DIRECT_REVISION_METADATA_ERROR:{error}"))?;
+    let metadata =
+        fs::metadata(path).map_err(|error| format!("DIRECT_REVISION_METADATA_ERROR:{error}"))?;
     if metadata.len() != u64::try_from(expected_length).unwrap_or(u64::MAX) {
         return Err("DIRECT_REVISION_LENGTH_MISMATCH".to_owned());
     }

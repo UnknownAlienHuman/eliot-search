@@ -4,14 +4,10 @@ use core::fmt;
 use std::path::Path;
 
 use search_os_secrets::{
-    LEGACY_REVISION_PROTECTED_OBJECT_EXTENSION,
-    legacy_revision_is_protected_object,
+    LEGACY_REVISION_PROTECTED_OBJECT_EXTENSION, legacy_revision_is_protected_object,
 };
 #[cfg(windows)]
-use search_os_secrets::{
-    derive_legacy_revision_dpapi_entropy,
-    derive_legacy_revision_key_binding,
-};
+use search_os_secrets::{derive_legacy_revision_dpapi_entropy, derive_legacy_revision_key_binding};
 #[cfg(windows)]
 use zeroize::Zeroize;
 
@@ -22,8 +18,7 @@ use super::super::windows;
 use crate::sha256;
 
 /// Legacy protected revision filename extension retained for call-site parity.
-pub const PROTECTED_OBJECT_EXTENSION: &str =
-    LEGACY_REVISION_PROTECTED_OBJECT_EXTENSION;
+pub const PROTECTED_OBJECT_EXTENSION: &str = LEGACY_REVISION_PROTECTED_OBJECT_EXTENSION;
 
 /// Per-namespace revision protection capability.
 pub struct RevisionProtector {
@@ -59,26 +54,25 @@ impl Drop for RevisionProtector {
 }
 
 impl RevisionProtector {
+    /// Development-platform existing-only protector; creates no state.
+    #[cfg(not(windows))]
+    pub(crate) const fn open_existing(namespace_id: [u8; 32]) -> Result<Option<Self>, String> {
+        Ok(Some(Self { namespace_id }))
+    }
     /// Opens the platform protector. Existing protected objects require the
     /// original credential; a missing credential is not silently replaced.
-    pub(crate) fn open(
-        namespace_id: [u8; 32],
-        revision_root: &Path,
-    ) -> Result<Self, String> {
+    pub(crate) fn open(namespace_id: [u8; 32], revision_root: &Path) -> Result<Self, String> {
         #[cfg(windows)]
         {
-            let root_secret =
-                windows::load_or_create_root_secret(namespace_id, revision_root)?;
-            let key_binding_digest =
-                derive_legacy_revision_key_binding::<DirectRevisionDigest>(
-                    &namespace_id,
-                    root_secret.expose_secret(),
-                );
-            let entropy =
-                derive_legacy_revision_dpapi_entropy::<DirectRevisionDigest>(
-                    &namespace_id,
-                    root_secret.expose_secret(),
-                );
+            let root_secret = windows::load_or_create_root_secret(namespace_id, revision_root)?;
+            let key_binding_digest = derive_legacy_revision_key_binding::<DirectRevisionDigest>(
+                &namespace_id,
+                root_secret.expose_secret(),
+            );
+            let entropy = derive_legacy_revision_dpapi_entropy::<DirectRevisionDigest>(
+                &namespace_id,
+                root_secret.expose_secret(),
+            );
             Ok(Self {
                 namespace_id,
                 key_binding_digest,

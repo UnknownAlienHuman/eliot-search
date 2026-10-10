@@ -1,12 +1,13 @@
 //! Alternating-slot read, selection, publication and transition readback.
 
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
 use search_runtime_owner::OwnerError;
 
 use super::codec::sync_directory;
+use super::read_existing::read_existing_bytes;
 use super::record::DurableOwnerRecord;
 use super::spec::{MAX_STATE_BYTES, Slot};
 
@@ -20,10 +21,7 @@ enum SlotRead {
     Unreadable,
 }
 
-pub(super) fn read_slot(
-    canonical_root: &Path,
-    slot: Slot,
-) -> Option<Box<DurableOwnerRecord>> {
+pub(super) fn read_slot(canonical_root: &Path, slot: Slot) -> Option<Box<DurableOwnerRecord>> {
     match read_slot_raw(canonical_root, slot) {
         SlotRead::Valid(record) => Some(record),
         SlotRead::Missing | SlotRead::Unreadable => None,
@@ -31,11 +29,9 @@ pub(super) fn read_slot(
 }
 
 fn read_slot_raw(canonical_root: &Path, slot: Slot) -> SlotRead {
-    let bytes = match fs::read(canonical_root.join(slot.file_name())) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return SlotRead::Missing;
-        }
+    let bytes = match read_existing_bytes(&canonical_root.join(slot.file_name()), MAX_STATE_BYTES) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return SlotRead::Missing,
         Err(_) => return SlotRead::Unreadable,
     };
     DurableOwnerRecord::decode(&bytes).map_or(SlotRead::Unreadable, |record| {
@@ -53,6 +49,9 @@ pub(super) fn newest_valid(
     let first = read_slot_raw(canonical_root, Slot::A);
     let second = read_slot_raw(canonical_root, Slot::B);
     match (first, second) {
+        (SlotRead::Unreadable, _) | (_, SlotRead::Unreadable) => {
+            Err(OwnerError::OwnerRecoveryQuarantined)
+        }
         (SlotRead::Valid(a), SlotRead::Valid(b)) => {
             if a.generation == b.generation && a != b {
                 return Err(OwnerError::OwnerRecoveryQuarantined);
@@ -66,7 +65,6 @@ pub(super) fn newest_valid(
         (SlotRead::Valid(record), _) => Ok((Slot::B, Some(record))),
         (_, SlotRead::Valid(record)) => Ok((Slot::A, Some(record))),
         (SlotRead::Missing, SlotRead::Missing) => Ok((Slot::A, None)),
-        _ => Err(OwnerError::OwnerRecoveryQuarantined),
     }
 }
 
@@ -84,21 +82,31 @@ pub(super) fn write_slot(
         return Err(OwnerError::DataRootInvalid);
     }
     let path = canonical_root.join(slot.file_name());
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
+    let mut options = OpenOptions::new();
+    options.create(cfg!(test)).write(true).truncate(false);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x0020_0000).share_mode(0x3);
+    }
+    let mut file = options
         .open(&path)
         .map_err(|_| OwnerError::DataRootInvalid)?;
+    super::read_existing::verify_existing_locator(&file, &path)?;
+    #[cfg(not(test))]
+    super::installation::verify_native_installation(canonical_root)?;
+    file.set_len(0)
+        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
     file.write_all(&expected)
-        .map_err(|_| OwnerError::DataRootInvalid)?;
-    file.sync_all().map_err(|_| OwnerError::DataRootInvalid)?;
+        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
+    file.sync_all()
+        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
     drop(file);
     sync_directory(canonical_root);
-    match fs::read(&path) {
-        Ok(actual) if actual == expected => Ok(()),
-        Ok(_) => Err(OwnerError::OwnerRecordDigestMismatch),
-        Err(_) => Err(OwnerError::OwnerAcquireOutcomeUnknown),
+    match read_existing_bytes(&path, MAX_STATE_BYTES) {
+        Ok(Some(actual)) if actual == expected => Ok(()),
+        Ok(Some(_)) => Err(OwnerError::OwnerRecordDigestMismatch),
+        Ok(None) | Err(_) => Err(OwnerError::OwnerAcquireOutcomeUnknown),
     }
 }
 

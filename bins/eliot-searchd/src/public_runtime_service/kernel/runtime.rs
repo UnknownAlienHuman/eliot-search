@@ -5,9 +5,7 @@ use std::io;
 use std::path::Path;
 
 use crate::catalog_quarantine;
-use crate::continuation::{
-    ContinuationCatalog, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
-};
+use crate::continuation::{ContinuationCatalog, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
 use crate::directory_manifest::verify_directory_manifests;
@@ -22,12 +20,11 @@ use super::spec::{MAX_COMMAND_BYTES, PROTOCOL_VERSION};
 use super::state::invalidate_search_state;
 
 pub(super) fn run_service(root: &Path) -> Result<(), String> {
-    let mut guard = DataRootGuard::acquire(root)?;
+    let mut guard = DataRootGuard::open_existing(root)?;
     catalog_quarantine::check(guard.canonical_root())?;
-    let mut store = DirectStore::open(guard.canonical_root())?;
+    let mut store = DirectStore::open_existing_mutating(&guard)?;
     let verification = store.verify()?;
-    let manifests =
-        verify_directory_manifests(guard.canonical_root(), &store.namespace_id())?;
+    let manifests = verify_directory_manifests(guard.canonical_root(), &store.namespace_id())?;
     let mut storage = StorageSecurityStatus::inspect(guard.canonical_root())?;
     let mut continuations = ContinuationCatalog::new(&store.namespace_id());
     let mut handles = ResultHandleCatalog::new(&store.namespace_id());
@@ -106,6 +103,11 @@ pub(super) fn run_service(root: &Path) -> Result<(), String> {
         invalidate_search_state(&mut continuations, &mut handles);
     }
     result?;
+    // Admission has stopped; retire dependent state before publishing RELEASED.
+    invalidate_search_state(&mut continuations, &mut handles);
+    drop(continuations);
+    drop(handles);
+    drop(store);
     guard.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
     let receipt = guard.release_cleanly()?;
     write_line(

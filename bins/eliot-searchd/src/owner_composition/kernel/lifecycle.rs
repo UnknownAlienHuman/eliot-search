@@ -46,6 +46,19 @@ pub struct ShutdownReceipt {
 }
 
 impl LiveOwner {
+    /// Revalidates the exact current durable binding without advancing it.
+    pub(crate) fn verify_existing(&self) -> Result<(), OwnerError> {
+        if self.poisoned {
+            return Err(OwnerError::OwnerAcquireOutcomeUnknown);
+        }
+        let snapshot = super::inspection::inspect_existing_owner(&self.canonical_root)?;
+        if snapshot.matches_record(&self.record) {
+            Ok(())
+        } else {
+            Err(OwnerError::OwnerGuardMismatch)
+        }
+    }
+
     /// Bound monotone owner epoch.
     #[must_use]
     pub const fn epoch(&self) -> OwnerEpoch {

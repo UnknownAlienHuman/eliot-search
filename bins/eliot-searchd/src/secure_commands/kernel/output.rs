@@ -1,12 +1,12 @@
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-use crate::direct_store::{DirectStore, SourceSummary};
+use crate::direct_store::{ReadOnlyStore, SourceSummary};
 use crate::service_output::{json_string, write_line};
 use crate::storage_security::StorageSecurityStatus;
 
 pub(super) fn emit_verification(
-    store: &DirectStore,
+    store: &ReadOnlyStore<'_>,
     storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     let verification = store.verify()?;
@@ -32,7 +32,7 @@ pub(super) fn emit_verification(
 }
 
 pub(super) fn emit_sources(
-    store: &DirectStore,
+    store: &ReadOnlyStore<'_>,
     storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     let sources = store.list_sources();
@@ -85,6 +85,19 @@ pub(super) fn write_stdout(value: &str) -> Result<(), String> {
 }
 
 pub(super) fn emit_process_error(error: &str) -> ExitCode {
-    eprintln!("{{\"error\":{}}}", json_string(error));
+    // Legacy storage errors may append unrestricted OS text after a colon.
+    // Public command failures expose only a finite closed reason token.
+    let candidate = error.split(':').next().unwrap_or_default();
+    let code = if !candidate.is_empty()
+        && candidate.len() <= 96
+        && candidate
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+    {
+        candidate
+    } else {
+        "DATA_ROOT_OPERATION_FAILED"
+    };
+    eprintln!("{{\"error\":{}}}", json_string(code));
     ExitCode::from(2)
 }

@@ -2,9 +2,6 @@ use std::ffi::OsString;
 use std::io;
 use std::path::Path;
 
-use crate::development::DataRootGuard;
-use crate::direct_store::DirectStore;
-use crate::maintenance::repair_control_log;
 use crate::maintenance_guard::guarded_collect_orphan_revisions;
 use crate::service_output::{emit_indexed_source, json_string, write_line};
 use crate::sha256;
@@ -98,31 +95,10 @@ pub(super) fn cmd_read_revision(arguments: &[OsString]) -> Result<(), String> {
     })
 }
 
-pub(super) fn cmd_repair_root(arguments: &[OsString]) -> Result<(), String> {
-    let guard = DataRootGuard::acquire(Path::new(&arguments[1]))?;
-    let repair = repair_control_log(guard.canonical_root())?;
-    let store = DirectStore::open(guard.canonical_root())?;
-    store.verify()?;
-    let storage = StorageSecurityStatus::inspect(guard.canonical_root())?;
-    write_stdout(&format!(
-        concat!(
-            "{{\"event\":\"direct_store_repair_complete\",",
-            "\"namespace_id\":{},\"repaired\":{},",
-            "\"removed_bytes\":{},\"retained_events\":{},",
-            "\"last_sequence\":{},\"last_digest\":{},",
-            "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
-        ),
-        json_string(&store.namespace_id()),
-        repair.repaired,
-        repair.removed_bytes,
-        repair.retained_events,
-        repair.last_sequence,
-        json_string(&repair.last_digest),
-        storage.json(),
-        storage.encrypted_at_rest,
-    ))
+pub(super) fn cmd_repair_root(_arguments: &[OsString]) -> Result<(), String> {
+    // A root locator cannot name or authorize the uncertain durable operation.
+    Err("DATA_ROOT_NAMED_RECOVERY_REQUIRED".to_owned())
 }
-
 pub(super) fn cmd_gc_root(arguments: &[OsString]) -> Result<(), String> {
     let mode = arguments[2]
         .to_str()
@@ -132,12 +108,21 @@ pub(super) fn cmd_gc_root(arguments: &[OsString]) -> Result<(), String> {
         "--apply" => true,
         _ => return Err("DIRECT_GC_MODE_INVALID".to_owned()),
     };
-    let guard = DataRootGuard::acquire(Path::new(&arguments[1]))?;
-    let store = DirectStore::open(guard.canonical_root())?;
-    store.verify()?;
-    let result = guarded_collect_orphan_revisions(guard.canonical_root(), apply)?;
-    store.verify()?;
-    let storage = StorageSecurityStatus::inspect(guard.canonical_root())?;
+    let (namespace, result, storage) = if apply {
+        with_store_mut(Path::new(&arguments[1]), |root, store| {
+            store.verify()?;
+            let result = guarded_collect_orphan_revisions(root, true)?;
+            store.verify()?;
+            let storage = StorageSecurityStatus::inspect(root)?;
+            Ok((store.namespace_id(), result, storage))
+        })?
+    } else {
+        with_store(Path::new(&arguments[1]), |root, store, storage| {
+            store.verify_catalog()?;
+            let result = guarded_collect_orphan_revisions(root, false)?;
+            Ok((store.namespace_id(), result, storage.clone()))
+        })?
+    };
     write_stdout(&format!(
         concat!(
             "{{\"event\":\"direct_store_gc_complete\",",
@@ -152,7 +137,7 @@ pub(super) fn cmd_gc_root(arguments: &[OsString]) -> Result<(), String> {
             "\"unexpected_objects\":{},\"storage_security\":{},",
             "\"encrypted_at_rest\":{}}}"
         ),
-        json_string(&store.namespace_id()),
+        json_string(&namespace),
         result.applied,
         result.referenced_revisions,
         result.scanned_objects,

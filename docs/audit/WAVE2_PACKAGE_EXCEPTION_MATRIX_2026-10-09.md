@@ -12,7 +12,7 @@ One manager owns integration, commits, dependency pins and Cargo.lock. This matr
 | #250 completed | xtask | accepted metadata/status tooling and pins | checker weakening; product runtime authority |
 | #256 | search-point-identity | focused port docs/fixtures; exact canonical-ledger refresh | deleting still-imported exports; daemon/planner rewrites; new codec/crypto owner |
 | #257 | search-unitizer | focused contract adapters/fixtures; exact ledger refresh; unitizer manifest/lock wiring to the existing search-materializer API and one named materialization ingress adapter | materializer/parser implementation; provisional second UnitSet; daemon/planner/store edits |
-| #266 | search-runtime-owner | daemon owner_composition, narrow command assembly, legacy DirectStore open helpers | query/source/Qdrant redesign; second root catalog |
+| #266 | search-runtime-owner | daemon owner_composition, narrow command assembly, legacy DirectStore open helpers; exact native/existing-secret/source-root-loader/shutdown adapters in the addendum below | query/source/Qdrant redesign; second root catalog |
 | #235 | new search-provider-client | typed CLI client move/deletion, workspace membership/lockfile, narrow CLI wiring | daemon internals; loopback promotion; protocol redesign; TCP fallback |
 | #238 | search-config | exact TOML/Serde pins/docs and the shared exact-byte SHA exception below | readiness/apply/input acquisition; changing existing digest domains |
 | #241 | search-source-admission | exact GlobSet pin/lockfile/docs; reuse shared SHA compatibility API | ingestion, safe-reader/root/registry mutation; ignore walker |
@@ -23,6 +23,51 @@ One manager owns integration, commits, dependency pins and Cargo.lock. This matr
 | #329 after #259/#262 | search-point-identity legacy retirement | narrow identity imports/arguments in migrated planner/bridge; daemon projection_composition/kernel/compose.rs and corresponding fixtures; exact ledger/docs | new schema/codec/transport; general daemon rewrite; final qualification claims |
 
 Rows name existing packages at their current Cargo paths, not new top-level directories. The exact task body narrows the row further. All unlisted nearest-package prohibitions remain effective.
+
+## #266 existing-root composition addendum
+
+The [lifetime/redaction addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094629373)
+retains the fixed native layout objects through admitted child lifetimes and bounds
+`secure_commands/kernel/output.rs` failures to closed reason tokens. No new identity catalog
+or mutation/recovery algorithm is introduced.
+
+Explicit initialize/named-initialization-recovery wiring includes only
+`owner_composition/kernel/initialization.rs` and the existing
+`secure_commands/kernel/{support,dispatch}.rs`. The existing installation codec
+may persist format 2 native control/lock bindings; ordinary format 1 opens cannot
+silently upgrade. An exact retained intent fences unknown initialization outcomes.
+Recovery never retries missing creates or credentials.
+
+Existing migration child parameter wiring also covers `control_migration_plan.rs`,
+`control_migration.rs`, `control_migration_cutover.rs` and
+`control_migration_cutover/{marker_io,operation}.rs`. Only borrowed admission and
+content-free marker/status inspection change; artifact/schema/replay owners remain.
+
+The [owner issue addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094110299)
+extends only the admission/open boundary to these actual reverse-consumer adapters:
+
+- `development/kernel/owner.rs`, `sealed_root_lock.rs` and `owner_composition/**`: existing-only
+  exclusion/co-hold, bounded state inspection, explicit initialization and abandoned-owner fencing;
+- `direct_store/store.rs`, `secure_direct_store/kernel/lifecycle.rs`,
+  `revision_protection/protector/model.rs`, `revision_protection_windows.rs` and
+  `revision_protection_windows/credential.rs`: existing-only catalog/credential opening, without
+  changing encryption or secret semantics;
+- `secure_direct_store/{kernel.rs,kernel/lifecycle.rs}`, `secure_direct_store.rs`,
+  `secure_commands/kernel/{entry,output}.rs` and `app/kernel/{output,status}.rs`: typed child-open views and
+  removal of duplicate private command wiring under the
+  [exact extension](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094257692);
+- `catalog_presence.rs`, `catalog_quarantine.rs` and `source_roots/kernel/catalog.rs`: admission
+  barriers, exact named recovery and an existing-only registration loader; no source policy redesign;
+- actual callers in `app/kernel/{commands,dispatch,source_root_commands}.rs`,
+  `secure_commands/kernel/{store,commands,dispatch}.rs`, `public_runtime_service/kernel/{runtime,dispatch}.rs`,
+  `preparation_composition.rs`, `source_migration_command.rs` and optional provider/control-migration
+  entry wiring: borrow the same authority, stop admission and close children before `RELEASED`;
+- owning focused fixtures/docs and exact changed ledger sites only.
+
+All paths above are beneath `bins/eliot-searchd/src/`. No new dependency, root catalog, provider
+protocol, source/query/Qdrant implementation or crypto profile is authorized. The parent remains the
+only repository writer and integrator; code-writing subagents prepare disjoint scratch patches under
+the maintainer's explicit instruction. An ordinary open cannot perform migration or initialize state.
 
 ## Current order
 

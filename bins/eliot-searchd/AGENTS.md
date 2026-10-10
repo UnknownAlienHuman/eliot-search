@@ -7,6 +7,11 @@ The bounded packet is `swarm/assignments/eliot-searchd.md`.
 
 ## Ownership
 
+The #266 exception in `docs/audit/WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md` permits the
+single manager to change only the named native/root/credential opening adapters and actual command
+wiring. Existing-only inspection/opening and child shutdown precede durable owner release. This
+does not authorize source/query/Qdrant or cryptographic implementation redesign.
+
 - progressive dependency injection/startup
 - concrete adapter construction and vendor-neutral port wiring
 - provider server, readiness, drain and shutdown coordination
